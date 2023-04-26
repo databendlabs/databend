@@ -45,6 +45,7 @@ impl Binder {
             on_conflict_columns,
             columns,
             source,
+            ..
         } = stmt;
 
         let catalog_name = catalog.as_ref().map_or_else(

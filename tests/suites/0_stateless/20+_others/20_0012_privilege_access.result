@@ -1,27 +1,33 @@
 default
 information_schema
 system
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Insert] privilege on 'default'.'default'.'t20_0012'.
+test -- insert
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Insert] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'127.0.0.1' with role public.
 1
 2
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Update] privilege on 'default'.'default'.'t20_0012'.
+test -- update
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Update] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'127.0.0.1' with role public.
 2
 3
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Delete] privilege on 'default'.'default'.'t20_0012'.
+test -- delete
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Delete] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'127.0.0.1' with role public.
 1
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Super] privilege on 'default'.'default'.'t20_0012'.
+test -- optimize table
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Super] is required on 'default'.'default'.'t20_0012' for user 'test-user'@'127.0.0.1' with role public.
 1
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Select] privilege on 'default'.'default'.'t20_0012_a'.
+test -- select
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'default'.'t20_0012_a' for user 'test-user'@'127.0.0.1' with role public.
 1
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Select] privilege on 'default'.'default'.'t20_0012_b'.
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'default'.'t20_0012_b' for user 'test-user'@'127.0.0.1' with role public.
 1
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Select] privilege on 'default'.'default2'.'v_t20_0012'.
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'default2'.'v_t20_0012' for user 'test-user'@'127.0.0.1' with role public.
 1
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Select] privilege on 'default'.'system'.'clustering_information'.
+test -- clustering_information
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'clustering_information' for user 'test-user'@'127.0.0.1' with role public.
 1
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Select] privilege on 'default'.'system'.'fuse_snapshot'.
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_snapshot' for user 'test-user'@'127.0.0.1' with role public.
 1
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Select] privilege on 'default'.'system'.'fuse_segment'.
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_segment' for user 'test-user'@'127.0.0.1' with role public.
 1
-ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, user 'test-user'@'127.0.0.1' requires [Select] privilege on 'default'.'system'.'fuse_block'.
+ERROR 1105 (HY000) at line 1: Code: 1063, Text = Permission denied, privilege [Select] is required on 'default'.'system'.'fuse_block' for user 'test-user'@'127.0.0.1' with role public.
 1
