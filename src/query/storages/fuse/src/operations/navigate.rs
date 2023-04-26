@@ -181,7 +181,7 @@ impl FuseTable {
             FUSE_TBL_SNAPSHOT_PREFIX,
         );
         let files = self
-            .list_files(prefix, time_point, |_| {}, |_| false)
+            .list_files(prefix, time_point, |_| {}, |_| false, true)
             .await?;
         let location = files[0].clone();
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
@@ -237,6 +237,7 @@ impl FuseTable {
                     }
                 },
                 |_| false,
+                true,
             )
             .await?;
         let location = location.ok_or(ErrorCode::TableHistoricalDataNotFound(
@@ -252,6 +253,7 @@ impl FuseTable {
         time_point: DateTime<Utc>,
         mut pred: P,
         filter: impl for<'a> Fn(&'a String) -> bool + Copy + Send + Sync,
+        return_error: bool,
     ) -> Result<Vec<String>>
     where
         P: FnMut(String),
@@ -283,9 +285,13 @@ impl FuseTable {
         }
 
         if file_list.is_empty() {
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "No historical data found at given point",
-            ));
+            if return_error {
+                return Err(ErrorCode::TableHistoricalDataNotFound(
+                    "No historical data found at given point",
+                ));
+            } else {
+                return Ok(vec![]);
+            }
         }
 
         file_list.sort_by(|(_, m1), (_, m2)| m2.cmp(m1));

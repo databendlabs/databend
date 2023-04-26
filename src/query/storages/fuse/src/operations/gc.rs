@@ -487,6 +487,7 @@ impl FuseTable {
                         |_| {},
                         // filter out all the referenced files
                         |location| referenced_files.contains(location),
+                        false,
                     )
                     .await?
                 } else {
