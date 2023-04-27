@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::ptr::NonNull;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -199,11 +198,12 @@ pub fn serialize_aggregate<Method: HashMethodBounds>(
     Ok(DataBlock::new_from_columns(columns))
 }
 
+// TODO: need hashmap into iter
 pub struct SerializeAggregateStream<Method: HashMethodBounds> {
     method: Method,
     params: Arc<AggregatorParams>,
     pub payload: HashTablePayload<Method, usize>,
-    iter: <Method::HashTable<usize> as HashtableLike>::Iterator<'static>,
+    end_iter: bool,
 }
 
 unsafe impl<Method: HashMethodBounds> Send for SerializeAggregateStream<Method> {}
@@ -216,14 +216,11 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
         params: &Arc<AggregatorParams>,
         payload: HashTablePayload<Method, usize>,
     ) -> Self {
-        unsafe {
-            let refs = NonNull::from(&payload).as_ref();
-            SerializeAggregateStream::<Method> {
-                payload,
-                method: method.clone(),
-                iter: refs.cell.hashtable.iter(),
-                params: params.clone(),
-            }
+        SerializeAggregateStream::<Method> {
+            payload,
+            method: method.clone(),
+            params: params.clone(),
+            end_iter: false,
         }
     }
 }
@@ -232,57 +229,40 @@ impl<Method: HashMethodBounds> Iterator for SerializeAggregateStream<Method> {
     type Item = Result<DataBlock>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        Result::transpose(self.next_impl())
+        if !self.end_iter {
+            self.end_iter = true;
+            return Result::transpose(self.next_impl());
+        }
+
+        None
     }
 }
 
 impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
     fn next_impl(&mut self) -> Result<Option<DataBlock>> {
-        let max_block_rows = std::cmp::min(8192, self.payload.cell.hashtable.len());
-        let max_block_bytes = std::cmp::min(
-            8 * 1024 * 1024 + 1024,
-            self.payload
-                .cell
-                .hashtable
-                .unsize_key_size()
-                .unwrap_or(usize::MAX),
-        );
-        let mut group_key_builder = self
-            .method
-            .keys_column_builder(max_block_rows, max_block_bytes);
+        let keys_len = self.payload.cell.hashtable.len();
+        let value_size = estimated_key_size(&self.payload.cell.hashtable);
 
         let funcs = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
 
         // Builders.
         let mut state_builders = (0..funcs.len())
-            .map(|_| StringColumnBuilder::with_capacity(max_block_rows, max_block_rows * 4))
+            .map(|_| StringColumnBuilder::with_capacity(keys_len, keys_len * 4))
             .collect::<Vec<_>>();
 
-        let mut bytes = 0;
-        #[allow(clippy::while_let_on_iterator)]
-        while let Some(group_entity) = self.iter.next() {
-            bytes = 0;
+        let mut group_key_builder = self.method.keys_column_builder(keys_len, value_size);
 
+        for group_entity in self.payload.cell.hashtable.iter() {
             let place = Into::<StateAddr>::into(*group_entity.get());
 
             for (idx, func) in funcs.iter().enumerate() {
                 let arg_place = place.next(offsets_aggregate_states[idx]);
                 func.serialize(arg_place, &mut state_builders[idx].data)?;
                 state_builders[idx].commit_row();
-                bytes += state_builders[idx].data.len();
             }
 
             group_key_builder.append_value(group_entity.key());
-            bytes += group_key_builder.bytes_size();
-
-            if bytes >= 8 * 1024 * 1024 {
-                break;
-            }
-        }
-
-        if bytes == 0 {
-            return Ok(None);
         }
 
         let mut columns = Vec::with_capacity(state_builders.len() + 1);
@@ -293,9 +273,9 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
 
         let bucket = self.payload.bucket;
         columns.push(group_key_builder.finish());
-        let data_block = DataBlock::new_from_columns(columns);
+        let block = DataBlock::new_from_columns(columns);
         Ok(Some(
-            data_block.add_meta(Some(AggregateSerdeMeta::create(bucket)))?,
+            block.add_meta(Some(AggregateSerdeMeta::create(bucket)))?,
         ))
     }
 }
