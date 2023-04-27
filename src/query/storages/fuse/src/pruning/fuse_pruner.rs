@@ -15,22 +15,17 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::bitmap::Bitmap;
 use common_base::base::tokio::sync::Semaphore;
 use common_base::runtime::Runtime;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
-use common_expression::DataBlock;
-use common_expression::Evaluator;
-use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use opendal::Operator;
 use storages_common_pruner::BlockMetaIndex;
+use storages_common_pruner::InternalColumnPruner;
 use storages_common_pruner::Limiter;
 use storages_common_pruner::LimiterPrunerCreator;
 use storages_common_pruner::PagePruner;
@@ -180,11 +175,21 @@ impl FusePruner {
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let segment_locs =
             create_segment_location_vector(segment_locs, snapshot_loc, segment_id_map);
+
+        let filter = self
+            .push_down
+            .as_ref()
+            .and_then(|p| p.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+        let internal_column_pruner =
+            InternalColumnPruner::create(self.pruning_ctx.ctx.get_function_context()?, filter);
         // Segment pruner.
-        let segment_pruner =
-            SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
-        let filter = self.push_down.as_ref().and_then(|p| p.filter.as_ref());
-        let metas = segment_pruner.pruning(segment_locs, filter).await?;
+        let segment_pruner = SegmentPruner::create(
+            self.pruning_ctx.clone(),
+            self.table_schema.clone(),
+            Arc::new(internal_column_pruner),
+        )?;
+
+        let metas = segment_pruner.pruning(segment_locs).await?;
 
         // TopN pruner.
         self.topn_pruning(metas)
@@ -234,33 +239,4 @@ impl FusePruner {
             blocks_bloom_pruning_after,
         }
     }
-}
-
-pub(super) fn eval_filters_with_one_column(
-    func_ctx: &FunctionContext,
-    col_name: &str,
-    col: Column,
-    filters: &RemoteExpr<String>,
-) -> Result<Bitmap> {
-    let num_rows = col.len();
-    let block = DataBlock::new_from_columns(vec![col]);
-    let evaluator = Evaluator::new(&block, func_ctx, &BUILTIN_FUNCTIONS);
-    let expr = filters
-        .as_expr(&BUILTIN_FUNCTIONS)
-        .project_column_ref(|name| {
-            // Should only have one column `_segment_name`.
-            debug_assert!(name == col_name);
-            0
-        });
-    let res = evaluator
-        .run(&expr)?
-        .convert_to_full_column(&DataType::Boolean, num_rows);
-
-    let res = match res {
-        Column::Nullable(col) => col.column.into_boolean().unwrap(),
-        Column::Boolean(bitmap) => bitmap,
-        _ => unreachable!(),
-    };
-
-    Ok(res)
 }

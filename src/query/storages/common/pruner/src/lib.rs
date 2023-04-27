@@ -15,11 +15,13 @@
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
 
+mod internal_column_pruner;
 mod limiter_pruner;
 mod page_pruner;
 mod range_pruner;
 mod topn_pruner;
 
+pub use internal_column_pruner::InternalColumnPruner;
 pub use limiter_pruner::Limiter;
 pub use limiter_pruner::LimiterPruner;
 pub use limiter_pruner::LimiterPrunerCreator;
