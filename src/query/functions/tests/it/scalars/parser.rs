@@ -515,6 +515,7 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
             let val_type = transform_data_type(*val_type);
             DataType::Map(Box::new(DataType::Tuple(vec![key_type, val_type])))
         }
+        common_ast::ast::TypeName::Bitmap => DataType::Bitmap,
         common_ast::ast::TypeName::Tuple { fields_type, .. } => {
             DataType::Tuple(fields_type.into_iter().map(transform_data_type).collect())
         }

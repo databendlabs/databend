@@ -27,7 +27,6 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
-use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 
 use super::fuse_rows_fetcher::RowsFetcher;
@@ -81,6 +80,8 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
                 (block_idx, *idx as usize, 1_usize)
             })
             .collect::<Vec<_>>();
+
+        let blocks = blocks.iter().collect::<Vec<_>>();
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
     }
 
@@ -103,7 +104,7 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
         for (seg_id, segment) in segments {
             let block_num = segment.blocks.len();
             for (block_idx, block_meta) in segment.blocks.iter().enumerate() {
-                let page_size = Self::page_size(block_meta);
+                let page_size = block_meta.page_size();
                 let part_info =
                     FuseTable::projection_part(block_meta, &None, &column_nodes, None, projection);
                 let block_id = block_id_in_segment(block_num, block_idx) as u64;
@@ -123,24 +124,6 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             column_leaves,
             part_map: HashMap::new(),
         }
-    }
-
-    /// Get the page size of one block file.
-    /// Page sizes within one block are all the same.
-    #[inline(always)]
-    fn page_size(block_meta: &BlockMeta) -> u64 {
-        block_meta
-            .col_metas
-            .iter()
-            .next()
-            .unwrap()
-            .1
-            .as_native()
-            .unwrap()
-            .pages
-            .first()
-            .unwrap()
-            .num_values
     }
 
     fn build_blocks(&self, mut chunks: DataChunks, needed_pages: &[u64]) -> Result<Vec<DataBlock>> {

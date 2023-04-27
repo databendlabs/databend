@@ -34,6 +34,7 @@ use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::Scalar;
+use crate::ARROW_EXT_TYPE_BITMAP;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
 use crate::ARROW_EXT_TYPE_VARIANT;
@@ -104,6 +105,7 @@ pub enum TableDataType {
     Nullable(Box<TableDataType>),
     Array(Box<TableDataType>),
     Map(Box<TableDataType>),
+    Bitmap,
     Tuple {
         fields_name: Vec<String>,
         fields_type: Vec<TableDataType>,
@@ -804,7 +806,7 @@ impl DataField {
         DataField {
             name: name.to_string(),
             default_expr: None,
-            data_type: DataType::Nullable(Box::new(data_type)),
+            data_type: data_type.wrap_nullable(),
         }
     }
 
@@ -974,6 +976,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Nullable(ty) => DataType::Nullable(Box::new((&**ty).into())),
             TableDataType::Array(ty) => DataType::Array(Box::new((&**ty).into())),
             TableDataType::Map(ty) => DataType::Map(Box::new((&**ty).into())),
+            TableDataType::Bitmap => DataType::Bitmap,
             TableDataType::Tuple { fields_type, .. } => {
                 DataType::Tuple(fields_type.iter().map(Into::into).collect())
             }
@@ -1230,6 +1233,7 @@ impl From<&ArrowField> for TableDataType {
                 ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
                 ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
                 ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
+                ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
                 _ => unimplemented!("data_type: {:?}", f.data_type()),
             },
             // this is safe, because we define the datatype firstly
@@ -1341,6 +1345,11 @@ impl From<&DataType> for ArrowDataType {
                     false,
                 )
             }
+            DataType::Bitmap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_BITMAP.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
             DataType::Tuple(types) => {
                 let fields = types
                     .iter()
@@ -1421,6 +1430,11 @@ impl From<&TableDataType> for ArrowDataType {
                     false,
                 )
             }
+            TableDataType::Bitmap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_BITMAP.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
             TableDataType::Tuple {
                 fields_name,
                 fields_type,
@@ -1468,6 +1482,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Map(inner_type) => {
             Ok(TableDataType::Map(Box::new(infer_schema_type(inner_type)?)))
         }
+        DataType::Bitmap => Ok(TableDataType::Bitmap),
         DataType::Variant => Ok(TableDataType::Variant),
         DataType::Tuple(fields) => {
             let fields_type = fields

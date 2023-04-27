@@ -545,6 +545,9 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
                 serialize_column_binary(&data, i, vec);
             }
         }
+        Column::Bitmap(v) => {
+            BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
+        }
         Column::Nullable(c) => {
             let valid = c.validity.get_bit(row);
             vec.push(valid as u8);
@@ -563,22 +566,19 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
     }
 }
 
-//  Group by (nullable(u16), nullable(u8)) needs 16 + 8 + 8 + 8 = 40 bytes, then we pad the bytes  up to u64 to store the hash value.
-//  If the value is null, we write 1 to the null_offset, otherwise we write 0.
-//  since most value is not null, so this can make the hash number as low as possible.
+// Group by (nullable(u16), nullable(u8)) needs 2 + 1 + 1 + 1 = 5 bytes, then we pad the bytes up to u64 to store the hash value.
+// If the value is null, we write 1 to the null_offset, otherwise we write 0.
+// since most value is not null, so this can make the hash number as low as possible.
 //
-//  u16 column pos       │u8 column pos
-// │                     │
-// │                     │
-// │                     │                       ┌─  null offset of u8 column
-// ▼                    ▼                      ▼
-// ┌──────────┬──────────┬───────────┬───────────┬───────────┬───────────┬─────────┬─────────┐
-// │   1byte  │   1byte  │    1byte  │    1byte  │   1byte   │    1byte  │   1byte │   1byte │
-// └──────────┴──────────┴───────────┴───────────┴───────────┼───────────┴─────────┴─────────┤
-//                                   ▲                       │                               │
-//                                   │                       └──────────►       ◄────────────┘
-//                                   │                                    unused bytes
-//                                   └─  null offset of u16 column
+// u16 column pos        u8 column pos
+// │                     │                       ┌─ null offset of u8 column
+// ▼                     ▼                       ▼
+// ┌──────────┬──────────┬───────────┬───────────┬───────────┬───────────┬───────────┬───────────┐
+// │   1byte  │   1byte  │   1byte   │   1byte   │   1byte   │   1byte   │   .....   │   1byte   │
+// └──────────┴──────────┴───────────┴───────────┴───────────┼───────────┴───────────┴───────────┤
+//                                   ▲                       │                                   │
+//                                   │                       └─────────► unused bytes  ◄─────────┘
+//                                   └─ null offset of u16 column
 
 pub fn fixed_hash(
     column: &Column,

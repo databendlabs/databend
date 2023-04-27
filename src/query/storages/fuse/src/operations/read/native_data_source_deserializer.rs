@@ -544,9 +544,13 @@ impl Processor for NativeDeserializeDataTransform {
 
             // Init array_iters and array_skip_pages to read pages in subsequent processes.
             if !self.inited {
+                let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
+                if let Some(range) = fuse_part.range() {
+                    self.offset_in_part = fuse_part.page_size() * range.start;
+                }
+
                 if let Some((_top_k, sorter, _index)) = self.top_k.as_mut() {
-                    let next_part = FusePartInfo::from_part(&self.parts[0])?;
-                    if let Some(sort_min_max) = &next_part.sort_min_max {
+                    if let Some(sort_min_max) = &fuse_part.sort_min_max {
                         if sorter.never_match(sort_min_max) {
                             return self.finish_process();
                         }
