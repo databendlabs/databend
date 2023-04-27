@@ -15,12 +15,12 @@ echo "create table small_parquets (id int, t tuple(a int, b string));" | $MYSQL_
 for threshold in "0" "4096"; do
 	for stage in "data_fs" "data_s3"; do
 		echo "--- copy, threshold=${threshold} stage=${stage}"
-		echo "set parquet_read_whole_file_threshold=${threshold}; copy into small_parquets from @${stage} PATTERN='tuple.parquet' force=true;" | $MYSQL_CLIENT_CONNECT
+		echo "set parquet_fast_read_bytes=${threshold}; copy into small_parquets from @${stage} PATTERN='tuple.parquet' force=true;" | $MYSQL_CLIENT_CONNECT
 		echo "select * from small_parquets" | $MYSQL_CLIENT_CONNECT
 		echo "truncate table small_parquets" | $MYSQL_CLIENT_CONNECT
 
 		echo "--- copy from select, threshold=${threshold} stage=${stage}"
-		echo "set parquet_read_whole_file_threshold=${threshold}; copy into small_parquets from (select * from @${stage} t) PATTERN='tuple.parquet' force = true;" | $MYSQL_CLIENT_CONNECT
+		echo "set parquet_fast_read_bytes=${threshold}; copy into small_parquets from (select * from @${stage} t) PATTERN='tuple.parquet' force = true;" | $MYSQL_CLIENT_CONNECT
 		echo "select * from small_parquets" | $MYSQL_CLIENT_CONNECT
 		echo "truncate table small_parquets" | $MYSQL_CLIENT_CONNECT
 	done
