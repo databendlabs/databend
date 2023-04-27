@@ -139,6 +139,7 @@ pub enum CopyUnit {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
+        columns: Option<Vec<Identifier>>,
     },
     /// StageLocation (a.k.a internal and external stage) can be used
     /// in `INTO` or `FROM`.
@@ -176,6 +177,7 @@ impl Display for CopyUnit {
                 catalog,
                 database,
                 table,
+                columns
             } => {
                 if let Some(catalog) = catalog {
                     write!(
@@ -187,6 +189,11 @@ impl Display for CopyUnit {
                     write!(f, "{database}.{table}")
                 } else {
                     write!(f, "{table}")
+                }
+                if let Some(columns) = columns {
+                    write!(f, "({})", columns.join(","))
+                } else {
+                    Ok(())
                 }
             }
             CopyUnit::StageLocation(v) => v.fmt(f),
