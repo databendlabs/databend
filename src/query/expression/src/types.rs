@@ -86,7 +86,7 @@ pub enum DataType {
 impl DataType {
     pub fn wrap_nullable(&self) -> Self {
         match self {
-            DataType::Nullable(_) => self.clone(),
+            DataType::Null | DataType::Nullable(_) => self.clone(),
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }

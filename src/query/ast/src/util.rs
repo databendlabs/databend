@@ -62,6 +62,16 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
     }
 }
 
+pub fn any_token(i: Input) -> IResult<&Token> {
+    match i.0.get(0).filter(|token| token.kind != EOI) {
+        Some(token) => Ok((i.slice(1..), token)),
+        _ => Err(nom::Err::Error(Error::from_error_kind(
+            i,
+            ErrorKind::Other("expected any token but reached the end"),
+        ))),
+    }
+}
+
 pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }

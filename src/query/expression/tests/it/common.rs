@@ -69,7 +69,8 @@ pub fn run_concat(file: &mut impl Write, blocks: &[DataBlock]) {
 }
 
 pub fn run_take_block(file: &mut impl Write, indices: &[BlockRowIndex], blocks: &[DataBlock]) {
-    let result = DataBlock::take_blocks(blocks, indices, 0);
+    let blocks = blocks.iter().collect::<Vec<_>>();
+    let result = DataBlock::take_blocks(&blocks, indices, 0);
     writeln!(file, "Take Block indices:         {indices:?}").unwrap();
     for (i, block) in blocks.iter().enumerate() {
         writeln!(file, "Block{i}:\n{block}").unwrap();

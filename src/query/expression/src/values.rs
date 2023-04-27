@@ -921,7 +921,7 @@ impl Column {
             Column::Bitmap(_) => DataType::Bitmap,
             Column::Nullable(inner) => {
                 let inner = inner.column.data_type();
-                DataType::Nullable(Box::new(inner))
+                inner.wrap_nullable()
             }
             Column::Tuple(fields) => {
                 let inner = fields.iter().map(|col| col.data_type()).collect::<Vec<_>>();

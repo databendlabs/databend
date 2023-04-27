@@ -370,6 +370,7 @@ Explain {
                     span: Some(
                         17..32,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -443,6 +444,7 @@ Explain {
                     span: Some(
                         17..33,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -743,6 +745,7 @@ CreateTable(
                         span: Some(
                             76..91,
                         ),
+                        hints: None,
                         distinct: false,
                         select_list: [
                             QualifiedName {
@@ -1497,6 +1500,7 @@ CreateView(
                     span: Some(
                         17..58,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -1607,6 +1611,7 @@ AlterView(
                     span: Some(
                         16..57,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -1747,6 +1752,7 @@ CreateView(
                     span: Some(
                         22..63,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -1865,6 +1871,7 @@ AlterView(
                     span: Some(
                         21..62,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -2364,6 +2371,7 @@ CreateTable(
                         span: Some(
                             21..38,
                         ),
+                        hints: None,
                         distinct: false,
                         select_list: [
                             QualifiedName {
@@ -2564,6 +2572,7 @@ Query(
                 span: Some(
                     0..84,
                 ),
+                hints: None,
                 distinct: true,
                 select_list: [
                     AliasedExpr {
@@ -2773,6 +2782,7 @@ Query(
                 span: Some(
                     0..16,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -2836,6 +2846,7 @@ Query(
                 span: Some(
                     0..19,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -2907,6 +2918,7 @@ Query(
                 span: Some(
                     0..21,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3006,6 +3018,7 @@ Query(
                 span: Some(
                     0..21,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3146,6 +3159,7 @@ Query(
                 span: Some(
                     0..35,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3287,6 +3301,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3428,6 +3443,7 @@ Query(
                 span: Some(
                     0..47,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3569,6 +3585,7 @@ Query(
                 span: Some(
                     0..45,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3710,6 +3727,7 @@ Query(
                 span: Some(
                     0..40,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3851,6 +3869,7 @@ Query(
                 span: Some(
                     0..45,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3992,6 +4011,7 @@ Query(
                 span: Some(
                     0..40,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4133,6 +4153,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4274,6 +4295,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4415,6 +4437,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4556,6 +4579,7 @@ Query(
                 span: Some(
                     0..41,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4697,6 +4721,7 @@ Query(
                 span: Some(
                     0..42,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4797,6 +4822,7 @@ Query(
                 span: Some(
                     0..43,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4897,6 +4923,7 @@ Query(
                 span: Some(
                     0..42,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4997,6 +5024,7 @@ Query(
                 span: Some(
                     0..37,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5097,6 +5125,7 @@ Query(
                 span: Some(
                     0..51,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5175,6 +5204,7 @@ Query(
                                         span: Some(
                                             33..50,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5266,6 +5296,7 @@ Query(
                 span: Some(
                     0..51,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5344,6 +5375,7 @@ Query(
                                         span: Some(
                                             33..50,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5435,6 +5467,7 @@ Query(
                 span: Some(
                     0..52,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5513,6 +5546,7 @@ Query(
                                         span: Some(
                                             34..51,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5604,6 +5638,7 @@ Query(
                 span: Some(
                     0..47,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5680,6 +5715,7 @@ Query(
                                         span: Some(
                                             29..46,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5771,6 +5807,7 @@ Query(
                 span: Some(
                     0..45,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -5878,6 +5915,7 @@ Query(
                 span: Some(
                     0..92,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -6112,6 +6150,7 @@ INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
 ---------- AST ------------
 Insert(
     InsertStmt {
+        hints: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -6152,6 +6191,7 @@ INSERT INTO t FORMAT json ;
 ---------- AST ------------
 Insert(
     InsertStmt {
+        hints: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -6179,6 +6219,7 @@ INSERT INTO t SELECT * FROM t2
 ---------- AST ------------
 Insert(
     InsertStmt {
+        hints: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -6200,6 +6241,7 @@ Insert(
                         span: Some(
                             20..36,
                         ),
+                        hints: None,
                         distinct: false,
                         select_list: [
                             QualifiedName {
@@ -6266,6 +6308,7 @@ Query(
                 span: Some(
                     0..44,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -8943,6 +8986,7 @@ UPDATE db1.tb1 SET a = (a + 1), b = 2 WHERE (c > 3)
 ---------- AST ------------
 Update(
     UpdateStmt {
+        hints: None,
         table: Table {
             span: Some(
                 7..14,
@@ -9189,6 +9233,7 @@ Query(
                 span: Some(
                     0..100,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -9287,6 +9332,7 @@ Query(
                 span: Some(
                     0..154,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -9435,6 +9481,7 @@ Query(
                 span: Some(
                     0..83,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -9556,6 +9603,7 @@ Query(
                 span: Some(
                     0..51,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9688,6 +9736,7 @@ Query(
                 span: Some(
                     0..53,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9818,6 +9867,7 @@ Query(
                 span: Some(
                     0..60,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9962,6 +10012,7 @@ Query(
                 span: Some(
                     0..59,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -10091,6 +10142,7 @@ Query(
                 span: Some(
                     0..39,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -10201,6 +10253,7 @@ Query(
                 span: Some(
                     0..41,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
