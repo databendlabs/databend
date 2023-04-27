@@ -43,13 +43,13 @@ select /* x /*+ yy */ */ 1
 ---------- Input ----------
 select 1 + /*+ foo
 ---------- Output ---------
-[(SELECT, "select", 0..6), (LiteralInteger, "1", 7..8), (Plus, "+", 9..10)]
+[(SELECT, "select", 0..6), (LiteralInteger, "1", 7..8), (Plus, "+", 9..10), (EOI, "", 18..18)]
 
 
 ---------- Input ----------
 select 1 /*+ foo
 ---------- Output ---------
-[(SELECT, "select", 0..6), (LiteralInteger, "1", 7..8)]
+[(SELECT, "select", 0..6), (LiteralInteger, "1", 7..8), (EOI, "", 16..16)]
 
 
 ---------- Input ----------

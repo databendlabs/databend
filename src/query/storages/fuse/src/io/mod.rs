@@ -14,7 +14,7 @@
 
 mod files;
 mod locations;
-mod read;
+pub mod read;
 mod segments;
 mod snapshots;
 mod write;
