@@ -6024,6 +6024,7 @@ Query(
                 span: Some(
                     0..28,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -6069,6 +6070,7 @@ Query(
                 span: Some(
                     0..31,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -6114,6 +6116,7 @@ Query(
                 span: Some(
                     0..13,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
