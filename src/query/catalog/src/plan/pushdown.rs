@@ -121,7 +121,7 @@ impl PushDownInfo {
 
             if let RemoteExpr::<String>::ColumnRef { id, .. } = &order.0 {
                 // TODO: support sub column of nested type.
-                let field = schema.field_with_name(id).unwrap();
+                let field = schema.field_with_name(id).ok()?;
                 if !support(&field.data_type().into()) {
                     return None;
                 }

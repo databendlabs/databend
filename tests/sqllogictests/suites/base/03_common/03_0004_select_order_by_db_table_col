@@ -43,11 +43,8 @@ SELECT DISTINCT(id) FROM a.t ORDER BY a.t.id2
 statement error
 SELECT SUM(id) as id2 FROM a.t ORDER BY a.t.id2
 
-query I
+statement error 1065
 SELECT DISTINCT(id) as id2 FROM a.t ORDER BY a.t.id2
-----
-1
-2
 
 query II
 SELECT * FROM a.t ORDER BY a.t.id ASC

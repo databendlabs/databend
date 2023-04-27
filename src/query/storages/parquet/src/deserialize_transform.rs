@@ -153,9 +153,12 @@ impl ParquetDeserializeTransform {
         use opendal::services::Memory;
         use opendal::Operator;
         let builder = Memory::default();
-        let op: Operator = Operator::new(builder)?.finish();
-        op.blocking().write(path, data)?;
-        let mut reader = op.blocking().reader(path)?;
+        let op = Operator::new(builder)?.finish();
+        let blocking_op = op.blocking();
+
+        blocking_op.write(path, data)?;
+
+        let mut reader = blocking_op.reader(path)?;
         let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;
@@ -165,7 +168,7 @@ impl ParquetDeserializeTransform {
         for part in parts {
             let mut readers = self
                 .source_reader
-                .row_group_readers_from_blocking_io(&part)?;
+                .row_group_readers_from_blocking_io(&part, &blocking_op)?;
             self.process_row_group(&part, &mut readers)?;
         }
         Ok(())

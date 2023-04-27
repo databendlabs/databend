@@ -40,7 +40,7 @@ use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_functions::BUILTIN_FUNCTIONS;
-use tracing::log::warn;
+use tracing::warn;
 
 use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;
@@ -182,6 +182,7 @@ impl Binder {
             .analyze_order_items(
                 &mut from_context,
                 &mut scalar_items,
+                &select_list,
                 &projections,
                 order_by,
                 stmt.distinct,
