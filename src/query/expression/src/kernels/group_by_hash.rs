@@ -30,9 +30,6 @@ use ethnum::u256;
 use ethnum::U256;
 use micromarshal::Marshal;
 
-use crate::types::array::ArrayColumn;
-use crate::types::array::ArrayColumnBuilder;
-use crate::types::array::ArrayIterator;
 use crate::types::boolean::BooleanType;
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalColumn;
@@ -46,7 +43,6 @@ use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
-use crate::types::StringType;
 use crate::types::ValueType;
 use crate::with_decimal_mapped_type;
 use crate::with_integer_mapped_type;

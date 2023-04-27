@@ -16,9 +16,10 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use common_hashtable::{DictionaryKeys, HashtableEntryMutRefLike};
+use common_hashtable::DictionaryKeys;
 use common_hashtable::DictionaryStringHashMap;
 use common_hashtable::HashMap;
+use common_hashtable::HashtableEntryMutRefLike;
 use common_hashtable::HashtableLike;
 use common_hashtable::ShortStringHashMap;
 use common_hashtable::StackHashMap;

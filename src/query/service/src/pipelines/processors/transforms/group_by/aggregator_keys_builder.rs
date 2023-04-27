@@ -12,25 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hash::Hash;
 use std::marker::PhantomData;
 
 use byteorder::BigEndian;
 use byteorder::WriteBytesExt;
 use common_arrow::arrow::buffer::Buffer;
-use common_expression::arrow::serialize_column;
 use common_expression::types::decimal::Decimal;
 use common_expression::types::number::Number;
-use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::NumberType;
 use common_expression::types::ValueType;
 use common_expression::Column;
 use common_hashtable::DictionaryKeys;
-use common_hashtable::DictionaryStringHashMap;
-use common_hashtable::FastHash;
-use common_hashtable::LookupHashMap;
-use common_hashtable::PartitionedHashMap;
 use ethnum::i256;
 
 use super::large_number::LargeNumber;

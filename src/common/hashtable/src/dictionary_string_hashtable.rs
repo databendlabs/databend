@@ -283,7 +283,8 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
                 dictionary_keys.push(NonNull::from(entry.key()));
             }
 
-            self.get_with_hash(&dictionary_keys, key.fast_hash()).map(|entry| DictionaryEntryRef::create(entry, self.dict_keys))
+            self.get_with_hash(&dictionary_keys, key.fast_hash())
+                .map(|entry| DictionaryEntryRef::create(entry, self.dict_keys))
         }
     }
 
@@ -298,7 +299,8 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
             }
 
             let keys = self.dict_keys;
-            self.get_mut_with_hash(&dictionary_keys, key.fast_hash()).map(|entry| DictionaryMutEntryRef::create(entry, keys))
+            self.get_mut_with_hash(&dictionary_keys, key.fast_hash())
+                .map(|entry| DictionaryMutEntryRef::create(entry, keys))
         }
     }
 
@@ -412,14 +414,14 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
 }
 
 pub struct DictionaryEntryRef<'a, V>
-    where Self: 'a
+where Self: 'a
 {
     key: DictionaryKeys,
     entry: &'a DictionaryEntry<V>,
 }
 
 impl<'a, V> Clone for DictionaryEntryRef<'a, V>
-    where Self: 'a
+where Self: 'a
 {
     fn clone(&self) -> Self {
         DictionaryEntryRef {
@@ -432,7 +434,7 @@ impl<'a, V> Clone for DictionaryEntryRef<'a, V>
 impl<'a, V> Copy for DictionaryEntryRef<'a, V> {}
 
 impl<'a, V> DictionaryEntryRef<'a, V>
-    where Self: 'a
+where Self: 'a
 {
     pub fn create(entry: &'a DictionaryEntry<V>, keys: usize) -> DictionaryEntryRef<'a, V> {
         unsafe {
@@ -506,7 +508,7 @@ impl<'a, V: 'a> EntryMutRefLike for DictionaryMutEntryRef<'a, V> {
     }
 
     fn write(&mut self, value: Self::Value) {
-            self.entry.val.write(value);
+        self.entry.val.write(value);
     }
 }
 
