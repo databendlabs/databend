@@ -45,15 +45,6 @@ impl RpcService {
         }))
     }
 
-    #[async_backtrace::framed]
-    async fn listener_tcp(listening: SocketAddr) -> Result<(TcpListenerStream, SocketAddr)> {
-        let listener = TcpListener::bind(listening).await.map_err(|e| {
-            ErrorCode::TokioError(format!("{{{}:{}}} {}", listening.ip(), listening.port(), e))
-        })?;
-        let listener_addr = listener.local_addr()?;
-        Ok((TcpListenerStream::new(listener), listener_addr))
-    }
-
     fn shutdown_notify(&self) -> impl Future<Output = ()> + 'static {
         let notified = self.abort_notify.clone();
         async move {
@@ -71,7 +62,7 @@ impl RpcService {
     }
 
     #[async_backtrace::framed]
-    pub async fn start_with_incoming(&mut self, listener_stream: TcpListenerStream) -> Result<()> {
+    pub async fn start_with_incoming(&mut self, addr: SocketAddr) -> Result<()> {
         let flight_api_service = DatabendQueryFlightService::create();
         let builder = Server::builder();
         let mut builder = if self.config.tls_rpc_server_enabled() {
@@ -91,7 +82,7 @@ impl RpcService {
 
         let server = builder
             .add_service(FlightServiceServer::new(flight_api_service))
-            .serve_with_incoming_shutdown(listener_stream, self.shutdown_notify());
+            .serve_with_shutdown(addr, self.shutdown_notify());
 
         tokio::spawn(async_backtrace::location!().frame(server));
         Ok(())
@@ -104,9 +95,8 @@ impl DatabendQueryServer for RpcService {
     async fn shutdown(&mut self, _graceful: bool) {}
 
     #[async_backtrace::framed]
-    async fn start(&mut self, listening: SocketAddr) -> Result<SocketAddr> {
-        let (listener_stream, listener_addr) = Self::listener_tcp(listening).await?;
-        self.start_with_incoming(listener_stream).await?;
+    async fn start(&mut self, addr: SocketAddr) -> Result<SocketAddr> {
+        self.start_with_incoming(addr).await?;
         Ok(listener_addr)
     }
 }
