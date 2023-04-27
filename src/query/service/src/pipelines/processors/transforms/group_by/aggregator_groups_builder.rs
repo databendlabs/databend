@@ -143,7 +143,7 @@ impl<'a> GroupColumnsBuilder for SerializedKeysGroupColumnsBuilder<'a> {
 
 pub struct DictionarySerializedKeysGroupColumnsBuilder<'a> {
     other_type_data: Vec<&'a [u8]>,
-    string_type_data: Vec<&'a DictionaryKeys>,
+    string_type_data: Vec<DictionaryKeys>,
     group_data_types: Vec<DataType>,
 }
 
@@ -167,7 +167,7 @@ impl<'a> GroupColumnsBuilder for DictionarySerializedKeysGroupColumnsBuilder<'a>
             }
         }
 
-        self.string_type_data.push(v)
+        self.string_type_data.push(v.clone())
     }
 
     fn finish(mut self) -> Result<Vec<Column>> {

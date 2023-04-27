@@ -50,6 +50,7 @@ impl RpcService {
         let listener = TcpListener::bind(listening).await.map_err(|e| {
             ErrorCode::TokioError(format!("{{{}:{}}} {}", listening.ip(), listening.port(), e))
         })?;
+
         let listener_addr = listener.local_addr()?;
         Ok((TcpListenerStream::new(listener), listener_addr))
     }

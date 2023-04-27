@@ -53,7 +53,6 @@ use crate::pipelines::processors::transforms::group_by::aggregator_groups_builde
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::DictionaryStringKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::FixedKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::KeysColumnBuilder;
-use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::PartitionedKeysBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_builder::StringKeysColumnBuilder;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::DictionarySerializedKeysColumnIter;
 use crate::pipelines::processors::transforms::group_by::aggregator_keys_iter::FixedKeysColumnIter;
@@ -110,16 +109,16 @@ pub trait PolymorphicKeysHelper<Method: HashMethod>: Send + Sync + 'static {
         + 'static;
     fn create_hash_table<T: Send + Sync + 'static>(&self) -> Result<Self::HashTable<T>>;
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static>: KeysColumnBuilder<T = &'a Method::HashKey, HashTable = Self::HashTable<V>>
+    type ColumnBuilder<'a>: KeysColumnBuilder<T = &'a Method::HashKey>
     where
         Self: 'a,
         Method: 'a;
 
-    fn keys_column_builder<V: Send + Sync + 'static>(
+    fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> Self::ColumnBuilder<'_, V>;
+    ) -> Self::ColumnBuilder<'_>;
 
     type KeysColumnIter: KeysColumnIter<Method::HashKey>;
 
@@ -149,14 +148,9 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u8>> for HashMethodFixedKeys<u8> 
         Ok(LookupHashMap::create(Default::default()))
     }
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static> =
-        FixedKeysColumnBuilder<'a, u8, Self::HashTable<V>>;
-    fn keys_column_builder<T: Send + Sync + 'static>(
-        &self,
-        capacity: usize,
-        _: usize,
-    ) -> FixedKeysColumnBuilder<u8, Self::HashTable<T>> {
-        FixedKeysColumnBuilder::<u8, Self::HashTable<T>> {
+    type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u8>;
+    fn keys_column_builder(&self, capacity: usize, _: usize) -> FixedKeysColumnBuilder<u8> {
+        FixedKeysColumnBuilder::<u8> {
             _t: Default::default(),
             inner_builder: Vec::with_capacity(capacity),
         }
@@ -191,14 +185,9 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u16>> for HashMethodFixedKeys<u16
         Ok(LookupHashMap::create(Default::default()))
     }
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static> =
-        FixedKeysColumnBuilder<'a, u16, Self::HashTable<V>>;
-    fn keys_column_builder<V: Send + Sync + 'static>(
-        &self,
-        capacity: usize,
-        _: usize,
-    ) -> FixedKeysColumnBuilder<u16, Self::HashTable<V>> {
-        FixedKeysColumnBuilder::<u16, Self::HashTable<V>> {
+    type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u16>;
+    fn keys_column_builder(&self, capacity: usize, _: usize) -> FixedKeysColumnBuilder<u16> {
+        FixedKeysColumnBuilder::<u16> {
             _t: Default::default(),
             inner_builder: Vec::with_capacity(capacity),
         }
@@ -233,14 +222,9 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u32>> for HashMethodFixedKeys<u32
         Ok(HashMap::new())
     }
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static> =
-        FixedKeysColumnBuilder<'a, u32, Self::HashTable<V>>;
-    fn keys_column_builder<V: Send + Sync + 'static>(
-        &self,
-        capacity: usize,
-        _: usize,
-    ) -> FixedKeysColumnBuilder<u32, Self::HashTable<V>> {
-        FixedKeysColumnBuilder::<u32, Self::HashTable<V>> {
+    type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u32>;
+    fn keys_column_builder(&self, capacity: usize, _: usize) -> FixedKeysColumnBuilder<u32> {
+        FixedKeysColumnBuilder::<u32> {
             _t: Default::default(),
             inner_builder: Vec::with_capacity(capacity),
         }
@@ -275,14 +259,9 @@ impl PolymorphicKeysHelper<HashMethodFixedKeys<u64>> for HashMethodFixedKeys<u64
         Ok(HashMap::new())
     }
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static> =
-        FixedKeysColumnBuilder<'a, u64, Self::HashTable<V>>;
-    fn keys_column_builder<V: Send + Sync + 'static>(
-        &self,
-        capacity: usize,
-        _: usize,
-    ) -> FixedKeysColumnBuilder<u64, Self::HashTable<V>> {
-        FixedKeysColumnBuilder::<u64, Self::HashTable<V>> {
+    type ColumnBuilder<'a> = FixedKeysColumnBuilder<'a, u64>;
+    fn keys_column_builder(&self, capacity: usize, _: usize) -> FixedKeysColumnBuilder<u64> {
+        FixedKeysColumnBuilder::<u64> {
             _t: Default::default(),
             inner_builder: Vec::with_capacity(capacity),
         }
@@ -317,14 +296,9 @@ impl PolymorphicKeysHelper<HashMethodKeysU128> for HashMethodKeysU128 {
         Ok(HashMap::new())
     }
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static> =
-        LargeFixedKeysColumnBuilder<'a, u128, Self::HashTable<V>>;
-    fn keys_column_builder<V: Send + Sync + 'static>(
-        &self,
-        capacity: usize,
-        _: usize,
-    ) -> LargeFixedKeysColumnBuilder<u128, Self::HashTable<V>> {
-        LargeFixedKeysColumnBuilder::<u128, Self::HashTable<V>> {
+    type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, u128>;
+    fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<u128> {
+        LargeFixedKeysColumnBuilder::<u128> {
             values: Vec::with_capacity(capacity * 16),
             _t: PhantomData,
         }
@@ -368,14 +342,9 @@ impl PolymorphicKeysHelper<HashMethodKeysU256> for HashMethodKeysU256 {
         Ok(HashMap::new())
     }
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static> =
-        LargeFixedKeysColumnBuilder<'a, U256, Self::HashTable<V>>;
-    fn keys_column_builder<V: Send + Sync + 'static>(
-        &self,
-        capacity: usize,
-        _: usize,
-    ) -> LargeFixedKeysColumnBuilder<U256, Self::HashTable<V>> {
-        LargeFixedKeysColumnBuilder::<U256, Self::HashTable<V>> {
+    type ColumnBuilder<'a> = LargeFixedKeysColumnBuilder<'a, U256>;
+    fn keys_column_builder(&self, capacity: usize, _: usize) -> LargeFixedKeysColumnBuilder<U256> {
+        LargeFixedKeysColumnBuilder::<U256> {
             values: Vec::with_capacity(capacity * 32),
             _t: PhantomData,
         }
@@ -420,13 +389,12 @@ impl PolymorphicKeysHelper<HashMethodSingleString> for HashMethodSingleString {
         Ok(ShortStringHashMap::new())
     }
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static> =
-        StringKeysColumnBuilder<'a, Self::HashTable<V>>;
-    fn keys_column_builder<V: Send + Sync + 'static>(
+    type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
+    fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> StringKeysColumnBuilder<'_, Self::HashTable<V>> {
+    ) -> StringKeysColumnBuilder<'_> {
         StringKeysColumnBuilder::create(capacity, value_capacity)
     }
 
@@ -461,13 +429,12 @@ impl PolymorphicKeysHelper<HashMethodSerializer> for HashMethodSerializer {
         Ok(StringHashMap::new())
     }
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static> =
-        StringKeysColumnBuilder<'a, Self::HashTable<V>>;
-    fn keys_column_builder<V: Send + Sync + 'static>(
+    type ColumnBuilder<'a> = StringKeysColumnBuilder<'a>;
+    fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> StringKeysColumnBuilder<'_, Self::HashTable<V>> {
+    ) -> StringKeysColumnBuilder<'_> {
         StringKeysColumnBuilder::create(capacity, value_capacity)
     }
 
@@ -502,22 +469,27 @@ impl PolymorphicKeysHelper<HashMethodDictionarySerializer> for HashMethodDiction
         Ok(DictionaryStringHashMap::new(self.dict_keys))
     }
 
-    type ColumnBuilder<'a, V: Send + Sync + 'static> = DictionaryStringKeysColumnBuilder<'a, V>;
+    type ColumnBuilder<'a> = DictionaryStringKeysColumnBuilder<'a>;
 
-    fn keys_column_builder<V: Send + Sync + 'static>(
+    fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> Self::ColumnBuilder<'_, V> {
+    ) -> Self::ColumnBuilder<'_> {
         DictionaryStringKeysColumnBuilder::create(capacity, value_capacity)
     }
 
     type KeysColumnIter = DictionarySerializedKeysColumnIter;
 
     fn keys_iter_from_column(&self, column: &Column) -> Result<Self::KeysColumnIter> {
-        DictionarySerializedKeysColumnIter::create(column.as_string().ok_or_else(|| {
-            ErrorCode::IllegalDataType("Illegal data type for SerializedKeysColumnIter".to_string())
-        })?)
+        DictionarySerializedKeysColumnIter::create(
+            self.dict_keys,
+            column.as_string().ok_or_else(|| {
+                ErrorCode::IllegalDataType(
+                    "Illegal data type for SerializedKeysColumnIter".to_string(),
+                )
+            })?,
+        )
     }
 
     type GroupColumnsBuilder<'a> = DictionarySerializedKeysGroupColumnsBuilder<'a>;
@@ -639,14 +611,14 @@ where
         Ok(PartitionedHashMap::<_, BUCKETS_LG2>::create(tables))
     }
 
-    type ColumnBuilder<'a, V:Send+Sync+'static> = PartitionedKeysBuilder<Method::ColumnBuilder<'a, V>> where Self: 'a, PartitionedHashMethod<Method>: 'a;
+    type ColumnBuilder<'a> = Method::ColumnBuilder<'a> where Self: 'a, PartitionedHashMethod<Method>: 'a;
 
-    fn keys_column_builder<V: Send + Sync + 'static>(
+    fn keys_column_builder(
         &self,
         capacity: usize,
         value_capacity: usize,
-    ) -> Self::ColumnBuilder<'_, V> {
-        PartitionedKeysBuilder::create(self.method.keys_column_builder(capacity, value_capacity))
+    ) -> Self::ColumnBuilder<'_> {
+        self.method.keys_column_builder(capacity, value_capacity)
     }
 
     type KeysColumnIter = Method::KeysColumnIter;

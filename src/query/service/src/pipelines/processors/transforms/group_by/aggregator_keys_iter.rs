@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ptr::NonNull;
 use std::slice::Iter;
 
+use byteorder::BigEndian;
+use byteorder::ReadBytesExt;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::arrow::deserialize_column;
 use common_expression::types::number::Number;
 use common_expression::types::string::StringColumn;
 use common_expression::types::string::StringIterator;
@@ -92,14 +96,35 @@ impl KeysColumnIter<[u8]> for SerializedKeysColumnIter {
 }
 
 pub struct DictionarySerializedKeysColumnIter {
+    #[allow(dead_code)]
     column: StringColumn,
+    #[allow(dead_code)]
+    points: Vec<NonNull<[u8]>>,
+    inner: Vec<DictionaryKeys>,
 }
 
 impl DictionarySerializedKeysColumnIter {
-    pub fn create(column: &StringColumn) -> Result<DictionarySerializedKeysColumnIter> {
-        Err(ErrorCode::Unimplemented(
-            "DictionarySerializedKeys is unimplemented in cluster.",
-        ))
+    pub fn create(
+        dict_keys: usize,
+        column: &StringColumn,
+    ) -> Result<DictionarySerializedKeysColumnIter> {
+        let mut inner = Vec::with_capacity(column.len());
+        let mut points = Vec::with_capacity(column.len() * dict_keys);
+        for (index, mut item) in column.iter().enumerate() {
+            for _ in 0..dict_keys {
+                let len = item.read_u64::<BigEndian>()? as usize;
+                points.push(NonNull::from(&item[0..len]));
+                item = &item[len..];
+            }
+
+            inner.push(DictionaryKeys::create(&points[index * dict_keys..]));
+        }
+
+        Ok(DictionarySerializedKeysColumnIter {
+            inner,
+            points,
+            column: column.clone(),
+        })
     }
 }
 
@@ -107,7 +132,6 @@ impl KeysColumnIter<DictionaryKeys> for DictionarySerializedKeysColumnIter {
     type Iterator<'a> = std::slice::Iter<'a, DictionaryKeys>;
 
     fn iter(&self) -> Self::Iterator<'_> {
-        // self.column.iter
-        unimplemented!()
+        self.inner.iter()
     }
 }

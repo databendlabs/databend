@@ -1,5 +1,6 @@
 use std::intrinsics::assume;
 use std::intrinsics::unlikely;
+use std::io::empty;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::ptr::NonNull;
@@ -12,7 +13,10 @@ use crate::container::HeapContainer;
 use crate::hashtable::Hashtable;
 use crate::hashtable::HashtableIter;
 use crate::hashtable::HashtableIterMut;
+use crate::short_string_hashtable::FallbackKey;
+use crate::string_hashtable::StringHashtable;
 use crate::table0::Entry;
+use crate::table_empty::TableEmpty;
 use crate::traits::EntryMutRefLike;
 use crate::traits::EntryRefLike;
 use crate::traits::Keyable;
@@ -238,6 +242,24 @@ impl<V> DictionaryStringHashTable<V> {
         }
         None
     }
+
+    pub fn dictionary_slot_iter(&self) -> DictionarySlotIter<'_> {
+        DictionarySlotIter {
+            i: 0,
+            empty: Some(&self.dictionary_hashset.table_empty),
+            entities_slice: self.dictionary_hashset.table.entries.as_ref(),
+        }
+    }
+
+    pub fn iter_slot(&self) -> DictionaryTableKeySlotIter<'_, V> {
+        DictionaryTableKeySlotIter::<'_, V> {
+            entities_i: 0,
+            dict_keys_i: 0,
+            dict_keys: self.dict_keys,
+            entities: self.entries.as_ref(),
+            dictionary_hashset: &self.dictionary_hashset,
+        }
+    }
 }
 
 impl<V> HashtableLike for DictionaryStringHashTable<V> {
@@ -329,6 +351,7 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
         let mut dictionary_keys = Vec::with_capacity(self.dict_keys);
 
         for key in key.keys.as_ref() {
+            // println!("insert: {:?}", String::from_utf8(key.as_ref().to_vec()).unwrap());
             dictionary_keys.push(NonNull::from(
                 match self.dictionary_hashset.insert_and_entry(key.as_ref()) {
                     Ok(e) => e.key(),
@@ -345,6 +368,9 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
                 self.entries_len += 1;
 
                 let global_keys = self.arena.alloc_slice_copy(&dictionary_keys);
+                // for key in global_keys.iter() {
+                //     println!("insert: {:?}", String::from_utf8(key.as_ref().to_vec()).unwrap());
+                // }
                 self.entries[i].hash = hash;
                 self.entries[i]
                     .key
@@ -425,6 +451,12 @@ where Self: 'a
         unsafe {
             let begin = entry.key.assume_init_ref().as_ptr();
             let slice = std::slice::from_raw_parts(begin, keys);
+
+            // for x in slice {
+            // for key in res.key.keys.as_ref() {
+            // println!("key {:?}", String::from_utf8(x.as_ref().to_vec()).unwrap());
+            // }
+            // }
 
             DictionaryEntryRef {
                 entry,
@@ -512,9 +544,11 @@ impl<'a, V> Iterator for DictionaryTableIter<'a, V> {
         if self.i == self.slice.len() {
             None
         } else {
-            let res = unsafe { &*(self.slice.as_ptr().add(self.i) as *const _) };
-            self.i += 1;
-            Some(DictionaryEntryRef::create(res, self.dict_keys))
+            unsafe {
+                let res = unsafe { &*(self.slice.as_ptr().add(self.i) as *const _) };
+                self.i += 1;
+                Some(DictionaryEntryRef::create(res, self.dict_keys))
+            }
         }
     }
 
@@ -549,5 +583,91 @@ impl<'a, V> Iterator for DictionaryTableMutIter<'a, V> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remain = self.slice.len() - self.i;
         (remain, Some(remain))
+    }
+}
+
+pub struct DictionarySlotIter<'a> {
+    empty: Option<&'a TableEmpty<(), MmapAllocator>>,
+    entities_slice: &'a [Entry<FallbackKey, ()>],
+    i: usize,
+}
+
+impl<'a> Iterator for DictionarySlotIter<'a> {
+    type Item = Option<&'a [u8]>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.empty.is_some() {
+            self.empty = None;
+            return Some(None);
+        }
+
+        match self.i == self.entities_slice.len() {
+            true => None,
+            false => {
+                let res = match &self.entities_slice[self.i].key().key {
+                    None => Some(None),
+                    Some(x) => unsafe { Some(Some(x.as_ref())) },
+                };
+
+                self.i += 1;
+                res
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remain = self.entities_slice.len() - self.i;
+        match self.empty.is_some() {
+            true => (remain + 1, Some(remain + 1)),
+            false => (remain, Some(remain)),
+        }
+    }
+}
+
+pub struct DictionaryTableKeySlotIter<'a, T> {
+    entities_i: usize,
+    dict_keys_i: usize,
+    dict_keys: usize,
+    entities: &'a [DictionaryEntry<T>],
+    dictionary_hashset: &'a StringHashSet<[u8]>,
+}
+
+impl<'a, T> Iterator for DictionaryTableKeySlotIter<'a, T> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        'worker: loop {
+            while self.entities_i < self.entities.len() && self.entities[self.entities_i].is_zero()
+            {
+                self.entities_i += 1;
+            }
+
+            return match self.entities_i == self.entities.len() {
+                true => None,
+                false => unsafe {
+                    if self.dict_keys_i == self.dict_keys {
+                        self.dict_keys_i = 0;
+                        self.entities_i += 1;
+                        continue 'worker;
+                    }
+
+                    let slice = std::slice::from_raw_parts(
+                        self.entities[self.entities_i]
+                            .key
+                            .assume_init_ref()
+                            .as_ptr(),
+                        self.dict_keys,
+                    );
+
+                    let key = slice[self.dict_keys_i];
+                    self.dict_keys_i += 1;
+                    Some(
+                        self.dictionary_hashset
+                            .get_slot_index(key.as_ref())
+                            .unwrap(),
+                    )
+                },
+            };
+        }
     }
 }

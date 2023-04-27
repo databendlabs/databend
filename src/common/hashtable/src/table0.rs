@@ -163,6 +163,23 @@ where
         }
         None
     }
+
+    pub unsafe fn get_slot_index(&self, key: &K) -> Option<usize> {
+        assume(!K::equals_zero(key));
+
+        let index = (key.hash() as usize) & (self.entries.len() - 1);
+        for i in (index..self.entries.len()).chain(0..index) {
+            assume(i < self.entries.len());
+            if self.entries[i].is_zero() {
+                return None;
+            }
+            if self.entries[i].key.assume_init_ref().borrow() == key {
+                return Some(i);
+            }
+        }
+        None
+    }
+
     /// # Safety
     ///
     /// `key` doesn't equal to zero.
