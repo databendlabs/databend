@@ -118,6 +118,8 @@ pub struct TypeChecker<'a> {
     // true if current expr is inside an window function.
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
+
+    allow_ambiguous: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -127,6 +129,7 @@ impl<'a> TypeChecker<'a> {
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
+        allow_ambiguous: bool,
     ) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
         Self {
@@ -138,6 +141,7 @@ impl<'a> TypeChecker<'a> {
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
+            allow_ambiguous,
         }
     }
 
@@ -185,6 +189,7 @@ impl<'a> TypeChecker<'a> {
                     column.as_str(),
                     ident.span,
                     self.aliases,
+                    self.allow_ambiguous,
                 )?;
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
@@ -2434,6 +2439,7 @@ impl<'a> TypeChecker<'a> {
             inner_column_name.as_str(),
             span,
             self.aliases,
+            self.allow_ambiguous,
         ) {
             Ok(result) => {
                 let (scalar, data_type) = match result {
