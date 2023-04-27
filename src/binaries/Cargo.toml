@@ -97,13 +97,13 @@ test = false
 
 [[bin]]
 name = "databend-query"
-path = "query/main.rs"
+path = "query/ee_main.rs"
 doctest = false
 test = false
 
 [[bin]]
 name = "databend-query-oss"
-path = "query/oss.rs"
+path = "query/oss_main.rs"
 doctest = false
 test = false
 

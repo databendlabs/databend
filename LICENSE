@@ -1,0 +1,5 @@
+Databend is released under a combination of two licenses:
+
+1. [Apache-2.0](licenses/apache.md). The portion licensed by Apache License 2.0 allows any use of Databend, excluding enterprise features.
+
+2. [Elactic](licenses/elastic_v2.md). The portion licensed by Elastic License 2.0 allows you to use enterprise features with a paid license key. Please contact us at https://www.databend.com/contact-us/ for more details.
