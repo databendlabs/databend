@@ -672,7 +672,7 @@ fn test_quote() {
         ("name\"with\"quote", "\"name\"\"with\"\"quote\""),
     ];
     for (input, want) in cases {
-        let quoted = quote_ident(input, '"');
+        let quoted = quote_ident(input, '"', false);
         assert_eq!(quoted, *want);
         let unquoted = unquote_ident(&quoted, '"');
         assert_eq!(unquoted, *input, "unquote({}) got {}", quoted, unquoted);

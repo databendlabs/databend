@@ -12,12 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub fn quote_ident(ident: &str, quote: Option<char>) -> String {
-    if !need_quote_ident(ident) && quote.is_none() {
+pub fn quote_ident(ident: &str, quote: char, always_quote: bool) -> String {
+    if !need_quote_ident(ident) && !always_quote {
         return ident.to_string();
     }
 
-    let quote = quote.unwrap_or('"');
     let mut s = String::with_capacity(ident.len() + 2);
     s.push(quote);
     for c in ident.chars() {
@@ -55,9 +54,16 @@ pub fn unquote_ident(s: &str, quote: char) -> String {
     s
 }
 
+// in ANSI SQL, it do not need to quote an identifier if the identifier matches
+// the following regular expression: [A-Za-z_][A-Za-z0-9_$]*.
 fn need_quote_ident(ident: &str) -> bool {
     if ident.is_empty() {
         return true;
+    }
+
+    // avoid quote the special identifier "~" which is an available stage name
+    if ident == "~" {
+        return false;
     }
 
     let mut chars = ident.chars();
@@ -67,7 +73,7 @@ fn need_quote_ident(ident: &str) -> bool {
     }
 
     for c in chars {
-        if !c.is_ascii_alphanumeric() && c != '_' {
+        if !c.is_ascii_alphanumeric() && c != '_' && c != '$' {
             return true;
         }
     }

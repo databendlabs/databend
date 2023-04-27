@@ -1138,7 +1138,7 @@ TruncateTable(
 ---------- Input ----------
 truncate table "a".b;
 ---------- Output ---------
-TRUNCATE TABLE a.b
+TRUNCATE TABLE "a".b
 ---------- AST ------------
 TruncateTable(
     TruncateTableStmt {
@@ -1191,7 +1191,7 @@ DropTable(
 ---------- Input ----------
 drop table if exists a."b";
 ---------- Output ---------
-DROP TABLE IF EXISTS a.b
+DROP TABLE IF EXISTS a."b"
 ---------- AST ------------
 DropTable(
     DropTableStmt {
@@ -1223,7 +1223,7 @@ DropTable(
 ---------- Input ----------
 use "a";
 ---------- Output ---------
-USE a
+USE "a"
 ---------- AST ------------
 UseDatabase {
     database: Identifier {
@@ -3005,7 +3005,7 @@ Query(
 ---------- Input ----------
 select * from a, b, c order by "db"."a"."c1";
 ---------- Output ---------
-SELECT * FROM a, b, c ORDER BY db.a.c1
+SELECT * FROM a, b, c ORDER BY "db"."a"."c1"
 ---------- AST ------------
 Query(
     Query {
