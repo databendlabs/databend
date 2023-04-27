@@ -8,7 +8,7 @@ import signal
 from multiprocessing import Process
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
-sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
+sys.path.insert(0, os.path.join(CURDIR, "../../../tests/helpers"))
 
 from native_client import NativeClient
 from native_client import prompt
@@ -25,7 +25,7 @@ mydb = mysql.connector.connect(
 def insert_data(name):
     mycursor = mydb.cursor()
     value = 1
-    while value < 20:
+    while True:
         sql = "insert into table gc_test values(%d);" % value
         mycursor.execute(sql)
         value +=1
@@ -44,9 +44,21 @@ if __name__ == '__main__':
         client1.send("create table gc_test(a int);");
         client1.expect(prompt)
 
-        insert_data('insert_data')
+        p = Process(target=insert_data, args=('insert_data',))
+        p.start()
 
-        compact_data('compact_data')
+        time.sleep(1)
+        #kill the insert_data child process randomly
+        p.kill()
+        time.sleep(0.1)
+
+        p = Process(target=compact_data, args=('compact_data',))
+        p.start()
+
+        time.sleep(0.1)
+        #kill the compact_data child process randomly
+        p.kill()
+        time.sleep(0.1)
 
         mycursor = mydb.cursor()
         mycursor.execute('select a from gc_test order by a;')
