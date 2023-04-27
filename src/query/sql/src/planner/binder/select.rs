@@ -40,6 +40,7 @@ use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_functions::BUILTIN_FUNCTIONS;
+use tracing::warn;
 
 use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;
@@ -86,6 +87,14 @@ impl Binder {
         order_by: &[OrderByExpr],
         limit: usize,
     ) -> Result<(SExpr, BindContext)> {
+        if let Some(hints) = &stmt.hints {
+            if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                warn!(
+                    "In SELECT resolve optimize hints {:?} failed, err: {:?}",
+                    hints, e
+                );
+            }
+        }
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             self.bind_one_table(bind_context, stmt).await?
         } else {

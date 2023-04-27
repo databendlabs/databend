@@ -38,10 +38,10 @@ impl ParquetTable {
         push_down: Option<PushDownInfo>,
         is_small_file: bool,
     ) -> Result<PartitionPruner> {
-        let parquet_read_whole_file_threshold = if is_small_file {
+        let parquet_fast_read_bytes = if is_small_file {
             0_usize
         } else {
-            ctx.get_settings().get_parquet_read_whole_file_threshold()? as usize
+            ctx.get_settings().get_parquet_fast_read_bytes()? as usize
         };
         // `plan.source_info.schema()` is the same as `TableSchema::from(&self.arrow_schema)`
         let projection = if let Some(PushDownInfo {
@@ -120,7 +120,7 @@ impl ParquetTable {
             column_nodes: projected_column_nodes,
             skip_pruning,
             top_k,
-            parquet_read_whole_file_threshold,
+            parquet_fast_read_bytes,
         })
     }
 
