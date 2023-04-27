@@ -16,6 +16,7 @@ echo "create table t20_0012(c int)" | $MYSQL_CLIENT_CONNECT
 echo "show databases" | $TEST_USER_CONNECT
 
 ## insert data
+echo "select 'test -- insert'" | $TEST_USER_CONNECT
 echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
 ## grant user privilege
 echo "GRANT SELECT, INSERT ON * TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
@@ -25,6 +26,7 @@ echo "insert into t20_0012 values(1),(2)" | $TEST_USER_CONNECT
 echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
 
 ## update data
+echo "select 'test -- update'" | $TEST_USER_CONNECT
 echo "update t20_0012 set c=3 where c=1" | $TEST_USER_CONNECT
 ## grant user privilege
 echo "GRANT UPDATE ON * TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
@@ -34,6 +36,7 @@ echo "update t20_0012 set c=3 where c=1" | $TEST_USER_CONNECT
 echo "select * from t20_0012 order by c" | $TEST_USER_CONNECT
 
 ## delete data
+echo "select 'test -- delete'" | $TEST_USER_CONNECT
 echo "delete from t20_0012 where c=2" | $TEST_USER_CONNECT
 ## grant user privilege
 echo "GRANT DELETE ON * TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
@@ -43,18 +46,20 @@ echo "delete from t20_0012 where c=2" | $TEST_USER_CONNECT
 echo "select count(*) = 0 from t20_0012 where c=2" | $TEST_USER_CONNECT
 
 ## optimize table
+echo "select 'test -- optimize table'" | $TEST_USER_CONNECT
 echo "optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## grant user privilege
 echo "GRANT Super ON *.* TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
 echo "GRANT SELECT ON system.fuse_snapshot TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
 ## optimize table
-echo "optimize table t20_0012 all" | $TEST_USER_CONNECT
+echo "set retention_period=0; optimize table t20_0012 all" | $TEST_USER_CONNECT
 ## verify
-echo "select count(*)=1  from fuse_snapshot('default', 't20_0012')" | $TEST_USER_CONNECT
+echo "select count(*)>=1  from fuse_snapshot('default', 't20_0012')" | $TEST_USER_CONNECT
 ## revoke privilege
 echo "REVOKE SELECT ON system.fuse_snapshot FROM 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
 
 ## select data
+echo "select 'test -- select'" | $TEST_USER_CONNECT
 ## Init tables
 echo "CREATE TABLE default.t20_0012_a(c int) CLUSTER BY(c)" | $MYSQL_CLIENT_CONNECT
 echo "GRANT INSERT ON default.t20_0012_a TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
@@ -84,21 +89,22 @@ echo "select * from default2.v_t20_0012" | $TEST_USER_CONNECT
 
 ## select procedure
 ## clustering_information
-echo "select count(*)=1 from clustering_information('default', 't20_0012_a')" | $TEST_USER_CONNECT
+echo "select 'test -- clustering_information'" | $MYSQL_CLIENT_CONNECT
+echo "select count(*)>=1 from clustering_information('default', 't20_0012_a')" | $TEST_USER_CONNECT
 echo "GRANT SELECT ON system.clustering_information TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
-echo "select count(*)=1 from clustering_information('default', 't20_0012_a')" | $TEST_USER_CONNECT
+echo "select count(*)>=1 from clustering_information('default', 't20_0012_a')" | $TEST_USER_CONNECT
 ## fuse_snapshot
-echo "select count(*)=1 from fuse_snapshot('default', 't20_0012_a')" | $TEST_USER_CONNECT
+echo "select count(*)>=1 from fuse_snapshot('default', 't20_0012_a')" | $TEST_USER_CONNECT
 echo "GRANT SELECT ON system.fuse_snapshot TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
-echo "select count(*)=1 from fuse_snapshot('default', 't20_0012_a')" | $TEST_USER_CONNECT
+echo "select count(*)>=1 from fuse_snapshot('default', 't20_0012_a')" | $TEST_USER_CONNECT
 ## fuse_segment
 echo "select count(*)=0 from fuse_segment('default', 't20_0012_a', '')" | $TEST_USER_CONNECT
 echo "GRANT SELECT ON system.fuse_segment TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
 echo "select count(*)=0 from fuse_segment('default', 't20_0012_a', '')" | $TEST_USER_CONNECT
 ## fuse_block
-echo "select count(*)=1 from fuse_block('default', 't20_0012_a')" | $TEST_USER_CONNECT
+echo "select count(*)>=1 from fuse_block('default', 't20_0012_a')" | $TEST_USER_CONNECT
 echo "GRANT SELECT ON system.fuse_block TO 'test-user'@'$QUERY_MYSQL_HANDLER_HOST'" | $MYSQL_CLIENT_CONNECT
-echo "select count(*)=1 from fuse_block('default', 't20_0012_a')" | $TEST_USER_CONNECT
+echo "select count(*)>=1 from fuse_block('default', 't20_0012_a')" | $TEST_USER_CONNECT
 
 ## Drop table.
 echo "drop table default.t20_0012 all" | $MYSQL_CLIENT_CONNECT

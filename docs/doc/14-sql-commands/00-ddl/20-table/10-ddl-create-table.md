@@ -26,7 +26,7 @@ CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     ...
-) [CLUSTER BY(<expr> [, <expr>, ...] )]
+)
 
 <data_type>:
   TINYINT
@@ -54,8 +54,6 @@ Data type reference:
 * [Semi-structured Data Types](../../../13-sql-reference/10-data-types/43-data-type-variant.md)
 :::
 
-For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../70-clusterkey/dml-set-cluster-key.md).
-
 ## CREATE TABLE ... LIKE
 
 Creates a table with the same column definitions as an existing table. Column names, data types, and their non-NUll constraints of the existing will be copied to the new table.
@@ -66,10 +64,9 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 ```
 
-This command does not include any data or attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
+This command does not include any data or attributes (such as `CLUSTER BY`, `TRANSIENT`, and `COMPRESSION`) from the original table, and instead creates a new table using the default system settings.
 
 :::note WORKAROUND
-- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
 - `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
 
 ```sql
@@ -92,7 +89,6 @@ AS SELECT query
 This command does not include any attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
 
 :::note WORKAROUND
-- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
 - `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
 
 ```sql
@@ -165,14 +161,14 @@ CONNECTION = (
   );
 ```
 
-| Parameter  | Description | Required |
-| ----------- | ----------- | --- |
-| `s3://<bucket>/[<path>]`  | Files are in the specified external location (S3-like bucket) | YES |
-| ENDPOINT_URL              	| The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.                                  	| Optional 	|
-| ACCESS_KEY_ID             	| Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.    	| Optional 	|
-| SECRET_ACCESS_KEY         	| Your secret access key for connecting the AWS S3 compatible object storage. 	| Optional 	|
-| REGION                    	| AWS region name. For example, us-east-1.                                    	| Optional 	|
-| ENABLE_VIRTUAL_HOST_STYLE 	| If you use virtual hosting to address the bucket, set it to "true".                               	| Optional 	|
+| Parameter                   | Description                                                                                                                                                                                                              | Required   |
+|-----------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------|
+| `s3://<bucket>/[<path>]`    | Files are in the specified external location (S3-like bucket)                                                                                                                                                            | YES        |
+| ENDPOINT_URL              	 | The bucket endpoint URL starting with "https://". To use a URL starting with "http://", set `allow_insecure` to `true` in the [storage] block of the file `databend-query-node.toml`.                                  	 | Optional 	 |
+| ACCESS_KEY_ID             	 | Your access key ID for connecting the AWS S3 compatible object storage. If not provided, Databend will access the bucket anonymously.    	                                                                               | Optional 	 |
+| SECRET_ACCESS_KEY         	 | Your secret access key for connecting the AWS S3 compatible object storage. 	                                                                                                                                            | Optional 	 |
+| REGION                    	 | AWS region name. For example, us-east-1.                                    	                                                                                                                                            | Optional 	 |
+| ENABLE_VIRTUAL_HOST_STYLE 	 | If you use virtual hosting to address the bucket, set it to "true".                               	                                                                                                                      | Optional 	 |
 
 ## Column Nullable
 
@@ -217,9 +213,9 @@ DESC t_null;
 
 ## Default Values
 ```sql
-DEFAULT <expression>
+DEFAULT <expr>
 ```
-Specifies a default value inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
+Specify a default value inserted in the column if a value is not specified via an `INSERT` or `CREATE TABLE AS SELECT` statement.
 
 For example:
 ```sql
@@ -260,153 +256,143 @@ Databend’s syntax is difference from MySQL mainly in the data type and some sp
 
 ### Create Table
 
-```sql
-CREATE TABLE test(a BIGINT UNSIGNED, b VARCHAR , c VARCHAR  DEFAULT concat(b, '-b'));
-```
+Create a table with a default value for a column (in this case, the `genre` column has 'General' as the default value):
 
 ```sql
-DESC test;
-+-------+--------+------+---------------+
-| Field | Type   | Null | Default       |
-+-------+--------+------+---------------+
-| a     | UInt64 | NO   | 0             |
-| b     | String | NO   |               |
-| c     | String | NO   | concat(b, -b) |
-+-------+--------+------+---------------+
+CREATE TABLE books (
+    id BIGINT UNSIGNED,
+    title VARCHAR,
+    genre VARCHAR DEFAULT 'General'
+);
 ```
 
-```sql
-INSERT INTO test(a,b) VALUES(888, 'stars');
-```
+Describe the table to confirm the structure and the default value for the `genre` column:
 
 ```sql
-SELECT * FROM test;
-+------+-------+---------+
-| a    | b     | c       |
-+------+-------+---------+
-|  888 | stars | stars-b |
-+------+-------+---------+
+DESC books;
++-------+-----------------+------+---------+-------+
+| Field | Type            | Null | Default | Extra |
++-------+-----------------+------+---------+-------+
+| id    | BIGINT UNSIGNED | NO   | 0       |       |
+| title | VARCHAR         | NO   | ""      |       |
+| genre | VARCHAR         | NO   | 'General'|       |
++-------+-----------------+------+---------+-------+
+```
+
+Insert a row without specifying the `genre`:
+
+```sql
+INSERT INTO books(id, title) VALUES(1, 'Invisible Stars');
+```
+
+Query the table and notice that the default value 'General' has been set for the `genre` column:
+
+```sql
+SELECT * FROM books;
++----+----------------+---------+
+| id | title          | genre   |
++----+----------------+---------+
+|  1 | Invisible Stars| General |
++----+----------------+---------+
 ```
 
 ### Create Table ... Like
 
-The following example indicates that the command does not copy any data from an existing table but only the column definitions:
+Create a new table (`books_copy`) with the same structure as an existing table (`books`):
 
 ```sql
-CREATE TABLE test2 LIKE test;
-
-DESC test2;
-+-------+--------+------+---------------+
-| Field | Type   | Null | Default       |
-+-------+--------+------+---------------+
-| a     | UInt64 | NO   | 0             |
-| b     | String | NO   |               |
-| c     | String | NO   | concat(b, -b) |
-+-------+--------+------+---------------+
-
-INSERT INTO test2(a,b) VALUES(888, 'stars');
-
--- The new table contains inserted data only. Data in the existing table was not copied.
-SELECT * FROM test2;
-+------+-------+---------+
-| a    | b     | c       |
-+------+-------+---------+
-|  888 | stars | stars-b |
-+------+-------+---------+
+CREATE TABLE books_copy LIKE books;
 ```
 
-The following example indicates that the command does not copy attributes of an existing table:
+Check the structure of the new table:
 
 ```sql
-CREATE TRANSIENT TABLE tb_01(id int, c1 varchar) CLUSTER BY(id);
+DESC books_copy;
++-------+-----------------+------+---------+-------+
+| Field | Type            | Null | Default | Extra |
++-------+-----------------+------+---------+-------+
+| id    | BIGINT UNSIGNED | NO   | 0       |       |
+| title | VARCHAR         | NO   | ""      |       |
+| genre | VARCHAR         | NO   | 'General'|       |
++-------+-----------------+------+---------+-------+
+```
 
-SET hide_options_in_show_create_table=0
+Insert a row into the new table and notice that the default value for the `genre` column has been copied:
 
-SHOW CREATE TABLE tb_01;
+```sql
+INSERT INTO books_copy(id, title) VALUES(1, 'Invisible Stars');
 
-Table|Create Table                                                                                                                           |
------+---------------------------------------------------------------------------------------------------------------------------------------+
-tb_01|CREATE TABLE `tb_01` (¶  `id` INT,¶  `c1` VARCHAR¶) ENGINE=FUSE CLUSTER BY (id) TRANSIENT='T' COMPRESSION='lz4' STORAGE_FORMAT='native'|
-
-
-CREATE TABLE tb_02 LIKE tb_01;
-
--- The attributes CLUSTER BY and TRANSIENT were not copied to the new table.
-
-SHOW CREATE TABLE tb_02;
-
-Table|Create Table                                                                                             |
------+---------------------------------------------------------------------------------------------------------+
-tb_02|CREATE TABLE `tb_02` (¶  `id` INT,¶  `c1` VARCHAR¶) ENGINE=FUSE COMPRESSION='lz4' STORAGE_FORMAT='native'|
-
--- Add CLUSTER BY using ALTER TABLE.
-
-ALTER TABLE tb_02 CLUSTER BY(id);
-
-Table|Create Table                                                                                                                                                                                      |
------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-tb_02|CREATE TABLE `tb_02` (¶  `id` INT,¶  `c1` VARCHAR¶) ENGINE=FUSE CLUSTER BY (id) COMPRESSION='lz4' SNAPSHOT_LOCATION='1/21465/_ss/6b4b16900a4c4134b7dab535b1c93546_v2.json' STORAGE_FORMAT='native'|
-
--- Not all the table attributes can be added using ALTER TABLE.
-
-ALTER TABLE tb_02 TRANSIENT='T';
-
-SQL Error [1105] [HY000]: Code: 1005, displayText = error: 
-  --> SQL:1:83
-  |
-1 | /* ApplicationName=DBeaver 23.0.1 - SQLEditor <Script-1.sql> */ alter table tb_02 TRANSIENT='T'
-  |                                                                 -----             ^^^^^^^^^ expected `RENAME`, `ADD`, `DROP`, `CLUSTER`, `RECLUSTER`, `FLASHBACK`, or 1 more ...
-  |                                                                 |                  
-  |                                                                 while parsing `ALTER TABLE [<database>.]<table> <action>`
-
-.
+SELECT * FROM books_copy;
++----+----------------+---------+
+| id | title          | genre   |
++----+----------------+---------+
+|  1 | Invisible Stars| General |
++----+----------------+---------+
 ```
 
 ### Create Table ... As
 
-```sql
-CREATE TABLE test3 AS SELECT * FROM test2;
-```
-```sql
-DESC test3;
-+-------+--------+------+---------------+
-| Field | Type   | Null | Default       |
-+-------+--------+------+---------------+
-| a     | UInt64 | NO   | 0             |
-| b     | String | NO   |               |
-| c     | String | NO   | concat(b, -b) |
-+-------+--------+------+---------------+
-```
+Create a new table (`books_backup`) that includes data from an existing table (`books`):
 
 ```sql
-SELECT * FROM test3;
-+------+-------+---------+
-| a    | b     | c       |
-+------+-------+---------+
-|  888 | stars | stars-b |
-+------+-------+---------+
+CREATE TABLE books_backup AS SELECT * FROM books;
 ```
+
+Describe the new table and notice that the default value for the `genre` column has NOT been copied:
+
+```sql
+DESC books_backup;
++-------+-----------------+------+---------+-------+
+| Field | Type            | Null | Default | Extra |
++-------+-----------------+------+---------+-------+
+| id    | BIGINT UNSIGNED | NO   | 0       |       |
+| title | VARCHAR         | NO   | ""      |       |
+| genre | VARCHAR         | NO   | NULL    |       |
++-------+-----------------+------+---------+-------+
+```
+
+Query the new table and notice that the data from the original table has been copied:
+
+```sql
+SELECT * FROM books_backup;
++----+----------------+---------+
+| id | title          | genre   |
++----+----------------+---------+
+|  1 | Invisible Stars| General |
++----+----------------+---------+
+```
+
 ### Create Transient Table
+
+Create a transient table (temporary table) that automatically deletes data after a specified period of time:
 
 ```sql
 -- Create a transient table
-CREATE TRANSIENT TABLE mytemp (c bigint);
+CREATE TRANSIENT TABLE visits (
+  visitor_id BIGINT
+);
 
 -- Insert values
-insert into mytemp values(1);
-insert into mytemp values(2);
-insert into mytemp values(3);
+INSERT INTO visits VALUES(1);
+INSERT INTO visits VALUES(2);
+INSERT INTO visits VALUES(3);
 
--- Only one snapshot is stored. This explains why the Time Travel feature does not work for transient tables.
-select count(*) from fuse_snapshot('default', 'mytemp');
-+---------+
-| count() |
-+---------+
-|       1 | 
+-- Check the inserted data
+SELECT * FROM visits;
++-----------+
+| visitor_id |
++-----------+
+|         1 |
+|         2 |
+|         3 |
++-----------+
 ```
 
 ### Create Table ... Snapshot_Location
 
+Create a table from a specific snapshot, allowing you to create a new table based on the data at a specific point in time:
+
+```sql
 ```sql
 CREATE TABLE members 
   ( 
@@ -456,9 +442,17 @@ Amy
 
 ### Create Table ... External_Location
 
+Create a table with data stored on an external location, such as Amazon S3:
+
 ```sql
 -- Create a table named `mytable` and specify the location `s3://testbucket/admin/data/` for the data storage
-CREATE TABLE mytable(a int) 
-'s3://testbucket/admin/data/' 
-connection=(ACCESS_KEY_ID='<your_aws_key_id>' SECRET_ACCESS_KEY='<your_aws_secret_key>' endpoint_url='https://s3.amazonaws.com');
+CREATE TABLE mytable (
+  a INT
+) 
+external_location='s3://testbucket/admin/data/' 
+connection=(
+  ACCESS_KEY_ID='<your_aws_key_id>' 
+  SECRET_ACCESS_KEY='<your_aws_secret_key>' 
+  endpoint_url='https://s3.amazonaws.com'
+);
 ```

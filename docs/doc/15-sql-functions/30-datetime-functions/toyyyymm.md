@@ -7,18 +7,18 @@ Converts a date or date with time (timestamp/datetime) to a UInt32 number contai
 ## Syntax
 
 ```sql
-to_yyyymm( <expr> )
+TO_YYYYMM(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>` | date/timestamp |
+| Arguments | Description    |
+|-----------|----------------|
+| `<expr>`  | date/timestamp |
 
 ## Return Type
 
-UInt32, returns in `YYYYMM` format.
+`INT`, returns in `YYYYMM` format.
 
 ## Examples
 

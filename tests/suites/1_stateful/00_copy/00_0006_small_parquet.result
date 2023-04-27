@@ -1,0 +1,32 @@
+--- copy, threshold=0 stage=data_fs
+1	(1,'a')
+2	(3,'b')
+3	(3,'c')
+--- copy from select, threshold=0 stage=data_fs
+1	(1,'a')
+2	(3,'b')
+3	(3,'c')
+--- copy, threshold=0 stage=data_s3
+1	(1,'a')
+2	(3,'b')
+3	(3,'c')
+--- copy from select, threshold=0 stage=data_s3
+1	(1,'a')
+2	(3,'b')
+3	(3,'c')
+--- copy, threshold=4096 stage=data_fs
+1	(1,'a')
+2	(3,'b')
+3	(3,'c')
+--- copy from select, threshold=4096 stage=data_fs
+1	(1,'a')
+2	(3,'b')
+3	(3,'c')
+--- copy, threshold=4096 stage=data_s3
+1	(1,'a')
+2	(3,'b')
+3	(3,'c')
+--- copy from select, threshold=4096 stage=data_s3
+1	(1,'a')
+2	(3,'b')
+3	(3,'c')

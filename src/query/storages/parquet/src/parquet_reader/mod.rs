@@ -19,4 +19,5 @@ mod reader;
 pub use reader::DataReader;
 pub use reader::IndexedChunk;
 pub use reader::IndexedReaders;
+pub use reader::ParquetPartData;
 pub use reader::ParquetReader;

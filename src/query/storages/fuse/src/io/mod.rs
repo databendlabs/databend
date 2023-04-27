@@ -14,7 +14,7 @@
 
 mod files;
 mod locations;
-mod read;
+pub mod read;
 mod segments;
 mod snapshots;
 mod write;
@@ -32,8 +32,7 @@ pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
 pub use read::UncompressedBuffer;
 pub use segments::SegmentsIO;
-pub use snapshots::ListSnapshotLiteOption;
-pub use snapshots::SnapshotLiteListExtended;
+pub use snapshots::SnapshotLiteExtended;
 pub use snapshots::SnapshotsIO;
 pub use write::serialize_block;
 pub use write::write_data;

@@ -60,6 +60,7 @@ use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
+use common_sql::executor::RowFetch;
 use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
@@ -69,6 +70,7 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
+use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 use petgraph::matrix_graph::Zero;
 
@@ -100,9 +102,9 @@ use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
-use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
+use crate::pipelines::processors::TransformHashJoinBuild;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformResortAddOn;
@@ -178,6 +180,7 @@ impl PipelineBuilder {
             PhysicalPlan::Window(window) => self.build_window(window),
             PhysicalPlan::Sort(sort) => self.build_sort(sort),
             PhysicalPlan::Limit(limit) => self.build_limit(limit),
+            PhysicalPlan::RowFetch(row_fetch) => self.build_row_fetch(row_fetch),
             PhysicalPlan::HashJoin(join) => self.build_join(join),
             PhysicalPlan::ExchangeSink(sink) => self.build_exchange_sink(sink),
             PhysicalPlan::ExchangeSource(source) => self.build_exchange_source(source),
@@ -226,11 +229,10 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-
         let create_sink_processor = |input| {
-            let transform = Sinker::<SinkBuildHashTable>::create(
+            let transform = TransformHashJoinBuild::create(
                 input,
-                SinkBuildHashTable::try_create(join_state.clone())?,
+                TransformHashJoinBuild::attach(join_state.clone())?,
             );
 
             if self.enable_profiling {
@@ -297,11 +299,22 @@ impl PipelineBuilder {
 
         // Fill internal columns if needed.
         if let Some(internal_columns) = &scan.internal_column {
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(Box::new(
-                    FillInternalColumnProcessor::create(internal_columns.clone(), input, output),
-                )))
-            })?;
+            if table.support_row_id_column() {
+                self.main_pipeline.add_transform(|input, output| {
+                    Ok(ProcessorPtr::create(Box::new(
+                        FillInternalColumnProcessor::create(
+                            internal_columns.clone(),
+                            input,
+                            output,
+                        ),
+                    )))
+                })?;
+            } else {
+                return Err(ErrorCode::TableEngineNotSupported(format!(
+                    "Table engine `{}` does not support virtual column _row_id",
+                    table.engine()
+                )));
+            }
         }
 
         let schema = scan.source.schema();
@@ -999,6 +1012,20 @@ impl PipelineBuilder {
         })
     }
 
+    fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
+        debug_assert!(
+            matches!(&*row_fetch.input, PhysicalPlan::Limit(limit) if matches!(*limit.input, PhysicalPlan::Sort(_)))
+        );
+        self.build_pipeline(&row_fetch.input)?;
+        build_row_fetcher_pipeline(
+            self.ctx.clone(),
+            &mut self.main_pipeline,
+            row_fetch.row_id_col_offset,
+            &row_fetch.source,
+            row_fetch.cols_to_fetch.clone(),
+        )
+    }
+
     fn build_join_probe(&mut self, join: &HashJoin, state: Arc<JoinHashTable>) -> Result<()> {
         self.build_pipeline(&join.probe)?;
 
@@ -1288,9 +1315,9 @@ impl PipelineBuilder {
         for _ in 0..output_size / 2 {
             let input = InputPort::create();
             items.push(PipeItem::create(
-                ProcessorPtr::create(Sinker::<SinkBuildHashTable>::create(
+                ProcessorPtr::create(TransformHashJoinBuild::create(
                     input.clone(),
-                    SinkBuildHashTable::try_create(self.join_state.as_ref().unwrap().clone())?,
+                    TransformHashJoinBuild::attach(self.join_state.as_ref().unwrap().clone())?,
                 )),
                 vec![input],
                 vec![],

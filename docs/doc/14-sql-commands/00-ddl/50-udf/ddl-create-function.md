@@ -7,7 +7,7 @@ description:
 
 ## CREATE FUNCTION
 
-Creates a new UDF (user-defined function), the UDF can contain a SQL expression.
+Creates a new UDF (user-defined function), the UDF can contain an SQL expression.
 
 ## Syntax
 

@@ -18,9 +18,9 @@ TRY_PARSE_JSON(<expr>)
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| `<expr>`| An expression of string type (e.g. VARCHAR) that holds valid JSON information. |
+| Arguments | Description                                                                    |
+|-----------|--------------------------------------------------------------------------------|
+| `<expr>`  | An expression of string type (e.g. VARCHAR) that holds valid JSON information. |
 
 ## Return Type
 

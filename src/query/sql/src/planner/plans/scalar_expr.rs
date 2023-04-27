@@ -28,7 +28,6 @@ use itertools::Itertools;
 use super::WindowFuncFrame;
 use super::WindowFuncType;
 use crate::binder::ColumnBinding;
-use crate::binder::InternalColumnBinding;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::IndexType;
@@ -37,7 +36,6 @@ use crate::MetadataRef;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ScalarExpr {
     BoundColumnRef(BoundColumnRef),
-    BoundInternalColumnRef(BoundInternalColumnRef),
     ConstantExpr(ConstantExpr),
     WindowFunction(WindowFunc),
     AggregateFunction(AggregateFunction),
@@ -54,7 +52,6 @@ impl ScalarExpr {
     pub fn used_columns(&self) -> ColumnSet {
         match self {
             ScalarExpr::BoundColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
-            ScalarExpr::BoundInternalColumnRef(scalar) => ColumnSet::from([scalar.column.index]),
             ScalarExpr::ConstantExpr(_) => ColumnSet::new(),
             ScalarExpr::WindowFunction(scalar) => {
                 let mut result = scalar.func.used_columns();
@@ -95,7 +92,7 @@ impl ScalarExpr {
                 }
                 Ok(tables)
             }
-            ScalarExpr::BoundInternalColumnRef(_) | ScalarExpr::ConstantExpr(_) => Ok(vec![]),
+            ScalarExpr::ConstantExpr(_) => Ok(vec![]),
             ScalarExpr::AggregateFunction(scalar) => {
                 let mut result = vec![];
                 for scalar in &scalar.args {
@@ -143,12 +140,6 @@ impl ScalarExpr {
 impl From<BoundColumnRef> for ScalarExpr {
     fn from(v: BoundColumnRef) -> Self {
         Self::BoundColumnRef(v)
-    }
-}
-
-impl From<BoundInternalColumnRef> for ScalarExpr {
-    fn from(v: BoundInternalColumnRef) -> Self {
-        Self::BoundInternalColumnRef(v)
     }
 }
 
@@ -282,11 +273,6 @@ pub struct BoundColumnRef {
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
     pub span: Span,
     pub column: ColumnBinding,
-}
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct BoundInternalColumnRef {
-    pub column: InternalColumnBinding,
 }
 
 #[derive(Clone, Debug, Educe)]

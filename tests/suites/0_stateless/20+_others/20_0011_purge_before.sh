@@ -24,7 +24,7 @@ SNAPSHOT_ID=$(echo "select snapshot_id from fuse_snapshot('default','t20_0011') 
 #TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't20_0011') where row_count=3" | $MYSQL_CLIENT_CONNECT)
 
 ## verify
-echo "optimize table t20_0011 purge before (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0; optimize table t20_0011 purge before (snapshot => '$SNAPSHOT_ID')" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 2 snapshots left"
 echo "select count(*)=2  from fuse_snapshot('default', 't20_0011')" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by snapshot id) there should be 4 rows left"
@@ -47,13 +47,13 @@ echo "insert into t20_0011 values(4)" | $MYSQL_CLIENT_CONNECT
 echo "checking that there should are 3 snapshots before purge"
 echo "select count(*)=3  from fuse_snapshot('default', 't20_0011')" | $MYSQL_CLIENT_CONNECT
 
-## location the timestamp of 2nd snapshot
-TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't20_0011') where row_count=3" | $MYSQL_CLIENT_CONNECT)
+## location the timestamp of latest snapshot
+TIMEPOINT=$(echo "select timestamp from fuse_snapshot('default', 't20_0011') where row_count=4" | $MYSQL_CLIENT_CONNECT)
 
 ## verify
-echo "optimize table t20_0011 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $MYSQL_CLIENT_CONNECT
-echo "checking that after purge (by timestamp) there should be 2 snapshots left"
-echo "select count(*)=2  from fuse_snapshot('default', 't20_0011')" | $MYSQL_CLIENT_CONNECT
+echo "set retention_period=0; optimize table t20_0011 purge before (TIMESTAMP => '$TIMEPOINT'::TIMESTAMP)" | $MYSQL_CLIENT_CONNECT
+echo "checking that after purge (by timestamp) there should be at least 2 snapshots left"
+echo "select count(*)>=2  from fuse_snapshot('default', 't20_0011')" | $MYSQL_CLIENT_CONNECT
 echo "checking that after purge (by timestamp) there should be 4 rows left"
 echo "select count(*)=4  from t20_0011" | $MYSQL_CLIENT_CONNECT
 

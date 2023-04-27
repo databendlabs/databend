@@ -579,7 +579,7 @@ pub fn get_simple_cast_function(is_try: bool, dest_type: &DataType) -> Option<St
     };
 
     if is_simple_cast_function(&function_name) {
-        let prefix = if is_try { "try_" } else { "" };
+        let prefix: &str = if is_try { "try_" } else { "" };
         Some(format!("{prefix}{function_name}"))
     } else {
         None

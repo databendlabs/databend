@@ -2,7 +2,7 @@
 title: Input & Output File Formats
 ---
 
-Databend accepts a variety of file formats both as a source and as a target for data loading or unloading. For example, you can load data into Databend from a file with the [COPY INTO table command](../14-sql-commands/10-dml/dml-copy-into-table.md) or the [Streaming Load API](../11-integrations/00-api/03-streaming-load.md). You can also unload data from Databend into a file with the [COPY INTO location command](../14-sql-commands/10-dml/dml-copy-into-location.md) command. To do so, you need to tell Databend what the file looks like using the following syntax:
+Databend accepts a variety of file formats both as a source and as a target for data loading or unloading. For example, you can load data into Databend from a file with the [COPY INTO table command](../14-sql-commands/10-dml/dml-copy-into-table.md) or the Streaming Load API. You can also unload data from Databend into a file with the [COPY INTO location command](../14-sql-commands/10-dml/dml-copy-into-location.md) command. To do so, you need to tell Databend what the file looks like using the following syntax:
 
 ```sql
 FILE_FORMAT = ( TYPE = { CSV | TSV | NDJSON | PARQUET | XML } [ formatTypeOptions ] )
@@ -42,15 +42,16 @@ Databend accepts CVS files that are compliant with [RFC 4180](https://www.rfc-ed
 - Databend does not recognize the files unloaded from MySQL as the CSV format unless the following conditions are satisfied:
   - `ESCAPED BY` is empty.
   - `ENCLOSED BY` is not empty.
-:::note
-Files will be recognized as the TSV format if the conditions above are not satisfied. For more information about the clauses `ESCAPED BY` and `ENCLOSED BY`, refer to https://dev.mysql.com/doc/refman/8.0/en/load-data.html.
-:::
+    :::note
+    Files will be recognized as the TSV format if the conditions above are not satisfied. For more information about the clauses `ESCAPED BY` and `ENCLOSED BY`, refer to https://dev.mysql.com/doc/refman/8.0/en/load-data.html.
+    :::
 
 ### RECORD_DELIMITER
 
 Separates records in an input file.
 
-**Available Values**: 
+**Available Values**:
+
 - `\r\n`
 - An arbitrary character, such as `a` and `|`.
 - A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
@@ -61,7 +62,8 @@ Separates records in an input file.
 
 Separates fields in a record.
 
-**Available Values**: 
+**Available Values**:
+
 - `\r\n`
 - An arbitrary character, such as `a` and `|`.
 - A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
@@ -137,7 +139,8 @@ Databend is subject to the following conditions when dealing with a TSV file:
 
 Separates records in an input file.
 
-**Available Values**: 
+**Available Values**:
+
 - `\r\n`
 - An arbitrary character, such as `a` and `|`.
 - A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`
@@ -148,7 +151,8 @@ Separates records in an input file.
 
 Separates fields in a record.
 
-**Available Values**: 
+**Available Values**:
+
 - `\r\n`
 - An arbitrary character, such as `a` and `|`.
 - A character with the escape char: `\b`, `\f`, `\r`, `\n`, `\t`, `\0`, `\xHH`

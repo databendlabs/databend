@@ -3,6 +3,7 @@ title: Benchmarking TPC-DS with Databend
 description: Benchmarking Databend using TPC-DS
 date: 2023-04-11
 tags: [databend, benchmark, TPC-DS]
+cover_url: databend-using-TPC-DS.png
 authors:
 - name: xudong
   url: https://github.com/xudong963

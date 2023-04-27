@@ -367,6 +367,7 @@ impl Binder {
                     let mut bind_context = BindContext::new();
                     let stmt = SelectStmt {
                         span: *span,
+                        hints: None,
                         distinct: false,
                         select_list: vec![SelectTarget::AliasedExpr {
                             expr: Box::new(common_ast::ast::Expr::FunctionCall {
@@ -389,7 +390,8 @@ impl Binder {
                         having: None,
                         window_list: None,
                     };
-                    self.bind_select_stmt(&mut bind_context, &stmt, &[]).await
+                    self.bind_select_stmt(&mut bind_context, &stmt, &[], 0)
+                        .await
                 } else {
                     // Other table functions always reside is default catalog
                     let table_meta: Arc<dyn TableFunction> = self

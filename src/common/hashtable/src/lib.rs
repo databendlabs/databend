@@ -23,6 +23,8 @@
 extern crate core;
 
 mod container;
+mod hashjoin_hashtable;
+mod hashjoin_string_hashtable;
 mod hashtable;
 mod keys_ref;
 mod lookup_hashtable;
@@ -101,5 +103,13 @@ pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a
 pub type LookupHashMapIterMut<'a, K, const CAPACITY: usize, V> =
     LookupTableIterMut<'a, CAPACITY, K, V>;
 
+pub use hashjoin_hashtable::MarkerKind;
+pub use hashjoin_hashtable::RawEntry;
+pub use hashjoin_hashtable::RowPtr;
+pub use hashjoin_string_hashtable::StringRawEntry;
+pub use hashjoin_string_hashtable::STRING_EARLY_SIZE;
 pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
+pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;
+pub type StringHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
+pub use traits::HashJoinHashtableLike;

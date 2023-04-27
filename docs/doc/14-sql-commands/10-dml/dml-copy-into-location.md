@@ -47,11 +47,11 @@ externalLocation (for Amazon S3) ::=
   [ { CONNECTION = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]
 ```
 
-| Parameter  | Description | Required |
-| ----------- | ----------- | --- |
-| `s3://<bucket>/[<path>]`  | Files are in the specified external location (S3-like bucket) | YES |
-| `[ { CONNECTION = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]`  | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. |  Optional |
-| `[ ENDPOINT_URL = '<endpoint_url>' ]`  | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com` |  Optional |
+| Parameter                                                                                  | Description                                                                                                             | Required |
+|--------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|----------|
+| `s3://<bucket>/[<path>]`                                                                   | Files are in the specified external location (S3-like bucket)                                                           | YES      |
+| `[ { CONNECTION = ( {  { AWS_KEY_ID = '<string>' AWS_SECRET_KEY = '<string>' } } ) } ]' ]` | The credentials for connecting to AWS and accessing the private/protected S3 bucket where the files to load are staged. | Optional |
+| `[ ENDPOINT_URL = '<endpoint_url>' ]`                                                      | S3-compatible endpoint URL like MinIO, default is `https://s3.amazonaws.com`                                            | Optional |
 
 
 ### FILE_FORMAT
@@ -65,9 +65,9 @@ copyOptions ::=
   [ MAX_FILE_SIZE = <num> ]
 ```
 
-| Parameter  | Description | Required |
-| ----------- | ----------- | --- |
-| `SINGLE` | When TRUE, the command unloads data into one single file. Default: FALSE. | Optional |
+| Parameter       | Description                                                                                                               | Required |
+|-----------------|---------------------------------------------------------------------------------------------------------------------------|----------|
+| `SINGLE`        | When TRUE, the command unloads data into one single file. Default: FALSE.                                                 | Optional |
 | `MAX_FILE_SIZE` | The maximum size (in bytes) of each file to be created.<br />Effective when `SINGLE` is FALSE. Default: 67108864 (64 MB). | Optional |
 
 ## Examples

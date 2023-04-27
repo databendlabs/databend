@@ -4,11 +4,11 @@ DB.Table: 'system'.'engines', Table: engines-table_id:1, ver:0, Engine: SystemEn
 +----------+-------------------------------+
 | Column 0 | Column 1                      |
 +----------+-------------------------------+
-| "FUSE"   | "FUSE Storage Engine"         |
-| "MEMORY" | "MEMORY Storage Engine"       |
-| "NULL"   | "NULL Storage Engine"         |
-| "RANDOM" | "RANDOM Storage Engine"       |
-| "VIEW"   | "VIEW STORAGE (LOGICAL VIEW)" |
+| 'FUSE'   | 'FUSE Storage Engine'         |
+| 'MEMORY' | 'MEMORY Storage Engine'       |
+| 'NULL'   | 'NULL Storage Engine'         |
+| 'RANDOM' | 'RANDOM Storage Engine'       |
+| 'VIEW'   | 'VIEW STORAGE (LOGICAL VIEW)' |
 +----------+-------------------------------+
 
 

@@ -12,7 +12,7 @@ TODAY()
 
 ## Return Type
 
-Datetime object, returns date in “YYYY-MM-DD” format.
+`DATE`, returns date in “YYYY-MM-DD” format.
 
 ## Examples
 

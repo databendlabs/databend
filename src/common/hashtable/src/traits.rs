@@ -23,6 +23,8 @@ use std::num::NonZeroU64;
 use ethnum::U256;
 use ordered_float::OrderedFloat;
 
+use crate::RowPtr;
+
 /// # Safety
 ///
 /// All functions must be implemented correctly.
@@ -429,4 +431,27 @@ pub trait HashtableLike {
     fn iter(&self) -> Self::Iterator<'_>;
 
     fn clear(&mut self);
+}
+
+pub trait HashJoinHashtableLike {
+    type Key: ?Sized;
+
+    fn contains(&self, key_ref: &Self::Key) -> bool;
+
+    fn probe_hash_table(
+        &self,
+        key_ref: &Self::Key,
+        vec_ptr: *mut RowPtr,
+        occupied: usize,
+        capacity: usize,
+    ) -> (usize, u64);
+
+    fn next_incomplete_ptr(
+        &self,
+        key_ref: &Self::Key,
+        incomplete_ptr: u64,
+        vec_ptr: *mut RowPtr,
+        occupied: usize,
+        capacity: usize,
+    ) -> (usize, u64);
 }

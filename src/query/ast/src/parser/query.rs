@@ -28,6 +28,7 @@ use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;
 use crate::parser::expr::*;
+use crate::parser::statement::hint;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
@@ -49,6 +50,7 @@ pub fn set_operation(i: Input) -> IResult<SetExpr> {
 pub enum SetOperationElement {
     With(With),
     SelectStmt {
+        hints: Option<Hint>,
         distinct: bool,
         select_list: Box<Vec<SelectTarget>>,
         from: Box<Vec<TableReference>>,
@@ -95,7 +97,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
     );
     let select_stmt = map(
         rule! {
-             SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
+             SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
                 ~ ( WHERE ~ ^#expr )?
                 ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
@@ -104,6 +106,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         },
         |(
             _select,
+            opt_hints,
             opt_distinct,
             select_list,
             opt_from_block,
@@ -113,6 +116,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_window_block,
         )| {
             SetOperationElement::SelectStmt {
+                hints: opt_hints,
                 distinct: opt_distinct.is_some(),
                 select_list: Box::new(select_list),
                 from: Box::new(
@@ -202,6 +206,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
         let set_expr = match input.elem {
             SetOperationElement::Group(expr) => expr,
             SetOperationElement::SelectStmt {
+                hints,
                 distinct,
                 select_list,
                 from,
@@ -211,6 +216,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 window_list,
             } => SetExpr::Select(Box::new(SelectStmt {
                 span: transform_span(input.span.0),
+                hints,
                 distinct,
                 select_list: *select_list,
                 from: *from,
@@ -425,10 +431,10 @@ pub fn table_alias(i: Input) -> IResult<TableAlias> {
 pub fn join_operator(i: Input) -> IResult<JoinOperator> {
     alt((
         value(JoinOperator::Inner, rule! { INNER }),
-        value(JoinOperator::LeftSemi, rule! {LEFT? ~ SEMI}),
-        value(JoinOperator::RightSemi, rule! {RIGHT ~ SEMI}),
-        value(JoinOperator::LeftAnti, rule! {LEFT? ~ ANTI}),
-        value(JoinOperator::RightAnti, rule! {RIGHT ~ ANTI}),
+        value(JoinOperator::LeftSemi, rule! { LEFT? ~ SEMI }),
+        value(JoinOperator::RightSemi, rule! { RIGHT ~ SEMI }),
+        value(JoinOperator::LeftAnti, rule! { LEFT? ~ ANTI }),
+        value(JoinOperator::RightAnti, rule! { RIGHT ~ ANTI }),
         value(JoinOperator::LeftOuter, rule! { LEFT ~ OUTER? }),
         value(JoinOperator::RightOuter, rule! { RIGHT ~ OUTER? }),
         value(JoinOperator::FullOuter, rule! { FULL ~ OUTER? }),
@@ -560,7 +566,6 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
             }
         },
     );
-
     let join = map(
         rule! {
             NATURAL? ~ #join_operator? ~ JOIN
@@ -582,7 +587,6 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
         |(_, _, idents, _)| TableReferenceElement::JoinCondition(JoinCondition::Using(idents)),
     );
-
     let table_function = map(
         rule! {
             #function_name ~ "(" ~ #comma_separated_list0(table_function_param) ~ ")" ~ #table_alias?
@@ -609,7 +613,6 @@ pub fn table_reference_element(i: Input) -> IResult<WithSpan<TableReferenceEleme
         },
         |(_, table_ref, _)| TableReferenceElement::Group(table_ref),
     );
-
     let stage_location = |i| map(stage_location, FileLocation::Stage)(i);
     let uri_location = |i| map(literal_string, FileLocation::Uri)(i);
     let aliased_stage = map(

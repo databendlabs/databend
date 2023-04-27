@@ -25,7 +25,11 @@ use common_base::base::StopHandle;
 use common_base::base::Stoppable;
 use common_base::mem_allocator::GlobalAllocator;
 use common_grpc::RpcClientConf;
+use common_meta_raft_store::ondisk::OnDisk;
+use common_meta_raft_store::ondisk::DATA_VERSION;
+use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
+use common_meta_sled_store::openraft::MessageSummary;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::Cmd;
 use common_meta_types::LogEntry;
@@ -92,6 +96,7 @@ async fn main() -> anyhow::Result<()> {
     conf.raft_config.check()?;
 
     // Leave cluster and quit if `--leave-via` and `--leave-id` is specified.
+    // Leaving does not access the local store thus it can be done before the store is initialized.
     let has_left = MetaNode::leave_cluster(&conf.raft_config).await?;
     if has_left {
         info!("node {:?} has left cluster", conf.raft_config.leave_id);
@@ -101,8 +106,70 @@ async fn main() -> anyhow::Result<()> {
     init_sled_db(conf.raft_config.raft_dir.clone());
     init_default_metrics_recorder();
 
+    // Print information to users.
+    println!("Databend Metasrv");
+    println!();
+    println!("Version: {}", METASRV_COMMIT_VERSION.as_str());
+    println!("Data version: {:?}", DATA_VERSION);
+    println!();
+
     info!(
-        "Starting MetaNode single: {} with config: {:?}",
+        "Initialize on-disk data version at {}",
+        conf.raft_config.raft_dir
+    );
+
+    let db = get_sled_db();
+    let mut on_disk = OnDisk::open(&db, &conf.raft_config).await?;
+
+    println!("On Disk Data:");
+    println!("    Dir: {}", conf.raft_config.raft_dir);
+    println!(
+        "    Version: version={:?}, upgrading={:?}",
+        on_disk.header.version, on_disk.header.upgrading
+    );
+    println!();
+    println!("Log:");
+    println!("    File: {}", conf.log.file);
+    println!("    Stderr: {}", conf.log.stderr);
+    println!("Id: {}", conf.raft_config.config_id);
+    println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
+    println!("Raft Dir: {}", conf.raft_config.raft_dir);
+    println!(
+        "Raft Status: {}",
+        if conf.raft_config.single {
+            "single".to_string()
+        } else {
+            format!("join {:#?}", conf.raft_config.join)
+        }
+    );
+    println!();
+    println!("HTTP API");
+    println!("   listening at {}", conf.admin_api_address);
+    println!("gRPC API");
+    println!("   listening at {}", conf.grpc_api_address);
+    println!(
+        "   advertise:  {}",
+        if let Some(a) = conf.grpc_api_advertise_address() {
+            a
+        } else {
+            "-".to_string()
+        }
+    );
+    println!("Raft API");
+    println!(
+        "   listening at {}",
+        conf.raft_config.raft_api_listen_host_string()
+    );
+    println!(
+        "   advertise:  {}",
+        conf.raft_config.raft_api_advertise_host_string()
+    );
+    println!();
+
+    on_disk.upgrade().await?;
+
+    info!(
+        "Starting MetaNode, is-single: {} with config: {:?}",
         conf.raft_config.single, conf
     );
 
@@ -139,32 +206,12 @@ async fn main() -> anyhow::Result<()> {
 
     register_node(&meta_node, &conf).await?;
 
-    // Print information to users.
-    println!("Databend Metasrv");
-    println!();
-    println!("Version: {}", METASRV_COMMIT_VERSION.as_str());
-    println!("Log:");
-    println!("    File: {}", conf.log.file);
-    println!("    Stderr: {}", conf.log.stderr);
-    println!("Id: {}", conf.raft_config.config_id);
-    println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
-    println!("Raft Dir: {}", conf.raft_config.raft_dir);
-    println!(
-        "Raft Status: {}",
-        if conf.raft_config.single {
-            "single".to_string()
-        } else {
-            format!("join {:#?}", conf.raft_config.join)
-        }
-    );
-    println!();
-    println!("HTTP API");
-    println!("   listened at {}", conf.admin_api_address);
-    println!("gRPC API");
-    println!("   listened at {}", conf.grpc_api_address);
+    println!("Databend Metasrv starting...");
 
     stop_handler.wait_to_terminate(stop_tx).await;
     info!("Databend-meta is done shutting down");
+
+    println!("Databend Metasrv shutdown");
 
     Ok(())
 }
@@ -184,6 +231,7 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
         wait_leader_timeout,
         conf.raft_config.election_timeout()
     );
+    println!("Wait for {:?} for active leader...", wait_leader_timeout);
 
     let wait = meta_node.raft.wait(Some(wait_leader_timeout));
     let metrics = wait
@@ -193,6 +241,19 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
     info!("Current raft node metrics: {:?}", metrics);
 
     let leader_id = metrics.current_leader.unwrap();
+
+    println!("Leader Id: {}", leader_id);
+    println!(
+        "    Metrics: id={}, {:?}, term={}, last_log={:?}, last_applied={}, membership={{log_id:{}, {}}}",
+        metrics.id,
+        metrics.state,
+        metrics.current_term,
+        metrics.last_log_index,
+        metrics.last_applied.summary(),
+        metrics.membership_config.log_id().summary(),
+        metrics.membership_config.membership().summary(),
+    );
+    println!();
 
     for _i in 0..20 {
         if meta_node.get_node(&leader_id).await?.is_none() {
@@ -245,6 +306,9 @@ async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), Met
     let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
     let node = Node::new(node_id, raft_endpoint)
         .with_grpc_advertise_address(conf.grpc_api_advertise_address());
+
+    println!("Register this node: {{{}}}", node);
+    println!();
 
     let ent = LogEntry {
         txid: None,
@@ -303,6 +367,7 @@ async fn run_cmd(conf: &Config) -> bool {
         "ver" => {
             println!("version: {}", METASRV_SEMVER.deref());
             println!("min-compatible-client-version: {}", MIN_METACLI_SEMVER);
+            println!("data-version: {:?}", DATA_VERSION);
         }
         "show-config" => {
             println!(

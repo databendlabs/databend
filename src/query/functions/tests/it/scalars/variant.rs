@@ -39,13 +39,15 @@ fn test_variant() {
     test_try_to_type(file);
     test_json_object(file);
     test_json_object_keep_null(file);
+    test_json_path_query_array(file);
+    test_json_path_query_first(file);
 }
 
 fn test_parse_json(file: &mut impl Write) {
     run_ast(file, "parse_json(NULL)", &[]);
     run_ast(file, "parse_json('nuLL')", &[]);
     run_ast(file, "parse_json('null')", &[]);
-    run_ast(file, "parse_json(' \t')", &[]);
+    run_ast(file, "parse_json('  ')", &[]);
     run_ast(file, "parse_json('true')", &[]);
     run_ast(file, "parse_json('false')", &[]);
     run_ast(file, "parse_json('\"测试\"')", &[]);
@@ -580,6 +582,100 @@ fn test_json_object_keep_null(file: &mut impl Write) {
             StringType::from_data_with_validity(&["j2", "k2", "l2", "m2"], vec![
                 true, true, true, true,
             ]),
+        ),
+    ]);
+}
+
+fn test_json_path_query_array(file: &mut impl Write) {
+    run_ast(
+        file,
+        "json_path_query_array(parse_json('[1, 2, 3, 4, 5, 6]'), '$[0, 2 to last, 4]')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_array(parse_json('[1, 2, 3, 4, 5, 6]'), '$[100]')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_array(parse_json('[{\"a\": 1}, {\"a\": 2}]'), '$[*].a')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_array(parse_json('[{\"a\": 1}, {\"a\": 2}]'), '$[*].a ? (@ == 1)')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_array(parse_json('[{\"a\": 1}, {\"a\": 2}]'), '$[*].a ? (@ > 10)')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_array(parse_json('[{\"a\": {\"b\":10}}, {\"a\": 2}]'), '$[*].a.b')",
+        &[],
+    );
+
+    run_ast(file, "json_path_query_array(parse_json(s), p)", &[
+        (
+            "s",
+            StringType::from_data_with_validity(
+                &["true", "[{\"k\":1},{\"k\":2}]", "", "[1,2,3,4]"],
+                vec![true, true, false, true],
+            ),
+        ),
+        (
+            "p",
+            StringType::from_data(vec!["$[0]", "$[*].k", "$.a", "$[0,2]"]),
+        ),
+    ]);
+}
+
+fn test_json_path_query_first(file: &mut impl Write) {
+    run_ast(
+        file,
+        "json_path_query_first(parse_json('[1, 2, 3, 4, 5, 6]'), '$[0, 2 to last, 4]')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_first(parse_json('[1, 2, 3, 4, 5, 6]'), '$[100]')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_first(parse_json('[{\"a\": 1}, {\"a\": 2}]'), '$[*].a')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_first(parse_json('[{\"a\": 1}, {\"a\": 2}]'), '$[*].a ? (@ == 1)')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_first(parse_json('[{\"a\": 1}, {\"a\": 2}]'), '$[*].a ? (@ > 10)')",
+        &[],
+    );
+    run_ast(
+        file,
+        "json_path_query_first(parse_json('[{\"a\": {\"b\":10}}, {\"a\": 2}]'), '$[*].a.b')",
+        &[],
+    );
+
+    run_ast(file, "json_path_query_first(parse_json(s), p)", &[
+        (
+            "s",
+            StringType::from_data_with_validity(
+                &["true", "[{\"k\":1},{\"k\":2}]", "", "[1,2,3,4]"],
+                vec![true, true, false, true],
+            ),
+        ),
+        (
+            "p",
+            StringType::from_data(vec!["$[0]", "$[*].k", "$.a", "$[0,2]"]),
         ),
     ]);
 }

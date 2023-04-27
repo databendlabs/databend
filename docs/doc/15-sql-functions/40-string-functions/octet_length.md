@@ -7,7 +7,7 @@ OCTET_LENGTH() is a synonym for LENGTH().
 ## Syntax
 
 ```sql
-OCTET_LENGTH(str)
+OCTET_LENGTH(<str>)
 ```
 
 ## Examples

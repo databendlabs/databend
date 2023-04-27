@@ -46,19 +46,20 @@ statement ok
 optimize table `t` purge
 
 query B
-select count(*)=1 from fuse_snapshot('db_09_0008', 't')
-----
-1
-
-query I
-select * from t order by a
+select count(*) from fuse_snapshot('db_09_0008', 't')
 ----
 5
-6
-7
+
+statement ok
+set retention_period = 0
 
 statement ok
 optimize table `t` purge
+
+query B
+select count(*)<5 from fuse_snapshot('db_09_0008', 't')
+----
+1
 
 query I
 select * from t order by a
@@ -89,10 +90,11 @@ select * from t order by a
 statement ok
 optimize table `t` all
 
-query B
-select count(*)=1 from fuse_snapshot('db_09_0008', 't')
+query II
+select segment_count,block_count from fuse_snapshot('db_09_0008', 't') limit 2
 ----
-1
+1 1
+4 4
 
 
 
@@ -222,10 +224,10 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1
 2 4
 
 statement ok
-optimize table t2 compact segment limit 2 /* right-assoc can not be compact further*/
+optimize table t2 compact segment limit 2 /* right-assoc can not be compact further*/ /*+ test hint */
 
 query II
-select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1 /* can not be compacted further */
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1 /* can not be compacted further */ /*+ test hint */
 ----
 2 4
 

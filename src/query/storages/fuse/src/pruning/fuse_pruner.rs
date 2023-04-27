@@ -170,7 +170,7 @@ impl FusePruner {
         &self,
         segment_locs: Vec<Location>,
         snapshot_loc: Option<String>,
-        segment_id_map: Option<HashMap<String, usize>>,
+        segment_id_map: Option<HashMap<Location, usize>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let segment_locs =
             create_segment_location_vector(segment_locs, snapshot_loc, segment_id_map);
@@ -200,7 +200,7 @@ impl FusePruner {
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
             let topn_pruner = TopNPrunner::create(schema, sort, limit);
-            return topn_pruner.prune(metas);
+            return Ok(topn_pruner.prune(metas.clone()).unwrap_or(metas));
         }
         Ok(metas)
     }

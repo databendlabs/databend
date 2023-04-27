@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -22,6 +23,7 @@ use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::VirtualColumnInfo;
+use common_catalog::plan::ROW_ID;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,6 +39,7 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
+use itertools::Itertools;
 
 use super::cast_expr_to_non_null_boolean;
 use super::AggregateExpand;
@@ -49,10 +52,12 @@ use super::Filter;
 use super::HashJoin;
 use super::Limit;
 use super::ProjectSet;
+use super::RowFetch;
 use super::Sort;
 use super::TableScan;
 use super::WindowFunction;
 use crate::binder::wrap_cast;
+use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::EvalScalar;
@@ -65,6 +70,7 @@ use crate::executor::Window;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
+use crate::planner;
 use crate::plans::AggregateMode;
 use crate::plans::Exchange;
 use crate::plans::FunctionCall;
@@ -116,11 +122,15 @@ impl PhysicalPlanBuilder {
         has_inner_column: bool,
         ignore_internal_column: bool,
         add_virtual_source_column: bool,
+        ignore_lazy_column: bool,
     ) -> Projection {
         if !has_inner_column {
             let mut col_indices = Vec::new();
             let mut virtual_col_indices = HashSet::new();
             for index in columns.iter() {
+                if ignore_lazy_column && metadata.is_lazy_column(*index) {
+                    continue;
+                }
                 let name = match metadata.column(*index) {
                     ColumnEntry::BaseTableColumn(BaseTableColumn { column_name, .. }) => {
                         column_name
@@ -158,6 +168,9 @@ impl PhysicalPlanBuilder {
         } else {
             let mut col_indices = BTreeMap::new();
             for index in columns.iter() {
+                if ignore_lazy_column && metadata.is_lazy_column(*index) {
+                    continue;
+                }
                 let column = metadata.column(*index);
                 match column {
                     ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -196,6 +209,80 @@ impl PhysicalPlanBuilder {
         }
     }
 
+    fn try_build_row_fetch_on_limit(
+        &mut self,
+        input_plan: PhysicalPlan,
+        limit: &planner::plans::Limit,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let next_plan_id = self.next_plan_id();
+        let metadata = self.metadata.read().clone();
+        if metadata.lazy_columns().is_empty() {
+            return Ok(PhysicalPlan::Limit(Limit {
+                plan_id: next_plan_id,
+                input: Box::new(input_plan),
+                limit: limit.limit,
+                offset: limit.offset,
+                stat_info: Some(stat_info),
+            }));
+        }
+        let input_schema = input_plan.output_schema()?;
+
+        // Lazy materialization is enabled.
+        let row_id_col_index = metadata
+            .columns()
+            .iter()
+            .position(|col| col.name() == ROW_ID)
+            .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
+        let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
+
+        let mut has_inner_column = false;
+        let fetched_fields = metadata
+            .lazy_columns()
+            .iter()
+            .sorted() // Needs sort because we need to make the order deterministic.
+            .map(|index| {
+                let col = metadata.column(*index);
+                if let ColumnEntry::BaseTableColumn(c) = col {
+                    if c.path_indices.is_some() {
+                        has_inner_column = true;
+                    }
+                }
+                DataField::new(&index.to_string(), col.data_type())
+            })
+            .collect();
+
+        let source = input_plan.try_find_single_data_source();
+        debug_assert!(source.is_some());
+        let source_info = source.cloned().unwrap();
+        let table_schema = source_info.source_info.schema();
+        let cols_to_fetch = Self::build_projection(
+            &metadata,
+            &table_schema,
+            metadata.lazy_columns(),
+            has_inner_column,
+            true,
+            true,
+            false,
+        );
+
+        Ok(PhysicalPlan::RowFetch(RowFetch {
+            plan_id: self.next_plan_id(),
+            input: Box::new(PhysicalPlan::Limit(Limit {
+                plan_id: next_plan_id,
+                input: Box::new(input_plan),
+                limit: limit.limit,
+                offset: limit.offset,
+                stat_info: Some(stat_info.clone()),
+            })),
+            source: Box::new(source_info),
+            row_id_col_offset,
+            cols_to_fetch,
+            fetched_fields,
+            stat_info: Some(stat_info),
+        }))
+    }
+
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
     pub async fn build(&mut self, s_expr: &SExpr) -> Result<PhysicalPlan> {
@@ -211,6 +298,9 @@ impl PhysicalPlanBuilder {
                 let metadata = self.metadata.read().clone();
 
                 for index in scan.columns.iter() {
+                    if metadata.is_lazy_column(*index) {
+                        continue;
+                    }
                     let column = metadata.column(*index);
                     if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) =
                         column
@@ -239,13 +329,27 @@ impl PhysicalPlanBuilder {
                     }
                 }
 
+                if !metadata.lazy_columns().is_empty() {
+                    // Lazy materilaztion is enabled.
+                    if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID.to_string()) {
+                        let internal_column =
+                            INTERNAL_COLUMN_FACTORY.get_internal_column(ROW_ID).unwrap();
+                        let index = self
+                            .metadata
+                            .write()
+                            .add_internal_column(scan.table_index, internal_column.clone());
+                        entry.insert(index);
+                        project_internal_columns.insert(index, internal_column);
+                    }
+                }
+
                 let table_entry = metadata.table(scan.table_index);
                 let table = table_entry.table();
                 let mut table_schema = table.schema();
                 if !project_internal_columns.is_empty() {
                     let mut schema = table_schema.as_ref().clone();
                     for internal_column in project_internal_columns.values() {
-                        schema.add_internal_column(
+                        schema.add_internal_field(
                             internal_column.column_name(),
                             internal_column.table_data_type(),
                             internal_column.column_id(),
@@ -808,14 +912,20 @@ impl PhysicalPlanBuilder {
                 stat_info: Some(stat_info),
             })),
 
-            RelOperator::Limit(limit) => Ok(PhysicalPlan::Limit(Limit {
-                plan_id: self.next_plan_id(),
-                input: Box::new(self.build(s_expr.child(0)?).await?),
-                limit: limit.limit,
-                offset: limit.offset,
-
-                stat_info: Some(stat_info),
-            })),
+            RelOperator::Limit(limit) => {
+                let input_plan = self.build(s_expr.child(0)?).await?;
+                if let PhysicalPlan::Sort(_) = input_plan {
+                    self.try_build_row_fetch_on_limit(input_plan, limit, stat_info)
+                } else {
+                    Ok(PhysicalPlan::Limit(Limit {
+                        plan_id: self.next_plan_id(),
+                        input: Box::new(input_plan),
+                        limit: limit.limit,
+                        offset: limit.offset,
+                        stat_info: Some(stat_info),
+                    }))
+                }
+            }
 
             RelOperator::Exchange(exchange) => {
                 let input = Box::new(self.build(s_expr.child(0)?).await?);
@@ -981,6 +1091,7 @@ impl PhysicalPlanBuilder {
             // or else in read_partition when search internal column from table schema will core.
             true,
             true,
+            true,
         );
 
         let output_columns = if has_virtual_column {
@@ -991,6 +1102,7 @@ impl PhysicalPlanBuilder {
                 has_inner_column,
                 true,
                 false,
+                true,
             ))
         } else {
             None
@@ -1048,15 +1160,17 @@ impl PhysicalPlanBuilder {
                     table_schema,
                     &prewhere.output_columns,
                     has_inner_column,
+                    true,
                     false,
-                    false,
+                    true,
                 );
                 let prewhere_columns = Self::build_projection(
                     &metadata,
                     table_schema,
                     &prewhere.prewhere_columns,
                     has_inner_column,
-                    false,
+                    true,
+                    true,
                     true,
                 );
                 let remain_columns = Self::build_projection(
@@ -1064,7 +1178,8 @@ impl PhysicalPlanBuilder {
                     table_schema,
                     &remain_columns,
                     has_inner_column,
-                    false,
+                    true,
+                    true,
                     true,
                 );
 
@@ -1153,6 +1268,7 @@ impl PhysicalPlanBuilder {
             limit: scan.limit,
             order_by: order_by.unwrap_or_default(),
             virtual_columns,
+            lazy_materialization: !metadata.lazy_columns().is_empty(),
         })
     }
 

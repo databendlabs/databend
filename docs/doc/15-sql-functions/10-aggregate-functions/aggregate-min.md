@@ -9,14 +9,14 @@ The MIN() function returns the minimum value in a set of values.
 ## Syntax
 
 ```
-MIN(expression)
+MIN(<expr>)
 ```
 
 ## Arguments
 
-| Arguments   | Description |
-| ----------- | ----------- |
-| expression  | Any expression |
+| Arguments | Description    |
+|-----------|----------------|
+| `<expr>`  | Any expression |
 
 ## Return Type
 

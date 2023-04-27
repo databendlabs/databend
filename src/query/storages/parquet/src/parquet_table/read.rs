@@ -34,6 +34,7 @@ use storages_common_index::RangeIndex;
 use super::ParquetTable;
 use crate::deserialize_transform::ParquetDeserializeTransform;
 use crate::deserialize_transform::ParquetPrewhereInfo;
+use crate::parquet_part::ParquetPart;
 use crate::parquet_reader::ParquetReader;
 use crate::parquet_source::AsyncParquetSource;
 use crate::parquet_source::SyncParquetSource;
@@ -139,26 +140,22 @@ impl ParquetTable {
 
         src_fields.extend_from_slice(remain_reader.output_schema.fields());
         let src_schema = DataSchemaRefExt::create(src_fields);
+        let is_blocking = self.operator.info().can_blocking();
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-
-        // Add source pipe.
-        if self.operator.info().can_blocking() {
+        let (num_reader, num_deserializer) = calc_parallelism(&ctx, plan, is_blocking)?;
+        if is_blocking {
             pipeline.add_source(
                 |output| SyncParquetSource::create(ctx.clone(), output, source_reader.clone()),
-                max_threads,
+                num_reader,
             )?;
         } else {
-            let max_io_requests = std::cmp::max(
-                max_threads,
-                ctx.get_settings().get_max_storage_io_requests()? as usize,
-            );
             pipeline.add_source(
                 |output| AsyncParquetSource::create(ctx.clone(), output, source_reader.clone()),
-                max_io_requests,
+                num_reader,
             )?;
-            pipeline.resize(std::cmp::min(max_threads, max_io_requests))?;
-        }
+        };
+
+        pipeline.resize(num_deserializer)?;
 
         pipeline.add_transform(|input, output| {
             ParquetDeserializeTransform::create(
@@ -168,8 +165,60 @@ impl ParquetTable {
                 src_schema.clone(),
                 output_schema.clone(),
                 prewhere_info.clone(),
+                source_reader.clone(),
                 remain_reader.clone(),
+                self.create_pruner(ctx.clone(), plan.push_downs.clone(), true)?,
             )
         })
     }
+}
+
+fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [usize]) -> usize {
+    sizes.sort_by(|a, b| b.cmp(a));
+    let mut mem = 0;
+    for (i, s) in sizes.iter().enumerate() {
+        mem += s;
+        if mem > max_memory {
+            return i;
+        }
+    }
+    sizes.len()
+}
+
+fn calc_parallelism(
+    ctx: &Arc<dyn TableContext>,
+    plan: &DataSourcePlan,
+    is_blocking: bool,
+) -> Result<(usize, usize)> {
+    if plan.parts.partitions.is_empty() {
+        return Ok((1, 1));
+    }
+    let mut sizes = vec![];
+    for p in plan.parts.partitions.iter() {
+        sizes.push(ParquetPart::from_part(p)?.uncompressed_size() as usize);
+    }
+    let num_chunks = ParquetPart::from_part(&plan.parts.partitions[0])?
+        .num_io()
+        .max(1);
+    let max_memory = ctx.get_settings().get_max_memory_usage()? as usize;
+    let max_by_memory = limit_parallelism_by_memory(max_memory, &mut sizes).max(1);
+
+    let max_storage_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+    let num_readers = if is_blocking {
+        max_storage_io_requests
+    } else {
+        max_storage_io_requests / num_chunks
+    }
+    .min(max_by_memory)
+    .max(1);
+
+    let num_deserializer = (ctx.get_settings().get_max_threads()? as usize)
+        .min(max_by_memory)
+        .max(1);
+
+    tracing::info!(
+        "loading row groups with {num_readers} readers and {num_deserializer} deserializers, blocking = {is_blocking}, according to max_memory={max_memory}, num_chunks={num_chunks}, max_storage_io_requests={max_storage_io_requests}, max_split_size={}",
+        sizes[0]
+    );
+    Ok((num_readers, num_deserializer))
 }
