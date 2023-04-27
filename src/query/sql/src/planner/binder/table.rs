@@ -367,6 +367,7 @@ impl Binder {
                     let mut bind_context = BindContext::new();
                     let stmt = SelectStmt {
                         span: *span,
+                        hints: None,
                         distinct: false,
                         select_list: vec![SelectTarget::AliasedExpr {
                             expr: Box::new(common_ast::ast::Expr::FunctionCall {
@@ -759,6 +760,7 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
+                    false,
                 );
                 let box (scalar, _) = type_checker.resolve(expr).await?;
                 let scalar_expr = scalar.as_expr_with_col_name()?;

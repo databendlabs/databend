@@ -28,6 +28,7 @@ use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;
 use crate::parser::expr::*;
+use crate::parser::statement::hint;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
@@ -49,6 +50,7 @@ pub fn set_operation(i: Input) -> IResult<SetExpr> {
 pub enum SetOperationElement {
     With(With),
     SelectStmt {
+        hints: Option<Hint>,
         distinct: bool,
         select_list: Box<Vec<SelectTarget>>,
         from: Box<Vec<TableReference>>,
@@ -95,7 +97,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
     );
     let select_stmt = map(
         rule! {
-             SELECT ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
+             SELECT ~ #hint? ~ DISTINCT? ~ ^#comma_separated_list1(select_target)
                 ~ ( FROM ~ ^#comma_separated_list1(table_reference) )?
                 ~ ( WHERE ~ ^#expr )?
                 ~ ( GROUP ~ ^BY ~ ^#group_by_items )?
@@ -104,6 +106,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
         },
         |(
             _select,
+            opt_hints,
             opt_distinct,
             select_list,
             opt_from_block,
@@ -113,6 +116,7 @@ pub fn set_operation_element(i: Input) -> IResult<WithSpan<SetOperationElement>>
             opt_window_block,
         )| {
             SetOperationElement::SelectStmt {
+                hints: opt_hints,
                 distinct: opt_distinct.is_some(),
                 select_list: Box::new(select_list),
                 from: Box::new(
@@ -202,6 +206,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
         let set_expr = match input.elem {
             SetOperationElement::Group(expr) => expr,
             SetOperationElement::SelectStmt {
+                hints,
                 distinct,
                 select_list,
                 from,
@@ -211,6 +216,7 @@ impl<'a, I: Iterator<Item = WithSpan<'a, SetOperationElement>>> PrattParser<I>
                 window_list,
             } => SetExpr::Select(Box::new(SelectStmt {
                 span: transform_span(input.span.0),
+                hints,
                 distinct,
                 select_list: *select_list,
                 from: *from,

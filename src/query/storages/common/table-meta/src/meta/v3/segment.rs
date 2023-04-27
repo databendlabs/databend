@@ -11,18 +11,22 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+use std::io::Cursor;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::format::compress;
 use crate::meta::format::encode;
+use crate::meta::format::read_and_deserialize;
 use crate::meta::format::Compression;
 use crate::meta::statistics::FormatVersion;
 use crate::meta::v2::BlockMeta;
 use crate::meta::Encoding;
+use crate::meta::MetaCompression;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
 
@@ -121,5 +125,22 @@ impl SegmentInfo {
         buf.extend(summary_compress);
 
         Ok(buf)
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
+        let mut cursor = Cursor::new(bytes);
+        let version = cursor.read_scalar::<u64>()?;
+        assert_eq!(version, SegmentInfo::VERSION);
+        let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
+        let blocks_size: u64 = cursor.read_scalar::<u64>()?;
+        let summary_size: u64 = cursor.read_scalar::<u64>()?;
+
+        let blocks: Vec<Arc<BlockMeta>> =
+            read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
+        let summary: Statistics =
+            read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+
+        Ok(Self::new(blocks, summary))
     }
 }

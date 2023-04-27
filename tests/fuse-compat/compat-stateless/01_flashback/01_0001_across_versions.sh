@@ -102,3 +102,51 @@ echo "checking that after flashback to s2,  the table contains {1,2}"
 echo "select c  from fuse_test_compaction order by c" | $MYSQL_CLIENT_CONNECT
 
 
+###########################################
+# mixed versioned segment compaction test #
+###########################################
+
+echo "suite: mixed versioned segment compaction test"
+
+# compaction of mixed versioned segments in to new versioned segment
+
+# current situation:
+# - table option block_per_segment is 2
+# - we have inserted 3 rows into t2, which produced 3 snapshots of version 2
+# - the snapshots are s1 {1}, s2 {1,2}, s3 {1,2,3}
+# - after that, we perform a compaction on s3, which give us a snapshot s4 {1,2,3}, of version 2
+#   since block_per_segment is 2, s4 contains 2 segments, v1 segment_1: {1,2}, v2 segment_2: {3}
+# end of description of s4
+
+# creation of s5:
+#---------------
+# insert another row, which will produce a new snapshot s5 {1,2,3,4}, of version 3
+echo "insert into t2 values (4)" | $MYSQL_CLIENT_CONNECT
+
+# s5 now contains 3 segments, 2 of version 2, and 1 of version 3
+# - v2 segment_1: {1,2}, v2 segment_2: {3}, v3 segment_3: {4}
+
+# creation of s6: the mixed version segments compaction,
+#---------------
+# compact the segments again.
+#
+# note that we should use `compact segment` here, otherwise if `compact` is used,
+# the blocks will also be compacted, which produces two new segments of version 3.
+echo "optimize table t2 compact segment" | $MYSQL_CLIENT_CONNECT
+
+# according to the table options segment_per_block=3,
+# v2 segment_2 and v3 segment_3 should be compacted -- the mixed version segments compaction,
+# into a new segment of version 3.
+#
+# the new snapshot s6 produced by this compaction should contains 2 segments:
+# - v2 segment_1: {1,2}, v3 segment_2: {3, 4}
+
+# grab the id of s6
+FST_SNAPSHOT_S6_ID=$(echo "select snapshot_id from fuse_snapshot('default','t2') limit 1" | $MYSQL_CLIENT_CONNECT)
+
+echo "check segments after compaction, there should be 2 segments, a version v2 and a version v3"
+echo "select count() c, format_version v from fuse_segment('default', 't2', '$FST_SNAPSHOT_S6_ID') group by v order by v " | $MYSQL_CLIENT_CONNECT
+
+echo "check table contains {1,2,3,4} after compaction"
+echo "select * from t2 order by c" | $MYSQL_CLIENT_CONNECT
+
