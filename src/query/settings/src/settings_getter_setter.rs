@@ -324,11 +324,11 @@ impl Settings {
         self.try_get_u64("lazy_topn_threshold")
     }
 
-    pub fn set_parquet_read_whole_file_threshold(&self, value: u64) -> Result<()> {
-        self.try_set_u64("parquet_read_whole_file_threshold", value)
+    pub fn set_parquet_fast_read_bytes(&self, value: u64) -> Result<()> {
+        self.try_set_u64("parquet_fast_read_bytes", value)
     }
 
-    pub fn get_parquet_read_whole_file_threshold(&self) -> Result<u64> {
-        self.try_get_u64("parquet_read_whole_file_threshold")
+    pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
+        self.try_get_u64("parquet_fast_read_bytes")
     }
 }
