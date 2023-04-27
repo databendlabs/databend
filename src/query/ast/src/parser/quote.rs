@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub fn quote_ident(ident: &str, quote: char) -> String {
-    if !need_quote_ident(ident) {
+pub fn quote_ident(ident: &str, quote: Option<char>) -> String {
+    if !need_quote_ident(ident) && quote.is_none() {
         return ident.to_string();
     }
 
+    let quote = quote.unwrap_or('"');
     let mut s = String::with_capacity(ident.len() + 2);
     s.push(quote);
     for c in ident.chars() {
