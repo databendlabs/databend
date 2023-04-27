@@ -199,6 +199,11 @@ impl<'a> ChunkDisplay for FormatDisplay<'a> {
                     wtr.write_record(record)?;
                 }
             }
+            OutputFormat::Null => {}
+        }
+
+        if self.settings.time {
+            eprintln!("{:.3}", self._start.elapsed().as_secs_f64());
         }
         Ok(())
     }

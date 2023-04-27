@@ -20,7 +20,7 @@ mod display;
 mod helper;
 mod session;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, io::stdin};
 
 use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, ValueEnum};
@@ -136,6 +136,9 @@ struct Args {
 
     #[clap(long, help = "Show progress for data loading in stderr")]
     progress: bool,
+
+    #[clap(long, help = "Only show execution time without results")]
+    time: bool,
 }
 
 /// Parse a single key-value pair
@@ -248,6 +251,7 @@ pub async fn main() -> Result<()> {
     } else {
         config.settings.output_format = OutputFormat::TSV;
     }
+    config.settings.time = args.time;
 
     let mut session = session::Session::try_new(dsn, config.settings, is_repl).await?;
 
@@ -261,13 +265,11 @@ pub async fn main() -> Result<()> {
             if args.non_interactive {
                 return Err(anyhow!("no query specified"));
             }
-            session.handle_stdin().await
+            session.handle_reader(stdin().lock()).await
         }
         Some(query) => match args.data {
             None => {
-                if let Err(e) = session.handle_query(false, &query).await {
-                    eprintln!("{}", e);
-                }
+                session.handle_reader(std::io::Cursor::new(query)).await;
             }
             Some(data) => {
                 let options = args.format.get_options(&args.format_opt);

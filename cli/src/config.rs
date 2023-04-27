@@ -43,6 +43,8 @@ pub struct Settings {
     /// Output format is set by the flag.
     #[serde(skip)]
     pub output_format: OutputFormat,
+    #[serde(skip)]
+    pub time: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug, PartialEq, Deserialize)]
@@ -50,6 +52,7 @@ pub enum OutputFormat {
     Table,
     CSV,
     TSV,
+    Null,
 }
 
 impl Settings {
@@ -64,9 +67,11 @@ impl Settings {
                     "table" => OutputFormat::Table,
                     "csv" => OutputFormat::CSV,
                     "tsv" => OutputFormat::TSV,
+                    "null" => OutputFormat::Null,
                     _ => return Err(anyhow!("Unknown output format: {}", cmd_value)),
                 }
             }
+            "time" => self.time = cmd_value.parse()?,
             _ => return Err(anyhow!("Unknown command: {}", cmd_name)),
         }
         Ok(())
@@ -113,6 +118,7 @@ impl Default for Settings {
             prompt: "{user}@{host}> ".to_string(),
             output_format: OutputFormat::Table,
             show_progress: false,
+            time: false,
         }
     }
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::io::stdin;
 use std::io::BufRead;
 use std::path::Path;
 use std::sync::Arc;
@@ -71,7 +72,7 @@ impl Session {
         if self.is_repl {
             self.handle_repl().await;
         } else {
-            self.handle_stdin().await;
+            self.handle_reader(stdin().lock()).await;
         }
     }
 
@@ -144,8 +145,8 @@ impl Session {
         let _ = rl.save_history(&get_history_path());
     }
 
-    pub async fn handle_stdin(&mut self) {
-        let mut lines = std::io::stdin().lock().lines();
+    pub async fn handle_reader<R: BufRead>(&mut self, r: R) {
+        let mut lines = r.lines();
         while let Some(Ok(line)) = lines.next() {
             let queries = self.append_query(&line);
             for query in queries {
@@ -166,7 +167,7 @@ impl Session {
         }
     }
 
-    fn append_query(&mut self, line: &str) -> Vec<String> {
+    pub fn append_query(&mut self, line: &str) -> Vec<String> {
         let line = line.trim();
         if line.is_empty() {
             return vec![];
