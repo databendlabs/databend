@@ -182,6 +182,7 @@ impl Binder {
             .analyze_order_items(
                 &mut from_context,
                 &mut scalar_items,
+                &select_list,
                 &projections,
                 order_by,
                 stmt.distinct,
