@@ -63,7 +63,6 @@ use crate::pipelines::processors::transforms::group_by::ArenaHolder;
 use crate::pipelines::processors::transforms::HashTableCell;
 use crate::pipelines::processors::transforms::PartitionedHashTableDropper;
 use crate::pipelines::processors::AggregatorParams;
-use crate::pipelines::processors::HashTable;
 
 // Provide functions for all HashMethod to help implement polymorphic group by key
 //

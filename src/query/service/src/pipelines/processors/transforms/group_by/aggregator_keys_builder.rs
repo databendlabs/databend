@@ -29,7 +29,6 @@ use common_expression::Column;
 use common_hashtable::DictionaryKeys;
 use common_hashtable::DictionaryStringHashMap;
 use common_hashtable::FastHash;
-use common_hashtable::HashtableLike;
 use common_hashtable::LookupHashMap;
 use common_hashtable::PartitionedHashMap;
 use ethnum::i256;
@@ -147,7 +146,7 @@ pub struct DictionaryStringKeysColumnBuilder<'a> {
 }
 
 impl<'a> DictionaryStringKeysColumnBuilder<'a> {
-    pub fn create(capacity: usize, value_capacity: usize) -> Self {
+    pub fn create(_: usize, _: usize) -> Self {
         DictionaryStringKeysColumnBuilder {
             bytes_size: 0,
             data: vec![],

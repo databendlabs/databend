@@ -1,6 +1,5 @@
 use std::intrinsics::assume;
 use std::intrinsics::unlikely;
-use std::io::empty;
 use std::iter::TrustedLen;
 use std::mem::MaybeUninit;
 use std::ptr::NonNull;
@@ -10,19 +9,13 @@ use common_base::mem_allocator::MmapAllocator;
 
 use crate::container::Container;
 use crate::container::HeapContainer;
-use crate::hashtable::Hashtable;
-use crate::hashtable::HashtableIter;
-use crate::hashtable::HashtableIterMut;
 use crate::short_string_hashtable::FallbackKey;
-use crate::string_hashtable::StringHashtable;
 use crate::table0::Entry;
 use crate::table_empty::TableEmpty;
 use crate::traits::EntryMutRefLike;
 use crate::traits::EntryRefLike;
-use crate::traits::Keyable;
 use crate::DictionaryStringHashMap;
 use crate::FastHash;
-use crate::HashtableEntryRefLike;
 use crate::HashtableLike;
 use crate::StringHashSet;
 
@@ -290,10 +283,7 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
                 dictionary_keys.push(NonNull::from(entry.key()));
             }
 
-            match self.get_with_hash(&dictionary_keys, key.fast_hash()) {
-                None => None,
-                Some(entry) => Some(DictionaryEntryRef::create(entry, self.dict_keys)),
-            }
+            self.get_with_hash(&dictionary_keys, key.fast_hash()).map(|entry| DictionaryEntryRef::create(entry, self.dict_keys))
         }
     }
 
@@ -308,10 +298,7 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
             }
 
             let keys = self.dict_keys;
-            match self.get_mut_with_hash(&dictionary_keys, key.fast_hash()) {
-                None => None,
-                Some(entry) => Some(DictionaryMutEntryRef::create(entry, keys)),
-            }
+            self.get_mut_with_hash(&dictionary_keys, key.fast_hash()).map(|entry| DictionaryMutEntryRef::create(entry, keys))
         }
     }
 
@@ -425,14 +412,14 @@ impl<V> HashtableLike for DictionaryStringHashTable<V> {
 }
 
 pub struct DictionaryEntryRef<'a, V>
-where Self: 'a
+    where Self: 'a
 {
     key: DictionaryKeys,
     entry: &'a DictionaryEntry<V>,
 }
 
 impl<'a, V> Clone for DictionaryEntryRef<'a, V>
-where Self: 'a
+    where Self: 'a
 {
     fn clone(&self) -> Self {
         DictionaryEntryRef {
@@ -445,7 +432,7 @@ where Self: 'a
 impl<'a, V> Copy for DictionaryEntryRef<'a, V> {}
 
 impl<'a, V> DictionaryEntryRef<'a, V>
-where Self: 'a
+    where Self: 'a
 {
     pub fn create(entry: &'a DictionaryEntry<V>, keys: usize) -> DictionaryEntryRef<'a, V> {
         unsafe {
@@ -498,7 +485,7 @@ impl<'a, V> DictionaryMutEntryRef<'a, V> {
     }
 
     pub fn get_mut_ptr(&mut self) -> *mut V {
-        unsafe { self.entry.val.as_mut_ptr() }
+        self.entry.val.as_mut_ptr()
     }
 }
 
@@ -519,9 +506,7 @@ impl<'a, V: 'a> EntryMutRefLike for DictionaryMutEntryRef<'a, V> {
     }
 
     fn write(&mut self, value: Self::Value) {
-        unsafe {
             self.entry.val.write(value);
-        }
     }
 }
 
@@ -544,11 +529,9 @@ impl<'a, V> Iterator for DictionaryTableIter<'a, V> {
         if self.i == self.slice.len() {
             None
         } else {
-            unsafe {
-                let res = unsafe { &*(self.slice.as_ptr().add(self.i) as *const _) };
-                self.i += 1;
-                Some(DictionaryEntryRef::create(res, self.dict_keys))
-            }
+            let res = unsafe { &*(self.slice.as_ptr().add(self.i) as *const _) };
+            self.i += 1;
+            Some(DictionaryEntryRef::create(res, self.dict_keys))
         }
     }
 

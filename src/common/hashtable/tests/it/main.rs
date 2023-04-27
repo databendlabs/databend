@@ -16,7 +16,7 @@ use std::ptr::NonNull;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 
-use common_hashtable::DictionaryKeys;
+use common_hashtable::{DictionaryKeys, HashtableEntryMutRefLike};
 use common_hashtable::DictionaryStringHashMap;
 use common_hashtable::HashMap;
 use common_hashtable::HashtableLike;
@@ -139,7 +139,7 @@ fn test_unsized_hash_map() {
 
 #[test]
 fn test_dictionary_hash_map() {
-    let mut hashtable = DictionaryStringHashMap::<usize>::new();
+    let mut hashtable = DictionaryStringHashMap::<usize>::new(2);
     unsafe {
         for index1 in 0..1000 {
             for index2 in 0..1000 {
@@ -149,7 +149,7 @@ fn test_dictionary_hash_map() {
                     NonNull::from(index1_str.as_bytes()),
                     NonNull::from(index2_str.as_bytes()),
                 ];
-                if let Ok(e) = hashtable.insert_and_entry(&DictionaryKeys::create(&keys)) {
+                if let Ok(mut e) = hashtable.insert_and_entry(&DictionaryKeys::create(&keys)) {
                     e.write(index1);
                 }
 
