@@ -70,7 +70,6 @@ impl SnapshotReferencedFiles {
 pub struct SnapshotLiteExtended {
     pub format_version: u64,
     pub snapshot_id: SnapshotId,
-    pub prev_snapshot_id: Option<SnapshotId>,
     pub timestamp: Option<DateTime<Utc>>,
     pub segments: HashSet<Location>,
     pub table_statistics_location: Option<String>,
@@ -378,9 +377,6 @@ impl SnapshotsIO {
         Ok(SnapshotLiteExtended {
             format_version: ver,
             snapshot_id: snapshot.snapshot_id,
-            prev_snapshot_id: snapshot
-                .prev_snapshot_id
-                .map(|(prev_snapshot_id, _)| prev_snapshot_id),
             timestamp: snapshot.timestamp,
             segments,
             table_statistics_location,

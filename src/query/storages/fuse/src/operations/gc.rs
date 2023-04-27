@@ -85,9 +85,6 @@ impl FuseTable {
         let root_snapshot_lite = Arc::new(SnapshotLiteExtended {
             format_version: ver,
             snapshot_id: root_snapshot.snapshot_id,
-            prev_snapshot_id: root_snapshot
-                .prev_snapshot_id
-                .map(|(prev_snapshot_id, _)| prev_snapshot_id),
             timestamp: root_snapshot.timestamp,
             segments: HashSet::from_iter(root_snapshot.segments.clone()),
             table_statistics_location: root_snapshot.table_statistics_location.clone(),
@@ -539,9 +536,6 @@ impl FuseTable {
         let root_snapshot_lite = Arc::new(SnapshotLiteExtended {
             format_version: ver,
             snapshot_id: root_snapshot.snapshot_id,
-            prev_snapshot_id: root_snapshot
-                .prev_snapshot_id
-                .map(|(prev_snapshot_id, _)| prev_snapshot_id),
             timestamp: root_snapshot.timestamp,
             segments: HashSet::from_iter(root_snapshot.segments.clone()),
             table_statistics_location: root_snapshot.table_statistics_location.clone(),
