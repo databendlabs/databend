@@ -93,8 +93,14 @@ pub fn parse_exprs(
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker =
-        TypeChecker::new(&mut bind_context, ctx, &name_resolution_ctx, metadata, &[]);
+    let mut type_checker = TypeChecker::new(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        false,
+    );
 
     let sql_dialect = Dialect::MySQL;
     let tokens = tokenize_sql(sql)?;
