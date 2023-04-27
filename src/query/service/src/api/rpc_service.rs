@@ -18,12 +18,10 @@ use std::sync::Arc;
 
 use common_arrow::arrow_format::flight::service::flight_service_server::FlightServiceServer;
 use common_base::base::tokio;
-use common_base::base::tokio::net::TcpListener;
 use common_base::base::tokio::sync::Notify;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Identity;
 use tonic::transport::Server;
 use tonic::transport::ServerTlsConfig;
@@ -97,6 +95,6 @@ impl DatabendQueryServer for RpcService {
     #[async_backtrace::framed]
     async fn start(&mut self, addr: SocketAddr) -> Result<SocketAddr> {
         self.start_with_incoming(addr).await?;
-        Ok(listener_addr)
+        Ok(addr)
     }
 }
