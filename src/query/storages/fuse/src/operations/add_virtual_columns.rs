@@ -76,9 +76,7 @@ impl FuseTable {
         );
 
         let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
-        let mut segment_idx = 0;
-
-        for chunk in segment_locations.chunks(max_io_requests) {
+        for (segment_idx, chunk) in segment_locations.chunks(max_io_requests).enumerate() {
             // Read the segments information in parallel.
             let segment_infos = segments_io
                 .read_segments(chunk, false)
@@ -107,7 +105,6 @@ impl FuseTable {
                 .collect();
 
             virtual_column_tasks.partitions.append(&mut partitions);
-            segment_idx += 1;
         }
 
         ctx.set_partitions(virtual_column_tasks)?;

@@ -212,7 +212,7 @@ impl Processor for VirtualColumnSource {
                         for row in 0..len {
                             let val = unsafe { column.index_unchecked(row) };
                             if let ScalarRef::Variant(v) = val {
-                                if let Some(inner_val) = get_by_name(&v, key.as_str()) {
+                                if let Some(inner_val) = get_by_name(v, key.as_str()) {
                                     validity.push(true);
                                     builder.put_slice(inner_val.as_slice());
                                     builder.commit_row();
