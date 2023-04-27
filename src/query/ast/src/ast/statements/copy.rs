@@ -20,6 +20,7 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 
+use itertools::Itertools;
 use url::Url;
 
 use crate::ast::write_quoted_comma_separated_list;
@@ -177,9 +178,9 @@ impl Display for CopyUnit {
                 catalog,
                 database,
                 table,
-                columns
+                columns,
             } => {
-                if let Some(catalog) = catalog {
+                let ret = if let Some(catalog) = catalog {
                     write!(
                         f,
                         "{catalog}.{}.{table}",
@@ -189,11 +190,11 @@ impl Display for CopyUnit {
                     write!(f, "{database}.{table}")
                 } else {
                     write!(f, "{table}")
-                }
+                };
                 if let Some(columns) = columns {
-                    write!(f, "({})", columns.join(","))
+                    write!(f, "({})", columns.iter().map(|c| c.to_string()).join(","))
                 } else {
-                    Ok(())
+                    ret
                 }
             }
             CopyUnit::StageLocation(v) => v.fmt(f),

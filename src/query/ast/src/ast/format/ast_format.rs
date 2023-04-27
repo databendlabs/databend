@@ -781,7 +781,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 catalog,
                 database,
                 table,
-            } => self.visit_table_ref(catalog, database, table),
+                columns,
+            } => {
+                self.visit_table_ref(catalog, database, table);
+                todo!()
+            }
             CopyUnit::StageLocation(v) => {
                 let location_format_ctx =
                     AstFormatContext::new(format!("Location @{}{}", v.name, v.path));

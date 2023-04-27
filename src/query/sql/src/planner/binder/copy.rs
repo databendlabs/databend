@@ -70,6 +70,7 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
             ) => {
                 let (catalog_name, database_name, table_name) =
@@ -101,6 +102,7 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
             ) => {
                 let (catalog_name, database_name, table_name) =
@@ -146,6 +148,7 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
                 CopyUnit::StageLocation(stage_location),
             ) => {
@@ -168,6 +171,7 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
                 CopyUnit::UriLocation(uri_location),
             ) => {
@@ -220,6 +224,7 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
             ) => {
                 let (catalog_name, database_name, table_name) =
