@@ -228,7 +228,7 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
     }
 }
 
-impl<'a, Method: HashMethodBounds> Iterator for SerializeAggregateStream<Method> {
+impl<Method: HashMethodBounds> Iterator for SerializeAggregateStream<Method> {
     type Item = Result<DataBlock>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -260,6 +260,7 @@ impl<Method: HashMethodBounds> SerializeAggregateStream<Method> {
             .collect::<Vec<_>>();
 
         let mut bytes = 0;
+        #[allow(clippy::while_let_on_iterator)]
         while let Some(group_entity) = self.iter.next() {
             bytes = 0;
 

@@ -186,7 +186,7 @@ impl<Method: HashMethodBounds> SerializeGroupByStream<Method> {
     }
 }
 
-impl<'a, Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
+impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
     type Item = Result<DataBlock>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -204,6 +204,7 @@ impl<'a, Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
             .keys_column_builder(max_block_rows, max_block_bytes);
 
         let mut rows = 0;
+        #[allow(clippy::while_let_on_iterator)]
         while let Some(group_entity) = self.iter.next() {
             rows += 1;
             group_key_builder.append_value(group_entity.key());

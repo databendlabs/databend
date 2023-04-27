@@ -167,7 +167,7 @@ impl<'a> GroupColumnsBuilder for DictionarySerializedKeysGroupColumnsBuilder<'a>
             }
         }
 
-        self.string_type_data.push(v.clone())
+        self.string_type_data.push(*v)
     }
 
     fn finish(mut self) -> Result<Vec<Column>> {

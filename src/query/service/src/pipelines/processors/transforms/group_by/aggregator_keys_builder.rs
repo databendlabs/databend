@@ -163,7 +163,7 @@ impl<'a> KeysColumnBuilder for DictionaryStringKeysColumnBuilder<'a> {
             }
         }
 
-        self.data.push(v.clone())
+        self.data.push(*v)
     }
 
     #[inline(always)]
