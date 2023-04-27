@@ -799,12 +799,18 @@ pub struct AggregateFunctionDesc {
     pub arg_indices: Vec<IndexType>,
 }
 
+pub enum LagLeadDefault {
+    Null,
+    Literal(),
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LagLeadFunctionDesc {
     pub sig: LagLeadFunctionSignature,
     pub output_column: IndexType,
     pub arg: usize,
     pub default: Option<usize>,
+    pub default_type: String,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

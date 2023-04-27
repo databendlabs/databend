@@ -92,7 +92,7 @@ pub enum WindowFunctionImpl {
     RowNumber,
     Rank,
     DenseRank,
-    PercentRank,
+    PercentRank((usize, Option<i64>, Option<usize>)),
 }
 
 impl WindowFunctionInfo {

@@ -39,6 +39,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
 use common_expression::RawExpr;
 use common_expression::RemoteExpr;
+use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -977,6 +978,18 @@ impl PhysicalPlanBuilder {
                         })
                     }
                     WindowFuncType::Lag(lag) => {
+                        let (new_default, default_type) = if let Some(box ScalarExpr::BoundColumnRef(col)) = &lag.default {
+                            (Some(col.column.index), "column_index".to_string())
+                        }else if let Some(box ScalarExpr::ConstantExpr(con)) = &lag.default{
+                            match con.value {
+                                Scalar::Null => (None, "constant".to_string()),
+                                Scalar::Number(b) => {
+                                    (b.as_int64(), "constant".to_string())
+                                }
+                            }
+                        } else {
+                            (None, "constant".to_string())
+                        };
                         WindowFunction::Lag(LagLeadFunctionDesc {
                             sig: LagLeadFunctionSignature {
                                 name: "lag".to_string(),
@@ -994,11 +1007,8 @@ impl PhysicalPlanBuilder {
                             }else {
                                 Err(ErrorCode::Internal("Window's lag, lead function argument must be a BoundColumnRef".to_string()))
                             }?,
-                            default: if let Some(box ScalarExpr::BoundColumnRef(col)) = &lag.default {
-                                Some(col.column.index)
-                            }else {
-                                None
-                            },
+                            default: new_default,
+                            default_type,
                         })
                     }
                     WindowFuncType::RowNumber => WindowFunction::RowNumber,
