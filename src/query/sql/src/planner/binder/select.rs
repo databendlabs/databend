@@ -40,7 +40,7 @@ use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_functions::BUILTIN_FUNCTIONS;
-use tracing::log::warn;
+use tracing::warn;
 
 use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;

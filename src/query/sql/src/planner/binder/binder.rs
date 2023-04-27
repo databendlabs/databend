@@ -33,7 +33,7 @@ use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::UserDefinedFunction;
-use tracing::log::warn;
+use tracing::warn;
 
 use crate::binder::wrap_cast;
 use crate::normalize_identifier;
