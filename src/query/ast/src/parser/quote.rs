@@ -56,6 +56,10 @@ pub fn unquote_ident(s: &str, quote: char) -> String {
 
 // in ANSI SQL, it do not need to quote an identifier if the identifier matches
 // the following regular expression: [A-Za-z_][A-Za-z0-9_$]*.
+//
+// There're also two known special cases in Databend which do not requires quoting:
+// - "~" is a valid stage name
+// - '$' is a valid character in some system functions
 fn need_quote_ident(ident: &str) -> bool {
     if ident.is_empty() {
         return true;
