@@ -41,7 +41,7 @@ async fn test_tls_rpc_server() -> Result<()> {
             .build(),
     )?;
 
-    let mut listener_address = SocketAddr::from_str("127.0.0.1:0")?;
+    let mut listener_address = SocketAddr::from_str("127.0.0.1:9991")?;
     listener_address = rpc_service.start(listener_address).await?;
 
     let tls_conf = Some(RpcClientTlsConfig {
