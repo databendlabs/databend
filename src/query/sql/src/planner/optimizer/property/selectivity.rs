@@ -19,11 +19,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
-use common_expression::ConstantFolder;
-use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::property::datum::F64;
