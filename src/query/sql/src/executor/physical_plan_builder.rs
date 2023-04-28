@@ -674,6 +674,10 @@ impl PhysicalPlanBuilder {
                                     }
                                 };
 
+                                let settings = self.ctx.get_settings();
+                                let efficiently_memory =
+                                    settings.get_efficiently_memory_group_by()?;
+
                                 let group_by_key_index =
                                     aggregate_partial.output_schema()?.num_fields() - 1;
                                 let group_by_key_data_type =
@@ -682,6 +686,7 @@ impl PhysicalPlanBuilder {
                                             .iter()
                                             .map(|v| v.scalar.data_type())
                                             .collect::<Result<Vec<_>>>()?,
+                                        efficiently_memory,
                                     )?
                                     .data_type();
 

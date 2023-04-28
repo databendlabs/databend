@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,18 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-
 use std::env;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
 
 use anyerror::AnyError;
-use common_base::base::tokio;
 use common_base::base::StopHandle;
 use common_base::base::Stoppable;
-use common_base::mem_allocator::GlobalAllocator;
 use common_grpc::RpcClientConf;
 use common_meta_raft_store::ondisk::OnDisk;
 use common_meta_raft_store::ondisk::DATA_VERSION;
@@ -45,25 +41,15 @@ use databend_meta::meta_service::MetaNode;
 use databend_meta::version::METASRV_COMMIT_VERSION;
 use databend_meta::version::METASRV_SEMVER;
 use databend_meta::version::MIN_METACLI_SEMVER;
+use tokio::time::sleep;
 use tracing::info;
 use tracing::warn;
 
-mod kvapi;
-
-pub use kvapi::KvApiCommand;
-
-use crate::tokio::time::sleep;
-
-#[global_allocator]
-pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
+use crate::kvapi::KvApiCommand;
 
 const CMD_KVAPI_PREFIX: &str = "kvapi::";
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let conf = Config::load()?;
-    conf.validate()?;
-
+pub async fn entry(conf: Config) -> anyhow::Result<()> {
     if run_cmd(&conf).await {
         return Ok(());
     }
@@ -216,6 +202,63 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), MetaAPIError> {
+    let node_id = meta_node.sto.id;
+    let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
+    let node = Node::new(node_id, raft_endpoint)
+        .with_grpc_advertise_address(conf.grpc_api_advertise_address());
+
+    println!("Register this node: {{{}}}", node);
+    println!();
+
+    let ent = LogEntry {
+        txid: None,
+        time_ms: None,
+        cmd: Cmd::AddNode {
+            node_id,
+            node,
+            overriding: true,
+        },
+    };
+    info!("Raft log entry for updating node: {:?}", ent);
+
+    meta_node.write(ent).await?;
+    info!("Done register");
+    Ok(())
+}
+
+async fn run_kvapi_command(conf: &Config, op: &str) {
+    match KvApiCommand::from_config(conf, op) {
+        Ok(kv_cmd) => {
+            let rpc_conf = RpcClientConf {
+                endpoints: vec![conf.grpc_api_address.clone()],
+                username: conf.username.clone(),
+                password: conf.password.clone(),
+                ..Default::default()
+            };
+            let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
+                Ok(s) => Arc::new(s),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    return;
+                }
+            };
+
+            match kv_cmd.execute(client).await {
+                Ok(res) => {
+                    println!("{}", res);
+                }
+                Err(e) => {
+                    eprintln!("{}", e);
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("{}", e);
+        }
+    }
+}
+
 /// The meta service GRPC API address can be changed by administrator in the config file.
 ///
 /// Thus every time a meta server starts up, re-register the node info to broadcast its latest grpc address
@@ -299,63 +342,6 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
     }
 
     unreachable!("Tried too many times registering node")
-}
-
-async fn do_register(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), MetaAPIError> {
-    let node_id = meta_node.sto.id;
-    let raft_endpoint = conf.raft_config.raft_api_advertise_host_endpoint();
-    let node = Node::new(node_id, raft_endpoint)
-        .with_grpc_advertise_address(conf.grpc_api_advertise_address());
-
-    println!("Register this node: {{{}}}", node);
-    println!();
-
-    let ent = LogEntry {
-        txid: None,
-        time_ms: None,
-        cmd: Cmd::AddNode {
-            node_id,
-            node,
-            overriding: true,
-        },
-    };
-    info!("Raft log entry for updating node: {:?}", ent);
-
-    meta_node.write(ent).await?;
-    info!("Done register");
-    Ok(())
-}
-
-async fn run_kvapi_command(conf: &Config, op: &str) {
-    match KvApiCommand::from_config(conf, op) {
-        Ok(kv_cmd) => {
-            let rpc_conf = RpcClientConf {
-                endpoints: vec![conf.grpc_api_address.clone()],
-                username: conf.username.clone(),
-                password: conf.password.clone(),
-                ..Default::default()
-            };
-            let client = match MetaStoreProvider::new(rpc_conf).create_meta_store().await {
-                Ok(s) => Arc::new(s),
-                Err(e) => {
-                    eprintln!("{}", e);
-                    return;
-                }
-            };
-
-            match kv_cmd.execute(client).await {
-                Ok(res) => {
-                    println!("{}", res);
-                }
-                Err(e) => {
-                    eprintln!("{}", e);
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("{}", e);
-        }
-    }
 }
 
 async fn run_cmd(conf: &Config) -> bool {

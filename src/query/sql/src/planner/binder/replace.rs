@@ -18,7 +18,6 @@ use common_ast::ast::InsertSource;
 use common_ast::ast::ReplaceStmt;
 use common_ast::ast::Statement;
 use common_exception::Result;
-use common_expression::TableSchemaRefExt;
 use common_meta_app::principal::FileFormatOptionsAst;
 
 use crate::binder::Binder;
@@ -67,17 +66,13 @@ impl Binder {
             table.schema()
         } else {
             let schema = table.schema();
-            let fields = columns
+            let field_indexes = columns
                 .iter()
                 .map(|ident| {
-                    schema
-                        .field_with_name(
-                            &normalize_identifier(ident, &self.name_resolution_ctx).name,
-                        )
-                        .map(|v| v.clone())
+                    schema.index_of(&normalize_identifier(ident, &self.name_resolution_ctx).name)
                 })
                 .collect::<Result<Vec<_>>>()?;
-            TableSchemaRefExt::create(fields)
+            Arc::new(schema.project(&field_indexes))
         };
 
         let on_conflict_fields = on_conflict_columns

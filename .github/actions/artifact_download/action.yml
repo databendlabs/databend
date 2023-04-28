@@ -28,6 +28,11 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Check Disk Space
+      shell: bash
+      run: |
+        df -h
+
     - name: Get Download Info
       id: info
       shell: bash
@@ -68,3 +73,8 @@ runs:
       run: |
         chmod +x ${{ steps.info.outputs.path }}/databend-*
         chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
+
+    - name: Check Disk Space
+      shell: bash
+      run: |
+        df -h

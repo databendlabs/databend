@@ -70,7 +70,7 @@ pub struct PartitionPruner {
     // TODO: use limit information for pruning
     // /// Limit of this query. If there is order by and filter, it will not be used (assign to `usize::MAX`).
     // pub limit: usize,
-    pub parquet_read_whole_file_threshold: usize,
+    pub parquet_fast_read_bytes: usize,
 }
 
 impl PartitionPruner {
@@ -163,6 +163,7 @@ impl PartitionPruner {
                 column_metas.insert(*index, ColumnMeta {
                     offset,
                     length,
+                    num_values: c.num_values(),
                     compression: c.compression(),
                     uncompressed_size: c.uncompressed_size() as u64,
                     min_max,
@@ -195,7 +196,7 @@ impl PartitionPruner {
         let mut large_files = vec![];
         let mut small_files = vec![];
         for (location, size) in locations {
-            if *size > self.parquet_read_whole_file_threshold as u64 {
+            if *size > self.parquet_fast_read_bytes as u64 {
                 large_files.push((location.clone(), *size));
             } else {
                 small_files.push((location.clone(), *size));

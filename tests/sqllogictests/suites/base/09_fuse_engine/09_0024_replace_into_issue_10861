@@ -50,6 +50,32 @@ DROP TABLE t;
 statement ok
 DROP TABLE s;
 
+
+# issue #11250
+
+# verifies that if columns are re-ordered, `replace` works as expected.
+
+statement ok
+CREATE TABLE employees(employee_id INT, employee_name VARCHAR, employee_email VARCHAR);
+
+statement ok
+insert INTO employees (employee_name, employee_email,employee_id)  VALUES ('John Doe', '123@qq.com',123);
+
+statement ok
+REPLACE INTO employees (employee_name, employee_email,employee_id)  ON (employee_id) VALUES ('John Doe', '456@qq.com',123);
+
+query ITT
+select * from employees;
+----
+123 John Doe 456@qq.com
+
+
+statement ok
+DROP table employees;
+
 statement ok
 DROP DATABASE issue_10861;
+
+
+
 

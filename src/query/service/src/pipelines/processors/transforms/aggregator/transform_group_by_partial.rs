@@ -198,6 +198,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 )],
             },
             HashTable::PartitionedHashTable(v) => {
+                let _ = v.hashtable.unsize_key_size();
                 let cells = PartitionedHashTableDropper::split_cell(v);
                 let mut blocks = Vec::with_capacity(cells.len());
                 for (bucket, cell) in cells.into_iter().enumerate() {
