@@ -157,7 +157,7 @@ struct Args {
 
     #[clap(
         long,
-        help = "Only show execution time without results, only works with output format `null`."
+        help = "Only show execution time without results, will implicitly set output format to `null`."
     )]
     time: bool,
 }
@@ -288,6 +288,7 @@ pub async fn main() -> Result<()> {
     }
     if args.time {
         settings.time = true;
+        settings.output_format = OutputFormat::Null;
     }
 
     let mut session = session::Session::try_new(dsn, settings, is_repl).await?;
