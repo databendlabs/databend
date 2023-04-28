@@ -3,11 +3,13 @@ title: Querying Data in Staged Files
 description:  Learn how to use standard SQL to query data files in internal or external storage stages with Databend
 ---
 
-Databend supports using standard SQL to query data files located in an internal stage or named external stage (Amazon S3, Google Cloud Storage, or Microsoft Azure). This can be useful for inspecting or viewing the contents of the staged files, particularly before loading or after unloading data.
+You can use the SELECT statement in Databend to query data files stored in internal or named external stages, such as Amazon S3, Google Cloud Storage, or Microsoft Azure. During this process, the schema is automatically detected, just like with the [infer_schema](../15-sql-functions/112-table-functions/infer_schema.md) function. This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
 
-The schema is automatically detected, same as [infer_schema](../15-sql-functions/112-table-functions/infer_schema.md).
+:::note
+This feature is currently only available for the Parquet file format.
+:::
 
-## Query Syntax and Parameters
+## Syntax and Parameters
 
 ```sql
 SELECT <columns> FROM
@@ -69,7 +71,7 @@ These include:
 
 They are explained in [Create Stage](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
 
-## Query Examples
+## Examples
 
 ### Example 1: Querying Columns in a Parquet File
 
@@ -134,7 +136,3 @@ SELECT count(*), author FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqclo
 (file_format => 'parquet')
 GROUP BY author;
 ```
-
-## Conclusion
-
-We hope this document has provided you with a better understanding of how to use standard SQL to query data files in an internal or external storage stage with Databend. By using the query function, you can easily inspect or view the contents of staged files, making it easier to load and unload data. The examples we provided should help you get started with using this powerful feature.
