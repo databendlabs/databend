@@ -1463,10 +1463,12 @@ impl<'a> TypeChecker<'a> {
             }
             BinaryOperator::Like => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
-                if let Expr::Literal { lit, .. } = right {
-                    if let Literal::String(str) = lit {
-                        return self.resolve_like(op, span, left, right, str).await;
-                    }
+                if let Expr::Literal {
+                    lit: Literal::String(str),
+                    ..
+                } = right
+                {
+                    return self.resolve_like(op, span, left, right, str).await;
                 }
                 let name = op.to_func_name();
                 self.resolve_function(span, name.as_str(), vec![], &[left, right])
@@ -2224,7 +2226,7 @@ impl<'a> TypeChecker<'a> {
         span: Span,
         left: &Expr,
         right: &Expr,
-        like_str: &String,
+        like_str: &str,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if check_const(like_str) {
             // Convert to equal comparison
@@ -2232,13 +2234,16 @@ impl<'a> TypeChecker<'a> {
                 .await
         } else if check_prefix(like_str) {
             // Convert to `a >= like_str and a < like_str + 1`
-            let mut char_vec: Vec<char> = like_str.chars().collect();
+            let mut char_vec: Vec<char> = like_str[0..like_str.len() - 1].chars().collect();
             let len = char_vec.len();
             let ascii_val = *char_vec.last().unwrap() as u8 + 1;
             char_vec[len - 1] = ascii_val as char;
             let like_str_plus: String = char_vec.iter().collect();
             let (new_left, _) = *self
-                .resolve_binary_op(span, &BinaryOperator::Gte, left, right)
+                .resolve_binary_op(span, &BinaryOperator::Gte, left, &Expr::Literal {
+                    span: None,
+                    lit: Literal::String(like_str[..like_str.len() - 1].to_owned()),
+                })
                 .await?;
             let (new_right, _) = *self
                 .resolve_binary_op(span, &BinaryOperator::Lt, left, &Expr::Literal {
@@ -3007,7 +3012,7 @@ pub fn validate_function_arg(
 }
 
 // Some check functions for like expression
-fn check_const(like_str: &String) -> bool {
+fn check_const(like_str: &str) -> bool {
     for char in like_str.chars() {
         if char == '_' || char == '%' {
             return false;
@@ -3016,7 +3021,7 @@ fn check_const(like_str: &String) -> bool {
     true
 }
 
-fn check_prefix(like_str: &String) -> bool {
+fn check_prefix(like_str: &str) -> bool {
     let mut i: usize = like_str.len();
     while i > 0 {
         if like_str.chars().nth(i - 1).unwrap() != '%' {
