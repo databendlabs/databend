@@ -806,7 +806,7 @@ impl DataField {
         DataField {
             name: name.to_string(),
             default_expr: None,
-            data_type: DataType::Nullable(Box::new(data_type)),
+            data_type: data_type.wrap_nullable(),
         }
     }
 
