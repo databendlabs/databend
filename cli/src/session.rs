@@ -34,6 +34,7 @@ use crate::config::OutputFormat;
 use crate::config::Settings;
 use crate::display::{format_write_progress, ChunkDisplay, FormatDisplay, ReplDisplay};
 use crate::helper::CliHelper;
+use crate::VERSION;
 
 pub struct Session {
     dsn: String,
@@ -49,7 +50,7 @@ impl Session {
         let conn = new_connection(&dsn)?;
         let info = conn.info();
         if is_repl {
-            println!("Welcome to BendSQL.");
+            println!("Welcome to BendSQL {}.", VERSION.as_str());
             println!(
                 "Trying connect to {}:{} as user {}.",
                 info.host, info.port, info.user

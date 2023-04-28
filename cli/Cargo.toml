@@ -22,6 +22,7 @@ humantime-serde = "1.1.1"
 indicatif = "0.17.3"
 itertools = "0.10.5"
 logos = "0.13.0"
+once_cell = "1.17.1"
 rustyline = "11.0.0"
 serde = { version = "1.0.159", features = ["derive"] }
 serde_json = "1.0.95"
@@ -38,6 +39,9 @@ tokio = { version = "1.26", features = [
 ] }
 toml = "0.7.3"
 url = { version = "2.3.1", default-features = false }
+
+[build-dependencies]
+vergen = { version = "8.1.3", features = ["build", "git", "gitcl"] }
 
 [[bin]]
 name = "bendsql"

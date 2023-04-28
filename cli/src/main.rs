@@ -25,6 +25,14 @@ use std::{collections::BTreeMap, io::stdin};
 use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, ValueEnum};
 use config::{Config, OutputFormat};
+use once_cell::sync::Lazy;
+
+static VERSION: Lazy<String> = Lazy::new(|| {
+    let version = option_env!("CARGO_PKG_VERSION").unwrap_or("unknown");
+    let sha = option_env!("VERGEN_GIT_DESCRIBE").unwrap_or("dev");
+    let timestamp = option_env!("VERGEN_BUILD_TIMESTAMP").unwrap_or("");
+    format!("{}-{}({})", version, sha, timestamp)
+});
 
 /// Supported file format and options:
 /// https://databend.rs/doc/sql-reference/file-format-options
@@ -83,8 +91,9 @@ impl InputFormat {
 }
 
 #[derive(Debug, Parser, PartialEq)]
+#[command(version = VERSION.as_str())]
 // disable default help flag since it would conflict with --host
-#[command(author, version, about, disable_help_flag = true)]
+#[command(author, about, disable_help_flag = true)]
 struct Args {
     #[clap(long, help = "Print help information")]
     help: bool,
