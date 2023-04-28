@@ -211,7 +211,8 @@ impl<'a> Evaluator<'a> {
                 assert_eq!(
                     ConstantFolder::fold_with_domain(
                         expr,
-                        self.input_columns
+                        &self
+                            .input_columns
                             .domains()
                             .into_iter()
                             .enumerate()
@@ -914,7 +915,7 @@ impl<'a> Evaluator<'a> {
 }
 
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
-    input_domains: HashMap<Index, Domain>,
+    input_domains: &'a HashMap<Index, Domain>,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
@@ -936,7 +937,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             .collect();
 
         let folder = ConstantFolder {
-            input_domains,
+            input_domains: &input_domains,
             func_ctx,
             fn_registry,
         };
@@ -948,7 +949,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     /// domain of the new expression.
     pub fn fold_with_domain(
         expr: &Expr<Index>,
-        input_domains: HashMap<Index, Domain>,
+        input_domains: &'a HashMap<Index, Domain>,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> (Expr<Index>, Option<Domain>) {
@@ -1449,7 +1450,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
         let (_, output_domain) = ConstantFolder::fold_with_domain(
             &cast_expr,
-            [(0, domain.clone())].into_iter().collect(),
+            &[(0, domain.clone())].into_iter().collect(),
             self.func_ctx,
             self.fn_registry,
         );

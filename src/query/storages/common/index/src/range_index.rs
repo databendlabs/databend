@@ -84,7 +84,7 @@ impl RangeIndex {
 
         let (new_expr, _) = ConstantFolder::fold_with_domain(
             &self.expr,
-            input_domains,
+            &input_domains,
             &self.func_ctx,
             &BUILTIN_FUNCTIONS,
         );
