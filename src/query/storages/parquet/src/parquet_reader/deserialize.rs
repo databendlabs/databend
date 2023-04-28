@@ -154,7 +154,7 @@ impl ParquetReader {
                     std::io::Cursor::new(chunk),
                     PageMetaData {
                         column_start: meta.offset,
-                        num_values: rows as i64,
+                        num_values: meta.num_values,
                         compression: meta.compression,
                         descriptor: descriptor.descriptor.clone(),
                     },
