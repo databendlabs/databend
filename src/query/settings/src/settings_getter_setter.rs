@@ -316,6 +316,10 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
+    pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
+        Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
+    }
+
     pub fn set_lazy_topn_threshold(&self, value: u64) -> Result<()> {
         self.try_set_u64("lazy_topn_threshold", value)
     }

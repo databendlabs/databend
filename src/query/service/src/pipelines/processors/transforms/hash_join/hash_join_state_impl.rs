@@ -176,6 +176,7 @@ impl HashJoinState for JoinHashTable {
                         hash_method,
                     })
                 }
+                HashMethodKind::DictionarySerializer(_) => unimplemented!(),
             };
             let hashtable = unsafe { &mut *self.hash_table.get() };
             *hashtable = hashjoin_hashtable;

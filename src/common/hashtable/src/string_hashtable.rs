@@ -183,6 +183,21 @@ where
             Err(e) => Err(&mut *e.get_mut_ptr()),
         }
     }
+
+    pub unsafe fn get_slot_index(&self, key: &K) -> Option<usize> {
+        let key = (*key).as_bytes();
+
+        if key.is_empty() {
+            return match self.table_empty.has_zero {
+                true => Some(0),
+                false => None,
+            };
+        }
+
+        self.table
+            .get_slot_index(&FallbackKey::new(key))
+            .map(|x| 1 + x)
+    }
 }
 
 pub struct StringHashtableIter<'a, K, V>
