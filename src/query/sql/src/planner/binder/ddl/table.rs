@@ -939,10 +939,15 @@ impl Binder {
                 let table = self.ctx.get_table(&catalog, &database, &table).await?;
 
                 if table.engine() == VIEW_ENGINE {
-                    let query = table.get_table_info().options().get(QUERY).unwrap();
-                    let mut planner = Planner::new(self.ctx.clone());
-                    let (plan, _) = planner.plan_sql(query).await?;
-                    Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
+                    if let Some(query) = table.get_table_info().options().get(QUERY) {
+                        let mut planner = Planner::new(self.ctx.clone());
+                        let (plan, _) = planner.plan_sql(query).await?;
+                        Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
+                    } else {
+                        Err(ErrorCode::Internal(
+                            "Logical error, View Table must have a SelectQuery inside.",
+                        ))
+                    }
                 } else {
                     Ok((table.schema(), vec![], table.field_comments().clone()))
                 }
