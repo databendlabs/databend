@@ -24,7 +24,7 @@ use std::{collections::BTreeMap, io::stdin};
 
 use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, ValueEnum};
-use config::{Config, OutputFormat};
+use config::{Config, OutputFormat, Settings};
 use once_cell::sync::Lazy;
 
 static VERSION: Lazy<String> = Lazy::new(|| {
@@ -143,10 +143,22 @@ struct Args {
     #[clap(short = 'o', long, help = "Output format")]
     output: Option<OutputFormat>,
 
-    #[clap(long, help = "Show progress for data loading in stderr")]
+    #[clap(
+        long,
+        help = "Show progress for query execution in stderr, only works with output format `table` and `null`."
+    )]
     progress: bool,
 
-    #[clap(long, help = "Only show execution time without results")]
+    #[clap(
+        long,
+        help = "Show stats after query execution in stderr, only works with non-interactive mode."
+    )]
+    stats: bool,
+
+    #[clap(
+        long,
+        help = "Only show execution time without results, only works with output format `null`."
+    )]
     time: bool,
 }
 
@@ -251,18 +263,34 @@ pub async fn main() -> Result<()> {
             conn_args.get_dsn()?
         }
     };
-    let is_repl = atty::is(atty::Stream::Stdin) && !args.non_interactive && args.query.is_none();
-    config.settings.show_progress = args.progress;
-    if let Some(output) = args.output {
-        config.settings.output_format = output;
-    } else if is_repl {
-        config.settings.output_format = OutputFormat::Table;
-    } else {
-        config.settings.output_format = OutputFormat::TSV;
-    }
-    config.settings.time = args.time;
+    let mut settings = Settings::default();
 
-    let mut session = session::Session::try_new(dsn, config.settings, is_repl).await?;
+    let is_repl = atty::is(atty::Stream::Stdin) && !args.non_interactive && args.query.is_none();
+    if is_repl {
+        settings.display_pretty_sql = true;
+        settings.show_progress = true;
+        settings.show_stats = true;
+        settings.output_format = OutputFormat::Table;
+    } else {
+        settings.output_format = OutputFormat::TSV;
+    }
+
+    settings.merge_config(config.settings);
+
+    if let Some(output) = args.output {
+        settings.output_format = output;
+    }
+    if args.progress {
+        settings.show_progress = true;
+    }
+    if args.stats {
+        settings.show_stats = true;
+    }
+    if args.time {
+        settings.time = true;
+    }
+
+    let mut session = session::Session::try_new(dsn, settings, is_repl).await?;
 
     if is_repl {
         session.handle().await;

@@ -37,7 +37,7 @@ pub trait ChunkDisplay {
     fn total_rows(&self) -> usize;
 }
 
-pub struct ReplDisplay<'a> {
+pub struct FormatDisplay<'a> {
     settings: &'a Settings,
     query: &'a str,
     schema: SchemaRef,
@@ -46,9 +46,10 @@ pub struct ReplDisplay<'a> {
     rows: usize,
     progress: Option<ProgressBar>,
     start: Instant,
+    stats: Option<QueryProgress>,
 }
 
-impl<'a> ReplDisplay<'a> {
+impl<'a> FormatDisplay<'a> {
     pub fn new(
         settings: &'a Settings,
         query: &'a str,
@@ -64,94 +65,141 @@ impl<'a> ReplDisplay<'a> {
             rows: 0,
             progress: None,
             start,
+            stats: None,
         }
     }
 }
 
-#[async_trait::async_trait]
-impl<'a> ChunkDisplay for ReplDisplay<'a> {
-    async fn display(&mut self) -> Result<()> {
-        let mut rows: Vec<Row> = Vec::new();
-        let mut progress = QueryProgress::default();
+impl<'a> FormatDisplay<'a> {
+    async fn display_progress(&mut self, pg: &QueryProgress) {
+        if self.settings.show_progress {
+            let pgo = self.progress.take();
+            self.progress = Some(display_read_progress(pgo, pg));
+        }
+    }
 
+    async fn display_table(&mut self) -> Result<()> {
         if self.settings.display_pretty_sql {
             let format_sql = format_query(self.query);
             let format_sql = CliHelper::new().highlight(&format_sql, format_sql.len());
             println!("\n{}\n", format_sql);
         }
-
+        let mut rows = Vec::new();
         while let Some(line) = self.data.next().await {
             match line {
-                Ok(RowWithProgress::Progress(pg)) => {
-                    let pgo = self.progress.take();
-                    self.progress = Some(display_read_progress(pgo, &pg));
-                    progress = pg;
-                }
                 Ok(RowWithProgress::Row(row)) => {
-                    rows.push(row);
                     self.rows += 1;
+                    rows.push(row);
                 }
-                Err(e) => {
-                    eprintln!("error: {}", e);
+                Ok(RowWithProgress::Progress(pg)) => {
+                    self.display_progress(&pg).await;
+                    self.stats = Some(pg);
+                }
+                Err(err) => {
+                    eprintln!("error: {}", err);
                     break;
                 }
             }
         }
-
         if let Some(pb) = self.progress.take() {
             pb.finish_and_clear();
         }
         if !rows.is_empty() {
             println!("{}", create_table(self.schema.clone(), &rows)?);
-            println!();
         }
-
-        progress.normalize();
-        let rows_str = if self.rows > 1 { "rows" } else { "row" };
-        println!(
-            "{} {} in {:.3} sec. Processed {} rows, {} ({} rows/s, {}/s)",
-            self.rows,
-            rows_str,
-            self.start.elapsed().as_secs_f64(),
-            humanize_count(progress.total_rows as f64),
-            HumanBytes(progress.total_rows as u64),
-            humanize_count(progress.total_rows as f64 / self.start.elapsed().as_secs_f64()),
-            HumanBytes((progress.total_bytes as f64 / self.start.elapsed().as_secs_f64()) as u64),
-        );
-        println!();
-
         Ok(())
     }
 
-    fn total_rows(&self) -> usize {
-        self.rows
+    async fn display_csv(&mut self) -> Result<()> {
+        let mut wtr = csv::WriterBuilder::new()
+            .quote_style(csv::QuoteStyle::Necessary)
+            .from_writer(std::io::stdout());
+        while let Some(line) = self.data.next().await {
+            match line {
+                Ok(RowWithProgress::Row(row)) => {
+                    self.rows += 1;
+                    let record = row.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
+                    wtr.write_record(record)?;
+                }
+                Ok(RowWithProgress::Progress(pg)) => {
+                    self.stats = Some(pg);
+                }
+                Err(err) => {
+                    eprintln!("error: {}", err);
+                    break;
+                }
+            }
+        }
+        Ok(())
     }
-}
 
-pub struct FormatDisplay<'a> {
-    settings: &'a Settings,
-    schema: SchemaRef,
-    data: RowProgressIterator,
+    async fn display_tsv(&mut self) -> Result<()> {
+        let mut wtr = csv::WriterBuilder::new()
+            .delimiter(b'\t')
+            .quote_style(csv::QuoteStyle::Necessary)
+            .from_writer(std::io::stdout());
+        while let Some(line) = self.data.next().await {
+            match line {
+                Ok(RowWithProgress::Row(row)) => {
+                    self.rows += 1;
+                    let record = row.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
+                    wtr.write_record(record)?;
+                }
+                Ok(RowWithProgress::Progress(pg)) => {
+                    self.stats = Some(pg);
+                }
+                Err(err) => {
+                    eprintln!("error: {}", err);
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
 
-    rows: usize,
-    _progress: Option<ProgressBar>,
-    _start: Instant,
-}
+    async fn display_null(&mut self) -> Result<()> {
+        while let Some(line) = self.data.next().await {
+            match line {
+                Ok(RowWithProgress::Row(_)) => {
+                    self.rows += 1;
+                }
+                Ok(RowWithProgress::Progress(pg)) => {
+                    self.display_progress(&pg).await;
+                    self.stats = Some(pg);
+                }
+                Err(err) => {
+                    eprintln!("error: {}", err);
+                    break;
+                }
+            }
+        }
+        if let Some(pb) = self.progress.take() {
+            pb.finish_and_clear();
+        }
+        if self.settings.time {
+            println!("{:.3}", self.start.elapsed().as_secs_f64());
+        }
+        Ok(())
+    }
 
-impl<'a> FormatDisplay<'a> {
-    pub fn new(
-        settings: &'a Settings,
-        start: Instant,
-        schema: SchemaRef,
-        data: RowProgressIterator,
-    ) -> Self {
-        Self {
-            settings,
-            schema,
-            data,
-            rows: 0,
-            _progress: None,
-            _start: start,
+    async fn display_stats(&mut self) {
+        if !self.settings.show_stats {
+            return;
+        }
+        if let Some(ref mut stats) = self.stats {
+            stats.normalize();
+            let rows_str = if self.rows > 1 { "rows" } else { "row" };
+            eprintln!(
+                "{} {} in {:.3} sec. Processed {} rows, {} ({} rows/s, {}/s)",
+                self.rows,
+                rows_str,
+                self.start.elapsed().as_secs_f64(),
+                humanize_count(stats.total_rows as f64),
+                HumanBytes(stats.total_rows as u64),
+                humanize_count(stats.total_rows as f64 / self.start.elapsed().as_secs_f64()),
+                HumanBytes((stats.total_bytes as f64 / self.start.elapsed().as_secs_f64()) as u64),
+            );
+            eprintln!();
         }
     }
 }
@@ -159,52 +207,21 @@ impl<'a> FormatDisplay<'a> {
 #[async_trait::async_trait]
 impl<'a> ChunkDisplay for FormatDisplay<'a> {
     async fn display(&mut self) -> Result<()> {
-        let mut rows = Vec::new();
-        while let Some(line) = self.data.next().await {
-            match line {
-                Ok(RowWithProgress::Row(row)) => {
-                    rows.push(row);
-                    self.rows += 1;
-                }
-                Ok(_) => {}
-                Err(err) => {
-                    eprintln!("error: {}", err);
-                    break;
-                }
-            }
-        }
-        if rows.is_empty() {
-            return Ok(());
-        }
         match self.settings.output_format {
             OutputFormat::Table => {
-                println!("{}", create_table(self.schema.clone(), &rows)?);
+                self.display_table().await?;
             }
             OutputFormat::CSV => {
-                let mut wtr = csv::WriterBuilder::new()
-                    .quote_style(csv::QuoteStyle::Necessary)
-                    .from_writer(std::io::stdout());
-                for row in rows {
-                    let record = row.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
-                    wtr.write_record(record)?;
-                }
+                self.display_csv().await?;
             }
             OutputFormat::TSV => {
-                let mut wtr = csv::WriterBuilder::new()
-                    .delimiter(b'\t')
-                    .quote_style(csv::QuoteStyle::Necessary)
-                    .from_writer(std::io::stdout());
-                for row in rows {
-                    let record = row.into_iter().map(|v| v.to_string()).collect::<Vec<_>>();
-                    wtr.write_record(record)?;
-                }
+                self.display_tsv().await?;
             }
-            OutputFormat::Null => {}
+            OutputFormat::Null => {
+                self.display_null().await?;
+            }
         }
-
-        if self.settings.time {
-            eprintln!("{:.3}", self._start.elapsed().as_secs_f64());
-        }
+        self.display_stats().await;
         Ok(())
     }
 

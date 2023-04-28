@@ -30,9 +30,8 @@ use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 
 use crate::ast::{TokenKind, Tokenizer};
-use crate::config::OutputFormat;
 use crate::config::Settings;
-use crate::display::{format_write_progress, ChunkDisplay, FormatDisplay, ReplDisplay};
+use crate::display::{format_write_progress, ChunkDisplay, FormatDisplay};
 use crate::helper::CliHelper;
 use crate::VERSION;
 
@@ -241,16 +240,9 @@ impl Session {
             }
             QueryKind::Query | QueryKind::Explain => {
                 let (schema, data) = self.conn.query_iter_ext(query).await?;
-
-                if is_repl && self.settings.output_format == OutputFormat::Table {
-                    let mut displayer =
-                        ReplDisplay::new(&self.settings, query, start, Arc::new(schema), data);
-                    displayer.display().await?;
-                } else {
-                    let mut displayer =
-                        FormatDisplay::new(&self.settings, start, Arc::new(schema), data);
-                    displayer.display().await?;
-                }
+                let mut displayer =
+                    FormatDisplay::new(&self.settings, query, start, Arc::new(schema), data);
+                displayer.display().await?;
                 Ok(false)
             }
         }

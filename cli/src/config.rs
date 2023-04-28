@@ -26,24 +26,38 @@ pub struct Config {
     #[serde(default)]
     pub connection: ConnectionConfig,
     #[serde(default)]
-    pub settings: Settings,
+    pub settings: SettingsConfig,
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Default)]
 #[serde(default)]
+pub struct SettingsConfig {
+    pub display_pretty_sql: Option<bool>,
+    pub prompt: Option<String>,
+    pub progress_color: Option<String>,
+    pub show_progress: Option<bool>,
+    pub show_stats: Option<bool>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Settings {
     pub display_pretty_sql: bool,
     pub prompt: String,
     pub progress_color: String,
 
     /// Show progress [bar] when executing queries.
-    /// Only works in non-interactive mode.
+    /// Only works with output format `table` and `null`.
     pub show_progress: bool,
 
+    /// Show stats after executing queries.
+    /// Only works with non-interactive mode.
+    pub show_stats: bool,
+
     /// Output format is set by the flag.
-    #[serde(skip)]
     pub output_format: OutputFormat,
-    #[serde(skip)]
+
+    /// Show time elapsed when executing queries.
+    /// only works with output format `null`.
     pub time: bool,
 }
 
@@ -56,12 +70,31 @@ pub enum OutputFormat {
 }
 
 impl Settings {
+    pub fn merge_config(&mut self, cfg: SettingsConfig) {
+        if let Some(display_pretty_sql) = cfg.display_pretty_sql {
+            self.display_pretty_sql = display_pretty_sql;
+        }
+        if let Some(prompt) = cfg.prompt {
+            self.prompt = prompt;
+        }
+        if let Some(progress_color) = cfg.progress_color {
+            self.progress_color = progress_color;
+        }
+        if let Some(show_progress) = cfg.show_progress {
+            self.show_progress = show_progress;
+        }
+        if let Some(show_stats) = cfg.show_stats {
+            self.show_stats = show_stats;
+        }
+    }
+
     pub fn inject_ctrl_cmd(&mut self, cmd_name: &str, cmd_value: &str) -> Result<()> {
         match cmd_name {
             "display_pretty_sql" => self.display_pretty_sql = cmd_value.parse()?,
             "prompt" => self.prompt = cmd_value.to_string(),
             "progress_color" => self.progress_color = cmd_value.to_string(),
             "show_progress" => self.show_progress = cmd_value.parse()?,
+            "show_stats" => self.show_stats = cmd_value.parse()?,
             "output_format" => {
                 self.output_format = match cmd_value.to_ascii_lowercase().as_str() {
                     "table" => OutputFormat::Table,
@@ -118,6 +151,7 @@ impl Default for Settings {
             prompt: "{user}@{host}> ".to_string(),
             output_format: OutputFormat::Table,
             show_progress: false,
+            show_stats: false,
             time: false,
         }
     }
