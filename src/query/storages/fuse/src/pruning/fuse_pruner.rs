@@ -54,7 +54,7 @@ pub struct PruningContext {
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
-    pub internal_column_pruner: Arc<InternalColumnPruner>,
+    pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
 }
@@ -126,7 +126,7 @@ impl FusePruner {
         // Internal column pruner, if there are predicates using internal columns,
         // we can use them to prune segments and blocks.
         let internal_column_pruner =
-            Arc::new(InternalColumnPruner::create(func_ctx, filter_expr.as_ref()));
+            InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
 
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;

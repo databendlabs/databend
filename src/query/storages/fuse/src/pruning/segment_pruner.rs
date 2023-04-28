@@ -57,11 +57,21 @@ impl SegmentPruner {
         }
 
         // Build pruning tasks.
-        let mut segments = segment_locs.into_iter().enumerate().filter(|(_, segment)| {
-            self.pruning_ctx
-                .internal_column_pruner
-                .should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
-        });
+        let segments = if let Some(internal_column_pruner) =
+            &self.pruning_ctx.internal_column_pruner
+        {
+            segment_locs
+                .into_iter()
+                .enumerate()
+                .filter(|(_, segment)| {
+                    internal_column_pruner.should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            segment_locs.into_iter().enumerate().collect::<Vec<_>>()
+        };
+
+        let mut segments = segments.into_iter();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let pruning_tasks = std::iter::from_fn(|| {
             // pruning tasks are executed concurrently, check if limit exceeded before proceeding
