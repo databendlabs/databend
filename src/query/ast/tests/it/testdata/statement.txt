@@ -8309,6 +8309,86 @@ Presign(
 
 
 ---------- Input ----------
+PRESIGN @my_stage/my\ file.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/my\ file.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/my file.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\"file\".csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\"file\".csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/\"file\".csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\'file\'.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\'file\'.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/'file'.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\\file\\.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\\file\\.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/\\file\\.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
 PRESIGN DOWNLOAD @my_stage/path/to/file
 ---------- Output ---------
 PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
