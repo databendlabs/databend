@@ -64,6 +64,7 @@ pub fn escape_at_string(s: &str) -> String {
     while let Some(c) = chars.next() {
         match c {
             ' ' => s.push_str("\\ "),
+            '\t' => s.push_str("\\\t"),
             '\'' => s.push_str("\\'"),
             '"' => s.push_str("\\\""),
             '\\' => s.push_str("\\\\"),
@@ -81,6 +82,7 @@ pub fn unescape_at_string(s: &str) -> String {
         if c == '\\' {
             match chars.next() {
                 Some(' ') => s.push(' '),
+                Some('\t') => s.push('\t'),
                 Some('\'') => s.push('\''),
                 Some('\"') => s.push('\"'),
                 Some('\\') => s.push('\\'),
