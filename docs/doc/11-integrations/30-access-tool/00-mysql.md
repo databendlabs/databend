@@ -25,6 +25,10 @@ This example connects to a local Databend with the user `root`:
 mysql -h127.0.0.1 -uroot -P3307 
 ```
 
+**Related video:**
+
+<iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/3cFmGvtU-ws" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+
 ## Built-in Accounts
 
 There are four built-in accounts in Databend that can be accessed from a local machine without requiring a password. These accounts are immutable and possess the highest level of privileges, meaning their settings cannot be altered or removed. Additionally, it is not possible to change or update their passwords.
