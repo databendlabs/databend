@@ -9,6 +9,10 @@ description:
 
 This tool is particularly useful for those who prefer a command line interface and need to work with Databend on a regular basis. With BendSQL, users can easily and efficiently manage their databases, tables, and data, and perform a wide range of queries and operations with ease.
 
+**Related video:**
+
+<iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/3cFmGvtU-ws" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+
 ## Downloading and Installing BendSQL
 
 To download and install BendSQL, kindly visit the [BendSQL release page](https://github.com/datafuselabs/BendSQL/releases) on GitHub.
