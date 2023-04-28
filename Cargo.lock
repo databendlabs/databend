@@ -3210,7 +3210,7 @@ dependencies = [
  "common-tracing",
  "databend-meta",
  "databend-query",
- "enterprise",
+ "enterprise-query",
  "limits-rs",
  "opendal",
  "poem",
@@ -3713,7 +3713,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "enterprise"
+name = "enterprise-meta"
+version = "0.1.0"
+dependencies = [
+ "common-building",
+]
+
+[[package]]
+name = "enterprise-query"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",

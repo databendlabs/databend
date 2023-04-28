@@ -1,6 +1,6 @@
 [package]
-name = "enterprise-query"
-description = "A real-time Cloud Distributed Query Engine"
+name = "enterprise-meta"
+description = "enterprise features for databend-meta"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -12,13 +12,6 @@ doctest = false
 test = false
 
 [dependencies]
-# Workspace dependencies
-common-base = { path = "../../common/base" }
-common-config = { path = "../config" }
-common-exception = { path = "../../common/exception" }
-common-license = { path = "../../common/license" }
-
-async-backtrace = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }

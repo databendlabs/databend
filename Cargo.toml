@@ -84,6 +84,7 @@ members = [
     "src/meta/stoerr",
     "src/meta/store",
     "src/meta/types",
+    "src/meta/ee",
     # meta proto
     "src/meta/proto-conv",
     "src/meta/protos",
