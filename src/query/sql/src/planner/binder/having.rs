@@ -16,7 +16,6 @@ use common_ast::ast::Expr;
 use common_exception::Result;
 use common_exception::Span;
 
-use super::select::SelectList;
 use crate::binder::aggregate::AggregateRewriter;
 use crate::binder::split_conjunctions;
 use crate::binder::ExprContext;
@@ -35,14 +34,9 @@ impl Binder {
     pub(super) async fn analyze_aggregate_having<'a>(
         &mut self,
         bind_context: &mut BindContext,
-        select_list: &SelectList<'a>,
+        aliases: &[(String, ScalarExpr)],
         having: &Expr,
     ) -> Result<(ScalarExpr, Span)> {
-        let aliases = select_list
-            .items
-            .iter()
-            .map(|item| (item.alias.clone(), item.scalar.clone()))
-            .collect::<Vec<_>>();
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),

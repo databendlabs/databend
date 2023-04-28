@@ -60,7 +60,7 @@ impl Binder {
         &mut self,
         bind_context: &mut BindContext,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
-        select_list: &SelectList<'_>,
+        aliases: &[(String, ScalarExpr)],
         projections: &[ColumnBinding],
         order_by: &[OrderByExpr],
         distinct: bool,
@@ -100,12 +100,6 @@ impl Binder {
                     });
                 }
                 _ => {
-                    let aliases = select_list
-                        .items
-                        .iter()
-                        .map(|item| (item.alias.clone(), item.scalar.clone()))
-                        .collect::<Vec<_>>();
-
                     debug_assert!(aliases.len() == projections.len());
 
                     let mut scalar_binder = ScalarBinder::new(

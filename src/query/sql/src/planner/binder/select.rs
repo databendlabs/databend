@@ -124,14 +124,6 @@ impl Binder {
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
         let order_by = new_order_by.as_deref().unwrap_or(order_by);
 
-        let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) = self.bind_where(&mut from_context, expr, s_expr).await?;
-            s_expr = new_expr;
-            Some(scalar)
-        } else {
-            None
-        };
-
         // Collect set returning functions
         let set_returning_functions = {
             let mut collector = SrfCollector::new();
@@ -143,14 +135,14 @@ impl Binder {
             collector.into_srfs()
         };
 
-        // Bind set returning functions
-        s_expr = self
-            .bind_project_set(&mut from_context, &set_returning_functions, s_expr)
-            .await?;
-
         // Generate a analyzed select list with from context
         let mut select_list = self
             .normalize_select_list(&mut from_context, &stmt.select_list)
+            .await?;
+
+        // Bind set returning functions
+        s_expr = self
+            .bind_project_set(&mut from_context, &set_returning_functions, s_expr)
             .await?;
 
         // This will potentially add some alias group items to `from_context` if find some.
@@ -165,13 +157,31 @@ impl Binder {
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
         self.analyze_window(&mut from_context, &mut select_list)?;
 
+        let aliases = select_list
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect::<Vec<_>>();
+
+        // To support using aliased column in `WHERE` clause,
+        // we should bind where after `select_list` is rewritten.
+        let where_scalar = if let Some(expr) = &stmt.selection {
+            let (new_expr, scalar) = self
+                .bind_where(&mut from_context, &aliases, expr, s_expr)
+                .await?;
+            s_expr = new_expr;
+            Some(scalar)
+        } else {
+            None
+        };
+
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
         let (mut scalar_items, projections) =
             self.analyze_projection(&from_context, &select_list)?;
 
         let having = if let Some(having) = &stmt.having {
             Some(
-                self.analyze_aggregate_having(&mut from_context, &select_list, having)
+                self.analyze_aggregate_having(&mut from_context, &aliases, having)
                     .await?,
             )
         } else {
@@ -182,7 +192,7 @@ impl Binder {
             .analyze_order_items(
                 &mut from_context,
                 &mut scalar_items,
-                &select_list,
+                &aliases,
                 &projections,
                 order_by,
                 stmt.distinct,
@@ -353,6 +363,7 @@ impl Binder {
     pub(super) async fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
@@ -363,7 +374,7 @@ impl Binder {
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
-            &[],
+            aliases,
         );
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
