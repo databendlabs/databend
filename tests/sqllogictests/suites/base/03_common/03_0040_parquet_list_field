@@ -8,7 +8,7 @@ CREATE STAGE r2_stage URL='s3://indexed-xyz/ethereum/decoded/logs/v1.2.0/partiti
 query I
 SELECT count(*) FROM @r2_stage;
 ----
-1000
+17223
 
 statement ok
 drop stage if exists r2_stage;
