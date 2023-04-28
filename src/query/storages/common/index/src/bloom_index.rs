@@ -536,41 +536,6 @@ fn visit_expr_column_eq_constant(
                     }
                 }
             }
-            [
-                Expr::FunctionCall { id, args, .. },
-                Expr::Cast {
-                    expr: box cast_expr,
-                    ..
-                },
-            ]
-            | [
-                Expr::Cast {
-                    expr: box cast_expr,
-                    ..
-                },
-                Expr::FunctionCall { id, args, .. },
-            ] => {
-                if let Expr::Constant {
-                    scalar,
-                    data_type: scalar_type,
-                    ..
-                } = cast_expr
-                {
-                    if id.name() == "get" {
-                        if let Some(new_expr) = visit_map_column(
-                            *span,
-                            args,
-                            scalar,
-                            scalar_type,
-                            return_type,
-                            visitor,
-                        )? {
-                            *expr = new_expr;
-                            return Ok(());
-                        }
-                    }
-                }
-            }
             _ => (),
         },
         _ => (),
