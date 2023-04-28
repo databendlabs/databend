@@ -1,5 +1,7 @@
 default: run
 
+run: test-core test-driver test-bendsql down
+
 prepare:
 	mkdir -p data/databend
 
@@ -18,8 +20,6 @@ test-driver: up
 test-bendsql: up
 	cd .. && ./cli/test.sh http
 	cd .. && ./cli/test.sh flight
-
-run: test-core test-driver test-bendsql
 
 down:
 	docker compose down

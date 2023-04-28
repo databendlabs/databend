@@ -23,6 +23,16 @@ async fn prepare() -> Box<dyn Connection> {
 }
 
 #[tokio::test]
+async fn select_null() {
+    let conn = prepare().await;
+    let row = conn.query_row("select null").await.unwrap();
+    assert!(row.is_some());
+    let row = row.unwrap();
+    let (val,): (Option<u8>,) = row.try_into().unwrap();
+    assert_eq!(val, None);
+}
+
+#[tokio::test]
 async fn select_string() {
     let conn = prepare().await;
     let row = conn.query_row("select 'hello'").await.unwrap();
@@ -109,7 +119,7 @@ async fn select_datetime() {
 }
 
 #[tokio::test]
-async fn select_null() {
+async fn select_nullable() {
     let conn = prepare().await;
     let row = conn
         .query_row("select sum(number) from numbers(0)")
