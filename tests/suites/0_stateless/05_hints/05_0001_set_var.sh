@@ -6,8 +6,8 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # mariadb mysql client has some bug, please use mysql offical client
 # mysql --version
 # mysql  Ver 8.0.32-0ubuntu0.20.04.2 for Linux on x86_64 ((Ubuntu))
-echo "select /*+SET_VAR(timezone='Asia/Shanghai')*/ name, value value from system.settings where name in ('timezone') union all (select /*+SET_VAR(timezone='America/Los_Angeles')*/ 'x','x');" |  $MYSQL_CLIENT_CONNECT
-echo "select /*+SET_VAR(timezone='America/Los_Angeles')*/ name, value value from system.settings where name in ('timezone') union all (select /*+SET_VAR(timezone='Asia/Shanghai')*/ 'x','x');" |  $MYSQL_CLIENT_CONNECT
+echo "select * from (select /*+SET_VAR(timezone='Asia/Shanghai')*/ name, value value from system.settings where name in ('timezone') union all (select /*+SET_VAR(timezone='America/Los_Angeles')*/ 'x','x')) order by name desc;" |  $MYSQL_CLIENT_CONNECT
+echo "select * from (select /*+SET_VAR(timezone='America/Los_Angeles')*/ name, value value from system.settings where name in ('timezone') union all (select /*+SET_VAR(timezone='Asia/Shanghai')*/ 'x','x')) order by name desc;" |  $MYSQL_CLIENT_CONNECT
 echo "select /*+SET_VAR(timezone='Asia/Shanghai') */ * from system.settings where name = 'timezone';" |  $MYSQL_CLIENT_CONNECT
 echo "select /*+SET_VAR(timezone='Asia') SET_VAR(storage_read_buffer_size=200)*/ name, value from system.settings where name in ('timezone', 'storage_read_buffer_size')" |  $MYSQL_CLIENT_CONNECT
 echo "select /*+SET_VAR(timezone='Asia/Shanghai') SET_VAR(storage_read_buffer_size=200)*/ /*+SET_VAR(storage_read_buffer_size=100)*/name, /*+xx*/ value from system.settings where name in ('timezone', 'storage_read_buffer_size')" |  $MYSQL_CLIENT_CONNECT
