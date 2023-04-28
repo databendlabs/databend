@@ -109,8 +109,6 @@ impl<'a> SelectivityEstimator<'a> {
         right: &ScalarExpr,
         update: bool,
     ) -> Result<f64> {
-        // Try to constant fold right right expr
-        let right = try_constant_fold(right)?;
         if let (ScalarExpr::BoundColumnRef(column_ref), ScalarExpr::ConstantExpr(constant)) =
             (left, &right)
         {
@@ -331,18 +329,6 @@ fn compare_equal(datum: &Option<Datum>, column_stat: &ColumnStat) -> f64 {
     } else {
         1.0 / column_stat.ndv
     }
-}
-
-fn try_constant_fold(scalar_expr: &ScalarExpr) -> Result<ScalarExpr> {
-    let expr = scalar_expr.as_expr()?;
-    let (expr, _) = ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-    if let Expr::Constant { scalar, span, .. } = expr {
-        return Ok(ScalarExpr::ConstantExpr(ConstantExpr {
-            span,
-            value: scalar,
-        }));
-    }
-    Ok(scalar_expr.clone())
 }
 
 fn update_statistic(
