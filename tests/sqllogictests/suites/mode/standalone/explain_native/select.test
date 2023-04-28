@@ -96,10 +96,10 @@ explain select * from numbers(1) where TRUE and 1 = 1
 ----
 EvalScalar
 ├── expressions: [numbers.number (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 1.00
 └── Filter
     ├── filters: [true]
-    ├── estimated rows: 0.33
+    ├── estimated rows: 1.00
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -198,10 +198,10 @@ explain select * from (select * from numbers(100)  where  number> 33 ) where 1=2
 ----
 EvalScalar
 ├── expressions: [numbers.number (#0), numbers.number (#0)]
-├── estimated rows: 11.11
+├── estimated rows: 0.00
 └── Filter
     ├── filters: [false, numbers.number (#0) > 33]
-    ├── estimated rows: 11.11
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 0

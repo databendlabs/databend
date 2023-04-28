@@ -3025,7 +3025,7 @@ fn check_prefix(like_str: &str) -> bool {
     if like_str.contains("\\%") {
         return false;
     }
-    if like_str.len() == 1 && matches!(like_str, "%" | "|") {
+    if like_str.len() == 1 && matches!(like_str, "%" | "_") {
         return false;
     }
     if like_str.chars().filter(|c| *c == '%').count() != 1 {
@@ -3043,7 +3043,7 @@ fn check_prefix(like_str: &str) -> bool {
         return false;
     }
     for j in (0..i).rev() {
-        if like_str.chars().nth(j).unwrap() == '%' || like_str.chars().nth(j).unwrap() == '_' {
+        if like_str.chars().nth(j).unwrap() == '_' {
             return false;
         }
     }
