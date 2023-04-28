@@ -3022,6 +3022,16 @@ fn check_const(like_str: &str) -> bool {
 }
 
 fn check_prefix(like_str: &str) -> bool {
+    if like_str.contains("\\%") {
+        return false;
+    }
+    if like_str.len() == 1 && matches!(like_str, "%" | "|") {
+        return false;
+    }
+    if like_str.chars().filter(|c| *c == '%').count() != 1 {
+        return false;
+    }
+
     let mut i: usize = like_str.len();
     while i > 0 {
         if like_str.chars().nth(i - 1).unwrap() != '%' {
