@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::pin::Pin;
+use std::ptr::NonNull;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -162,10 +164,10 @@ pub fn serialize_group_by<Method: HashMethodBounds>(
     ]))
 }
 
-// TODO: need hashmap into iter
 pub struct SerializeGroupByStream<Method: HashMethodBounds> {
     method: Method,
-    pub payload: HashTablePayload<Method, ()>,
+    pub payload: Pin<Box<HashTablePayload<Method, ()>>>,
+    iter: <Method::HashTable<()> as HashtableLike>::Iterator<'static>,
     end_iter: bool,
 }
 
@@ -175,10 +177,16 @@ unsafe impl<Method: HashMethodBounds> Sync for SerializeGroupByStream<Method> {}
 
 impl<Method: HashMethodBounds> SerializeGroupByStream<Method> {
     pub fn create(method: &Method, payload: HashTablePayload<Method, ()>) -> Self {
-        SerializeGroupByStream::<Method> {
-            payload,
-            method: method.clone(),
-            end_iter: false,
+        unsafe {
+            let payload = Box::pin(payload);
+            let iter = NonNull::from(&payload.cell.hashtable).as_ref().iter();
+
+            SerializeGroupByStream::<Method> {
+                iter,
+                payload,
+                method: method.clone(),
+                end_iter: false,
+            }
         }
     }
 }
@@ -191,15 +199,32 @@ impl<Method: HashMethodBounds> Iterator for SerializeGroupByStream<Method> {
             return None;
         }
 
-        self.end_iter = true;
-        let keys_len = self.payload.cell.hashtable.len();
-        let value_size = estimated_key_size(&self.payload.cell.hashtable);
-        let mut group_key_builder = self.method.keys_column_builder(keys_len, value_size);
+        let max_block_rows = std::cmp::min(8192, self.payload.cell.hashtable.len());
+        let max_block_bytes = std::cmp::min(
+            8 * 1024 * 1024 + 1024,
+            self.payload
+                .cell
+                .hashtable
+                .unsize_key_size()
+                .unwrap_or(usize::MAX),
+        );
 
-        for group_entity in self.payload.cell.hashtable.iter() {
+        let mut group_key_builder = self
+            .method
+            .keys_column_builder(max_block_rows, max_block_bytes);
+
+        #[allow(clippy::while_let_on_iterator)]
+        while let Some(group_entity) = self.iter.next() {
             group_key_builder.append_value(group_entity.key());
+
+            if group_key_builder.bytes_size() >= 8 * 1024 * 1024 {
+                let bucket = self.payload.bucket;
+                let data_block = DataBlock::new_from_columns(vec![group_key_builder.finish()]);
+                return Some(data_block.add_meta(Some(AggregateSerdeMeta::create(bucket))));
+            }
         }
 
+        self.end_iter = true;
         let bucket = self.payload.bucket;
         let data_block = DataBlock::new_from_columns(vec![group_key_builder.finish()]);
         Some(data_block.add_meta(Some(AggregateSerdeMeta::create(bucket))))
