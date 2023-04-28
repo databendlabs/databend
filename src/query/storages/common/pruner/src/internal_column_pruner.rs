@@ -27,39 +27,38 @@ use common_functions::BUILTIN_FUNCTIONS;
 /// Only support `_segment_name` and `_block_name` now.
 pub struct InternalColumnPruner {
     func_ctx: FunctionContext,
-    input_domains: HashMap<String, Domain>,
-    expr: Option<Expr<String>>,
+    expr_with_domains: Option<(Expr<String>, HashMap<String, Domain>)>,
 }
 
 impl InternalColumnPruner {
     pub fn create(func_ctx: FunctionContext, expr: Option<&Expr<String>>) -> Self {
-        let input_domains = if let Some(expr) = expr {
+        let expr_with_domains = if let Some(expr) = expr {
             let exprs = expr.column_refs();
             if !exprs.contains_key(SEGMENT_NAME_COL_NAME)
                 && !exprs.contains_key(BLOCK_NAME_COL_NAME)
             {
-                HashMap::new()
+                None
             } else {
-                exprs
+                let domains = exprs
                     .into_iter()
                     .map(|(name, ty)| (name, Domain::full(&ty)))
-                    .collect()
+                    .collect();
+                Some((expr.clone(), domains))
             }
         } else {
-            HashMap::new()
+            None
         };
 
         InternalColumnPruner {
             func_ctx,
-            input_domains,
-            expr: expr.cloned(),
+            expr_with_domains,
         }
     }
 
     pub fn should_keep(&self, col_name: &str, value: &str) -> bool {
-        if let Some(expr) = &self.expr {
-            if self.input_domains.contains_key(col_name) {
-                let mut input_domains = self.input_domains.clone();
+        if let Some((expr, input_domains)) = &self.expr_with_domains {
+            if input_domains.contains_key(col_name) {
+                let mut input_domains = input_domains.clone();
                 let bytes = value.as_bytes().to_vec();
                 let domain = Domain::String(StringDomain {
                     min: bytes.clone(),
