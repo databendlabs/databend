@@ -58,6 +58,21 @@ pub fn unescape_string(s: &str, quote: char) -> Option<String> {
     Some(s)
 }
 
+pub fn escape_at_string(s: &str) -> String {
+    let mut chars = s.chars().peekable();
+    let mut s = String::new();
+    while let Some(c) = chars.next() {
+        match c {
+            ' ' => s.push_str("\\ "),
+            '\'' => s.push_str("\\'"),
+            '"' => s.push_str("\\\""),
+            '\\' => s.push_str("\\\\"),
+            _ => s.push(c),
+        }
+    }
+    s
+}
+
 pub fn unescape_at_string(s: &str) -> String {
     let mut chars = s.chars().peekable();
     let mut s = String::new();
@@ -68,6 +83,7 @@ pub fn unescape_at_string(s: &str) -> String {
                 Some(' ') => s.push(' '),
                 Some('\'') => s.push('\''),
                 Some('\"') => s.push('\"'),
+                Some('\\') => s.push('\\'),
                 Some(c) => {
                     s.push('\\');
                     s.push(c);

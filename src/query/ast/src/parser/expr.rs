@@ -26,7 +26,6 @@ use pratt::Precedence;
 use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;
-use crate::match_token;
 use crate::parser::query::*;
 use crate::parser::token::*;
 use crate::parser::unescape::unescape_at_string;
@@ -1231,7 +1230,7 @@ pub fn literal_string_eq_ignore_case(s: &str) -> impl FnMut(Input) -> IResult<()
 pub fn at_string(i: Input) -> IResult<String> {
     map_res(rule! { AtString }, |token| {
         let path = token.text()[1..token.text().len()].to_string();
-        Ok(unescape_at_string(path))
+        Ok(unescape_at_string(&path))
     })(i)
 }
 
