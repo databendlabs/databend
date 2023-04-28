@@ -20,19 +20,21 @@ queue_rules:
       - check-success=test_stateful_standalone
       - check-success=test_stateful_cluster
       # sqllogic standalone tests
-      - check-success=test_sqllogic_standalone_base
-      - check-success=test_sqllogic_standalone_query
-      - check-success=test_sqllogic_standalone_standalone
-      - check-success=test_sqllogic_standalone_ydb
-      - check-success=test_sqllogic_standalone_crdb
-      - check-success=test_sqllogic_standalone_duckdb
+      - check-success=sqllogic_standalone_base_parquet
+      - check-success=sqllogic_standalone_base_native
+      - check-success=sqllogic_standalone_ydb_parquet
+      - check-success=sqllogic_standalone_ydb_native
+      - check-success=sqllogic_standalone_query
+      - check-success=sqllogic_standalone_standalone
+      - check-success=sqllogic_standalone_crdb
+      - check-success=sqllogic_standalone_duckdb
       # sqllogic cluster tests
-      - check-success=test_sqllogic_cluster_base
-      - check-success=test_sqllogic_cluster_query
-      - check-success=test_sqllogic_cluster_cluster
-      - check-success=test_sqllogic_cluster_ydb
-      - check-success=test_sqllogic_cluster_crdb
-      - check-success=test_sqllogic_cluster_duckdb
+      - check-success=sqllogic_cluster_base
+      - check-success=sqllogic_cluster_query
+      - check-success=sqllogic_cluster_cluster
+      - check-success=sqllogic_cluster_ydb
+      - check-success=sqllogic_cluster_crdb
+      - check-success=sqllogic_cluster_duckdb
 
   - name: docs_queue
     merge_method: squash
