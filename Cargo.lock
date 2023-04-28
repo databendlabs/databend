@@ -2614,6 +2614,7 @@ dependencies = [
  "common-metrics",
  "common-pipeline-core",
  "common-pipeline-sources",
+ "common-sql",
  "common-storages-fuse",
  "common-storages-result-cache",
  "common-storages-view",
