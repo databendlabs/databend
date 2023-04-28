@@ -59,9 +59,9 @@ pub fn unescape_string(s: &str, quote: char) -> Option<String> {
 }
 
 pub fn escape_at_string(s: &str) -> String {
-    let mut chars = s.chars().peekable();
+    let chars = s.chars().peekable();
     let mut s = String::new();
-    while let Some(c) = chars.next() {
+    for c in chars {
         match c {
             ' ' => s.push_str("\\ "),
             '\t' => s.push_str("\\\t"),
