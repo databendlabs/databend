@@ -23,7 +23,6 @@ use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::VirtualColumnInfo;
-use common_catalog::plan::ROW_ID;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,6 +36,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
+use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
@@ -231,7 +231,7 @@ impl PhysicalPlanBuilder {
         let row_id_col_index = metadata
             .columns()
             .iter()
-            .position(|col| col.name() == ROW_ID)
+            .position(|col| col.name() == ROW_ID_COL_NAME)
             .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
         let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
 
@@ -330,9 +330,10 @@ impl PhysicalPlanBuilder {
 
                 if !metadata.lazy_columns().is_empty() {
                     // Lazy materilaztion is enabled.
-                    if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID.to_string()) {
-                        let internal_column =
-                            INTERNAL_COLUMN_FACTORY.get_internal_column(ROW_ID).unwrap();
+                    if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID_COL_NAME.to_string()) {
+                        let internal_column = INTERNAL_COLUMN_FACTORY
+                            .get_internal_column(ROW_ID_COL_NAME)
+                            .unwrap();
                         let index = self
                             .metadata
                             .write()
