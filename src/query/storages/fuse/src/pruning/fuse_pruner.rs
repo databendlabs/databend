@@ -54,6 +54,7 @@ pub struct PruningContext {
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
+    pub internal_column_pruner: Arc<InternalColumnPruner>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
 }
@@ -115,12 +116,17 @@ impl FusePruner {
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
-            func_ctx,
+            func_ctx.clone(),
             &table_schema,
             filter_expr.as_ref(),
             cluster_key_meta,
             cluster_keys,
         )?;
+
+        // Internal column pruner, if there are predicates using internal columns,
+        // we can use them to prune segments and blocks.
+        let internal_column_pruner =
+            Arc::new(InternalColumnPruner::create(func_ctx, filter_expr.as_ref()));
 
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -154,6 +160,7 @@ impl FusePruner {
             range_pruner,
             bloom_pruner,
             page_pruner,
+            internal_column_pruner,
             pruning_stats,
         });
 
@@ -176,18 +183,9 @@ impl FusePruner {
         let segment_locs =
             create_segment_location_vector(segment_locs, snapshot_loc, segment_id_map);
 
-        let filter = self
-            .push_down
-            .as_ref()
-            .and_then(|p| p.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
-        let internal_column_pruner =
-            InternalColumnPruner::create(self.pruning_ctx.ctx.get_function_context()?, filter);
         // Segment pruner.
-        let segment_pruner = SegmentPruner::create(
-            self.pruning_ctx.clone(),
-            self.table_schema.clone(),
-            Arc::new(internal_column_pruner),
-        )?;
+        let segment_pruner =
+            SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
 
         let metas = segment_pruner.pruning(segment_locs).await?;
 

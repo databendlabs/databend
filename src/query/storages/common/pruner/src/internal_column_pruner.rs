@@ -20,6 +20,8 @@ use common_expression::Domain;
 use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
+use common_expression::BLOCK_NAME_COL_NAME;
+use common_expression::SEGMENT_NAME_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 
 /// Only support `_segment_name` and `_block_name` now.
@@ -30,12 +32,19 @@ pub struct InternalColumnPruner {
 }
 
 impl InternalColumnPruner {
-    pub fn create(func_ctx: FunctionContext, expr: Option<Expr<String>>) -> Self {
-        let input_domains = if let Some(expr) = &expr {
-            expr.column_refs()
-                .into_iter()
-                .map(|(name, ty)| (name, Domain::full(&ty)))
-                .collect()
+    pub fn create(func_ctx: FunctionContext, expr: Option<&Expr<String>>) -> Self {
+        let input_domains = if let Some(expr) = expr {
+            let exprs = expr.column_refs();
+            if !exprs.contains_key(SEGMENT_NAME_COL_NAME)
+                && !exprs.contains_key(BLOCK_NAME_COL_NAME)
+            {
+                HashMap::new()
+            } else {
+                exprs
+                    .into_iter()
+                    .map(|(name, ty)| (name, Domain::full(&ty)))
+                    .collect()
+            }
         } else {
             HashMap::new()
         };
@@ -43,35 +52,34 @@ impl InternalColumnPruner {
         InternalColumnPruner {
             func_ctx,
             input_domains,
-            expr,
+            expr: expr.cloned(),
         }
     }
 
     pub fn should_keep(&self, col_name: &str, value: &str) -> bool {
         if let Some(expr) = &self.expr {
-            let mut input_domains = self.input_domains.clone();
-            input_domains
-                .entry(col_name.to_string())
-                .and_modify(|domain| {
-                    let bytes = value.as_bytes().to_vec();
-                    *domain = Domain::String(StringDomain {
-                        min: bytes.clone(),
-                        max: Some(bytes),
-                    });
+            if self.input_domains.contains_key(col_name) {
+                let mut input_domains = self.input_domains.clone();
+                let bytes = value.as_bytes().to_vec();
+                let domain = Domain::String(StringDomain {
+                    min: bytes.clone(),
+                    max: Some(bytes),
                 });
-            let (folded_expr, _) = ConstantFolder::fold_with_domain(
-                expr,
-                input_domains,
-                &self.func_ctx,
-                &BUILTIN_FUNCTIONS,
-            );
+                input_domains.insert(col_name.to_string(), domain);
 
-            !matches!(folded_expr, Expr::Constant {
-                scalar: Scalar::Boolean(false),
-                ..
-            })
-        } else {
-            true
+                let (folded_expr, _) = ConstantFolder::fold_with_domain(
+                    expr,
+                    &input_domains,
+                    &self.func_ctx,
+                    &BUILTIN_FUNCTIONS,
+                );
+
+                return !matches!(folded_expr, Expr::Constant {
+                    scalar: Scalar::Boolean(false),
+                    ..
+                });
+            }
         }
+        true
     }
 }

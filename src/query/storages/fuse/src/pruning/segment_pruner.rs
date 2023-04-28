@@ -15,14 +15,13 @@
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
-use common_catalog::plan::SEGMENT_NAME;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
+use common_expression::SEGMENT_NAME_COL_NAME;
 use futures_util::future;
 use storages_common_cache::LoadParams;
 use storages_common_pruner::BlockMetaIndex;
-use storages_common_pruner::InternalColumnPruner;
 use storages_common_table_meta::meta::BlockMeta;
 
 use super::SegmentLocation;
@@ -35,19 +34,16 @@ use crate::pruning::PruningContext;
 pub struct SegmentPruner {
     pub pruning_ctx: Arc<PruningContext>,
     pub table_schema: TableSchemaRef,
-    pub internal_column_pruner: Arc<InternalColumnPruner>,
 }
 
 impl SegmentPruner {
     pub fn create(
         pruning_ctx: Arc<PruningContext>,
         table_schema: TableSchemaRef,
-        internal_column_pruner: Arc<InternalColumnPruner>,
     ) -> Result<SegmentPruner> {
         Ok(SegmentPruner {
             pruning_ctx,
             table_schema,
-            internal_column_pruner,
         })
     }
 
@@ -62,8 +58,9 @@ impl SegmentPruner {
 
         // Build pruning tasks.
         let mut segments = segment_locs.into_iter().enumerate().filter(|(_, segment)| {
-            self.internal_column_pruner
-                .should_keep(SEGMENT_NAME, &segment.location.0)
+            self.pruning_ctx
+                .internal_column_pruner
+                .should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
         });
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let pruning_tasks = std::iter::from_fn(|| {
@@ -74,7 +71,6 @@ impl SegmentPruner {
                 segments.next().map(|(segment_idx, segment_location)| {
                     let pruning_ctx = self.pruning_ctx.clone();
                     let table_schema = self.table_schema.clone();
-                    let internal_column_pruner = self.internal_column_pruner.clone();
                     move |permit| async move {
                         Self::segment_pruning(
                             pruning_ctx,
@@ -82,7 +78,6 @@ impl SegmentPruner {
                             table_schema,
                             segment_idx,
                             segment_location,
-                            internal_column_pruner,
                         )
                         .await
                     }
@@ -118,7 +113,6 @@ impl SegmentPruner {
         table_schema: TableSchemaRef,
         segment_idx: usize,
         segment_location: SegmentLocation,
-        internal_column_pruner: Arc<InternalColumnPruner>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let dal = pruning_ctx.dal.clone();
         let pruning_stats = pruning_ctx.pruning_stats.clone();
@@ -162,12 +156,7 @@ impl SegmentPruner {
             // Block pruner.
             let block_pruner = BlockPruner::create(pruning_ctx)?;
             block_pruner
-                .pruning(
-                    segment_idx,
-                    segment_location,
-                    &segment_info,
-                    internal_column_pruner,
-                )
+                .pruning(segment_idx, segment_location, &segment_info)
                 .await?
         } else {
             vec![]

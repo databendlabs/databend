@@ -20,12 +20,11 @@ use std::time::Instant;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_catalog::plan::block_id_in_segment;
-use common_catalog::plan::BLOCK_NAME;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BLOCK_NAME_COL_NAME;
 use futures_util::future;
 use storages_common_pruner::BlockMetaIndex;
-use storages_common_pruner::InternalColumnPruner;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 
@@ -49,26 +48,14 @@ impl BlockPruner {
         segment_idx: usize,
         segment_location: SegmentLocation,
         segment_info: &SegmentInfo,
-        internal_column_pruner: Arc<InternalColumnPruner>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
-            self.block_pruning(
-                bloom_pruner,
-                segment_idx,
-                segment_location,
-                segment_info,
-                internal_column_pruner,
-            )
-            .await
+            self.block_pruning(bloom_pruner, segment_idx, segment_location, segment_info)
+                .await
         } else {
             // if no available filter pruners, just prune the blocks by
             // using zone map index, and do not spawn async tasks
-            self.block_pruning_sync(
-                segment_idx,
-                segment_location,
-                segment_info,
-                internal_column_pruner,
-            )
+            self.block_pruning_sync(segment_idx, segment_location, segment_info)
         }
     }
 
@@ -80,7 +67,6 @@ impl BlockPruner {
         segment_idx: usize,
         segment_location: SegmentLocation,
         segment_info: &SegmentInfo,
-        internal_column_pruner: Arc<InternalColumnPruner>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -93,7 +79,11 @@ impl BlockPruner {
             .blocks
             .iter()
             .enumerate()
-            .filter(|(_, block)| internal_column_pruner.should_keep(BLOCK_NAME, &block.location.0))
+            .filter(|(_, block)| {
+                self.pruning_ctx
+                    .internal_column_pruner
+                    .should_keep(BLOCK_NAME_COL_NAME, &block.location.0)
+            })
             .collect::<Vec<_>>();
         let mut blocks = blocks.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
@@ -233,7 +223,6 @@ impl BlockPruner {
         segment_idx: usize,
         segment_location: SegmentLocation,
         segment_info: &SegmentInfo,
-        internal_column_pruner: Arc<InternalColumnPruner>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
@@ -246,7 +235,11 @@ impl BlockPruner {
             .blocks
             .iter()
             .enumerate()
-            .filter(|(_, block)| internal_column_pruner.should_keep(BLOCK_NAME, &block.location.0))
+            .filter(|(_, block)| {
+                self.pruning_ctx
+                    .internal_column_pruner
+                    .should_keep(BLOCK_NAME_COL_NAME, &block.location.0)
+            })
             .collect::<Vec<_>>();
         let mut result = Vec::with_capacity(blocks.len());
         let block_num = segment_info.blocks.len();
