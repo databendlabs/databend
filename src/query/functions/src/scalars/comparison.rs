@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::types::boolean::BooleanDomain;
+use common_expression::types::string::StringDomain;
 use common_expression::types::AnyType;
 use common_expression::types::ArgType;
 use common_expression::types::ArrayType;
@@ -441,7 +442,44 @@ fn register_like(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, StringType, BooleanType, _, _>(
         "like",
-        |_, _| FunctionDomain::Full,
+        |lhs, rhs| {
+            if rhs.max.as_ref() == Some(&rhs.min) {
+                let pattern_type = check_pattern_type(&rhs.min, false);
+                if pattern_type == PatternType::EndOfPercent
+                    || pattern_type == PatternType::OrdinalStr
+                {
+                    let min = rhs.min[0..rhs.min.len() - 1].to_vec();
+                    let mut max = rhs.min[0..rhs.min.len() - 1].to_vec();
+                    let l = max.len();
+
+                    if pattern_type == PatternType::EndOfPercent {
+                        if max[l - 1] != u8::MAX {
+                            max[l - 1] += 1;
+                        } else {
+                            return FunctionDomain::Full;
+                        }
+                    }
+
+                    let other = StringDomain {
+                        min,
+                        max: Some(max),
+                    };
+                    let gte = lhs.domain_gte(&other);
+                    let lt = lhs.domain_lt(&other);
+
+                    match (lt, gte) {
+                        (FunctionDomain::Domain(lhs), FunctionDomain::Domain(rhs)) => {
+                            return FunctionDomain::Domain(BooleanDomain {
+                                has_false: lhs.has_false || rhs.has_false,
+                                has_true: lhs.has_true && rhs.has_true,
+                            });
+                        }
+                        (_, _) => {}
+                    }
+                }
+            }
+            FunctionDomain::Full
+        },
         vectorize_like(|str, pat, _, pattern_type| {
             match pattern_type {
                 PatternType::OrdinalStr => str == pat,
