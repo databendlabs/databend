@@ -33,7 +33,7 @@ use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::UserDefinedFunction;
-use tracing::log::warn;
+use tracing::warn;
 
 use crate::binder::wrap_cast;
 use crate::normalize_identifier;
@@ -108,6 +108,7 @@ impl<'a> Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
+            false,
         );
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
