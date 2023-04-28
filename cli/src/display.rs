@@ -176,9 +176,6 @@ impl<'a> FormatDisplay<'a> {
         if let Some(pb) = self.progress.take() {
             pb.finish_and_clear();
         }
-        if self.settings.time {
-            println!("{:.3}", self.start.elapsed().as_secs_f64());
-        }
         Ok(())
     }
 
