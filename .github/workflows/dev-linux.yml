@@ -57,7 +57,6 @@ jobs:
       - uses: ./.github/actions/build_linux
         with:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-          profile: debug
 
   build_other:
     timeout-minutes: 30
@@ -77,7 +76,6 @@ jobs:
       - uses: ./.github/actions/build_linux
         with:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-          profile: debug
 
   build_hive:
     timeout-minutes: 30
@@ -90,7 +88,6 @@ jobs:
       - uses: ./.github/actions/build_linux_hive
         with:
           target: x86_64-unknown-linux-gnu
-          profile: debug
 
   test_unit:
     runs-on: [self-hosted, X64, Linux, 8c16g]
@@ -320,4 +317,3 @@ jobs:
       - uses: ./.github/actions/test_stateful_hive_standalone
         with:
           target: x86_64-unknown-linux-gnu
-          profile: debug

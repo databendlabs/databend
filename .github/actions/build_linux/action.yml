@@ -1,9 +1,6 @@
 name: "Build Linux"
 description: "Build with profile"
 inputs:
-  profile:
-    description: "debug/release"
-    required: true
   target:
     description: ""
     required: true
@@ -21,12 +18,12 @@ runs:
         bypass_env_vars: RUSTFLAGS,RUST_LOG
 
     - name: Build Debug
-      if: inputs.profile == 'debug'
+      if: env.BUILD_PROFILE == 'debug'
       shell: bash
       run: cargo build --target ${{ inputs.target }}
 
     - name: Set Release build flags
-      if: inputs.profile == 'release'
+      if: env.BUILD_PROFILE == 'release'
       shell: bash
       run: |
         case ${{ inputs.target }} in
@@ -51,15 +48,15 @@ runs:
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
 
     - name: Build Release
-      if: inputs.profile == 'release'
+      if: env.BUILD_PROFILE == 'release'
       shell: bash
       run: cargo build --target ${{ inputs.target }} --release
 
     # - shell: bash
-    #   run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query
+    #   run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
 
     - name: Copyobj zlib for gnu binaries
-      if: inputs.profile == 'release' && endsWith(inputs.target, '-gnu')
+      if: env.BUILD_PROFILE == 'release' && endsWith(inputs.target, '-gnu')
       shell: bash
       run: |
         build-tool /usr/bin/${{ env.BUILD_ARCH }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ inputs.target }}/release/databend-query
@@ -70,6 +67,5 @@ runs:
       if: inputs.upload == 'true'
       uses: ./.github/actions/artifact_upload
       with:
-        profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
