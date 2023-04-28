@@ -28,6 +28,7 @@ members = [
     "src/common/storage",
     "src/common/profile",
     "src/common/vector",
+    "src/common/license",
     # Query
     "src/query/ast",
     "src/query/codegen",
@@ -71,6 +72,8 @@ members = [
     "src/query/users",
     # databend-query
     "src/query/service",
+    # enterprise
+    "src/query/ee",
     # Meta
     "src/meta/api",
     "src/meta/app",
@@ -81,6 +84,7 @@ members = [
     "src/meta/stoerr",
     "src/meta/store",
     "src/meta/types",
+    "src/meta/ee",
     # meta proto
     "src/meta/proto-conv",
     "src/meta/protos",
