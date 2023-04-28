@@ -448,17 +448,20 @@ fn register_like(registry: &mut FunctionRegistry) {
                 if pattern_type == PatternType::EndOfPercent
                     || pattern_type == PatternType::OrdinalStr
                 {
-                    let min = rhs.min[0..rhs.min.len() - 1].to_vec();
-                    let mut max = rhs.min[0..rhs.min.len() - 1].to_vec();
-                    let l = max.len();
+                    let (min, max) = if pattern_type == PatternType::EndOfPercent {
+                        let min = rhs.min[..rhs.min.len() - 1].to_vec();
+                        let mut max = min.clone();
 
-                    if pattern_type == PatternType::EndOfPercent {
+                        let l = max.len();
                         if max[l - 1] != u8::MAX {
                             max[l - 1] += 1;
                         } else {
                             return FunctionDomain::Full;
                         }
-                    }
+                        (min, max)
+                    } else {
+                        (rhs.min.clone(), rhs.min.clone())
+                    };
 
                     let other = StringDomain {
                         min,
