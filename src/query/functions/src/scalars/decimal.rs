@@ -244,7 +244,6 @@ macro_rules! register_decimal_compare_op {
             let return_type = if args_type[0].is_decimal() && args_type[1].is_decimal() {
                 let lhs_type = args_type[0].as_decimal().unwrap();
                 let rhs_type = args_type[1].as_decimal().unwrap();
-
                 DecimalDataType::binary_result_type(&lhs_type, &rhs_type, false, false, true)
             } else if args_type[0].is_decimal() {
                 let lhs_type = args_type[0].as_decimal().unwrap();
@@ -258,7 +257,7 @@ macro_rules! register_decimal_compare_op {
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![args_type[0].clone(), args_type[1].clone()],
+                    args_type: vec![DataType::Generic(0), DataType::Generic(0)],
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
@@ -267,13 +266,13 @@ macro_rules! register_decimal_compare_op {
                         let lhs = convert_to_decimal(
                             &args[0],
                             ctx,
-                            args_type[0].clone(),
+                            ctx.generics[0].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
                         let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
-                            args_type[1].clone(),
+                            ctx.generics[0].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
                         op_decimal!(
@@ -347,7 +346,7 @@ macro_rules! register_decimal_binary_op {
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![args_type[0].clone(), args_type[1].clone()],
+                    args_type: vec![DataType::Generic(0), DataType::Generic(0)],
                     return_type: DataType::Decimal(return_type.clone()),
                 },
                 eval: FunctionEval::Scalar {
@@ -356,13 +355,13 @@ macro_rules! register_decimal_binary_op {
                         let lhs = convert_to_decimal(
                             &args[0],
                             ctx,
-                            args_type[0].clone(),
+                            ctx.generics[0].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
                         let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
-                            args_type[1].clone(),
+                            ctx.generics[0].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
                         op_decimal!(

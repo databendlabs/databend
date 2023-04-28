@@ -507,7 +507,7 @@ error:
   --> SQL:1:5
   |
 1 | 2.0 / 0
-  |     ^ divided by zero while evaluating function `divide(2.0, 0)`
+  |     ^ divided by zero while evaluating function `divide(2.0, 0.0)`
 
 
 
