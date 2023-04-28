@@ -1814,6 +1814,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-license"
+version = "0.1.0"
+dependencies = [
+ "common-base",
+ "common-exception",
+]
+
+[[package]]
 name = "common-management"
 version = "0.1.0"
 dependencies = [
@@ -3203,6 +3211,7 @@ dependencies = [
  "common-tracing",
  "databend-meta",
  "databend-query",
+ "enterprise-query",
  "limits-rs",
  "opendal",
  "poem",
@@ -3702,6 +3711,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06c36cb11dbde389f4096111698d8b567c0720e3452fd5ac3e6b4e47e1939932"
 dependencies = [
  "thiserror",
+]
+
+[[package]]
+name = "enterprise-meta"
+version = "0.1.0"
+dependencies = [
+ "common-building",
+]
+
+[[package]]
+name = "enterprise-query"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "common-base",
+ "common-building",
+ "common-config",
+ "common-exception",
+ "common-license",
 ]
 
 [[package]]
