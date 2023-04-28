@@ -467,14 +467,11 @@ fn register_like(registry: &mut FunctionRegistry) {
                     let gte = lhs.domain_gte(&other);
                     let lt = lhs.domain_lt(&other);
 
-                    match (lt, gte) {
-                        (FunctionDomain::Domain(lhs), FunctionDomain::Domain(rhs)) => {
-                            return FunctionDomain::Domain(BooleanDomain {
-                                has_false: lhs.has_false || rhs.has_false,
-                                has_true: lhs.has_true && rhs.has_true,
-                            });
-                        }
-                        (_, _) => {}
+                    if let (FunctionDomain::Domain(lhs), FunctionDomain::Domain(rhs)) = (lt, gte) {
+                        return FunctionDomain::Domain(BooleanDomain {
+                            has_false: lhs.has_false || rhs.has_false,
+                            has_true: lhs.has_true && rhs.has_true,
+                        });
                     }
                 }
             }
