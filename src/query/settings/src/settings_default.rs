@@ -238,6 +238,11 @@ impl DefaultSettings {
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
                     possible_values: Some(vec!["before_partial", "before_merge"]),
                 }),
+                ("efficiently_memory_group_by", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Memory is used efficiently, but this may cause performance degradation.",
+                    possible_values: None,
+                }),
                 ("lazy_topn_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),
                     desc: "Enable lazy materialization and set the limit threshold of Top-N queries. Set the value to 0 to disable this setting.",

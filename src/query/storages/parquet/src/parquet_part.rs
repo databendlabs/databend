@@ -32,6 +32,7 @@ use common_expression::Scalar;
 pub struct ColumnMeta {
     pub offset: u64,
     pub length: u64,
+    pub num_values: i64,
     pub compression: Compression,
     pub uncompressed_size: u64,
     pub min_max: Option<(Scalar, Scalar)>,

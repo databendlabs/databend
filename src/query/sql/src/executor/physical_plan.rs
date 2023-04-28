@@ -248,6 +248,7 @@ impl AggregatePartial {
                             .clone())
                     })
                     .collect::<Result<Vec<_>>>()?,
+                false,
             )?;
             fields.push(DataField::new("_group_by_key", method.data_type()));
         }
