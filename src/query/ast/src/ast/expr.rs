@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_exception::Span;
 use common_io::display_decimal_128;
 use common_io::display_decimal_256;
+use common_io::escape_string_with_quote;
 use enum_as_inner::EnumAsInner;
 use ethnum::i256;
 
@@ -914,7 +915,7 @@ impl Display for Literal {
                 write!(f, "{val}")
             }
             Literal::String(val) => {
-                write!(f, "\'{val}\'")
+                write!(f, "\'{}\'", escape_string_with_quote(val, Some('\'')))
             }
             Literal::Boolean(val) => {
                 if *val {

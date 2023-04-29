@@ -16,6 +16,7 @@ pub mod expr;
 #[allow(clippy::module_inception)]
 mod parser;
 pub mod query;
+pub mod quote;
 mod share;
 mod stage;
 pub mod statement;
