@@ -55,7 +55,7 @@ export BENDSQL_DSN="databend://${CLOUD_USER}:${CLOUD_PASSWORD}@${CLOUD_GATEWAY}:
 echo "Creating warehouse..."
 echo "DROP WAREHOUSE IF EXISTS '${CLOUD_WAREHOUSE}';" | bendsql
 echo "CREATE WAREHOUSE '${CLOUD_WAREHOUSE}' WITH version='${BENCHMARK_VERSION}' warehouse_size='${BENCHMARK_SIZE}';" | bendsql
-echo "SHOW WAREHOUSES;" | bendsql
+echo "SHOW WAREHOUSES;" | bendsql --output table
 
 max_retry=15
 counter=0
@@ -80,12 +80,9 @@ function run_query() {
     local seq=$2
     local query=$3
 
-    local q_start q_end q_time
-
-    q_start=$(date +%s.%N)
-    if echo "$query" | bendsql --output csv >/dev/null; then
-        q_end=$(date +%s.%N)
-        q_time=$(python3 -c "print($q_end - $q_start)")
+    local q_time
+    q_time=$(echo "$query" | bendsql --time)
+    if [[ -n $q_time ]]; then
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
         yq -i ".result[${query_num}] += [${q_time}]" result.json
     else

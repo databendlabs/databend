@@ -163,6 +163,7 @@ impl PartitionPruner {
                 column_metas.insert(*index, ColumnMeta {
                     offset,
                     length,
+                    num_values: c.num_values(),
                     compression: c.compression(),
                     uncompressed_size: c.uncompressed_size() as u64,
                     min_max,

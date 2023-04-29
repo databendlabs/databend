@@ -53,6 +53,8 @@ impl<'a> SelectivityEstimator<'a> {
 
     /// Compute the selectivity of a predicate.
     pub fn compute_selectivity(&mut self, predicate: &ScalarExpr, update: bool) -> Result<f64> {
+        // Try to do constant fold first
+        let predicate = &try_constant_fold(predicate)?;
         Ok(match predicate {
             ScalarExpr::BoundColumnRef(_) => {
                 // If a column ref is on top of a predicate, e.g.

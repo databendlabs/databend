@@ -17,6 +17,8 @@ use std::fmt::Formatter;
 
 use common_exception::Span;
 
+use crate::parser::quote::quote_ident;
+
 // Identifier of table name or column name.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identifier {
@@ -34,9 +36,8 @@ impl Identifier {
 impl Display for Identifier {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         if let Some(c) = self.quote {
-            write!(f, "{}", c)?;
-            write!(f, "{}", self.name)?;
-            write!(f, "{}", c)
+            let quoted = quote_ident(&self.name, c, true);
+            write!(f, "{}", quoted)
         } else {
             write!(f, "{}", self.name)
         }

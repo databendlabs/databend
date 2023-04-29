@@ -76,12 +76,9 @@ function run_query() {
     local seq=$2
     local query=$3
 
-    local q_start q_end q_time
-
-    q_start=$(date +%s.%N)
-    if echo "$query" | bendsql --output csv >/dev/null; then
-        q_end=$(date +%s.%N)
-        q_time=$(python3 -c "print($q_end - $q_start)")
+    local q_time
+    q_time=$(echo "$query" | bendsql --time)
+    if [[ -n $q_time ]]; then
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
         yq -i ".result[${query_num}] += [${q_time}]" result.json
     else

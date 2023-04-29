@@ -7,7 +7,7 @@
 1	1	2
 2	2	3
 ----tsv header escape
-regexp_like(\'fo\nfo\', \'^fo$\')
+regexp_like(\'fo\\nfo\', \'^fo$\')
 Boolean
 0
 ----NDJSON
