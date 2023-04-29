@@ -37,7 +37,10 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 
     let semver = semver.strip_prefix('v').unwrap_or(semver);
 
-    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
+    Version::parse(semver).expect(
+        "run `git fetch --tags https://github.com/datafuselabs/databend` to slove this error, 
+    to learn more about this error, please visit https://crates.io/crates/semver",
+    )
 });
 
 /// Oldest compatible nightly metasrv version
