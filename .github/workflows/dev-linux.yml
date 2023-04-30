@@ -42,7 +42,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
-    timeout-minutes: 30
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
     runs-on: [self-hosted, X64, Linux, 16c32g]
     strategy:
@@ -55,11 +54,11 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
+        timeout-minutes: 60
         with:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
   build_other:
-    timeout-minutes: 30
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
     runs-on: [self-hosted, X64, Linux, 16c32g]
     strategy:
@@ -74,11 +73,11 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
+        timeout-minutes: 60
         with:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
   build_hive:
-    timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, 16c32g]
     steps:
       - uses: actions/checkout@v3
@@ -86,6 +85,7 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux_hive
+        timeout-minutes: 60
         with:
           target: x86_64-unknown-linux-gnu
 
@@ -249,20 +249,20 @@ jobs:
           name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
 
   test_stateless_standalone:
-    timeout-minutes: 20
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_linux
+        timeout-minutes: 20
 
   test_stateless_cluster:
-    timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
+        timeout-minutes: 30
 
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
@@ -291,29 +291,29 @@ jobs:
           name: test-stateful-cluster-linux
 
   test_stateful_large_data:
-    timeout-minutes: 60
     if: contains(github.event.pull_request.labels.*.name, 'ci-largedata')
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_large_data
+        timeout-minutes: 60
 
   test_fuzz_standalone:
-    timeout-minutes: 10
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_fuzz_standalone_linux
+        timeout-minutes: 10
         continue-on-error: true
 
   test_stateful_hive_standalone:
-    timeout-minutes: 10
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build_hive
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_hive_standalone
+        timeout-minutes: 10
         with:
           target: x86_64-unknown-linux-gnu
