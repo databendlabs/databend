@@ -927,7 +927,7 @@ pub enum TokenKind {
     CUBE,
     #[token("ROLLUP", ignore(ascii_case))]
     ROLLUP,
-    #[token("SNAPSHOT_LOCATION", ignore(ascii_case))]
+    #[token("SNAPSHOT_LOC", ignore(ascii_case))]
     SNAPSHOT_LOCATION,
     #[token("EXTERNAL_LOCATION", ignore(ascii_case))]
     EXTERNAL_LOCATION,
