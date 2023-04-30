@@ -927,6 +927,10 @@ pub enum TokenKind {
     CUBE,
     #[token("ROLLUP", ignore(ascii_case))]
     ROLLUP,
+    #[token("SNAPSHOT_LOCATION", ignore(ascii_case))]
+    SNAPSHOT_LOCATION,
+    #[token("EXTERNAL_LOCATION", ignore(ascii_case))]
+    EXTERNAL_LOCATION,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
