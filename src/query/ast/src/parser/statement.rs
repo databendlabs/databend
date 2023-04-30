@@ -1793,7 +1793,23 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
         rule! {
            ( #ident_to_string ~ "=" ~ #parameter_to_string )*
         },
-        |opts| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone()))),
+        |opts| {
+            BTreeMap::from_iter(
+                opts.iter()
+                    .filter(|(k, _, _)| -> bool {
+                        let s = k.to_lowercase();
+                        if s == "snapshot_location" {
+                            return true;
+                        } else if s == "external_location" {
+                            return true;
+                        } else if s == "compression" {
+                            return true;
+                        }
+                        return false;
+                    })
+                    .map(|(k, _, v)| (k.to_lowercase(), v.clone())),
+            )
+        },
     )(i)
 }
 
