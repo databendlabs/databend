@@ -229,7 +229,7 @@ For general help in using Databend, please refer to the official documentation. 
 
 Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/Apache-2.0.txt) and the [Elastic License 2.0](licenses/Elastic.txt). Read the [LICENSE](LICENSE) file for more details.
 
-When contributing to a Databend feature, you can find the relevant license header in each file.
+When contributing to Databend, you can find the relevant license header in each file.
 
 ## Acknowledgement
 
