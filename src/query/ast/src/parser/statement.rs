@@ -1791,7 +1791,7 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-           ((SNAPSHOT_LOCATION|COMPRESSION|EXTERNAL_LOCATION|COMMENT|BLOCK_SIZE_THRESHOLD|ENGINE|BLOCK_PER_SEGMENT|STORAGE_FORMAT|ROW_PER_BLOCK|DATABASE_ID)  ~ "=" ~ #parameter_to_string )*
+           ((SNAPSHOT_LOCATION|COMPRESSION|EXTERNAL_LOCATION|COMMENT|BLOCK_SIZE_THRESHOLD|ENGINE|BLOCK_PER_SEGMENT|STORAGE_FORMAT|ROW_PER_BLOCK|DATABASE_ID|SNAPSHOT_LOC)  ~ "=" ~ #parameter_to_string )*
         },
         |opts| {
             BTreeMap::from_iter(
