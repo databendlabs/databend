@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -237,6 +237,11 @@ impl DefaultSettings {
                     value: UserSettingValue::String(String::from("before_merge")),
                     desc: "Group by shuffle mode, 'before_partial' is more balanced, but more data needs to exchange.",
                     possible_values: Some(vec!["before_partial", "before_merge"]),
+                }),
+                ("efficiently_memory_group_by", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Memory is used efficiently, but this may cause performance degradation.",
+                    possible_values: None,
                 }),
                 ("lazy_topn_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(0),

@@ -7,6 +7,10 @@ description:
 
 Databend provides a JDBC driver that enables connection to Databend from a client application, such as [DBeaver](https://dbeaver.com/). DBeaver comes with numerous pre-configured drivers for SQL, NoSQL, key-value databases, graph databases, search engines, and more. However, the Databend JDBC driver is not currently pre-configured in DBeaver, which means that you cannot locate and select Databend while creating a connection in the application. Nevertheless, you can manually add the driver to DBeaver, allowing you to establish a connection to Databend in the same way you would with a pre-configured database.
 
+**Related video:**
+
+<iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/3cFmGvtU-ws" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+
 The following shows how to add the Databend JDBC driver to a client application and connect to Databend via the driver, using DBeaver as an example. For more information about the driver, refer to https://github.com/databendcloud/databend-jdbc
 
 ## Example: Connect from DBeaver with JDBC
