@@ -1362,7 +1362,7 @@ impl<'a> TypeChecker<'a> {
         let raw_expr = RawExpr::FunctionCall {
             span,
             name: func_name.to_string(),
-            params: vec![],
+            params: params.clone(),
             args: arguments,
         };
         let registry = &BUILTIN_FUNCTIONS;

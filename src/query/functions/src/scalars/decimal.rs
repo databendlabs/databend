@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::serialize::read_decimal_with_size;
+use common_expression::type_check::common_super_type;
 use common_expression::types::decimal::*;
 use common_expression::types::string::StringColumn;
 use common_expression::types::*;
@@ -240,24 +241,21 @@ macro_rules! register_decimal_compare_op {
                 return None;
             }
 
-            // we use the max precision and scale for the result
-            let return_type = if args_type[0].is_decimal() && args_type[1].is_decimal() {
-                let lhs_type = args_type[0].as_decimal().unwrap();
-                let rhs_type = args_type[1].as_decimal().unwrap();
-                DecimalDataType::binary_result_type(&lhs_type, &rhs_type, false, false, true)
-            } else if args_type[0].is_decimal() {
-                let lhs_type = args_type[0].as_decimal().unwrap();
-                lhs_type.binary_upgrade_to_max_precision()
-            } else {
-                let rhs_type = args_type[1].as_decimal().unwrap();
-                rhs_type.binary_upgrade_to_max_precision()
-            }
+            let common_arg_type =
+                common_super_type(args_type[0].clone(), args_type[0].clone(), &[])?;
+            let return_type = DecimalDataType::binary_result_type(
+                common_arg_type.as_decimal()?,
+                common_arg_type.as_decimal()?,
+                false,
+                false,
+                true,
+            )
             .ok()?;
 
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![DataType::Generic(0), DataType::Generic(0)],
+                    args_type: vec![common_arg_type.clone(), common_arg_type.clone()],
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
@@ -266,13 +264,13 @@ macro_rules! register_decimal_compare_op {
                         let lhs = convert_to_decimal(
                             &args[0],
                             ctx,
-                            ctx.generics[0].clone(),
+                            common_arg_type.clone(),
                             DataType::Decimal(return_type.clone()),
                         );
                         let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
-                            ctx.generics[0].clone(),
+                            common_arg_type.clone(),
                             DataType::Decimal(return_type.clone()),
                         );
                         op_decimal!(
@@ -310,28 +308,22 @@ macro_rules! register_decimal_binary_op {
                 return None;
             }
 
+            let common_arg_type =
+                common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
+            dbg!(&args_type[0]);
+            dbg!(&args_type[1]);
+            dbg!(&common_arg_type);
+
             let is_multiply = $name == "multiply";
             let is_divide = $name == "divide";
             let is_plus_minus = !is_multiply && !is_divide;
-
-            let return_type = if args_type[0].is_decimal() && args_type[1].is_decimal() {
-                let lhs_type = args_type[0].as_decimal().unwrap();
-                let rhs_type = args_type[1].as_decimal().unwrap();
-
-                DecimalDataType::binary_result_type(
-                    &lhs_type,
-                    &rhs_type,
-                    is_multiply,
-                    is_divide,
-                    is_plus_minus,
-                )
-            } else if args_type[0].is_decimal() {
-                let lhs_type = args_type[0].as_decimal().unwrap();
-                lhs_type.binary_upgrade_to_max_precision()
-            } else {
-                let rhs_type = args_type[1].as_decimal().unwrap();
-                rhs_type.binary_upgrade_to_max_precision()
-            }
+            let return_type = DecimalDataType::binary_result_type(
+                common_arg_type.as_decimal()?,
+                common_arg_type.as_decimal()?,
+                is_multiply,
+                is_divide,
+                is_plus_minus,
+            )
             .ok()?;
 
             let mut scale_a = 0;
@@ -346,7 +338,7 @@ macro_rules! register_decimal_binary_op {
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![DataType::Generic(0), DataType::Generic(0)],
+                    args_type: vec![common_arg_type.clone(), common_arg_type.clone()],
                     return_type: DataType::Decimal(return_type.clone()),
                 },
                 eval: FunctionEval::Scalar {
@@ -355,13 +347,13 @@ macro_rules! register_decimal_binary_op {
                         let lhs = convert_to_decimal(
                             &args[0],
                             ctx,
-                            ctx.generics[0].clone(),
+                            common_arg_type.clone(),
                             DataType::Decimal(return_type.clone()),
                         );
                         let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
-                            ctx.generics[0].clone(),
+                            common_arg_type.clone(),
                             DataType::Decimal(return_type.clone()),
                         );
                         op_decimal!(

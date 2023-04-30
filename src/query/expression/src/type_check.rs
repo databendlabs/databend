@@ -25,6 +25,7 @@ use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
 use crate::types::decimal::DecimalSize;
+use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::Number;
@@ -486,7 +487,11 @@ pub fn can_auto_cast_to(
                 .all(|(src_ty, dest_ty)| can_auto_cast_to(src_ty, dest_ty, auto_cast_rules))
         }
         (DataType::String, DataType::Decimal(_)) => true,
-        (DataType::Decimal(x), DataType::Decimal(y)) => x.precision() <= y.precision(),
+        (DataType::Decimal(x), DataType::Decimal(y)) => {
+            x.scale() <= y.scale()
+                && (x.leading_digits() <= y.leading_digits()
+                    || y.precision() == MAX_DECIMAL256_PRECISION)
+        }
         (DataType::Number(n), DataType::Decimal(_)) if !n.is_float() => true,
         (DataType::Decimal(_), DataType::Number(n)) if n.is_float() => true,
         _ => false,
@@ -530,8 +535,12 @@ pub fn common_super_type(
         (DataType::String, decimal_ty @ DataType::Decimal(_))
         | (decimal_ty @ DataType::Decimal(_), DataType::String) => Some(decimal_ty),
         (DataType::Decimal(a), DataType::Decimal(b)) => {
-            let ty = DecimalDataType::binary_result_type(&a, &b, false, false, true).ok();
-            ty.map(DataType::Decimal)
+            let scale = a.scale().max(b.scale());
+            let precision =
+                (a.leading_digits().max(b.leading_digits()) + scale).min(MAX_DECIMAL256_PRECISION);
+            Some(DataType::Decimal(
+                DecimalDataType::from_size(DecimalSize { precision, scale }).ok()?,
+            ))
         }
         (DataType::Number(num_ty), DataType::Decimal(decimal_ty))
         | (DataType::Decimal(decimal_ty), DataType::Number(num_ty))

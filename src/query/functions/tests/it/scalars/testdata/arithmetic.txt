@@ -113,6 +113,33 @@ evaluation (internal):
 +--------+------------------------+
 
 
+ast            : 1.23::decimal(6, 2) + 987654321.34::decimal(20, 2)
+raw expr       : plus(CAST(1.23 AS Decimal(6, 2)), CAST(987654321.34 AS Decimal(20, 2)))
+checked expr   : plus<Decimal(20, 2), Decimal(20, 2)>(to_decimal<Decimal(6, 2)>(20, 2)(to_decimal<Decimal(3, 2)>(6, 2)(1.23_d128(3,2))), to_decimal<Decimal(11, 2)>(20, 2)(987654321.34_d128(11,2)))
+optimized expr : 987654322.57_d128(21,2)
+output type    : Decimal(21, 2)
+output domain  : {987654322.57..=987654322.57}
+output         : 987654322.57
+
+
+ast            : 3::Decimal(13,2) + 3.1::Decimal(8,3)
+raw expr       : plus(CAST(3 AS Decimal(13, 2)), CAST(3.1 AS Decimal(8, 3)))
+checked expr   : plus<Decimal(14, 3), Decimal(14, 3)>(to_decimal<Decimal(13, 2)>(14, 3)(to_decimal<UInt8>(13, 2)(3_u8)), to_decimal<Decimal(8, 3)>(14, 3)(to_decimal<Decimal(2, 1)>(8, 3)(3.1_d128(2,1))))
+optimized expr : 6.100_d128(15,3)
+output type    : Decimal(15, 3)
+output domain  : {6.100..=6.100}
+output         : 6.100
+
+
+ast            : 3::Decimal(76,2) + 3.1::Decimal(76,3)
+raw expr       : plus(CAST(3 AS Decimal(76, 2)), CAST(3.1 AS Decimal(76, 3)))
+checked expr   : plus<Decimal(76, 3), Decimal(76, 3)>(to_decimal<Decimal(76, 2)>(76, 3)(to_decimal<UInt8>(76, 2)(3_u8)), to_decimal<Decimal(2, 1)>(76, 3)(3.1_d128(2,1)))
+optimized expr : 6.100_d256(76,3)
+output type    : Decimal(76, 3)
+output domain  : {6.100..=6.100}
+output         : 6.100
+
+
 ast            : a - b
 raw expr       : minus(a::Int8, b::Int16)
 checked expr   : minus<Int8, Int16>(a, b)

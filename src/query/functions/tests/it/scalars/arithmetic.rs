@@ -66,6 +66,13 @@ fn test_add(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a2 + c", columns);
     run_ast(file, "c + b", columns);
     run_ast(file, "c + d", columns);
+    run_ast(
+        file,
+        "1.23::decimal(6, 2) + 987654321.34::decimal(20, 2)",
+        &[],
+    );
+    run_ast(file, "3::Decimal(13,2) + 3.1::Decimal(8,3)", &[]);
+    run_ast(file, "3::Decimal(76,2) + 3.1::Decimal(76,3)", &[]);
 }
 
 fn test_minus(file: &mut impl Write, columns: &[(&str, Column)]) {
