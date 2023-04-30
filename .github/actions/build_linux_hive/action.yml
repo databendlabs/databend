@@ -4,9 +4,6 @@ inputs:
   target:
     description: ""
     required: true
-  profile:
-    description: "debug/release"
-    required: true
 runs:
   using: "composite"
   steps:
@@ -16,22 +13,21 @@ runs:
         target: ${{ inputs.target }}
 
     - name: Build Debug
-      if: inputs.profile == 'debug'
+      if: env.BUILD_PROFILE == 'debug'
       shell: bash
       run: cargo build --target ${{ inputs.target }} --features hive
 
     - name: Build Release
-      if: inputs.profile == 'release'
+      if: env.BUILD_PROFILE == 'release'
       shell: bash
       run: cargo build --target ${{ inputs.target }} --features hive --release
 
     # - shell: bash
-    #   run: readelf -p .comment ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-query
+    #   run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
 
     - name: Upload artifact
       uses: ./.github/actions/artifact_upload
       with:
-        profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
         category: hive
