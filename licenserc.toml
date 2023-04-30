@@ -12,6 +12,9 @@ excludes = [
     "benchmark",
     "src/common/compress/tests",
 
+    # copied from third-party projects
+    "src/query/storages/hive/hive-meta-store/src/idl/hms.thrift",
+
     # licensed under Elastic License 2.0
     "src/binaries/query/ee_main.rs",
     "src/binaries/meta/ee_main.rs",
