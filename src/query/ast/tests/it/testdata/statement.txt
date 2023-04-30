@@ -67,6 +67,50 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+describe "name""with""quote";
+---------- Output ---------
+DESCRIBE "name""with""quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"with\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: Some(
+                9..28,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+describe "name""""with""""quote";
+---------- Output ---------
+DESCRIBE "name""""with""""quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"\"with\"\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: Some(
+                9..32,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 show full tables
 ---------- Output ---------
 SHOW FULL TABLES
@@ -5965,6 +6009,144 @@ Query(
 
 
 ---------- Input ----------
+select 'stringwith''quote'''
+---------- Output ---------
+SELECT 'stringwith\'quote\''
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..28,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..28,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..28,
+                            ),
+                            lit: String(
+                                "stringwith'quote'",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select 'stringwith"doublequote'
+---------- Output ---------
+SELECT 'stringwith"doublequote'
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..31,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..31,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..31,
+                            ),
+                            lit: String(
+                                "stringwith\"doublequote",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select '🦈'
+---------- Output ---------
+SELECT '🦈'
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..13,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..13,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..13,
+                            ),
+                            lit: String(
+                                "🦈",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
@@ -8300,6 +8482,86 @@ Presign(
             StageLocation {
                 name: "my_stage",
                 path: "/path/to/file",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/my\ file.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/my\ file.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/my file.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\"file\".csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\"file\".csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/\"file\".csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\'file\'.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\'file\'.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/'file'.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\\file\\.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\\file\\.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/\\file\\.csv",
             },
         ),
         expire: 3600s,

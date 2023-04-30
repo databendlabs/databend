@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -176,6 +176,7 @@ impl HashJoinState for JoinHashTable {
                         hash_method,
                     })
                 }
+                HashMethodKind::DictionarySerializer(_) => unimplemented!(),
             };
             let hashtable = unsafe { &mut *self.hash_table.get() };
             *hashtable = hashjoin_hashtable;

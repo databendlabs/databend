@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,11 +23,16 @@ use super::group_by_hash::HashMethodSerializer;
 use super::group_by_hash::HashMethodSingleString;
 use crate::types::DataType;
 use crate::DataBlock;
+use crate::HashMethodDictionarySerializer;
 use crate::HashMethodKeysU128;
 use crate::HashMethodKeysU256;
 
 impl DataBlock {
-    pub fn choose_hash_method(chunk: &DataBlock, indices: &[usize]) -> Result<HashMethodKind> {
+    pub fn choose_hash_method(
+        chunk: &DataBlock,
+        indices: &[usize],
+        efficiently_memory: bool,
+    ) -> Result<HashMethodKind> {
         let hash_key_types = indices
             .iter()
             .map(|&offset| {
@@ -37,10 +42,13 @@ impl DataBlock {
             .collect::<Result<Vec<_>>>();
 
         let hash_key_types = hash_key_types?;
-        Self::choose_hash_method_with_types(&hash_key_types)
+        Self::choose_hash_method_with_types(&hash_key_types, efficiently_memory)
     }
 
-    pub fn choose_hash_method_with_types(hash_key_types: &[DataType]) -> Result<HashMethodKind> {
+    pub fn choose_hash_method_with_types(
+        hash_key_types: &[DataType],
+        efficiently_memory: bool,
+    ) -> Result<HashMethodKind> {
         if hash_key_types.len() == 1 {
             let typ = hash_key_types[0].clone();
             if matches!(typ, DataType::String | DataType::Variant) {
@@ -65,7 +73,26 @@ impl DataBlock {
                     group_key_len += 1;
                 }
             } else {
-                return Ok(HashMethodKind::Serializer(HashMethodSerializer::default()));
+                return Ok(match !efficiently_memory || hash_key_types.len() == 1 {
+                    true => HashMethodKind::Serializer(HashMethodSerializer::default()),
+                    false => {
+                        let mut dict_keys = 0;
+                        let mut hash_other_type = false;
+                        for data_type in hash_key_types {
+                            let non_null_type = data_type.remove_nullable();
+
+                            if non_null_type.is_string() || non_null_type.is_variant() {
+                                dict_keys += 1;
+                            } else if !hash_other_type {
+                                hash_other_type = true;
+                                dict_keys += 1;
+                            }
+                        }
+                        HashMethodKind::DictionarySerializer(HashMethodDictionarySerializer {
+                            dict_keys,
+                        })
+                    }
+                });
             }
         }
 

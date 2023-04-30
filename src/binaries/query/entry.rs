@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(try_blocks)]
-
-mod local;
-
 use std::env;
 
 use common_base::mem_allocator::GlobalAllocator;
-use common_base::runtime::Runtime;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_base::set_alloc_error_hook;
 use common_config::InnerConfig;
@@ -44,28 +38,35 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
 
-#[global_allocator]
-pub static GLOBAL_ALLOCATOR: GlobalAllocator = GlobalAllocator;
+use crate::local;
 
-fn main() {
-    match Runtime::with_default_worker_threads() {
-        Err(cause) => {
-            eprintln!("Databend Query start failure, cause: {:?}", cause);
-            std::process::exit(cause.code() as i32);
+async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
+    if conf.cmd.is_empty() {
+        return Ok(false);
+    }
+
+    match conf.cmd.as_str() {
+        "ver" => {
+            println!("version: {}", *QUERY_SEMVER);
+            println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
         }
-        Ok(rt) => {
-            if let Err(cause) = rt.block_on(async_backtrace::location!().frame(main_entrypoint())) {
-                eprintln!("Databend Query start failure, cause: {:?}", cause);
-                std::process::exit(cause.code() as i32);
-            }
+        "local" => {
+            println!("exec local query: {}", conf.local.sql);
+            local::query_local(conf).await?
+        }
+        _ => {
+            eprintln!("Invalid cmd: {}", conf.cmd);
+            eprintln!("Available cmds:");
+            eprintln!("  --cmd ver");
+            eprintln!("    Print version and the min compatible databend-meta version");
         }
     }
+
+    Ok(true)
 }
 
-async fn main_entrypoint() -> Result<()> {
-    let conf: InnerConfig = InnerConfig::load()?;
-
-    if run_cmd(&conf).await? {
+pub async fn init_services(conf: &InnerConfig) -> Result<()> {
+    if run_cmd(conf).await? {
         return Ok(());
     }
 
@@ -89,8 +90,10 @@ async fn main_entrypoint() -> Result<()> {
         ));
     }
     // Make sure global services have been inited.
-    GlobalServices::init(conf.clone()).await?;
+    GlobalServices::init(conf.clone()).await
+}
 
+pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     if conf.query.max_memory_limit_enabled {
         let size = conf.query.max_server_memory_usage as i64;
         info!("Set memory limit: {}", size);
@@ -188,7 +191,7 @@ async fn main_entrypoint() -> Result<()> {
     // Admin HTTP API service.
     {
         let address = conf.query.admin_api_address.clone();
-        let mut srv = HttpService::create(&conf);
+        let mut srv = HttpService::create(conf);
         let listening = srv.start(address.parse()?).await?;
         shutdown_handle.add_service(srv);
         info!("Listening for Admin HTTP API: {}", listening);
@@ -218,7 +221,7 @@ async fn main_entrypoint() -> Result<()> {
     // Cluster register.
     {
         ClusterDiscovery::instance()
-            .register_to_metastore(&conf)
+            .register_to_metastore(conf)
             .await?;
         info!(
             "Databend query has been registered:{:?} to metasrv:{:?}.",
@@ -257,7 +260,7 @@ async fn main_entrypoint() -> Result<()> {
     println!("    config: {}", GlobalAllocator::conf());
 
     println!("Cluster: {}", {
-        let cluster = ClusterDiscovery::instance().discover(&conf).await?;
+        let cluster = ClusterDiscovery::instance().discover(conf).await?;
         let nodes = cluster.nodes.len();
         if nodes > 1 {
             format!("[{}] nodes", nodes)
@@ -333,31 +336,6 @@ async fn main_entrypoint() -> Result<()> {
     shutdown_handle.wait_for_termination_request().await;
     info!("Shutdown server.");
     Ok(())
-}
-
-async fn run_cmd(conf: &InnerConfig) -> Result<bool> {
-    if conf.cmd.is_empty() {
-        return Ok(false);
-    }
-
-    match conf.cmd.as_str() {
-        "ver" => {
-            println!("version: {}", *QUERY_SEMVER);
-            println!("min-compatible-metasrv-version: {}", MIN_METASRV_SEMVER);
-        }
-        "local" => {
-            println!("exec local query: {}", conf.local.sql);
-            local::query_local(conf).await?
-        }
-        _ => {
-            eprintln!("Invalid cmd: {}", conf.cmd);
-            eprintln!("Available cmds:");
-            eprintln!("  --cmd ver");
-            eprintln!("    Print version and the min compatible databend-meta version");
-        }
-    }
-
-    Ok(true)
 }
 
 #[cfg(not(target_os = "macos"))]

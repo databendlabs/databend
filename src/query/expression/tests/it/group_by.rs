@@ -36,10 +36,10 @@ fn test_group_by_hash() -> Result<()> {
         StringType::from_data(vec!["x1", "x1", "x2", "x1", "x2", "x3"]),
     ]);
 
-    let method = DataBlock::choose_hash_method(&block, &[0, 3])?;
+    let method = DataBlock::choose_hash_method(&block, &[0, 3], false)?;
     assert_eq!(method.name(), HashMethodSerializer::default().name(),);
 
-    let method = DataBlock::choose_hash_method(&block, &[0, 1, 2])?;
+    let method = DataBlock::choose_hash_method(&block, &[0, 1, 2], false)?;
 
     assert_eq!(method.name(), HashMethodKeysU32::default().name());
 

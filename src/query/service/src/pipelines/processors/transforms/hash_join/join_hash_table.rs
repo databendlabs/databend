@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ use common_base::base::tokio::sync::Notify;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::arrow::and_validities;
-use common_expression::with_hash_method;
+use common_expression::with_join_hash_method;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
@@ -118,7 +118,7 @@ impl JoinHashTable {
             .iter()
             .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone())
             .collect::<Vec<_>>();
-        let method = DataBlock::choose_hash_method_with_types(&hash_key_types)?;
+        let method = DataBlock::choose_hash_method_with_types(&hash_key_types, false)?;
         Ok(Arc::new(JoinHashTable::try_create(
             ctx,
             build_schema,
@@ -234,7 +234,7 @@ impl JoinHashTable {
         }
 
         let hash_table = unsafe { &*self.hash_table.get() };
-        with_hash_method!(|T| match hash_table {
+        with_join_hash_method!(|T| match hash_table {
             HashJoinHashTable::T(table) => {
                 let keys_state = table
                     .hash_method
