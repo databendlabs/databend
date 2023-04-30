@@ -92,6 +92,7 @@ runs:
         path: |
           ~/.cargo/registry/cache
           ~/.cargo/registry/index
+          ~/.cargo/git/db
         key: |
           ${{ runner.os }}/${{ inputs.target }}/${{ hashFiles('**/Cargo.lock') }}
         restore-keys: |
