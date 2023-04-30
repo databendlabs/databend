@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUILD_PROFILE: release
+  BUILD_PROFILE: debug
   RUNNER_PROVIDER: aws
 
 jobs:
