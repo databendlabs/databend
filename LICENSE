@@ -1,5 +1,11 @@
-Databend is released under a combination of two licenses:
+Portions of this software are licensed as follows:
 
-1. [Apache-2.0](licenses/apache.md). The portion licensed by Apache License 2.0 allows any use of Databend, excluding enterprise features.
+* All content that resides under the following directories or files of this repository, if that directory or file exists, is licensed under the "Elastic" license defined in "licenses/Elastic-2.0.txt":
+    * "src/binaries/query/ee_main.rs"
+    * "src/binaries/meta/ee_main.rs"
+    * "src/meta/ee"
+    * "src/query/ee"
+* All third party components incorporated into this software are licensed under the original license provided by the owner of the applicable component.
+* Content outside of the above mentioned directories or restrictions above is available under the "Apache-2.0" license as defined in "licenses/Apache-2.0.txt".
 
-2. [Elactic](licenses/elastic_v2.md). The portion licensed by Elastic License 2.0 allows you to use enterprise features with a paid license key. Please contact us at https://www.databend.com/contact-us/ for more details.
+Specifically, a full distribution of Databend is licensed by the "Elastic" license which allows you to use enterprise features with a paid license key. Please contact us at https://www.databend.com/contact-us/ for more details.
