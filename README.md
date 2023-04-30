@@ -27,10 +27,6 @@
 
 <img src="https://img.shields.io/badge/Platform-Linux%2C%20macOS%2C%20ARM-green.svg?style=flat" alt="Linux Platform" />
 
-<a href="https://opensource.org/licenses/Apache-2.0">
-<img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="license" />
-</a>
-
 </div>
 </div>
 
@@ -231,9 +227,9 @@ For general help in using Databend, please refer to the official documentation. 
 
 ## License
 
-Currently, Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/apache.md) and the [Elastic License 2.0](licenses/elastic_v2.md). The latter is for our enterprise features under the `ee` directory
+Databend is released under a combination of two licenses: the [Apache License 2.0](licenses/Apache-2.0.txt) and the [Elastic License 2.0](licenses/Elastic.txt). Read the [LICENSE](LICENSE) file for more details.
 
-When contributing to a Databend feature, you can find the relevant license in the comments at the top of each file.
+When contributing to a Databend feature, you can find the relevant license header in each file.
 
 ## Acknowledgement
 
