@@ -931,6 +931,16 @@ pub enum TokenKind {
     SNAPSHOT_LOCATION,
     #[token("EXTERNAL_LOCATION", ignore(ascii_case))]
     EXTERNAL_LOCATION,
+    #[token("BLOCK_SIZE_THRESHOLD", ignore(ascii_case))]
+    BLOCK_SIZE_THRESHOLD,
+    #[token("BLOCK_PER_SEGMENT", ignore(ascii_case))]
+    BLOCK_PER_SEGMENT,
+    #[token("STORAGE_FORMAT", ignore(ascii_case))]
+    STORAGE_FORMAT,
+    #[token("ROW_PER_BLOCK", ignore(ascii_case))]
+    ROW_PER_BLOCK,
+    #[token("DATABASE_ID", ignore(ascii_case))]
+    DATABASE_ID,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
