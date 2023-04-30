@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -41,3 +41,4 @@ mod stat_buffer;
 pub use decimal::display_decimal_128;
 pub use decimal::display_decimal_256;
 pub use escape::escape_string;
+pub use escape::escape_string_with_quote;

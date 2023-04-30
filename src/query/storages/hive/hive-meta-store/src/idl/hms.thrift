@@ -1,17 +1,3 @@
-// Copyright 2021 Datafuse Labs.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
@@ -157,7 +143,7 @@ enum PartitionEventType {
   LOAD_DONE = 1,
 }
 
-// Enums for transaction and lock management 
+// Enums for transaction and lock management
 enum TxnState {
     COMMITTED = 1,
     ABORTED = 2,
@@ -666,7 +652,7 @@ struct CheckConstraintsResponse {
 
 
 struct DropConstraintRequest {
-  1: required string dbname, 
+  1: required string dbname,
   2: required string tablename,
   3: required string constraintname,
   4: optional string catName
@@ -1133,7 +1119,7 @@ struct FireEventRequest {
 struct FireEventResponse {
     // NOP for now, this is just a place holder for future responses
 }
-    
+
 struct MetadataPpdResult {
   1: optional binary metadata,
   2: optional binary includeBitset
@@ -1677,7 +1663,7 @@ service ThriftHiveMetastore
   void add_primary_key(1:AddPrimaryKeyRequest req)
       throws(1:NoSuchObjectException o1, 2:MetaException o2)
   void add_foreign_key(1:AddForeignKeyRequest req)
-      throws(1:NoSuchObjectException o1, 2:MetaException o2)  
+      throws(1:NoSuchObjectException o1, 2:MetaException o2)
   void add_unique_constraint(1:AddUniqueConstraintRequest req)
       throws(1:NoSuchObjectException o1, 2:MetaException o2)
   void add_not_null_constraint(1:AddNotNullConstraintRequest req)
@@ -2101,13 +2087,13 @@ service ThriftHiveMetastore
   ShowLocksResponse show_locks(1:ShowLocksRequest rqst)
   void heartbeat(1:HeartbeatRequest ids) throws (1:NoSuchLockException o1, 2:NoSuchTxnException o2, 3:TxnAbortedException o3)
   HeartbeatTxnRangeResponse heartbeat_txn_range(1:HeartbeatTxnRangeRequest txns)
-  void compact(1:CompactionRequest rqst) 
-  CompactionResponse compact2(1:CompactionRequest rqst) 
+  void compact(1:CompactionRequest rqst)
+  CompactionResponse compact2(1:CompactionRequest rqst)
   ShowCompactResponse show_compact(1:ShowCompactRequest rqst)
   void add_dynamic_partitions(1:AddDynamicPartitions rqst) throws (1:NoSuchTxnException o1, 2:TxnAbortedException o2)
 
   // Notification logging calls
-  NotificationEventResponse get_next_notification(1:NotificationEventRequest rqst) 
+  NotificationEventResponse get_next_notification(1:NotificationEventRequest rqst)
   CurrentNotificationEventId get_current_notificationEventId()
   NotificationEventsCountResponse get_notification_events_count(1:NotificationEventsCountRequest rqst)
   FireEventResponse fire_listener_event(1:FireEventRequest rqst)
@@ -2210,7 +2196,7 @@ service ThriftHiveMetastore
 
   LockResponse get_lock_materialization_rebuild(1: string dbName, 2: string tableName, 3: i64 txnId)
   bool heartbeat_lock_materialization_rebuild(1: string dbName, 2: string tableName, 3: i64 txnId)
-  
+
   void add_runtime_stats(1: RuntimeStat stat) throws(1:MetaException o1)
   list<RuntimeStat> get_runtime_stats(1: GetRuntimeStatsRequest rqst) throws(1:MetaException o1)
 }

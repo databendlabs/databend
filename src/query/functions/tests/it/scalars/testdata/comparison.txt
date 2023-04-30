@@ -1262,6 +1262,54 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------+
 
 
+ast            : lhs like 'b%'
+raw expr       : like(lhs::String, 'b%')
+checked expr   : like<String, String>(lhs, "b%")
+optimized expr : false
+evaluation:
++--------+-----------------+---------+
+|        | lhs             | Output  |
++--------+-----------------+---------+
+| Type   | String          | Boolean |
+| Domain | {"abc"..="abf"} | {FALSE} |
+| Row 0  | 'abc'           | false   |
+| Row 1  | 'abd'           | false   |
+| Row 2  | 'abe'           | false   |
+| Row 3  | 'abf'           | false   |
++--------+-----------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------+
+| Column | Data                                                                         |
++--------+------------------------------------------------------------------------------+
+| lhs    | StringColumn { data: 0x616263616264616265616266, offsets: [0, 3, 6, 9, 12] } |
+| Output | Boolean([0b____0000])                                                        |
++--------+------------------------------------------------------------------------------+
+
+
+ast            : lhs like 'c'
+raw expr       : like(lhs::String, 'c')
+checked expr   : like<String, String>(lhs, "c")
+optimized expr : false
+evaluation:
++--------+-----------------+---------+
+|        | lhs             | Output  |
++--------+-----------------+---------+
+| Type   | String          | Boolean |
+| Domain | {"abc"..="abf"} | {FALSE} |
+| Row 0  | 'abc'           | false   |
+| Row 1  | 'abd'           | false   |
+| Row 2  | 'abe'           | false   |
+| Row 3  | 'abf'           | false   |
++--------+-----------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------+
+| Column | Data                                                                         |
++--------+------------------------------------------------------------------------------+
+| lhs    | StringColumn { data: 0x616263616264616265616266, offsets: [0, 3, 6, 9, 12] } |
+| Output | Boolean([0b____0000])                                                        |
++--------+------------------------------------------------------------------------------+
+
+
 ast            : lhs like rhs
 raw expr       : like(lhs::String, rhs::String)
 checked expr   : like<String, String>(lhs, rhs)

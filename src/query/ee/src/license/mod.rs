@@ -1,10 +1,10 @@
-// Copyright 2023 Databend Cloud, Inc.
+// Copyright 2023 Databend Cloud
 //
 // Licensed under the Elastic License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// https://www.elastic.co/licensing/elastic-license
+//     https://www.elastic.co/licensing/elastic-license
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
