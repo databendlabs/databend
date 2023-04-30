@@ -20,7 +20,7 @@ runs:
     - name: Build Debug
       if: env.BUILD_PROFILE == 'debug'
       shell: bash
-      run: cargo build --target ${{ inputs.target }}
+      run: cargo build --target ${{ inputs.target }} --timings
 
     - name: Set Release build flags
       if: env.BUILD_PROFILE == 'release'

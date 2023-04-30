@@ -160,6 +160,7 @@ async-backtrace = "0.2.2"
 debug = 1
 lto = "thin"
 overflow-checks = false
+incremental = false
 # codegen-units = 1       # Reduce number of codegen units to increase optimizations.
 
 # [profile.release.package]
