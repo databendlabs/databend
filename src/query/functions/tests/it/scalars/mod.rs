@@ -70,7 +70,7 @@ pub fn run_ast(file: &mut impl Write, text: impl AsRef<str>, columns: &[(&str, C
 
         let (optimized_expr, output_domain) = ConstantFolder::fold_with_domain(
             &expr,
-            input_domains.clone(),
+            &input_domains,
             &FunctionContext::default(),
             &BUILTIN_FUNCTIONS,
         );

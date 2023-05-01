@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -86,7 +86,7 @@ pub enum DataType {
 impl DataType {
     pub fn wrap_nullable(&self) -> Self {
         match self {
-            DataType::Nullable(_) => self.clone(),
+            DataType::Null | DataType::Nullable(_) => self.clone(),
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }

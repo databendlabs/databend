@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -198,6 +198,7 @@ impl<Method: HashMethodBounds> AccumulatingTransform for TransformPartialGroupBy
                 )],
             },
             HashTable::PartitionedHashTable(v) => {
+                let _ = v.hashtable.unsize_key_size();
                 let cells = PartitionedHashTableDropper::split_cell(v);
                 let mut blocks = Vec::with_capacity(cells.len());
                 for (bucket, cell) in cells.into_iter().enumerate() {

@@ -1,0 +1,47 @@
+## In release 1.1.22 ci test, this will cause databend-query Segmentation fault (core dumped)
+## statement ok
+## DROP DATABASE IF EXISTS db1
+##
+## statement ok
+## CREATE DATABASE db1
+##
+## statement ok
+## USE db1
+##
+## statement ok
+## create table t(a String, b String, c UInt64);
+##
+## statement ok
+## insert into t select number::String as a, number::String as b, number as c  from numbers(10000);
+##
+## statement ok
+## insert into t select (number + 10000)::String as a, (number + 10000)::String as b, (number + 10000) as c  from numbers(10000);
+##
+## statement ok
+## set efficiently_memory_group_by = 1;
+##
+## query TIFS
+## SELECT COUNT() FROM (SELECT a, b FROM t GROUP BY a, b);
+## ----
+## 20000
+##
+## query TIFS
+## SELECT SUM(c) FROM (SELECT a, b, COUNT() as c FROM t GROUP BY a, b);
+## ----
+## 20000
+##
+## query TIFS
+## SELECT COUNT() FROM (SELECT a, b FROM t GROUP BY a, b, c);
+## ----
+## 20000
+##
+## query TIFS
+## SELECT SUM(c) FROM (SELECT a, b, COUNT() as c FROM t GROUP BY a, b, c);
+## ----
+## 20000
+##
+## statement ok
+## set efficiently_memory_group_by = 0;
+##
+## statement ok
+## DROP DATABASE IF EXISTS db1

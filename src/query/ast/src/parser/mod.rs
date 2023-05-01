@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ pub mod expr;
 #[allow(clippy::module_inception)]
 mod parser;
 pub mod query;
+pub mod quote;
 mod share;
 mod stage;
 pub mod statement;

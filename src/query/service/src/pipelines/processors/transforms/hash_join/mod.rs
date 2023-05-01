@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,9 +25,7 @@ mod util;
 
 pub use desc::HashJoinDesc;
 pub use hash_join_state::HashJoinState;
-pub use join_hash_table::FixedKeyHashTable;
-pub use join_hash_table::HashTable;
+pub use join_hash_table::FixedKeyHashJoinHashTable;
 pub use join_hash_table::JoinHashTable;
-pub use join_hash_table::SerializerHashTable;
 pub use probe_state::ProbeState;
 pub use result_blocks::*;

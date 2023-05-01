@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -264,6 +264,7 @@ impl BindContext {
         column: &str,
         span: Span,
         available_aliases: &[(String, ScalarExpr)],
+        allow_ambiguous: bool,
     ) -> Result<NameResolutionResult> {
         let mut result = vec![];
 
@@ -316,7 +317,7 @@ impl BindContext {
 
         if result.is_empty() {
             Err(ErrorCode::SemanticError(format!("column {column} doesn't exist")).set_span(span))
-        } else if result.len() > 1 {
+        } else if result.len() > 1 && !allow_ambiguous {
             Err(ErrorCode::SemanticError(format!(
                 "column {column} reference is ambiguous, got {result:?}"
             ))

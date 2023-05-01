@@ -361,6 +361,9 @@ fn test_like(file: &mut impl Write) {
         StringType::from_data(vec!["abc", "abd", "abe", "abf"]),
     )];
     run_ast(file, "lhs like 'a%'", &columns);
+    run_ast(file, "lhs like 'b%'", &columns);
+    run_ast(file, "lhs like 'c'", &columns);
+
     let columns = [
         (
             "lhs",

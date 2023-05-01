@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -149,9 +149,11 @@ impl From<&DataField> for ArrowField {
         match ty {
             ArrowDataType::Struct(_) if f.is_nullable() => {
                 let ty = set_nullable(&ty);
-                ArrowField::new(f.name(), ty, f.is_nullable()).with_metadata(metadata)
+                ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
             }
-            _ => ArrowField::new(f.name(), ty, f.is_nullable()).with_metadata(metadata),
+            // Must set nullable for DataType::Null
+            // Or error: Column 'null' is declared as non-nullable but contains null values
+            _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata),
         }
     }
 }
@@ -204,7 +206,7 @@ impl TryFrom<&ArrowField> for DataType {
 
         if let Some(ty) = extend_type {
             return if f.is_nullable() {
-                Ok(DataType::Nullable(Box::new(ty)))
+                Ok(ty.wrap_nullable())
             } else {
                 Ok(ty)
             };
@@ -253,7 +255,7 @@ impl TryFrom<&ArrowField> for DataType {
             )))?,
         };
         if f.is_nullable() {
-            Ok(DataType::Nullable(Box::new(data_type)))
+            Ok(data_type.wrap_nullable())
         } else {
             Ok(data_type)
         }

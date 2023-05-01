@@ -1,29 +1,32 @@
-//  Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashMap;
+use std::io::Cursor;
 
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
 use common_exception::Result;
 use common_expression::TableSchema;
+use common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::format::compress;
 use crate::meta::format::encode;
+use crate::meta::format::read_and_deserialize;
 use crate::meta::format::Compression;
 use crate::meta::monotonically_increased_timestamp;
 use crate::meta::statistics::FormatVersion;
@@ -32,6 +35,7 @@ use crate::meta::v2;
 use crate::meta::ClusterKey;
 use crate::meta::Encoding;
 use crate::meta::Location;
+use crate::meta::MetaCompression;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
@@ -162,6 +166,16 @@ impl TableSnapshot {
         Ok(buf)
     }
 
+    pub fn from_bytes(buffer: Vec<u8>) -> Result<TableSnapshot> {
+        let mut cursor = Cursor::new(buffer);
+        let version = cursor.read_scalar::<u64>()?;
+        assert_eq!(version, TableSnapshot::VERSION);
+        let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
+        let snapshot_size: u64 = cursor.read_scalar::<u64>()?;
+
+        read_and_deserialize(&mut cursor, snapshot_size, &encoding, &compression)
+    }
     #[inline]
     pub fn encoding() -> Encoding {
         Encoding::default()

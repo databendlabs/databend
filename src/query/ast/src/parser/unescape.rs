@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,7 +15,7 @@
 use std::char;
 use std::iter::Peekable;
 
-pub fn unescape(s: &str, quote: char) -> Option<String> {
+pub fn unescape_string(s: &str, quote: char) -> Option<String> {
     let mut chars = s.chars().peekable();
     let mut s = String::new();
 
@@ -56,6 +56,50 @@ pub fn unescape(s: &str, quote: char) -> Option<String> {
     }
 
     Some(s)
+}
+
+pub fn escape_at_string(s: &str) -> String {
+    let chars = s.chars().peekable();
+    let mut s = String::new();
+    for c in chars {
+        match c {
+            ' ' => s.push_str("\\ "),
+            '\t' => s.push_str("\\\t"),
+            '\'' => s.push_str("\\'"),
+            '"' => s.push_str("\\\""),
+            '\\' => s.push_str("\\\\"),
+            _ => s.push(c),
+        }
+    }
+    s
+}
+
+pub fn unescape_at_string(s: &str) -> String {
+    let mut chars = s.chars().peekable();
+    let mut s = String::new();
+
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            match chars.next() {
+                Some(' ') => s.push(' '),
+                Some('\t') => s.push('\t'),
+                Some('\'') => s.push('\''),
+                Some('\"') => s.push('\"'),
+                Some('\\') => s.push('\\'),
+                Some(c) => {
+                    s.push('\\');
+                    s.push(c);
+                }
+                None => {
+                    s.push('\\');
+                }
+            }
+        } else {
+            s.push(c);
+        }
+    }
+
+    s
 }
 
 fn unescape_unicode(chars: &mut Peekable<impl Iterator<Item = char>>) -> Option<char> {

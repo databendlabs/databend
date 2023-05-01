@@ -1,16 +1,16 @@
-//  Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::sync::Arc;
 
@@ -38,10 +38,10 @@ impl ParquetTable {
         push_down: Option<PushDownInfo>,
         is_small_file: bool,
     ) -> Result<PartitionPruner> {
-        let parquet_read_whole_file_threshold = if is_small_file {
+        let parquet_fast_read_bytes = if is_small_file {
             0_usize
         } else {
-            ctx.get_settings().get_parquet_read_whole_file_threshold()? as usize
+            ctx.get_settings().get_parquet_fast_read_bytes()? as usize
         };
         // `plan.source_info.schema()` is the same as `TableSchema::from(&self.arrow_schema)`
         let projection = if let Some(PushDownInfo {
@@ -120,7 +120,7 @@ impl ParquetTable {
             column_nodes: projected_column_nodes,
             skip_pruning,
             top_k,
-            parquet_read_whole_file_threshold,
+            parquet_fast_read_bytes,
         })
     }
 

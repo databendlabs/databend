@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,17 +23,15 @@ use common_expression::types::DataType;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_hashtable::HashtableEntryRefLike;
-use common_hashtable::HashtableLike;
+use common_hashtable::HashJoinHashtableLike;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
-use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
 impl JoinHashTable {
-    pub(crate) fn probe_inner_join<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
+    pub(crate) fn probe_inner_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
         probe_state: &mut ProbeState,
@@ -46,81 +44,77 @@ impl JoinHashTable {
     {
         let valids = &probe_state.valids;
         // The inner join will return multiple data blocks of similar size.
-        let mut probed_num = 0;
+        let mut occupied = 0;
         let mut probed_blocks = vec![];
         let mut probe_indexes_len = 0;
         let probe_indexes = &mut probe_state.probe_indexes;
-        let mut build_indexes = Vec::with_capacity(JOIN_MAX_BLOCK_SIZE);
+        let build_indexes = &mut probe_state.build_indexes;
+        let build_indexes_ptr = build_indexes.as_mut_ptr();
 
-        let data_blocks = self.row_space.datablocks();
+        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
         for (i, key) in keys_iter.enumerate() {
             // If the join is derived from correlated subquery, then null equality is safe.
-            let probe_result_ptr = if self.hash_join_desc.from_correlated_subquery {
-                hash_table.entry(key)
+            let (mut match_count, mut incomplete_ptr) = if self
+                .hash_join_desc
+                .from_correlated_subquery
+            {
+                hash_table.probe_hash_table(key, build_indexes_ptr, occupied, JOIN_MAX_BLOCK_SIZE)
             } else {
-                self.probe_key(hash_table, key, valids, i)
+                self.probe_key(hash_table, key, valids, i, build_indexes_ptr, occupied)
             };
+            if match_count == 0 {
+                continue;
+            }
 
-            if let Some(v) = probe_result_ptr {
-                let probed_rows = v.get();
+            occupied += match_count;
+            probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
+            probe_indexes_len += 1;
+            if occupied >= JOIN_MAX_BLOCK_SIZE {
+                loop {
+                    probed_blocks.push(
+                        self.merge_eq_block(
+                            &self
+                                .row_space
+                                .gather(build_indexes, &data_blocks, &num_rows)?,
+                            &DataBlock::take_compacted_indices(
+                                input,
+                                &probe_indexes[0..probe_indexes_len],
+                                occupied,
+                            )?,
+                        )?,
+                    );
 
-                if probed_num + probed_rows.len() < JOIN_MAX_BLOCK_SIZE {
-                    build_indexes.extend_from_slice(probed_rows);
-                    probe_indexes[probe_indexes_len] = (i as u32, probed_rows.len() as u32);
+                    probe_indexes_len = 0;
+                    occupied = 0;
+
+                    if incomplete_ptr == 0 {
+                        break;
+                    }
+                    (match_count, incomplete_ptr) = hash_table.next_incomplete_ptr(
+                        key,
+                        incomplete_ptr,
+                        build_indexes_ptr,
+                        occupied,
+                        JOIN_MAX_BLOCK_SIZE,
+                    );
+                    if match_count == 0 {
+                        break;
+                    }
+
+                    occupied += match_count;
+                    probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
-                    probed_num += probed_rows.len();
-                } else {
-                    let mut index = 0_usize;
-                    let mut remain = probed_rows.len();
 
-                    while index < probed_rows.len() {
-                        if probed_num + remain < JOIN_MAX_BLOCK_SIZE {
-                            build_indexes.extend_from_slice(&probed_rows[index..]);
-                            probe_indexes[probe_indexes_len] = (i as u32, remain as u32);
-                            probe_indexes_len += 1;
-                            probed_num += remain;
-                            index += remain;
-                        } else {
-                            if self.interrupt.load(Ordering::Relaxed) {
-                                return Err(ErrorCode::AbortedQuery(
-                                    "Aborted query, because the server is shutting down or the query was killed.",
-                                ));
-                            }
-
-                            let addition = JOIN_MAX_BLOCK_SIZE - probed_num;
-                            let new_index = index + addition;
-
-                            build_indexes.extend_from_slice(&probed_rows[index..new_index]);
-                            probe_indexes[probe_indexes_len] = (i as u32, addition as u32);
-                            probe_indexes_len += 1;
-                            probed_num += addition;
-
-                            probed_blocks.push(
-                                self.merge_eq_block(
-                                    &self.row_space.gather(
-                                        &build_indexes,
-                                        &data_blocks,
-                                        &num_rows,
-                                    )?,
-                                    &DataBlock::take_compacted_indices(
-                                        input,
-                                        &probe_indexes[0..probe_indexes_len],
-                                        probed_num,
-                                    )?,
-                                )?,
-                            );
-
-                            index = new_index;
-                            remain -= addition;
-
-                            build_indexes.clear();
-                            probe_indexes_len = 0;
-                            probed_num = 0;
-                        }
+                    if occupied < JOIN_MAX_BLOCK_SIZE {
+                        break;
                     }
                 }
             }
@@ -130,11 +124,11 @@ impl JoinHashTable {
             self.merge_eq_block(
                 &self
                     .row_space
-                    .gather(&build_indexes, &data_blocks, &num_rows)?,
+                    .gather(&build_indexes[0..occupied], &data_blocks, &num_rows)?,
                 &DataBlock::take_compacted_indices(
                     input,
                     &probe_indexes[0..probe_indexes_len],
-                    probed_num,
+                    occupied,
                 )?,
             )?,
         );

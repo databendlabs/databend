@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,6 +77,7 @@ pub enum Statement {
     Replace(ReplaceStmt),
 
     Delete {
+        hints: Option<Hint>,
         table_reference: TableReference,
         selection: Option<Expr>,
     },
@@ -272,9 +273,12 @@ impl Display for Statement {
             Statement::Delete {
                 table_reference,
                 selection,
-                ..
+                hints,
             } => {
                 write!(f, "DELETE FROM {table_reference}")?;
+                if let Some(hints) = hints {
+                    write!(f, "{} ", hints)?;
+                }
                 if let Some(conditions) = selection {
                     write!(f, "WHERE {conditions} ")?;
                 }

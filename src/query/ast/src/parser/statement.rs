@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,13 +96,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let insert = map(
         rule! {
-            INSERT ~ ( INTO | OVERWRITE ) ~ TABLE?
+            INSERT ~ #hint? ~ ( INTO | OVERWRITE ) ~ TABLE?
             ~ #period_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ #insert_source
         },
-        |(_, overwrite, _, (catalog, database, table), opt_columns, source)| {
+        |(_, opt_hints, overwrite, _, (catalog, database, table), opt_columns, source)| {
             Statement::Insert(InsertStmt {
+                hints: opt_hints,
                 catalog,
                 database,
                 table,
@@ -117,7 +118,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let replace = map(
         rule! {
-            REPLACE ~ INTO?
+            REPLACE ~ #hint? ~ INTO?
             ~ #period_separated_idents_1_to_3
             ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
             ~ (ON ~ CONFLICT? ~ "(" ~ #comma_separated_list1(ident) ~ ")")
@@ -125,6 +126,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
         |(
             _,
+            opt_hints,
             _,
             (catalog, database, table),
             opt_columns,
@@ -132,6 +134,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             source,
         )| {
             Statement::Replace(ReplaceStmt {
+                hints: opt_hints,
                 catalog,
                 database,
                 table,
@@ -146,10 +149,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let delete = map(
         rule! {
-            DELETE ~ FROM ~ #table_reference_only
+            DELETE ~ #hint? ~ FROM ~ #table_reference_only
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, _, table_reference, opt_selection)| Statement::Delete {
+        |(_, opt_hints, _, table_reference, opt_selection)| Statement::Delete {
+            hints: opt_hints,
             table_reference,
             selection: opt_selection.map(|(_, selection)| selection),
         },
@@ -157,12 +161,13 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let update = map(
         rule! {
-            UPDATE ~ #table_reference_only
+            UPDATE ~ #hint? ~ #table_reference_only
             ~ SET ~ ^#comma_separated_list1(update_expr)
             ~ ( WHERE ~ ^#expr )?
         },
-        |(_, table, _, update_list, opt_selection)| {
+        |(_, opt_hints, table, _, update_list, opt_selection)| {
             Statement::Update(UpdateStmt {
+                hints: opt_hints,
                 table,
                 update_list,
                 selection: opt_selection.map(|(_, selection)| selection),
@@ -1320,6 +1325,31 @@ pub fn unset_source(i: Input) -> IResult<UnSetSource> {
         #var
         | #vars
     )(i)
+}
+
+pub fn set_var_hints(i: Input) -> IResult<HintItem> {
+    map(
+        rule! {
+            SET_VAR ~ ^"(" ~ ^#ident ~ ^"=" ~ #subexpr(0) ~ ^")"
+        },
+        |(_, _, name, _, expr, _)| HintItem { name, expr },
+    )(i)
+}
+
+pub fn hint(i: Input) -> IResult<Hint> {
+    let hint = map(
+        rule! {
+            "/*+" ~ #set_var_hints+ ~ "*/"
+        },
+        |(_, hints_list, _)| Hint { hints_list },
+    );
+    let invalid_hint = map(
+        rule! {
+            "/*+" ~ (!"*/" ~ #any_token)* ~ "*/"
+        },
+        |_| Hint { hints_list: vec![] },
+    );
+    rule!(#hint|#invalid_hint)(i)
 }
 
 pub fn rest_str(i: Input) -> IResult<(String, usize)> {

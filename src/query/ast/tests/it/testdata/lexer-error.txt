@@ -8,3 +8,13 @@ error:
   |        ^^^^^^^^^^^ unable to recognize the rest tokens
 
 
+---------- Input ----------
+select /* x  1
+---------- Output ---------
+error: 
+  --> SQL:1:8
+  |
+1 | select /* x  1
+  |        ^^^^^^^ unable to recognize the rest tokens
+
+

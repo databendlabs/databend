@@ -1,16 +1,16 @@
-//  Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::any::Any;
 use std::collections::VecDeque;
@@ -153,9 +153,12 @@ impl ParquetDeserializeTransform {
         use opendal::services::Memory;
         use opendal::Operator;
         let builder = Memory::default();
-        let op: Operator = Operator::new(builder)?.finish();
-        op.blocking().write(path, data)?;
-        let mut reader = op.blocking().reader(path)?;
+        let op = Operator::new(builder)?.finish();
+        let blocking_op = op.blocking();
+
+        blocking_op.write(path, data)?;
+
+        let mut reader = blocking_op.reader(path)?;
         let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
             ErrorCode::Internal(format!("Read parquet file '{}''s meta error: {}", path, e))
         })?;
@@ -165,7 +168,7 @@ impl ParquetDeserializeTransform {
         for part in parts {
             let mut readers = self
                 .source_reader
-                .row_group_readers_from_blocking_io(&part)?;
+                .row_group_readers_from_blocking_io(&part, &blocking_op)?;
             self.process_row_group(&part, &mut readers)?;
         }
         Ok(())

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -248,6 +248,7 @@ impl AggregatePartial {
                             .clone())
                     })
                     .collect::<Result<Vec<_>>>()?,
+                false,
             )?;
             fields.push(DataField::new("_group_by_key", method.data_type()));
         }
