@@ -25,7 +25,7 @@ RUN chmod +x /build/scripts/setup/dev_setup.sh && \
 
 RUN ln -s $(readlink -f `which javac` | sed "s:/bin/javac::") /opt/java
 
-RUN curl -qL https://github.com/rui314/mold/releases/download/v1.2.1/mold-1.2.1-$(uname -m)-linux.tar.gz -o /tmp/mold.tar.gz && \
+RUN curl -sSfLo /tmp/mold.tar.gz https://github.com/rui314/mold/releases/download/v1.11.0/mold-1.11.0-$(uname -m)-linux.tar.gz && \
     tar --strip-components=1 -xzf /tmp/mold.tar.gz -C /usr/local && \
     rm -rf /tmp/mold.tar.gz && \
     ln -sf /usr/local/bin/mold /usr/bin/$(uname -m)-linux-gnu-ld
