@@ -71,6 +71,7 @@ runs:
         ln -s build-tool $BIN_LOCAL/cargo
         ln -s build-tool $BIN_LOCAL/rustup
         ln -s build-tool $BIN_LOCAL/make
+        ln -s build-tool $BIN_LOCAL/readelf
         ln -s build-tool $BIN_LOCAL/taplo
         ln -s build-tool $BIN_LOCAL/typos
 
