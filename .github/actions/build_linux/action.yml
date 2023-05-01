@@ -29,7 +29,7 @@ runs:
     - name: Build Debug
       if: env.BUILD_PROFILE == 'debug' && inputs.features == 'default'
       shell: bash
-      run: cargo build --target ${{ inputs.target }} --timings
+      run: cargo build --target ${{ inputs.target }}
 
     - name: Build Debug for other features
       if: env.BUILD_PROFILE == 'debug' && inputs.features != 'default'
