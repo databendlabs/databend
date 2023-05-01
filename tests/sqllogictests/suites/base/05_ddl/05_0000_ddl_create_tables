@@ -253,3 +253,6 @@ drop table if exists tt_v2
 
 statement error 3001
 create table tt_v2 (id int) engine=fuse SNAPSHOT_LOCATION='xx'
+
+statement error 1005
+create table t_check_create_table(a int) x=x
