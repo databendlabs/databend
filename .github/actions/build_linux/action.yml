@@ -31,13 +31,15 @@ runs:
       shell: bash
       run: cargo build --target ${{ inputs.target }} --features ${{ inputs.features }}
 
-    - name: Build Debug for other features
+    - name: Build Debug for specific artifacts
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts != 'all'
       shell: bash
       run: |
         artifacts="${{ inputs.artifacts }}"
+        echo "==> building libs ..."
         cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --lib
         for artifact in ${artifacts//,/ }; do
+          echo "==> building databend-$artifact ..."
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
         done
 
@@ -71,8 +73,10 @@ runs:
       shell: bash
       run: |
         artifacts="${{ inputs.artifacts }}"
+        echo "==> building libs ..."
         cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --lib
         for artifact in ${artifacts//,/ }; do
+          echo "==> building databend-$artifact ..."
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
         done
 
@@ -85,6 +89,7 @@ runs:
       run: |
         artifacts="${{ inputs.artifacts }}"
         for artifact in ${artifacts//,/ }; do
+          echo "==> compressing zlib debug for databend-$artifact ..."
           build-tool /usr/bin/${{ env.BUILD_ARCH }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ inputs.target }}/release/databend-$artifact
         done
 

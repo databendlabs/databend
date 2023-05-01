@@ -17,7 +17,6 @@ concurrency:
 
 env:
   BUILD_PROFILE: release
-  CARGO_INCREMENTAL: 0
 
 jobs:
   check:
@@ -74,7 +73,6 @@ jobs:
           features: hive
 
   test_unit:
-    timeout-minutes: 30
     runs-on: [self-hosted, X64, Linux, 8c16g]
     env:
       RUNNER_PROVIDER: aws
@@ -84,6 +82,7 @@ jobs:
           # fetch all tags,  metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/test_unit
+        timeout-minutes: 30
 
   test_stateless_standalone_linux:
     runs-on: ubuntu-latest
@@ -91,6 +90,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_linux
+        timeout-minutes: 30
 
   # test_stateless_standalone_macos:
   #   runs-on: macos-11
@@ -105,6 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
+        timeout-minutes: 30
 
   test_stateless_cluster_macos:
     runs-on: macos-11
@@ -112,6 +113,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_macos
+        timeout-minutes: 30
 
   test_stateful_standalone_linux:
     runs-on: ubuntu-latest
@@ -150,6 +152,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_macos
+        timeout-minutes: 20
         with:
           dirs: ${{ matrix.dirs }}
 
@@ -173,6 +176,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
+        timeout-minutes: 20
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
