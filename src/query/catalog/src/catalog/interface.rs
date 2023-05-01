@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::AddTableMutationLockReply;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -45,6 +44,7 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableMutationLockReply;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
@@ -171,11 +171,12 @@ pub trait Catalog: DynClone + Send + Sync {
         table_info: &TableInfo,
     ) -> Result<GetTableMutationLockReply>;
 
-    async fn add_table_mutation_lock(
+    async fn upsert_table_mutation_lock(
         &self,
         expire_sec: u64,
         table_info: &TableInfo,
-    ) -> Result<AddTableMutationLockReply>;
+        fail_if_exists: bool,
+    ) -> Result<UpsertTableMutationLockReply>;
 
     async fn drop_table_mutation_lock(
         &self,

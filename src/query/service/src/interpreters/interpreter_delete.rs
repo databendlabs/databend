@@ -85,7 +85,9 @@ impl Interpreter for DeleteInterpreter {
         // Add table mutation lock.
         let table_info = tbl.get_table_info().clone();
         let catalog = self.ctx.get_catalog(catalog_name)?;
-        let _res = catalog.add_table_mutation_lock(60, &table_info).await?;
+        let _res = catalog
+            .upsert_table_mutation_lock(60, &table_info, true)
+            .await?;
 
         let mut build_res = PipelineBuildResult::create();
         tbl.delete(

@@ -220,6 +220,22 @@ impl DuplicatedUpsertFiles {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("TableMutationAlreadyLocked: {table_id} , in operation `{context}`")]
+pub struct TableMutationAlreadyLocked {
+    table_id: u64,
+    context: String,
+}
+
+impl TableMutationAlreadyLocked {
+    pub fn new(table_id: u64, context: impl Into<String>) -> Self {
+        TableMutationAlreadyLocked {
+            table_id,
+            context: context.into(),
+        }
+    }
+}
+
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatabase: `{db_name}` while `{context}`")]
 pub struct UnknownDatabase {
@@ -548,6 +564,9 @@ pub enum AppError {
     DuplicatedUpsertFiles(#[from] DuplicatedUpsertFiles),
 
     #[error(transparent)]
+    TableMutationAlreadyLocked(#[from] TableMutationAlreadyLocked),
+
+    #[error(transparent)]
     TableAlreadyExists(#[from] TableAlreadyExists),
 
     #[error(transparent)]
@@ -675,6 +694,7 @@ impl AppErrorMessage for UnknownDatabaseId {}
 
 impl AppErrorMessage for TableVersionMismatched {}
 impl AppErrorMessage for DuplicatedUpsertFiles {}
+impl AppErrorMessage for TableMutationAlreadyLocked {}
 
 impl AppErrorMessage for TableAlreadyExists {
     fn message(&self) -> String {
@@ -899,6 +919,9 @@ impl From<AppError> for ErrorCode {
             }
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
             AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),
+            AppError::TableMutationAlreadyLocked(err) => {
+                ErrorCode::TableMutationAlreadyLocked(err.message())
+            }
         }
     }
 }

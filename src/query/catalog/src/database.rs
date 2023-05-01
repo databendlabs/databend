@@ -17,8 +17,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::AddTableMutationLockReply;
-use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropTableByIdReq;
@@ -40,6 +38,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_meta_app::schema::UpsertTableMutationLockReply;
+use common_meta_app::schema::UpsertTableMutationLockReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use dyn_clone::DynClone;
@@ -205,12 +205,12 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn add_table_mutation_lock(
+    async fn upsert_table_mutation_lock(
         &self,
-        _req: AddTableMutationLockReq,
-    ) -> Result<AddTableMutationLockReply> {
+        _req: UpsertTableMutationLockReq,
+    ) -> Result<UpsertTableMutationLockReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement add_table_mutation_lock in {} Database",
+            "UnImplement upsert_table_mutation_lock in {} Database",
             self.name()
         )))
     }

@@ -210,7 +210,7 @@ impl Processor for MutationSink {
             State::TryCommit(new_snapshot) => {
                 let table_info = self.table.get_table_info();
                 if self.check_lock {
-                    let catalog = self.ctx.get_catalog(&table_info.meta.catalog)?;
+                    let catalog = self.ctx.get_catalog(table_info.catalog())?;
                     let res = catalog.get_table_mutation_lock(table_info).await?;
                     if res.locked {
                         tracing::error!(

@@ -29,6 +29,7 @@ use common_sql::ColumnBinding;
 use common_sql::ScalarExpr;
 use common_sql::Visibility;
 
+use crate::interpreters::common::MutationLockHeartbeat;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -141,7 +142,9 @@ impl Interpreter for UpdateInterpreter {
         let table_info = tbl.get_table_info().clone();
         let catalog = self.ctx.get_catalog(catalog_name)?;
         // Todo: add mutation_lock_expire_sec in ctx.setting.
-        let _res = catalog.add_table_mutation_lock(60, &table_info).await?;
+        let _res = catalog
+            .upsert_table_mutation_lock(10, &table_info, true)
+            .await?;
 
         let mut build_res = PipelineBuildResult::create();
         tbl.update(
@@ -156,10 +159,11 @@ impl Interpreter for UpdateInterpreter {
         if build_res.main_pipeline.is_empty() {
             let _res = catalog.drop_table_mutation_lock(&table_info).await?;
         } else {
+            let mut heartbeat = MutationLockHeartbeat::create(self.ctx.clone(), table_info.clone());
             build_res.main_pipeline.set_on_finished(move |may_error| {
                 // Drop table mutation lock.
                 GlobalIORuntime::instance().block_on(async move {
-                    let _res = catalog.drop_table_mutation_lock(&table_info).await?;
+                    heartbeat.shutdown().await?;
                     Ok(())
                 })?;
                 match may_error {

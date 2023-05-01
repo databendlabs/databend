@@ -19,8 +19,6 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
-use common_meta_app::schema::AddTableMutationLockReply;
-use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropTableByIdReq;
@@ -42,6 +40,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_meta_app::schema::UpsertTableMutationLockReply;
+use common_meta_app::schema::UpsertTableMutationLockReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_sharing::ShareEndpointManager;
@@ -216,10 +216,10 @@ impl Database for ShareDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn add_table_mutation_lock(
+    async fn upsert_table_mutation_lock(
         &self,
-        _req: AddTableMutationLockReq,
-    ) -> Result<AddTableMutationLockReply> {
+        _req: UpsertTableMutationLockReq,
+    ) -> Result<UpsertTableMutationLockReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot add table mutation lock from a shared database".to_string(),
         ))

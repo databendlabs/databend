@@ -14,8 +14,6 @@
 
 use std::sync::Arc;
 
-use common_meta_app::schema::AddTableMutationLockReply;
-use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -55,6 +53,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_meta_app::schema::UpsertTableMutationLockReply;
+use common_meta_app::schema::UpsertTableMutationLockReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::GCDroppedDataReply;
@@ -163,10 +163,10 @@ pub trait SchemaApi: Send + Sync {
         req: GetTableMutationLockReq,
     ) -> Result<GetTableMutationLockReply, KVAppError>;
 
-    async fn add_table_mutation_lock(
+    async fn upsert_table_mutation_lock(
         &self,
-        req: AddTableMutationLockReq,
-    ) -> Result<AddTableMutationLockReply, KVAppError>;
+        req: UpsertTableMutationLockReq,
+    ) -> Result<UpsertTableMutationLockReply, KVAppError>;
 
     async fn drop_table_mutation_lock(
         &self,

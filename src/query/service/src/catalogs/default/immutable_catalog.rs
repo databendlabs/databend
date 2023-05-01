@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::schema::AddTableMutationLockReply;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -47,6 +46,7 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableMutationLockReply;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
@@ -277,13 +277,14 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn add_table_mutation_lock(
+    async fn upsert_table_mutation_lock(
         &self,
         _expire_sec: u64,
         _table_info: &TableInfo,
-    ) -> Result<AddTableMutationLockReply> {
+        _fail_if_exists: bool,
+    ) -> Result<UpsertTableMutationLockReply> {
         Err(ErrorCode::Unimplemented(
-            "add_table_mutation_lock not allowed for system database",
+            "upsert_table_mutation_lock not allowed for system database",
         ))
     }
 

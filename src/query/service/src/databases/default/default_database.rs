@@ -17,8 +17,6 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
-use common_meta_app::schema::AddTableMutationLockReply;
-use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropTableByIdReq;
@@ -42,6 +40,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_meta_app::schema::UpsertTableMutationLockReply;
+use common_meta_app::schema::UpsertTableMutationLockReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 
@@ -210,11 +210,11 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn add_table_mutation_lock(
+    async fn upsert_table_mutation_lock(
         &self,
-        req: AddTableMutationLockReq,
-    ) -> Result<AddTableMutationLockReply> {
-        let res = self.ctx.meta.add_table_mutation_lock(req).await?;
+        req: UpsertTableMutationLockReq,
+    ) -> Result<UpsertTableMutationLockReply> {
+        let res = self.ctx.meta.upsert_table_mutation_lock(req).await?;
         Ok(res)
     }
 

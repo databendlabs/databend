@@ -27,6 +27,7 @@ use common_meta_app::app_error::DropTableWithDropTime;
 use common_meta_app::app_error::DuplicatedUpsertFiles;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use common_meta_app::app_error::TableAlreadyExists;
+use common_meta_app::app_error::TableMutationAlreadyLocked;
 use common_meta_app::app_error::TableVersionMismatched;
 use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::app_error::UndropDbHasNoHistory;
@@ -39,8 +40,6 @@ use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
-use common_meta_app::schema::AddTableMutationLockReply;
-use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
@@ -98,6 +97,8 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_meta_app::schema::UpsertTableMutationLockReply;
+use common_meta_app::schema::UpsertTableMutationLockReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::share::ShareGrantObject;
@@ -2355,10 +2356,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         })
     }
 
-    async fn add_table_mutation_lock(
+    async fn upsert_table_mutation_lock(
         &self,
-        req: AddTableMutationLockReq,
-    ) -> Result<AddTableMutationLockReply, KVAppError> {
+        req: UpsertTableMutationLockReq,
+    ) -> Result<UpsertTableMutationLockReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let mut retry = 0;
@@ -2370,37 +2371,37 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
             if tb_meta_seq == 0 {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, "add_table_mutation_lock"),
+                    UnknownTableId::new(table_id, "upsert_table_mutation_lock"),
                 )));
             }
 
             debug!(
                 ident = display(&tbid),
                 table_meta = debug(&tb_meta),
-                "add_table_mutation_lock"
+                "upsert_table_mutation_lock"
             );
 
             let lock_key = TableMutationLockKey { table_id };
+            let (lock_key_seq, _): (_, Option<TableMutationLock>) =
+                get_pb_value(self, &lock_key).await?;
+
+            if req.fail_if_exists && lock_key_seq != 0 {
+                return Err(KVAppError::AppError(AppError::TableMutationAlreadyLocked(
+                    TableMutationAlreadyLocked::new(table_id, "upsert_table_mutation_lock"),
+                )));
+            }
 
             let lock = TableMutationLock {};
 
             let condition = vec![
                 txn_cond_seq(&tbid, Eq, tb_meta_seq),
-                // assumes lock are absent.
-                txn_cond_seq(&lock_key, Eq, 0),
+                txn_cond_seq(&lock_key, Eq, lock_key_seq),
             ];
-            let if_then = match &req.expire_at {
-                Some(expire_at) => {
-                    vec![txn_op_put_with_expire(
-                        &lock_key,
-                        serialize_struct(&lock)?,
-                        *expire_at,
-                    )]
-                }
-                None => {
-                    vec![txn_op_put(&lock_key, serialize_struct(&lock)?)]
-                }
-            };
+            let if_then = vec![txn_op_put_with_expire(
+                &lock_key,
+                serialize_struct(&lock)?,
+                req.expire_at,
+            )];
 
             let txn_req = TxnRequest {
                 condition,
@@ -2413,16 +2414,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             debug!(
                 ident = display(&tbid),
                 succ = display(succ),
-                "add_table_mutation_lock"
+                "upsert_table_mutation_lock"
             );
 
             if succ {
-                return Ok(AddTableMutationLockReply {});
+                return Ok(UpsertTableMutationLockReply {});
             }
         }
 
         Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("add_table_mutation_lock", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("upsert_table_mutation_lock", TXN_MAX_RETRY_TIMES),
         )))
     }
 

@@ -13,7 +13,9 @@
 // limitations under the License.
 
 mod grant;
+mod mutation_lock;
 mod table;
 
 pub use grant::validate_grant_object_exists;
+pub use mutation_lock::MutationLockHeartbeat;
 pub use table::append2table;

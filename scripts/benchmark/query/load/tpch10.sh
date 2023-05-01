@@ -7,7 +7,7 @@ select version();
 SQL
 
 for t in customer lineitem nation orders partsupp part region supplier; do
-  echo "DROP TABLE IF EXISTS $t;" | bendsql
+	echo "DROP TABLE IF EXISTS $t;" | bendsql
 done
 
 cat <<SQL | bendsql
@@ -113,8 +113,8 @@ cat <<SQL | bendsql
 SQL
 
 for t in customer lineitem nation orders partsupp part region supplier; do
-  echo "loading into $t ..."
-  cat <<SQL | bendsql
+	echo "loading into $t ..."
+	cat <<SQL | bendsql
 COPY INTO $t FROM 's3://repo.databend.rs/datasets/tpch10/${t}/'
 credentials=(aws_key_id='$REPO_ACCESS_KEY_ID' aws_secret_key='$REPO_SECRET_ACCESS_KEY') pattern ='${t}.*'
 file_format=(type='CSV' field_delimiter='|' record_delimiter='\\n' skip_header=0);

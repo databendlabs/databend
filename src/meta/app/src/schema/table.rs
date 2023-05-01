@@ -756,13 +756,14 @@ pub struct GetTableMutationLockReply {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AddTableMutationLockReq {
+pub struct UpsertTableMutationLockReq {
     pub table_id: u64,
-    pub expire_at: Option<u64>,
+    pub expire_at: u64,
+    pub fail_if_exists: bool,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct AddTableMutationLockReply {}
+pub struct UpsertTableMutationLockReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct DropTableMutationLockReq {

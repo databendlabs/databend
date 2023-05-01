@@ -43,8 +43,6 @@ pub use database::RenameDatabaseReply;
 pub use database::RenameDatabaseReq;
 pub use database::UndropDatabaseReply;
 pub use database::UndropDatabaseReq;
-pub use table::AddTableMutationLockReply;
-pub use table::AddTableMutationLockReq;
 pub use table::CountTablesKey;
 pub use table::CountTablesReply;
 pub use table::CountTablesReq;
@@ -87,6 +85,8 @@ pub use table::UpdateTableMetaReply;
 pub use table::UpdateTableMetaReq;
 pub use table::UpsertTableCopiedFileReply;
 pub use table::UpsertTableCopiedFileReq;
+pub use table::UpsertTableMutationLockReply;
+pub use table::UpsertTableMutationLockReq;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
 

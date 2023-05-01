@@ -19,8 +19,6 @@ use chrono::Utc;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
-use common_meta_app::schema::AddTableMutationLockReply;
-use common_meta_app::schema::AddTableMutationLockReq;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
@@ -58,6 +56,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpsertTableMutationLockReply;
+use common_meta_app::schema::UpsertTableMutationLockReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_store::MetaStoreProvider;
@@ -381,22 +381,24 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn add_table_mutation_lock(
+    async fn upsert_table_mutation_lock(
         &self,
         expire_sec: u64,
         table_info: &TableInfo,
-    ) -> Result<AddTableMutationLockReply> {
-        let req = AddTableMutationLockReq {
+        fail_if_exists: bool,
+    ) -> Result<UpsertTableMutationLockReply> {
+        let req = UpsertTableMutationLockReq {
             table_id: table_info.ident.table_id,
-            expire_at: Some(Utc::now().timestamp() as u64 + expire_sec),
+            expire_at: Utc::now().timestamp() as u64 + expire_sec,
+            fail_if_exists,
         };
         match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.add_table_mutation_lock(req).await?),
+            DatabaseType::NormalDB => Ok(self.ctx.meta.upsert_table_mutation_lock(req).await?),
             DatabaseType::ShareDB(share_ident) => {
                 let db = self
                     .get_database(&share_ident.tenant, &share_ident.share_name)
                     .await?;
-                db.add_table_mutation_lock(req).await
+                db.upsert_table_mutation_lock(req).await
             }
         }
     }
