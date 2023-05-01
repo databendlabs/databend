@@ -58,7 +58,7 @@ if [[ $ENABLE_SCCACHE == "true" ]]; then
 	COMMAND="${COMMAND} && sccache --show-stats"
 fi
 
-exec docker run --rm --tty --net=host ${EXTRA_ARGS} \
+exec docker run --rm --tty ${EXTRA_ARGS} \
 	--user "${_UID}:${_GID}" \
 	--volume "${CARGO_HOME}/registry:/opt/rust/cargo/registry" \
 	--volume "${CARGO_HOME}/git:/opt/rust/cargo/git" \
