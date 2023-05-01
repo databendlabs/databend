@@ -21,6 +21,9 @@ permissions:
   statuses: write
   contents: write
 
+env:
+  BUILD_PROFILE: release
+
 jobs:
   create_release:
     name: create release
@@ -115,7 +118,6 @@ jobs:
         shell: bash
         env:
           TEST_HANDLERS: http
-          BUILD_PROFILE: release
         run: |
           mkdir -p target/release
           cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
@@ -180,7 +182,6 @@ jobs:
       - name: Build Release
         uses: ./.github/actions/build_linux
         with:
-          profile: release
           target: ${{ steps.target.outputs.target }}
           upload: false
       - name: Basic Sqllogic Test
@@ -188,7 +189,6 @@ jobs:
         shell: bash
         env:
           TEST_HANDLERS: http
-          BUILD_PROFILE: release
         run: |
           mkdir -p target/release
           cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
