@@ -310,9 +310,6 @@ macro_rules! register_decimal_binary_op {
 
             let common_arg_type =
                 common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
-            dbg!(&args_type[0]);
-            dbg!(&args_type[1]);
-            dbg!(&common_arg_type);
 
             let is_multiply = $name == "multiply";
             let is_divide = $name == "divide";

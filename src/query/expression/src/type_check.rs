@@ -504,8 +504,6 @@ pub fn common_super_type(
     auto_cast_rules: AutoCastRules,
 ) -> Option<DataType> {
     match (ty1, ty2) {
-        (ty1, ty2) if can_auto_cast_to(&ty1, &ty2, auto_cast_rules) => Some(ty2),
-        (ty1, ty2) if can_auto_cast_to(&ty2, &ty1, auto_cast_rules) => Some(ty1),
         (DataType::Null, ty @ DataType::Nullable(_))
         | (ty @ DataType::Nullable(_), DataType::Null) => Some(ty),
         (DataType::Null, ty) | (ty, DataType::Null) => Some(DataType::Nullable(Box::new(ty))),
@@ -561,6 +559,8 @@ pub fn common_super_type(
         {
             Some(DataType::Number(num_ty))
         }
+        (ty1, ty2) if can_auto_cast_to(&ty1, &ty2, auto_cast_rules) => Some(ty2),
+        (ty1, ty2) if can_auto_cast_to(&ty2, &ty1, auto_cast_rules) => Some(ty1),
         (ty1, ty2) => {
             let ty1_can_cast_to = auto_cast_rules
                 .iter()
