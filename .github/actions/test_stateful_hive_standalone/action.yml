@@ -25,7 +25,7 @@ runs:
     - name: Hive Cluster Setup
       shell: bash
       run: |
-        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" up -d
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" up --quiet-pull -d
 
     # Wait for h2 to come alive
     #  INSIDE the container of service "hive-server", wait for port 10000 being listened:

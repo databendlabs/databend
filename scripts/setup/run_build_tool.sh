@@ -12,7 +12,9 @@ INTERACTIVE="${INTERACTIVE:-true}"
 CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 BYPASS_ENV_VARS="${BYPASS_ENV_VARS:-RUSTFLAGS,RUST_LOG}"
 ENABLE_SCCACHE="${ENABLE_SCCACHE:-false}"
-COMMAND="$*"
+COMMAND=$1
+COMMAND_ARGS="$*"
+
 TOOLCHAIN_VERSION=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
 
 _UID=$(id -u)
@@ -55,14 +57,16 @@ done
 if [[ $ENABLE_SCCACHE == "true" ]]; then
 	env | grep -E "^SCCACHE_" >"${CARGO_HOME}/sccache.env"
 	EXTRA_ARGS="${EXTRA_ARGS} --env RUSTC_WRAPPER=sccache --env-file ${CARGO_HOME}/sccache.env"
-	COMMAND="${COMMAND} && sccache --show-stats"
+	if [[ $COMMAND == "cargo" ]]; then
+		COMMAND_ARGS="${COMMAND_ARGS} && sccache --show-stats"
+	fi
 fi
 
 # shellcheck disable=SC2086
-exec docker run --rm --tty --net=host ${EXTRA_ARGS} \
+exec docker run --rm --tty ${EXTRA_ARGS} \
 	--user "${_UID}:${_GID}" \
 	--volume "${CARGO_HOME}/registry:/opt/rust/cargo/registry" \
 	--volume "${CARGO_HOME}/git:/opt/rust/cargo/git" \
 	--volume "${PWD}:/workspace" \
 	--workdir "/workspace" \
-	"${IMAGE}" /bin/bash -c "${COMMAND}"
+	"${IMAGE}" /bin/bash -c "${COMMAND_ARGS}"
