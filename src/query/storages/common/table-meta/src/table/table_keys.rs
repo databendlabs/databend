@@ -15,12 +15,19 @@
 use std::collections::HashSet;
 
 use once_cell::sync::Lazy;
-
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
+pub const OPT_KEY_COMMENT: &str = "comment";
+pub const OPT_KEY_EXTERNAL_LOCATION: &str = "external_location";
+pub const OPT_KEY_ENGINE: &str = "engine";
 
+pub const FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD: &str = "block_size_threshold";
+pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
+pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
+pub const FUSE_OPT_KEY_ROW_PER_PAGE: &str = "row_per_page";
+pub const FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD: &str = "row_avg_depth_threshold";
 /// Legacy table snapshot location key
 ///
 /// # Deprecated
@@ -41,6 +48,25 @@ pub static RESERVED_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|
     r
 });
 
+/// Table option keys that can occur in 'create table statement'.
+pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    let mut r = HashSet::new();
+    r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
+    r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
+    r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
+    r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
+    r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
+
+    r.insert(OPT_KEY_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_TABLE_COMPRESSION);
+    r.insert(OPT_KEY_STORAGE_FORMAT);
+
+    r.insert(OPT_KEY_COMMENT);
+    r.insert(OPT_KEY_EXTERNAL_LOCATION);
+    r.insert(OPT_KEY_ENGINE);
+    r
+});
+
 /// Table option keys that Should not be shown in `show create table` statement
 pub static INTERNAL_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     let mut r = HashSet::new();
@@ -55,4 +81,8 @@ pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
 
 pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
+}
+
+pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
+    CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
 }

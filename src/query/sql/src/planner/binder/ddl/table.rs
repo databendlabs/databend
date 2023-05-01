@@ -67,6 +67,7 @@ use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use storages_common_table_meta::table::is_valid_create_opt;
 use tracing::debug;
 
 use crate::binder::location::parse_uri_location;
@@ -985,7 +986,11 @@ impl Binder {
             Err(ErrorCode::TableOptionInvalid(format!(
                 "table option {key} duplicated"
             )))
-        } else {
+        }else if !is_valid_create_opt(&key){
+            Err(ErrorCode::TableOptionInvalid(format!(
+                "table option {key} is invalid for create table statement",
+            )))
+        }else {
             Ok(())
         }
     }
