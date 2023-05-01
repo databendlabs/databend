@@ -25,7 +25,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  BUILD_PROFILE: release
+  BUILD_PROFILE: debug
   RUNNER_PROVIDER: aws
 
 jobs:
@@ -54,13 +54,13 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        timeout-minutes: 60
+        timeout-minutes: 30
         with:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
   build_other:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     strategy:
       matrix:
         include:
@@ -73,27 +73,27 @@ jobs:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        timeout-minutes: 60
+        timeout-minutes: 30
         with:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           artifacts: query
 
   build_hive:
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
         with:
           # fetch all tags, metasrv and metaclient need tag as its version.
           fetch-depth: 0
       - uses: ./.github/actions/build_linux
-        timeout-minutes: 60
+        timeout-minutes: 30
         with:
           target: x86_64-unknown-linux-gnu
           features: hive
           artifacts: meta,query
 
   test_unit:
-    runs-on: [self-hosted, X64, Linux, 16c32g]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -206,7 +206,6 @@ jobs:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
 
   sqllogic_management_mode:
-    timeout-minutes: 30
     name: sqllogic_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
@@ -219,6 +218,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_management_mode_linux
+        timeout-minutes: 10
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
@@ -279,6 +279,19 @@ jobs:
         uses: ./.github/actions/artifact_failure
         with:
           name: test-stateful-standalone-linux
+
+  test_stateful_sharing:
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_stateful_sharing
+        timeout-minutes: 10
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-sharing-linux
 
   test_stateful_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g]
