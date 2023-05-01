@@ -1,9 +1,6 @@
 name: "Upload Artifacts"
 description: "Upload build Result Binaries"
 inputs:
-  profile:
-    description: "debug/release"
-    required: true
   sha:
     description: "git sha"
     required: true
@@ -36,21 +33,21 @@ runs:
       if: steps.info.outputs.src == 'github'
       uses: actions/upload-artifact@v3
       with:
-        name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
-        path: ./target/${{ inputs.target }}/${{ inputs.profile }}/databend-*
+        name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
+        path: ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Upload open-sharing to github
       if: steps.info.outputs.src == 'github'
       uses: actions/upload-artifact@v3
       with:
-        name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
-        path: ./target/${{ inputs.target }}/${{ inputs.profile }}/open-sharing
+        name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
+        path: ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/open-sharing
 
     - name: Upload artifacts to s3
       if: steps.info.outputs.src == 's3'
       shell: bash
       run: |
-        aws s3 sync ./target/${{ inputs.target }}/${{ inputs.profile }}/ \
-          s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
+        aws s3 sync ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/ \
+          s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
           --exclude "*" --include "databend-*" --no-progress
-        aws s3 cp ./target/${{ inputs.target }}/${{ inputs.profile }}/open-sharing s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ --no-progress || true
+        aws s3 cp ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/open-sharing s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ --no-progress || true
