@@ -12,7 +12,7 @@ INTERACTIVE="${INTERACTIVE:-true}"
 CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 BYPASS_ENV_VARS="${BYPASS_ENV_VARS:-RUSTFLAGS,RUST_LOG}"
 ENABLE_SCCACHE="${ENABLE_SCCACHE:-false}"
-COMMAND="$@"
+COMMAND="$*"
 TOOLCHAIN_VERSION=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
 
 _UID=$(id -u)
@@ -24,7 +24,7 @@ else
 	USER=${USER:-$(whoami)}
 	IMAGE="${USER}/build-tool:${TARGET}-${TOOLCHAIN_VERSION}"
 
-	if [[ "$(docker image ls ${IMAGE} --format="true")" ]]; then
+	if [[ $(docker image ls "${IMAGE}" --format="true") ]]; then
 		echo "==> build-tool using image ${IMAGE}"
 	else
 		echo "==> preparing temporary build-tool image ${IMAGE} ..."
@@ -34,8 +34,8 @@ FROM datafuselabs/build-tool:${TARGET}-${TOOLCHAIN_VERSION}
 RUN useradd -u ${_UID} ${USER}
 RUN printf "${USER} ALL=(ALL:ALL) NOPASSWD:ALL\\n" > /etc/sudoers.d/databend
 EOF
-		docker build -t ${IMAGE} ${tmpdir}
-		rm -rf ${tmpdir}
+		docker build -t "${IMAGE}" "${tmpdir}"
+		rm -rf "${tmpdir}"
 	fi
 fi
 
@@ -44,7 +44,7 @@ mkdir -p "${CARGO_HOME}/git"
 mkdir -p "${CARGO_HOME}/registry"
 
 if [[ $INTERACTIVE == "true" ]]; then
-	echo "==> building interactive..." >&2
+	echo "==> build-tool with interactive..." >&2
 	EXTRA_ARGS="--interactive --env TERM=xterm-256color"
 fi
 
@@ -58,6 +58,7 @@ if [[ $ENABLE_SCCACHE == "true" ]]; then
 	COMMAND="${COMMAND} && sccache --show-stats"
 fi
 
+# shellcheck disable=SC2086
 exec docker run --rm --tty --net=host ${EXTRA_ARGS} \
 	--user "${_UID}:${_GID}" \
 	--volume "${CARGO_HOME}/registry:/opt/rust/cargo/registry" \
