@@ -18,6 +18,8 @@ use common_ast::display_parser_error;
 use common_ast::parser::expr::*;
 use common_ast::parser::parse_sql;
 use common_ast::parser::query::*;
+use common_ast::parser::quote::quote_ident;
+use common_ast::parser::quote::unquote_ident;
 use common_ast::parser::token::*;
 use common_ast::parser::tokenize_sql;
 use common_ast::rule;
@@ -67,6 +69,8 @@ fn test_statement() {
         r#"show databases format TabSeparatedWithNamesAndTypes;"#,
         r#"show tables"#,
         r#"show tables format TabSeparatedWithNamesAndTypes;"#,
+        r#"describe "name""with""quote";"#,
+        r#"describe "name""""with""""quote";"#,
         r#"show full tables"#,
         r#"show full tables from db"#,
         r#"show full tables from ctl.db"#,
@@ -149,6 +153,9 @@ fn test_statement() {
         r#"select * from a where a.a > (select b.a from b);"#,
         r#"select 1 from numbers(1) where ((1 = 1) or 1)"#,
         r#"select * from read_parquet('p1', 'p2', 'p3', prune_page => true, refresh_meta_cache => true);"#,
+        r#"select 'stringwith''quote'''"#,
+        r#"select 'stringwith"doublequote'"#,
+        r#"select '🦈'"#,
         r#"insert into t (c1, c2) values (1, 2), (3, 4);"#,
         r#"insert into table t format json;"#,
         r#"insert into table t select * from t2;"#,
@@ -647,5 +654,31 @@ fn test_expr_error() {
 
     for case in cases {
         run_parser!(file, expr, case);
+    }
+}
+
+#[test]
+fn test_quote() {
+    let cases = &[
+        ("a", "a"),
+        ("_", "_"),
+        ("_abc", "_abc"),
+        ("_abc12", "_abc12"),
+        ("_12a", "_12a"),
+        ("12a", "\"12a\""),
+        ("12", "\"12\""),
+        ("🍣", "\"🍣\""),
+        ("価格", "\"価格\""),
+        ("\t", "\"\t\""),
+        ("complex \"string\"", "\"complex \"\"string\"\"\""),
+        ("\"\"\"", "\"\"\"\"\"\"\"\""),
+        ("'''", "\"'''\""),
+        ("name\"with\"quote", "\"name\"\"with\"\"quote\""),
+    ];
+    for (input, want) in cases {
+        let quoted = quote_ident(input, '"', false);
+        assert_eq!(quoted, *want);
+        let unquoted = unquote_ident(&quoted, '"');
+        assert_eq!(unquoted, *input, "unquote({}) got {}", quoted, unquoted);
     }
 }

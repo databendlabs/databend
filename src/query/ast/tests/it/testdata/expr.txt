@@ -22,7 +22,7 @@ ColumnRef {
 ---------- Input ----------
 'I''m who I\'m.'
 ---------- Output ---------
-'I'm who I'm.'
+'I\'m who I\'m.'
 ---------- AST ------------
 Literal {
     span: Some(
@@ -37,8 +37,7 @@ Literal {
 ---------- Input ----------
 '\776 \n \t \u0053 \xaa'
 ---------- Output ---------
-'Ǿ 
- 	 S ª'
+'Ǿ \n \t S ª'
 ---------- AST ------------
 Literal {
     span: Some(
