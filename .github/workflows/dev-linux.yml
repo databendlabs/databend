@@ -57,6 +57,7 @@ jobs:
         timeout-minutes: 30
         with:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          artifacts: all
 
   build_other:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}

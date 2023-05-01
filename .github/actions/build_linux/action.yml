@@ -25,14 +25,14 @@ runs:
         target: ${{ inputs.target }}
         bypass_env_vars: RUSTFLAGS,RUST_LOG
 
-    # build all binaries for debug with default features
+    # build all binaries for debug
     - name: Build Debug
-      if: env.BUILD_PROFILE == 'debug' && inputs.features == 'default'
+      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
-      run: cargo build --target ${{ inputs.target }}
+      run: cargo build --target ${{ inputs.target }} --features ${{ inputs.features }}
 
     - name: Build Debug for other features
-      if: env.BUILD_PROFILE == 'debug' && inputs.features != 'default'
+      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts != 'all'
       shell: bash
       run: |
         artifacts="${{ inputs.artifacts }}"
