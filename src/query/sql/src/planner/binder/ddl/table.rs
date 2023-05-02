@@ -64,7 +64,6 @@ use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 use storages_common_table_meta::table::is_reserved_opt_key;
-use storages_common_table_meta::table::is_valid_create_opt;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
