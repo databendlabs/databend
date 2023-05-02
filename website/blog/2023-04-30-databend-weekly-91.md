@@ -42,7 +42,7 @@ authors:
 
 Stay connected with the latest news about Databend.
 
-### Data Type: BITMAP
+### New datatype: BITMAP
 
 Databend has added support for the bitmap datatype.
 
@@ -63,7 +63,7 @@ Databend has added support for the bitmap datatype.
 └──────────────────────┘
 ```
 
-We used `RoaringTreemap` to implement the `BITMAP` data type, which is a compressed bitmap with `u64` values. By utilizing this data structure, we expect to achieve better performance and reduced memory usage compared to other bitmap implementations.
+Our implementation of the BITMAP data type utilizes `RoaringTreemap`, a compressed bitmap with u64 values. Using this data structure brought us improved performance and decreased memory usage in comparison to alternative bitmap implementations.
 
 If you are interested in learning more, please check out the resources listed below.
 
@@ -71,13 +71,9 @@ If you are interested in learning more, please check out the resources listed be
 - [Website | Roaring Bitmaps](https://roaringbitmap.org/)
 - [Paper | Consistently faster and smaller compressed bitmaps with Roaring](https://arxiv.org/pdf/1603.06549.pdf)
 
-## Improving Hash Join Performance with a New Hash Table Design
+## Improving Hash Join Performance with New Hash Table Design
 
-Our previous hash table implementation was optimized for aggregation functions, but it significantly limited the performance of hash join operations.
-
-To improve the performance of hash join operations, we implemented a dedicated hash table optimized for hash join operations. We also allocated a fixed-size hash table based on the number of rows in the build stage, eliminating the need for growth during insertion. We replaced the value type of the hash table from `Vec` to a pointer that can be used for CAS operations, which ensures memory control and eliminates the need for `Vec`'s growth. 
-
-The new implementation showed significant improvement in performance. If you are interested in learning more, please check out the resources listed below.
+We optimized our previous hash table implementation for aggregation functions, but it significantly limited hash join operation performance. To improve hash join performance, we implemented a dedicated hash table optimized for it. We allocated a fixed-size hash table based on the number of rows in the build stage and replaced the value type with a pointer that supports CAS operations, ensuring memory control without the need for Vec growth. The new implementation significantly improved performance. Check out the resources below for more information:
 
 - [PR #11140 | feat(query): new hash table and parallel finalize for hash join](https://github.com/datafuselabs/databend/pull/11140)
 
@@ -99,17 +95,17 @@ If you are interested in learning more, please check out the resources listed be
 
 Here are some noteworthy items recorded here, perhaps you can find something that interests you.
 
-- Databend has announced its participation in OSPP 2023 projects. For more information about OSPP, visit [OSPP2023 - Databend](https://summer-ospp.ac.cn/org/orgdetail/646b9834-3923-4e74-b98b-90afec341705?lang=en).
-- To develop applications with Databend using Rust, refer to [Docs | Developing with Databend using Rust](https://databend.rs/doc/develop/rust) and utilize `databend-driver`.
+- Databend will participate in OSPP 2023 projects: [OSPP2023 - Databend](https://summer-ospp.ac.cn/org/orgdetail/646b9834-3923-4e74-b98b-90afec341705?lang=en).
+- Check out [Docs | Developing with Databend using Rust](https://databend.rs/doc/develop/rust) for Rust application development with `databend-driver`.
 - Learn to manage and query databases with ease using BendSQL, a powerful command-line tool for Databend. Check out [Docs | BendSQL](https://databend.rs/doc/integrations/access-tool/bendsql) now!
 - Check out [Docs | Loading from a Stage](https://databend.rs/doc/load-data/stage) and [Docs | Loading from a Bucket](https://databend.rs/doc/load-data/s3) to learn more about loading data from stages and object storage buckets.
-- Added `table-meta-inspector`, a command-line tool for decoding new table metadata in Databend.
+- Introduced `table-meta-inspector`, a command-line tool for decoding new table metadata in Databend.
 
 ## What's Up Next
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Call for Contributors to Help with Functions
+### Contributors Wanted for Function Development
 
 We are currently working on improving our functions, and we need your help!
 
