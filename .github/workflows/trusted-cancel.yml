@@ -25,9 +25,14 @@ jobs:
             });
             for (const run of runs.workflow_runs) {
               if (run.status === "completed") {
+                core.debug(`Skipped completed workflow run: ${run.id}`);
                 continue
               }
-              core.info(`Canceling ${run.id}...`);
+              if (run.head_sha !== context.payload.pull_request.head.sha) {
+                core.debug(`Skipped different head sha workflow run: ${run.id}`);
+                continue
+              }
+              core.info(`Canceling workflow run: ${run.id} ...`);
               await github.rest.actions.cancelWorkflowRun({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
