@@ -85,7 +85,7 @@ jobs:
 
   macos:
     runs-on: macos-11
-    needs: [create_release]
+    needs: create_release
     strategy:
       fail-fast: false
       matrix:
@@ -105,11 +105,12 @@ jobs:
           bash ./scripts/setup/dev_setup.sh -yb
       - name: Install coreutils for macOS sha256sum
         run: brew install coreutils
-      - name: Cross setup
-        if: matrix.arch == 'aarch64'
-        run: |
-          rustup target add aarch64-apple-darwin
-          echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+      - name: Build Release
+        uses: ./.github/actions/build_macos
+        with:
+          target: ${{ steps.target.outputs.target }}
+          artifacts: sqllogictests,metactl,meta,query
+          upload: false
       - name: Build Binary
         run: |
           cargo build --release --target=${{ steps.target.outputs.target }}
@@ -183,6 +184,7 @@ jobs:
         uses: ./.github/actions/build_linux
         with:
           target: ${{ steps.target.outputs.target }}
+          artifacts: sqllogictests,metactl,meta,query
           upload: false
       - name: Basic Sqllogic Test
         if: matrix.arch == 'x86_64'
