@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -102,6 +102,10 @@ impl Datum {
                 | (Datum::Float(_), Datum::Int(_))
                 | (Datum::Float(_), Datum::UInt(_))
         )
+    }
+
+    pub fn is_numeric(&self) -> bool {
+        matches!(self, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
     }
 
     pub fn compare(&self, other: &Self) -> Result<std::cmp::Ordering> {

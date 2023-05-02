@@ -12,7 +12,7 @@ See also: [UNSET](02-unset.md)
 SET [GLOBAL] <setting_name> = <new_value>;
 ```
 
-`GLOBAL`: If you include this option preceding a session-level setting, the setting will become a global-level setting. For more information about the setting levels, see [Managing Settings](../../10-deploy/06-manage-settings.md).
+`GLOBAL`: If you include this option preceding a session-level setting, the setting will become a global-level setting. For more information about the setting levels, see [Managing Settings](../../13-sql-reference/42-manage-settings.md).
 
 ## Examples
 

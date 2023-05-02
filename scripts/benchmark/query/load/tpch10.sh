@@ -2,15 +2,15 @@
 
 set -e
 
-cat <<SQL | bendsql query
+cat <<SQL | bendsql
 select version();
 SQL
 
 for t in customer lineitem nation orders partsupp part region supplier; do
-	echo "DROP TABLE IF EXISTS $t;" | bendsql query
+	echo "DROP TABLE IF EXISTS $t;" | bendsql
 done
 
-cat <<SQL | bendsql query
+cat <<SQL | bendsql
   CREATE TABLE IF NOT EXISTS customer (
     c_custkey BIGINT not null,
     c_name STRING not null,
@@ -23,7 +23,7 @@ cat <<SQL | bendsql query
   ) CLUSTER BY (c_custkey);
 SQL
 
-cat <<SQL | bendsql query
+cat <<SQL | bendsql
   CREATE TABLE IF NOT EXISTS lineitem (
     l_orderkey BIGINT not null,
     l_partkey BIGINT not null,
@@ -45,7 +45,7 @@ cat <<SQL | bendsql query
 SQL
 
 # create tpch tables
-cat <<SQL | bendsql query
+cat <<SQL | bendsql
   CREATE TABLE IF NOT EXISTS nation (
     n_nationkey INTEGER not null,
     n_name STRING not null,
@@ -54,7 +54,7 @@ cat <<SQL | bendsql query
   ) CLUSTER BY (n_nationkey);
 SQL
 
-cat <<SQL | bendsql query
+cat <<SQL | bendsql
   CREATE TABLE IF NOT EXISTS orders (
     o_orderkey BIGINT not null,
     o_custkey BIGINT not null,
@@ -68,7 +68,7 @@ cat <<SQL | bendsql query
   ) CLUSTER BY (o_orderkey, o_orderdate);
 SQL
 
-cat <<SQL | bendsql query
+cat <<SQL | bendsql
   CREATE TABLE IF NOT EXISTS partsupp (
     ps_partkey BIGINT not null,
     ps_suppkey BIGINT not null,
@@ -78,7 +78,7 @@ cat <<SQL | bendsql query
   ) CLUSTER BY (ps_partkey);
 SQL
 
-cat <<SQL | bendsql query
+cat <<SQL | bendsql
   CREATE TABLE IF NOT EXISTS part (
     p_partkey BIGINT not null,
     p_name STRING not null,
@@ -92,7 +92,7 @@ cat <<SQL | bendsql query
   ) CLUSTER BY (p_partkey);
 SQL
 
-cat <<SQL | bendsql query
+cat <<SQL | bendsql
   CREATE TABLE IF NOT EXISTS region (
     r_regionkey INTEGER not null,
     r_name STRING not null,
@@ -100,7 +100,7 @@ cat <<SQL | bendsql query
   ) CLUSTER BY (r_regionkey);
 SQL
 
-cat <<SQL | bendsql query
+cat <<SQL | bendsql
   CREATE TABLE IF NOT EXISTS supplier (
     s_suppkey BIGINT not null,
     s_name STRING not null,
@@ -114,7 +114,7 @@ SQL
 
 for t in customer lineitem nation orders partsupp part region supplier; do
 	echo "loading into $t ..."
-	cat <<SQL | bendsql query
+	cat <<SQL | bendsql
 COPY INTO $t FROM 's3://repo.databend.rs/datasets/tpch10/${t}/'
 credentials=(aws_key_id='$REPO_ACCESS_KEY_ID' aws_secret_key='$REPO_SECRET_ACCESS_KEY') pattern ='${t}.*'
 file_format=(type='CSV' field_delimiter='|' record_delimiter='\\n' skip_header=0);

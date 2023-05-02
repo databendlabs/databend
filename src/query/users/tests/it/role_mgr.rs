@@ -59,9 +59,14 @@ async fn test_role_manager() -> Result<()> {
 
     // get all roles
     {
-        let roles = role_mgr.get_roles(tenant).await?;
-        assert_eq!(roles.len(), 1);
-        assert_eq!(roles[0].name, "test-role1");
+        let mut role_names = role_mgr
+            .get_roles(tenant)
+            .await?
+            .into_iter()
+            .map(|r| r.name)
+            .collect::<Vec<_>>();
+        role_names.sort();
+        assert_eq!(role_names, vec!["account_admin", "public", "test-role1"]);
     }
 
     // grant and verify privilege to role

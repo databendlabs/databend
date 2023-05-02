@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ use common_arrow::arrow::compute::merge_sort::MergeSlice;
 use itertools::Itertools;
 
 use crate::types::array::ArrayColumnBuilder;
+use crate::types::bitmap::BitmapType;
 use crate::types::decimal::DecimalColumn;
 use crate::types::map::KvColumnBuilder;
 use crate::types::nullable::NullableColumn;
@@ -46,7 +47,7 @@ pub type BlockRowIndex = (usize, usize, usize);
 
 impl DataBlock {
     pub fn take_blocks(
-        blocks: &[DataBlock],
+        blocks: &[&DataBlock],
         indices: &[BlockRowIndex],
         result_size: usize,
     ) -> Self {
@@ -268,6 +269,10 @@ impl Column {
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::take_block_value_types::<MapType<AnyType, AnyType>>(columns, builder, indices)
+            }
+            Column::Bitmap(_) => {
+                let builder = BitmapType::create_builder(result_size, &[]);
+                Self::take_block_value_types::<BitmapType>(columns, builder, indices)
             }
             Column::Nullable(_) => {
                 let inner_ty = datatype.as_nullable().unwrap();

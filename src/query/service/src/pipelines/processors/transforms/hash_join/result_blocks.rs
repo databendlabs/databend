@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,15 +17,14 @@ use std::iter::TrustedLen;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_hashtable::HashtableLike;
+use common_hashtable::HashJoinHashtableLike;
 
 use super::JoinHashTable;
 use super::ProbeState;
-use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::planner::plans::JoinType;
 
 impl JoinHashTable {
-    pub(crate) fn result_blocks<'a, H: HashtableLike<Value = Vec<RowPtr>>, IT>(
+    pub(crate) fn result_blocks<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
         probe_state: &mut ProbeState,

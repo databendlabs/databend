@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::hash::Hash;
-use std::hash::Hasher;
 use std::sync::Arc;
 use std::sync::RwLock;
 
@@ -23,9 +21,9 @@ use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::KeysState;
+use common_hashtable::RowPtr;
 use common_storages_fuse::TableContext;
 
-use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::sessions::QueryContext;
 
 pub type ColumnVector = Vec<(Column, DataType)>;
@@ -39,23 +37,6 @@ pub struct Chunk {
 impl Chunk {
     pub fn num_rows(&self) -> usize {
         self.data_block.num_rows()
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct RowPtr {
-    pub chunk_index: usize,
-    pub row_index: usize,
-    pub marker: Option<MarkerKind>,
-}
-
-impl RowPtr {
-    pub fn new(chunk_index: usize, row_index: usize) -> Self {
-        RowPtr {
-            chunk_index,
-            row_index,
-            marker: None,
-        }
     }
 }
 
@@ -99,7 +80,7 @@ impl RowSpace {
     pub fn gather(
         &self,
         row_ptrs: &[RowPtr],
-        data_blocks: &Vec<DataBlock>,
+        data_blocks: &Vec<&DataBlock>,
         num_rows: &usize,
     ) -> Result<DataBlock> {
         let mut indices = Vec::with_capacity(row_ptrs.len());
@@ -114,20 +95,5 @@ impl RowSpace {
         } else {
             Ok(DataBlock::empty_with_schema(self.data_schema.clone()))
         }
-    }
-}
-
-impl PartialEq for RowPtr {
-    fn eq(&self, other: &Self) -> bool {
-        self.chunk_index == other.chunk_index && self.row_index == other.row_index
-    }
-}
-
-impl Eq for RowPtr {}
-
-impl Hash for RowPtr {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.chunk_index.hash(state);
-        self.row_index.hash(state);
     }
 }

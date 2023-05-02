@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -93,8 +93,14 @@ pub fn parse_exprs(
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-    let mut type_checker =
-        TypeChecker::new(&mut bind_context, ctx, &name_resolution_ctx, metadata, &[]);
+    let mut type_checker = TypeChecker::new(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        metadata,
+        &[],
+        false,
+    );
 
     let sql_dialect = Dialect::MySQL;
     let tokens = tokenize_sql(sql)?;

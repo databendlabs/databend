@@ -1,26 +1,21 @@
-//  Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
-use std::collections::HashMap;
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_catalog::plan::compute_row_id_prefix;
-use common_catalog::plan::split_row_id;
 use common_catalog::plan::DataSourcePlan;
-use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -29,18 +24,18 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
+use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncTransform;
 use common_pipeline_transforms::processors::transforms::AsyncTransformer;
-use common_storage::ColumnNodes;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::SegmentInfo;
 
-use super::native_rows_fetcher::NativeRowFetcher;
-use super::parquet_rows_fetcher::ParquetRowFetcher;
-use crate::io::BlockReader;
+use super::native_rows_fetcher::NativeRowsFetcher;
+use super::parquet_rows_fetcher::ParquetRowsFetcher;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::FuseStorageFormat;
@@ -82,7 +77,7 @@ pub fn build_row_fetcher_pipeline(
                         fuse_table.clone(),
                         row_id_col_offset,
                         projection.clone(),
-                        NativeRowFetcher::<true>::create(block_reader.clone(), column_leaves),
+                        NativeRowsFetcher::<true>::create(block_reader.clone(), column_leaves),
                     )
                 } else {
                     TransformRowsFetcher::create(
@@ -91,7 +86,7 @@ pub fn build_row_fetcher_pipeline(
                         fuse_table.clone(),
                         row_id_col_offset,
                         projection.clone(),
-                        NativeRowFetcher::<false>::create(block_reader.clone(), column_leaves),
+                        NativeRowsFetcher::<false>::create(block_reader.clone(), column_leaves),
                     )
                 }
             }
@@ -106,7 +101,7 @@ pub fn build_row_fetcher_pipeline(
                         fuse_table.clone(),
                         row_id_col_offset,
                         projection.clone(),
-                        ParquetRowFetcher::<true>::create(
+                        ParquetRowsFetcher::<true>::create(
                             block_reader.clone(),
                             read_settings,
                             buffer_size,
@@ -119,7 +114,7 @@ pub fn build_row_fetcher_pipeline(
                         fuse_table.clone(),
                         row_id_col_offset,
                         projection.clone(),
-                        ParquetRowFetcher::<false>::create(
+                        ParquetRowsFetcher::<false>::create(
                             block_reader.clone(),
                             read_settings,
                             buffer_size,
@@ -132,36 +127,35 @@ pub fn build_row_fetcher_pipeline(
 }
 
 #[async_trait::async_trait]
-pub trait RowFetcher {
-    async fn fetch(
-        &self,
-        part_map: &HashMap<u64, PartInfoPtr>,
-        part_set: HashSet<u64>,
-    ) -> Result<(Vec<DataBlock>, HashMap<u64, usize>)>;
+pub trait RowsFetcher {
+    async fn fetch(&self, row_ids: &[u64]) -> Result<DataBlock>;
 
-    fn reader(&self) -> &BlockReader;
+    /// `segments` contains seg_id and segment info
+    fn set_metas(
+        &mut self,
+        segments: Vec<(u64, Arc<SegmentInfo>)>,
+        table_schema: TableSchemaRef,
+        projection: &Projection,
+    );
 }
 
-pub struct TransformRowsFetcher<F: RowFetcher> {
+pub struct TransformRowsFetcher<F: RowsFetcher> {
     table: Arc<FuseTable>,
     projection: Projection,
 
     row_id_col_offset: usize,
-    part_map: HashMap<u64, PartInfoPtr>,
     fetcher: F,
 }
 
 #[async_trait::async_trait]
 impl<F> AsyncTransform for TransformRowsFetcher<F>
-where F: RowFetcher + Send + Sync + 'static
+where F: RowsFetcher + Send + Sync + 'static
 {
     const NAME: &'static str = "TransformRowsFetcher";
 
-    // #[async_backtrace::framed]
+    #[async_backtrace::framed]
     async fn on_start(&mut self) -> Result<()> {
         let table_schema = self.table.schema();
-        let arrow_schema = table_schema.to_arrow();
-        let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&table_schema));
 
         let snapshot = self
             .table
@@ -170,32 +164,22 @@ where F: RowFetcher + Send + Sync + 'static
             .ok_or_else(|| ErrorCode::Internal("No snapshot found"))?;
         let segment_id_map = snapshot.build_segment_id_map();
         let segment_reader =
-            MetaReaders::segment_info_reader(self.table.operator.clone(), table_schema);
-        let mut map = HashMap::new();
-
-        for (location, seg_id) in segment_id_map.iter() {
+            MetaReaders::segment_info_reader(self.table.operator.clone(), table_schema.clone());
+        let mut segments = Vec::with_capacity(snapshot.segments.len());
+        for ((location, ver), seg_id) in segment_id_map.into_iter() {
             let segment_info = segment_reader
                 .read(&LoadParams {
-                    location: location.clone(),
+                    location,
                     len_hint: None,
-                    ver: snapshot.format_version(),
-                    put_cache: true,
+                    ver,
+                    put_cache: false,
                 })
                 .await?;
-            for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
-                let part_info = FuseTable::projection_part(
-                    block_meta,
-                    &None,
-                    &column_nodes,
-                    None,
-                    &self.projection,
-                );
-                let part_id = compute_row_id_prefix(*seg_id as u64, block_idx as u64);
-                map.insert(part_id, part_info);
-            }
+            segments.push((seg_id as u64, segment_info));
         }
 
-        self.part_map = map;
+        self.fetcher
+            .set_metas(segments, table_schema, &self.projection);
         Ok(())
     }
 
@@ -214,26 +198,9 @@ where F: RowFetcher + Send + Sync + 'static
             .into_u_int64()
             .unwrap();
 
-        let mut part_set = HashSet::new();
-        let mut row_set = Vec::with_capacity(num_rows);
-        for row_id in row_id_column.iter() {
-            let (part_id, idx) = split_row_id(*row_id);
-            part_set.insert(part_id);
-            row_set.push((part_id, idx));
-        }
+        let fetched_block = self.fetcher.fetch(&row_id_column).await?;
 
-        let (fetched_blocks, part_idx_map) = self.fetcher.fetch(&self.part_map, part_set).await?;
-
-        let indices = row_set
-            .iter()
-            .map(|(part_id, row_idx)| {
-                let block_idx = part_idx_map[part_id];
-                (block_idx, *row_idx as usize, 1_usize)
-            })
-            .collect::<Vec<_>>();
-
-        let needed_block = DataBlock::take_blocks(&fetched_blocks, &indices, num_rows);
-        for col in needed_block.columns().iter() {
+        for col in fetched_block.columns().iter() {
             data.add_column(col.clone());
         }
 
@@ -242,7 +209,7 @@ where F: RowFetcher + Send + Sync + 'static
 }
 
 impl<F> TransformRowsFetcher<F>
-where F: RowFetcher + Send + Sync + 'static
+where F: RowsFetcher + Send + Sync + 'static
 {
     fn create(
         input: Arc<InputPort>,
@@ -256,7 +223,6 @@ where F: RowFetcher + Send + Sync + 'static
             table,
             projection,
             row_id_col_offset,
-            part_map: HashMap::new(),
             fetcher,
         }))
     }

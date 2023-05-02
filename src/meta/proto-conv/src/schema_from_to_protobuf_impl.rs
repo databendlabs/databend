@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -191,6 +191,7 @@ impl FromToProto for ex::TableDataType {
                     Dt24::MapT(x) => ex::TableDataType::Map(Box::new(ex::TableDataType::from_pb(
                         Box::into_inner(x),
                     )?)),
+                    Dt24::BitmapT(_) => ex::TableDataType::Bitmap,
                     Dt24::TupleT(t) => {
                         reader_check_msg(t.ver, t.min_reader_ver)?;
 
@@ -249,6 +250,7 @@ impl FromToProto for ex::TableDataType {
                 let x = v.to_pb()?;
                 new_pb_dt24(Dt24::MapT(Box::new(x)))
             }
+            TableDataType::Bitmap => new_pb_dt24(Dt24::BitmapT(pb::Empty {})),
             TableDataType::Tuple {
                 fields_name,
                 fields_type,

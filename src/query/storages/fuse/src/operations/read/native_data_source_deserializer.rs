@@ -1,16 +1,16 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::any::Any;
 use std::collections::BTreeMap;
@@ -40,7 +40,6 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::BlockEntry;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataField;
@@ -59,6 +58,7 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_storage::ColumnNode;
 
+use super::fuse_source::fill_internal_column_meta;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::NativeReaderExt;
@@ -90,6 +90,9 @@ pub struct NativeDeserializeDataTransform {
     prewhere_virtual_columns: Option<Vec<VirtualColumnInfo>>,
 
     skipped_page: usize,
+    // The row offset of current part.
+    // It's used to compute the row offset in one block (single data file in one segment).
+    offset_in_part: usize,
 
     read_columns: Vec<usize>,
     top_k: Option<(TopK, TopKSorter, usize)>,
@@ -144,7 +147,10 @@ impl NativeDeserializeDataTransform {
         let remain_columns: Vec<usize> = (0..src_schema.num_fields())
             .filter(|i| !prewhere_columns.contains(i))
             .collect();
-        let output_schema: DataSchema = plan.schema().into();
+
+        let mut output_schema = plan.schema().as_ref().clone();
+        output_schema.remove_internal_fields();
+        let output_schema: DataSchema = (&output_schema).into();
 
         let func_ctx = ctx.get_function_context()?;
         let mut prewhere_schema = src_schema.project(&prewhere_columns);
@@ -224,6 +230,7 @@ impl NativeDeserializeDataTransform {
                 inited: false,
                 array_iters: BTreeMap::new(),
                 array_skip_pages: BTreeMap::new(),
+                offset_in_part: 0,
             },
         )))
     }
@@ -392,14 +399,8 @@ impl NativeDeserializeDataTransform {
         self.inited = false;
         self.array_iters.clear();
         self.array_skip_pages.clear();
+        self.offset_in_part = 0;
         Ok(())
-    }
-
-    fn fill_block_meta_index(data_block: DataBlock, fuse_part: &FusePartInfo) -> Result<DataBlock> {
-        // Fill `BlockMetaInfoPtr` if query internal columns
-        let meta: Option<BlockMetaInfoPtr> =
-            Some(Box::new(fuse_part.block_meta_index().unwrap().to_owned()));
-        data_block.add_meta(meta)
     }
 
     /// All columns are default values, not need to read.
@@ -423,7 +424,7 @@ impl NativeDeserializeDataTransform {
         let data_block = if !self.block_reader.query_internal_columns() {
             data_block
         } else {
-            Self::fill_block_meta_index(data_block, fuse_part)?
+            fill_internal_column_meta(data_block, fuse_part, None)?
         };
         let data_block = data_block.resort(&self.src_schema, &self.output_schema)?;
         self.add_block(data_block)?;
@@ -431,6 +432,7 @@ impl NativeDeserializeDataTransform {
         self.inited = false;
         self.array_iters.clear();
         self.array_skip_pages.clear();
+        self.offset_in_part = 0;
         Ok(())
     }
 
@@ -445,7 +447,7 @@ impl NativeDeserializeDataTransform {
         let data_block = if !self.block_reader.query_internal_columns() {
             data_block
         } else {
-            Self::fill_block_meta_index(data_block, fuse_part)?
+            fill_internal_column_meta(data_block, fuse_part, None)?
         };
 
         self.add_block(data_block)?;
@@ -542,9 +544,13 @@ impl Processor for NativeDeserializeDataTransform {
 
             // Init array_iters and array_skip_pages to read pages in subsequent processes.
             if !self.inited {
+                let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
+                if let Some(range) = fuse_part.range() {
+                    self.offset_in_part = fuse_part.page_size() * range.start;
+                }
+
                 if let Some((_top_k, sorter, _index)) = self.top_k.as_mut() {
-                    let next_part = FusePartInfo::from_part(&self.parts[0])?;
-                    if let Some(sort_min_max) = &next_part.sort_min_max {
+                    if let Some(sort_min_max) = &fuse_part.sort_min_max {
                         if sorter.never_match(sort_min_max) {
                             return self.finish_process();
                         }
@@ -594,6 +600,7 @@ impl Processor for NativeDeserializeDataTransform {
                                 arrays.push((*index, array));
                                 self.array_iters.insert(*index, array_iter);
                                 if sorter.never_match_any(&col) {
+                                    self.offset_in_part += col.len();
                                     return self.finish_process_skip_page();
                                 }
                             }
@@ -661,6 +668,7 @@ impl Processor for NativeDeserializeDataTransform {
 
                         // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
                         if FilterHelpers::is_all_unset(&filter) {
+                            self.offset_in_part += prewhere_block.num_rows();
                             return self.finish_process_skip_page();
                         }
 
@@ -686,6 +694,7 @@ impl Processor for NativeDeserializeDataTransform {
                         };
 
                         if FilterHelpers::is_all_unset(&filter) {
+                            self.offset_in_part += prewhere_block.num_rows();
                             return self.finish_process_skip_page();
                         }
                         Some(filter)
@@ -716,8 +725,9 @@ impl Processor for NativeDeserializeDataTransform {
             }
 
             let block = self.block_reader.build_block(arrays, None)?;
-            let block = if let Some(filter) = filter {
-                block.filter_boolean_value(&filter)?
+            let origin_num_rows = block.num_rows();
+            let block = if let Some(filter) = &filter {
+                block.filter_boolean_value(filter)?
             } else {
                 block
             };
@@ -733,18 +743,24 @@ impl Processor for NativeDeserializeDataTransform {
             // Step 7: Add optional virtual columns
             self.add_virtual_columns(&self.src_schema, &self.virtual_columns, &mut block)?;
 
-            // Step 8: Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-            // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
-            let block = if !self.block_reader.query_internal_columns() {
-                block.resort(&self.src_schema, &self.output_schema)?
-            } else {
+            // Step 8: Fill `InternalColumnMeta` as `DataBlock.meta` if query internal columns,
+            // `FillInternalColumnProcessor` will generate internal columns using `InternalColumnMeta` in next pipeline.
+            let mut block = block.resort(&self.src_schema, &self.output_schema)?;
+            if self.block_reader.query_internal_columns() {
+                let offsets = if let Some(Value::Column(bitmap)) = filter.as_ref() {
+                    (self.offset_in_part..self.offset_in_part + origin_num_rows)
+                        .filter(|i| unsafe { bitmap.get_bit_unchecked(i - self.offset_in_part) })
+                        .collect()
+                } else {
+                    (self.offset_in_part..self.offset_in_part + origin_num_rows).collect()
+                };
+
                 let fuse_part = FusePartInfo::from_part(&self.parts[0])?;
-                let meta: Option<BlockMetaInfoPtr> =
-                    Some(Box::new(fuse_part.block_meta_index().unwrap().to_owned()));
-                block.add_meta(meta)?
+                block = fill_internal_column_meta(block, fuse_part, Some(offsets))?;
             };
 
             // Step 9: Add the block to output data
+            self.offset_in_part += origin_num_rows;
             self.add_block(block)?;
         }
 

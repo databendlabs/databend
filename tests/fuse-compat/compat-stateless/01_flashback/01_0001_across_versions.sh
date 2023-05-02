@@ -6,11 +6,17 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # this case is supposed to run with the current version of query,
 # after fuse-compat/compat-logictest/01_meta_compression/ been run with the old version of query
 
+##########################################
+# test flashback across version boundary #
+##########################################
+
+echo "suite: flashback across version boundary"
 # current situation:
 # - we have inserted 3 rows into fuse_test_flashback, which produced 3 snapshots
 # - and the content of the table is {1,2,3}
 
-echo "checking that 3 snapshots exit"
+
+echo "checking that 3 snapshots exist"
 echo "select count(*)  from fuse_snapshot('default', 'fuse_test_flashback')" | $MYSQL_CLIENT_CONNECT
 
 # write down 2 new rows using current version
@@ -50,3 +56,97 @@ echo "alter table fuse_test_flashback flashback to (snapshot => '$FST_SNAPSHOT_I
 
 echo "checking that after flashback to the 5th last snapshot s1 which is of version 2, the table contains {1}"
 echo "select c  from fuse_test_flashback order by c" | $MYSQL_CLIENT_CONNECT
+
+###########################################################
+# test compaction & fuse_snapshot across version boundary #
+# issue 11204                                             #
+###########################################################
+
+echo "suite: test compaction & fuse_snapshot across version boundary"
+
+# current situation:
+# - we have inserted 2 rows into fuse_test_compaction, which produced 2 snapshots
+# - the content of the table is {1,2}
+# - the snapshots are s1 {1}, s2 {1,2}
+
+
+echo "checking that 2 snapshots of version 2 exist"
+echo "select count() c, format_version v from fuse_snapshot('default', 'fuse_test_compaction') group by v order by c" | $MYSQL_CLIENT_CONNECT
+
+# grab the current last snapshot (s2)
+FST_SNAPSHOT_S2_ID=$(echo "select snapshot_id from fuse_snapshot('default','fuse_test_compaction') limit 1" | $MYSQL_CLIENT_CONNECT)
+# grab s2's location
+FST_SNAPSHOT_S2_ID_LOC=$(echo "select snapshot_location from fuse_snapshot('default','fuse_test_compaction') limit 1" | $MYSQL_CLIENT_CONNECT)
+
+# compact the table
+echo "doing compact"
+echo "optimize table fuse_test_compaction compact" | $MYSQL_CLIENT_CONNECT
+
+# verify the following cases:
+
+echo "checking that after compaction the table still contains {1,2}"
+echo "select c from fuse_test_compaction order by c" | $MYSQL_CLIENT_CONNECT
+
+echo "checking that after compaction, 2 snapshots of version 2, and 1 snapshot of version 3 exist"
+echo "select count() c, format_version v from fuse_snapshot('default', 'fuse_test_compaction') group by v order by c " | $MYSQL_CLIENT_CONNECT
+
+echo "checking the version and location of snapshots s2 is correct"
+echo "select snapshot_location='${FST_SNAPSHOT_S2_ID_LOC}', format_version=2 from fuse_snapshot('default', 'fuse_test_compaction') where snapshot_id='$FST_SNAPSHOT_S2_ID'" | $MYSQL_CLIENT_CONNECT
+
+# flash back to s2
+echo "alter table fuse_test_compaction flashback to (snapshot => '$FST_SNAPSHOT_S2_ID')" | $MYSQL_CLIENT_CONNECT
+echo "checking that flashback works as expected (to s2)"
+echo "select snapshot_location='${FST_SNAPSHOT_S2_ID_LOC}', format_version=2 from fuse_snapshot('default', 'fuse_test_compaction') limit 1" | $MYSQL_CLIENT_CONNECT
+
+echo "checking that after flashback to s2,  the table contains {1,2}"
+echo "select c  from fuse_test_compaction order by c" | $MYSQL_CLIENT_CONNECT
+
+
+###########################################
+# mixed versioned segment compaction test #
+###########################################
+
+echo "suite: mixed versioned segment compaction test"
+
+# compaction of mixed versioned segments in to new versioned segment
+
+# current situation:
+# - table option block_per_segment is 2
+# - we have inserted 3 rows into t2, which produced 3 snapshots of version 2
+# - the snapshots are s1 {1}, s2 {1,2}, s3 {1,2,3}
+# - after that, we perform a compaction on s3, which give us a snapshot s4 {1,2,3}, of version 2
+#   since block_per_segment is 2, s4 contains 2 segments, v1 segment_1: {1,2}, v2 segment_2: {3}
+# end of description of s4
+
+# creation of s5:
+#---------------
+# insert another row, which will produce a new snapshot s5 {1,2,3,4}, of version 3
+echo "insert into t2 values (4)" | $MYSQL_CLIENT_CONNECT
+
+# s5 now contains 3 segments, 2 of version 2, and 1 of version 3
+# - v2 segment_1: {1,2}, v2 segment_2: {3}, v3 segment_3: {4}
+
+# creation of s6: the mixed version segments compaction,
+#---------------
+# compact the segments again.
+#
+# note that we should use `compact segment` here, otherwise if `compact` is used,
+# the blocks will also be compacted, which produces two new segments of version 3.
+echo "optimize table t2 compact segment" | $MYSQL_CLIENT_CONNECT
+
+# according to the table options segment_per_block=3,
+# v2 segment_2 and v3 segment_3 should be compacted -- the mixed version segments compaction,
+# into a new segment of version 3.
+#
+# the new snapshot s6 produced by this compaction should contains 2 segments:
+# - v2 segment_1: {1,2}, v3 segment_2: {3, 4}
+
+# grab the id of s6
+FST_SNAPSHOT_S6_ID=$(echo "select snapshot_id from fuse_snapshot('default','t2') limit 1" | $MYSQL_CLIENT_CONNECT)
+
+echo "check segments after compaction, there should be 2 segments, a version v2 and a version v3"
+echo "select count() c, format_version v from fuse_segment('default', 't2', '$FST_SNAPSHOT_S6_ID') group by v order by v " | $MYSQL_CLIENT_CONNECT
+
+echo "check table contains {1,2,3,4} after compaction"
+echo "select * from t2 order by c" | $MYSQL_CLIENT_CONNECT
+

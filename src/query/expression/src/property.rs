@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -201,7 +201,7 @@ impl Domain {
                 };
                 Domain::Map(Some(inner_domain))
             }
-            DataType::Variant => Domain::Undefined,
+            DataType::Bitmap | DataType::Variant => Domain::Undefined,
             DataType::Generic(_) => unreachable!(),
         }
     }

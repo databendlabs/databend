@@ -67,6 +67,50 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+describe "name""with""quote";
+---------- Output ---------
+DESCRIBE "name""with""quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"with\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: Some(
+                9..28,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+describe "name""""with""""quote";
+---------- Output ---------
+DESCRIBE "name""""with""""quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"\"with\"\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: Some(
+                9..32,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 show full tables
 ---------- Output ---------
 SHOW FULL TABLES
@@ -326,6 +370,7 @@ Explain {
                     span: Some(
                         17..32,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -399,6 +444,7 @@ Explain {
                     span: Some(
                         17..33,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -699,6 +745,7 @@ CreateTable(
                         span: Some(
                             76..91,
                         ),
+                        hints: None,
                         distinct: false,
                         select_list: [
                             QualifiedName {
@@ -1453,6 +1500,7 @@ CreateView(
                     span: Some(
                         17..58,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -1563,6 +1611,7 @@ AlterView(
                     span: Some(
                         16..57,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -1703,6 +1752,7 @@ CreateView(
                     span: Some(
                         22..63,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -1821,6 +1871,7 @@ AlterView(
                     span: Some(
                         21..62,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -2320,6 +2371,7 @@ CreateTable(
                         span: Some(
                             21..38,
                         ),
+                        hints: None,
                         distinct: false,
                         select_list: [
                             QualifiedName {
@@ -2520,6 +2572,7 @@ Query(
                 span: Some(
                     0..84,
                 ),
+                hints: None,
                 distinct: true,
                 select_list: [
                     AliasedExpr {
@@ -2729,6 +2782,7 @@ Query(
                 span: Some(
                     0..16,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -2792,6 +2846,7 @@ Query(
                 span: Some(
                     0..19,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -2863,6 +2918,7 @@ Query(
                 span: Some(
                     0..21,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -2962,6 +3018,7 @@ Query(
                 span: Some(
                     0..21,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3102,6 +3159,7 @@ Query(
                 span: Some(
                     0..35,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3243,6 +3301,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3384,6 +3443,7 @@ Query(
                 span: Some(
                     0..47,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3525,6 +3585,7 @@ Query(
                 span: Some(
                     0..45,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3666,6 +3727,7 @@ Query(
                 span: Some(
                     0..40,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3807,6 +3869,7 @@ Query(
                 span: Some(
                     0..45,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3948,6 +4011,7 @@ Query(
                 span: Some(
                     0..40,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4089,6 +4153,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4230,6 +4295,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4371,6 +4437,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4512,6 +4579,7 @@ Query(
                 span: Some(
                     0..41,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4653,6 +4721,7 @@ Query(
                 span: Some(
                     0..42,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4753,6 +4822,7 @@ Query(
                 span: Some(
                     0..43,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4853,6 +4923,7 @@ Query(
                 span: Some(
                     0..42,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4953,6 +5024,7 @@ Query(
                 span: Some(
                     0..37,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5053,6 +5125,7 @@ Query(
                 span: Some(
                     0..51,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5131,6 +5204,7 @@ Query(
                                         span: Some(
                                             33..50,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5222,6 +5296,7 @@ Query(
                 span: Some(
                     0..51,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5300,6 +5375,7 @@ Query(
                                         span: Some(
                                             33..50,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5391,6 +5467,7 @@ Query(
                 span: Some(
                     0..52,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5469,6 +5546,7 @@ Query(
                                         span: Some(
                                             34..51,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5560,6 +5638,7 @@ Query(
                 span: Some(
                     0..47,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5636,6 +5715,7 @@ Query(
                                         span: Some(
                                             29..46,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5727,6 +5807,7 @@ Query(
                 span: Some(
                     0..45,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -5834,6 +5915,7 @@ Query(
                 span: Some(
                     0..92,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5927,12 +6009,151 @@ Query(
 
 
 ---------- Input ----------
+select 'stringwith''quote'''
+---------- Output ---------
+SELECT 'stringwith\'quote\''
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..28,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..28,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..28,
+                            ),
+                            lit: String(
+                                "stringwith'quote'",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select 'stringwith"doublequote'
+---------- Output ---------
+SELECT 'stringwith"doublequote'
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..31,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..31,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..31,
+                            ),
+                            lit: String(
+                                "stringwith\"doublequote",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select '🦈'
+---------- Output ---------
+SELECT '🦈'
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..13,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..13,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..13,
+                            ),
+                            lit: String(
+                                "🦈",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
 ---------- AST ------------
 Insert(
     InsertStmt {
+        hints: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -5973,6 +6194,7 @@ INSERT INTO t FORMAT json ;
 ---------- AST ------------
 Insert(
     InsertStmt {
+        hints: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -6000,6 +6222,7 @@ INSERT INTO t SELECT * FROM t2
 ---------- AST ------------
 Insert(
     InsertStmt {
+        hints: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -6021,6 +6244,7 @@ Insert(
                         span: Some(
                             20..36,
                         ),
+                        hints: None,
                         distinct: false,
                         select_list: [
                             QualifiedName {
@@ -6087,6 +6311,7 @@ Query(
                 span: Some(
                     0..44,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -8266,6 +8491,86 @@ Presign(
 
 
 ---------- Input ----------
+PRESIGN @my_stage/my\ file.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/my\ file.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/my file.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\"file\".csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\"file\".csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/\"file\".csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\'file\'.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\'file\'.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/'file'.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\\file\\.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\\file\\.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/\\file\\.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
 PRESIGN DOWNLOAD @my_stage/path/to/file
 ---------- Output ---------
 PRESIGN DOWNLOAD @my_stage/path/to/file EXPIRE = 3600
@@ -8764,6 +9069,7 @@ UPDATE db1.tb1 SET a = (a + 1), b = 2 WHERE (c > 3)
 ---------- AST ------------
 Update(
     UpdateStmt {
+        hints: None,
         table: Table {
             span: Some(
                 7..14,
@@ -9010,6 +9316,7 @@ Query(
                 span: Some(
                     0..100,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -9108,6 +9415,7 @@ Query(
                 span: Some(
                     0..154,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -9256,6 +9564,7 @@ Query(
                 span: Some(
                     0..83,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -9377,6 +9686,7 @@ Query(
                 span: Some(
                     0..51,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9509,6 +9819,7 @@ Query(
                 span: Some(
                     0..53,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9639,6 +9950,7 @@ Query(
                 span: Some(
                     0..60,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9783,6 +10095,7 @@ Query(
                 span: Some(
                     0..59,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9912,6 +10225,7 @@ Query(
                 span: Some(
                     0..39,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -10022,6 +10336,7 @@ Query(
                 span: Some(
                     0..41,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {

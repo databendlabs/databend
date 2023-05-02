@@ -12,6 +12,7 @@ common-base = { path = "../../../../common/base" }
 common-datavalues = { path = "../../../datavalues" }
 common-exception = { path = "../../../../common/exception" }
 common-expression = { path = "../../../expression" }
+common-io = { path = "../../../../common/io" }
 
 bincode = "1.3.3"
 chrono = { workspace = true }

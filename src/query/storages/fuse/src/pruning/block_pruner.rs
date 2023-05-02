@@ -1,16 +1,16 @@
-//  Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::future::Future;
 use std::ops::Range;
@@ -19,8 +19,10 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
+use common_catalog::plan::block_id_in_segment;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BLOCK_NAME_COL_NAME;
 use futures_util::future;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
@@ -73,8 +75,21 @@ impl BlockPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
         let page_pruner = self.pruning_ctx.page_pruner.clone();
 
-        let block_num = segment_info.blocks.len();
-        let mut blocks = segment_info.blocks.iter().enumerate();
+        let blocks = if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner
+        {
+            segment_info
+                .blocks
+                .iter()
+                .enumerate()
+                .filter(|(_, block)| {
+                    internal_column_pruner.should_keep(BLOCK_NAME_COL_NAME, &block.location.0)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            segment_info.blocks.iter().enumerate().collect::<Vec<_>>()
+        };
+
+        let mut blocks = blocks.into_iter();
         let pruning_tasks = std::iter::from_fn(|| {
             // check limit speculatively
             if limit_pruner.exceeded() {
@@ -173,7 +188,8 @@ impl BlockPruner {
             .await
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
-        let mut result = Vec::with_capacity(segment_info.blocks.len());
+        let mut result = Vec::with_capacity(joint.len());
+        let block_num = segment_info.blocks.len();
         for item in joint {
             let (block_idx, keep, range, block_location) = item;
             if keep {
@@ -186,7 +202,8 @@ impl BlockPruner {
                         segment_idx,
                         block_idx,
                         range,
-                        block_id: block_num - block_idx - 1,
+                        page_size: block.page_size() as usize,
+                        block_id: block_id_in_segment(block_num, block_idx),
                         block_location: block_location.clone(),
                         segment_id: segment_location.segment_id,
                         segment_location: segment_location.location.0.clone(),
@@ -218,9 +235,22 @@ impl BlockPruner {
 
         let start = Instant::now();
 
+        let blocks = if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner
+        {
+            segment_info
+                .blocks
+                .iter()
+                .enumerate()
+                .filter(|(_, block)| {
+                    internal_column_pruner.should_keep(BLOCK_NAME_COL_NAME, &block.location.0)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            segment_info.blocks.iter().enumerate().collect::<Vec<_>>()
+        };
+        let mut result = Vec::with_capacity(blocks.len());
         let block_num = segment_info.blocks.len();
-        let mut result = Vec::with_capacity(segment_info.blocks.len());
-        for (block_idx, block_meta) in segment_info.blocks.iter().enumerate() {
+        for (block_idx, block_meta) in blocks {
             // Perf.
             {
                 metrics_inc_blocks_range_pruning_after(1);
@@ -252,7 +282,8 @@ impl BlockPruner {
                             segment_idx,
                             block_idx,
                             range,
-                            block_id: block_num - block_idx - 1,
+                            page_size: block_meta.page_size() as usize,
+                            block_id: block_id_in_segment(block_num, block_idx),
                             block_location: block_meta.as_ref().location.0.clone(),
                             segment_id: segment_location.segment_id,
                             segment_location: segment_location.location.0.clone(),

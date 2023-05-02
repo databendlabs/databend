@@ -1,16 +1,16 @@
-//  Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -114,7 +114,7 @@ impl FuseTable {
         table_info: TableInfo,
         segments_location: Vec<Location>,
         summary: usize,
-        segment_id_map: Option<HashMap<String, usize>>,
+        segment_id_map: Option<HashMap<Location, usize>>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
@@ -245,12 +245,26 @@ impl FuseTable {
             .and_then(|p| p.limit)
             .unwrap_or(usize::MAX);
 
+        let mut block_metas = block_metas.to_vec();
+        if let Some(top_k) = &top_k {
+            block_metas.sort_by(|a, b| {
+                let a = a.1.col_stats.get(&top_k.column_id).unwrap();
+                let b = b.1.col_stats.get(&top_k.column_id).unwrap();
+
+                if top_k.asc {
+                    (a.min.as_ref(), a.max.as_ref()).cmp(&(b.min.as_ref(), b.max.as_ref()))
+                } else {
+                    (b.max.as_ref(), b.min.as_ref()).cmp(&(a.max.as_ref(), a.min.as_ref()))
+                }
+            });
+        }
+
         let (mut statistics, mut partitions) = match &push_down {
-            None => Self::all_columns_partitions(schema, block_metas, top_k.clone(), limit),
+            None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
             Some(extras) => match &extras.projection {
-                None => Self::all_columns_partitions(schema, block_metas, top_k.clone(), limit),
+                None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
                 Some(projection) => Self::projection_partitions(
-                    block_metas,
+                    &block_metas,
                     column_nodes,
                     projection,
                     top_k.clone(),

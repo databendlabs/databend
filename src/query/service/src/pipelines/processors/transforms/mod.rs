@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,12 +57,10 @@ use common_pipeline_transforms::processors::transforms::transform_block_compact;
 use common_pipeline_transforms::processors::transforms::transform_compact;
 use common_pipeline_transforms::processors::transforms::transform_sort_merge;
 use common_pipeline_transforms::processors::transforms::transform_sort_partial;
-pub use hash_join::FixedKeyHashTable;
+pub use hash_join::FixedKeyHashJoinHashTable;
 pub use hash_join::HashJoinDesc;
 pub use hash_join::HashJoinState;
-pub use hash_join::HashTable;
 pub use hash_join::JoinHashTable;
-pub use hash_join::SerializerHashTable;
 pub use profile_wrapper::ProfileWrapper;
 pub use runtime_filter::RuntimeFilterState;
 pub use transform_add_const_columns::TransformAddConstColumns;
@@ -73,7 +71,7 @@ pub use transform_compact::Compactor;
 pub use transform_compact::TransformCompact;
 pub use transform_create_sets::SubqueryReceiver;
 pub use transform_create_sets::TransformCreateSets;
-pub use transform_hash_join::SinkBuildHashTable;
+pub use transform_hash_join::TransformHashJoinBuild;
 pub use transform_hash_join::TransformHashJoinProbe;
 pub use transform_left_join::LeftJoinCompactor;
 pub use transform_left_join::TransformLeftJoin;

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ use std::num::NonZeroU64;
 
 use ethnum::U256;
 use ordered_float::OrderedFloat;
+
+use crate::RowPtr;
 
 /// # Safety
 ///
@@ -429,4 +431,27 @@ pub trait HashtableLike {
     fn iter(&self) -> Self::Iterator<'_>;
 
     fn clear(&mut self);
+}
+
+pub trait HashJoinHashtableLike {
+    type Key: ?Sized;
+
+    fn contains(&self, key_ref: &Self::Key) -> bool;
+
+    fn probe_hash_table(
+        &self,
+        key_ref: &Self::Key,
+        vec_ptr: *mut RowPtr,
+        occupied: usize,
+        capacity: usize,
+    ) -> (usize, u64);
+
+    fn next_incomplete_ptr(
+        &self,
+        key_ref: &Self::Key,
+        incomplete_ptr: u64,
+        vec_ptr: *mut RowPtr,
+        occupied: usize,
+        capacity: usize,
+    ) -> (usize, u64);
 }

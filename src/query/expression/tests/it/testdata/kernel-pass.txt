@@ -4,8 +4,8 @@ Source:
 | Column 0 | Column 1 | Column 2 | Column 3 |
 +----------+----------+----------+----------+
 | 0        | NULL     | NULL     | NULL     |
-| 1        | 11       | NULL     | "y"      |
-| 2        | NULL     | NULL     | "z"      |
+| 1        | 11       | NULL     | 'y'      |
+| 2        | NULL     | NULL     | 'z'      |
 | 3        | NULL     | NULL     | NULL     |
 | -4       | NULL     | NULL     | NULL     |
 +----------+----------+----------+----------+
@@ -43,12 +43,12 @@ Result:
 | Column 0 | Column 1 | Column 2 | Column 3 | Column 4 |
 +----------+----------+----------+----------+----------+
 | 0        | NULL     | NULL     | []       | NULL     |
-| 1        | 11       | NULL     | []       | "y"      |
-| 2        | NULL     | NULL     | []       | "z"      |
+| 1        | 11       | NULL     | []       | 'y'      |
+| 2        | NULL     | NULL     | []       | 'z'      |
 | 3        | NULL     | NULL     | []       | NULL     |
 | -4       | NULL     | NULL     | []       | NULL     |
 | 5        | NULL     | NULL     | []       | NULL     |
-| 6        | 16       | NULL     | []       | "y"      |
+| 6        | 16       | NULL     | []       | 'y'      |
 +----------+----------+----------+----------+----------+
 
 
@@ -58,8 +58,8 @@ Source:
 | Column 0 | Column 1 | Column 2 | Column 3 |
 +----------+----------+----------+----------+
 | 0        | NULL     | NULL     | NULL     |
-| 1        | 11       | NULL     | "y"      |
-| 2        | NULL     | NULL     | "z"      |
+| 1        | 11       | NULL     | 'y'      |
+| 2        | NULL     | NULL     | 'z'      |
 | 3        | NULL     | NULL     | NULL     |
 | -4       | NULL     | NULL     | NULL     |
 +----------+----------+----------+----------+
@@ -69,7 +69,7 @@ Result:
 +----------+----------+----------+----------+
 | 0        | NULL     | NULL     | NULL     |
 | 3        | NULL     | NULL     | NULL     |
-| 1        | 11       | NULL     | "y"      |
+| 1        | 11       | NULL     | 'y'      |
 +----------+----------+----------+----------+
 
 
@@ -214,8 +214,8 @@ Block:
 | Column 0 | Column 1 | Column 2 | Column 3 |
 +----------+----------+----------+----------+
 | 0        | NULL     | NULL     | NULL     |
-| 1        | 11       | NULL     | "y"      |
-| 2        | NULL     | NULL     | "z"      |
+| 1        | 11       | NULL     | 'y'      |
+| 2        | NULL     | NULL     | 'z'      |
 | 3        | NULL     | NULL     | NULL     |
 | -4       | NULL     | NULL     | NULL     |
 +----------+----------+----------+----------+
@@ -223,7 +223,7 @@ Result:
 +----------+----------+----------+----------+
 | Column 0 | Column 1 | Column 2 | Column 3 |
 +----------+----------+----------+----------+
-| 2        | NULL     | NULL     | "z"      |
+| 2        | NULL     | NULL     | 'z'      |
 | 3        | NULL     | NULL     | NULL     |
 | -4       | NULL     | NULL     | NULL     |
 +----------+----------+----------+----------+
@@ -235,8 +235,8 @@ Block:
 | Column 0 | Column 1 | Column 2 | Column 3 |
 +----------+----------+----------+----------+
 | 0        | NULL     | NULL     | NULL     |
-| 1        | 11       | NULL     | "y"      |
-| 2        | NULL     | NULL     | "z"      |
+| 1        | 11       | NULL     | 'y'      |
+| 2        | NULL     | NULL     | 'z'      |
 | 3        | NULL     | NULL     | NULL     |
 | -4       | NULL     | NULL     | NULL     |
 +----------+----------+----------+----------+
@@ -244,7 +244,7 @@ Result:
 +----------+----------+----------+----------+
 | Column 0 | Column 1 | Column 2 | Column 3 |
 +----------+----------+----------+----------+
-| 2        | NULL     | NULL     | "z"      |
+| 2        | NULL     | NULL     | 'z'      |
 | 3        | NULL     | NULL     | NULL     |
 +----------+----------+----------+----------+
 
@@ -255,8 +255,8 @@ Source:
 | Column 0 | Column 1 | Column 2 | Column 3 |
 +----------+----------+----------+----------+
 | 0        | NULL     | NULL     | NULL     |
-| 1        | 11       | NULL     | "y"      |
-| 2        | NULL     | NULL     | "z"      |
+| 1        | 11       | NULL     | 'y'      |
+| 2        | NULL     | NULL     | 'z'      |
 | 3        | NULL     | NULL     | NULL     |
 | -4       | NULL     | NULL     | NULL     |
 +----------+----------+----------+----------+
@@ -265,13 +265,13 @@ Result-0:
 | Column 0 | Column 1 | Column 2 | Column 3 |
 +----------+----------+----------+----------+
 | 0        | NULL     | NULL     | NULL     |
-| 1        | 11       | NULL     | "y"      |
+| 1        | 11       | NULL     | 'y'      |
 +----------+----------+----------+----------+
 Result-1:
 +----------+----------+----------+----------+
 | Column 0 | Column 1 | Column 2 | Column 3 |
 +----------+----------+----------+----------+
-| 2        | NULL     | NULL     | "z"      |
+| 2        | NULL     | NULL     | 'z'      |
 | -4       | NULL     | NULL     | NULL     |
 +----------+----------+----------+----------+
 Result-2:

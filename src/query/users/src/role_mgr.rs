@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,11 @@ impl UserApiProvider {
     // Get one role from by tenant.
     #[async_backtrace::framed]
     pub async fn get_role(&self, tenant: &str, role: String) -> Result<RoleInfo> {
+        let builtin_roles = self.builtin_roles();
+        if let Some(role_info) = builtin_roles.get(&role) {
+            return Ok(role_info.clone());
+        }
+
         let client = self.get_role_api_client(tenant)?;
         let role_data = client.get_role(&role, MatchSeq::GE(0)).await?.data;
         Ok(role_data)
@@ -41,20 +46,21 @@ impl UserApiProvider {
     // Get the tenant all roles list.
     #[async_backtrace::framed]
     pub async fn get_roles(&self, tenant: &str) -> Result<Vec<RoleInfo>> {
-        let client = self.get_role_api_client(tenant)?;
-        let get_roles = client.get_roles();
-
-        let mut res = vec![];
-        match get_roles.await {
-            Err(e) => Err(e.add_message_back("(while get roles).")),
-            Ok(seq_roles_info) => {
-                for seq_role_info in seq_roles_info {
-                    res.push(seq_role_info.data);
-                }
-
-                Ok(res)
-            }
-        }
+        let builtin_roles = self.builtin_roles();
+        let seq_roles = self
+            .get_role_api_client(tenant)?
+            .get_roles()
+            .await
+            .map_err(|e| e.add_message_back("(while get roles)."))?;
+        // overwrite the builtin roles.
+        let mut roles = seq_roles
+            .into_iter()
+            .map(|r| r.data)
+            .filter(|r| !builtin_roles.contains_key(&r.name))
+            .collect::<Vec<_>>();
+        roles.extend(builtin_roles.values().cloned());
+        roles.sort_by(|a, b| a.name.cmp(&b.name));
+        Ok(roles)
     }
 
     #[async_backtrace::framed]
@@ -97,19 +103,17 @@ impl UserApiProvider {
         }
     }
 
-    // Ensure the builtin roles inside a tenant. Currently we have two builtin roles:
+    // Currently we have two builtin roles:
     // 1. ACCOUNT_ADMIN, which has the equivalent privileges of `GRANT ALL ON *.* TO ROLE account_admin`,
     //    it also contains all roles. ACCOUNT_ADMIN can access the data objects which owned by any role.
     // 2. PUBLIC, on the other side only includes the public accessible privileges, but every role
     //    contains the PUBLIC role. The data objects which owned by PUBLIC can be accessed by any role.
-    #[async_backtrace::framed]
-    pub async fn ensure_builtin_roles(&self, tenant: &str) -> Result<()> {
+    fn builtin_roles(&self) -> HashMap<String, RoleInfo> {
         let mut account_admin = RoleInfo::new(BUILTIN_ROLE_ACCOUNT_ADMIN);
         account_admin.grants.grant_privileges(
             &GrantObject::Global,
             UserPrivilegeSet::available_privileges_on_global(),
         );
-        self.add_role(tenant, account_admin, true).await?;
 
         let mut public = RoleInfo::new(BUILTIN_ROLE_PUBLIC);
         public.grants.grant_privileges(
@@ -120,9 +124,11 @@ impl UserApiProvider {
             ),
             UserPrivilegeType::Select.into(),
         );
-        self.add_role(tenant, public, true).await?;
 
-        Ok(())
+        let mut result = HashMap::new();
+        result.insert(BUILTIN_ROLE_ACCOUNT_ADMIN.into(), account_admin);
+        result.insert(BUILTIN_ROLE_PUBLIC.into(), public);
+        result
     }
 
     #[async_backtrace::framed]

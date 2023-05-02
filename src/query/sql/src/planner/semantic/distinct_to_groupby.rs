@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,6 +58,7 @@ impl VisitorMut for DistinctToGroupBy {
                         with: None,
                         body: SetExpr::Select(Box::new(SelectStmt {
                             span: None,
+                            hints: None,
                             distinct: false,
                             select_list: vec![],
                             from: from.clone(),
@@ -74,6 +75,7 @@ impl VisitorMut for DistinctToGroupBy {
 
                     let new_stmt = SelectStmt {
                         span: None,
+                        hints: None,
                         distinct: false,
                         select_list: vec![common_ast::ast::SelectTarget::AliasedExpr {
                             expr: Box::new(Expr::FunctionCall {

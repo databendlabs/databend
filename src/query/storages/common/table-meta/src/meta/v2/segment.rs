@@ -1,16 +1,16 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -37,7 +37,7 @@ use crate::meta::Versioned;
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct SegmentInfo {
     /// format version
-    format_version: FormatVersion,
+    pub format_version: FormatVersion,
     /// blocks belong to this segment
     pub blocks: Vec<Arc<BlockMeta>>,
     /// summary statistics
@@ -52,11 +52,6 @@ impl SegmentInfo {
             blocks,
             summary,
         }
-    }
-
-    #[inline]
-    pub fn version(&self) -> FormatVersion {
-        self.format_version
     }
 }
 
@@ -115,13 +110,26 @@ impl BlockMeta {
     pub fn compression(&self) -> Compression {
         self.compression
     }
+
+    /// Get the page size of the block.
+    /// - If the format is parquet, its page size is its row count.
+    /// - If the format is native, its page size is the row count of each page.
+    /// (The row count of the last page may be smaller than the page size)
+    pub fn page_size(&self) -> u64 {
+        if let Some((_, ColumnMeta::Native(meta))) = self.col_metas.iter().next() {
+            meta.pages.first().unwrap().num_values
+        } else {
+            self.row_count
+        }
+    }
 }
 
 impl SegmentInfo {
     pub fn from_v0(s: v0::SegmentInfo, fields: &[TableField]) -> Self {
         let summary = Statistics::from_v0(s.summary, fields);
         Self {
-            format_version: SegmentInfo::VERSION,
+            // the is no version before v0, and no versions other then 0 can be converted into v0
+            format_version: v0::SegmentInfo::VERSION,
             blocks: s
                 .blocks
                 .into_iter()
@@ -134,7 +142,9 @@ impl SegmentInfo {
     pub fn from_v1(s: v1::SegmentInfo, fields: &[TableField]) -> Self {
         let summary = Statistics::from_v0(s.summary, fields);
         Self {
-            format_version: SegmentInfo::VERSION,
+            // NOTE: it is important to let the format_version return from here
+            // carries the format_version of segment info being converted.
+            format_version: s.format_version,
             blocks: s
                 .blocks
                 .into_iter()

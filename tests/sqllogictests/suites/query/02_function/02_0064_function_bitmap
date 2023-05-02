@@ -1,0 +1,9 @@
+query T
+SELECT to_string(to_bitmap('0, 1, 2'))
+----
+0,1,2
+
+query T
+SELECT to_string(to_bitmap(1024))
+----
+1024

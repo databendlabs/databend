@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -167,6 +167,7 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                 DataType::Timestamp => Ok(ColumnType::MYSQL_TYPE_DATETIME),
                 DataType::Array(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Map(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
+                DataType::Bitmap => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Tuple(_) => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Variant => Ok(ColumnType::MYSQL_TYPE_VARCHAR),
                 DataType::Decimal(_) => Ok(ColumnType::MYSQL_TYPE_DECIMAL),
@@ -268,6 +269,10 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
                                         )?;
                                     }
                                 },
+                                ScalarRef::Bitmap(_) => {
+                                    let bitmap_result = "<bitmap binary>".as_bytes();
+                                    row_writer.write_col(bitmap_result)?;
+                                }
                                 _ => write_field(
                                     &mut row_writer,
                                     column,

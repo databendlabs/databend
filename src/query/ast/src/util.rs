@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ use pratt::Precedence;
 use crate::ast::Identifier;
 use crate::input::Input;
 use crate::input::WithSpan;
+use crate::parser::quote::unquote_ident;
 use crate::parser::token::*;
 use crate::rule;
 use crate::Error;
@@ -61,6 +62,16 @@ pub fn match_token(kind: TokenKind) -> impl FnMut(Input) -> IResult<&Token> {
     }
 }
 
+pub fn any_token(i: Input) -> IResult<&Token> {
+    match i.0.get(0).filter(|token| token.kind != EOI) {
+        Some(token) => Ok((i.slice(1..), token)),
+        _ => Err(nom::Err::Error(Error::from_error_kind(
+            i,
+            ErrorKind::Other("expected any token but reached the end"),
+        ))),
+    }
+}
+
 pub fn ident(i: Input) -> IResult<Identifier> {
     non_reserved_identifier(|token| token.is_reserved_ident(false))(i)
 }
@@ -92,29 +103,32 @@ pub fn stage_name(i: Input) -> IResult<Identifier> {
                 quote: None,
             },
         ),
-        move |i| {
-            match_token(QuotedString)(i).and_then(|(i2, token)| {
-                if token
-                    .text()
-                    .chars()
-                    .next()
-                    .filter(|c| i.1.is_ident_quote(*c))
-                    .is_some()
-                {
-                    Ok((i2, Identifier {
-                        span: transform_span(&[token.clone()]),
-                        name: token.text()[1..token.text().len() - 1].to_string(),
-                        quote: Some(token.text().chars().next().unwrap()),
-                    }))
-                } else {
-                    Err(nom::Err::Error(Error::from_error_kind(
-                        i,
-                        ErrorKind::ExpectToken(Ident),
-                    )))
-                }
-            })
-        },
+        quoted_identifier,
     ))(i)
+}
+
+fn quoted_identifier(i: Input) -> IResult<Identifier> {
+    match_token(QuotedString)(i).and_then(|(i2, token)| {
+        if token
+            .text()
+            .chars()
+            .next()
+            .filter(|c| i.1.is_ident_quote(*c))
+            .is_some()
+        {
+            let quote = token.text().chars().next().unwrap();
+            Ok((i2, Identifier {
+                span: transform_span(&[token.clone()]),
+                name: unquote_ident(token.text(), quote),
+                quote: Some(quote),
+            }))
+        } else {
+            Err(nom::Err::Error(Error::from_error_kind(
+                i,
+                ErrorKind::ExpectToken(Ident),
+            )))
+        }
+    })
 }
 
 fn non_reserved_identifier(
@@ -130,28 +144,7 @@ fn non_reserved_identifier(
                     quote: None,
                 },
             ),
-            move |i| {
-                match_token(QuotedString)(i).and_then(|(i2, token)| {
-                    if token
-                        .text()
-                        .chars()
-                        .next()
-                        .filter(|c| i.1.is_ident_quote(*c))
-                        .is_some()
-                    {
-                        Ok((i2, Identifier {
-                            span: transform_span(&[token.clone()]),
-                            name: token.text()[1..token.text().len() - 1].to_string(),
-                            quote: Some(token.text().chars().next().unwrap()),
-                        }))
-                    } else {
-                        Err(nom::Err::Error(Error::from_error_kind(
-                            i,
-                            ErrorKind::ExpectToken(Ident),
-                        )))
-                    }
-                })
-            },
+            quoted_identifier,
         ))(i)
     }
 }

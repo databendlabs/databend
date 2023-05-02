@@ -1,16 +1,16 @@
-//  Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,6 +25,7 @@ use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use opendal::Operator;
 use storages_common_pruner::BlockMetaIndex;
+use storages_common_pruner::InternalColumnPruner;
 use storages_common_pruner::Limiter;
 use storages_common_pruner::LimiterPrunerCreator;
 use storages_common_pruner::PagePruner;
@@ -53,6 +54,7 @@ pub struct PruningContext {
     pub range_pruner: Arc<dyn RangePruner + Send + Sync>,
     pub bloom_pruner: Option<Arc<dyn BloomPruner + Send + Sync>>,
     pub page_pruner: Arc<dyn PagePruner + Send + Sync>,
+    pub internal_column_pruner: Option<Arc<InternalColumnPruner>>,
 
     pub pruning_stats: Arc<FusePruningStatistics>,
 }
@@ -114,12 +116,17 @@ impl FusePruner {
 
         // Page pruner, used in native format
         let page_pruner = PagePrunerCreator::try_create(
-            func_ctx,
+            func_ctx.clone(),
             &table_schema,
             filter_expr.as_ref(),
             cluster_key_meta,
             cluster_keys,
         )?;
+
+        // Internal column pruner, if there are predicates using internal columns,
+        // we can use them to prune segments and blocks.
+        let internal_column_pruner =
+            InternalColumnPruner::try_create(func_ctx, filter_expr.as_ref());
 
         // Constraint the degree of parallelism
         let max_threads = ctx.get_settings().get_max_threads()? as usize;
@@ -153,6 +160,7 @@ impl FusePruner {
             range_pruner,
             bloom_pruner,
             page_pruner,
+            internal_column_pruner,
             pruning_stats,
         });
 
@@ -170,13 +178,15 @@ impl FusePruner {
         &self,
         segment_locs: Vec<Location>,
         snapshot_loc: Option<String>,
-        segment_id_map: Option<HashMap<String, usize>>,
+        segment_id_map: Option<HashMap<Location, usize>>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let segment_locs =
             create_segment_location_vector(segment_locs, snapshot_loc, segment_id_map);
+
         // Segment pruner.
         let segment_pruner =
             SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
+
         let metas = segment_pruner.pruning(segment_locs).await?;
 
         // TopN pruner.

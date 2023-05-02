@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -159,6 +159,11 @@ impl Column {
                 let column = ArrayColumn::try_downcast(column).unwrap();
                 Self::filter_scalar_types::<MapType<AnyType, AnyType>>(&column, builder, filter)
             }
+            Column::Bitmap(column) => {
+                let column = Self::filter_string_scalars(column, filter);
+                Column::Bitmap(column)
+            }
+
             Column::Nullable(c) => {
                 let column = Self::filter(&c.column, filter);
                 let validity = Self::filter_scalar_types::<BooleanType>(

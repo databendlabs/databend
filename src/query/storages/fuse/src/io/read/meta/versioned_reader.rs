@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,7 +44,7 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
     async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V3(v) => load_snapshot_v3(reader, v).await?,
+            SnapshotVersion::V3(_) => load_snapshot_v3(reader).await?,
             SnapshotVersion::V2(v) => {
                 let mut ts = load_by_version(reader, v).await?;
                 ts.schema = TableSchema::init_if_need(ts.schema);
@@ -82,7 +82,7 @@ impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
     where R: AsyncRead + Unpin + Send {
         let schema = &self.1;
         let r = match &self.0 {
-            SegmentInfoVersion::V3(v) => load_segment_v3(reader, v).await?,
+            SegmentInfoVersion::V3(_) => load_segment_v3(reader).await?,
             SegmentInfoVersion::V2(v) => {
                 let data = load_by_version(reader, v).await?;
                 SegmentInfo::from_v2(data)

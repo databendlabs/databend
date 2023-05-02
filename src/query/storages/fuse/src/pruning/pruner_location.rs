@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,15 +26,15 @@ pub struct SegmentLocation {
 pub fn create_segment_location_vector(
     locations: Vec<Location>,
     snapshot_loc: Option<String>,
-    segment_id_map: Option<HashMap<String, usize>>,
+    segment_id_map: Option<HashMap<Location, usize>>,
 ) -> Vec<SegmentLocation> {
     let segment_count = locations.len();
     if let Some(segment_id_map) = segment_id_map {
         let mut seg_locations = Vec::with_capacity(segment_count);
-        for (location, version) in locations {
+        for location in locations {
             seg_locations.push(SegmentLocation {
                 segment_id: *segment_id_map.get(&location).unwrap(),
-                location: (location.clone(), version),
+                location,
                 snapshot_loc: snapshot_loc.clone(),
             });
         }
@@ -42,10 +42,10 @@ pub fn create_segment_location_vector(
         seg_locations
     } else {
         let mut seg_locations = Vec::with_capacity(segment_count);
-        for (i, location) in locations.iter().enumerate() {
+        for (i, location) in locations.into_iter().enumerate() {
             seg_locations.push(SegmentLocation {
                 segment_id: segment_count - i - 1,
-                location: location.to_owned(),
+                location,
                 snapshot_loc: snapshot_loc.clone(),
             });
         }

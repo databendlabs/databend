@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,13 +20,18 @@
 #![feature(maybe_uninit_slice)]
 #![feature(trusted_len)]
 
+extern crate core;
+
 mod container;
+mod hashjoin_hashtable;
+mod hashjoin_string_hashtable;
 mod hashtable;
 mod keys_ref;
 mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
 
+mod dictionary_string_hashtable;
 mod partitioned_hashtable;
 mod short_string_hashtable;
 mod string_hashtable;
@@ -90,10 +95,21 @@ pub type StringHashtableEntryRef<'a, K, V> = string_hashtable::StringHashtableEn
 pub type StringHashtableEntryMutRef<'a, K, V> =
     string_hashtable::StringHashtableEntryMutRef<'a, K, V>;
 
+pub type DictionaryStringHashMap<V> = dictionary_string_hashtable::DictionaryStringHashTable<V>;
+pub type DictionaryKeys = dictionary_string_hashtable::DictionaryKeys;
+
 pub type LookupHashMap<K, const CAPACITY: usize, V> = LookupHashtable<K, CAPACITY, V>;
 pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a, CAPACITY, K, V>;
 pub type LookupHashMapIterMut<'a, K, const CAPACITY: usize, V> =
     LookupTableIterMut<'a, CAPACITY, K, V>;
 
+pub use hashjoin_hashtable::MarkerKind;
+pub use hashjoin_hashtable::RawEntry;
+pub use hashjoin_hashtable::RowPtr;
+pub use hashjoin_string_hashtable::StringRawEntry;
+pub use hashjoin_string_hashtable::STRING_EARLY_SIZE;
 pub use keys_ref::KeysRef;
 pub use partitioned_hashtable::hash2bucket;
+pub type HashJoinHashMap<K> = hashjoin_hashtable::HashJoinHashTable<K>;
+pub type StringHashJoinHashMap = hashjoin_string_hashtable::HashJoinStringHashTable;
+pub use traits::HashJoinHashtableLike;

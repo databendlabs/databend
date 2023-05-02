@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,7 @@ pub fn pretty_statement(stmt: Statement, max_width: usize) -> Result<String> {
         Statement::Delete {
             table_reference,
             selection,
+            ..
         } => pretty_delete(table_reference, selection),
         Statement::Copy(copy_stmt) => pretty_copy(copy_stmt),
         Statement::Update(update_stmt) => pretty_update(update_stmt),

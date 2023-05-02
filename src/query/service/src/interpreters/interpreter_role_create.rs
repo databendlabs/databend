@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -50,7 +50,6 @@ impl Interpreter for CreateRoleInterpreter {
         let plan = self.plan.clone();
         let tenant = self.ctx.get_tenant();
         let user_mgr = UserApiProvider::instance();
-        user_mgr.ensure_builtin_roles(&tenant).await?;
         user_mgr
             .add_role(&tenant, RoleInfo::new(&plan.role_name), plan.if_not_exists)
             .await?;

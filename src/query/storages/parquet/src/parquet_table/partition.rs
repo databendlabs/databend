@@ -1,16 +1,16 @@
-//  Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::sync::Arc;
 
@@ -32,13 +32,17 @@ use crate::pruning::PartitionPruner;
 use crate::ParquetTable;
 
 impl ParquetTable {
-    #[inline]
-    #[async_backtrace::framed]
-    pub(super) async fn do_read_partitions(
+    pub(crate) fn create_pruner(
         &self,
         ctx: Arc<dyn TableContext>,
         push_down: Option<PushDownInfo>,
-    ) -> Result<(PartStatistics, Partitions)> {
+        is_small_file: bool,
+    ) -> Result<PartitionPruner> {
+        let parquet_fast_read_bytes = if is_small_file {
+            0_usize
+        } else {
+            ctx.get_settings().get_parquet_fast_read_bytes()? as usize
+        };
         // `plan.source_info.schema()` is the same as `TableSchema::from(&self.arrow_schema)`
         let projection = if let Some(PushDownInfo {
             projection: Some(prj),
@@ -100,13 +104,34 @@ impl ParquetTable {
 
         let page_pruners = if self.read_options.prune_pages() && filter.is_some() {
             Some(build_column_page_pruners(
-                func_ctx.clone(),
+                func_ctx,
                 &schema,
                 filter.as_ref().unwrap(),
             )?)
         } else {
             None
         };
+
+        Ok(PartitionPruner {
+            schema,
+            row_group_pruner,
+            page_pruners,
+            columns_to_read,
+            column_nodes: projected_column_nodes,
+            skip_pruning,
+            top_k,
+            parquet_fast_read_bytes,
+        })
+    }
+
+    #[inline]
+    #[async_backtrace::framed]
+    pub(super) async fn do_read_partitions(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_down: Option<PushDownInfo>,
+    ) -> Result<(PartStatistics, Partitions)> {
+        let pruner = self.create_pruner(ctx.clone(), push_down.clone(), false)?;
 
         let file_locations = match &self.files_to_read {
             Some(files) => files
@@ -123,18 +148,8 @@ impl ParquetTable {
             .collect::<Vec<_>>(),
         };
 
-        let pruner = PartitionPruner {
-            schema,
-            row_group_pruner,
-            page_pruners,
-            operator: self.operator.clone(),
-            locations: file_locations,
-            columns_to_read,
-            column_nodes: projected_column_nodes,
-            skip_pruning,
-            top_k,
-        };
-
-        pruner.read_and_prune_partitions().await
+        pruner
+            .read_and_prune_partitions(self.operator.clone(), &file_locations)
+            .await
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ use crate::types::string::StringColumnBuilder;
 use crate::types::AnyType;
 use crate::types::ArgType;
 use crate::types::ArrayType;
+use crate::types::BitmapType;
 use crate::types::BooleanType;
 use crate::types::DateType;
 use crate::types::EmptyArrayType;
@@ -161,6 +162,11 @@ impl Column {
                 };
                 let builder = ArrayColumnBuilder { builder, offsets };
                 Self::concat_value_types::<MapType<AnyType, AnyType>>(builder, columns)
+            }
+            Column::Bitmap(_) => {
+                let data_capacity = columns.iter().map(|c| c.memory_size() - c.len() * 8).sum();
+                let builder = StringColumnBuilder::with_capacity(capacity, data_capacity);
+                Self::concat_value_types::<BitmapType>(builder, columns)
             }
             Column::Nullable(_) => {
                 let mut bitmaps = Vec::with_capacity(columns.len());

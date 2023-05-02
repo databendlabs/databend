@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ use common_arrow::arrow::io::parquet::read::indexes::compute_page_row_intervals;
 use common_arrow::arrow::io::parquet::read::indexes::read_columns_indexes;
 use common_arrow::arrow::io::parquet::read::indexes::FieldPageStatistics;
 use common_arrow::parquet::indexes::Interval;
+use common_arrow::parquet::metadata::FileMetaData;
 use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_pages_locations;
 use common_catalog::plan::PartStatistics;
@@ -44,7 +45,9 @@ use storages_common_pruner::RangePruner;
 use storages_common_pruner::RangePrunerCreator;
 
 use crate::parquet_part::ColumnMeta;
+use crate::parquet_part::ParquetPart;
 use crate::parquet_part::ParquetRowGroupPart;
+use crate::parquet_part::ParquetSmallFilesPart;
 use crate::statistics::collect_row_group_stats;
 use crate::statistics::BatchStatistics;
 
@@ -56,10 +59,6 @@ pub struct PartitionPruner {
     pub row_group_pruner: Option<Arc<dyn RangePruner + Send + Sync>>,
     /// Pruners to prune pages.
     pub page_pruners: Option<ColumnRangePruners>,
-    /// Parquet file locations
-    pub locations: Vec<(String, u64)>,
-    /// OpenDAL operator
-    pub operator: Operator,
     /// The projected column indices.
     pub columns_to_read: HashSet<FieldIndex>,
     /// The projected column nodes.
@@ -71,40 +70,157 @@ pub struct PartitionPruner {
     // TODO: use limit information for pruning
     // /// Limit of this query. If there is order by and filter, it will not be used (assign to `usize::MAX`).
     // pub limit: usize,
+    pub parquet_fast_read_bytes: usize,
 }
 
 impl PartitionPruner {
+    #[async_backtrace::framed]
+    pub fn read_and_prune_file_meta(
+        &self,
+        path: &str,
+        file_meta: FileMetaData,
+        operator: Operator,
+    ) -> Result<(PartStatistics, Vec<ParquetRowGroupPart>)> {
+        let mut stats = PartStatistics::default();
+        let mut partitions = vec![];
+
+        let is_blocking_io = operator.info().can_blocking();
+        let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
+
+        let no_stats = file_meta.row_groups.iter().any(|r| {
+            r.columns()
+                .iter()
+                .any(|c| c.metadata().statistics.is_none())
+        });
+
+        let row_group_stats = if no_stats {
+            None
+        } else if self.row_group_pruner.is_some() && !self.skip_pruning {
+            let pruner = self.row_group_pruner.as_ref().unwrap();
+            // If collecting stats fails or `should_keep` is true, we still read the row group.
+            // Otherwise, the row group will be pruned.
+            if let Ok(row_group_stats) =
+                collect_row_group_stats(&self.column_nodes, &file_meta.row_groups)
+            {
+                for (idx, (stats, _rg)) in row_group_stats
+                    .iter()
+                    .zip(file_meta.row_groups.iter())
+                    .enumerate()
+                {
+                    row_group_pruned[idx] = !pruner.should_keep(stats);
+                }
+                Some(row_group_stats)
+            } else {
+                None
+            }
+        } else if self.top_k.is_some() {
+            collect_row_group_stats(&self.column_nodes, &file_meta.row_groups).ok()
+        } else {
+            None
+        };
+
+        for (rg_idx, rg) in file_meta.row_groups.iter().enumerate() {
+            if row_group_pruned[rg_idx] {
+                continue;
+            }
+
+            stats.read_rows += rg.num_rows();
+            stats.read_bytes += rg.total_byte_size();
+            stats.partitions_scanned += 1;
+
+            // Currently, only blocking io is allowed to prune pages.
+            let row_selection = if self.page_pruners.is_some()
+                && is_blocking_io
+                && rg.columns().iter().all(|c| {
+                    c.column_chunk().column_index_offset.is_some()
+                        && c.column_chunk().column_index_length.is_some()
+                }) {
+                let mut reader = operator.blocking().reader(path)?;
+                self.page_pruners
+                    .as_ref()
+                    .map(|pruners| filter_pages(&mut reader, &self.schema, rg, pruners))
+                    .transpose()
+                    .unwrap_or(None)
+            } else {
+                None
+            };
+
+            let mut column_metas = HashMap::with_capacity(self.columns_to_read.len());
+            for index in self.columns_to_read.iter() {
+                let c = &rg.columns()[*index];
+                let (offset, length) = c.byte_range();
+
+                let min_max = self
+                    .top_k
+                    .as_ref()
+                    .filter(|(tk, _)| tk.column_id as usize == *index)
+                    .zip(row_group_stats.as_ref())
+                    .map(|((_, offset), stats)| {
+                        let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();
+                        (stat.min.clone(), stat.max.clone())
+                    });
+
+                column_metas.insert(*index, ColumnMeta {
+                    offset,
+                    length,
+                    num_values: c.num_values(),
+                    compression: c.compression(),
+                    uncompressed_size: c.uncompressed_size() as u64,
+                    min_max,
+                    has_dictionary: c.dictionary_page_offset().is_some(),
+                });
+            }
+
+            partitions.push(ParquetRowGroupPart {
+                location: path.to_string(),
+                num_rows: rg.num_rows(),
+                column_metas,
+                row_selection,
+                sort_min_max: None,
+            })
+        }
+        Ok((stats, partitions))
+    }
+
     /// Try to read parquet meta to generate row-group-wise partitions.
     /// And prune row groups an pages to generate the final row group partitions.
     #[async_backtrace::framed]
-    pub async fn read_and_prune_partitions(&self) -> Result<(PartStatistics, Partitions)> {
-        let PartitionPruner {
-            schema,
-            row_group_pruner,
-            page_pruners,
-            locations,
-            operator,
-            columns_to_read,
-            column_nodes,
-            skip_pruning,
-            top_k,
-        } = self;
-
+    pub async fn read_and_prune_partitions(
+        &self,
+        operator: Operator,
+        locations: &Vec<(String, u64)>,
+    ) -> Result<(PartStatistics, Partitions)> {
         // part stats
-        let mut read_rows = 0;
-        let mut read_bytes = 0;
-        let mut partitions_scanned = 0;
-        let mut partitions_total = 0;
+        let mut stats = PartStatistics::default();
+
+        let mut large_files = vec![];
+        let mut small_files = vec![];
+        for (location, size) in locations {
+            if *size > self.parquet_fast_read_bytes as u64 {
+                large_files.push((location.clone(), *size));
+            } else {
+                small_files.push((location.clone(), *size));
+            }
+        }
 
         let mut partitions = Vec::with_capacity(locations.len());
+        for paths in small_files.chunks(self.columns_to_read.len().max(1)) {
+            stats.read_rows += paths.len();
+            stats.read_bytes += paths.iter().map(|(_, size)| *size as usize).sum::<usize>();
+            stats.partitions_scanned += 1;
+            stats.partitions_total += 1;
+            partitions.push(ParquetPart::SmallFiles(ParquetSmallFilesPart {
+                files: paths.to_vec(),
+            }))
+        }
 
         let is_blocking_io = operator.info().can_blocking();
 
         // 1. Read parquet meta data. Distinguish between sync and async reading.
         let file_metas = if is_blocking_io {
             let mut file_metas = Vec::with_capacity(locations.len());
-            for (location, _size) in locations {
-                let mut reader = operator.blocking().reader(location)?;
+            for (location, _size) in large_files {
+                let mut reader = operator.blocking().reader(&location)?;
                 let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
                     ErrorCode::Internal(format!(
                         "Read parquet file '{}''s meta error: {}",
@@ -115,106 +231,23 @@ impl PartitionPruner {
             }
             file_metas
         } else {
-            read_parquet_metas_in_parallel(operator.clone(), locations.clone(), 16, 64).await?
+            read_parquet_metas_in_parallel(operator.clone(), large_files.clone(), 16, 64).await?
         };
 
         // 2. Use file meta to prune row groups or pages.
 
         // If one row group does not have stats, we cannot use the stats for topk optimization.
-        for (file_id, file_meta) in file_metas.iter().enumerate() {
-            partitions_total += file_meta.row_groups.len();
-            let mut row_group_pruned = vec![false; file_meta.row_groups.len()];
-
-            let no_stats = file_meta.row_groups.iter().any(|r| {
-                r.columns()
-                    .iter()
-                    .any(|c| c.metadata().statistics.is_none())
-            });
-
-            let row_group_stats = if no_stats {
-                None
-            } else if row_group_pruner.is_some() && !skip_pruning {
-                let pruner = row_group_pruner.as_ref().unwrap();
-                // If collecting stats fails or `should_keep` is true, we still read the row group.
-                // Otherwise, the row group will be pruned.
-                if let Ok(row_group_stats) =
-                    collect_row_group_stats(column_nodes, &file_meta.row_groups)
-                {
-                    for (idx, (stats, _rg)) in row_group_stats
-                        .iter()
-                        .zip(file_meta.row_groups.iter())
-                        .enumerate()
-                    {
-                        row_group_pruned[idx] = !pruner.should_keep(stats);
-                    }
-                    Some(row_group_stats)
-                } else {
-                    None
-                }
-            } else if top_k.is_some() {
-                collect_row_group_stats(column_nodes, &file_meta.row_groups).ok()
-            } else {
-                None
-            };
-
-            for (rg_idx, rg) in file_meta.row_groups.iter().enumerate() {
-                if row_group_pruned[rg_idx] {
-                    continue;
-                }
-
-                read_rows += rg.num_rows();
-                read_bytes += rg.total_byte_size();
-                partitions_scanned += 1;
-
-                // Currently, only blocking io is allowed to prune pages.
-                let row_selection = if page_pruners.is_some()
-                    && is_blocking_io
-                    && rg.columns().iter().all(|c| {
-                        c.column_chunk().column_index_offset.is_some()
-                            && c.column_chunk().column_index_length.is_some()
-                    }) {
-                    let mut reader = operator.blocking().reader(&locations[file_id].0)?;
-                    page_pruners
-                        .as_ref()
-                        .map(|pruners| filter_pages(&mut reader, schema, rg, pruners))
-                        .transpose()
-                        .unwrap_or(None)
-                } else {
-                    None
-                };
-
-                let mut column_metas = HashMap::with_capacity(columns_to_read.len());
-                for index in columns_to_read {
-                    let c = &rg.columns()[*index];
-                    let (offset, length) = c.byte_range();
-
-                    let min_max = top_k
-                        .as_ref()
-                        .filter(|(tk, _)| tk.column_id as usize == *index)
-                        .zip(row_group_stats.as_ref())
-                        .map(|((_, offset), stats)| {
-                            let stat = stats[rg_idx].get(&(*offset as u32)).unwrap();
-                            (stat.min.clone(), stat.max.clone())
-                        });
-
-                    column_metas.insert(*index, ColumnMeta {
-                        offset,
-                        length,
-                        compression: c.compression(),
-                        uncompressed_size: c.uncompressed_size() as u64,
-                        min_max,
-                        has_dictionary: c.dictionary_page_offset().is_some(),
-                    });
-                }
-
-                partitions.push(ParquetRowGroupPart {
-                    location: locations[file_id].0.clone(),
-                    num_rows: rg.num_rows(),
-                    column_metas,
-                    row_selection,
-                    sort_min_max: None,
-                })
+        for (file_id, file_meta) in file_metas.into_iter().enumerate() {
+            stats.partitions_total += file_meta.row_groups.len();
+            let (sub_stats, parts) =
+                self.read_and_prune_file_meta(&locations[file_id].0, file_meta, operator.clone())?;
+            for p in parts {
+                partitions.push(ParquetPart::RowGroup(p));
             }
+            stats.partitions_total += sub_stats.partitions_total;
+            stats.partitions_scanned += sub_stats.partitions_scanned;
+            stats.read_bytes += sub_stats.read_bytes;
+            stats.read_rows += sub_stats.read_rows;
         }
 
         let partition_kind = PartitionsShuffleKind::Mod;
@@ -223,15 +256,7 @@ impl PartitionPruner {
             .map(|p| p.convert_to_part_info())
             .collect();
 
-        Ok((
-            PartStatistics::new_estimated(
-                read_rows,
-                read_bytes,
-                partitions_scanned,
-                partitions_total,
-            ),
-            Partitions::create_nolazy(partition_kind, partitions),
-        ))
+        Ok((stats, Partitions::create_nolazy(partition_kind, partitions)))
     }
 }
 

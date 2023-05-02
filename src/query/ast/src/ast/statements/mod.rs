@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ mod copy;
 mod database;
 mod explain;
 mod index;
+mod hint;
 mod insert;
 mod kill;
 mod presign;
@@ -39,6 +40,7 @@ pub use columns::*;
 pub use copy::*;
 pub use database::*;
 pub use explain::*;
+pub use hint::*;
 pub use index::*;
 pub use insert::*;
 pub use kill::*;

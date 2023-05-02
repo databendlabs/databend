@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Instant;
@@ -536,7 +537,7 @@ impl CopyInterpreter {
             return None;
         }
         tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
-        let expire_at = expire_hours * 60 + Utc::now().timestamp() as u64;
+        let expire_at = expire_hours * 60 * 60 + Utc::now().timestamp() as u64;
         let req = UpsertTableCopiedFileReq {
             table_id,
             file_info: copy_stage_files,

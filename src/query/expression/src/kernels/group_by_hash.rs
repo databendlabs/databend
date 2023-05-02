@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,11 +16,13 @@ use std::fmt::Debug;
 use std::iter::TrustedLen;
 use std::marker::PhantomData;
 use std::ops::Not;
+use std::ptr::NonNull;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::buffer::Buffer;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_hashtable::DictionaryKeys;
 use common_hashtable::FastHash;
 use common_io::prelude::BinaryWrite;
 use ethnum::i256;
@@ -34,6 +36,7 @@ use crate::types::decimal::DecimalColumn;
 use crate::types::nullable::NullableColumn;
 use crate::types::number::Number;
 use crate::types::number::NumberColumn;
+use crate::types::string::StringColumn;
 use crate::types::string::StringColumnBuilder;
 use crate::types::string::StringIterator;
 use crate::types::DataType;
@@ -52,7 +55,16 @@ pub enum KeysState {
     Column(Column),
     U128(Buffer<u128>),
     U256(Buffer<u256>),
+    Dictionary {
+        columns: Vec<StringColumn>,
+        keys_point: Vec<NonNull<[u8]>>,
+        dictionaries: Vec<DictionaryKeys>,
+    },
 }
+
+unsafe impl Send for KeysState {}
+
+unsafe impl Sync for KeysState {}
 
 pub trait HashMethod: Clone + Sync + Send + 'static {
     type HashKey: ?Sized + Eq + FastHash + Debug;
@@ -83,6 +95,7 @@ pub type HashMethodKeysU256 = HashMethodFixedKeys<u256>;
 #[derive(Clone, Debug)]
 pub enum HashMethodKind {
     Serializer(HashMethodSerializer),
+    DictionarySerializer(HashMethodDictionarySerializer),
     SingleString(HashMethodSingleString),
     KeysU8(HashMethodKeysU8),
     KeysU16(HashMethodKeysU16),
@@ -94,6 +107,17 @@ pub enum HashMethodKind {
 
 #[macro_export]
 macro_rules! with_hash_method {
+    ( | $t:tt | $($tail:tt)* ) => {
+        match_template::match_template! {
+            $t = [Serializer, SingleString, KeysU8, KeysU16,
+            KeysU32, KeysU64, KeysU128, KeysU256, DictionarySerializer],
+            $($tail)*
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! with_join_hash_method {
     ( | $t:tt | $($tail:tt)* ) => {
         match_template::match_template! {
             $t = [Serializer, SingleString, KeysU8, KeysU16,
@@ -116,6 +140,7 @@ macro_rules! with_mappedhash_method {
                 KeysU64 => HashMethodKeysU64,
                 KeysU128 => HashMethodKeysU128,
                 KeysU256 => HashMethodKeysU256,
+                DictionarySerializer => HashMethodDictionarySerializer
             ],
             $($tail)*
         }
@@ -143,6 +168,7 @@ impl HashMethodKind {
             HashMethodKind::KeysU256(_) => {
                 DataType::Decimal(DecimalDataType::Decimal256(i256::default_decimal_size()))
             }
+            HashMethodKind::DictionarySerializer(_) => DataType::String,
         }
     }
 }
@@ -210,6 +236,84 @@ impl HashMethod for HashMethodSerializer {
     fn build_keys_iter<'a>(&self, key_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
         match key_state {
             KeysState::Column(Column::String(col)) => Ok(col.iter()),
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HashMethodDictionarySerializer {
+    pub dict_keys: usize,
+}
+
+impl HashMethod for HashMethodDictionarySerializer {
+    type HashKey = DictionaryKeys;
+    type HashKeyIter<'a> = std::slice::Iter<'a, DictionaryKeys>;
+
+    fn name(&self) -> String {
+        "DictionarySerializer".to_string()
+    }
+
+    fn build_keys_state(
+        &self,
+        group_columns: &[(Column, DataType)],
+        rows: usize,
+    ) -> Result<KeysState> {
+        // fixed type serialize one column to dictionary
+        let mut dictionary_columns = Vec::with_capacity(group_columns.len());
+
+        for (group_column, _) in group_columns {
+            if let Column::String(v) = group_column {
+                debug_assert_eq!(v.len(), rows);
+                dictionary_columns.push(v.clone());
+            } else if let Column::Variant(v) = group_column {
+                debug_assert_eq!(v.len(), rows);
+                dictionary_columns.push(v.clone());
+            }
+        }
+
+        if dictionary_columns.len() != group_columns.len() {
+            let approx_size = group_columns.len() * rows * 8;
+            let mut builder = StringColumnBuilder::with_capacity(rows, approx_size);
+
+            for row in 0..rows {
+                for (group_column, _) in group_columns {
+                    if !matches!(group_column, Column::String(_) | Column::Variant(_)) {
+                        serialize_column_binary(group_column, row, &mut builder.data);
+                    }
+                }
+
+                builder.commit_row();
+            }
+
+            dictionary_columns.push(builder.build());
+        }
+
+        let mut keys = Vec::with_capacity(rows * dictionary_columns.len());
+        let mut points = Vec::with_capacity(rows * dictionary_columns.len());
+
+        for row in 0..rows {
+            let start = points.len();
+
+            for dictionary_column in &dictionary_columns {
+                points.push(NonNull::from(unsafe {
+                    dictionary_column.index_unchecked(row)
+                }));
+            }
+
+            keys.push(DictionaryKeys::create(&points[start..]))
+        }
+
+        Ok(KeysState::Dictionary {
+            dictionaries: keys,
+            keys_point: points,
+            columns: dictionary_columns,
+        })
+    }
+
+    fn build_keys_iter<'a>(&self, keys_state: &'a KeysState) -> Result<Self::HashKeyIter<'a>> {
+        match keys_state {
+            KeysState::Dictionary { dictionaries, .. } => Ok(dictionaries.iter()),
             _ => unreachable!(),
         }
     }
@@ -545,6 +649,9 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
                 serialize_column_binary(&data, i, vec);
             }
         }
+        Column::Bitmap(v) => {
+            BinaryWrite::write_binary(vec, unsafe { v.index_unchecked(row) }).unwrap()
+        }
         Column::Nullable(c) => {
             let valid = c.validity.get_bit(row);
             vec.push(valid as u8);
@@ -563,22 +670,19 @@ pub fn serialize_column_binary(column: &Column, row: usize, vec: &mut Vec<u8>) {
     }
 }
 
-//  Group by (nullable(u16), nullable(u8)) needs 16 + 8 + 8 + 8 = 40 bytes, then we pad the bytes  up to u64 to store the hash value.
-//  If the value is null, we write 1 to the null_offset, otherwise we write 0.
-//  since most value is not null, so this can make the hash number as low as possible.
+// Group by (nullable(u16), nullable(u8)) needs 2 + 1 + 1 + 1 = 5 bytes, then we pad the bytes up to u64 to store the hash value.
+// If the value is null, we write 1 to the null_offset, otherwise we write 0.
+// since most value is not null, so this can make the hash number as low as possible.
 //
-//  u16 column pos       │u8 column pos
-// │                     │
-// │                     │
-// │                     │                       ┌─  null offset of u8 column
-// ▼                    ▼                      ▼
-// ┌──────────┬──────────┬───────────┬───────────┬───────────┬───────────┬─────────┬─────────┐
-// │   1byte  │   1byte  │    1byte  │    1byte  │   1byte   │    1byte  │   1byte │   1byte │
-// └──────────┴──────────┴───────────┴───────────┴───────────┼───────────┴─────────┴─────────┤
-//                                   ▲                       │                               │
-//                                   │                       └──────────►       ◄────────────┘
-//                                   │                                    unused bytes
-//                                   └─  null offset of u16 column
+// u16 column pos        u8 column pos
+// │                     │                       ┌─ null offset of u8 column
+// ▼                     ▼                       ▼
+// ┌──────────┬──────────┬───────────┬───────────┬───────────┬───────────┬───────────┬───────────┐
+// │   1byte  │   1byte  │   1byte   │   1byte   │   1byte   │   1byte   │   .....   │   1byte   │
+// └──────────┴──────────┴───────────┴───────────┴───────────┼───────────┴───────────┴───────────┤
+//                                   ▲                       │                                   │
+//                                   │                       └─────────► unused bytes  ◄─────────┘
+//                                   └─ null offset of u16 column
 
 pub fn fixed_hash(
     column: &Column,

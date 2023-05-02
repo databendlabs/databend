@@ -1,10 +1,6 @@
 name: "Test databend-meta cluster"
 description: "Download binaries, setup cluster by joining and leaving"
 inputs:
-  profile:
-    description: ""
-    required: true
-    default: "debug"
   target:
     description: ""
     required: true
@@ -15,7 +11,6 @@ runs:
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:
-        profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
 

@@ -1,29 +1,32 @@
-//  Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashMap;
+use std::io::Cursor;
 
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::uuid::Uuid;
 use common_exception::Result;
 use common_expression::TableSchema;
+use common_io::prelude::BinaryRead;
 use serde::Deserialize;
 use serde::Serialize;
 
 use crate::meta::format::compress;
 use crate::meta::format::encode;
+use crate::meta::format::read_and_deserialize;
 use crate::meta::format::Compression;
 use crate::meta::monotonically_increased_timestamp;
 use crate::meta::statistics::FormatVersion;
@@ -32,6 +35,7 @@ use crate::meta::v2;
 use crate::meta::ClusterKey;
 use crate::meta::Encoding;
 use crate::meta::Location;
+use crate::meta::MetaCompression;
 use crate::meta::SnapshotId;
 use crate::meta::Statistics;
 use crate::meta::Versioned;
@@ -39,8 +43,21 @@ use crate::meta::Versioned;
 /// The structure of the segment is the same as that of v2, but the serialization and deserialization methods are different
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TableSnapshot {
-    /// format version of snapshot
-    format_version: FormatVersion,
+    /// format version of TableSnapshot meta data
+    ///
+    /// Note that:
+    ///
+    /// - A instance of v3::TableSnapshot may have a value of v2/v1::TableSnapshot::VERSION for this field.
+    ///
+    ///   That indicates this instance is converted from a v2/v1::TableSnapshot.
+    ///
+    /// - The meta writers are responsible for only writing down the latest version of TableSnapshot, and
+    /// the format_version being written is of the latest version.
+    ///
+    ///   e.g. if the current version of TableSnapshot is v3::TableSnapshot, then the format_version
+    ///   that will be written down to object storage as part of TableSnapshot table meta data,
+    ///   should always be v3::TableSnapshot::VERSION (which is 3)
+    pub format_version: FormatVersion,
 
     /// id of snapshot
     pub snapshot_id: SnapshotId,
@@ -149,20 +166,26 @@ impl TableSnapshot {
         Ok(buf)
     }
 
+    pub fn from_bytes(buffer: Vec<u8>) -> Result<TableSnapshot> {
+        let mut cursor = Cursor::new(buffer);
+        let version = cursor.read_scalar::<u64>()?;
+        assert_eq!(version, TableSnapshot::VERSION);
+        let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
+        let snapshot_size: u64 = cursor.read_scalar::<u64>()?;
+
+        read_and_deserialize(&mut cursor, snapshot_size, &encoding, &compression)
+    }
     #[inline]
     pub fn encoding() -> Encoding {
         Encoding::default()
     }
 
-    pub fn format_version(&self) -> u64 {
-        self.format_version
-    }
-
-    pub fn build_segment_id_map(&self) -> HashMap<String, usize> {
+    pub fn build_segment_id_map(&self) -> HashMap<Location, usize> {
         let segment_count = self.segments.len();
         let mut segment_id_map = HashMap::new();
         for (i, segment_loc) in self.segments.iter().enumerate() {
-            segment_id_map.insert(segment_loc.0.to_string(), segment_count - i - 1);
+            segment_id_map.insert(segment_loc.clone(), segment_count - i - 1);
         }
         segment_id_map
     }
@@ -171,7 +194,9 @@ impl TableSnapshot {
 impl From<v2::TableSnapshot> for TableSnapshot {
     fn from(s: v2::TableSnapshot) -> Self {
         Self {
-            format_version: TableSnapshot::VERSION,
+            // NOTE: it is important to let the format_version return from here
+            // carries the format_version of snapshot being converted.
+            format_version: s.format_version,
             snapshot_id: s.snapshot_id,
             timestamp: s.timestamp,
             prev_snapshot_id: s.prev_snapshot_id,
