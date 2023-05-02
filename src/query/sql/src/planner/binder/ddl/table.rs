@@ -908,9 +908,8 @@ impl Binder {
                 }
             }
         }
-        let catalog = "".to_string();
-        let database = "".to_string();
-        let table = "".to_string();
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
         Ok(Plan::CreateIndex(Box::new(CreateIndexPlan {
             catalog,
             database,

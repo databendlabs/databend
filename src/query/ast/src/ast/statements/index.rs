@@ -8,6 +8,8 @@ use crate::parser::token::TokenKind;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateIndexStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
     pub table: Identifier,
     pub index_type: TokenKind,
     pub column: Identifier,

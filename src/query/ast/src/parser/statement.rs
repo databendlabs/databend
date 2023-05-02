@@ -272,12 +272,29 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let create_index = map(
         // example: CREATE INDEX ON items USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);
         rule! {
-            CREATE ~ INDEX~ ON ~ #ident
+            CREATE ~ INDEX~ ON ~ #period_separated_idents_1_to_3
             ~ USING ~ IVFFLAT ~ "(" ~ #ident ~ IP ~")"
             ~ WITH ~ "(" ~ #comma_separated_list1(expr) ~ ")"
         },
-        |(_, _, _, table, _, index_type, _, column, metric_type, _, _, _, paras, _)| {
+        |(
+            _,
+            _,
+            _,
+            (catalog, database, table),
+            _,
+            index_type,
+            _,
+            column,
+            metric_type,
+            _,
+            _,
+            _,
+            paras,
+            _,
+        )| {
             Statement::CreateIndex(CreateIndexStmt {
+                catalog,
+                database,
                 table,
                 index_type: index_type.kind,
                 column,

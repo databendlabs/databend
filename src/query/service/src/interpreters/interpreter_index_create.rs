@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
+use common_base::base::tokio;
 use common_exception::Result;
 use common_sql::plans::CreateIndexPlan;
+use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 
 use super::Interpreter;
@@ -32,10 +34,11 @@ impl Interpreter for CreateIndexInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
-
-        // build index in background thread asynchronously
-        std::thread::spawn(move || {
-           
+        // build index in background task and return immediately
+        let handle = tokio::spawn(async move {
+            let table = FuseTable::try_from_table(table.as_ref())?;
+            table.create_vector_index().await?;
+            Ok::<(), common_exception::ErrorCode>(())
         });
         Ok(PipelineBuildResult::create())
     }
