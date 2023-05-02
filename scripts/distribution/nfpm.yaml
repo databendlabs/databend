@@ -21,8 +21,6 @@ contents:
     dst: /usr/bin/databend-meta
   - src: ${path}/bin/databend-metactl
     dst: /usr/bin/databend-metactl
-  - src: ${path}/bin/databend-metabench
-    dst: /usr/bin/databend-metabench
 
   # Configs
   - src: ${path}/configs/databend-query.toml
