@@ -48,25 +48,6 @@ pub static RESERVED_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|
     r
 });
 
-/// Table option keys that can occur in 'create table statement'.
-pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
-    let mut r = HashSet::new();
-    r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
-    r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
-    r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
-    r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
-    r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
-
-    r.insert(OPT_KEY_SNAPSHOT_LOCATION);
-    r.insert(OPT_KEY_TABLE_COMPRESSION);
-    r.insert(OPT_KEY_STORAGE_FORMAT);
-
-    r.insert(OPT_KEY_COMMENT);
-    r.insert(OPT_KEY_EXTERNAL_LOCATION);
-    r.insert(OPT_KEY_ENGINE);
-    r
-});
-
 /// Table option keys that Should not be shown in `show create table` statement
 pub static INTERNAL_TABLE_OPTION_KEYS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     let mut r = HashSet::new();
@@ -81,8 +62,4 @@ pub fn is_reserved_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
 
 pub fn is_internal_opt_key<S: AsRef<str>>(opt_key: S) -> bool {
     INTERNAL_TABLE_OPTION_KEYS.contains(opt_key.as_ref().to_lowercase().as_str())
-}
-
-pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
-    CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
