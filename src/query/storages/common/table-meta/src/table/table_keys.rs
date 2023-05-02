@@ -23,11 +23,6 @@ pub const OPT_KEY_COMMENT: &str = "comment";
 pub const OPT_KEY_EXTERNAL_LOCATION: &str = "external_location";
 pub const OPT_KEY_ENGINE: &str = "engine";
 
-pub const FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD: &str = "block_size_threshold";
-pub const FUSE_OPT_KEY_BLOCK_PER_SEGMENT: &str = "block_per_segment";
-pub const FUSE_OPT_KEY_ROW_PER_BLOCK: &str = "row_per_block";
-pub const FUSE_OPT_KEY_ROW_PER_PAGE: &str = "row_per_page";
-pub const FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD: &str = "row_avg_depth_threshold";
 /// Legacy table snapshot location key
 ///
 /// # Deprecated
