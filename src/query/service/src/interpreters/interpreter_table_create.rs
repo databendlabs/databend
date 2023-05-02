@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_config::GlobalConfig;
@@ -28,11 +29,24 @@ use common_sql::field_default_value;
 use common_sql::plans::CreateTablePlan;
 use common_storages_fuse::io::MetaReaders;
 use common_users::UserApiProvider;
+use once_cell::sync::Lazy;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-
+use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
+use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
+use storages_common_table_meta::table::OPT_KEY_COMMENT;
+use storages_common_table_meta::table::OPT_KEY_EXTERNAL_LOCATION;
+use storages_common_table_meta::table::OPT_KEY_ENGINE;
+use common_storages_fuse::FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD;
+use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_PAGE;
+use common_storages_fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
+use common_storages_fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use common_storages_fuse::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
+use tracing::error;
 use crate::interpreters::InsertInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -224,6 +238,17 @@ impl CreateTableInterpreter {
             },
             ..Default::default()
         };
+
+        for table_option in table_meta.options.iter() {
+            let key = table_option.0.to_lowercase();
+            if !is_valid_create_opt(&key) {
+                error!("invalid opt for fuse table in create table statement");
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option {key} is invalid for create table statement",
+                )));
+            }
+        }
+
         if let Some(cluster_key) = &self.plan.cluster_key {
             table_meta = table_meta.push_cluster_key(cluster_key.clone());
         }
@@ -240,4 +265,29 @@ impl CreateTableInterpreter {
 
         Ok(req)
     }
+}
+
+/// Table option keys that can occur in 'create table statement'.
+pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
+    let mut r = HashSet::new();
+    r.insert(FUSE_OPT_KEY_ROW_PER_PAGE);
+    r.insert(FUSE_OPT_KEY_BLOCK_PER_SEGMENT);
+    r.insert(FUSE_OPT_KEY_ROW_PER_BLOCK);
+    r.insert(FUSE_OPT_KEY_BLOCK_IN_MEM_SIZE_THRESHOLD);
+    r.insert(FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD);
+
+    r.insert(OPT_KEY_SNAPSHOT_LOCATION);
+    r.insert(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    r.insert(OPT_KEY_TABLE_COMPRESSION);
+    r.insert(OPT_KEY_STORAGE_FORMAT);
+    r.insert(OPT_KEY_DATABASE_ID);
+
+    r.insert(OPT_KEY_COMMENT);
+    r.insert(OPT_KEY_EXTERNAL_LOCATION);
+    r.insert(OPT_KEY_ENGINE);
+    r
+});
+
+pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
+    CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
 }
