@@ -8,6 +8,14 @@ inputs:
     description: "Upload artifact"
     required: false
     default: "true"
+  artifacts:
+    description: "Artifacts to build"
+    required: false
+    default: "sqllogictests,meta,query"
+  features:
+    description: "Features to build"
+    required: false
+    default: "default"
 runs:
   using: "composite"
   steps:
@@ -17,10 +25,23 @@ runs:
         target: ${{ inputs.target }}
         bypass_env_vars: RUSTFLAGS,RUST_LOG
 
+    # build all binaries for debug
     - name: Build Debug
-      if: env.BUILD_PROFILE == 'debug'
+      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
-      run: cargo build --target ${{ inputs.target }} --timings
+      run: cargo build --target ${{ inputs.target }} --features ${{ inputs.features }}
+
+    - name: Build Debug for specific artifacts
+      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts != 'all'
+      shell: bash
+      run: |
+        artifacts="${{ inputs.artifacts }}"
+        echo "==> building libs ..."
+        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --lib
+        for artifact in ${artifacts//,/ }; do
+          echo "==> building databend-$artifact ..."
+          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+        done
 
     - name: Set Release build flags
       if: env.BUILD_PROFILE == 'release'
@@ -50,18 +71,27 @@ runs:
     - name: Build Release
       if: env.BUILD_PROFILE == 'release'
       shell: bash
-      run: cargo build --target ${{ inputs.target }} --release
+      run: |
+        artifacts="${{ inputs.artifacts }}"
+        echo "==> building libs ..."
+        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --lib
+        for artifact in ${artifacts//,/ }; do
+          echo "==> building databend-$artifact ..."
+          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
+        done
 
-    # - shell: bash
-    #   run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+    - shell: bash
+      run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
 
     - name: Copyobj zlib for gnu binaries
       if: env.BUILD_PROFILE == 'release' && endsWith(inputs.target, '-gnu')
       shell: bash
       run: |
-        build-tool /usr/bin/${{ env.BUILD_ARCH }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ inputs.target }}/release/databend-query
-        build-tool /usr/bin/${{ env.BUILD_ARCH }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ inputs.target }}/release/databend-meta
-        build-tool /usr/bin/${{ env.BUILD_ARCH }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ inputs.target }}/release/databend-metactl
+        artifacts="${{ inputs.artifacts }}"
+        for artifact in ${artifacts//,/ }; do
+          echo "==> compressing zlib debug for databend-$artifact ..."
+          build-tool /usr/bin/${{ env.BUILD_ARCH }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ inputs.target }}/release/databend-$artifact
+        done
 
     - name: Upload artifact
       if: inputs.upload == 'true'
@@ -69,3 +99,4 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
+        category: ${{ inputs.features }}
