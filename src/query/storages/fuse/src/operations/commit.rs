@@ -728,11 +728,23 @@ mod utils {
                 let block_location = &block.location.0;
                 // if deletion operation failed (after DAL retried)
                 // we just left them there, and let the "major GC" collect them
+                info!(
+                    "aborting operation, delete block location: {:?}",
+                    block_location,
+                );
                 let _ = operator.delete(block_location).await;
                 if let Some(index) = &block.bloom_filter_index_location {
+                    info!(
+                        "aborting operation, delete bloom index location: {:?}",
+                        index.0
+                    );
                     let _ = operator.delete(&index.0).await;
                 }
             }
+            info!(
+                "aborting operation, delete segment location: {:?}",
+                entry.segment_location
+            );
             let _ = operator.delete(&entry.segment_location).await;
         }
         Ok(())
