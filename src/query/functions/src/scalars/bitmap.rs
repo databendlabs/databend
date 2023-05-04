@@ -87,7 +87,7 @@ pub fn register(registry: &mut FunctionRegistry) {
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|arg, builder, ctx| {
             match RoaringTreemap::deserialize_from(arg) {
                 Ok(rb) => {
-                    builder.push(rb.len() as u64);
+                    builder.push(rb.len());
                 }
                 Err(e) => {
                     builder.push(0_u64);
