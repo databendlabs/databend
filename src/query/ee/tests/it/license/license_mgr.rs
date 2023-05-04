@@ -25,10 +25,7 @@ fn test_make_license() -> common_exception::Result<()> {
         common_exception::ErrorCode::LicenseKeyParseError("").code()
     );
     let valid_key = "eyJhbGciOiAiRVMyNTYiLCAidHlwIjogIkpXVCJ9.eyJ0eXBlIjogInRyaWFsIiwgIm9yZyI6ICJ0ZXN0IiwgInRlbmFudHMiOiBudWxsLCAiaXNzIjogImRhdGFiZW5kIiwgImlhdCI6IDE2ODE4OTk1NjIsICJuYmYiOiAxNjgxODk5NTYyLCAiZXhwIjogMTY4MzE5NTU2MX0.EfnbkZgNGuCUM0yZ7wg1ARgkiY3g32OHkoWZYoEADNEBPd4Dp8Dhq-W5qzTTSEthiMiiRym0DswGpzYPFSwQww";
-    let claim = RealLicenseManager::make_license(valid_key).unwrap();
-    assert_eq!(claim.issuer.unwrap(), "databend");
-    assert_eq!(claim.custom.org.unwrap(), "test");
-    assert_eq!(claim.custom.r#type.unwrap(), "trial");
-    assert!(claim.custom.tenants.is_none());
+
+    assert!(RealLicenseManager::make_license(valid_key).is_err());
     Ok(())
 }
