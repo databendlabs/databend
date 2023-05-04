@@ -134,10 +134,7 @@ impl<'a> SelectivityEstimator<'a> {
 
             return match op {
                 ComparisonOp::Equal => {
-                    // For equal predicate, we just use cardinality of a single
-                    // value to estimate the selectivity. This assumes that
-                    // the column is in a uniform distribution.
-                    let sel = evaluate_equal(column_stat, constant);
+                    let sel = evaluate_equal(column_stat, constant, &const_datum);
                     if update {
                         update_statistic(column_stat, const_datum.clone(), const_datum, sel)?;
                     }
@@ -145,7 +142,7 @@ impl<'a> SelectivityEstimator<'a> {
                 }
                 ComparisonOp::NotEqual => {
                     // For not equal predicate, we treat it as opposite of equal predicate.
-                    let sel = 1.0 - evaluate_equal(column_stat, constant);
+                    let sel = 1.0 - evaluate_equal(column_stat, constant, &const_datum);
                     if update {
                         update_statistic(
                             column_stat,
@@ -287,7 +284,13 @@ fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
     }
 }
 
-fn evaluate_equal(column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
+fn evaluate_equal(column_stat: &ColumnStat, constant: &ConstantExpr, const_datum: &Datum) -> f64 {
+    if column_stat.histogram.is_some() {
+        let res = evaluate_equal_by_histogram(const_datum, column_stat);
+        if let Some(res) = res {
+            return res;
+        }
+    }
     let constant_datum = Datum::from_scalar(&constant.value);
     match constant.value.as_ref().infer_data_type() {
         DataType::Null => 0.0,
@@ -377,4 +380,60 @@ fn update_statistic(
         )?);
     }
     Ok(())
+}
+
+fn evaluate_equal_by_histogram(const_datum: &Datum, col_stat: &ColumnStat) -> Option<f64> {
+    let hist = col_stat.histogram.as_ref().unwrap();
+    let min = &col_stat.min;
+    let max = &col_stat.max;
+    // Find how many buckets in [min, max]
+    let mut num_buckets = 0;
+    for (idx, bucket) in hist.buckets_iter().enumerate() {
+        if idx == 0 {
+            continue;
+        }
+        // If the bucket max is less than min, skip it
+        if let Ok(ord) = bucket.upper_bound().compare(min) {
+            if ord == Ordering::Less || ord == Ordering::Equal {
+                continue;
+            }
+        } else {
+            return None;
+        }
+        // If the bucket min is greater than max, stop iteration
+        if let Ok(ord) = hist.buckets[idx - 1].upper_bound().compare(max) {
+            if ord == Ordering::Greater || ord == Ordering::Equal {
+                break;
+            }
+        } else {
+            return None;
+        }
+        num_buckets += 1;
+    }
+
+    // Find how many buckets in [const_datum, const_datum]
+    let mut num_equal_buckets = 0;
+    for (idx, bucket) in hist.buckets_iter().enumerate() {
+        if idx == 0 {
+            continue;
+        }
+        if let Ok(ord) = hist.buckets[idx - 1].upper_bound().compare(const_datum) {
+            if ord == Ordering::Less || ord == Ordering::Equal {
+                if let Ok(ord) = bucket.upper_bound().compare(const_datum) {
+                    if ord == Ordering::Greater || ord == Ordering::Equal {
+                        num_equal_buckets += 1;
+                    }
+                } else {
+                    return None;
+                }
+            }
+        } else {
+            return None;
+        }
+    }
+    if num_buckets == 0 {
+        return Some(0.0);
+    }
+
+    Some(num_equal_buckets as f64 / num_buckets as f64)
 }
