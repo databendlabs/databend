@@ -107,7 +107,7 @@ impl Binder {
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
-                        &aliases,
+                        aliases,
                     );
                     scalar_binder.allow_ambiguity();
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;

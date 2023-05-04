@@ -135,14 +135,14 @@ impl Binder {
             collector.into_srfs()
         };
 
-        // Generate a analyzed select list with from context
-        let mut select_list = self
-            .normalize_select_list(&mut from_context, &stmt.select_list)
-            .await?;
-
         // Bind set returning functions
         s_expr = self
             .bind_project_set(&mut from_context, &set_returning_functions, s_expr)
+            .await?;
+
+        // Generate a analyzed select list with from context
+        let mut select_list = self
+            .normalize_select_list(&mut from_context, &stmt.select_list)
             .await?;
 
         // This will potentially add some alias group items to `from_context` if find some.

@@ -42,7 +42,7 @@ impl Binder {
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
-            &aliases,
+            aliases,
         );
         let (scalar, _) = scalar_binder.bind(having).await?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
