@@ -2,7 +2,7 @@
 title: SET_VAR
 ---
 
-The SET_VAR is an Optimizer Hint that allows you to set a global-level variable for the duration of the query, which can be used in other parts of the query to control behavior. In addition to setting variables that affect the optimizer's execution plan, you can also use SET_VAR to set variables that affect other aspects of query processing, such as locking, sorting, or parallelism.
+The SET_VAR is an optimizer hint that can be specified within a single SQL statement to provide finer control over statement execution plans. This allows you to configure global-level settings temporarily (only for the duration of the SQL statement) with a Key=Value pair. For the available settings you can configure with the SET_VAR, see [SHOW SETTINGS](../40-show/show-settings.md).
 
 See also: [SET](01-set-global.md)
 
@@ -12,24 +12,54 @@ See also: [SET](01-set-global.md)
 /*+ SET_VAR(key=value) SET_VAR(key=value) ... */
 ```
 
-
+- The hint must immediately follow an **INSERT**, **UPDATE**, **DELETE**, **SELECT**, or **REPLACE** keyword that begins the SQL statement.
+- A SET_VAR can include only one Key=Value pair, which means you can configure only one setting with one SET_VAR. However, you can use multiple SET_VAR hints to configure multiple settings.
+    - If multiple SET_VAR hints containing a same key, the first Key=Value pair will be applied.
+    - If a key fails to parse or bind, all hints will be ignored.
 
 ## Examples
 
-The following example sets the `max_memory_usage` setting to `4 GB`:
-
 ```sql
-SET max_memory_usage = 1024*1024*1024*4;
-```
+root@localhost> SELECT TIMEZONE();
 
-The following example sets the `max_threads` setting to `4`:
+SELECT
+  TIMEZONE();
 
-```sql
-SET max_threads = 4;
-```
+┌────────────┐
+│ timezone() │
+│   String   │
+├────────────┤
+│ UTC        │
+└────────────┘
 
-The following example sets the `max_threads` setting to `4` and changes it to be a global-level setting:
+1 row in 0.011 sec. Processed 1 rows, 1B (91.23 rows/s, 91B/s)
 
-```sql
-SET GLOBAL max_threads = 4;
+root@localhost> SELECT /*+SET_VAR(timezone='America/Toronto') */ TIMEZONE();
+
+SELECT
+  /*+SET_VAR(timezone='America/Toronto') */
+  TIMEZONE();
+
+┌─────────────────┐
+│    timezone()   │
+│      String     │
+├─────────────────┤
+│ America/Toronto │
+└─────────────────┘
+
+1 row in 0.023 sec. Processed 1 rows, 1B (43.99 rows/s, 43B/s)
+
+root@localhost> SELECT TIMEZONE();
+
+SELECT
+  TIMEZONE();
+
+┌────────────┐
+│ timezone() │
+│   String   │
+├────────────┤
+│ UTC        │
+└────────────┘
+
+1 row in 0.010 sec. Processed 1 rows, 1B (104.34 rows/s, 104B/s)
 ```
