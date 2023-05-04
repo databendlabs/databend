@@ -42,7 +42,7 @@ impl Interpreter for VacuumTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        return Err(ErrorCode::PermissionDenied(
+        return Err(ErrorCode::LicenceDenied(
             "Need Commercial License".to_string(),
         ));
     }
