@@ -12,5 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod license;
-pub mod license_manager;
+use serde::Deserialize;
+use serde::Serialize;
+
+pub const LICENSE_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0a
+pWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==
+-----END PUBLIC KEY-----"#;
+
+#[derive(Serialize, Deserialize)]
+pub struct LicenseInfo {
+    #[serde(rename = "type")]
+    pub r#type: Option<String>,
+    pub org: Option<String>,
+    pub tenants: Option<Vec<String>>,
+}
