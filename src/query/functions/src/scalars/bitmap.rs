@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use common_expression::types::bitmap::BitmapType;
+use common_expression::types::ArrayType;
 use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
 use common_expression::vectorize_with_builder_1_arg;
@@ -38,9 +39,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 }) {
                 Ok(v) => {
                     let rb = RoaringTreemap::from_iter(v.iter());
-                    let mut buf = vec![];
-                    rb.serialize_into(&mut buf).unwrap();
-                    builder.put_slice(&buf);
+                    rb.serialize_into(&mut builder.data).unwrap();
                 }
                 Err(e) => {
                     ctx.set_error(builder.len(), e);
@@ -62,12 +61,43 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let mut rb = RoaringTreemap::new();
             rb.insert(arg);
-            let mut buf = vec![];
-            rb.serialize_into(&mut buf).unwrap();
-            builder.put_slice(&buf);
+
+            rb.serialize_into(&mut builder.data).unwrap();
             builder.commit_row();
         }),
     );
+
+    registry.register_passthrough_nullable_1_arg::<ArrayType<UInt64Type>, BitmapType, _, _>(
+        "build_bitmap",
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<ArrayType<UInt64Type>, BitmapType>(|arg, builder, _ctx| {
+            let mut rb = RoaringTreemap::new();
+            for a in arg.iter() {
+                rb.insert(*a);
+            }
+
+            rb.serialize_into(&mut builder.data).unwrap();
+            builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<BitmapType, UInt64Type, _, _>(
+        "bitmap_count",
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|arg, builder, ctx| {
+            match RoaringTreemap::deserialize_from(arg) {
+                Ok(rb) => {
+                    builder.push(rb.len() as u64);
+                }
+                Err(e) => {
+                    builder.push(0_u64);
+                    ctx.set_error(builder.len(), e.to_string());
+                }
+            }
+        }),
+    );
+
+    registry.register_aliases("bitmap_count", &["bitmap_cardinality"]);
 
     registry.register_passthrough_nullable_1_arg::<BitmapType, StringType, _, _>(
         "to_string",
