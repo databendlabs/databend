@@ -1406,6 +1406,22 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_vacuum_table(&mut self, stmt: &'ast VacuumTableStmt) {
+        let mut children = Vec::new();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        children.push(self.children.pop().unwrap());
+        if let Some(option) = &stmt.option {
+            let action_name = format!("Option {}", option);
+            let action_format_ctx = AstFormatContext::new(action_name);
+            children.push(FormatTreeNode::new(action_format_ctx));
+        }
+
+        let name = "VacuumTable".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_analyze_table(&mut self, stmt: &'ast AnalyzeTableStmt) {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);

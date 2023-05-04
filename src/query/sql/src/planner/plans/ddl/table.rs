@@ -92,6 +92,27 @@ impl DropTablePlan {
     }
 }
 
+/// Vacuum
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VacuumTablePlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub option: Option<VacuumTableOption>,
+}
+
+impl VacuumTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VacuumTableOption {
+    pub retain_hours: Option<usize>,
+    pub dry_run: Option<()>,
+}
+
 /// Optimize.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OptimizeTablePlan {

@@ -600,6 +600,19 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let vacuum_table = map(
+        rule! {
+            VACUUM ~ TABLE ~ #period_separated_idents_1_to_3 ~ #vacuum_table_option
+        },
+        |(_, _, (catalog, database, table), option)| {
+            Statement::VacuumTable(VacuumTableStmt {
+                catalog,
+                database,
+                table,
+                option,
+            })
+        },
+    );
     let analyze_table = map(
         rule! {
             ANALYZE ~ TABLE ~ #period_separated_idents_1_to_3
@@ -1174,6 +1187,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
@@ -1704,6 +1718,32 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
             },
         ),
     ))(i)
+}
+
+pub fn vacuum_table_option(i: Input) -> IResult<Option<VacuumTableOption>> {
+    alt((map(
+        rule! {
+            (RETAIN ~ #expr ~ HOURS)? ~ (DRY ~ RUN)?
+        },
+        |(retain_hours_opt, dry_run_opt)| {
+            let retain_hours = match retain_hours_opt {
+                Some(retain_hours) => Some(retain_hours.1),
+                None => None,
+            };
+            let dry_run = match dry_run_opt {
+                Some(_) => Some(()),
+                None => None,
+            };
+
+            if retain_hours.is_none() && dry_run.is_none() {
+                return None;
+            }
+            Some(VacuumTableOption {
+                retain_hours,
+                dry_run,
+            })
+        },
+    ),))(i)
 }
 
 pub fn kill_target(i: Input) -> IResult<KillTarget> {

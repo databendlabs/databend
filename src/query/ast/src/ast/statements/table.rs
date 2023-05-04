@@ -403,6 +403,32 @@ impl Display for TruncateTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct VacuumTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub option: Option<VacuumTableOption>,
+}
+
+impl Display for VacuumTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        if let Some(option) = &self.option {
+            write!(f, " {}", option)?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct OptimizeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -493,6 +519,24 @@ impl Display for Engine {
 pub enum CompactTarget {
     Block,
     Segment,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumTableOption {
+    pub retain_hours: Option<Expr>,
+    pub dry_run: Option<()>,
+}
+
+impl Display for VacuumTableOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(retain_hours) = &self.retain_hours {
+            write!(f, " RETAIN {} HOURS", retain_hours)?;
+        }
+        if self.dry_run.is_some() {
+            write!(f, " DRY RUN")?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
