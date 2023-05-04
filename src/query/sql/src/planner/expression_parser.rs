@@ -64,32 +64,41 @@ pub fn parse_exprs(
 
     let columns = metadata.read().columns_by_table_index(table_index);
     let table = metadata.read().table(table_index).clone();
-    for (index, column) in columns.iter().enumerate() {
+    let mut index = 0;
+    for column in columns.iter() {
         let column_binding = match column {
             ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_name,
                 data_type,
                 path_indices,
+                virtual_computed_expr,
                 ..
-            }) => ColumnBinding {
-                database_name: Some("default".to_string()),
-                table_name: Some(table.name().to_string()),
-                table_index: Some(table.index()),
-                column_name: column_name.clone(),
-                index,
-                data_type: Box::new(data_type.into()),
-                visibility: if path_indices.is_some() {
-                    Visibility::InVisible
-                } else {
-                    Visibility::Visible
-                },
-            },
+            }) => {
+                if virtual_computed_expr.is_some() {
+                    continue;
+                }
+                ColumnBinding {
+                    database_name: Some("default".to_string()),
+                    table_name: Some(table.name().to_string()),
+                    table_index: Some(table.index()),
+                    column_name: column_name.clone(),
+                    index,
+                    data_type: Box::new(data_type.into()),
+                    visibility: if path_indices.is_some() {
+                        Visibility::InVisible
+                    } else {
+                        Visibility::Visible
+                    },
+                    virtual_computed_expr: None,
+                }
+            }
             _ => {
                 return Err(ErrorCode::Internal("Invalid column entry"));
             }
         };
 
         bind_context.add_column_binding(column_binding);
+        index += 1;
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -99,6 +108,7 @@ pub fn parse_exprs(
         &name_resolution_ctx,
         metadata,
         &[],
+        false,
         false,
     );
 

@@ -377,6 +377,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
+        scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
@@ -643,6 +644,7 @@ impl Binder {
                     index: new_column_index,
                     data_type: Box::new(coercion_types[idx].clone()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 };
                 let left_coercion_expr = CastExpr {
                     span: left_span,

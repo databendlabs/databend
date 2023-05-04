@@ -338,6 +338,7 @@ impl SubqueryRewriter {
                             index: output_column.index,
                             data_type: output_column.data_type,
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     &subquery.data_type,
@@ -472,6 +473,7 @@ impl SubqueryRewriter {
                         index: *derived_column,
                         data_type: Box::from(column_entry.data_type()),
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     };
                     items.push(ScalarItem {
                         scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -596,6 +598,7 @@ impl SubqueryRewriter {
                             index: *derived_column,
                             data_type: Box::from(data_type.clone()),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         }
                     };
                     group_items.push(ScalarItem {
@@ -713,6 +716,7 @@ impl SubqueryRewriter {
                             index: *index,
                             data_type: Box::new(column_entry.data_type()),
                             visibility: column_binding.visibility,
+                            virtual_computed_expr: None,
                         },
                     }));
                 }
@@ -781,6 +785,7 @@ impl SubqueryRewriter {
                     index: *correlated_column,
                     data_type: Box::from(column_entry.data_type()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
@@ -795,6 +800,7 @@ impl SubqueryRewriter {
                     index: *derive_column,
                     data_type: Box::from(column_entry.data_type()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
             });
             left_conditions.push(left_column);

@@ -41,10 +41,10 @@ echo " === export from $meta_dir"
 
 echo " === check ver"
 ./target/${BUILD_PROFILE}/databend-meta-upgrade-09 --cmd print --raft-dir "$meta_dir"
-count_of_v35=$(./target/${BUILD_PROFILE}/databend-meta-upgrade-09 --cmd print --raft-dir "$meta_dir" | grep ' ver: 35' | wc -l)
-if [ "$count_of_table_meta" == "$count_of_v35" ]; then
-    echo " === count of ver=35: $count_of_v35; OK"
+count_of_v36=$(./target/${BUILD_PROFILE}/databend-meta-upgrade-09 --cmd print --raft-dir "$meta_dir" | grep ' ver: 36' | wc -l)
+if [ "$count_of_table_meta" == "$count_of_v36" ]; then
+    echo " === count of ver=36: $count_of_v36; OK"
 else
-    echo " === mismatching lines of ver=35: expect: $count_of_table_meta; got: $count_of_v35"
+    echo " === mismatching lines of ver=36: expect: $count_of_table_meta; got: $count_of_v36"
     exit 1
 fi

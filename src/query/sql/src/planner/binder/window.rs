@@ -166,6 +166,7 @@ impl<'a> WindowRewriter<'a> {
                             index: agg.index,
                             data_type: agg_func.return_type.clone(),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         };
                         Ok(BoundColumnRef {
                             span: None,
@@ -238,6 +239,7 @@ impl<'a> WindowRewriter<'a> {
                             index,
                             data_type: Box::new(arg.data_type()?),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         };
                         replaced_args.push(
                             BoundColumnRef {
@@ -290,6 +292,7 @@ impl<'a> WindowRewriter<'a> {
                     index,
                     data_type: Box::new(part.data_type()?),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 };
                 replaced_partition_items.push(
                     BoundColumnRef {
@@ -339,6 +342,7 @@ impl<'a> WindowRewriter<'a> {
                     index,
                     data_type: Box::new(order_expr.data_type()?),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 };
                 replaced_order_by_items.push(WindowOrderBy {
                     expr: BoundColumnRef {
