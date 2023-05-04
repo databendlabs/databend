@@ -910,10 +910,12 @@ impl Binder {
         }
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
+        let column = normalize_identifier(&stmt.column, &self.name_resolution_ctx).name;
         Ok(Plan::CreateIndex(Box::new(CreateIndexPlan {
             catalog,
             database,
             table,
+            column,
             nlists,
         })))
     }
