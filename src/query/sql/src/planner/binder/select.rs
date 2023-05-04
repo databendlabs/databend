@@ -367,6 +367,7 @@ impl Binder {
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
+        let last_expr_context = bind_context.expr_context.clone();
         bind_context.set_expr_context(ExprContext::WhereClause);
 
         let mut scalar_binder = ScalarBinder::new(
@@ -382,6 +383,7 @@ impl Binder {
             is_having: false,
         };
         let new_expr = SExpr::create_unary(filter_plan.into(), child);
+        bind_context.set_expr_context(last_expr_context);
         Ok((new_expr, scalar))
     }
 
