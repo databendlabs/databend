@@ -21,20 +21,31 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: Update normal release to github
+    - name: Get publish name
+      id: name
       shell: bash
-      # Reference: https://cli.github.com/manual/gh_release_upload
-      if: inputs.mode == 'normal'
-      run: gh release upload ${{ inputs.version }} databend-${{ inputs.version }}-${{ inputs.target }}.* --clobber
-      env:
-        GH_TOKEN: ${{ inputs.github_token }}
+      run: |
+        case ${{ inputs.mode }} in
+          normal)
+            publish_name="databend-${{ inputs.version }}-${{ inputs.target }}"
+            ;;
+          hive)
+            publish_name="databend-hive-${{ inputs.version }}-${{ inputs.target }}"
+            ;;
+          *)
+            echo "Unknown release mode: ${{ inputs.mode }}"
+            exit 1
+            ;;
+        esac
+        echo "name=$publish_name" >> $GITHUB_OUTPUT
 
-    - name: Update hive release to github
+    - name: Update release to github
       shell: bash
-      if: inputs.mode == 'hive'
-      run: gh release upload ${{ inputs.version }} databend-hive-${{ inputs.version }}-${{ inputs.target }}.* --clobber
       env:
         GH_TOKEN: ${{ inputs.github_token }}
+      # Reference: https://cli.github.com/manual/gh_release_upload
+      run: |
+        gh release upload ${{ inputs.version }} ${{ steps.name.outputs.name }}.*
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v2
@@ -47,25 +58,7 @@ runs:
       shell: bash
       if: inputs.mode == 'normal'
       run: |
-        aws s3 cp databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/databend-${{ inputs.version }}-${{ inputs.target }}.tar.gz --no-progress
-        curl --retry 3 -fsSLo tags.json \
-            --header 'content-type: application/json' \
-            --header 'authorization: Bearer ${{ inputs.github_token }}' \
-            https://api.github.com/repos/datafuselabs/databend/tags
-        cat tags.json
-        aws s3 cp ./tags.json s3://repo.databend.rs/databend/tags.json
-        curl --retry 3 -fsSLo releases.json \
-            --header 'content-type: application/json' \
-            --header 'authorization: Bearer ${{ inputs.github_token }}' \
-            https://api.github.com/repos/datafuselabs/databend/releases
-        cat releases.json
-        aws s3 cp ./releases.json s3://repo.databend.rs/databend/releases.json
-
-    - name: Sync hive release to S3
-      shell: bash
-      if: inputs.mode == 'hive'
-      run: |
-        aws s3 cp databend-hive-${{ inputs.version }}-${{ inputs.target }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/databend-hive-${{ inputs.version }}-${{ inputs.target }}.tar.gz --no-progress
+        aws s3 cp ${{ steps.name.outputs.name }}.tar.gz s3://repo.databend.rs/databend/${{ inputs.version }}/${{ steps.name.outputs.name }}.tar.gz --no-progress
         curl --retry 3 -fsSLo tags.json \
             --header 'content-type: application/json' \
             --header 'authorization: Bearer ${{ inputs.github_token }}' \
