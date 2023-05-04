@@ -760,6 +760,51 @@ fn float_to_decimal_internal<T: Number + AsPrimitive<f64>>(
     }
 }
 
+fn decimal_256_to_128(
+    buffer: Buffer<i256>,
+    from_size: DecimalSize,
+    dest_size: DecimalSize,
+    ctx: &mut EvalContext,
+) -> DecimalColumn {
+    let max = i128::max_for_precision(dest_size.precision);
+    let min = i128::min_for_precision(dest_size.precision);
+
+    let values = if dest_size.scale >= from_size.scale {
+        let factor = i256::e((dest_size.scale - from_size.scale) as u32);
+        buffer
+            .iter()
+            .enumerate()
+            .map(|(row, x)| {
+                let x = x * i128::one();
+                match x.checked_mul(factor) {
+                    Some(x) if x <= max && x >= min => *x.low(),
+                    _ => {
+                        ctx.set_error(row, "Decimal overflow");
+                        i128::one()
+                    }
+                }
+            })
+            .collect()
+    } else {
+        let factor = i256::e((from_size.scale - dest_size.scale) as u32);
+        buffer
+            .iter()
+            .enumerate()
+            .map(|(row, x)| {
+                let x = x * i128::one();
+                match x.checked_div(factor) {
+                    Some(x) if x <= max && x >= min => *x.low(),
+                    _ => {
+                        ctx.set_error(row, "Decimal overflow");
+                        i128::one()
+                    }
+                }
+            })
+            .collect()
+    };
+    i128::to_column(values, dest_size)
+}
+
 macro_rules! m_decimal_to_decimal {
     ($from_size: expr, $dest_size: expr, $buffer: expr, $from_type_name: ty, $dest_type_name: ty, $ctx: expr) => {
         // faster path
@@ -802,7 +847,7 @@ macro_rules! m_decimal_to_decimal {
                     .map(|(row, x)| {
                         let x = x * <$dest_type_name>::one();
                         match x.checked_mul(factor) {
-                            Some(x) if x <= max && x >= min => x,
+                            Some(x) if x <= max && x >= min => x as $dest_type_name,
                             _ => {
                                 $ctx.set_error(row, "Decimal overflow");
                                 <$dest_type_name>::one()
@@ -849,8 +894,9 @@ fn decimal_to_decimal(
             let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
             m_decimal_to_decimal! {from_size, *dest_size, buffer, i256, i256, ctx}
         }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(_)) => {
-            unreachable!("Decimal256 to Decimal128 path is unreachable")
+        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(dest_size)) => {
+            let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
+            decimal_256_to_128(buffer, from_size, *dest_size, ctx)
         }
     };
 
