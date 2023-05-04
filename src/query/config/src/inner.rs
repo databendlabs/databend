@@ -164,6 +164,8 @@ pub struct QueryConfig {
     pub management_mode: bool,
 
     pub parquet_fast_read_bytes: Option<u64>,
+    pub max_storage_io_requests: Option<u64>,
+
     pub jwt_key_file: String,
     pub jwt_key_files: Vec<String>,
     pub default_storage_format: String,
@@ -222,6 +224,7 @@ impl Default for QueryConfig {
             max_query_log_size: 10_000,
             management_mode: false,
             parquet_fast_read_bytes: None,
+            max_storage_io_requests: None,
             jwt_key_file: "".to_string(),
             jwt_key_files: Vec::new(),
             default_storage_format: "auto".to_string(),

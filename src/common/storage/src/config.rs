@@ -46,7 +46,6 @@ use serde::Serialize;
 pub struct StorageConfig {
     pub num_cpus: u64,
     pub allow_insecure: bool,
-    pub max_storage_io_requests: Option<u64>,
     pub params: StorageParams,
 }
 

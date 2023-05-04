@@ -105,7 +105,7 @@ impl SessionManager {
             settings.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
         }
         if let Some(max_storage_io_requests) =
-            GlobalConfig::instance().storage.max_storage_io_requests
+            GlobalConfig::instance().query.max_storage_io_requests
         {
             settings.set_max_storage_io_requests(max_storage_io_requests)?;
         }

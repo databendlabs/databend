@@ -63,7 +63,7 @@ impl ConfigBuilder {
     }
 
     pub fn max_storage_io_requests(mut self, value: u64) -> ConfigBuilder {
-        self.conf.storage.max_storage_io_requests = Some(value);
+        self.conf.query.max_storage_io_requests = Some(value);
         self
     }
 
