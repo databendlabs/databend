@@ -1215,6 +1215,15 @@ pub struct QueryConfig {
     #[clap(long, default_value = "10000")]
     pub max_query_log_size: usize,
 
+    /// add session scope settings override
+    /// For example:
+    /// ```toml
+    /// [Config.query.session_settings]
+    /// parquet_fast_read_bytes = "52428800"
+    /// max_storage_io_requests = "128"
+    #[clap(skip)]
+    pub session_settings: HashMap<String, String>,
+
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
     pub management_mode: bool,
@@ -1370,6 +1379,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
             management_mode: self.management_mode,
+            session_settings: self.session_settings,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
             default_storage_format: self.default_storage_format,
@@ -1436,6 +1446,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
             management_mode: inner.management_mode,
+            session_settings: inner.session_settings,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
             default_storage_format: inner.default_storage_format,

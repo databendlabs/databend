@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
+
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::sessions::SessionManager;
@@ -29,6 +31,37 @@ async fn test_session_setting() -> Result<()> {
     // Settings.
     {
         let settings = session.get_settings();
+        settings.set_setting("max_threads".to_string(), "3".to_string())?;
+        let actual = settings.get_max_threads()?;
+        let expect = 3;
+        assert_eq!(actual, expect);
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_session_setting_override() -> Result<()> {
+    let mut osettings: HashMap<String, String> = HashMap::new();
+    osettings
+        .entry(String::from("max_threads"))
+        .or_insert("4".parse()?);
+    let _guard = TestGlobalServices::setup(
+        crate::tests::ConfigBuilder::create()
+            .session_settings(osettings)
+            .build(),
+    )
+    .await?;
+    let session = SessionManager::instance()
+        .create_session(SessionType::Dummy)
+        .await?;
+
+    // Settings.
+    {
+        let settings = session.get_settings();
+        let overrided = settings.get_max_threads()?;
+        let expect = 4;
+        assert_eq!(overrided, expect);
         settings.set_setting("max_threads".to_string(), "3".to_string())?;
         let actual = settings.get_max_threads()?;
         let expect = 3;

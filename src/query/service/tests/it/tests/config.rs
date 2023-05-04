@@ -57,6 +57,11 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn session_settings(mut self, value: HashMap<String, String>) -> ConfigBuilder {
+        self.conf.query.session_settings = value;
+        self
+    }
+
     pub fn jwt_key_file(mut self, value: impl Into<String>) -> ConfigBuilder {
         self.conf.query.jwt_key_file = value.into();
         self

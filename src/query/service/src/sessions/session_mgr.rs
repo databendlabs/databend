@@ -92,6 +92,10 @@ impl SessionManager {
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
+        if !GlobalConfig::instance().query.session_settings.is_empty() {
+            let overrides = GlobalConfig::instance().query.session_settings.clone();
+            settings.set_batch_settings(&overrides)?;
+        }
         settings.load_global_changes().await?;
 
         self.create_with_settings(typ, settings)
