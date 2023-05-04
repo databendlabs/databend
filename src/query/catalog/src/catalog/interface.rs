@@ -174,7 +174,7 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn upsert_table_mutation_lock(
         &self,
-        expire_sec: u64,
+        expire_secs: u64,
         table_info: &TableInfo,
         fail_if_exists: bool,
     ) -> Result<UpsertTableMutationLockReply>;

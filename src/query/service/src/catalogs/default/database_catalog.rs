@@ -494,12 +494,12 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn upsert_table_mutation_lock(
         &self,
-        expire_sec: u64,
+        expire_secs: u64,
         table_info: &TableInfo,
         fail_if_exists: bool,
     ) -> Result<UpsertTableMutationLockReply> {
         self.mutable_catalog
-            .upsert_table_mutation_lock(expire_sec, table_info, fail_if_exists)
+            .upsert_table_mutation_lock(expire_secs, table_info, fail_if_exists)
             .await
     }
 

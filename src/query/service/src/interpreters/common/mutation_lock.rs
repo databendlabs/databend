@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2023 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,8 @@ use common_meta_app::schema::TableInfo;
 use common_storages_fuse::TableContext;
 use futures::future::select;
 use futures::future::Either;
+use rand::thread_rng;
+use rand::Rng;
 
 use crate::sessions::QueryContext;
 
@@ -38,9 +40,13 @@ pub struct MutationLockHeartbeat {
 }
 
 impl MutationLockHeartbeat {
-    pub fn create(ctx: Arc<QueryContext>, table_info: TableInfo) -> Self {
+    pub fn try_create(ctx: Arc<QueryContext>, table_info: TableInfo) -> Result<Self> {
         let shutdown_notify = Arc::new(Notify::new());
         let shutdown_flag = Arc::new(AtomicBool::new(false));
+
+        let expire_secs = ctx.get_settings().get_mutation_lock_expire_secs()?;
+        let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
+
         let shutdown_handler: JoinHandle<Result<()>> = GlobalIORuntime::instance().spawn({
             let shutdown_flag = shutdown_flag.clone();
             let shutdown_notify = shutdown_notify.clone();
@@ -49,8 +55,13 @@ impl MutationLockHeartbeat {
                 let catalog = ctx.get_catalog(table_info.catalog())?;
                 let mut notified = Box::pin(shutdown_notify.notified());
                 while !shutdown_flag.load(Ordering::Relaxed) {
-                    let interval = Box::pin(sleep(Duration::from_secs(1)));
-                    match select(notified, interval).await {
+                    let mills = {
+                        let mut rng = thread_rng();
+                        rng.gen_range(sleep_range.clone())
+                    };
+                    println!("mills: {}", mills);
+                    let sleep = Box::pin(sleep(Duration::from_millis(mills)));
+                    match select(notified, sleep).await {
                         Either::Left((_, _)) => {
                             catalog.drop_table_mutation_lock(&table_info).await?;
                             break;
@@ -58,7 +69,7 @@ impl MutationLockHeartbeat {
                         Either::Right((_, new_notified)) => {
                             notified = new_notified;
                             catalog
-                                .upsert_table_mutation_lock(10, &table_info, false)
+                                .upsert_table_mutation_lock(expire_secs, &table_info, false)
                                 .await?;
                         }
                     }
@@ -66,11 +77,11 @@ impl MutationLockHeartbeat {
                 Ok(())
             }
         });
-        MutationLockHeartbeat {
+        Ok(MutationLockHeartbeat {
             shutdown_flag,
             shutdown_notify,
             shutdown_handler: Some(shutdown_handler),
-        }
+        })
     }
 
     #[async_backtrace::framed]

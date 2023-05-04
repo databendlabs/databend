@@ -253,6 +253,11 @@ impl DefaultSettings {
                     desc: "Parquet file with smaller size will be read as a whole file, instead of column by column.",
                     possible_values: None,
                 }),
+                ("mutation_lock_expire_secs", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(5),
+                    desc: "Sets the seconds that the table mutation lock will expire in.",
+                    possible_values: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

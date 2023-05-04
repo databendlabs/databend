@@ -383,13 +383,13 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn upsert_table_mutation_lock(
         &self,
-        expire_sec: u64,
+        expire_secs: u64,
         table_info: &TableInfo,
         fail_if_exists: bool,
     ) -> Result<UpsertTableMutationLockReply> {
         let req = UpsertTableMutationLockReq {
             table_id: table_info.ident.table_id,
-            expire_at: Utc::now().timestamp() as u64 + expire_sec,
+            expire_at: Utc::now().timestamp() as u64 + expire_secs,
             fail_if_exists,
         };
         match table_info.db_type.clone() {

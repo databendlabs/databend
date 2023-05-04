@@ -335,4 +335,12 @@ impl Settings {
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
     }
+
+    pub fn set_mutation_lock_expire_secs(&self, val: u64) -> Result<()> {
+        self.try_set_u64("mutation_lock_expire_secs", val)
+    }
+
+    pub fn get_mutation_lock_expire_secs(&self) -> Result<u64> {
+        self.try_get_u64("mutation_lock_expire_secs")
+    }
 }
