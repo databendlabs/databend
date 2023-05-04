@@ -1819,6 +1819,8 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
+ "jwt-simple",
+ "serde",
 ]
 
 [[package]]
@@ -3730,6 +3732,7 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-license",
+ "jwt-simple",
 ]
 
 [[package]]
