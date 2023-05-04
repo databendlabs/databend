@@ -162,7 +162,8 @@ pub struct QueryConfig {
     pub max_query_log_size: usize,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     pub management_mode: bool,
-    pub session_settings: HashMap<String, String>,
+
+    pub parquet_fast_read_bytes: Option<u64>,
     pub jwt_key_file: String,
     pub jwt_key_files: Vec<String>,
     pub default_storage_format: String,
@@ -220,7 +221,7 @@ impl Default for QueryConfig {
             wait_timeout_mills: 5000,
             max_query_log_size: 10_000,
             management_mode: false,
-            session_settings: HashMap::new(),
+            parquet_fast_read_bytes: None,
             jwt_key_file: "".to_string(),
             jwt_key_files: Vec::new(),
             default_storage_format: "auto".to_string(),

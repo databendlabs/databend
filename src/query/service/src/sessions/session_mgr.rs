@@ -92,13 +92,24 @@ impl SessionManager {
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
-        if !GlobalConfig::instance().query.session_settings.is_empty() {
-            let overrides = GlobalConfig::instance().query.session_settings.clone();
-            settings.set_batch_settings(&overrides)?;
-        }
+        self.load_config_changes(&settings)?;
         settings.load_global_changes().await?;
 
         self.create_with_settings(typ, settings)
+    }
+
+    pub fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
+        if let Some(parquet_fast_read_bytes) =
+            GlobalConfig::instance().query.parquet_fast_read_bytes
+        {
+            settings.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
+        }
+        if let Some(max_storage_io_requests) =
+            GlobalConfig::instance().storage.max_storage_io_requests
+        {
+            settings.set_max_storage_io_requests(max_storage_io_requests)?;
+        }
+        Ok(())
     }
 
     pub fn create_with_settings(

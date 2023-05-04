@@ -219,6 +219,9 @@ pub struct StorageConfig {
     #[serde(rename = "num_cpus", alias = "storage_num_cpus")]
     pub storage_num_cpus: u64,
 
+    #[clap(long)]
+    pub max_storage_io_requests: Option<u64>,
+
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
 
@@ -267,6 +270,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             storage_num_cpus: inner.num_cpus,
             storage_type: "".to_string(),
             allow_insecure: inner.allow_insecure,
+            max_storage_io_requests: None,
             // use default for each config instead of using `..Default::default`
             // using `..Default::default` is calling `Self::default`
             // and `Self::default` relies on `InnerStorage::into()`
@@ -332,6 +336,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
+            max_storage_io_requests: self.max_storage_io_requests,
             params: {
                 match self.storage_type.as_str() {
                     "azblob" => StorageParams::Azblob(self.azblob.try_into()?),
@@ -1214,16 +1219,12 @@ pub struct QueryConfig {
 
     #[clap(long, default_value = "10000")]
     pub max_query_log_size: usize,
-
-    /// add session scope settings override
+    /// Parquet file with smaller size will be read as a whole file, instead of column by column.
     /// For example:
-    /// ```toml
-    /// [query.session_settings]
-    /// parquet_fast_read_bytes = "52428800"
-    /// max_storage_io_requests = "128"
-    /// ```
-    #[clap(skip)]
-    pub session_settings: HashMap<String, String>,
+    /// parquet_fast_read_bytes = 52428800
+    /// will let databend read whole file for parquet file less than 50MB and read column by column
+    /// if file size is greater than 50MB
+    pub parquet_fast_read_bytes: Option<u64>,
 
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
@@ -1380,7 +1381,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
             management_mode: self.management_mode,
-            session_settings: self.session_settings,
+            parquet_fast_read_bytes: self.parquet_fast_read_bytes,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
             default_storage_format: self.default_storage_format,
@@ -1447,12 +1448,11 @@ impl From<InnerQueryConfig> for QueryConfig {
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
             management_mode: inner.management_mode,
-            session_settings: inner.session_settings,
+            parquet_fast_read_bytes: inner.parquet_fast_read_bytes,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
-
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,

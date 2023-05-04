@@ -57,8 +57,13 @@ impl ConfigBuilder {
         self
     }
 
-    pub fn session_settings(mut self, value: HashMap<String, String>) -> ConfigBuilder {
-        self.conf.query.session_settings = value;
+    pub fn parquet_fast_read_bytes(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.parquet_fast_read_bytes = Some(value);
+        self
+    }
+
+    pub fn max_storage_io_requests(mut self, value: u64) -> ConfigBuilder {
+        self.conf.storage.max_storage_io_requests = Some(value);
         self
     }
 
