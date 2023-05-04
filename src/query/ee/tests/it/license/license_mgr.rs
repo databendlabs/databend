@@ -28,7 +28,7 @@ fn test_make_license() -> common_exception::Result<()> {
     let claim = RealLicenseManager::make_license(valid_key).unwrap();
     assert_eq!(claim.issuer.unwrap(), "databend");
     assert_eq!(claim.custom.org.unwrap(), "test");
-    assert_eq!(claim.custom.type_.unwrap(), "trial");
+    assert_eq!(claim.custom.r#type.unwrap(), "trial");
     assert!(claim.custom.tenants.is_none());
     Ok(())
 }
