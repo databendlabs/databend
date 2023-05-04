@@ -707,16 +707,16 @@ explain SELECT o.x, t.y FROM onecolumn o INNER JOIN twocolumn t ON (o.x=t.x AND 
 ----
 EvalScalar
 ├── expressions: [o.x (#0), t.y (#2)]
-├── estimated rows: 1.00
+├── estimated rows: 1.33
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.x (#1)]
     ├── probe keys: [o.x (#0)]
     ├── filters: []
-    ├── estimated rows: 1.00
+    ├── estimated rows: 1.33
     ├── Filter(Build)
     │   ├── filters: [is_true(t.y (#2) = 53)]
-    │   ├── estimated rows: 1.00
+    │   ├── estimated rows: 1.33
     │   └── TableScan
     │       ├── table: default.default.twocolumn
     │       ├── read rows: 8

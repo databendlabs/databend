@@ -287,7 +287,7 @@ fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
 fn evaluate_equal(column_stat: &ColumnStat, constant: &ConstantExpr, const_datum: &Datum) -> f64 {
     if column_stat.histogram.is_some() {
         let res = evaluate_equal_by_histogram(const_datum, column_stat);
-        if let Some(res) = res {
+        if let Ok(res) = res {
             return res;
         }
     }
@@ -382,58 +382,57 @@ fn update_statistic(
     Ok(())
 }
 
-fn evaluate_equal_by_histogram(const_datum: &Datum, col_stat: &ColumnStat) -> Option<f64> {
+fn evaluate_equal_by_histogram(const_datum: &Datum, col_stat: &ColumnStat) -> Result<f64> {
     let hist = col_stat.histogram.as_ref().unwrap();
-    let min = &col_stat.min;
-    let max = &col_stat.max;
-    // Find how many buckets in [min, max]
-    let mut num_buckets = 0;
+    let min = col_stat.min.to_double()?;
+    let max = col_stat.max.to_double()?;
+    let mut range = 0.0;
     for (idx, bucket) in hist.buckets_iter().enumerate() {
         if idx == 0 {
             continue;
         }
+        let bucket_min = hist.buckets[idx - 1].upper_bound().to_double()?;
+        let bucket_max = bucket.upper_bound().to_double()?;
         // If the bucket max is less than min, skip it
-        if let Ok(ord) = bucket.upper_bound().compare(min) {
-            if ord == Ordering::Less || ord == Ordering::Equal {
-                continue;
-            }
-        } else {
-            return None;
+        if bucket_max < min {
+            continue;
         }
         // If the bucket min is greater than max, stop iteration
-        if let Ok(ord) = hist.buckets[idx - 1].upper_bound().compare(max) {
-            if ord == Ordering::Greater || ord == Ordering::Equal {
-                break;
-            }
-        } else {
-            return None;
+        if bucket_min >= max {
+            break;
         }
-        num_buckets += 1;
+        if (bucket_min > min && bucket_max <= max) || bucket_max == bucket_min {
+            // ---min---bucket_min---bucket_max---max---
+            range += 1.0;
+        } else if bucket_min <= min {
+            // left part
+            range += (bucket_max - min) / (bucket_max - bucket_min);
+        } else if bucket_max > max {
+            // right part
+            range += (max - bucket_min) / (bucket_max - bucket_min);
+        }
     }
 
-    // Find how many buckets in [const_datum, const_datum]
-    let mut num_equal_buckets = 0;
+    let mut equal_range = 0.0;
+    let const_value = const_datum.to_double()?;
     for (idx, bucket) in hist.buckets_iter().enumerate() {
         if idx == 0 {
             continue;
         }
-        if let Ok(ord) = hist.buckets[idx - 1].upper_bound().compare(const_datum) {
-            if ord == Ordering::Less || ord == Ordering::Equal {
-                if let Ok(ord) = bucket.upper_bound().compare(const_datum) {
-                    if ord == Ordering::Greater || ord == Ordering::Equal {
-                        num_equal_buckets += 1;
-                    }
-                } else {
-                    return None;
-                }
-            }
-        } else {
-            return None;
+        let bucket_min = hist.buckets[idx - 1].upper_bound().to_double()?;
+        let bucket_max = bucket.upper_bound().to_double()?;
+        // If the bucket max is less than min, skip it
+        if bucket_max < const_value || bucket.num_distinct() == 0.0 {
+            continue;
         }
+        // If the bucket min is greater than max, stop iteration
+        if bucket_min >= const_value {
+            break;
+        }
+        equal_range += 1.0 / bucket.num_distinct()
     }
-    if num_buckets == 0 {
-        return Some(0.0);
+    if range == 0.0 {
+        return Ok(0.0);
     }
-
-    Some(num_equal_buckets as f64 / num_buckets as f64)
+    Ok(equal_range / range)
 }
