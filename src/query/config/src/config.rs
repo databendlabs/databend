@@ -1218,9 +1218,10 @@ pub struct QueryConfig {
     /// add session scope settings override
     /// For example:
     /// ```toml
-    /// [Config.query.session_settings]
+    /// [query.session_settings]
     /// parquet_fast_read_bytes = "52428800"
     /// max_storage_io_requests = "128"
+    /// ```
     #[clap(skip)]
     pub session_settings: HashMap<String, String>,
 
