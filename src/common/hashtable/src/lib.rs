@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #![feature(maybe_uninit_slice)]
 #![feature(trusted_len)]
 
+extern crate core;
+
 mod container;
 mod hashjoin_hashtable;
 mod hashjoin_string_hashtable;
@@ -29,6 +31,7 @@ mod lookup_hashtable;
 mod stack_hashtable;
 mod table0;
 
+mod dictionary_string_hashtable;
 mod partitioned_hashtable;
 mod short_string_hashtable;
 mod string_hashtable;
@@ -91,6 +94,9 @@ pub type StringHashSet<K> = string_hashtable::StringHashtable<K, ()>;
 pub type StringHashtableEntryRef<'a, K, V> = string_hashtable::StringHashtableEntryRef<'a, K, V>;
 pub type StringHashtableEntryMutRef<'a, K, V> =
     string_hashtable::StringHashtableEntryMutRef<'a, K, V>;
+
+pub type DictionaryStringHashMap<V> = dictionary_string_hashtable::DictionaryStringHashTable<V>;
+pub type DictionaryKeys = dictionary_string_hashtable::DictionaryKeys;
 
 pub type LookupHashMap<K, const CAPACITY: usize, V> = LookupHashtable<K, CAPACITY, V>;
 pub type LookupHashMapIter<'a, K, const CAPACITY: usize, V> = LookupTableIter<'a, CAPACITY, K, V>;

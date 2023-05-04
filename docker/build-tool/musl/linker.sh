@@ -15,4 +15,4 @@ for arg in "$@"; do
 done
 
 echo "RUNNING WITH ARGS: ${args[@]}"
-/usr/local/bin/${MUSL_TARGET}-g++ "${args[@]}"
+mold -run /usr/local/bin/${MUSL_TARGET}-g++ "${args[@]}"

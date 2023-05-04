@@ -21,6 +21,9 @@ permissions:
   statuses: write
   contents: write
 
+env:
+  BUILD_PROFILE: release
+
 jobs:
   create_release:
     name: create release
@@ -82,7 +85,7 @@ jobs:
 
   macos:
     runs-on: macos-11
-    needs: [create_release]
+    needs: create_release
     strategy:
       fail-fast: false
       matrix:
@@ -102,11 +105,12 @@ jobs:
           bash ./scripts/setup/dev_setup.sh -yb
       - name: Install coreutils for macOS sha256sum
         run: brew install coreutils
-      - name: Cross setup
-        if: matrix.arch == 'aarch64'
-        run: |
-          rustup target add aarch64-apple-darwin
-          echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+      - name: Build Release
+        uses: ./.github/actions/build_macos
+        with:
+          target: ${{ steps.target.outputs.target }}
+          artifacts: sqllogictests,metactl,meta,query
+          upload: false
       - name: Build Binary
         run: |
           cargo build --release --target=${{ steps.target.outputs.target }}
@@ -115,7 +119,6 @@ jobs:
         shell: bash
         env:
           TEST_HANDLERS: http
-          BUILD_PROFILE: release
         run: |
           mkdir -p target/release
           cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
@@ -180,15 +183,14 @@ jobs:
       - name: Build Release
         uses: ./.github/actions/build_linux
         with:
-          profile: release
           target: ${{ steps.target.outputs.target }}
+          artifacts: sqllogictests,metactl,meta,query
           upload: false
       - name: Basic Sqllogic Test
         if: matrix.arch == 'x86_64'
         shell: bash
         env:
           TEST_HANDLERS: http
-          BUILD_PROFILE: release
         run: |
           mkdir -p target/release
           cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
@@ -252,16 +254,13 @@ jobs:
         uses: ./.github/actions/setup_build_tool
         with:
           target: ${{ steps.target.outputs.target }}
-      - name: Build Binary
-        run: |
-          cargo build --release --target=${{ steps.target.outputs.target }} --features hive
-      - name: Copyobj zlib for gnu binaries
-        if: matrix.libc == 'gnu'
-        run: |
-          target=${{ steps.target.outputs.target }}
-          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-query
-          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-meta
-          build-tool /usr/bin/${{ matrix.arch }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${target}/release/databend-metactl
+      - name: Build Release
+        uses: ./.github/actions/build_linux
+        with:
+          target: ${{ steps.target.outputs.target }}
+          artifacts: query
+          features: hive
+          upload: false
       - name: Pack binaries
         run: |
           target=${{ steps.target.outputs.target }}

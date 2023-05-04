@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -314,6 +314,10 @@ impl Settings {
 
     pub fn get_group_by_shuffle_mode(&self) -> Result<String> {
         self.try_get_string("group_by_shuffle_mode")
+    }
+
+    pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
+        Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
     }
 
     pub fn set_lazy_topn_threshold(&self, value: u64) -> Result<()> {

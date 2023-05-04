@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -163,6 +163,7 @@ impl PartitionPruner {
                 column_metas.insert(*index, ColumnMeta {
                     offset,
                     length,
+                    num_values: c.num_values(),
                     compression: c.compression(),
                     uncompressed_size: c.uncompressed_size() as u64,
                     min_max,

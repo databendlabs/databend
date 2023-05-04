@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,11 +15,13 @@
 use std::collections::HashSet;
 
 use once_cell::sync::Lazy;
-
 pub const OPT_KEY_DATABASE_ID: &str = "database_id";
 pub const OPT_KEY_SNAPSHOT_LOCATION: &str = "snapshot_location";
 pub const OPT_KEY_STORAGE_FORMAT: &str = "storage_format";
 pub const OPT_KEY_TABLE_COMPRESSION: &str = "compression";
+pub const OPT_KEY_COMMENT: &str = "comment";
+pub const OPT_KEY_EXTERNAL_LOCATION: &str = "external_location";
+pub const OPT_KEY_ENGINE: &str = "engine";
 
 /// Legacy table snapshot location key
 ///

@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -39,11 +39,6 @@ use common_expression::SNAPSHOT_NAME_COLUMN_ID;
 pub const NUM_BLOCK_ID_BITS: usize = 10;
 pub const NUM_SEGMENT_ID_BITS: usize = 22;
 pub const NUM_ROW_ID_PREFIX_BITS: usize = NUM_BLOCK_ID_BITS + NUM_SEGMENT_ID_BITS;
-
-pub const ROW_ID: &str = "_row_id";
-pub const SNAPSHOT_NAME: &str = "_snapshot_name";
-pub const SEGMENT_NAME: &str = "_segment_name";
-pub const BLOCK_NAME: &str = "_block_name";
 
 #[inline(always)]
 pub fn compute_row_id_prefix(seg_id: u64, block_id: u64) -> u64 {

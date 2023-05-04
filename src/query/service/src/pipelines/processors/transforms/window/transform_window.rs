@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -951,8 +951,8 @@ macro_rules! impl_advance_frame_bound_method {
                             .column_at(&self.[<frame_ $bound>], ref_idx)
                             .as_nullable()
                             .unwrap();
-                        let valdity = &col.validity;
-                        if unsafe { !valdity.get_bit_unchecked(self.[<frame_ $bound>].row) } {
+                        let validity = &col.validity;
+                        if unsafe { !validity.get_bit_unchecked(self.[<frame_ $bound>].row) } {
                             // Need to skip null rows.
                             if nulls_first {
                                 // The null rows are at front.

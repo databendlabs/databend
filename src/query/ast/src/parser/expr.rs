@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,10 +26,10 @@ use pratt::Precedence;
 use crate::ast::*;
 use crate::input::Input;
 use crate::input::WithSpan;
-use crate::match_token;
 use crate::parser::query::*;
 use crate::parser::token::*;
-use crate::parser::unescape::unescape;
+use crate::parser::unescape::unescape_at_string;
+use crate::parser::unescape::unescape_string;
 use crate::rule;
 use crate::util::*;
 use crate::Error;
@@ -1205,8 +1205,8 @@ pub fn literal_string(i: Input) -> IResult<String> {
                 .is_some()
             {
                 let str = &token.text()[1..token.text().len() - 1];
-                let unescaped =
-                    unescape(str, '\'').ok_or(ErrorKind::Other("invalid escape or unicode"))?;
+                let unescaped = unescape_string(str, '\'')
+                    .ok_or(ErrorKind::Other("invalid escape or unicode"))?;
                 Ok(unescaped)
             } else {
                 Err(ErrorKind::ExpectToken(QuotedString))
@@ -1228,8 +1228,10 @@ pub fn literal_string_eq_ignore_case(s: &str) -> impl FnMut(Input) -> IResult<()
 }
 
 pub fn at_string(i: Input) -> IResult<String> {
-    match_token(AtString)(i)
-        .map(|(i2, token)| (i2, token.text()[1..token.text().len()].to_string()))
+    map_res(rule! { AtString }, |token| {
+        let path = token.text()[1..token.text().len()].to_string();
+        Ok(unescape_at_string(&path))
+    })(i)
 }
 
 pub fn type_name(i: Input) -> IResult<TypeName> {
