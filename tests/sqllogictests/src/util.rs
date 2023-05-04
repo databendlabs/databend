@@ -133,3 +133,31 @@ pub fn get_files(suit: PathBuf) -> Result<Vec<walkdir::Result<DirEntry>>> {
     }
     Ok(files)
 }
+
+// Execute `scripts/prepare_tpch_data.sh` to prepare tpch data
+pub fn prepare_tpch_data() -> Result<()> {
+    let output = std::process::Command::new("bash")
+        .arg("tests/sqllogictests/scripts/prepare_tpch_data.sh")
+        .output()
+        .expect("failed to execute process");
+    if !output.status.success() {
+        return Err(DSqlLogicTestError::SelfError(
+            "Failed to prepare tpch data".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+// Execute `scripts/prepare_tpcds_data.sh` to prepare tpcds data
+pub fn prepare_tpcds_data() -> Result<()> {
+    let output = std::process::Command::new("bash")
+        .arg("tests/sqllogictests/scripts/prepare_tpcds_data.sh")
+        .output()
+        .expect("failed to execute process");
+    if !output.status.success() {
+        return Err(DSqlLogicTestError::SelfError(
+            "Failed to prepare tpcds data".to_string(),
+        ));
+    }
+    Ok(())
+}

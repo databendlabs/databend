@@ -19,6 +19,7 @@ use std::time::Instant;
 
 use clap::Parser;
 use client::ClickhouseHttpClient;
+use crate::util::{prepare_tpcds_data, prepare_tpch_data};
 use futures_util::stream;
 use futures_util::StreamExt;
 use sqllogictest::default_column_validator;
@@ -75,6 +76,8 @@ impl sqllogictest::AsyncDB for Databend {
 #[tokio::main]
 pub async fn main() -> Result<()> {
     env_logger::init();
+    prepare_tpch_data()?;
+    prepare_tpcds_data()?;
     let args = SqlLogicTestArgs::parse();
     let handlers = match &args.handlers {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
