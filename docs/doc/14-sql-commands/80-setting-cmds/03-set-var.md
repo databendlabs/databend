@@ -2,7 +2,7 @@
 title: SET_VAR
 ---
 
-The SET_VAR is an optimizer hint that can be specified within a single SQL statement to provide finer control over statement execution plans. This allows you to configure global-level settings temporarily (only for the duration of the SQL statement) with a Key=Value pair. For the available settings you can configure with the SET_VAR, see [SHOW SETTINGS](../40-show/show-settings.md).
+The SET_VAR is an optimizer hint that can be specified within a single SQL statement to provide finer control over statement execution plans. This allows you to configure settings temporarily (only for the duration of the SQL statement) with a Key=Value pair. For the available settings you can configure with the SET_VAR, see [SHOW SETTINGS](../40-show/show-settings.md).
 
 See also: [SET](01-set-global.md)
 
