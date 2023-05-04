@@ -169,10 +169,14 @@ fn replace_column_binding(
                 }),
                 WindowFuncType::Lag(lag) => {
                     let new_arg = replace_column_binding(index_pairs, *lag.arg)?;
+                    let new_default = match &lag.default {
+                        None => None,
+                        Some(d) => Some(Box::new(replace_column_binding(index_pairs, *d.clone())?)),
+                    };
                     WindowFuncType::Lag(LagLeadFunction {
                         arg: Box::new(new_arg),
                         offset: lag.offset,
-                        default: lag.default,
+                        default: new_default,
                         return_type: lag.return_type.clone(),
                     })
                 }

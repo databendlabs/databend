@@ -81,10 +81,10 @@ impl Window {
                 }
             }
             WindowFuncType::Lag(lag) => {
-                used_columns = used_columns
-                    .union(&lag.arg.used_columns())
-                    .cloned()
-                    .collect();
+                used_columns.extend(lag.arg.used_columns());
+                if let Some(default) = &lag.default {
+                    used_columns.extend(default.used_columns());
+                }
             }
             _ => {}
         }
@@ -252,14 +252,14 @@ impl WindowFuncType {
     pub fn get_lag_lead_func(
         name: &str,
         arg: ScalarExpr,
-        offset: Option<i64>,
+        offset: Option<u64>,
         default: Option<ScalarExpr>,
         return_type: DataType,
     ) -> Result<WindowFuncType> {
         match name {
             "lag" => Ok(WindowFuncType::Lag(LagLeadFunction {
                 arg: Box::new(arg),
-                offset,
+                offset: offset.unwrap_or(1),
                 default: default.map(Box::new),
                 return_type: Box::new(return_type),
             })),
@@ -284,7 +284,15 @@ impl WindowFuncType {
             WindowFuncType::Aggregate(agg) => {
                 agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
             }
-            WindowFuncType::Lag(lag) => lag.arg.used_columns(),
+            WindowFuncType::Lag(lag) => match lag.default.clone() {
+                None => lag.arg.used_columns(),
+                Some(d) => lag
+                    .arg
+                    .used_columns()
+                    .union(&d.used_columns())
+                    .cloned()
+                    .collect(),
+            },
             _ => ColumnSet::new(),
         }
     }

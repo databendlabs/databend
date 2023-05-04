@@ -131,6 +131,9 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
                 }
                 WindowFuncType::Lag(lag) => {
                     replace_column(&mut lag.arg, col_to_scalar);
+                    if let Some(ref mut default) = &mut lag.default {
+                        replace_column(default, col_to_scalar);
+                    }
                 }
                 _ => {}
             }

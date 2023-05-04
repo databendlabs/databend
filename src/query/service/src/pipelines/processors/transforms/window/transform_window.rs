@@ -29,6 +29,7 @@ use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
+use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::SortColumnDescription;
 use common_expression::Value;
@@ -36,6 +37,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
+use common_sql::executor::LagLeadDefault;
 use common_sql::plans::WindowFuncFrameUnits;
 
 use super::frame_bound::FrameBound;
@@ -206,7 +208,9 @@ impl<T: Number> TransformWindow<T> {
 
         let block_rows = self.block_rows(&self.partition_end);
 
+        // STEP 1: Increment `self.partition_end` until it reaches the end of the partition or the end of the block.
         while self.partition_end.row < block_rows {
+            // STEP 2: Check each partition column to see if it has changed.
             let mut i = 0;
             while i < partition_by_columns {
                 // Should use `prev_frame_start` because the block at `partition_start` may already be popped out of the buffer queue.
@@ -223,6 +227,7 @@ impl<T: Number> TransformWindow<T> {
                 i += 1;
             }
 
+            // STEP 3: If any partition column has changed, we have reached the end of the partition.
             if i < partition_by_columns {
                 self.partition_ended = true;
                 return;
@@ -403,6 +408,38 @@ impl<T: Number> TransformWindow<T> {
         }
     }
 
+    fn get_value_from_partition_position(
+        &self,
+        // position: usize,
+        // lag_lead_column_index: usize,
+        // current_row: &RowPtr,
+        // default_value: Option<ScalarRef>,
+    ) -> ScalarRef {
+        // let row_position = RowPtr {
+        //     block: self.partition_start.block,
+        //     row: self.partition_start.row + position,
+        // };
+        // if row_position >= self.partition_start && row_position < self.partition_end {
+        //     let block_index = row_position.block - self.first_block;
+        //     let block = &self.blocks[block_index].block;
+        //     let col = block.get_by_offset(lag_lead_column_index);
+        //     let value = col.value.as_column().unwrap();
+        //     value.index(position).unwrap()
+        // } else {
+        //     // match default_value {
+        //     //     Some(value) => value,
+        //     //     None => {
+        //     //         let block = &self.blocks[current_row.block - self.first_block].block;
+        //     //         let col = &block.columns()[0]; // todo(ariesdevil): use default column index instead
+        //     //         let value = col[current_row.row];
+        //     //         value
+        //     //     }
+        //     // }
+        //     ScalarRef::Null
+        // }
+        ScalarRef::Null
+    }
+
     fn apply_aggregate(&self, agg: &WindowFuncAggImpl) -> Result<()> {
         debug_assert!(self.frame_started);
         debug_assert!(self.frame_ended);
@@ -453,6 +490,7 @@ impl<T: Number> TransformWindow<T> {
     #[inline]
     fn merge_result_of_current_row(&mut self) -> Result<()> {
         let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
+        dbg!(&builder.data_type());
 
         match &self.func {
             WindowFunctionImpl::Aggregate(agg) => {
@@ -480,6 +518,28 @@ impl<T: Number> TransformWindow<T> {
                     ((self.current_rank - 1) as f64) / ((self.partition_size - 1) as f64)
                 };
                 builder.push(ScalarRef::Number(NumberScalar::Float64(percent.into())));
+            }
+            WindowFunctionImpl::Lag(lag) => {
+                dbg!(&lag.offset);
+                let default_value = match lag.default.clone() {
+                    LagLeadDefault::Null => Scalar::Null,
+                    LagLeadDefault::Literal(l) => l.clone(),
+                    LagLeadDefault::Index(col) => {
+                        // if self.current_row_in_partition > lag.offset as usize {
+                        //     let block =
+                        //         &self.blocks[self.current_row.block - self.first_block].block;
+                        //     let col = block.columns().get(col).unwrap();
+                        //     Some(col.value.index(self.current_row.row).unwrap())
+                        // } else {
+                        //     None
+                        // }
+                        Scalar::Null
+                    }
+                };
+
+                // let lag_row = ScalarRef::Number(NumberScalar::Int32(88));
+                let lag_row = default_value;
+                builder.push(lag_row.as_ref());
             }
         };
 
@@ -756,12 +816,13 @@ where T: Number + ResultTypeOfUnary
     /// When adding a [`DataBlock`], we compute the aggregations to the end.
     ///
     /// For each row in the input block,
-    /// compute the aggregation result of its window frame and add it intp result column buffer.
+    /// compute the aggregation result of its window frame and add it into result column buffer.
     ///
     /// If not reach the end bound of the window frame, hold the temporary aggregation value in `state_place`.
     ///
     /// Once collect all the results of one input [`DataBlock`], attach the corresponding result column to the input as output.
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
+        dbg!(&self.func.return_type()?);
         if let Some(data) = data {
             let num_rows = data.num_rows();
             self.blocks.push_back(WindowBlock {

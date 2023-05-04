@@ -25,6 +25,7 @@ use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::StateAddr;
+use common_sql::executor::LagLeadDefault;
 use common_sql::executor::WindowFunction;
 
 use crate::pipelines::processors::transforms::group_by::Area;
@@ -36,6 +37,7 @@ pub enum WindowFunctionInfo {
     Rank,
     DenseRank,
     PercentRank,
+    Lag(WindowFuncLagLeadImpl),
 }
 
 pub struct WindowFuncAggImpl {
@@ -87,12 +89,21 @@ impl Drop for WindowFuncAggImpl {
     }
 }
 
+#[derive(Clone)]
+pub struct WindowFuncLagLeadImpl {
+    pub arg: usize,
+    pub offset: u64,
+    pub default: LagLeadDefault,
+    pub return_type: DataType,
+}
+
 pub enum WindowFunctionImpl {
     Aggregate(WindowFuncAggImpl),
     RowNumber,
     Rank,
     DenseRank,
-    PercentRank((usize, Option<i64>, Option<usize>)),
+    PercentRank,
+    Lag(WindowFuncLagLeadImpl),
 }
 
 impl WindowFunctionInfo {
@@ -118,7 +129,12 @@ impl WindowFunctionInfo {
             WindowFunction::Rank => Self::Rank,
             WindowFunction::DenseRank => Self::DenseRank,
             WindowFunction::PercentRank => Self::PercentRank,
-            WindowFunction::Lag(_) => Self::PercentRank, // todo(ariesdevil)
+            WindowFunction::Lag(lag) => Self::Lag(WindowFuncLagLeadImpl {
+                arg: lag.arg,
+                offset: lag.sig.offset,
+                default: lag.default.clone(),
+                return_type: lag.sig.return_type.clone(),
+            }),
         })
     }
 }
@@ -145,6 +161,7 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::Rank => Self::Rank,
             WindowFunctionInfo::DenseRank => Self::DenseRank,
             WindowFunctionInfo::PercentRank => Self::PercentRank,
+            WindowFunctionInfo::Lag(lag) => Self::Lag(lag),
         })
     }
 
@@ -155,6 +172,7 @@ impl WindowFunctionImpl {
                 DataType::Number(NumberDataType::UInt64)
             }
             Self::PercentRank => DataType::Number(NumberDataType::Float64),
+            Self::Lag(lag) => lag.return_type.clone(),
         })
     }
 

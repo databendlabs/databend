@@ -175,7 +175,13 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
                 WindowFuncType::Aggregate(agg) => {
                     agg.args.iter().all(|arg| prune_by_children(arg, columns))
                 }
-                WindowFuncType::Lag(lag) => prune_by_children(&lag.arg, columns),
+                WindowFuncType::Lag(lag) => {
+                    if let Some(default) = &lag.default {
+                        prune_by_children(&lag.arg, columns) & prune_by_children(default, columns)
+                    } else {
+                        prune_by_children(&lag.arg, columns)
+                    }
+                }
                 _ => false,
             };
             flag || scalar

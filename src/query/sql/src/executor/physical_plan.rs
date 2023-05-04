@@ -310,7 +310,7 @@ impl WindowFunction {
                 Ok(DataType::Number(NumberDataType::UInt64))
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
-            WindowFunction::Lag(lag) => Ok(DataType::Nullable(Box::new(lag.sig.return_type.clone()))),
+            WindowFunction::Lag(lag) => Ok(lag.sig.return_type.clone()),
         }
     }
 }
@@ -799,9 +799,11 @@ pub struct AggregateFunctionDesc {
     pub arg_indices: Vec<IndexType>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum LagLeadDefault {
     Null,
-    Literal(),
+    Literal(Scalar),
+    Index(IndexType),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -809,15 +811,14 @@ pub struct LagLeadFunctionDesc {
     pub sig: LagLeadFunctionSignature,
     pub output_column: IndexType,
     pub arg: usize,
-    pub default: Option<usize>,
-    pub default_type: String,
+    pub default: LagLeadDefault,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LagLeadFunctionSignature {
     pub name: String,
     pub arg: DataType,
-    pub offset: Option<i64>,
+    pub offset: u64,
     pub default: Option<DataType>,
     pub return_type: DataType,
 }

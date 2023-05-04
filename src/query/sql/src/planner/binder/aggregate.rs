@@ -176,7 +176,7 @@ impl<'a> AggregateRewriter<'a> {
 
                         WindowFuncType::Lag(LagLeadFunction {
                             arg: Box::new(new_arg),
-                            offset: lag.offset.clone(),
+                            offset: lag.offset,
                             default: new_default,
                             return_type: lag.return_type.clone(),
                         })

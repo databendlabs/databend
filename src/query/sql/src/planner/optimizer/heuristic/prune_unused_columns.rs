@@ -200,7 +200,12 @@ impl UnusedColumnPruner {
                                 required.extend(item.used_columns());
                             });
                         }
-                        WindowFuncType::Lag(lag) => required.extend(lag.arg.used_columns()),
+                        WindowFuncType::Lag(lag) => {
+                            required.extend(lag.arg.used_columns());
+                            if let Some(default) = &lag.default {
+                                required.extend(default.used_columns());
+                            }
+                        }
                         _ => {}
                     }
                     p.partition_by.iter().for_each(|item| {

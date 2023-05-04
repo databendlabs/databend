@@ -665,7 +665,7 @@ impl<'a> TypeChecker<'a> {
                         )));
                     }
                     let func = if !args.is_empty() {
-                        self.resolve_window_function(&name, params, &args).await?
+                        self.resolve_window_function(&name, &args).await?
                     } else {
                         WindowFuncType::from_name(&name)?
                     };
@@ -1072,11 +1072,15 @@ impl<'a> TypeChecker<'a> {
                     end_bound: WindowFuncFrameBound::Following(None),
                 });
             }
-            WindowFuncType::Lag(_) => {
+            WindowFuncType::Lag(lag) => {
                 return Ok(WindowFuncFrame {
                     units: WindowFuncFrameUnits::Rows,
-                    start_bound: WindowFuncFrameBound::Preceding(None),
-                    end_bound: WindowFuncFrameBound::CurrentRow,
+                    start_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
+                        NumberScalar::UInt64(lag.offset),
+                    ))),
+                    end_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
+                        NumberScalar::UInt64(lag.offset),
+                    ))),
                 });
             }
             _ => {}
@@ -1113,14 +1117,8 @@ impl<'a> TypeChecker<'a> {
     async fn resolve_window_function(
         &mut self,
         func_name: &str,
-        params: &[Literal],
         args: &[&Expr],
     ) -> Result<WindowFuncType> {
-        let _params = params
-            .iter()
-            .map(|literal| self.resolve_literal(literal).map(|box (value, _)| value))
-            .collect::<Result<Vec<_>>>()?;
-
         self.in_window_function = true;
         let mut arguments = vec![];
         let mut arg_types = vec![];
@@ -1133,9 +1131,70 @@ impl<'a> TypeChecker<'a> {
         debug_assert!(arguments.len() >= 1);
         debug_assert!(arg_types.len() >= 1);
 
-        let return_type = arg_types[0].clone();
+        dbg!(&arguments);
+        dbg!(&arg_types);
 
-        WindowFuncType::get_lag_lead_func(func_name, arguments[0].clone(), None, None, return_type)
+        let offset = if arguments.len() >= 2 {
+            let off = match &arguments[1] {
+                ScalarExpr::ConstantExpr(con) => match con.value {
+                    Scalar::Number(num) => {
+                        let result = match num {
+                            NumberScalar::UInt64(n) => Ok(n),
+                            NumberScalar::UInt32(n) => Ok(n as u64),
+                            NumberScalar::UInt16(n) => Ok(n as u64),
+                            NumberScalar::UInt8(n) => Ok(n as u64),
+                            _ => Err(ErrorCode::SemanticError(
+                                "Window function LAG/LEAD offset just support positive integer",
+                            )),
+                        };
+                        result
+                    }
+                    _ => Err(ErrorCode::SemanticError(
+                        "Window function LAG/LEAD offset just support positive integer",
+                    )),
+                },
+                _ => Err(ErrorCode::SemanticError(
+                    "Window function LAG/LEAD offset just support positive integer",
+                )),
+            };
+            Some(off?)
+        } else {
+            None
+        };
+
+        let default = if arguments.len() == 3 {
+            Some(arguments[2].clone())
+        } else {
+            None
+        };
+        let return_type = match default {
+            Some(_) => arg_types[0].clone(),
+            None => DataType::Nullable(Box::new(arg_types[0].clone())),
+        };
+
+        let cast_default = default
+            .map(|d| match d.clone() {
+                ScalarExpr::BoundColumnRef(_)
+                | ScalarExpr::CastExpr(_)
+                | ScalarExpr::ConstantExpr(_) => Ok(ScalarExpr::CastExpr(CastExpr {
+                    span: d.span(),
+                    is_try: true,
+                    argument: Box::new(d),
+                    target_type: Box::new(return_type.clone()),
+                })),
+                _ => Err(ErrorCode::SemanticError(
+                    "default value just support literal value or column",
+                )),
+            })
+            .transpose()?;
+
+        WindowFuncType::get_lag_lead_func(
+            func_name,
+            arguments[0].clone(),
+            offset,
+            cast_default,
+            return_type,
+        )
     }
 
     /// Resolve aggregation function call.
