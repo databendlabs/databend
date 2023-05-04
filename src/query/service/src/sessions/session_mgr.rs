@@ -99,8 +99,12 @@ impl SessionManager {
     }
 
     pub fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
-        settings
-            .set_parquet_fast_read_bytes(GlobalConfig::instance().query.parquet_fast_read_bytes)?;
+        if let Some(parquet_fast_read_bytes) =
+            GlobalConfig::instance().query.parquet_fast_read_bytes
+        {
+            settings.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
+        }
+
         if let Some(max_storage_io_requests) =
             GlobalConfig::instance().query.max_storage_io_requests
         {

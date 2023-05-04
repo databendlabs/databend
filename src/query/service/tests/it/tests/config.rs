@@ -58,7 +58,7 @@ impl ConfigBuilder {
     }
 
     pub fn parquet_fast_read_bytes(mut self, value: u64) -> ConfigBuilder {
-        self.conf.query.parquet_fast_read_bytes = value;
+        self.conf.query.parquet_fast_read_bytes = Some(value);
         self
     }
 
