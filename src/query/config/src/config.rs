@@ -1214,6 +1214,16 @@ pub struct QueryConfig {
 
     #[clap(long, default_value = "10000")]
     pub max_query_log_size: usize,
+    /// Parquet file with smaller size will be read as a whole file, instead of column by column.
+    /// For example:
+    /// parquet_fast_read_bytes = 52428800
+    /// will let databend read whole file for parquet file less than 50MB and read column by column
+    /// if file size is greater than 50MB
+    #[clap(long)]
+    pub parquet_fast_read_bytes: Option<u64>,
+
+    #[clap(long)]
+    pub max_storage_io_requests: Option<u64>,
 
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
@@ -1370,6 +1380,8 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
             management_mode: self.management_mode,
+            parquet_fast_read_bytes: self.parquet_fast_read_bytes,
+            max_storage_io_requests: self.max_storage_io_requests,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
             default_storage_format: self.default_storage_format,
@@ -1436,11 +1448,12 @@ impl From<InnerQueryConfig> for QueryConfig {
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
             management_mode: inner.management_mode,
+            parquet_fast_read_bytes: inner.parquet_fast_read_bytes,
+            max_storage_io_requests: inner.max_storage_io_requests,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
-
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,

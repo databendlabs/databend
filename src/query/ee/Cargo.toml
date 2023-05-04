@@ -13,12 +13,12 @@ test = false
 
 [dependencies]
 # Workspace dependencies
+async-backtrace = { workspace = true }
 common-base = { path = "../../common/base" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-license = { path = "../../common/license" }
-
-async-backtrace = { workspace = true }
+jwt-simple = "0.11.0"
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
