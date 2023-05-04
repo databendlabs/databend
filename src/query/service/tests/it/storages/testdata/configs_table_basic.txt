@@ -68,6 +68,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'max_memory_limit_enabled'                 | 'false'                          | ''       |
 | 'query'   | 'max_query_log_size'                       | '10000'                          | ''       |
 | 'query'   | 'max_server_memory_usage'                  | '0'                              | ''       |
+| 'query'   | 'max_storage_io_requests'                  | 'null'                           | ''       |
 | 'query'   | 'metric_api_address'                       | '127.0.0.1:7070'                 | ''       |
 | 'query'   | 'mysql_handler_host'                       | '127.0.0.1'                      | ''       |
 | 'query'   | 'mysql_handler_port'                       | '3307'                           | ''       |
@@ -77,6 +78,7 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'openai_api_completion_model'              | 'gpt-3.5-turbo'                  | ''       |
 | 'query'   | 'openai_api_embedding_model'               | 'text-embedding-ada-002'         | ''       |
 | 'query'   | 'openai_api_key'                           | '******'                         | ''       |
+| 'query'   | 'parquet_fast_read_bytes'                  | '4194304'                        | ''       |
 | 'query'   | 'quota'                                    | 'null'                           | ''       |
 | 'query'   | 'rpc_tls_query_server_root_ca_cert'        | ''                               | ''       |
 | 'query'   | 'rpc_tls_query_service_domain_name'        | 'localhost'                      | ''       |
