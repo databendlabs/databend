@@ -1,7 +1,5 @@
 ---
-title: Transforming Data During a Load
-sidebar_label: Transforming Data During a Load
-description: Learn how to use Databend to transform data while loading it into a table using the COPY INTO <table> command. 
+title: Transforming Data During Load
 ---
 
 Databend supports transforming data while loading it into a table using the `COPY INTO <table>` command, which simplifies your ETL pipeline for basic transformations. 
