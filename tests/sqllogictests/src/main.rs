@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use clap::Parser;
 use client::ClickhouseHttpClient;
-use crate::util::{prepare_tpcds_data, prepare_tpch_data};
 use futures_util::stream;
 use futures_util::StreamExt;
 use sqllogictest::default_column_validator;
@@ -39,6 +38,8 @@ use crate::client::MySQLClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 use crate::util::get_files;
+use crate::util::prepare_tpcds_data;
+use crate::util::prepare_tpch_data;
 
 mod arg;
 mod client;
@@ -76,9 +77,29 @@ impl sqllogictest::AsyncDB for Databend {
 #[tokio::main]
 pub async fn main() -> Result<()> {
     env_logger::init();
-    prepare_tpch_data()?;
-    prepare_tpcds_data()?;
     let args = SqlLogicTestArgs::parse();
+    match (&args.dir, &args.skipped_dir) {
+        (None, None) => {
+            prepare_tpch_data()?;
+            prepare_tpcds_data()?;
+        }
+        (Some(dir), _) => {
+            if dir == "tpch" {
+                prepare_tpch_data()?;
+            }
+            if dir == "tpcds" {
+                prepare_tpcds_data()?;
+            }
+        }
+        (None, Some(skipped_dir)) => {
+            if skipped_dir != "tpch" {
+                prepare_tpch_data()?;
+            }
+            if skipped_dir != "tpcds" {
+                prepare_tpcds_data()?;
+            }
+        }
+    }
     let handlers = match &args.handlers {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
         None => vec![HANDLER_MYSQL, HANDLER_HTTP, HANDLER_CLICKHOUSE],

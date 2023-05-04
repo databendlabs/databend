@@ -6,6 +6,9 @@
 data_dir="tests/sqllogictests/data"
 
 db="tpch"
+
+echo "CREATE DATABASE IF NOT EXISTS tpch" | $MYSQL_CLIENT_CONNECT
+
 for t in customer lineitem nation orders partsupp part region supplier; do
     echo "DROP TABLE IF EXISTS ${db}.$t" | $MYSQL_CLIENT_CONNECT
 done

@@ -1,4 +1,7 @@
 statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
 use tpcds;
 
 # Q1

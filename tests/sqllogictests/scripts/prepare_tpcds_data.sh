@@ -38,8 +38,10 @@ tables=(
 # shellcheck disable=SC2068
 for t in ${tables[@]}
 do
-    echo "DROP TABLE IF EXISTS ${db}.$t ALL" | $MYSQL_CLIENT_CONNECT
+    echo "DROP TABLE IF EXISTS ${db}.$t" | $MYSQL_CLIENT_CONNECT
 done
+
+echo "CREATE DATABASE IF NOT EXISTS tpcds" | $MYSQL_CLIENT_CONNECT
 
 # Create Tables;
 # shellcheck disable=SC2002
