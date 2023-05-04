@@ -4,7 +4,10 @@ title: SET
 
 Changes the value and/or level of a system setting. To show all the current settings, use [SHOW SETTINGS](../40-show/show-settings.md).
 
-See also: [UNSET](02-unset.md)
+See also:
+
+- [SET_VAR](03-set-var.md)
+- [UNSET](02-unset.md)
 
 ## Syntax
 
