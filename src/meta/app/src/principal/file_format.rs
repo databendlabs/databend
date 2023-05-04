@@ -283,7 +283,7 @@ impl Default for CsvFileFormatParams {
             field_delimiter: ",".to_string(),
             record_delimiter: "\n".to_string(),
             nan_display: "NaN".to_string(),
-            escape: "".to_string(),
+            escape: "\\".to_string(),
             quote: "\"".to_string(),
         }
     }
