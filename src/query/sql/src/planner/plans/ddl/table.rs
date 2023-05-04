@@ -98,7 +98,7 @@ pub struct VacuumTablePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub option: Option<VacuumTableOption>,
+    pub option: VacuumTableOption,
 }
 
 impl VacuumTablePlan {

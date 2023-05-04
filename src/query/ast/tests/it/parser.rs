@@ -182,7 +182,7 @@ fn test_statement() {
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
         r#"VACUUM TABLE t;"#,
         r#"VACUUM TABLE t RETAIN 4 HOURS DRY RUN;"#,
-        r#"VACUUM TABLE t RETAIN 4 HOURS;"#,
+        r#"VACUUM TABLE t RETAIN 40 HOURS;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,

@@ -1720,7 +1720,7 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     ))(i)
 }
 
-pub fn vacuum_table_option(i: Input) -> IResult<Option<VacuumTableOption>> {
+pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
     alt((map(
         rule! {
             (RETAIN ~ #expr ~ HOURS)? ~ (DRY ~ RUN)?
@@ -1734,14 +1734,10 @@ pub fn vacuum_table_option(i: Input) -> IResult<Option<VacuumTableOption>> {
                 Some(_) => Some(()),
                 None => None,
             };
-
-            if retain_hours.is_none() && dry_run.is_none() {
-                return None;
-            }
-            Some(VacuumTableOption {
+            VacuumTableOption {
                 retain_hours,
                 dry_run,
-            })
+            }
         },
     ),))(i)
 }

@@ -407,7 +407,7 @@ pub struct VacuumTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
-    pub option: Option<VacuumTableOption>,
+    pub option: VacuumTableOption,
 }
 
 impl Display for VacuumTableStmt {
@@ -420,9 +420,7 @@ impl Display for VacuumTableStmt {
                 .chain(&self.database)
                 .chain(Some(&self.table)),
         )?;
-        if let Some(option) = &self.option {
-            write!(f, " {}", option)?;
-        }
+        write!(f, " {}", &self.option)?;
 
         Ok(())
     }

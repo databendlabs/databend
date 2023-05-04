@@ -832,25 +832,22 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
-        let option = match option {
-            Some(option) => {
-                let retain_hours = match option.retain_hours {
-                    Some(Expr::Literal {
-                        lit: Literal::UInt64(uint),
-                        ..
-                    }) => Some(uint as usize),
-                    Some(_) => {
-                        return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
-                    }
-                    _ => None,
-                };
+        let option = {
+            let retain_hours = match option.retain_hours {
+                Some(Expr::Literal {
+                    lit: Literal::UInt64(uint),
+                    ..
+                }) => Some(uint as usize),
+                Some(_) => {
+                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
+                }
+                _ => None,
+            };
 
-                Some(VacuumTableOption {
-                    retain_hours,
-                    dry_run: option.dry_run,
-                })
+            VacuumTableOption {
+                retain_hours,
+                dry_run: option.dry_run,
             }
-            None => None,
         };
         Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
             catalog,
