@@ -1219,6 +1219,7 @@ pub struct QueryConfig {
     /// parquet_fast_read_bytes = 52428800
     /// will let databend read whole file for parquet file less than 50MB and read column by column
     /// if file size is greater than 50MB
+    #[clap(long)]
     pub parquet_fast_read_bytes: Option<u64>,
 
     #[clap(long)]
