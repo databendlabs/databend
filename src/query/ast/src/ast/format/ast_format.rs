@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1401,6 +1401,20 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         children.push(FormatTreeNode::new(action_format_ctx));
 
         let name = "OptimizeTable".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_vacuum_table(&mut self, stmt: &'ast VacuumTableStmt) {
+        let mut children = Vec::new();
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        children.push(self.children.pop().unwrap());
+        let action_name = format!("Option {}", &stmt.option);
+        let action_format_ctx = AstFormatContext::new(action_name);
+        children.push(FormatTreeNode::new(action_format_ctx));
+
+        let name = "VacuumTable".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);

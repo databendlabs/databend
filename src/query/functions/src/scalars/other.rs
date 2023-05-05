@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -108,9 +108,10 @@ pub fn register(registry: &mut FunctionRegistry) {
                     Duration::try_from_secs_f64((*val).into()).map_err(|x| x.to_string());
                 match duration {
                     Ok(duration) => {
-                        if duration.gt(&Duration::from_secs(300)) {
+                        // Note!!!: Don't increase the sleep time to a large value, it'll block the thread.
+                        if duration.gt(&Duration::from_secs(3)) {
                             let err = format!(
-                                "The maximum sleep time is 300 seconds. Requested: {:?}",
+                                "The maximum sleep time is 3 seconds. Requested: {:?}",
                                 duration
                             );
                             ctx.set_error(0, err);

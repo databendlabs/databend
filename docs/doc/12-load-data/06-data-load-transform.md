@@ -1,25 +1,21 @@
 ---
-title: Transforming Data During a Load
-sidebar_label: Transforming Data During a Load
-description: Learn how to use Databend to transform data while loading it into a table using the COPY INTO <table> command. 
+title: Transforming Data During Load
 ---
 
-Databend supports transforming data while loading it into a table using the `COPY INTO <table>` command, which simplifies your ETL pipeline for basic transformations. 
+Databend provides a powerful feature that allows you to transform data while loading it into a table using the COPY INTO command. This functionality simplifies your ETL (extract, transform, load) pipeline with basic transformations. By transforming data during a load, you can avoid the use of temporary tables, streamline your ETL process, and improve performance.
 
-This feature helps you avoid the use of temporary tables to store pre-transformed data when reordering columns during a data load.
-
-The `COPY` command supports:
-- Column reordering, column omission, and casts using a SELECT statement. There is no requirement for your data files to have the same number and ordering of columns as your target table.
+The COPY INTO command supports column reordering, column omission, and casts using a SELECT statement. This means that your data files don't need to have the same number and ordering of columns as your target table. You can also convert data types during the load, which is particularly useful if you need to change the format of data in your source files to match the data type of the target table.
 
 :::note
-Transforming is only supported for Parquet format in the stage.
+This feature is currently only available for the Parquet file format.
 :::
 
-## Load a Subset of Table Data
+## Loading Subset of Table Data
 
-Load a subset of data into a table. The following example loads data from columns `id`, `name` of a staged Parquet file:
+The following example loads data from columns `id`, `name` of a staged Parquet file:
 
 **Sample Data**
+
 ```text
 id | name       | age
 ---|------------|----
@@ -28,20 +24,21 @@ id | name       | age
 ```
 
 **Example**
+
 ```sql
--- create a table
 CREATE TABLE my_table(id int, name string);
 
 COPY INTO my_table
 FROM (SELECT t.id, t.name FROM @mystage t)
 FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
-````
+```
 
-## Reorder Columns During a Load
+## Reordering Columns During Load
 
 To reorder the columns from a staged Parquet file before loading it into a table, you can use the `COPY INTO` command with a `SELECT` statement. The following example reorders the columns `name` and `id`:
 
 **Sample Data**
+
 ```text
 id | name       | age
 ---|------------|----
@@ -50,21 +47,23 @@ id | name       | age
 ```
 
 **Example**
-````sql
+
+```sql
 CREATE TABLE my_table(name string, id int);
 
 COPY INTO my_table
 FROM (SELECT t.name, t.id FROM @mystage t)
 FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
-````
+```
 
-## Convert Data Types During a Load
+## Converting Datatypes During Load
 
 To convert staged data into other data types during a data load, you can use the appropriate conversion function in your `SELECT` statement.
 
 The following example converts a timestamp into a date:
 
 **Sample Data**
+
 ```text
 id | name    | timestamp
 ---|---------|--------------------
@@ -73,6 +72,7 @@ id | name    | timestamp
 ```
 
 **Example**
+
 ```sql
 CREATE TABLE my_table(id int, name string, time date);
 
@@ -80,7 +80,3 @@ COPY INTO my_table
 FROM (SELECT t.id, t.name, to_date(t.timestamp) FROM @mystage t)
 FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
 ```
-
-## Conclusion
-
-Transforming data during a load is a powerful feature of Databend that allows you to simplify your ETL pipeline and avoid the use of temporary tables. With the ability to transform data during a load, you can streamline your ETL pipeline and focus on the analysis of your data rather than the mechanics of moving it around.

@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +16,9 @@ use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
 use common_exception::Result;
+use jwt_simple::claims::JWTClaims;
+
+use crate::license::LicenseInfo;
 
 pub trait LicenseManager {
     fn init() -> Result<()>
@@ -23,6 +26,33 @@ pub trait LicenseManager {
     fn instance() -> Arc<Box<dyn LicenseManager>>
     where Self: Sized;
     fn is_active(&self) -> bool;
+
+    /// Encodes a raw license string as a JWT using the constant public key.
+    ///
+    /// This function takes a raw license string and a secret key,
+    /// The function returns a `jwt_simple::Claim` object that represents the
+    /// decoded contents of the JWT  with custom fields `LicenseInfo`
+    ///
+    /// # Arguments
+    ///
+    /// * `raw` - The raw license string to be encoded.
+    ///
+    /// # Returns
+    ///
+    /// A `jwt_simple::Claim` object representing the decoded contents of the JWT.
+    ///
+    /// # Errors
+    ///
+    /// This function may return `LicenseKeyParseError` error if the encoding or decoding of the JWT fails.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let raw_license = "my_license";
+    /// let claim = make_license(raw_license).unwrap();
+    /// ```
+    fn make_license(raw: &str) -> Result<JWTClaims<LicenseInfo>>
+    where Self: Sized;
 }
 
 pub struct LicenseManagerWrapper {

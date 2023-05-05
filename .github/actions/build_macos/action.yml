@@ -4,9 +4,14 @@ inputs:
   target:
     description: ""
     required: true
-  profile:
-    description: "debug/release"
-    required: true
+  upload:
+    description: "Upload artifact"
+    required: false
+    default: "true"
+  artifacts:
+    description: "Artifacts to build"
+    required: false
+    default: "sqllogictests,meta,query"
 runs:
   using: "composite"
   steps:
@@ -15,20 +20,46 @@ runs:
       run: |
         bash ./scripts/setup/dev_setup.sh -yb
         rustup target add ${{ inputs.target }}
+        echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
 
-    - name: Build Debug
-      if: inputs.profile == 'debug'
+    - name: Cross setup
+      if: inputs.target == 'aarch64-apple-darwin'
+      shell: bash
+      run: |
+        echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+
+    - name: Build Debug for all artifacts
+      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
       run: cargo build --target ${{ inputs.target }}
 
-    - name: Build Release
-      if: inputs.profile == 'release'
+    - name: Build Debug for specific artifacts
+      if: env.BUILD_PROFILE == 'debug' && inputs.artifacts != 'all'
       shell: bash
-      run: cargo build --target ${{ inputs.target }} --release
+      run: |
+        artifacts="${{ inputs.artifacts }}"
+        echo "==> building libs ..."
+        cargo build --target ${{ inputs.target }} --lib
+        for artifact in ${artifacts//,/ }; do
+          echo "==> building databend-$artifact ..."
+          cargo build --target ${{ inputs.target }} --bin databend-$artifact
+        done
+
+    - name: Build Release
+      if: env.BUILD_PROFILE == 'release'
+      shell: bash
+      run: |
+        artifacts="${{ inputs.artifacts }}"
+        echo "==> building libs ..."
+        cargo build --target ${{ inputs.target }} --release --lib
+        for artifact in ${artifacts//,/ }; do
+          echo "==> building databend-$artifact ..."
+          cargo build --target ${{ inputs.target }} --release --bin databend-$artifact
+        done
 
     - name: Upload artifact
+      if: inputs.upload == 'true'
       uses: ./.github/actions/artifact_upload
       with:
-        profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}

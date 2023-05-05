@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@ use std::collections::BTreeMap;
 
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::InternalColumnType;
-use common_catalog::plan::BLOCK_NAME;
-use common_catalog::plan::ROW_ID;
-use common_catalog::plan::SEGMENT_NAME;
-use common_catalog::plan::SNAPSHOT_NAME;
+use common_expression::BLOCK_NAME_COL_NAME;
+use common_expression::ROW_ID_COL_NAME;
+use common_expression::SEGMENT_NAME_COL_NAME;
+use common_expression::SNAPSHOT_NAME_COL_NAME;
 use ctor::ctor;
 
 #[ctor]
@@ -34,23 +34,23 @@ impl InternalColumnFactory {
         let mut internal_columns = BTreeMap::new();
 
         internal_columns.insert(
-            ROW_ID.to_string(),
-            InternalColumn::new(ROW_ID, InternalColumnType::RowId),
+            ROW_ID_COL_NAME.to_string(),
+            InternalColumn::new(ROW_ID_COL_NAME, InternalColumnType::RowId),
         );
 
         internal_columns.insert(
-            BLOCK_NAME.to_string(),
-            InternalColumn::new(BLOCK_NAME, InternalColumnType::BlockName),
+            BLOCK_NAME_COL_NAME.to_string(),
+            InternalColumn::new(BLOCK_NAME_COL_NAME, InternalColumnType::BlockName),
         );
 
         internal_columns.insert(
-            SEGMENT_NAME.to_string(),
-            InternalColumn::new(SEGMENT_NAME, InternalColumnType::SegmentName),
+            SEGMENT_NAME_COL_NAME.to_string(),
+            InternalColumn::new(SEGMENT_NAME_COL_NAME, InternalColumnType::SegmentName),
         );
 
         internal_columns.insert(
-            SNAPSHOT_NAME.to_string(),
-            InternalColumn::new(SNAPSHOT_NAME, InternalColumnType::SnapshotName),
+            SNAPSHOT_NAME_COL_NAME.to_string(),
+            InternalColumn::new(SNAPSHOT_NAME_COL_NAME, InternalColumnType::SnapshotName),
         );
 
         InternalColumnFactory { internal_columns }

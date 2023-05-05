@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ use crate::ast::write_quoted_comma_separated_list;
 use crate::ast::write_space_separated_map;
 use crate::ast::Identifier;
 use crate::ast::Query;
+use crate::parser::unescape::escape_at_string;
 
 /// CopyStmt is the parsed statement of `COPY`.
 ///
@@ -356,7 +357,7 @@ pub struct StageLocation {
 
 impl Display for StageLocation {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "@{}{}", self.name, self.path)
+        write!(f, "@{}{}", self.name, escape_at_string(&self.path))
     }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -252,6 +252,18 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::OptimizeTable(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Super],
+                    )
+                    .await?;
+            }
+            Plan::VacuumTable(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(

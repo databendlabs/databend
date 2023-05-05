@@ -12,11 +12,13 @@ runs:
       with:
         bypass_env_vars: RUSTFLAGS,RUST_LOG,GITHUB_TOKEN
 
-    - name: Check License Header
-      shell: bash
-      env:
-        GITHUB_TOKEN: ${{ inputs.github_token }}
-      run: make check-license
+    - name: Check Apache License Header
+      uses: korandoru/hawkeye@v2
+
+    - name: Check Elastic License Header
+      uses: korandoru/hawkeye@v2
+      with:
+        config: licenserc-ee.toml
 
     - name: YAML Lint
       shell: bash

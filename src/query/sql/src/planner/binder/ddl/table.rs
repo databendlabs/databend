@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ use common_ast::ast::TableReference;
 use common_ast::ast::TruncateTableStmt;
 use common_ast::ast::UndropTableStmt;
 use common_ast::ast::UriLocation;
+use common_ast::ast::VacuumTableStmt;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
@@ -99,6 +100,8 @@ use crate::plans::RewriteKind;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumTableOption;
+use crate::plans::VacuumTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Planner;
@@ -810,6 +813,47 @@ impl Binder {
             database,
             table,
             action,
+        })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_table(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumTableStmt,
+    ) -> Result<Plan> {
+        let VacuumTableStmt {
+            catalog,
+            database,
+            table,
+            option,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let option = {
+            let retain_hours = match option.retain_hours {
+                Some(Expr::Literal {
+                    lit: Literal::UInt64(uint),
+                    ..
+                }) => Some(uint as usize),
+                Some(_) => {
+                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
+                }
+                _ => None,
+            };
+
+            VacuumTableOption {
+                retain_hours,
+                dry_run: option.dry_run,
+            }
+        };
+        Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
+            catalog,
+            database,
+            table,
+            option,
         })))
     }
 

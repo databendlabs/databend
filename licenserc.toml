@@ -1,0 +1,56 @@
+baseDir = "."
+
+headerPath = "Apache-2.0.txt"
+
+excludes = [
+    "scripts",
+    "docker",
+    "docs",
+    "website",
+    "tests",
+    "tools",
+    "benchmark",
+    "src/common/compress/tests",
+
+    # copied from third-party projects
+    "src/query/storages/hive/hive-meta-store/src/idl/hms.thrift",
+
+    # licensed under Elastic License 2.0
+    "src/binaries/query/ee_main.rs",
+    "src/binaries/meta/ee_main.rs",
+    "src/meta/ee",
+    "src/query/ee",
+
+    # hidden files
+    ".cargo",
+    ".databend",
+    ".devcontainer",
+    ".github",
+    ".dockerignore",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+
+    "LICENSE",
+    "Makefile",
+
+    # docs and generated files
+    "**/*.md",
+    "**/*.hbs",
+    "**/*.template",
+    "**/*.cue",
+    "**/*.json",
+    "**/*.sql",
+    "**/*.proto",
+    "**/*.yml",
+    "**/*.yaml",
+    "**/*.toml",
+    "**/*.lock",
+    "**/*.yapf",
+    "**/*.test",
+    "**/*.txt",
+]
+
+[properties]
+inceptionYear = 2021
+copyrightOwner = "Datafuse Labs"

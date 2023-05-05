@@ -1819,6 +1819,8 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
+ "jwt-simple",
+ "serde",
 ]
 
 [[package]]
@@ -3730,6 +3732,7 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-license",
+ "jwt-simple",
 ]
 
 [[package]]
@@ -9374,6 +9377,7 @@ version = "0.1.0"
 dependencies = [
  "common-exception",
  "common-expression",
+ "common-functions",
  "serde",
  "storages-common-index",
  "storages-common-table-meta",

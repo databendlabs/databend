@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -76,6 +76,7 @@ mod interpreter_table_revert;
 mod interpreter_table_show_create;
 mod interpreter_table_truncate;
 mod interpreter_table_undrop;
+mod interpreter_table_vacuum;
 mod interpreter_unsetting;
 mod interpreter_update;
 mod interpreter_use_database;
@@ -147,6 +148,7 @@ pub use interpreter_table_rename::RenameTableInterpreter;
 pub use interpreter_table_show_create::ShowCreateTableInterpreter;
 pub use interpreter_table_truncate::TruncateTableInterpreter;
 pub use interpreter_table_undrop::UndropTableInterpreter;
+pub use interpreter_table_vacuum::VacuumTableInterpreter;
 pub use interpreter_unsetting::UnSettingInterpreter;
 pub use interpreter_update::UpdateInterpreter;
 pub use interpreter_use_database::UseDatabaseInterpreter;

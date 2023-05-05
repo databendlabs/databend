@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -138,6 +138,7 @@ build_exceptions! {
     // create table or alter table add column with internal column name
     TableWithInternalColumnName(1110),
     EmptyShareEndpointConfig(1111),
+    LicenceDenied(1112),
 
     // Data Related Errors
 
@@ -159,6 +160,18 @@ build_exceptions! {
     ///
     /// For example: try to with 3 columns into a table with 4 columns.
     TableSchemaMismatch(1303),
+
+    // License related errors starts here
+
+    /// LicenseKeyParseError is used when license key cannot be pared by the jwt public key
+    ///
+    /// For example: license key is not valid
+    LicenseKeyParseError(1401),
+
+    /// LicenseKeyInvalid is used when license key verification error occurs
+    ///
+    /// For example: license key is expired
+    LicenseKeyInvalid(1402)
 }
 
 // Meta service errors [2001, 3000].

@@ -1,10 +1,6 @@
 name: "(hive) Test Stateful Standalone"
 description: "(hive) Running stateful tests in standalone mode"
 inputs:
-  profile:
-    description: "The profile for this test"
-    required: true
-    default: "debug"
   target:
     description: ""
     required: true
@@ -15,7 +11,6 @@ runs:
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:
-        profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
         category: hive
@@ -30,7 +25,7 @@ runs:
     - name: Hive Cluster Setup
       shell: bash
       run: |
-        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" up -d
+        docker-compose -f "./docker/it-hive/hive-docker-compose.yml" up --quiet-pull -d
 
     # Wait for h2 to come alive
     #  INSIDE the container of service "hive-server", wait for port 10000 being listened:

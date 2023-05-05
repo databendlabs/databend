@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -68,6 +68,7 @@ impl Plan {
             Plan::ReclusterTable(recluster_table) => Ok(format!("{:?}", recluster_table)),
             Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
             Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
+            Plan::VacuumTable(vacuum_table) => Ok(format!("{:?}", vacuum_table)),
             Plan::AnalyzeTable(analyze_table) => Ok(format!("{:?}", analyze_table)),
             Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 
