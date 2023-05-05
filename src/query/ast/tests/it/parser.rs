@@ -394,6 +394,7 @@ fn test_statement() {
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
         r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
         r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
+        r#"CREATE INDEX ON items USING ivfflat (embedding cosine) WITH (nlist = 100)",
     ];
 
     for case in cases {
@@ -681,11 +682,4 @@ fn test_quote() {
         let unquoted = unquote_ident(&quoted, '"');
         assert_eq!(unquoted, *input, "unquote({}) got {}", quoted, unquoted);
     }
-}
-
-#[test]
-fn test() {
-    let sql = "CREATE INDEX ON items USING ivfflat (embedding cosine) WITH (lists = 100)";
-    let tokens = tokenize_sql(sql).unwrap();
-    let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
 }

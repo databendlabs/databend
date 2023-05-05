@@ -52,7 +52,7 @@ impl Interpreter for CreateIndexInterpreter {
             table.create_vector_index(ctx, column_idx, nlists).await?;
             Ok::<(), common_exception::ErrorCode>(())
         });
-        handle.await.unwrap()?;
+        handle.await.unwrap()?; //TODO:run in background
         Ok(PipelineBuildResult::create())
     }
 }
