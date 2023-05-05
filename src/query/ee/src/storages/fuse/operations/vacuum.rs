@@ -279,9 +279,9 @@ pub async fn do_gc_orphan_files(
 #[async_backtrace::framed]
 pub async fn do_vacuum(
     fuse_table: &FuseTable,
-    ctx: &Arc<dyn TableContext>,
+    ctx: Arc<dyn TableContext>,
     retention_time: DateTime<Utc>,
 ) -> Result<()> {
     let start = Instant::now();
-    do_gc_orphan_files(fuse_table, ctx, retention_time, start).await
+    do_gc_orphan_files(fuse_table, &ctx, retention_time, start).await
 }

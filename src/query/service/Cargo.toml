@@ -62,6 +62,7 @@ common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
+common-license = { path = "../../common/license" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-metrics = { path = "../../common/metrics" }
@@ -91,6 +92,7 @@ common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 storages-common-cache = { path = "../storages/common/cache" }
 
+enterprise-query = { path = "../ee" }
 storages-common-blocks = { path = "../storages/common/blocks" }
 storages-common-cache-manager = { path = "../storages/common/cache-manager" }
 storages-common-index = { path = "../storages/common/index" }

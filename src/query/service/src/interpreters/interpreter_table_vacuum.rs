@@ -14,13 +14,18 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_license::license_manager::get_license_manager;
 use common_sql::plans::VacuumTablePlan;
+use common_storages_fuse::FuseTable;
+use enterprise_query::storages::fuse::do_vacuum;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
 
 #[allow(dead_code)]
 pub struct VacuumTableInterpreter {
@@ -42,8 +47,47 @@ impl Interpreter for VacuumTableInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        return Err(ErrorCode::LicenceDenied(
-            "Need Commercial License".to_string(),
-        ));
+        let license_manager = get_license_manager();
+        if !license_manager.manager.is_active() {
+            return Err(ErrorCode::LicenceDenied(
+                "Need Commercial License".to_string(),
+            ));
+        }
+
+        let catalog_name = self.plan.catalog.clone();
+        let db_name = self.plan.database.clone();
+        let tbl_name = self.plan.table.clone();
+        let ctx = self.ctx.clone();
+        let table = self
+            .ctx
+            .get_table(&catalog_name, &db_name, &tbl_name)
+            .await?;
+        let retention_time = chrono::Utc::now()
+            - chrono::Duration::hours(ctx.get_settings().get_retention_period()? as i64);
+        let mut build_res = PipelineBuildResult::create();
+        let ctx = self.ctx.clone();
+        if build_res.main_pipeline.is_empty() {
+            let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+            do_vacuum(fuse_table, ctx, retention_time).await?;
+        } else {
+            build_res.main_pipeline.set_on_finished(move |may_error| {
+                if may_error.is_none() {
+                    return GlobalIORuntime::instance().block_on(async move {
+                        // currently, context caches the table, we have to "refresh"
+                        // the table by using the catalog API directly
+                        let table = ctx
+                            .get_catalog(&catalog_name)?
+                            .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
+                            .await?;
+                        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+                        do_vacuum(fuse_table, ctx, retention_time).await
+                    });
+                }
+
+                Err(may_error.as_ref().unwrap().clone())
+            });
+        }
+
+        Ok(build_res)
     }
 }
