@@ -1,6 +1,5 @@
 ---
-title: Querying Data Before Load
-description:  Learn how to use standard SQL to query data files in internal or external storage stages with Databend
+title: Querying Data in Staged Files
 ---
 
 Databend allows you to directly query data in the files stored in one of the following locations without loading them into a table:
