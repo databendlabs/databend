@@ -36,7 +36,7 @@ enum HashJoinStep {
 }
 
 pub struct TransformHashJoinProbe {
-    input_data: Option<DataBlock>,
+    input_data: VecDeque<DataBlock>,
     output_data_blocks: VecDeque<DataBlock>,
 
     input_port: Arc<InputPort>,
@@ -56,7 +56,7 @@ impl TransformHashJoinProbe {
     ) -> Result<Box<dyn Processor>> {
         let default_block_size = ctx.get_settings().get_max_block_size()?;
         Ok(Box::new(TransformHashJoinProbe {
-            input_data: None,
+            input_data: VecDeque::new(),
             output_data_blocks: VecDeque::new(),
             input_port,
             output_port,
@@ -105,13 +105,19 @@ impl Processor for TransformHashJoinProbe {
                     return Ok(Event::NeedConsume);
                 }
 
-                if self.input_data.is_some() {
+                if !self.input_data.is_empty() {
                     return Ok(Event::Sync);
                 }
 
                 if self.input_port.has_data() {
                     let data = self.input_port.pull_data().unwrap()?;
-                    self.input_data = Some(data);
+                    // Split data to 1024 rows per sub block.
+                    // Todo(xudong): maybe we should add a config.
+                    let (sub_blocks, remain_block) = data.split_by_rows(1024);
+                    self.input_data.extend(sub_blocks);
+                    if let Some(remain) = remain_block {
+                        self.input_data.push_back(remain);
+                    }
                     return Ok(Event::Sync);
                 }
 
@@ -135,7 +141,7 @@ impl Processor for TransformHashJoinProbe {
             HashJoinStep::Build => Ok(()),
             HashJoinStep::Finalize => unreachable!(),
             HashJoinStep::Probe => {
-                if let Some(data) = self.input_data.take() {
+                if let Some(data) = self.input_data.pop_front() {
                     let data = data.convert_to_full();
                     self.probe(&data)?;
                 }
