@@ -63,6 +63,14 @@ impl SnapshotsIO {
         Self { ctx, operator }
     }
 
+    pub fn get_ctx(&self) -> Arc<dyn TableContext> {
+        self.ctx.clone()
+    }
+
+    pub fn get_operator(&self) -> Operator {
+        self.operator.clone()
+    }
+
     #[async_backtrace::framed]
     async fn read_snapshot(
         snapshot_location: String,
@@ -231,6 +239,7 @@ impl SnapshotsIO {
         snapshot_location: String,
         data_accessor: Operator,
         root_snapshot: Arc<SnapshotLiteExtended>,
+        ignore_timestamp: bool,
     ) -> Result<SnapshotLiteExtended> {
         let reader = MetaReaders::table_snapshot_reader(data_accessor);
         let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
@@ -242,7 +251,7 @@ impl SnapshotsIO {
         };
         let snapshot = reader.read(&load_params).await?;
 
-        if snapshot.timestamp >= root_snapshot.timestamp {
+        if !ignore_timestamp && snapshot.timestamp >= root_snapshot.timestamp {
             // filter out snapshots which have larger (artificial)timestamp , they are
             // not members of precedents of the current snapshot, whose timestamp is
             // min_snapshot_timestamp.
@@ -278,12 +287,14 @@ impl SnapshotsIO {
         })
     }
 
+    // If `ignore_timestamp` is true, ignore filter out snapshots which have larger (artificial)timestamp
     #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     pub async fn read_snapshot_lite_extends(
         &self,
         snapshot_files: &[String],
         root_snapshot: Arc<SnapshotLiteExtended>,
+        ignore_timestamp: bool,
     ) -> Result<Vec<Result<SnapshotLiteExtended>>> {
         // combine all the tasks.
         let mut iter = snapshot_files.iter();
@@ -293,6 +304,7 @@ impl SnapshotsIO {
                     location.clone(),
                     self.operator.clone(),
                     root_snapshot.clone(),
+                    ignore_timestamp,
                 )
                 .instrument(tracing::debug_span!("read_snapshot"))
             })

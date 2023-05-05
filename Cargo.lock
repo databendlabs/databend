@@ -3727,12 +3727,18 @@ name = "enterprise-query"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "chrono",
  "common-base",
  "common-building",
+ "common-catalog",
  "common-config",
  "common-exception",
  "common-license",
+ "common-storages-fuse",
  "jwt-simple",
+ "storages-common-cache",
+ "storages-common-table-meta",
+ "tracing",
 ]
 
 [[package]]

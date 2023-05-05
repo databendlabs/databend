@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod enterprise_services;
-pub mod license;
-pub mod storages;
+pub mod io;
+pub mod operations;
+
+pub use io::snapshots::get_snapshot_referenced_segments;
+pub use operations::vacuum::do_vacuum;
