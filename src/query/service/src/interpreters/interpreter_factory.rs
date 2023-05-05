@@ -191,6 +191,10 @@ impl InterpreterFactory {
             Plan::OptimizeTable(optimize_table) => Ok(Arc::new(
                 OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())?,
             )),
+            Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
+                ctx,
+                *vacuum_table.clone(),
+            )?)),
             Plan::AnalyzeTable(analyze_table) => Ok(Arc::new(AnalyzeTableInterpreter::try_create(
                 ctx,
                 *analyze_table.clone(),
