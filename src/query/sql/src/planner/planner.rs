@@ -125,7 +125,6 @@ impl Planner {
                     let iter = (&mut tokenizer)
                         .take(tokens.len() * 2)
                         .take_while(|token| token.is_ok())
-                        .chain(std::iter::once(Ok(Token::new_eoi(sql))))
                         .map(|token| token.unwrap())
                         // Make sure the tokens stream is always ended with EOI.
                         .chain(std::iter::once(Token::new_eoi(sql)));
