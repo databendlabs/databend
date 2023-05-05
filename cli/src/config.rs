@@ -59,6 +59,9 @@ pub struct Settings {
     /// Show time elapsed when executing queries.
     /// only works with output format `null`.
     pub time: bool,
+
+    /// Multi line mode, default is true.
+    pub multi_line: bool,
 }
 
 #[derive(ValueEnum, Clone, Debug, PartialEq, Deserialize)]
@@ -105,6 +108,7 @@ impl Settings {
                 }
             }
             "time" => self.time = cmd_value.parse()?,
+            "multi_line" => self.multi_line = cmd_value.parse()?,
             _ => return Err(anyhow!("Unknown command: {}", cmd_name)),
         }
         Ok(())
@@ -153,6 +157,7 @@ impl Default for Settings {
             show_progress: false,
             show_stats: false,
             time: false,
+            multi_line: true,
         }
     }
 }

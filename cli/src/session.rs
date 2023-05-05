@@ -184,6 +184,10 @@ impl Session {
             return vec![line.to_owned()];
         }
 
+        if !self.settings.multi_line {
+            return vec![line.to_owned()];
+        }
+
         self.query.push(' ');
         self.query.push_str(line);
 
