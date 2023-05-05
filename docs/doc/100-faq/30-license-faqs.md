@@ -21,7 +21,7 @@ You can find the feature's license by taking a look on the code file's header un
 | Type                | Description                                                                                                                                                                                                                                                                                         |
 |---------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Apache 2.0 License  | Core features under the Apache License are free to use and fully open source.                                                                                                                                                                                                                       |
-| Elastic 2.0 License | * Elastic (Free) features are free to use. The source code is available to view and modify under Elastic 2.0 License Limitations  <br> * Elastic (Paid) features require an Enterprise License key to access. The source code is available to view and modify under Elastic 2.0 License Limitations | 
+| Elastic 2.0 License | * Elastic (Free) features are free to use. The source code is available to view and modify under Elastic 2.0 License Limitations  <br/> * Elastic (Paid) features require an Enterprise License key to access. The source code is available to view and modify under Elastic 2.0 License Limitations | 
 
 For additional custom licensing options, [contact us](https://www.databend.com/contact-us).
 
