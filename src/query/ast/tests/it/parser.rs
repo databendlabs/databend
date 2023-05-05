@@ -685,7 +685,7 @@ fn test_quote() {
 
 #[test]
 fn test() {
-    let sql = "CREATE INDEX ON items USING ivfflat (embedding IP) WITH (lists = 100)";
+    let sql = "CREATE INDEX ON items USING ivfflat (embedding cosine) WITH (lists = 100)";
     let tokens = tokenize_sql(sql).unwrap();
     let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
 }

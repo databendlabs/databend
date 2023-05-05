@@ -2365,6 +2365,7 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
+ "faiss",
  "futures",
  "futures-util",
  "jsonb",
@@ -3376,7 +3377,6 @@ dependencies = [
  "ctor",
  "dashmap",
  "ethnum",
- "faiss",
  "futures",
  "futures-util",
  "goldenfile",
@@ -3888,7 +3888,7 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 [[package]]
 name = "faiss"
 version = "0.12.1-alpha.0"
-source = "git+https://github.com/datafuselabs/faiss-rs.git?branch=generic_io#1a387bad43cc284cc0fd5bc6383ac92f7016004e"
+source = "git+https://github.com/datafuse-extras/faiss-rs.git#e410e25a8b7a86b02533c64972190d7920ce910e"
 dependencies = [
  "faiss-sys",
 ]
@@ -3896,7 +3896,7 @@ dependencies = [
 [[package]]
 name = "faiss-sys"
 version = "0.6.1"
-source = "git+https://github.com/datafuselabs/faiss-rs.git?branch=generic_io#1a387bad43cc284cc0fd5bc6383ac92f7016004e"
+source = "git+https://github.com/datafuse-extras/faiss-rs.git#e410e25a8b7a86b02533c64972190d7920ce910e"
 dependencies = [
  "cmake",
 ]

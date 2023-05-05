@@ -278,7 +278,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         // example: CREATE INDEX ON items USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);
         rule! {
             CREATE ~ INDEX~ ON ~ #period_separated_idents_1_to_3
-            ~ USING ~ IVFFLAT ~ "(" ~ #ident ~ IP ~")"
+            ~ USING ~ IVFFLAT ~ "(" ~ #ident ~ COSINE ~")"
             ~ WITH ~ "(" ~ #comma_separated_list1(expr) ~ ")"
         },
         |(

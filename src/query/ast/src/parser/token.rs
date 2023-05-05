@@ -561,8 +561,8 @@ pub enum TokenKind {
     INTERVAL,
     #[token("INTO", ignore(ascii_case))]
     INTO,
-    #[token("IP", ignore(ascii_case))]
-    IP,
+    #[token("COSINE", ignore(ascii_case))]
+    COSINE,
     #[token("IS", ignore(ascii_case))]
     IS,
     #[token("ISODOW", ignore(ascii_case))]
@@ -1190,7 +1190,7 @@ impl TokenKind {
             | TokenKind::INNER
             | TokenKind::IS
             | TokenKind::IVFFLAT
-            | TokenKind::IP
+            | TokenKind::COSINE
             | TokenKind::JOIN
             // | TokenKind::LATERAL
             | TokenKind::LEADING

@@ -34,6 +34,7 @@ impl Interpreter for CreateIndexInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
+        let nlists = plan.nlists.unwrap();
         let ctx = self.ctx.clone();
         let column_idx = table
             .schema()
@@ -48,7 +49,7 @@ impl Interpreter for CreateIndexInterpreter {
         // build index in background task and return immediately
         let handle = tokio::spawn(async move {
             let table = FuseTable::try_from_table(table.as_ref())?;
-            table.create_vector_index(ctx, column_idx).await?;
+            table.create_vector_index(ctx, column_idx, nlists).await?;
             Ok::<(), common_exception::ErrorCode>(())
         });
         handle.await.unwrap()?;

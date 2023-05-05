@@ -31,7 +31,7 @@ impl Display for CreateIndexStmt {
             }
         };
         let metric_type = match self.metric_type {
-            TokenKind::IP => "inner product",
+            TokenKind::COSINE => "cosine distance",
             _ => {
                 unreachable!()
             }
