@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_base::base::tokio;
+use common_catalog::table::Table;
+use common_exception::ErrorCode;
+use common_expression::DataBlock;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use futures_util::TryStreamExt;
 
+use crate::storages::fuse::table_test_fixture::execute_query;
 use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -75,6 +81,100 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
     // cleared?
     assert_eq!(parts.len(), 0);
     assert_eq!(stats.read_rows, 0);
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_fuse_table_truncate_appending_concurrently() -> common_exception::Result<()> {
+    // the test scenario is as follows:
+    // ┌──────┐
+    // │  s0  │
+    // └───┬──┘
+    //     │ append 30 rows
+    //     ▼
+    // ┌──────┐
+    // │  s1  │
+    // └───┬──┘
+    //     │ append 30 rows
+    //     ▼
+    // ┌──────┐
+    // │  s2  │
+    // └───┬──┘
+    //     │   ─────────────────► after s2 is committed; `truncate purge table @s1` should fail
+    //     ▼ append 30 rows
+    // ┌──────┐
+    // │  s3  │
+    // └──────┘
+    //
+    //        s3 should be a valid snapshot,full-scan should work as expected
+
+    let fixture = Arc::new(TestFixture::new().await);
+    let ctx = fixture.ctx();
+    fixture.create_default_table().await?;
+    let init_table = fixture.latest_default_table().await?;
+
+    // 1. setup
+
+    let num_blocks = 10;
+    let rows_per_block = 3;
+    let value_start_from = 1;
+
+    let append_data = |t: Arc<dyn Table>| {
+        let fixture = fixture.clone();
+        async move {
+            let stream = TestFixture::gen_sample_blocks_stream_ex(
+                num_blocks,
+                rows_per_block,
+                value_start_from,
+            );
+
+            let blocks = stream.try_collect().await?;
+            fixture
+                .append_commit_blocks(t.clone(), blocks, false, true)
+                .await?;
+            Ok::<_, ErrorCode>(())
+        }
+    };
+
+    // append 10 blocks, generate snapshot s1
+    append_data(init_table).await?;
+
+    // 2. pin to snapshot s1, later we use this snapshot to perform the `truncate purge` operation
+    let s1_table_to_be_truncated = fixture.latest_default_table().await?;
+
+    // 3. append other 10 blocks, on the base of s1, generate snapshot s2
+    append_data(s1_table_to_be_truncated.clone()).await?;
+    let s2_table_to_appended = fixture.latest_default_table().await?;
+
+    // 4. perform `truncate purge` operation on s1
+    let purge = true;
+    let r = s1_table_to_be_truncated.truncate(ctx.clone(), purge).await;
+    // version mismatched, and `truncate purge` should result in error (but nothing should have been removed)
+    assert!(r.is_err());
+
+    // 5. append 10 blocks, on the base of s2, generate snapshot s3
+    append_data(s2_table_to_appended.clone()).await?;
+
+    // 6. check s3
+    let qry = format!(
+        "select * from  {}.{}",
+        fixture.default_db_name(),
+        fixture.default_table_name()
+    );
+    // - full scan should work
+    let result = execute_query(ctx.clone(), qry.as_str())
+        .await?
+        .try_collect::<Vec<DataBlock>>()
+        .await?;
+
+    // - and the number of rows should be as expected
+    assert_eq!(
+        result.iter().map(|b| b.num_rows()).sum::<usize>(),
+        // 3 `append ` operations( s0 -> s1, s1 -> s2, s2 -> s3)
+        // each append `num_blocks` blocks, each block has `rows_per_block` rows
+        num_blocks * rows_per_block * 3
+    );
 
     Ok(())
 }
