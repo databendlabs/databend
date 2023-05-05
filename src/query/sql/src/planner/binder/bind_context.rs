@@ -27,6 +27,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use dashmap::DashMap;
+use enum_as_inner::EnumAsInner;
 
 use super::AggregateInfo;
 use super::INTERNAL_COLUMN_FACTORY;
@@ -41,7 +42,7 @@ use crate::NameResolutionContext;
 
 /// Context of current expression, this is used to check if
 /// the expression is valid in current context.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, EnumAsInner)]
 pub enum ExprContext {
     SelectClause,
     WhereClause,
@@ -271,6 +272,14 @@ impl BindContext {
         let mut bind_context: &BindContext = self;
         // Lookup parent context to resolve outer reference.
         loop {
+            if self.expr_context.is_where_clause() {
+                // In where clause, check bound columns first.
+                Self::search_bound_columns(bind_context, database, table, column, &mut result);
+                if !result.is_empty() {
+                    break;
+                }
+            }
+
             // TODO(leiysky): use `Identifier` for alias instead of raw string
             for (alias, scalar) in available_aliases {
                 if database.is_none() && table.is_none() && column == alias {
@@ -287,25 +296,11 @@ impl BindContext {
                 break;
             }
 
-            for column_binding in bind_context.columns.iter() {
-                if Self::match_column_binding(database, table, column, column_binding) {
-                    result.push(NameResolutionResult::Column(column_binding.clone()));
+            if !self.expr_context.is_where_clause() {
+                Self::search_bound_columns(bind_context, database, table, column, &mut result);
+                if !result.is_empty() {
+                    break;
                 }
-            }
-            if !result.is_empty() {
-                break;
-            }
-
-            // look up internal column
-            if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(column) {
-                let column_binding = InternalColumnBinding {
-                    database_name: database.map(|n| n.to_owned()),
-                    table_name: table.map(|n| n.to_owned()),
-                    index: bind_context.columns.len(),
-                    internal_column,
-                };
-                result.push(NameResolutionResult::InternalColumn(column_binding));
-                break;
             }
 
             if let Some(ref parent) = bind_context.parent {
@@ -324,6 +319,34 @@ impl BindContext {
             .set_span(span))
         } else {
             Ok(result.remove(0))
+        }
+    }
+
+    pub fn search_bound_columns(
+        bind_context: &BindContext,
+        database: Option<&str>,
+        table: Option<&str>,
+        column: &str,
+        result: &mut Vec<NameResolutionResult>,
+    ) {
+        for column_binding in bind_context.columns.iter() {
+            if Self::match_column_binding(database, table, column, column_binding) {
+                result.push(NameResolutionResult::Column(column_binding.clone()));
+            }
+        }
+        if !result.is_empty() {
+            return;
+        }
+
+        // look up internal column
+        if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(column) {
+            let column_binding = InternalColumnBinding {
+                database_name: database.map(|n| n.to_owned()),
+                table_name: table.map(|n| n.to_owned()),
+                index: bind_context.columns.len(),
+                internal_column,
+            };
+            result.push(NameResolutionResult::InternalColumn(column_binding));
         }
     }
 
