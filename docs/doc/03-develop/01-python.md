@@ -67,6 +67,9 @@ for (title, author, date) in results:
   print("{} {} {}".format(title, author, date))
 client.execute('drop table books')
 client.execute('drop database book_db')
+
+# Close Connect.
+client.disconnect()
 ```
 
 3. Run `python main.py`:
@@ -102,6 +105,9 @@ for result in results:
     print(result)
 conn.execute('drop table books')
 conn.execute('drop database book_db')
+
+# Close Connect.
+conn.close()
 ```
 
 3. Run `python main.py`:
