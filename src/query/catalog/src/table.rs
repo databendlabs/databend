@@ -364,6 +364,10 @@ pub trait Table: Sync + Send {
             self.get_table_info().engine(),
         )))
     }
+
+    fn is_stage_table(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]

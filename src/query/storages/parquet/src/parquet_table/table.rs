@@ -126,6 +126,10 @@ impl Table for ParquetTable {
     ) -> Result<()> {
         self.do_read_data(ctx, plan, pipeline)
     }
+
+    fn is_stage_table(&self) -> bool {
+        true
+    }
 }
 
 fn lower_field_name(field: &mut ArrowField) {
