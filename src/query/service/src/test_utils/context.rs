@@ -23,16 +23,17 @@ use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
 use common_meta_types::NodeInfo;
-use databend_query::clusters::Cluster;
-use databend_query::clusters::ClusterHelper;
-use databend_query::sessions::QueryContext;
-use databend_query::sessions::QueryContextShared;
-use databend_query::sessions::SessionManager;
-use databend_query::sessions::SessionType;
-use databend_query::sessions::TableContext;
 
-use crate::tests::sessions::TestGuard;
-use crate::tests::TestGlobalServices;
+use crate::clusters::Cluster;
+use crate::clusters::ClusterHelper;
+use crate::sessions::QueryContext;
+use crate::sessions::QueryContextShared;
+use crate::sessions::SessionManager;
+use crate::sessions::SessionType;
+use crate::sessions::TableContext;
+use crate::test_utils::ConfigBuilder;
+use crate::test_utils::TestGlobalServices;
+use crate::test_utils::TestGuard;
 
 pub async fn create_query_context() -> Result<(TestGuard, Arc<QueryContext>)> {
     create_query_context_with_session(SessionType::Dummy, None).await
@@ -43,7 +44,7 @@ pub async fn create_query_context_with_session(
     guard: Option<TestGuard>,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {
     let guard = match guard {
-        None => TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?,
+        None => TestGlobalServices::setup(ConfigBuilder::create().build()).await?,
         Some(g) => g,
     };
     let dummy_session = SessionManager::instance().create_session(typ).await?;
@@ -148,7 +149,7 @@ impl Default for ClusterDescriptor {
 pub async fn create_query_context_with_cluster(
     desc: ClusterDescriptor,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {
-    let config = crate::tests::ConfigBuilder::create().build();
+    let config = ConfigBuilder::create().build();
     let guard = TestGlobalServices::setup(config.clone()).await?;
     let dummy_session = SessionManager::instance()
         .create_session(SessionType::Dummy)

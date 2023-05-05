@@ -16,9 +16,10 @@ use common_base::base::GlobalInstance;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_tracing::set_panic_hook;
-use databend_query::clusters::ClusterDiscovery;
-use databend_query::GlobalServices;
 use tracing::info;
+
+use crate::clusters::ClusterDiscovery;
+use crate::GlobalServices;
 
 pub struct TestGlobalServices;
 

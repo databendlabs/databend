@@ -32,6 +32,10 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::test_utils::table_test_fixture::execute_command;
+use databend_query::test_utils::table_test_fixture::execute_query;
+use databend_query::test_utils::table_test_fixture::expects_ok;
+use databend_query::test_utils::table_test_fixture::TestFixture;
 use rand::thread_rng;
 use rand::Rng;
 use storages_common_cache::LoadParams;
@@ -41,10 +45,6 @@ use uuid::Uuid;
 
 use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
-use crate::storages::fuse::table_test_fixture::execute_command;
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::expects_ok;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact() -> Result<()> {

@@ -26,15 +26,14 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::storages::fuse::fuse_part::FusePartInfo;
+use databend_query::test_utils::table_test_fixture::execute_query;
+use databend_query::test_utils::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 fn expected_data_block(
     parts: &Partitions,

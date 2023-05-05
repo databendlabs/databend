@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog;
+#![allow(clippy::too_many_arguments)]
+pub mod config;
+pub mod context;
+pub mod sessions;
+pub mod table_test_fixture;
 
-pub(crate) mod tls_constants;
-
-pub use catalog::create_catalog;
+pub use config::ConfigBuilder;
+pub use context::create_query_context;
+pub use context::create_query_context_with_cluster;
+pub use context::create_query_context_with_config;
+pub use context::create_query_context_with_session;
+pub use context::ClusterDescriptor;
+pub use sessions::TestGlobalServices;
+pub use sessions::TestGuard;
+pub use table_test_fixture::TestFixture;

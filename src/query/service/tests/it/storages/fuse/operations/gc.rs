@@ -25,6 +25,9 @@ use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::merge_statistics;
 use common_storages_fuse::FuseTable;
+use databend_query::test_utils::table_test_fixture::append_sample_data;
+use databend_query::test_utils::table_test_fixture::check_data_dir;
+use databend_query::test_utils::table_test_fixture::TestFixture;
 use futures_util::TryStreamExt;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -36,9 +39,6 @@ use uuid::Uuid;
 
 use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::operations::mutation::compact_segment;
-use crate::storages::fuse::table_test_fixture::append_sample_data;
-use crate::storages::fuse::table_test_fixture::check_data_dir;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_purge_normal_case() -> Result<()> {

@@ -45,22 +45,6 @@ use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlan;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
-use databend_query::interpreters::append2table;
-use databend_query::interpreters::CreateTableInterpreter;
-use databend_query::interpreters::Interpreter;
-use databend_query::interpreters::InterpreterFactory;
-use databend_query::pipelines::executor::ExecutorSettings;
-use databend_query::pipelines::executor::PipelineCompleteExecutor;
-use databend_query::pipelines::PipelineBuildResult;
-use databend_query::sessions::QueryContext;
-use databend_query::sessions::TableContext;
-use databend_query::sql::Planner;
-use databend_query::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
-use databend_query::storages::fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
-use databend_query::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
-use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
-use databend_query::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
-use databend_query::storages::Table;
 use futures::TryStreamExt;
 use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -68,10 +52,27 @@ use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-use crate::tests::TestGuard;
+use crate::interpreters::append2table;
+use crate::interpreters::CreateTableInterpreter;
+use crate::interpreters::Interpreter;
+use crate::interpreters::InterpreterFactory;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::PipelineBuildResult;
+use crate::sessions::QueryContext;
+use crate::sessions::TableContext;
+use crate::sql::Planner;
+use crate::storages::fuse::FUSE_TBL_BLOCK_PREFIX;
+use crate::storages::fuse::FUSE_TBL_LAST_SNAPSHOT_HINT;
+use crate::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
+use crate::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
+use crate::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
+use crate::storages::Table;
+use crate::test_utils::create_query_context_with_config;
+use crate::test_utils::ConfigBuilder;
+use crate::test_utils::TestGuard;
 
 pub struct TestFixture {
-    _tmp_dir: TempDir,
     ctx: Arc<QueryContext>,
     _guard: TestGuard,
     prefix: String,
@@ -80,7 +81,7 @@ pub struct TestFixture {
 impl TestFixture {
     pub async fn new() -> TestFixture {
         let tmp_dir = TempDir::new().unwrap();
-        let mut conf = crate::tests::ConfigBuilder::create().config();
+        let mut conf = ConfigBuilder::create().config();
 
         // make sure we are suing `fs` storage
         conf.storage.params = StorageParams::Fs(StorageFsConfig {
@@ -88,9 +89,7 @@ impl TestFixture {
             root: tmp_dir.path().to_str().unwrap().to_string(),
         });
 
-        let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None)
-            .await
-            .unwrap();
+        let (_guard, ctx) = create_query_context_with_config(conf, None).await.unwrap();
 
         let tenant = ctx.get_tenant();
         let random_prefix: String = Uuid::new_v4().simple().to_string();
@@ -113,7 +112,6 @@ impl TestFixture {
             .unwrap();
 
         Self {
-            _tmp_dir: tmp_dir,
             ctx,
             _guard,
             prefix: random_prefix,

@@ -14,9 +14,8 @@
 
 use common_base::base::tokio;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_query::test_utils::table_test_fixture::TestFixture;
 use futures_util::TryStreamExt;
-
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_truncate() -> common_exception::Result<()> {
