@@ -57,6 +57,16 @@ impl ConfigBuilder {
         self
     }
 
+    pub fn parquet_fast_read_bytes(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.parquet_fast_read_bytes = Some(value);
+        self
+    }
+
+    pub fn max_storage_io_requests(mut self, value: u64) -> ConfigBuilder {
+        self.conf.query.max_storage_io_requests = Some(value);
+        self
+    }
+
     pub fn jwt_key_file(mut self, value: impl Into<String>) -> ConfigBuilder {
         self.conf.query.jwt_key_file = value.into();
         self

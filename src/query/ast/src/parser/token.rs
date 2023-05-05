@@ -433,6 +433,8 @@ pub enum TokenKind {
     DOWNLOAD,
     #[token("DROP", ignore(ascii_case))]
     DROP,
+    #[token("DRY", ignore(ascii_case))]
+    DRY,
     #[token("EXCEPT", ignore(ascii_case))]
     EXCEPT,
     #[token("EXCLUDE", ignore(ascii_case))]
@@ -529,6 +531,8 @@ pub enum TokenKind {
     HIVE,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
+    #[token("HOURS", ignore(ascii_case))]
+    HOURS,
     #[token("ICEBERG", ignore(ascii_case))]
     ICEBERG,
     #[token("INTERSECT", ignore(ascii_case))]
@@ -713,10 +717,14 @@ pub enum TokenKind {
     PRIVILEGES,
     #[token("REMOVE", ignore(ascii_case))]
     REMOVE,
+    #[token("RETAIN", ignore(ascii_case))]
+    RETAIN,
     #[token("REVOKE", ignore(ascii_case))]
     REVOKE,
     #[token("RECURSIVE", ignore(ascii_case))]
     RECURSIVE,
+    #[token("RUN", ignore(ascii_case))]
+    RUN,
     #[token("GRANTS", ignore(ascii_case))]
     GRANTS,
     #[token("RIGHT", ignore(ascii_case))]
@@ -871,6 +879,8 @@ pub enum TokenKind {
     USERS,
     #[token("USING", ignore(ascii_case))]
     USING,
+    #[token("VACUUM", ignore(ascii_case))]
+    VACUUM,
     #[token("VALUES", ignore(ascii_case))]
     VALUES,
     #[token("VALIDATION_MODE", ignore(ascii_case))]
