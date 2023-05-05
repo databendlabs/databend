@@ -39,6 +39,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::table::TableCompression;
+use tracing::info;
 
 use super::AppendOperationLogEntry;
 use crate::io;
@@ -371,6 +372,7 @@ impl Processor for FuseTableSink {
                 segment,
             } => {
                 self.data_accessor.write(&location, data).await?;
+                info!("fuse sink wrote down segment {} ", location);
 
                 self.state = State::PreCommitSegment { location, segment };
             }
