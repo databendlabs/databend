@@ -64,3 +64,16 @@ SELECT b.number FROM (SELECT * FROM numbers(3) AS b ORDER BY a.number) AS a
 statement error 1065
 SELECT b.number FROM (SELECT * FROM numbers(3) AS b) AS a ORDER BY b.number
 
+query I
+select number * 2 as a from numbers(3) where (a + 1) % 3 = 0
+----
+2 
+
+statement error
+select number, number * 2 as number from numbers(3) where (number + 1) % 3 = 0
+
+# If the alias name is the same as the column name, use column name first.
+query I
+select number * 2 as number from numbers(3) where (number + 1) % 3 = 0
+----
+4
