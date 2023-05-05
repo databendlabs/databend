@@ -5,17 +5,17 @@ description:
   Load data from local file system.
 ---
 
-In this tutorial, you will load data from a local sample file into Databend with the [BendSQL](../11-integrations/30-access-tool/01-bendsql.md).
+Uploading your local data files to a stage or bucket before loading them into Databend can be unnecessary. Instead, you can use [BendSQL](../11-integrations/30-access-tool/01-bendsql.md), the Databend native CLI tool, to directly import the data. This simplifies the workflow and can save you storage fees. By using BendSQL to import your local data, you can streamline the process and avoid unnecessary steps. Please note that the files must be in a format supported by Databend, otherwise the data cannot be imported. For more information on the file formats supported by Databend, see [Input & Output File Formats](../13-sql-reference/50-file-format-options.md).
 
-## Tutorial 1 - Load from a CSV File
+## Tutorial 1 - Load from a Local File
 
 This tutorial takes a CSV file as an example, showing how to load data into Databend from a local file.
 
 ### Before You Begin
 
-Download the sample CSV file [books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv). The sample contains the following records:
+Download and save the sample file [books.csv](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.csv) to a local folder. The file contains two records:
 
-```
+```text
 Transaction Processing,Jim Gray,1992
 Readings in Database Systems,Michael Stonebraker,2004
 ```
@@ -73,7 +73,7 @@ Send loading data request with the following command:
 
 ## Tutorial 2 - Load into Specified Columns
 
-In [Tutorial 1](#tutorial-1---load-from-a-csv-file), you created a table containing three columns that exactly match the data in the sample file. The Streaming Load API also allows you to load data into specified columns of a table in Databend, so the table does not need to have the same columns as the data to be loaded as long as the specified columns can match. This tutorial shows how to do that.
+In [Tutorial 1](#tutorial-1---load-from-a-csv-file), you created a table containing three columns that exactly match the data in the sample file. You can also load data into specified columns of a table, so the table does not need to have the same columns as the data to be loaded as long as the specified columns can match. This tutorial shows how to do that.
 
 ### Before You Begin
 
