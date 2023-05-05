@@ -403,10 +403,7 @@ pub fn unify(
     auto_cast_rules: AutoCastRules,
 ) -> Result<Substitution> {
     match (src_ty, dest_ty) {
-        (DataType::Generic(_), _) => Err(ErrorCode::from_string_no_backtrace(
-            "source type {src_ty} must not contain generic type".to_string(),
-        )),
-        (ty, DataType::Generic(_)) if ty.has_generic() => Err(ErrorCode::from_string_no_backtrace(
+        (ty, _) if ty.has_generic() => Err(ErrorCode::from_string_no_backtrace(
             "source type {src_ty} must not contain generic type".to_string(),
         )),
         (ty, DataType::Generic(idx)) => Ok(Substitution::equation(*idx, ty.clone())),
@@ -492,7 +489,11 @@ pub fn can_auto_cast_to(
                 && (x.leading_digits() <= y.leading_digits()
                     || y.precision() == MAX_DECIMAL256_PRECISION)
         }
-        (DataType::Number(n), DataType::Decimal(_)) if !n.is_float() => true,
+        (DataType::Number(n), DataType::Decimal(d))
+            if !n.is_float() && d.precision() == d.max_precision() =>
+        {
+            true
+        }
         (DataType::Decimal(_), DataType::Number(n)) if n.is_float() => true,
         _ => false,
     }
@@ -504,6 +505,8 @@ pub fn common_super_type(
     auto_cast_rules: AutoCastRules,
 ) -> Option<DataType> {
     match (ty1, ty2) {
+        (ty1, ty2) if can_auto_cast_to(&ty1, &ty2, auto_cast_rules) => Some(ty2),
+        (ty1, ty2) if can_auto_cast_to(&ty2, &ty1, auto_cast_rules) => Some(ty1),
         (DataType::Null, ty @ DataType::Nullable(_))
         | (ty @ DataType::Nullable(_), DataType::Null) => Some(ty),
         (DataType::Null, ty) | (ty, DataType::Null) => Some(DataType::Nullable(Box::new(ty))),
@@ -559,8 +562,6 @@ pub fn common_super_type(
         {
             Some(DataType::Number(num_ty))
         }
-        (ty1, ty2) if can_auto_cast_to(&ty1, &ty2, auto_cast_rules) => Some(ty2),
-        (ty1, ty2) if can_auto_cast_to(&ty2, &ty1, auto_cast_rules) => Some(ty1),
         (ty1, ty2) => {
             let ty1_can_cast_to = auto_cast_rules
                 .iter()

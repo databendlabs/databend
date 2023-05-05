@@ -27,7 +27,7 @@ output         : false
 
 ast            : 1.0=1
 raw expr       : eq(1.0, 1)
-checked expr   : eq<Decimal(2, 1), Decimal(2, 1)>(1.0_d128(2,1), to_decimal<UInt8>(2, 1)(1_u8))
+checked expr   : eq<Decimal(38, 1), Decimal(38, 1)>(to_decimal<Decimal(2, 1)>(38, 1)(1.0_d128(2,1)), to_decimal<UInt8>(38, 1)(1_u8))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}

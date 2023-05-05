@@ -242,7 +242,7 @@ macro_rules! register_decimal_compare_op {
             }
 
             let common_arg_type =
-                common_super_type(args_type[0].clone(), args_type[0].clone(), &[])?;
+                common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
             let return_type = DecimalDataType::binary_result_type(
                 common_arg_type.as_decimal()?,
                 common_arg_type.as_decimal()?,
