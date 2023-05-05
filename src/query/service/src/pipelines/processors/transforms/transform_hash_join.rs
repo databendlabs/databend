@@ -44,6 +44,7 @@ pub struct TransformHashJoinProbe {
     step: HashJoinStep,
     join_state: Arc<dyn HashJoinState>,
     probe_state: ProbeState,
+    block_size: u64,
 }
 
 impl TransformHashJoinProbe {
@@ -63,6 +64,7 @@ impl TransformHashJoinProbe {
             step: HashJoinStep::Build,
             join_state,
             probe_state: ProbeState::with_capacity(default_block_size as usize),
+            block_size: default_block_size,
         }))
     }
 
@@ -111,9 +113,8 @@ impl Processor for TransformHashJoinProbe {
 
                 if self.input_port.has_data() {
                     let data = self.input_port.pull_data().unwrap()?;
-                    // Split data to 1024 rows per sub block.
-                    // Todo(xudong): maybe we should add a config.
-                    let (sub_blocks, remain_block) = data.split_by_rows(1024);
+                    // Split data to `block_size` rows per sub block.
+                    let (sub_blocks, remain_block) = data.split_by_rows(self.block_size as usize);
                     self.input_data.extend(sub_blocks);
                     if let Some(remain) = remain_block {
                         self.input_data.push_back(remain);
