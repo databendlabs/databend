@@ -248,6 +248,8 @@ impl<'a> WindowRewriter<'a> {
                     Some(d) => Some(Box::new(d?)),
                 };
 
+                dbg!(&new_default);
+
                 WindowFuncType::Lag(LagLeadFunction {
                     arg: Box::new(new_arg),
                     offset: lag.offset,

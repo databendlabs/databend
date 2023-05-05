@@ -489,8 +489,8 @@ impl<T: Number> TransformWindow<T> {
 
     #[inline]
     fn merge_result_of_current_row(&mut self) -> Result<()> {
-        let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-        dbg!(&builder.data_type());
+        let window_block = &mut self.blocks[self.current_row.block - self.first_block];
+        let builder = &mut window_block.builder;
 
         match &self.func {
             WindowFunctionImpl::Aggregate(agg) => {
@@ -536,6 +536,16 @@ impl<T: Number> TransformWindow<T> {
                         Scalar::Null
                     }
                 };
+
+                let col = window_block
+                    .block
+                    .get_by_offset(lag.arg)
+                    .value
+                    .as_column()
+                    .unwrap();
+                let result = col.index(self.current_row.row).unwrap();
+                dbg!(&self.frame_start);
+                dbg!(&result);
 
                 // let lag_row = ScalarRef::Number(NumberScalar::Int32(88));
                 let lag_row = default_value;
@@ -822,7 +832,6 @@ where T: Number + ResultTypeOfUnary
     ///
     /// Once collect all the results of one input [`DataBlock`], attach the corresponding result column to the input as output.
     fn add_block(&mut self, data: Option<DataBlock>) -> Result<()> {
-        dbg!(&self.func.return_type()?);
         if let Some(data) = data {
             let num_rows = data.num_rows();
             self.blocks.push_back(WindowBlock {
