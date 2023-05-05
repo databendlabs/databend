@@ -16,7 +16,6 @@ use std::any::Any;
 use std::io::BufRead;
 use std::io::Cursor;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::array::ArrayColumnBuilder;
 use common_expression::types::string::StringColumnBuilder;
@@ -28,7 +27,6 @@ use common_io::constants::NULL_BYTES_ESCAPE;
 use common_io::constants::TRUE_BYTES_LOWER;
 use common_io::cursor_ext::ReadBytesExt;
 use common_meta_app::principal::CsvFileFormatParams;
-use jsonb::parse_value;
 
 use crate::field_decoder::row_based::FieldDecoderRowBased;
 use crate::field_decoder::values::FieldDecoderValues;
@@ -95,29 +93,6 @@ impl FieldDecoderRowBased for FieldDecoderCSV {
         column.put_slice(buf);
         column.commit_row();
 
-        reader.consume(buf.len());
-        Ok(())
-    }
-
-    fn read_variant<R: AsRef<[u8]>>(
-        &self,
-        column: &mut StringColumnBuilder,
-        reader: &mut Cursor<R>,
-        _raw: bool,
-    ) -> Result<()> {
-        let buf = reader.remaining_slice();
-        match parse_value(buf) {
-            Ok(value) => {
-                value.write_to_vec(&mut column.data);
-                column.commit_row();
-            }
-            Err(_) => {
-                return Err(ErrorCode::BadBytes(format!(
-                    "Invalid JSON value: {:?}",
-                    String::from_utf8_lossy(buf)
-                )));
-            }
-        }
         reader.consume(buf.len());
         Ok(())
     }
