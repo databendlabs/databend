@@ -113,6 +113,7 @@ pub enum Statement {
     RenameTable(RenameTableStmt),
     TruncateTable(TruncateTableStmt),
     OptimizeTable(OptimizeTableStmt),
+    VacuumTable(VacuumTableStmt),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
     // Columns
@@ -363,6 +364,7 @@ impl Display for Statement {
             Statement::RenameTable(stmt) => write!(f, "{stmt}")?,
             Statement::TruncateTable(stmt) => write!(f, "{stmt}")?,
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
             Statement::AnalyzeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,

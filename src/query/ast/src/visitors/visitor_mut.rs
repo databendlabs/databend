@@ -439,6 +439,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_optimize_table(&mut self, _stmt: &mut OptimizeTableStmt) {}
 
+    fn visit_vacuum_table(&mut self, _stmt: &mut VacuumTableStmt) {}
+
     fn visit_analyze_table(&mut self, _stmt: &mut AnalyzeTableStmt) {}
 
     fn visit_exists_table(&mut self, _stmt: &mut ExistsTableStmt) {}
