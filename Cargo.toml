@@ -106,7 +106,7 @@ opendal = { version = "0.33", features = [
     "trust-dns",
 ] }
 ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { version = "0.2.0" }
+jsonb = { version = "0.2.1" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
