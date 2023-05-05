@@ -106,7 +106,7 @@ pub struct SqlLogicTestArgs {
     )]
     pub bench: bool,
 
-    // Set specific the database to connnect
+    // Set specific the database to connect
     #[arg(
         long = "database",
         default_value = "default",

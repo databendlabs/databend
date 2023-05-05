@@ -106,14 +106,20 @@ function install_python3 {
 		install_pkg python3-all-dev "$PACKAGE_MANAGER"
 		install_pkg python3-setuptools "$PACKAGE_MANAGER"
 		install_pkg python3-pip "$PACKAGE_MANAGER"
+		install_pkg libcairo2-dev "$PACKAGE_MANAGER"
 		;;
 	apk)
 		install_pkg python3-dev "$PACKAGE_MANAGER"
 		install_pkg py3-pip "$PACKAGE_MANAGER"
 		install_pkg libffi-dev "$PACKAGE_MANAGER"
 		;;
-	brew | pacman | yum | dnf)
+	brew | pacman)
 		install_pkg python3 "$PACKAGE_MANAGER"
+		install_pkg cairo "$PACKAGE_MANAGER"
+		;;
+	yum | dnf)
+		install_pkg python3-devel "$PACKAGE_MANAGER"
+		install_pkg cairo-devel "$PACKAGE_MANAGER"
 		;;
 	*)
 		echo "Unable to install python3 with package manager: $PACKAGE_MANAGER"
@@ -560,6 +566,7 @@ install_pkg curl "$PACKAGE_MANAGER"
 if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_rustup "$RUST_TOOLCHAIN"
 
+	install_pkg unzip "$PACKAGE_MANAGER"
 	install_build_essentials "$PACKAGE_MANAGER"
 	install_pkg_config "$PACKAGE_MANAGER"
 	install_openssl "$PACKAGE_MANAGER"
