@@ -13,6 +13,7 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
+        artifacts: metactl,meta
 
     - name: Test meta-data-compat-openraft-07
       shell: bash

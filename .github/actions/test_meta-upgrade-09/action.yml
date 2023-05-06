@@ -13,6 +13,7 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
+        artifacts: metactl,meta-upgrade-09
 
     - name: Test meta-upgrade-09
       shell: bash
