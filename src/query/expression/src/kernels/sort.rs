@@ -15,6 +15,7 @@
 use std::iter::once;
 use std::sync::Arc;
 
+use arrow_array::Decimal256Array;
 use common_arrow::arrow::array::ord as arrow_ord;
 use common_arrow::arrow::array::ord::DynComparator;
 use common_arrow::arrow::array::Array;
@@ -201,6 +202,21 @@ fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynCompar
     }))
 }
 
+fn compare_decimal256(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
+    let left = left
+        .as_any()
+        .downcast_ref::<Decimal256Array>()
+        .unwrap()
+        .clone();
+    let right = right
+        .as_any()
+        .downcast_ref::<Decimal256Array>()
+        .unwrap()
+        .clone();
+
+    Ok(Box::new(move |i, j| left.value(i).cmp(&right.value(j))))
+}
+
 fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     match left.data_type() {
         ArrowType::Extension(name, _, _) => {
@@ -213,6 +229,7 @@ fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparat
                 )))
             }
         }
+        ArrowType::Decimal256(_, _) => compare_decimal256(left, right),
         _ => arrow_ord::build_compare(left, right),
     }
 }

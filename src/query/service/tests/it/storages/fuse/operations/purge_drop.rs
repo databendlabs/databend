@@ -14,11 +14,10 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-
-use crate::storages::fuse::table_test_fixture::append_sample_data;
-use crate::storages::fuse::table_test_fixture::check_data_dir;
-use crate::storages::fuse::table_test_fixture::execute_command;
-use crate::storages::fuse::table_test_fixture::TestFixture;
+use databend_query::test_kits::table_test_fixture::append_sample_data;
+use databend_query::test_kits::table_test_fixture::check_data_dir;
+use databend_query::test_kits::table_test_fixture::execute_command;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_snapshot_truncate_in_drop_stmt() -> Result<()> {

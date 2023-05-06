@@ -20,10 +20,9 @@ use common_meta_app::schema::TableInfo;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::stream::ReadDataBlockStream;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
-
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_normal_case() -> Result<()> {

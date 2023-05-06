@@ -1,0 +1,300 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpch;
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        full outer join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+    limit 20;
+----
+1 0
+2 0
+3 0
+4 0
+5 0
+6 0
+7 0
+8 0
+9 0
+10 0
+11 0
+12 0
+13 0
+14 0
+15 0
+16 0
+17 0
+18 0
+19 0
+20 0
+
+
+query I
+select
+    c_custkey
+from
+    customer
+        inner join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120 order by c_custkey limit 20;
+----
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+103
+103
+103
+103
+103
+103
+103
+103
+
+statement ok
+set enable_cbo = 0;
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        left join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+    limit 20;
+----
+1 0
+2 0
+3 0
+4 0
+5 0
+6 0
+7 0
+8 0
+9 0
+10 0
+11 0
+12 0
+13 0
+14 0
+15 0
+16 0
+17 0
+18 0
+19 0
+20 0
+
+
+query I
+select
+    c_custkey, count(o_orderkey) as c_count
+from
+    customer
+        right join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+group by
+    c_custkey
+order by c_custkey
+limit 20;
+----
+101 12
+103 18
+104 7
+106 18
+107 12
+109 25
+110 9
+112 19
+113 17
+115 28
+116 4
+118 18
+119 10
+NULL 149803
+
+query I
+select
+    c_custkey
+from
+    customer
+        left semi join
+    orders
+    on c_custkey = o_custkey
+        and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by c_custkey
+    limit 20;
+----
+101
+103
+104
+106
+107
+109
+110
+112
+113
+115
+116
+118
+119
+
+query I
+select
+    o_custkey
+from
+    customer
+    right semi join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_custkey
+    limit 20;
+----
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+101
+103
+103
+103
+103
+103
+103
+103
+103
+
+query I
+select
+    c_custkey
+from
+    customer
+    left anti join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by c_custkey
+    limit 20;
+----
+1
+2
+3
+4
+5
+6
+7
+8
+9
+10
+11
+12
+13
+14
+15
+16
+17
+18
+19
+20
+
+query I
+select
+    o_custkey
+from
+    customer
+    right anti join
+    orders
+on c_custkey = o_custkey
+    and o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_custkey
+    limit 20;
+----
+1
+1
+1
+1
+1
+1
+1
+1
+1
+2
+2
+2
+2
+2
+2
+2
+2
+2
+2
+2
+
+statement ok
+set enable_cbo = 1;
+
+query I
+select
+    o_comment
+from
+    customer
+    cross join
+    orders
+where o_comment not like '%pending%deposits%' and c_custkey > 100 and c_custkey < 120
+order by o_comment
+    limit 20;
+----
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias about the blithely ironic a
+ Tiresias above the carefully ironic packages nag about the pend

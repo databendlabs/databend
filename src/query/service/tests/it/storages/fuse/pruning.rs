@@ -40,6 +40,7 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
@@ -47,8 +48,6 @@ use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,

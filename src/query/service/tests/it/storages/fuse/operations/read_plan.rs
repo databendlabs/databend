@@ -28,13 +28,12 @@ use common_expression::Scalar;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 use databend_query::storages::fuse::FuseTable;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
-
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_to_partitions() -> Result<()> {

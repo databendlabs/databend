@@ -120,7 +120,7 @@ The system table tests are located at `tests/it/storages/system.rs`. For tables 
 ```rust
 #[tokio::test(flavor = "multi_thread")]
 async fn test_columns_table() -> Result<()> {
-    let (_guard, ctx) = crate::tests::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("columns_table.txt").unwrap();
     let table = ColumnsTable::create(1);

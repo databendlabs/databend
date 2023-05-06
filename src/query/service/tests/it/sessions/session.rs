@@ -16,9 +16,8 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-
-use crate::tests::ConfigBuilder;
-use crate::tests::TestGlobalServices;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session() -> Result<()> {
