@@ -24,13 +24,13 @@ This section lists the parameters that you must set in the connection string or 
 ## Timeout Parameters
 
 ### wait_time_secs
-**Description**: Bloking time before all remaining result is ready to return.Default: 60s.
+**Description**: Time before all remaining result is ready to return.Default: 60s.
 
 ### connection_timeout
 **Description**: Connection timeout config for http request.Default: 0.
 
 ### socket_timeout
-**Descrition**: Read timeout config for http request.Default: 0.
+**Description**: Read timeout config for http request.Default: 0.
 
 ## Others
 
