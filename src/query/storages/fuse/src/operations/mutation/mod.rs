@@ -15,12 +15,12 @@
 pub mod abort_operation;
 pub mod base_mutator;
 mod compact;
+mod mutation_aggregator;
 pub mod mutation_fill_internal_columns;
 pub mod mutation_meta;
 mod mutation_part;
 pub mod mutation_sink;
 mod mutation_source;
-mod mutation_transform;
 pub mod recluster_mutator;
 mod serialize_data_transform;
 
@@ -33,6 +33,7 @@ pub use compact::CompactSource;
 pub use compact::SegmentCompactMutator;
 pub use compact::SegmentCompactionState;
 pub use compact::SegmentCompactor;
+pub use mutation_aggregator::MutationAggregator;
 pub use mutation_fill_internal_columns::FillInternalColumnProcessor;
 pub use mutation_meta::Mutation;
 pub use mutation_meta::MutationSinkMeta;
@@ -42,6 +43,5 @@ pub use mutation_part::MutationPartInfo;
 pub use mutation_sink::MutationSink;
 pub use mutation_source::MutationAction;
 pub use mutation_source::MutationSource;
-pub use mutation_transform::MutationAggregator;
 pub use recluster_mutator::ReclusterMutator;
 pub use serialize_data_transform::SerializeDataTransform;
