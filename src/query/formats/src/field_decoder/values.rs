@@ -16,7 +16,6 @@ use std::any::Any;
 use std::collections::HashSet;
 use std::io::Cursor;
 
-use chrono_tz::Tz;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::array::ArrayColumnBuilder;
@@ -55,19 +54,7 @@ impl FieldDecoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
-            },
-        }
-    }
-
-    pub fn create_for_insert(timezone: Tz) -> Self {
-        FieldDecoderValues {
-            common_settings: CommonSettings {
-                true_bytes: TRUE_BYTES_LOWER.as_bytes().to_vec(),
-                false_bytes: FALSE_BYTES_LOWER.as_bytes().to_vec(),
-                null_bytes: NULL_BYTES_UPPER.as_bytes().to_vec(),
-                nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
-                inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
-                timezone,
+                disable_json_check: options_ext.disable_json_check,
             },
         }
     }

@@ -335,4 +335,8 @@ impl Settings {
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
     }
+
+    pub fn get_disable_json_check(&self) -> Result<bool> {
+        Ok(self.try_get_u64("disable_json_check")? != 0)
+    }
 }

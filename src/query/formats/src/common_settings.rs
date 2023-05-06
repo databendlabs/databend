@@ -22,4 +22,5 @@ pub struct CommonSettings {
     pub nan_bytes: Vec<u8>,
     pub inf_bytes: Vec<u8>,
     pub timezone: Tz,
+    pub disable_json_check: bool,
 }
