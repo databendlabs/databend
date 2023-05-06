@@ -738,6 +738,12 @@ pub struct TableCopiedFileLockKey {
 pub struct TableCopiedFileLock {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct TableMutationLockKey2 {
+    pub table_id: u64,
+    pub revision: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TableMutationLockKey {
     pub table_id: u64,
 }
@@ -784,6 +790,7 @@ mod kvapi_key_impl {
     use crate::schema::TableIdListKey;
     use crate::schema::TableIdToName;
     use crate::schema::TableMutationLockKey;
+    use crate::schema::TableMutationLockKey2;
     use crate::schema::PREFIX_TABLE;
     use crate::schema::PREFIX_TABLE_BY_ID;
     use crate::schema::PREFIX_TABLE_COPIED_FILES;
@@ -958,6 +965,28 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(TableMutationLockKey { table_id })
+        }
+    }
+
+    /// __fd_table_mutation_lock/table_id/revision -> ""
+    impl kvapi::Key for TableMutationLockKey2 {
+        const PREFIX: &'static str = PREFIX_TABLE_MUTATION_LOCK;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.table_id)
+                .push_u64(self.revision)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let table_id = p.next_u64()?;
+            let revision = p.next_u64()?;
+            p.done()?;
+
+            Ok(TableMutationLockKey2 { table_id, revision })
         }
     }
 }

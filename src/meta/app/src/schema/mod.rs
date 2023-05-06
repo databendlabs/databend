@@ -75,6 +75,7 @@ pub use table::TableInfo;
 pub use table::TableMeta;
 pub use table::TableMutationLock;
 pub use table::TableMutationLockKey;
+pub use table::TableMutationLockKey2;
 pub use table::TableNameIdent;
 pub use table::TableStatistics;
 pub use table::TruncateTableReply;

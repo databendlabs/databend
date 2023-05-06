@@ -18,6 +18,7 @@ use crate::schema_api_keys::ID_GEN_DATABASE;
 use crate::schema_api_keys::ID_GEN_TABLE;
 use crate::share_api_keys::ID_GEN_SHARE;
 use crate::share_api_keys::ID_GEN_SHARE_ENDPOINT;
+use crate::schema_api_keys::ID_GEN_MUTATION_LOCK;
 
 pub(crate) const PREFIX_ID_GEN: &str = "__fd_id_gen";
 
@@ -56,6 +57,12 @@ impl IdGenerator {
     pub fn share_endpoint_id() -> Self {
         Self {
             resource: ID_GEN_SHARE_ENDPOINT.to_string(),
+        }
+    }
+
+    pub fn mutation_lock_id(table_id: u64) -> Self {
+        Self {
+            resource: format!("{}_{}", ID_GEN_MUTATION_LOCK, table_id),
         }
     }
 }
