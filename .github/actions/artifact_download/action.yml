@@ -15,6 +15,10 @@ inputs:
     description: "default to ./target/${BUILD_PROFILE}/"
     required: false
     default: ""
+  artifacts:
+    description: "Artifacts to download"
+    required: false
+    default: "meta,query"
 outputs:
   path:
     description: ""
@@ -58,18 +62,18 @@ runs:
       if: steps.info.outputs.src == 's3'
       shell: bash
       run: |
-        aws s3 sync \
-          s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
-          ${{ steps.info.outputs.path }}/ --exclude "*" --include "databend-*" --no-progress
-        aws s3 sync \
-          s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
-          ${{ steps.info.outputs.path }}/ --exclude "*" --include "open-sharing" --no-progress || true
-
-    - name: make artifacts executable
-      shell: bash
-      run: |
-        chmod +x ${{ steps.info.outputs.path }}/databend-*
-        chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
+        artifacts="${{ inputs.artifacts }}"
+        for artifact in ${artifacts//,/ }; do
+          if [[ "${artifact}" == "open-sharing" ]]; then
+            echo "==> fetching open-sharing ..."
+            aws s3 cp s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/open-sharing ${{ steps.info.outputs.path }}/open-sharing --no-progress || true
+            chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
+          else
+            echo "==> fetching databend-$artifact ..."
+            aws s3 cp s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-$artifact ${{ steps.info.outputs.path }}/databend-$artifact --no-progress
+            chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
+          fi
+        done
 
     - name: Check Disk Space
       shell: bash
