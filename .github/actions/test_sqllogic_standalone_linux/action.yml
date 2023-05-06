@@ -26,12 +26,15 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
+        artifacts: sqllogictests,meta,query
+
     - name: Run sqllogic Tests with Standalone mode
       if: inputs.storage-format == 'all' || inputs.storage-format == 'parquet'
       shell: bash
       env:
         TEST_HANDLERS: ${{ inputs.handlers }}
       run: bash ./scripts/ci/ci-run-sqllogic-tests.sh ${{ inputs.dirs }}
+
     - name: Run native sqllogic Tests with Standalone mode
       if: inputs.storage-format == 'all' || inputs.storage-format == 'native'
       shell: bash

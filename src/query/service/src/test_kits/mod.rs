@@ -15,6 +15,7 @@
 #![allow(clippy::too_many_arguments)]
 pub mod config;
 pub mod context;
+#[allow(dead_code)]
 pub mod sessions;
 pub mod table_test_fixture;
 
