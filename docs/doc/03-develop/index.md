@@ -10,15 +10,15 @@ Utilize the drivers described in this section to access Databend or Databend Clo
 
 Connect to Databend or Databend Cloud and perform all standard operations with an interface for developing applications using the Go programming language.
 
-## [Python Driver](./01-Python/00-installing.md)
+## [Python Driver](./01-python.md)
 
 Develop Python applications that can connect to Databend or Databend Cloud and perform all standard operations.
 
-## [Node.js Driver](./02-NodeJs/00-install.md)
+## [Node.js Driver](./02-nodejs.md)
 
 Connect to Databend or Databend Cloud with a native asynchronous Node.js interface.
 
-## [JDBC Driver](./03-JDBC/00-requirements.md)
+## [JDBC Driver](./03-jdbc.md)
 
 Connect to Databend or Databend Cloud from most client tools/applications that support JDBC.
 

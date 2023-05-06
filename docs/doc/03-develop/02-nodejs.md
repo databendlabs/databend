@@ -1,11 +1,26 @@
 ---
-title: Managing Connections
-sidebar_label: Connect and execute SQL
+title: Developing with Databend using Node.js
+sidebar_label: Node.js
 description:
-  Managing Connections
+  Develop with Databend using Node.js.
 ---
 
-## Connect to databend and execute
+## Installing
+This topic describes how to install the Node.js driver using npm, the default package manager for the Node.js JavaScript runtime environment.
+
+## Prerequisites
+- Node.js must already be installed in the environment where you wish to install the driver.
+
+- You need to be able to run the node and npm commands.
+
+- Depending on your environment, you may need sudo privileges.
+
+## Installing the Driver
+```shell
+npm install --save mysql
+```
+
+## Connect and execute SQL
 
 1. Copy and paste the following code to a file named `databend.js`:
 

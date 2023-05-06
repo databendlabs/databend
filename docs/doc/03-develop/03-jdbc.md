@@ -1,10 +1,70 @@
 ---
-title: Using the JDBC Driver
-sidebar_label: Using
+title: Developing with Databend using Java
+sidebar_label: JDBC
 description:
-  Using the JDBC Driver
+  Develop with Databend using Java.
 ---
 
+## Requirements
+The Databend JDBC driver requires Java LTS (Long-Term Support) versions 1.8 or higher. If the minimum required version of Java is not installed on the client machines where the JDBC driver is installed, you must install either Oracle Java or OpenJDK.
+
+## Oracle Java
+Oracle Java currently supports Java 8. For download and installation instructions, go to:
+
+http://www.java.com/en/download/manual.jsp
+
+## OpenJDK
+
+OpenJDK is an open-source implementation of Java that provides JDK 8 packages for various Linux environments. Packages for non-Linux environments or higher Java versions are only available through 3rd parties. For more information, go to:
+
+http://openjdk.java.net
+
+## Downloading / Integrating the JDBC Driver
+The JDBC driver (databend-jdbc) is provided as a JAR file, available as an artifact in Maven for download or integrating directly into your Java-based projects.
+
+## Downloading the Driver
+To download the driver:
+
+1. Go to the Maven Central Repository:
+   https://repo1.maven.org/maven2/com/databend/databend-jdbc/
+2. Click on the directory for the version that you need.
+3. Download the databend-jdbc-#.#.#.jar file.
+
+> Note:
+>
+>If desired, you can verify the JDBC driver version by entering the following command:
+java -jar databend-jdbc-#.#.#.jar --version, where #.#.# matches the version numbers in the downloaded file name.
+If you plan to verify the driver package signature, download the databend-jdbc-#.#.#.jar.asc file.
+
+## Configuring the JDBC Driver
+This topic describes how to configure the JDBC driver, including how to connect to Databend using the driver.
+
+>NOTE:
+>The connection parameters are now documented in the [JDBC Driver Connection Parameter Reference](#parameter-reference).
+
+
+## JDBC Driver Connection String
+
+```
+jdbc:databend://<username>:<password>@<host_port>/<database>?<connection_params>
+```
+
+
+### connection_params
+Specifies a series of one or more JDBC connection parameters, in the form of `param=value`, with each parameter separated by the ampersand character (&), and no spaces anywhere in the connection string.
+You can set these parameters in the connection string:
+```
+jdbc:databend://<username>:<password>@<host_port>/<database>?<connection_params>
+```
+or set these parameters in a Properties object that you pass to the DriverManager.getConnectionIO method:
+```java 
+Properties props = new Properties();
+props.put("parameter1", parameter1Value);
+props.put("parameter2", parameter2Value);
+Connection con = DriverManager.getConnection("jdbc:databend://user:pass@host/database", props);
+```
+
+## Using the JDBC Driver
 This topic provides information about how to use the JDBC driver.
 
 ## Declare a Maven dependency.
@@ -139,3 +199,37 @@ Sample code:
             f.delete();
         }
 ```
+
+## Parameter Reference
+This topic lists the connection parameters that you can use to configure the JDBC driver. You can set these parameters in the JDBC connection string or in a Java Properties object.
+
+## Required Parameters
+This section lists the parameters that you must set in the connection string or in the Map of properties.
+
+### username
+**Description**: Specifies the login name of the user for the connection.
+
+
+## Authentication Parameters
+
+### password
+**Description**: Specifies the password of the user for the connection.
+
+### ssl
+**Description**: Specifies the host using http or https.Default: False.
+
+## Timeout Parameters
+
+### wait_time_secs
+**Description**: Time before all remaining result is ready to return.Default: 60s.
+
+### connection_timeout
+**Description**: Connection timeout config for http request.Default: 0.
+
+### socket_timeout
+**Description**: Read timeout config for http request.Default: 0.
+
+## Others
+
+### copy_purge
+**Description**: If True, the `copy into` will purge the files in the stage after they are loaded successfully into the table. Default: True.
