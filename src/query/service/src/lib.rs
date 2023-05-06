@@ -46,7 +46,7 @@ pub mod servers;
 pub mod sessions;
 pub mod stream;
 pub mod table_functions;
-pub mod test_utils;
+pub mod test_kits;
 
 mod global_services;
 

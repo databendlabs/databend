@@ -14,7 +14,7 @@
 
 use common_base::base::tokio;
 use databend_query::api::http::v1::config::config_handler;
-use databend_query::test_utils::TestGlobalServices;
+use databend_query::test_kits::TestGlobalServices;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -27,7 +27,7 @@ use pretty_assertions::assert_eq; // for `app.oneshot()`
 #[tokio::test(flavor = "multi_thread")]
 async fn test_config() -> common_exception::Result<()> {
     let _guard =
-        TestGlobalServices::setup(databend_query::test_utils::ConfigBuilder::create().build())
+        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
             .await?;
     let cluster_router = Route::new().at("/v1/config", get(config_handler));
 

@@ -30,7 +30,7 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
-use databend_query::test_utils::table_test_fixture::TestFixture;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;

@@ -18,11 +18,11 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
-use databend_query::test_utils::table_test_fixture::append_sample_data;
-use databend_query::test_utils::table_test_fixture::append_sample_data_overwrite;
-use databend_query::test_utils::table_test_fixture::check_data_dir;
-use databend_query::test_utils::table_test_fixture::history_should_have_item;
-use databend_query::test_utils::table_test_fixture::TestFixture;
+use databend_query::test_kits::table_test_fixture::append_sample_data;
+use databend_query::test_kits::table_test_fixture::append_sample_data_overwrite;
+use databend_query::test_kits::table_test_fixture::check_data_dir;
+use databend_query::test_kits::table_test_fixture::history_should_have_item;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 
 pub async fn do_insertions(fixture: &TestFixture) -> Result<()> {
     fixture.create_default_table().await?;

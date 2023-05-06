@@ -28,7 +28,7 @@ use common_expression::Scalar;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::test_utils::table_test_fixture::TestFixture;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;

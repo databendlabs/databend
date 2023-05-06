@@ -68,9 +68,9 @@ use crate::storages::fuse::FUSE_TBL_SEGMENT_PREFIX;
 use crate::storages::fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::storages::fuse::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::storages::Table;
-use crate::test_utils::create_query_context_with_config;
-use crate::test_utils::ConfigBuilder;
-use crate::test_utils::TestGuard;
+use crate::test_kits::create_query_context_with_config;
+use crate::test_kits::ConfigBuilder;
+use crate::test_kits::TestGuard;
 
 pub struct TestFixture {
     ctx: Arc<QueryContext>,

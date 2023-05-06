@@ -27,7 +27,7 @@ use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_fuse::table_functions::ClusteringInformationTable;
 use databend_query::sessions::QueryContext;
 use databend_query::stream::ReadDataBlockStream;
-use databend_query::test_utils::table_test_fixture::*;
+use databend_query::test_kits::table_test_fixture::*;
 use tokio_stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread")]

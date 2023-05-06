@@ -23,7 +23,7 @@ use databend_query::interpreters::AlterTableClusterKeyInterpreter;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::DropTableClusterKeyInterpreter;
 use databend_query::interpreters::Interpreter;
-use databend_query::test_utils::table_test_fixture::TestFixture;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;

@@ -47,7 +47,7 @@ use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
-use databend_query::test_utils::table_test_fixture::TestFixture;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use opendal::Operator;
 use rand::Rng;
 use storages_common_table_meta::meta::BlockMeta;

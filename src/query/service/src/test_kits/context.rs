@@ -31,9 +31,9 @@ use crate::sessions::QueryContextShared;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
-use crate::test_utils::ConfigBuilder;
-use crate::test_utils::TestGlobalServices;
-use crate::test_utils::TestGuard;
+use crate::test_kits::ConfigBuilder;
+use crate::test_kits::TestGlobalServices;
+use crate::test_kits::TestGuard;
 
 pub async fn create_query_context() -> Result<(TestGuard, Arc<QueryContext>)> {
     create_query_context_with_session(SessionType::Dummy, None).await

@@ -23,8 +23,8 @@ use common_storages_fuse::io::SnapshotHistoryReader;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::FuseTable;
-use databend_query::test_utils::table_test_fixture::execute_query;
-use databend_query::test_utils::table_test_fixture::TestFixture;
+use databend_query::test_kits::table_test_fixture::execute_query;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]

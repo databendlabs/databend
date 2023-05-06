@@ -95,7 +95,7 @@ async fn run_table_tests(
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_build_options_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
 
     let table = BuildOptionsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
@@ -110,7 +110,7 @@ async fn test_build_options_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_columns_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
 
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("columns_table.txt").unwrap();
@@ -122,7 +122,7 @@ async fn test_columns_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_clusters_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = ClustersTable::create(1);
 
     let source_plan = table.read_plan(ctx.clone(), None).await?;
@@ -140,9 +140,9 @@ async fn test_configs_table_basic() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("configs_table_basic.txt").unwrap();
 
-    let conf = databend_query::test_utils::ConfigBuilder::create().config();
+    let conf = databend_query::test_kits::ConfigBuilder::create().config();
     let (_guard, ctx) =
-        databend_query::test_utils::create_query_context_with_config(conf, None).await?;
+        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);
@@ -163,7 +163,7 @@ async fn test_configs_table_redact() -> Result<()> {
         .mount(&mock_server)
         .await;
 
-    let mut conf = databend_query::test_utils::ConfigBuilder::create().build();
+    let mut conf = databend_query::test_kits::ConfigBuilder::create().build();
     conf.storage.params = StorageParams::S3(StorageS3Config {
         region: "us-east-2".to_string(),
         endpoint_url: mock_server.uri(),
@@ -174,7 +174,7 @@ async fn test_configs_table_redact() -> Result<()> {
     });
 
     let (_guard, ctx) =
-        databend_query::test_utils::create_query_context_with_config(conf, None).await?;
+        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);
@@ -192,7 +192,7 @@ async fn test_configs_table_redact() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_contributors_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = ContributorsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
@@ -205,7 +205,7 @@ async fn test_contributors_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_credits_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = CreditsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
@@ -221,7 +221,7 @@ async fn test_catalogs_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("catalogs_table.txt").unwrap();
 
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = CatalogsTable::create(1);
 
     run_table_tests(file, ctx, table).await?;
@@ -230,7 +230,7 @@ async fn test_catalogs_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_databases_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = DatabasesTable::create(1);
 
     let mut mint = Mint::new("tests/it/storages/testdata");
@@ -242,7 +242,7 @@ async fn test_databases_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_engines_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = EnginesTable::create(1);
 
     let mut mint = Mint::new("tests/it/storages/testdata");
@@ -254,7 +254,7 @@ async fn test_engines_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_functions_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = FunctionsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
@@ -268,7 +268,7 @@ async fn test_functions_table() -> Result<()> {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_metrics_table() -> Result<()> {
     init_default_metrics_recorder();
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = MetricsTable::create(1);
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
@@ -295,7 +295,7 @@ async fn test_roles_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("roles_table.txt").unwrap();
 
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
 
@@ -324,7 +324,7 @@ async fn test_settings_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("settings_table.txt").unwrap();
 
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     ctx.get_settings().set_max_threads(2)?;
     ctx.get_settings().set_max_memory_usage(1073741824)?;
 
@@ -336,7 +336,7 @@ async fn test_settings_table() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_tracing_table() -> Result<()> {
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table: Arc<dyn Table> = Arc::new(TracingTable::create(1));
     let source_plan = table.read_plan(ctx.clone(), None).await?;
 
@@ -354,7 +354,7 @@ async fn test_users_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("users_table.txt").unwrap();
 
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let tenant = ctx.get_tenant();
     ctx.get_settings().set_max_threads(2)?;
     let auth_data = AuthInfo::None;
@@ -400,7 +400,7 @@ async fn test_caches_table() -> Result<()> {
     let mut mint = Mint::new("tests/it/storages/testdata");
     let file = &mut mint.new_goldenfile("caches_table.txt").unwrap();
 
-    let (_guard, ctx) = databend_query::test_utils::create_query_context().await?;
+    let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
 
     let table = CachesTable::create(1);
 

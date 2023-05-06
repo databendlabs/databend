@@ -34,7 +34,7 @@ use common_pipeline_sources::SyncReceiverSource;
 use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineExecutor;
 use databend_query::sessions::QueryContext;
-use databend_query::test_utils::create_query_context;
+use databend_query::test_kits::create_query_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_always_call_on_finished() -> Result<()> {

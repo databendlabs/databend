@@ -16,12 +16,12 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use databend_query::test_utils::TestGlobalServices;
+use databend_query::test_kits::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting() -> Result<()> {
     let _guard =
-        TestGlobalServices::setup(databend_query::test_utils::ConfigBuilder::create().build())
+        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
             .await?;
     let session = SessionManager::instance()
         .create_session(SessionType::Dummy)
@@ -42,7 +42,7 @@ async fn test_session_setting() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting_override() -> Result<()> {
     let _guard = TestGlobalServices::setup(
-        databend_query::test_utils::ConfigBuilder::create()
+        databend_query::test_kits::ConfigBuilder::create()
             .max_storage_io_requests(1000)
             .parquet_fast_read_bytes(1000000)
             .build(),

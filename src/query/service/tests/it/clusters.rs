@@ -16,8 +16,8 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
-use databend_query::test_utils::ConfigBuilder;
-use databend_query::test_utils::TestGlobalServices;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestGlobalServices;
 use pretty_assertions::assert_eq;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]

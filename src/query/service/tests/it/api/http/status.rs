@@ -27,8 +27,8 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
-use databend_query::test_utils::create_query_context_with_session;
-use databend_query::test_utils::TestGlobalServices;
+use databend_query::test_kits::create_query_context_with_session;
+use databend_query::test_kits::TestGlobalServices;
 use poem::get;
 use poem::http::header;
 use poem::http::Method;
@@ -75,7 +75,7 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
 async fn test_status() -> Result<()> {
     // init global services
     let guard =
-        TestGlobalServices::setup(databend_query::test_utils::ConfigBuilder::create().build())
+        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
             .await?;
     let ep = Route::new().at("/v1/status", get(instance_status_handler));
 

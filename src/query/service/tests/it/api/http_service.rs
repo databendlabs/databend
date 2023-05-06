@@ -20,7 +20,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::api::HttpService;
 use databend_query::servers::Server;
-use databend_query::test_utils::ConfigBuilder;
+use databend_query::test_kits::ConfigBuilder;
 
 use crate::tests::tls_constants::*;
 
