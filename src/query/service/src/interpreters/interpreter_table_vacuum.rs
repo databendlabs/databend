@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_license::license_manager::get_license_manager;
 use common_sql::plans::VacuumTablePlan;
 use common_storages_fuse::FuseTable;
-use enterprise_query::storages::fuse::do_vacuum;
+use interface_manager::get_interface_manager;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -66,9 +66,11 @@ impl Interpreter for VacuumTableInterpreter {
             - chrono::Duration::hours(ctx.get_settings().get_retention_period()? as i64);
         let mut build_res = PipelineBuildResult::create();
         let ctx = self.ctx.clone();
+
         if build_res.main_pipeline.is_empty() {
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-            do_vacuum(fuse_table, ctx, retention_time).await?;
+            let mgr = get_interface_manager();
+            mgr.do_vacuum(fuse_table, ctx, retention_time).await?;
         } else {
             build_res.main_pipeline.set_on_finished(move |may_error| {
                 if may_error.is_none() {
@@ -80,7 +82,8 @@ impl Interpreter for VacuumTableInterpreter {
                             .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
                             .await?;
                         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-                        do_vacuum(fuse_table, ctx, retention_time).await
+                        let mgr = get_interface_manager();
+                        mgr.do_vacuum(fuse_table, ctx, retention_time).await
                     });
                 }
 

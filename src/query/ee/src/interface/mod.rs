@@ -12,19 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_license::license_manager::LicenseManager;
-
-use crate::interface::interface_mgr::RealInterfaceManager;
-use crate::license::license_mgr::RealLicenseManager;
-
-pub struct EnterpriseServices;
-impl EnterpriseServices {
-    #[async_backtrace::framed]
-    pub async fn init(_config: InnerConfig) -> Result<()> {
-        RealLicenseManager::init()?;
-        RealInterfaceManager::init()?;
-        Ok(())
-    }
-}
+pub mod interface_mgr;
+pub use interface_mgr::RealInterfaceManager;

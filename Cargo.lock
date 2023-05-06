@@ -3372,7 +3372,6 @@ dependencies = [
  "criterion",
  "ctor",
  "dashmap",
- "enterprise-query",
  "ethnum",
  "futures",
  "futures-util",
@@ -3381,6 +3380,7 @@ dependencies = [
  "headers",
  "hex",
  "http",
+ "interface-manager",
  "itertools",
  "jsonb",
  "jwt-simple",
@@ -3729,6 +3729,7 @@ name = "enterprise-query"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "async-trait",
  "chrono",
  "common-base",
  "common-building",
@@ -3737,6 +3738,7 @@ dependencies = [
  "common-exception",
  "common-license",
  "common-storages-fuse",
+ "interface-manager",
  "jwt-simple",
  "storages-common-cache",
  "storages-common-table-meta",
@@ -5813,6 +5815,20 @@ name = "integer-encoding"
 version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
+
+[[package]]
+name = "interface-manager"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "chrono",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-license",
+ "common-storages-fuse",
+]
 
 [[package]]
 name = "inventory"

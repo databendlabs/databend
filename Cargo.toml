@@ -70,6 +70,7 @@ members = [
     "src/query/storages/parquet",
     "src/query/storages/result_cache",
     "src/query/users",
+    "src/query/interface-manager",
     # databend-query
     "src/query/service",
     # enterprise

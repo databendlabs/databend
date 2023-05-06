@@ -1,6 +1,6 @@
 [package]
-name = "enterprise-query"
-description = "A real-time Cloud Distributed Query Engine"
+name = "interface-manager"
+description = "interface manager"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,24 +13,17 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-async-backtrace = { workspace = true }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
-common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-license = { path = "../../common/license" }
-interface-manager = { path = "../interface-manager" }
 common-storages-fuse = { path = "../storages/fuse" }
-storages-common-cache = { path = "../storages/common/cache" }
-storages-common-table-meta = { path = "../storages/common/table-meta" }
 
+async-backtrace = { workspace = true }
 async-trait = "0.1.57"
 chrono = { workspace = true }
-jwt-simple = "0.11.0"
-tracing = "0.1.36"
 
 [build-dependencies]
-common-building = { path = "../../common/building" }
 
 [package.metadata.cargo-machete]
 ignored = ["match-template"]
