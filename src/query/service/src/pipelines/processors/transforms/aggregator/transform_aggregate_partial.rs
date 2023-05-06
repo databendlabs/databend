@@ -179,10 +179,6 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             .group_columns
             .iter()
             .map(|&index| block.get_by_offset(index))
-            .collect::<Vec<_>>();
-
-        let group_columns = group_columns
-            .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
 
