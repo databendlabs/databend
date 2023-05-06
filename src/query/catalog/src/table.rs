@@ -436,7 +436,6 @@ pub trait ColumnStatisticsProvider {
 
     // If the data type is int and max - min + 1 < ndv, then adjust ndv to max - min + 1.
     fn adjust_ndv_by_min_max(&self, mut ndv: u64, min: Scalar, max: Scalar) -> u64 {
-        dbg!("{} {} {}", ndv, &min, &max);
         let mut range = match (min, max) {
             (Scalar::Number(min), Scalar::Number(max)) => match (min, max) {
                 (NumberScalar::UInt8(min), NumberScalar::UInt8(max)) => (max - min) as u64,
