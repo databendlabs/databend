@@ -253,21 +253,6 @@ impl ScalarExpr {
                 span: *span,
                 column: id.clone(),
             })),
-            Expr::Constant {
-                span,
-                scalar,
-                data_type,
-            } if &scalar.as_ref().infer_data_type() != data_type => {
-                Ok(ScalarExpr::CastExpr(CastExpr {
-                    span: *span,
-                    is_try: false,
-                    argument: Box::new(ScalarExpr::ConstantExpr(ConstantExpr {
-                        span: *span,
-                        value: scalar.clone(),
-                    })),
-                    target_type: Box::new(data_type.clone()),
-                }))
-            }
             Expr::Constant { span, scalar, .. } => Ok(ScalarExpr::ConstantExpr(ConstantExpr {
                 span: *span,
                 value: scalar.clone(),
