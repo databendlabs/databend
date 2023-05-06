@@ -28,8 +28,8 @@ use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
 use storages_common_cache_manager::CacheManager;
+use storages_common_cache_manager::SegmentInfoRawBytes;
 use storages_common_index::BloomIndexMeta;
-use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -44,7 +44,7 @@ pub type TableSnapshotStatisticsReader =
 pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
 pub type SegmentInfoReader =
-    InMemoryItemCacheReader<SegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
+    InMemoryItemCacheReader<SegmentInfoRawBytes, LoaderWrapper<(Operator, TableSchemaRef)>>;
 
 pub struct MetaReaders;
 
@@ -103,13 +103,18 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
 }
 
 #[async_trait::async_trait]
-impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
+impl Loader<SegmentInfoRawBytes> for LoaderWrapper<(Operator, TableSchemaRef)> {
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<SegmentInfo> {
+    async fn load(&self, params: &LoadParams) -> Result<SegmentInfoRawBytes> {
+        // TODO the version
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
-        let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        (version, schema.clone()).read(reader).await
+        let mut reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
+
+        let mut buffer: Vec<u8> = vec![];
+        reader.read_to_end(&mut buffer).await?;
+        Ok(SegmentInfoRawBytes { bytes: buffer })
+        //(version, schema.clone()).read(reader).await
     }
 }
 

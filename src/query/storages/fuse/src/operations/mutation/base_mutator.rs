@@ -114,6 +114,8 @@ impl BaseMutator {
                 segment_reader.read(&load_params).await?
             };
 
+            let segment: SegmentInfo = segment.as_ref().try_into()?;
+
             // collects the block locations of the segment being modified
             let block_positions = segment
                 .blocks
@@ -176,7 +178,7 @@ impl BaseMutator {
                 ver: *ver,
                 put_cache: true,
             };
-            let seg = segment_reader.read(&params).await?;
+            let seg: SegmentInfo = segment_reader.read(&params).await?.as_ref().try_into()?;
             new_segment_summaries.push(seg.summary.clone())
         }
 

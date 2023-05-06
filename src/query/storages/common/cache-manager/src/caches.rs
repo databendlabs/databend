@@ -20,6 +20,7 @@ use common_cache::DefaultHashBuilder;
 use common_cache::Meter;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_exception::ErrorCode;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::NamedCache;
@@ -31,8 +32,30 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 
 use crate::cache_manager::CacheManager;
 
+// pub type SegmentInfoCache = NamedCache<InMemoryItemCacheHolder<SegmentInfo>>;
+
+pub struct SegmentInfoRawBytes {
+    pub bytes: Vec<u8>,
+}
+
+impl TryFrom<&SegmentInfoRawBytes> for SegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: &SegmentInfoRawBytes) -> Result<Self, Self::Error> {
+        todo!()
+    }
+}
+
+impl From<&SegmentInfo> for SegmentInfoRawBytes {
+    fn from(value: &SegmentInfo) -> Self {
+        todo!()
+    }
+}
+
 /// In memory object cache of SegmentInfo
-pub type SegmentInfoCache = NamedCache<InMemoryItemCacheHolder<SegmentInfo>>;
+pub type SegmentInfoCache =
+    NamedCache<InMemoryItemCacheHolder<SegmentInfoRawBytes, DefaultHashBuilder>>;
+
 /// In memory object cache of TableSnapshot
 pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>;
 /// In memory object cache of TableSnapshotStatistics
@@ -66,7 +89,21 @@ pub trait CachedObject<T> {
     fn cache() -> Option<Self::Cache>;
 }
 
-impl CachedObject<SegmentInfo> for SegmentInfo {
+// impl CachedObject<SegmentInfo> for SegmentInfo {
+//    type Cache = SegmentInfoCache;
+//    fn cache() -> Option<Self::Cache> {
+//        CacheManager::instance().get_table_segment_cache()
+//    }
+//}
+
+impl CachedObject<SegmentInfoRawBytes> for SegmentInfoRawBytes {
+    type Cache = SegmentInfoCache;
+    fn cache() -> Option<Self::Cache> {
+        CacheManager::instance().get_table_segment_cache()
+    }
+}
+
+impl CachedObject<SegmentInfoRawBytes> for SegmentInfo {
     type Cache = SegmentInfoCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_segment_cache()

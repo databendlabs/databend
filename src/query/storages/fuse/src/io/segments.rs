@@ -62,7 +62,9 @@ impl SegmentsIO {
             put_cache,
         };
 
-        reader.read(&load_params).await
+        let raw_bytes = reader.read(&load_params).await?;
+        let segment_info = SegmentInfo::try_from(raw_bytes.as_ref())?;
+        Ok(Arc::new(segment_info))
     }
 
     // Read all segments information from s3 in concurrently.
@@ -124,8 +126,9 @@ impl SegmentsIO {
             put_cache,
         };
 
-        let segment = reader.read(&load_params).await;
-        segment.map(|v| v.into())
+        let segment = reader.read(&load_params).await?;
+        let segment = Arc::new(SegmentInfo::try_from(segment.as_ref())?);
+        Ok(segment.into())
     }
 
     #[tracing::instrument(level = "debug", skip_all)]

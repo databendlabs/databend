@@ -165,7 +165,8 @@ where F: RowsFetcher + Send + Sync + 'static
         let segment_id_map = snapshot.build_segment_id_map();
         let segment_reader =
             MetaReaders::segment_info_reader(self.table.operator.clone(), table_schema.clone());
-        let mut segments = Vec::with_capacity(snapshot.segments.len());
+        let mut segments: Vec<(u64, Arc<SegmentInfo>)> =
+            Vec::with_capacity(snapshot.segments.len());
         for ((location, ver), seg_id) in segment_id_map.into_iter() {
             let segment_info = segment_reader
                 .read(&LoadParams {
@@ -175,7 +176,7 @@ where F: RowsFetcher + Send + Sync + 'static
                     put_cache: false,
                 })
                 .await?;
-            segments.push((seg_id as u64, segment_info));
+            segments.push((seg_id as u64, Arc::new(segment_info.as_ref().try_into()?)));
         }
 
         self.fetcher

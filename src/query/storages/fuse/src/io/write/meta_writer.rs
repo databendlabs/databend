@@ -18,6 +18,7 @@ use common_exception::Result;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
+use storages_common_cache_manager::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -80,6 +81,16 @@ impl Marshal for SegmentInfo {
         // can we expressed as type constraint?
         assert_eq!(self.format_version, SegmentInfo::VERSION);
         self.to_bytes()
+    }
+}
+
+impl Marshal for SegmentInfoRawBytes {
+    fn marshal(&self) -> Result<Vec<u8>> {
+        // make sure the table meta we write down to object store always has the current version
+        // can we expressed as type constraint?
+        // assert_eq!(self.format_version, SegmentInfo::VERSION);
+        // TODO avoid clone
+        Ok(self.bytes.clone())
     }
 }
 

@@ -157,7 +157,10 @@ impl MutationTransform {
             tasks.push(async move {
                 op.write(&segment.location, segment.data).await?;
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    segment_cache.put(segment.location.clone(), segment.segment.clone());
+                    segment_cache.put(
+                        segment.location.clone(),
+                        Arc::new(segment.segment.as_ref().into()),
+                    );
                 }
                 Ok::<_, ErrorCode>(())
             });

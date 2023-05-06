@@ -34,6 +34,7 @@ use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
 use tracing::info;
 
 use crate::io::write_data;
@@ -126,6 +127,7 @@ impl MergeIntoOperationAggregator {
                     };
                     // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
                     let segment_info = self.segment_reader.read(&load_param).await?;
+                    let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
 
                     // segment level
                     if self.overlapped(&segment_info.summary.col_stats, columns_min_max) {
@@ -170,6 +172,7 @@ impl MergeIntoOperationAggregator {
             };
 
             let segment_info = self.segment_reader.read(&load_param).await?;
+            let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
 
             for (block_index, keys) in block_deletion {
                 let block_meta = &segment_info.blocks[*block_index];

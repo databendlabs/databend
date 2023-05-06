@@ -92,7 +92,10 @@ impl CompactAggregator {
         dal.write(&segment.location, segment.segment.to_bytes()?)
             .await?;
         if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-            segment_cache.put(segment.location.clone(), segment.segment.clone());
+            segment_cache.put(
+                segment.location.clone(),
+                Arc::new(segment.segment.as_ref().into()),
+            );
         }
         Ok(())
     }

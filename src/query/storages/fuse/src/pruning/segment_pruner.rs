@@ -23,6 +23,7 @@ use futures_util::future;
 use storages_common_cache::LoadParams;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::SegmentInfo;
 
 use super::SegmentLocation;
 use crate::io::MetaReaders;
@@ -138,6 +139,7 @@ impl SegmentPruner {
                 put_cache: true,
             })
             .await?;
+        let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
 
         // IO job of reading segment done, release the permit, allows more concurrent pruners
         // Note that it is required to explicitly release this permit before pruning blocks, to avoid deadlock.

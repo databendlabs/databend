@@ -23,6 +23,7 @@ use common_exception::Result;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::LoadParams;
 use storages_common_cache_manager::CachedObject;
+use storages_common_cache_manager::SegmentInfoRawBytes;
 use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
@@ -340,7 +341,7 @@ impl FuseTable {
         let segments_count = segments_to_be_purged.len();
         if segments_count > 0 {
             counter.segments += segments_count;
-            self.try_purge_location_files_and_cache::<SegmentInfo>(
+            self.try_purge_location_files_and_cache::<SegmentInfoRawBytes>(
                 ctx.clone(),
                 segments_to_be_purged,
             )

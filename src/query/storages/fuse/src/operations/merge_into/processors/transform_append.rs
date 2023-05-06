@@ -140,7 +140,7 @@ impl AppendTransform {
             .await?;
 
         if let Some(segment_cache) = SegmentInfo::cache() {
-            segment_cache.put(location.clone(), segment.clone());
+            segment_cache.put(location.clone(), Arc::new(segment.as_ref().into()));
         }
 
         // emit log entry.
