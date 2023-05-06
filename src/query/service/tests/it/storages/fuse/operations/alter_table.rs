@@ -102,6 +102,7 @@ async fn check_segment_column_ids(
                 put_cache: false,
             };
             let segment_info = segment_reader.read(&params).await?;
+            let segment_info = SegmentInfo::try_from(segment_info.as_ref())?;
 
             segment_info.blocks.iter().for_each(|block_meta| {
                 assert_eq!(

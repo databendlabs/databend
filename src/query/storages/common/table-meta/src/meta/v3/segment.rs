@@ -129,6 +129,10 @@ impl SegmentInfo {
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
+        SegmentInfo::from_slice(&bytes)
+    }
+
+    pub fn from_slice(bytes: &[u8]) -> Result<Self> {
         let mut cursor = Cursor::new(bytes);
         let version = cursor.read_scalar::<u64>()?;
         assert_eq!(version, SegmentInfo::VERSION);

@@ -159,7 +159,7 @@ impl MutationTransform {
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
                     segment_cache.put(
                         segment.location.clone(),
-                        Arc::new(segment.segment.as_ref().into()),
+                        Arc::new(segment.segment.as_ref().try_into()?),
                     );
                 }
                 Ok::<_, ErrorCode>(())

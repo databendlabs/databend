@@ -279,7 +279,7 @@ impl Processor for FuseTableSink {
             }
             State::PreCommitSegment { location, segment } => {
                 if let Some(segment_cache) = SegmentInfo::cache() {
-                    segment_cache.put(location.clone(), Arc::new(segment.as_ref().into()));
+                    segment_cache.put(location.clone(), Arc::new(segment.as_ref().try_into()?));
                 }
 
                 // TODO: dyn operation for table trait

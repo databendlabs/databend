@@ -43,7 +43,7 @@ impl<'a> SegmentWriter<'a> {
     #[async_backtrace::framed]
     pub async fn write_segment(&self, segment: SegmentInfo) -> Result<Location> {
         let location = self.generate_location();
-        let segment_raw_bytes = SegmentInfoRawBytes::from(&segment);
+        let segment_raw_bytes = SegmentInfoRawBytes::try_from(&segment)?;
         segment_raw_bytes
             .write_meta_through_cache(self.data_accessor, &location.0)
             .await?;

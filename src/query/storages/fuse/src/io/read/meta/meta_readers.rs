@@ -38,6 +38,7 @@ use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 
 use super::versioned_reader::VersionedReader;
 use crate::io::read::meta::meta_readers::thrift_file_meta_read::read_thrift_file_metadata;
+use crate::io::read::meta::versioned_reader::VersionedRawDataReader;
 
 pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
@@ -106,15 +107,11 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
 impl Loader<SegmentInfoRawBytes> for LoaderWrapper<(Operator, TableSchemaRef)> {
     #[async_backtrace::framed]
     async fn load(&self, params: &LoadParams) -> Result<SegmentInfoRawBytes> {
-        // TODO the version
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
-        let mut reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-
-        let mut buffer: Vec<u8> = vec![];
-        reader.read_to_end(&mut buffer).await?;
-        Ok(SegmentInfoRawBytes { bytes: buffer })
-        //(version, schema.clone()).read(reader).await
+        let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
+        let bytes = (version, schema.clone()).read_raw_data(reader).await?;
+        Ok(SegmentInfoRawBytes { bytes })
     }
 }
 

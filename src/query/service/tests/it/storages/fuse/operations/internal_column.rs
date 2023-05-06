@@ -116,6 +116,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
             put_cache: false,
         };
         let segment_info = segment_reader.read(&params).await?;
+        let segment_info = SegmentInfo::try_from(segment_info.as_ref())?;
 
         for block in &segment_info.blocks {
             block_name.insert(block.location.0.clone());

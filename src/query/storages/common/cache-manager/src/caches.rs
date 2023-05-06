@@ -40,15 +40,18 @@ pub struct SegmentInfoRawBytes {
 
 impl TryFrom<&SegmentInfoRawBytes> for SegmentInfo {
     type Error = ErrorCode;
-
     fn try_from(value: &SegmentInfoRawBytes) -> Result<Self, Self::Error> {
-        todo!()
+        // the bytes are guaranteed to be serialized as current version of SegmentInfo
+        SegmentInfo::from_slice(&value.bytes)
     }
 }
 
-impl From<&SegmentInfo> for SegmentInfoRawBytes {
-    fn from(value: &SegmentInfo) -> Self {
-        todo!()
+impl TryFrom<&SegmentInfo> for SegmentInfoRawBytes {
+    type Error = ErrorCode;
+
+    fn try_from(value: &SegmentInfo) -> Result<Self, Self::Error> {
+        let bytes = value.to_bytes()?;
+        Ok(Self { bytes })
     }
 }
 
