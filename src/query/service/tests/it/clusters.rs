@@ -16,10 +16,9 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::clusters::ClusterDiscovery;
 use databend_query::clusters::ClusterHelper;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestGlobalServices;
 use pretty_assertions::assert_eq;
-
-use crate::tests::ConfigBuilder;
-use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_single_cluster_discovery() -> Result<()> {

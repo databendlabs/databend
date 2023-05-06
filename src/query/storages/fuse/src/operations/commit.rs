@@ -212,7 +212,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version().await?;
+        let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()
@@ -728,11 +728,23 @@ mod utils {
                 let block_location = &block.location.0;
                 // if deletion operation failed (after DAL retried)
                 // we just left them there, and let the "major GC" collect them
+                info!(
+                    "aborting operation, delete block location: {:?}",
+                    block_location,
+                );
                 let _ = operator.delete(block_location).await;
                 if let Some(index) = &block.bloom_filter_index_location {
+                    info!(
+                        "aborting operation, delete bloom index location: {:?}",
+                        index.0
+                    );
                     let _ = operator.delete(&index.0).await;
                 }
             }
+            info!(
+                "aborting operation, delete segment location: {:?}",
+                entry.segment_location
+            );
             let _ = operator.delete(&entry.segment_location).await;
         }
         Ok(())

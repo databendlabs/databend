@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_base::base::GlobalInstance;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_tracing::set_panic_hook;
-use databend_query::clusters::ClusterDiscovery;
-use databend_query::GlobalServices;
 use tracing::info;
+
+use crate::clusters::ClusterDiscovery;
+use crate::GlobalServices;
 
 pub struct TestGlobalServices;
 
@@ -36,7 +36,9 @@ impl TestGlobalServices {
             Some(thread_name) => thread_name.to_string(),
         };
 
-        GlobalInstance::init_testing(&thread_name);
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::init_testing(&thread_name);
+
         GlobalServices::init_with(config.clone()).await?;
 
         // Cluster register.
@@ -62,6 +64,7 @@ pub struct TestGuard {
 
 impl Drop for TestGuard {
     fn drop(&mut self) {
-        GlobalInstance::drop_testing(&self.thread_name);
+        #[cfg(debug_assertions)]
+        common_base::base::GlobalInstance::drop_testing(&self.thread_name);
     }
 }
