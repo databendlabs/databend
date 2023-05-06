@@ -21,6 +21,8 @@ use databend_query::servers::http::middleware::HTTPSessionMiddleware;
 use databend_query::servers::http::v1::clickhouse_router;
 use databend_query::servers::http::CLICKHOUSE_VERSION;
 use databend_query::servers::HttpHandlerKind;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestGlobalServices;
 use http::Uri;
 use poem::error::Result as PoemResult;
 use poem::http::Method;
@@ -32,9 +34,6 @@ use poem::EndpointExt;
 use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
-
-use crate::tests::ConfigBuilder;
-use crate::tests::TestGlobalServices;
 
 macro_rules! assert_error {
     ($body:expr, $msg:expr$(,)?) => {{

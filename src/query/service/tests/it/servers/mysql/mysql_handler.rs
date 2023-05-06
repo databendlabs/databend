@@ -23,14 +23,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use databend_query::servers::MySQLHandler;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestGlobalServices;
 use mysql_async::prelude::FromRow;
 use mysql_async::prelude::Queryable;
 use mysql_async::FromRowError;
 use mysql_async::Row;
 use tokio::sync::Barrier;
-
-use crate::tests::ConfigBuilder;
-use crate::tests::TestGlobalServices;
 
 #[tokio::test(flavor = "current_thread")]
 async fn test_generic_code_with_on_query() -> Result<()> {

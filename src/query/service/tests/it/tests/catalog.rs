@@ -16,6 +16,6 @@ use common_exception::Result;
 use databend_query::catalogs::DatabaseCatalog;
 
 pub async fn create_catalog() -> Result<DatabaseCatalog> {
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let conf = databend_query::test_kits::ConfigBuilder::create().config();
     DatabaseCatalog::try_create_with_config(conf).await
 }

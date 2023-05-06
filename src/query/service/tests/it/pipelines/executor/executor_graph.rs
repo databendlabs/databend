@@ -31,8 +31,7 @@ use databend_query::pipelines::processors::port::InputPort;
 use databend_query::pipelines::processors::port::OutputPort;
 use databend_query::pipelines::Pipeline;
 use databend_query::sessions::QueryContext;
-
-use crate::tests::create_query_context;
+use databend_query::test_kits::create_query_context;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_create_simple_pipeline() -> Result<()> {

@@ -35,11 +35,11 @@ yq -i '.tags = ["s3"]' result.json
 case ${BENCHMARK_SIZE} in
 Medium)
     yq -i '.cluster_size = "16"' result.json
-    yq -i '.machine = "16×Medium"' result.json
+    yq -i '.machine = "Medium"' result.json
     ;;
 Large)
     yq -i '.cluster_size = "64"' result.json
-    yq -i '.machine = "64×Large"' result.json
+    yq -i '.machine = "Large"' result.json
     ;;
 *)
     echo "Unsupported benchmark size: ${BENCHMARK_SIZE}"

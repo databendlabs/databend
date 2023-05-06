@@ -38,6 +38,7 @@ use databend_query::interpreters::AddTableColumnInterpreter;
 use databend_query::interpreters::DropTableColumnInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::interpreters::InterpreterFactory;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures_util::TryStreamExt;
 use ordered_float::OrderedFloat;
 use storages_common_cache::LoadParams;
@@ -45,8 +46,6 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 async fn check_segment_column_ids(
     fixture: &TestFixture,

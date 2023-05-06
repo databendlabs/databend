@@ -4,15 +4,12 @@ title: OPTIMIZE TABLE
 
 Optimizing a table in Databend involves compacting or purging historical data to save storage space and enhance query performance.
 
-**Why do we need to optimize tables?**
+<details>
+  <summary>Why Optimize?</summary>
+    <div>Databend stores data in tables using the Parquet format, which is organized into blocks. Additionally, Databend supports time travel functionality, where each operation that modifies a table generates a Parquet file that captures and reflects the changes made to the table.</div><br/>
 
-If your table has too many blocks, its performance may be affected, as Databend needs to scan many blocks during query execution.
-
-**What causes too many blocks?**
-
-Too many blocks can be caused by long-running insert, delete, or update operations, or by having a small batch size for these operations. This can lead to the generation of many block files.
-
-By optimizing tables in Databend, you can reduce the number of blocks, thus improving query performance and reducing storage space.
+   <div>As a table accumulates more Parquet files over time, it can lead to performance issues and increased storage requirements. To optimize the table's performance, historical Parquet files can be deleted when they are no longer needed. This optimization can help to improve query performance and reduce the amount of storage space used by the table.</div>
+</details>
 
 ## Databend Data Storage: Snapshot, Segment, and Block
 
