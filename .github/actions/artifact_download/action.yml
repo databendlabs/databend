@@ -16,7 +16,7 @@ inputs:
     required: false
     default: ""
   artifacts:
-    description: "Artifacts to download"
+    description: "Artifacts to download, only works with s3"
     required: false
     default: "meta,query"
 outputs:
