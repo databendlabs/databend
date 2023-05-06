@@ -33,6 +33,8 @@ use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
+use crate::plans::Insert;
+use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::Binder;
 use crate::Metadata;
@@ -117,7 +119,21 @@ impl Planner {
             }
             .await;
 
-            if res.is_err() && matches!(tokenizer.peek(), Some(Ok(_))) {
+            let mut maybe_partial_insert = false;
+            if is_insert_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
+                if let Ok((
+                    Plan::Insert(box Insert {
+                        source: InsertInputSource::SelectPlan(_),
+                        ..
+                    }),
+                    _,
+                )) = &res
+                {
+                    maybe_partial_insert = true;
+                }
+            }
+
+            if maybe_partial_insert || (res.is_err() && matches!(tokenizer.peek(), Some(Ok(_)))) {
                 // Remove the previous EOI.
                 tokens.pop();
                 // Tokenize more and try again.

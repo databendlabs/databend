@@ -29,6 +29,8 @@ use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
 use common_meta_app::principal::PasswordHashMethod;
 use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestGlobalServices;
 use futures::TryStreamExt;
 use goldenfile::Mint;
 use tempfile::NamedTempFile;
@@ -40,9 +42,6 @@ use tonic::transport::Endpoint;
 use tonic::transport::Server;
 use tower::service_fn;
 use tracing::debug;
-
-use crate::tests::ConfigBuilder;
-use crate::tests::TestGlobalServices;
 
 const TEST_USER: &str = "test_user";
 const TEST_PASSWORD: &str = "test_password";

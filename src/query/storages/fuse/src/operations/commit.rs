@@ -212,7 +212,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version().await?;
+        let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()

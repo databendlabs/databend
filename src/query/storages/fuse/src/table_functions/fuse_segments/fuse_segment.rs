@@ -55,7 +55,7 @@ impl<'a> FuseSegment<'a> {
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
             // prepare the stream of snapshot
-            let snapshot_version = tbl.snapshot_format_version().await?;
+            let snapshot_version = tbl.snapshot_format_version(None).await?;
             let snapshot_location = tbl
                 .meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;

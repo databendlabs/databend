@@ -34,7 +34,7 @@ impl FuseTable {
         if let Some(prev_snapshot) = self.read_table_snapshot().await? {
             // 1. prepare new snapshot
             let prev_id = prev_snapshot.snapshot_id;
-            let prev_format_version = self.snapshot_format_version().await?;
+            let prev_format_version = self.snapshot_format_version(None).await?;
             let new_snapshot = TableSnapshot::new(
                 Uuid::new_v4(),
                 &prev_snapshot.timestamp,
