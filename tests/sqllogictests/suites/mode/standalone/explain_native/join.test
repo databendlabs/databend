@@ -31,7 +31,7 @@ EvalScalar
     ├── TableScan(Build)
     │   ├── table: default.default.t
     │   ├── read rows: 1
-    │   ├── read bytes: 18
+    │   ├── read bytes: 26
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -40,7 +40,7 @@ EvalScalar
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── read rows: 10
-        ├── read bytes: 54
+        ├── read bytes: 51
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -62,7 +62,7 @@ EvalScalar
     ├── TableScan(Build)
     │   ├── table: default.default.t
     │   ├── read rows: 1
-    │   ├── read bytes: 18
+    │   ├── read bytes: 26
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -71,7 +71,7 @@ EvalScalar
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── read rows: 10
-        ├── read bytes: 54
+        ├── read bytes: 51
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -102,7 +102,7 @@ EvalScalar
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── read rows: 10
-        ├── read bytes: 54
+        ├── read bytes: 51
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -128,7 +128,7 @@ EvalScalar
         ├── TableScan(Build)
         │   ├── table: default.default.t
         │   ├── read rows: 1
-        │   ├── read bytes: 18
+        │   ├── read bytes: 26
         │   ├── partitions total: 1
         │   ├── partitions scanned: 1
         │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -137,7 +137,7 @@ EvalScalar
         └── TableScan(Probe)
             ├── table: default.default.t1
             ├── read rows: 10
-            ├── read bytes: 54
+            ├── read bytes: 51
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -160,7 +160,7 @@ EvalScalar
     ├── TableScan(Build)
     │   ├── table: default.default.t1
     │   ├── read rows: 10
-    │   ├── read bytes: 54
+    │   ├── read bytes: 51
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -184,7 +184,7 @@ EvalScalar
         └── TableScan(Probe)
             ├── table: default.default.t2
             ├── read rows: 100
-            ├── read bytes: 414
+            ├── read bytes: 156
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -219,6 +219,37 @@ EvalScalar
 ├── estimated rows: 0.00
 └── HashJoin
     ├── join type: INNER
+    ├── build keys: [b.x (#1)]
+    ├── probe keys: [a.x (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.00
+    ├── TableScan(Build)
+    │   ├── table: default.default.twocolumn
+    │   ├── read rows: 4
+    │   ├── read bytes: 80
+    │   ├── partitions total: 1
+    │   ├── partitions scanned: 1
+    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │   ├── push downs: [filters: [is_true(b.x (#1) > 42)], limit: NONE]
+    │   └── estimated rows: 2.67
+    └── TableScan(Probe)
+        ├── table: default.default.onecolumn
+        ├── read rows: 4
+        ├── read bytes: 40
+        ├── partitions total: 1
+        ├── partitions scanned: 1
+        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        ├── push downs: [filters: [is_true(a.x (#0) > 42)], limit: NONE]
+        └── estimated rows: 2.67
+
+query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
+----
+EvalScalar
+├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
+├── estimated rows: 0.00
+└── HashJoin
+    ├── join type: INNER
     ├── build keys: [a.x (#0)]
     ├── probe keys: [b.x (#1)]
     ├── filters: []
@@ -226,24 +257,24 @@ EvalScalar
     ├── TableScan(Build)
     │   ├── table: default.default.onecolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 29
+    │   ├── read bytes: 40
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │   ├── push downs: [filters: [is_true(a.x (#0) > 42)], limit: NONE]
+    │   ├── push downs: [filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)], limit: NONE]
     │   └── estimated rows: 1.33
     └── TableScan(Probe)
         ├── table: default.default.twocolumn
         ├── read rows: 4
-        ├── read bytes: 62
+        ├── read bytes: 80
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [is_true(b.x (#1) > 42)], limit: NONE]
-        └── estimated rows: 2.67
+        ├── push downs: [filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)], limit: NONE]
+        └── estimated rows: 2.22
 
 query T
-explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
@@ -257,51 +288,20 @@ EvalScalar
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 62
+    │   ├── read bytes: 80
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │   ├── push downs: [filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)], limit: NONE]
-    │   └── estimated rows: 2.22
+    │   ├── push downs: [filters: [and_filters(b.x (#1) > 42, b.x (#1) < 45)], limit: NONE]
+    │   └── estimated rows: 0.89
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 29
+        ├── read bytes: 40
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)], limit: NONE]
-        └── estimated rows: 2.67
-
-query T
-explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
-----
-EvalScalar
-├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 0.00
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [a.x (#0)]
-    ├── probe keys: [b.x (#1)]
-    ├── filters: []
-    ├── estimated rows: 0.00
-    ├── TableScan(Build)
-    │   ├── table: default.default.onecolumn
-    │   ├── read rows: 4
-    │   ├── read bytes: 29
-    │   ├── partitions total: 1
-    │   ├── partitions scanned: 1
-    │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │   ├── push downs: [filters: [and_filters(a.x (#0) > 42, a.x (#0) < 45)], limit: NONE]
-    │   └── estimated rows: 0.44
-    └── TableScan(Probe)
-        ├── table: default.default.twocolumn
-        ├── read rows: 4
-        ├── read bytes: 62
-        ├── partitions total: 1
-        ├── partitions scanned: 1
-        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [and_filters(b.x (#1) > 42, b.x (#1) < 45)], limit: NONE]
+        ├── push downs: [filters: [and_filters(a.x (#0) > 42, a.x (#0) < 45)], limit: NONE]
         └── estimated rows: 0.89
 
 # the following cases won't be converted to inner join
@@ -311,10 +311,10 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 3.11
+├── estimated rows: 2.22
 └── Filter
     ├── filters: [is_true(b.x (#1) > 44 OR a.x (#0) < 43)]
-    ├── estimated rows: 3.11
+    ├── estimated rows: 2.22
     └── HashJoin
         ├── join type: LEFT OUTER
         ├── build keys: [b.x (#1)]
@@ -324,7 +324,7 @@ EvalScalar
         ├── TableScan(Build)
         │   ├── table: default.default.twocolumn
         │   ├── read rows: 4
-        │   ├── read bytes: 62
+        │   ├── read bytes: 80
         │   ├── partitions total: 1
         │   ├── partitions scanned: 1
         │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -333,7 +333,7 @@ EvalScalar
         └── TableScan(Probe)
             ├── table: default.default.onecolumn
             ├── read rows: 4
-            ├── read bytes: 29
+            ├── read bytes: 40
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -355,7 +355,7 @@ EvalScalar
     ├── TableScan(Build)
     │   ├── table: default.default.twocolumn
     │   ├── read rows: 4
-    │   ├── read bytes: 62
+    │   ├── read bytes: 80
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -364,7 +364,7 @@ EvalScalar
     └── TableScan(Probe)
         ├── table: default.default.onecolumn
         ├── read rows: 4
-        ├── read bytes: 29
+        ├── read bytes: 40
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]

@@ -54,7 +54,7 @@ EvalScalar
         └── TableScan(Probe)
             ├── table: default.default.t2
             ├── read rows: 5
-            ├── read bytes: 68
+            ├── read bytes: 82
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -76,7 +76,7 @@ EvalScalar
     ├── TableScan(Build)
     │   ├── table: default.default.t1
     │   ├── read rows: 1
-    │   ├── read bytes: 36
+    │   ├── read bytes: 52
     │   ├── partitions total: 1
     │   ├── partitions scanned: 1
     │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
@@ -85,7 +85,7 @@ EvalScalar
     └── TableScan(Probe)
         ├── table: default.default.t2
         ├── read rows: 5
-        ├── read bytes: 68
+        ├── read bytes: 82
         ├── partitions total: 1
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
