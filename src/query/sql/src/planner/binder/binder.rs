@@ -137,7 +137,11 @@ impl<'a> Binder {
             }
         }
 
-        self.ctx.get_settings().set_batch_settings(&hint_settings)
+        self.ctx
+            .get_settings()
+            .set_batch_settings(&hint_settings)
+            .ok();
+        Ok(())
     }
 
     #[async_recursion::async_recursion]
