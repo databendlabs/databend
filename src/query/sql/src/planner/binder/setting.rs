@@ -52,7 +52,7 @@ impl Binder {
 
         let (scalar, _) = *type_checker.resolve(value).await?;
         let scalar = wrap_cast(&scalar, &DataType::String);
-        let expr = scalar.as_expr_with_col_index()?;
+        let expr = scalar.as_expr()?;
 
         let (new_expr, _) =
             ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);

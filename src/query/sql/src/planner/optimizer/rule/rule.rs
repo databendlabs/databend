@@ -41,6 +41,7 @@ pub trait Rule {
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum RuleID {
     // Rewrite rules
+    FoldConstant,
     NormalizeScalarFilter,
     NormalizeDisjunctiveFilter,
     PushDownFilterAggregate,
@@ -78,6 +79,7 @@ pub enum RuleID {
 impl Display for RuleID {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            RuleID::FoldConstant => write!(f, "FoldConstant"),
             RuleID::PushDownFilterUnion => write!(f, "PushDownFilterUnion"),
             RuleID::PushDownFilterEvalScalar => write!(f, "PushDownFilterEvalScalar"),
             RuleID::PushDownFilterJoin => write!(f, "PushDownFilterJoin"),
