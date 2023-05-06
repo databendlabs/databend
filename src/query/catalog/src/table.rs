@@ -20,6 +20,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::NumberScalar;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
@@ -432,6 +433,40 @@ pub trait ColumnStatisticsProvider {
     // returns the statistics of the given column, if any.
     // column_id is just the index of the column in table's schema
     fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics>;
+
+    // If the data type is int and max - min + 1 < ndv, then adjust ndv to max - min + 1.
+    fn adjust_ndv_by_min_max(&self, mut ndv: u64, min: Scalar, max: Scalar) -> u64 {
+        dbg!("{} {} {}", ndv, &min, &max);
+        let mut range = match (min, max) {
+            (Scalar::Number(min), Scalar::Number(max)) => match (min, max) {
+                (NumberScalar::UInt8(min), NumberScalar::UInt8(max)) => (max - min) as u64,
+                (NumberScalar::UInt16(min), NumberScalar::UInt16(max)) => (max - min) as u64,
+                (NumberScalar::UInt32(min), NumberScalar::UInt32(max)) => (max - min) as u64,
+                (NumberScalar::UInt64(min), NumberScalar::UInt64(max)) => max - min,
+                (NumberScalar::Int8(min), NumberScalar::Int8(max)) => {
+                    (max as i16 - min as i16) as u64
+                }
+                (NumberScalar::Int16(min), NumberScalar::Int16(max)) => {
+                    (max as i32 - min as i32) as u64
+                }
+                (NumberScalar::Int32(min), NumberScalar::Int32(max)) => {
+                    (max as i64 - min as i64) as u64
+                }
+                (NumberScalar::Int64(min), NumberScalar::Int64(max)) => {
+                    (max as i128 - min as i128) as u64
+                }
+                _ => return ndv,
+            },
+            (Scalar::Timestamp(min), Scalar::Timestamp(max)) => (max as i128 - min as i128) as u64,
+            (Scalar::Date(min), Scalar::Date(max)) => (max as i64 - min as i64) as u64,
+            _ => return ndv,
+        };
+        range = range.saturating_add(1);
+        if range < ndv {
+            ndv = range;
+        }
+        ndv
+    }
 }
 
 mod column_stats_provider_impls {
