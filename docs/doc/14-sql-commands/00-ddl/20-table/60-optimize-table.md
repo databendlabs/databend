@@ -4,15 +4,12 @@ title: OPTIMIZE TABLE
 
 Optimizing a table in Databend involves compacting or purging historical data to save storage space and enhance query performance.
 
-**Why do we need to optimize tables?**
+<details>
+  <summary>Why Optimize?</summary>
+    <div>Optimizing tables is essential to improve the performance of a database system. Tables can become fragmented over time due to various operations such as inserts, deletes, or updates. When a table becomes fragmented, it means that its data is scattered across multiple blocks. As a result, when a query is executed, the database system needs to scan through all the blocks to retrieve the necessary data, which can take a considerable amount of time, especially for large tables. This can lead to poor query performance and negatively impact the overall user experience. By optimizing tables, the number of blocks can be reduced, which helps to speed up query execution and improve the database system's overall performance.</div><br/>
 
-If your table has too many blocks, its performance may be affected, as Databend needs to scan many blocks during query execution.
-
-**What causes too many blocks?**
-
-Too many blocks can be caused by long-running insert, delete, or update operations, or by having a small batch size for these operations. This can lead to the generation of many block files.
-
-By optimizing tables in Databend, you can reduce the number of blocks, thus improving query performance and reducing storage space.
+   <div>Furthermore, optimizing tables can also help reduce storage space. When tables become fragmented, the database system creates additional block files to store the data. These block files occupy disk space, and over time, they can consume a significant amount of storage space, which can be expensive and difficult to manage. By optimizing tables, the number of block files can be reduced, thus freeing up storage space and reducing the overall cost of maintaining the database system. Therefore, optimizing tables is not only essential for improving query performance but also for reducing storage space and optimizing the overall database system's efficiency.</div>
+</details>
 
 ## Databend Data Storage: Snapshot, Segment, and Block
 
