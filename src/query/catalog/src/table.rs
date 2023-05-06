@@ -458,6 +458,33 @@ pub trait ColumnStatisticsProvider {
             },
             (Scalar::Timestamp(min), Scalar::Timestamp(max)) => (max as i128 - min as i128) as u64,
             (Scalar::Date(min), Scalar::Date(max)) => (max as i64 - min as i64) as u64,
+            (Scalar::String(mut min), Scalar::String(mut max)) | (Scalar::Variant(mut min), Scalar::Variant(mut max)) => {
+                // There are 128 characters in ASCII code and 128^4 = 268435456 < 2^32 < 128^5.
+                if min.len() == 0 || max.len() == 0 || min.len() > 4 || max.len() > 4 {
+                    return ndv;
+                }
+                let mut min_value: u32 = 0;
+                let mut max_value: u32 = 0;
+                while min.len() != max.len() {
+                    if min.len() < max.len() {
+                        min.push(0);
+                    } else {
+                        max.push(0);
+                    }
+                }
+                for idx in (0..min.len()).rev() {
+                    min_value = min_value * 128 + min[idx] as u32;
+                    max_value = max_value * 128 + max[idx] as u32;
+                }
+                (max_value - min_value) as u64
+            }
+            (Scalar::Boolean(min), Scalar::Boolean(max)) => {
+                if min == max {
+                    1
+                } else {
+                    2
+                }
+            }
             _ => return ndv,
         };
         range = range.saturating_add(1);
