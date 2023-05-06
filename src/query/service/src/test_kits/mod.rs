@@ -13,6 +13,8 @@
 // limitations under the License.
 
 #![allow(clippy::too_many_arguments)]
+
+pub mod block_writer;
 pub mod config;
 pub mod context;
 pub mod sessions;

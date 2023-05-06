@@ -21,10 +21,10 @@ use chrono::Duration;
 use chrono::Utc;
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_expression::DataBlock;
 use common_storages_factory::Table;
-use common_storages_fuse::block_writer::BlockWriter;
 use common_storages_fuse::io::MetaWriter;
-use common_storages_fuse::operations::mutation::compact_segment;
+use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::statistics::gen_columns_statistics;
 use common_storages_fuse::statistics::merge_statistics;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -44,6 +44,7 @@ use storages_common_table_meta::meta::TableSnapshotV2;
 use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
+use super::block_writer::BlockWriter;
 use super::TestFixture;
 
 pub async fn generate_snapshot_with_segments(
