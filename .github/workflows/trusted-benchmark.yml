@@ -13,9 +13,9 @@ on:
         required: true
         type: string
 
-# concurrency:
-#   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-#   cancel-in-progress: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
 
 permissions:
   id-token: write
@@ -177,6 +177,7 @@ jobs:
         include:
           - { dataset: hits, size: Medium }
           - { dataset: hits, size: Large }
+          - { dataset: tpch, size: Medium }
           - { dataset: tpch, size: Large }
       fail-fast: true
       max-parallel: 1
