@@ -121,14 +121,15 @@ impl Planner {
 
             let mut maybe_partial_insert = false;
             if is_insert_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
-                if let Ok((p, _)) = &res {
-                    if let Plan::Insert(box Insert {
+                if let Ok((
+                    Plan::Insert(box Insert {
                         source: InsertInputSource::SelectPlan(_),
                         ..
-                    }) = p
-                    {
-                        maybe_partial_insert = true;
-                    }
+                    }),
+                    _,
+                )) = &res
+                {
+                    maybe_partial_insert = true;
                 }
             }
 
