@@ -228,7 +228,7 @@ dependencies = [
 [[package]]
 name = "arrow-format"
 version = "0.8.1"
-source = "git+https://github.com/sundy-li/arrow-format?rev=c49adfe#c49adfe8e2a28d1b482570314d1562b07880b209"
+source = "git+https://github.com/zhang2014/arrow-format?rev=c8e11341#c8e11341f2cb34cc8c25c49379c56b38c9b29057"
 dependencies = [
  "planus",
  "prost",
