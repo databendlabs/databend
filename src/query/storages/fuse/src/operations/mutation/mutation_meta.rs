@@ -15,8 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
-use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
@@ -62,15 +60,6 @@ impl SerializeDataMeta {
             cluster_stats,
         })
     }
-
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&SerializeDataMeta> {
-        match SerializeDataMeta::downcast_ref_from(info) {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to  SerializeDataMeta.",
-            )),
-        }
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -107,15 +96,6 @@ impl BlockMetaInfo for MutationTransformMeta {
 impl MutationTransformMeta {
     pub fn create(index: BlockMetaIndex, op: Mutation) -> BlockMetaInfoPtr {
         Box::new(MutationTransformMeta { index, op })
-    }
-
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationTransformMeta> {
-        match MutationTransformMeta::downcast_ref_from(info) {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MutationTransformMeta.",
-            )),
-        }
     }
 }
 
@@ -155,14 +135,5 @@ impl MutationSinkMeta {
             summary,
             abort_operation,
         })
-    }
-
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationSinkMeta> {
-        match MutationSinkMeta::downcast_ref_from(info) {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MutationSinkMeta.",
-            )),
-        }
     }
 }

@@ -20,6 +20,7 @@ use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use opendal::Operator;
 use storages_common_table_meta::meta::Location;
@@ -161,7 +162,7 @@ impl Processor for MutationSink {
                     info!(status);
                 }
 
-                let meta = MutationSinkMeta::from_meta(&input_meta)?;
+                let meta = MutationSinkMeta::downcast_ref_from(&input_meta).unwrap();
 
                 self.merged_segments = meta.segments.clone();
                 self.merged_statistics = meta.summary.clone();

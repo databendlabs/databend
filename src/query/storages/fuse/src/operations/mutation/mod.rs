@@ -42,6 +42,6 @@ pub use mutation_part::MutationPartInfo;
 pub use mutation_sink::MutationSink;
 pub use mutation_source::MutationAction;
 pub use mutation_source::MutationSource;
-pub use mutation_transform::MutationTransform;
+pub use mutation_transform::MutationAggregator;
 pub use recluster_mutator::ReclusterMutator;
 pub use serialize_data_transform::SerializeDataTransform;

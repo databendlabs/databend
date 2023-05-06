@@ -19,6 +19,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -130,7 +131,7 @@ impl Processor for SerializeDataTransform {
         let mut input_data = self.input.pull_data().unwrap()?;
         let meta = input_data.take_meta();
         if let Some(meta) = meta {
-            let meta = SerializeDataMeta::from_meta(&meta)?;
+            let meta = SerializeDataMeta::downcast_ref_from(&meta).unwrap();
             self.index = meta.index.clone();
             if input_data.is_empty() {
                 self.state = State::Output(Mutation::Deleted);

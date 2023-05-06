@@ -22,7 +22,6 @@ use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
@@ -37,20 +36,18 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::BlockOperator;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::info;
 
 use crate::operations::mutation::MutationAction;
+use crate::operations::mutation::MutationAggregator;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::MutationSource;
-use crate::operations::mutation::MutationTransform;
 use crate::operations::mutation::SerializeDataTransform;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::pruning::FusePruner;
 use crate::FuseTable;
@@ -59,9 +56,9 @@ impl FuseTable {
     /// The flow of Pipeline is as follows:
     /// +---------------+      +-----------------------+
     /// |MutationSource1| ---> |SerializeDataTransform1|   ------
-    /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
-    /// |     ...       | ---> |          ...          |   ...   | ---> |MutationTransform| ---> |MutationSink|
-    /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
+    /// +---------------+      +-----------------------+         |      +------------------+      +------------+
+    /// |     ...       | ---> |          ...          |   ...   | ---> |MutationAggregator| ---> |MutationSink|
+    /// +---------------+      +-----------------------+         |      +------------------+      +------------+
     /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
     /// +---------------+      +-----------------------+
     #[async_backtrace::framed]
@@ -85,6 +82,13 @@ impl FuseTable {
         if snapshot.summary.row_count == 0 {
             // empty snapshot, no deletion
             return Ok(());
+        }
+
+        // Status.
+        {
+            let status = "delete: begin to run delete tasks";
+            ctx.set_status_info(status);
+            info!(status);
         }
 
         // check if unconditional deletion
@@ -124,8 +128,12 @@ impl FuseTable {
             return Ok(());
         }
 
-        self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
+        let total_tasks = self
+            .try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
             .await?;
+        if pipeline.is_empty() {
+            return Ok(());
+        }
 
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, self.get_block_thresholds())?;
@@ -139,7 +147,22 @@ impl FuseTable {
             )
         })?;
 
-        self.try_add_mutation_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
+        pipeline.resize(1)?;
+
+        pipeline.add_transform(|input, output| {
+            let aggregator = MutationAggregator::new(
+                ctx.clone(),
+                self.schema(),
+                self.get_operator(),
+                self.meta_location_generator().clone(),
+                snapshot.segments.clone(),
+                self.get_block_thresholds(),
+                total_tasks,
+            );
+            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                input, output, aggregator,
+            )))
+        })?;
 
         pipeline.add_sink(|input| {
             MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
@@ -192,15 +215,19 @@ impl FuseTable {
         col_indices: Vec<usize>,
         base_snapshot: &TableSnapshot,
         pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         let projection = Projection::Columns(col_indices.clone());
-        self.mutation_block_pruning(
-            ctx.clone(),
-            Some(filter.clone()),
-            projection.clone(),
-            base_snapshot,
-        )
-        .await?;
+        let total_tasks = self
+            .mutation_block_pruning(
+                ctx.clone(),
+                Some(filter.clone()),
+                projection.clone(),
+                base_snapshot,
+            )
+            .await?;
+        if total_tasks == 0 {
+            return Ok(0);
+        }
 
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
         let schema = block_reader.schema();
@@ -235,7 +262,8 @@ impl FuseTable {
         projection.sort_by_key(|&i| source_col_indices[i]);
         let ops = vec![BlockOperator::Project { projection }];
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+        let max_threads =
+            std::cmp::min(ctx.get_settings().get_max_threads()? as usize, total_tasks);
         // Add source pipe.
         pipeline.add_source(
             |output| {
@@ -251,7 +279,8 @@ impl FuseTable {
                 )
             },
             max_threads,
-        )
+        )?;
+        Ok(total_tasks)
     }
 
     #[async_backtrace::framed]
@@ -261,7 +290,7 @@ impl FuseTable {
         filter: Option<RemoteExpr<String>>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
             filter,
@@ -299,45 +328,10 @@ impl FuseTable {
                 .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
                 .collect(),
         );
-        ctx.set_partitions(parts)
-    }
 
-    pub fn try_add_mutation_transform(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        base_segments: Vec<Location>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        if pipeline.is_empty() {
-            return Err(ErrorCode::Internal("The pipeline is empty."));
-        }
-
-        match pipeline.output_len() {
-            0 => Err(ErrorCode::Internal("The output of the last pipe is 0.")),
-            last_pipe_size => {
-                let mut inputs_port = Vec::with_capacity(last_pipe_size);
-                for _ in 0..last_pipe_size {
-                    inputs_port.push(InputPort::create());
-                }
-                let output_port = OutputPort::create();
-                pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
-                    MutationTransform::try_create(
-                        ctx,
-                        self.schema(),
-                        inputs_port.clone(),
-                        output_port.clone(),
-                        self.get_operator(),
-                        self.meta_location_generator().clone(),
-                        base_segments,
-                        self.get_block_thresholds(),
-                    )?,
-                    inputs_port,
-                    vec![output_port],
-                )]));
-
-                Ok(())
-            }
-        }
+        let part_num = parts.len();
+        ctx.set_partitions(parts)?;
+        Ok(part_num)
     }
 
     pub fn all_column_indices(&self) -> Vec<FieldIndex> {

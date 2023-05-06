@@ -25,10 +25,14 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::info;
 
 use crate::operations::mutation::MutationAction;
+use crate::operations::mutation::MutationAggregator;
 use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
@@ -74,15 +78,26 @@ impl FuseTable {
             filter = None;
         }
 
-        self.try_add_update_source(
-            ctx.clone(),
-            filter,
-            col_indices,
-            update_list,
-            &snapshot,
-            pipeline,
-        )
-        .await?;
+        // Status.
+        {
+            let status = "mutation: begin to run update tasks";
+            ctx.set_status_info(status);
+            info!(status);
+        }
+
+        let total_tasks = self
+            .try_add_update_source(
+                ctx.clone(),
+                filter,
+                col_indices,
+                update_list,
+                &snapshot,
+                pipeline,
+            )
+            .await?;
+        if pipeline.is_empty() {
+            return Ok(());
+        }
 
         // TODO(zhyass): support cluster stats generator.
         pipeline.add_transform(|input, output| {
@@ -95,7 +110,22 @@ impl FuseTable {
             )
         })?;
 
-        self.try_add_mutation_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
+        pipeline.resize(1)?;
+
+        pipeline.add_transform(|input, output| {
+            let aggregator = MutationAggregator::new(
+                ctx.clone(),
+                self.schema(),
+                self.get_operator(),
+                self.meta_location_generator().clone(),
+                snapshot.segments.clone(),
+                self.get_block_thresholds(),
+                total_tasks,
+            );
+            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                input, output, aggregator,
+            )))
+        })?;
 
         pipeline.add_sink(|input| {
             MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
@@ -112,7 +142,7 @@ impl FuseTable {
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         base_snapshot: &TableSnapshot,
         pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    ) -> Result<usize> {
         let all_column_indices = self.all_column_indices();
         let schema = self.schema();
 
@@ -200,25 +230,31 @@ impl FuseTable {
             (Arc::new(None), None)
         };
 
-        self.mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
+        let total_tasks = self
+            .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
             .await?;
 
-        let max_threads = ctx.get_settings().get_max_threads()? as usize;
-        // Add source pipe.
-        pipeline.add_source(
-            |output| {
-                MutationSource::try_create(
-                    ctx.clone(),
-                    MutationAction::Update,
-                    output,
-                    filter_expr.clone(),
-                    block_reader.clone(),
-                    remain_reader.clone(),
-                    ops.clone(),
-                    self.storage_format,
-                )
-            },
-            max_threads,
-        )
+        if total_tasks != 0 {
+            let max_threads =
+                std::cmp::min(ctx.get_settings().get_max_threads()? as usize, total_tasks);
+            // Add source pipe.
+            pipeline.add_source(
+                |output| {
+                    MutationSource::try_create(
+                        ctx.clone(),
+                        MutationAction::Update,
+                        output,
+                        filter_expr.clone(),
+                        block_reader.clone(),
+                        remain_reader.clone(),
+                        ops.clone(),
+                        self.storage_format,
+                    )
+                },
+                max_threads,
+            )?;
+        }
+
+        Ok(total_tasks)
     }
 }
