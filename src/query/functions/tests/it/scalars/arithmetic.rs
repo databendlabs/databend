@@ -14,9 +14,12 @@
 
 use std::io::Write;
 
+use common_expression::types::decimal::DecimalColumn;
+use common_expression::types::decimal::DecimalSize;
 use common_expression::types::number::*;
 use common_expression::Column;
 use common_expression::FromData;
+use ethnum::i256;
 use goldenfile::Mint;
 
 use super::run_ast;
@@ -38,6 +41,26 @@ fn test_arithmetic() {
         (
             "d2",
             UInt8Type::from_data_with_validity(vec![1u8, 0, 3], vec![true, false, true]),
+        ),
+        (
+            "e",
+            Column::Decimal(DecimalColumn::Decimal128(
+                vec![31, 335, 1888].into(),
+                DecimalSize {
+                    precision: 10,
+                    scale: 1,
+                },
+            )),
+        ),
+        (
+            "f",
+            Column::Decimal(DecimalColumn::Decimal256(
+                vec![i256::from(50), i256::from(92), i256::from(1234)].into(),
+                DecimalSize {
+                    precision: 76,
+                    scale: 2,
+                },
+            )),
         ),
     ];
     test_add(file, columns);
@@ -64,41 +87,67 @@ fn test_add(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a + b", columns);
     run_ast(file, "a2 + 10", columns);
     run_ast(file, "a2 + c", columns);
+    run_ast(file, "c + 0.5", columns);
     run_ast(file, "c + b", columns);
     run_ast(file, "c + d", columns);
+    run_ast(file, "c + e", columns);
+    run_ast(file, "d + e", columns);
+    run_ast(file, "d2 + e", columns);
+    run_ast(file, "d2 + f", columns);
+    run_ast(file, "e + f", columns);
 }
 
 fn test_minus(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a - b", columns);
     run_ast(file, "a2 - 10", columns);
     run_ast(file, "a2 - c", columns);
+    run_ast(file, "c - 0.5", columns);
     run_ast(file, "c - b", columns);
     run_ast(file, "c - d", columns);
     run_ast(file, "-c", columns);
+    run_ast(file, "c - e", columns);
+    run_ast(file, "d - e", columns);
+    run_ast(file, "d2 - e", columns);
+    run_ast(file, "d2 - f", columns);
+    run_ast(file, "e - f", columns);
 }
 
 fn test_mul(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a  * b", columns);
     run_ast(file, "a2 * 10", columns);
     run_ast(file, "a2 * c", columns);
+    run_ast(file, "c * 0.5", columns);
     run_ast(file, "c * b", columns);
     run_ast(file, "c * d", columns);
+    run_ast(file, "c * e", columns);
+    run_ast(file, "d * e", columns);
+    run_ast(file, "d2 * e", columns);
+    run_ast(file, "d2 * f", columns);
+    run_ast(file, "e * f", columns);
+    run_ast(file, "e * 0.5", columns);
 }
 
 fn test_div(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a / b", columns);
     run_ast(file, "a2 / 10", columns);
     run_ast(file, "a2 / c", columns);
+    run_ast(file, "c / 0.5", columns);
     run_ast(file, "divide(c, b)", columns);
     run_ast(file, "c / d", columns);
     run_ast(file, "b / d2", columns);
     run_ast(file, "2.0 / 0", columns);
+    run_ast(file, "c / e", columns);
+    run_ast(file, "d / e", columns);
+    run_ast(file, "d2 / e", columns);
+    run_ast(file, "d2 / f", columns);
+    run_ast(file, "e / f", columns);
 }
 
 fn test_intdiv(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "a  div b", columns);
     run_ast(file, "a2 div 10", columns);
     run_ast(file, "a2 div c", columns);
+    run_ast(file, "c div 0.5", columns);
     run_ast(file, "c div b", columns);
     run_ast(file, "c div d", columns);
     run_ast(file, "c div d2", columns);
@@ -122,6 +171,8 @@ fn test_to_string(file: &mut impl Write, columns: &[(&str, Column)]) {
     run_ast(file, "to_string(c)", columns);
     run_ast(file, "to_string(d)", columns);
     run_ast(file, "to_string(d2)", columns);
+    run_ast(file, "to_string(e)", columns);
+    run_ast(file, "to_string(f)", columns);
 }
 
 fn test_carte(file: &mut impl Write, columns: &[(&str, Column)]) {

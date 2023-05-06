@@ -166,6 +166,7 @@ impl<'a> Evaluator<'a> {
 
             Expr::FunctionCall {
                 span,
+                id,
                 function,
                 args,
                 generics,
@@ -193,7 +194,7 @@ impl<'a> Evaluator<'a> {
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                ctx.render_error(*span, &args, &function.signature.name)?;
+                ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
                 Ok(result)
             }
         };
@@ -222,7 +223,8 @@ impl<'a> Evaluator<'a> {
                     )
                     .1,
                     None,
-                    "domain calculation should not return any domain for expressions that are possible to fail"
+                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
+                    result.unwrap_err()
                 );
                 RECURSING.store(false, Ordering::SeqCst);
             }
@@ -882,6 +884,7 @@ impl<'a> Evaluator<'a> {
     pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
         if let Expr::FunctionCall {
             span,
+            id,
             function,
             args,
             return_type,
@@ -904,7 +907,7 @@ impl<'a> Evaluator<'a> {
                     func_ctx: self.func_ctx,
                 };
                 let result = (eval)(&cols_ref, &mut ctx);
-                ctx.render_error(*span, &args, &function.signature.name)?;
+                ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
                 assert_eq!(result.len(), self.input_columns.num_rows());
                 return Ok(result);
             }

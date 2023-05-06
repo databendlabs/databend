@@ -13,11 +13,14 @@
 // limitations under the License.
 
 #![allow(clippy::too_many_arguments)]
+
+pub mod block_writer;
 pub mod config;
 pub mod context;
 #[allow(dead_code)]
 pub mod sessions;
 pub mod table_test_fixture;
+pub mod utils;
 
 pub use config::ConfigBuilder;
 pub use context::create_query_context;

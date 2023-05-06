@@ -215,11 +215,11 @@ output         : 2939704650099116301
 
 ast            : city64withseed(1.1, 12)
 raw expr       : city64withseed(1.1, 12)
-checked expr   : city64withseed<Decimal(38, 0), UInt8>(to_decimal<Decimal(2, 1)>(38, 0)(1.1_d128(2,1)), 12_u8)
-optimized expr : 10350043282552431796_u64
+checked expr   : city64withseed<Float32, UInt8>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)), 12_u8)
+optimized expr : 14184975929553424950_u64
 output type    : UInt64
-output domain  : {10350043282552431796..=10350043282552431796}
-output         : 10350043282552431796
+output domain  : {14184975929553424950..=14184975929553424950}
+output         : 14184975929553424950
 
 
 ast            : city64withseed('1234567890', 12.12)
@@ -310,11 +310,11 @@ output         : 12447382539015599056
 
 ast            : siphash64(1.1)
 raw expr       : siphash64(1.1)
-checked expr   : siphash64<Decimal(38, 0)>(to_decimal<Decimal(2, 1)>(38, 0)(1.1_d128(2,1)))
-optimized expr : 9886797495896358906_u64
+checked expr   : siphash64<Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
+optimized expr : 2120135555285830191_u64
 output type    : UInt64
-output domain  : {9886797495896358906..=9886797495896358906}
-output         : 9886797495896358906
+output domain  : {2120135555285830191..=2120135555285830191}
+output         : 2120135555285830191
 
 
 ast            : siphash64(to_date(100000))
@@ -403,11 +403,11 @@ output         : 14922725725041217620
 
 ast            : xxhash64(1.1)
 raw expr       : xxhash64(1.1)
-checked expr   : xxhash64<Decimal(38, 0)>(to_decimal<Decimal(2, 1)>(38, 0)(1.1_d128(2,1)))
-optimized expr : 7790381849595394832_u64
+checked expr   : xxhash64<Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
+optimized expr : 2344681381137403510_u64
 output type    : UInt64
-output domain  : {7790381849595394832..=7790381849595394832}
-output         : 7790381849595394832
+output domain  : {2344681381137403510..=2344681381137403510}
+output         : 2344681381137403510
 
 
 ast            : xxhash64(to_date(100000))
@@ -496,11 +496,11 @@ output         : 2833116583
 
 ast            : xxhash32(1.1)
 raw expr       : xxhash32(1.1)
-checked expr   : xxhash32<Decimal(38, 0)>(to_decimal<Decimal(2, 1)>(38, 0)(1.1_d128(2,1)))
-optimized expr : 3061175237_u32
+checked expr   : xxhash32<Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
+optimized expr : 1309932719_u32
 output type    : UInt32
-output domain  : {3061175237..=3061175237}
-output         : 3061175237
+output domain  : {1309932719..=1309932719}
+output         : 1309932719
 
 
 ast            : xxhash32(to_date(100000))
