@@ -6,9 +6,9 @@ Optimizing a table in Databend involves compacting or purging historical data to
 
 <details>
   <summary>Why Optimize?</summary>
-    <div>Optimizing tables is essential to improve the performance of a database system. Tables can become fragmented over time due to various operations such as inserts, deletes, or updates. When a table becomes fragmented, it means that its data is scattered across multiple blocks. As a result, when a query is executed, the database system needs to scan through all the blocks to retrieve the necessary data, which can take a considerable amount of time, especially for large tables. This can lead to poor query performance and negatively impact the overall user experience. By optimizing tables, the number of blocks can be reduced, which helps to speed up query execution and improve the database system's overall performance.</div><br/>
+    <div>Databend stores data in tables using the Parquet format, which is organized into blocks. Additionally, Databend supports time travel functionality, where each operation that modifies a table generates a Parquet file that captures and reflects the changes made to the table.</div><br/>
 
-   <div>Furthermore, optimizing tables can also help reduce storage space. When tables become fragmented, the database system creates additional block files to store the data. These block files occupy disk space, and over time, they can consume a significant amount of storage space, which can be expensive and difficult to manage. By optimizing tables, the number of block files can be reduced, thus freeing up storage space and reducing the overall cost of maintaining the database system. Therefore, optimizing tables is not only essential for improving query performance but also for reducing storage space and optimizing the overall database system's efficiency.</div>
+   <div>As a table accumulates more Parquet files over time, it can lead to performance issues and increased storage requirements. To optimize the table's performance, historical Parquet files can be deleted when they are no longer needed. This optimization can help to improve query performance and reduce the amount of storage space used by the table.</div>
 </details>
 
 ## Databend Data Storage: Snapshot, Segment, and Block
