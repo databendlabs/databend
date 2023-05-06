@@ -224,53 +224,16 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 1.78
-└── HashJoin
-    ├── join type: INNER
-    ├── build keys: [a.x (#0)]
-    ├── probe keys: [b.x (#1)]
-    ├── filters: []
-    ├── estimated rows: 1.78
-    ├── Filter(Build)
-    │   ├── filters: [is_true(a.x (#0) > 42)]
-    │   ├── estimated rows: 1.33
-    │   └── TableScan
-    │       ├── table: default.default.onecolumn
-    │       ├── read rows: 4
-    │       ├── read bytes: 45
-    │       ├── partitions total: 1
-    │       ├── partitions scanned: 1
-    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(a.x (#0) > 42)], limit: NONE]
-    │       └── estimated rows: 4.00
-    └── Filter(Probe)
-        ├── filters: [is_true(b.x (#1) > 42)]
-        ├── estimated rows: 2.67
-        └── TableScan
-            ├── table: default.default.twocolumn
-            ├── read rows: 4
-            ├── read bytes: 94
-            ├── partitions total: 1
-            ├── partitions scanned: 1
-            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_true(b.x (#1) > 42)], limit: NONE]
-            └── estimated rows: 4.00
-
-query T
-explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
-----
-EvalScalar
-├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 1.98
+├── estimated rows: 3.56
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [b.x (#1)]
     ├── probe keys: [a.x (#0)]
     ├── filters: []
-    ├── estimated rows: 1.98
+    ├── estimated rows: 3.56
     ├── Filter(Build)
-    │   ├── filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)]
-    │   ├── estimated rows: 2.22
+    │   ├── filters: [is_true(b.x (#1) > 42)]
+    │   ├── estimated rows: 2.67
     │   └── TableScan
     │       ├── table: default.default.twocolumn
     │       ├── read rows: 4
@@ -278,10 +241,10 @@ EvalScalar
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)], limit: NONE]
+    │       ├── push downs: [filters: [is_true(b.x (#1) > 42)], limit: NONE]
     │       └── estimated rows: 4.00
     └── Filter(Probe)
-        ├── filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)]
+        ├── filters: [is_true(a.x (#0) > 42)]
         ├── estimated rows: 2.67
         └── TableScan
             ├── table: default.default.onecolumn
@@ -290,24 +253,24 @@ EvalScalar
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)], limit: NONE]
+            ├── push downs: [filters: [is_true(a.x (#0) > 42)], limit: NONE]
             └── estimated rows: 4.00
 
 query T
-explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 44 or b.x < 43
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 0.40
+├── estimated rows: 0.99
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [a.x (#0)]
     ├── probe keys: [b.x (#1)]
     ├── filters: []
-    ├── estimated rows: 0.40
+    ├── estimated rows: 0.99
     ├── Filter(Build)
-    │   ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
-    │   ├── estimated rows: 0.44
+    │   ├── filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)]
+    │   ├── estimated rows: 1.33
     │   └── TableScan
     │       ├── table: default.default.onecolumn
     │       ├── read rows: 4
@@ -315,11 +278,11 @@ EvalScalar
     │       ├── partitions total: 1
     │       ├── partitions scanned: 1
     │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    │       ├── push downs: [filters: [and_filters(a.x (#0) > 42, a.x (#0) < 45)], limit: NONE]
+    │       ├── push downs: [filters: [is_true(a.x (#0) > 44 OR a.x (#0) < 43)], limit: NONE]
     │       └── estimated rows: 4.00
     └── Filter(Probe)
-        ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
-        ├── estimated rows: 0.89
+        ├── filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)]
+        ├── estimated rows: 2.22
         └── TableScan
             ├── table: default.default.twocolumn
             ├── read rows: 4
@@ -327,7 +290,44 @@ EvalScalar
             ├── partitions total: 1
             ├── partitions scanned: 1
             ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            ├── push downs: [filters: [and_filters(b.x (#1) > 42, b.x (#1) < 45)], limit: NONE]
+            ├── push downs: [filters: [is_true(b.x (#1) > 44 OR b.x (#1) < 43)], limit: NONE]
+            └── estimated rows: 4.00
+
+query T
+explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where b.x > 42 and b.x < 45
+----
+EvalScalar
+├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
+├── estimated rows: 0.79
+└── HashJoin
+    ├── join type: INNER
+    ├── build keys: [b.x (#1)]
+    ├── probe keys: [a.x (#0)]
+    ├── filters: []
+    ├── estimated rows: 0.79
+    ├── Filter(Build)
+    │   ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
+    │   ├── estimated rows: 0.89
+    │   └── TableScan
+    │       ├── table: default.default.twocolumn
+    │       ├── read rows: 4
+    │       ├── read bytes: 94
+    │       ├── partitions total: 1
+    │       ├── partitions scanned: 1
+    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+    │       ├── push downs: [filters: [and_filters(b.x (#1) > 42, b.x (#1) < 45)], limit: NONE]
+    │       └── estimated rows: 4.00
+    └── Filter(Probe)
+        ├── filters: [is_true(a.x (#0) > 42), is_true(a.x (#0) < 45)]
+        ├── estimated rows: 0.89
+        └── TableScan
+            ├── table: default.default.onecolumn
+            ├── read rows: 4
+            ├── read bytes: 45
+            ├── partitions total: 1
+            ├── partitions scanned: 1
+            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+            ├── push downs: [filters: [and_filters(a.x (#0) > 42, a.x (#0) < 45)], limit: NONE]
             └── estimated rows: 4.00
 
 # the following cases won't be converted to inner join
@@ -337,10 +337,10 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 3.11
+├── estimated rows: 2.22
 └── Filter
     ├── filters: [is_true(b.x (#1) > 44 OR a.x (#0) < 43)]
-    ├── estimated rows: 3.11
+    ├── estimated rows: 2.22
     └── HashJoin
         ├── join type: LEFT OUTER
         ├── build keys: [b.x (#1)]
@@ -371,13 +371,13 @@ explain select * from onecolumn as a right join twocolumn as b on a.x = b.x wher
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 0.89
+├── estimated rows: 1.19
 └── HashJoin
     ├── join type: RIGHT OUTER
     ├── build keys: [b.x (#1)]
     ├── probe keys: [a.x (#0)]
     ├── filters: []
-    ├── estimated rows: 0.89
+    ├── estimated rows: 1.19
     ├── Filter(Build)
     │   ├── filters: [is_true(b.x (#1) > 42), is_true(b.x (#1) < 45)]
     │   ├── estimated rows: 0.89
@@ -707,13 +707,13 @@ explain SELECT o.x, t.y FROM onecolumn o INNER JOIN twocolumn t ON (o.x=t.x AND 
 ----
 EvalScalar
 ├── expressions: [o.x (#0), t.y (#2)]
-├── estimated rows: 1.00
+├── estimated rows: 2.33
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t.x (#1)]
     ├── probe keys: [o.x (#0)]
     ├── filters: []
-    ├── estimated rows: 1.00
+    ├── estimated rows: 2.33
     ├── Filter(Build)
     │   ├── filters: [is_true(t.y (#2) = 53)]
     │   ├── estimated rows: 1.00
