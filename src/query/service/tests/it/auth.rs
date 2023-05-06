@@ -74,12 +74,13 @@ async fn test_auth_mgr_with_jwt_multi_sources() -> Result<()> {
         // Mounting the mock on the mock server - it's now effective!
         .mount(&server)
         .await;
-    let mut conf = crate::tests::ConfigBuilder::create().config();
+    let mut conf = databend_query::test_kits::ConfigBuilder::create().config();
     let first_url = format!("http://{}{}", server.address(), json_path);
     let second_url = format!("http://{}{}", server.address(), second_path);
     conf.query.jwt_key_file = first_url.clone();
     conf.query.jwt_key_files = vec![second_url];
-    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, ctx) =
+        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
     let auth_mgr = AuthMgr::instance();
     {
         let user_name = "test-user2";
@@ -208,9 +209,10 @@ async fn test_auth_mgr_with_jwt() -> Result<()> {
         .await;
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
-    let mut conf = crate::tests::ConfigBuilder::create().config();
+    let mut conf = databend_query::test_kits::ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
-    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, ctx) =
+        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
     let auth_mgr = AuthMgr::instance();
     let user_name = "test";
 
@@ -386,9 +388,10 @@ async fn test_auth_mgr_with_jwt_es256() -> Result<()> {
         .await;
     let jwks_url = format!("http://{}{}", server.address(), json_path);
 
-    let mut conf = crate::tests::ConfigBuilder::create().config();
+    let mut conf = databend_query::test_kits::ConfigBuilder::create().config();
     conf.query.jwt_key_file = jwks_url.clone();
-    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, ctx) =
+        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
     let auth_mgr = AuthMgr::instance();
     let user_name = "test";
 
@@ -560,11 +563,12 @@ async fn test_jwt_auth_mgr_with_management() -> Result<()> {
         .mount(&server)
         .await;
 
-    let mut conf = crate::tests::ConfigBuilder::create()
+    let mut conf = databend_query::test_kits::ConfigBuilder::create()
         .with_management_mode()
         .config();
     conf.query.jwt_key_file = format!("http://{}{}", server.address(), json_path);
-    let (_guard, ctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, ctx) =
+        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
     let auth_mgr = AuthMgr::instance();
 
     // with create user in other tenant

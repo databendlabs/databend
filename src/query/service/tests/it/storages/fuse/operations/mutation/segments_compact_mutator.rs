@@ -45,6 +45,9 @@ use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::test_kits::table_test_fixture::execute_command;
+use databend_query::test_kits::table_test_fixture::execute_query;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
@@ -56,9 +59,6 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
 
 use crate::storages::fuse::block_writer::BlockWriter;
-use crate::storages::fuse::table_test_fixture::execute_command;
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {

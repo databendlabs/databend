@@ -19,10 +19,9 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_expression::DataBlock;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use databend_query::test_kits::table_test_fixture::execute_query;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures_util::TryStreamExt;
-
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_table_truncate() -> common_exception::Result<()> {

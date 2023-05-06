@@ -15,6 +15,7 @@
 use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::api::http::v1::logs::logs_handler;
+use databend_query::test_kits::TestGlobalServices;
 use poem::get;
 use poem::http::Method;
 use poem::http::StatusCode;
@@ -24,11 +25,11 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 
-use crate::tests::TestGlobalServices;
-
 #[tokio::test(flavor = "multi_thread")]
 async fn test_logs() -> Result<()> {
-    let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let _guard =
+        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
+            .await?;
 
     let test_router = Route::new().at("/v1/logs", get(logs_handler));
     {
