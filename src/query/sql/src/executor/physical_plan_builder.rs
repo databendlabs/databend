@@ -33,7 +33,6 @@ use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
@@ -1116,12 +1115,14 @@ impl PhysicalPlanBuilder {
             .filter(|p| !p.is_empty())
             .map(
                 |predicates: &Vec<ScalarExpr>| -> Result<RemoteExpr<String>> {
-                    let predicates: Result<Vec<Expr<String>>> = predicates
+                    let predicates = predicates
                         .iter()
-                        .map(|p| p.as_expr_with_col_name())
-                        .collect();
+                        .map(|p| {
+                            Ok(p.as_expr()?
+                                .project_column_ref(|col| col.column_name.clone()))
+                        })
+                        .collect::<Result<Vec<_>>>()?;
 
-                    let predicates = predicates?;
                     let expr = predicates
                         .into_iter()
                         .reduce(|lhs, rhs| {
@@ -1137,10 +1138,10 @@ impl PhysicalPlanBuilder {
                         .unwrap();
 
                     let expr = cast_expr_to_non_null_boolean(expr)?;
-
                     let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
                     is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+
                     Ok(expr.as_remote_expr())
                 },
             )
@@ -1197,9 +1198,12 @@ impl PhysicalPlanBuilder {
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
-                let expr = cast_expr_to_non_null_boolean(predicate.as_expr_with_col_name()?)?;
-                let (filter, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let filter = filter.as_remote_expr();
+                let filter = cast_expr_to_non_null_boolean(
+                    predicate
+                        .as_expr()?
+                        .project_column_ref(|col| col.column_name.clone()),
+                )?
+                .as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {

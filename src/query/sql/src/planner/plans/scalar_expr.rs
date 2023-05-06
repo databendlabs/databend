@@ -46,7 +46,7 @@ pub enum ScalarExpr {
 
 impl ScalarExpr {
     pub fn data_type(&self) -> Result<DataType> {
-        Ok(self.as_expr_with_col_index()?.data_type().clone())
+        Ok(self.as_expr()?.data_type().clone())
     }
 
     pub fn used_columns(&self) -> ColumnSet {
