@@ -17,8 +17,7 @@ use databend_query::catalogs::InMemoryMetas;
 use databend_query::catalogs::SYS_DB_ID_BEGIN;
 use databend_query::catalogs::SYS_TBL_ID_BEGIN;
 use databend_query::databases::SystemDatabase;
-
-use crate::tests::ConfigBuilder;
+use databend_query::test_kits::ConfigBuilder;
 
 #[test]
 fn test_disable_system_table() -> Result<()> {

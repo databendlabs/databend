@@ -40,6 +40,8 @@ use databend_query::servers::http::v1::QueryResponse;
 use databend_query::servers::HttpHandler;
 use databend_query::servers::HttpHandlerKind;
 use databend_query::sessions::QueryAffect;
+use databend_query::test_kits::ConfigBuilder;
+use databend_query::test_kits::TestGlobalServices;
 use headers::Header;
 use jwt_simple::algorithms::RS256KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
@@ -64,8 +66,6 @@ use wiremock::MockServer;
 use wiremock::ResponseTemplate;
 
 use crate::tests::tls_constants::*;
-use crate::tests::ConfigBuilder;
-use crate::tests::TestGlobalServices;
 
 type EndpointType = HTTPSessionEndpoint<Route>;
 
