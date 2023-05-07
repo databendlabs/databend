@@ -613,7 +613,7 @@ impl PhysicalPlanBuilder {
                                         name: agg.func_name.clone(),
                                         args: agg.args.iter().map(|s| {
                                             if let ScalarExpr::BoundColumnRef(col) = s {
-                                                input_schema.field_with_name(&col.column.index.to_string())?.data_type().clone()
+                                                Ok(input_schema.field_with_name(&col.column.index.to_string())?.data_type().clone())
                                             } else {
                                                 Err(ErrorCode::Internal(
                                                     "Aggregate function argument must be a BoundColumnRef".to_string()

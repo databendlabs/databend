@@ -17,7 +17,6 @@ use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::wrap_cast;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
