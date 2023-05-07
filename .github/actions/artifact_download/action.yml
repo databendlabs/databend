@@ -58,6 +58,19 @@ runs:
         name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
         path: ${{ steps.info.outputs.path }}/
 
+    - name: Make Executable
+      if: steps.info.outputs.src == 'github'
+      shell: bash
+      run: |
+        artifacts="${{ inputs.artifacts }}"
+        for artifact in ${artifacts//,/ }; do
+          if [[ "${artifact}" == "open-sharing" ]]; then
+            chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
+          else
+            chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
+          fi
+        done
+
     - name: Download artifact from s3
       if: steps.info.outputs.src == 's3'
       shell: bash
