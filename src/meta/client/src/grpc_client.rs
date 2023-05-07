@@ -51,6 +51,7 @@ use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::ConnectionError;
+use common_meta_types::GrpcConfig;
 use common_meta_types::InvalidArgument;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
@@ -530,7 +531,9 @@ impl MetaGrpcClient {
             let channel = self.make_channel(Some(addr)).await;
             match channel {
                 Ok(c) => {
-                    let mut client = MetaServiceClient::new(c.clone());
+                    let mut client = MetaServiceClient::new(c.clone())
+                        .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+                        .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
                     let new_token = Self::handshake(
                         &mut client,
@@ -542,9 +545,12 @@ impl MetaGrpcClient {
                     .await;
                     match new_token {
                         Ok(token) => {
-                            return Ok(MetaServiceClient::with_interceptor(c, AuthInterceptor {
-                                token,
-                            }));
+                            let client =
+                                MetaServiceClient::with_interceptor(c, AuthInterceptor { token })
+                                    .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+                                    .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+
+                            return Ok(client);
                         }
                         Err(handshake_err) => {
                             warn!("handshake error when make client: {:?}", handshake_err);
