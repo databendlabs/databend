@@ -19,12 +19,20 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
 use opendal::Operator;
+use storages_common_cache::CacheAccessor;
 use storages_common_cache::LoadParams;
+use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use tracing::Instrument;
 
 use crate::io::MetaReaders;
+
+#[derive(Clone)]
+pub struct SerializedSegment {
+    pub path: String,
+    pub segment: Arc<SegmentInfo>,
+}
 
 // Read segment related operations.
 pub struct SegmentsIO {
@@ -164,5 +172,49 @@ impl SegmentsIO {
             "fuse-req-segments-worker".to_owned(),
         )
         .await
+    }
+
+    #[async_backtrace::framed]
+    async fn write_segment(
+        dal: Operator,
+        segment: SerializedSegment,
+        put_cache: bool,
+    ) -> Result<()> {
+        dal.write(&segment.path, segment.segment.to_bytes()?)
+            .await?;
+        if put_cache {
+            if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
+                segment_cache.put(segment.path.clone(), segment.segment.clone());
+            }
+        }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn write_segments(
+        &self,
+        segments: Vec<SerializedSegment>,
+        put_cache: bool,
+    ) -> Result<()> {
+        let mut iter = segments.into_iter();
+        let tasks = std::iter::from_fn(move || {
+            iter.next().map(|segment| {
+                Self::write_segment(self.operator.clone(), segment.clone(), put_cache)
+                    .instrument(tracing::debug_span!("write_segment"))
+            })
+        });
+
+        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
+        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        execute_futures_in_parallel(
+            tasks,
+            threads_nums,
+            permit_nums,
+            "write-segments-worker".to_owned(),
+        )
+        .await?
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+        Ok(())
     }
 }
