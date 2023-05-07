@@ -202,7 +202,7 @@ impl Operator for Scan {
             (Some(precise_cardinality), Some(ref prewhere)) => {
                 let mut statistics = OpStatistics {
                     precise_cardinality: Some(precise_cardinality),
-                    column_stats: column_stats.clone(),
+                    column_stats,
                 };
 
                 // Derive cardinality
@@ -212,6 +212,7 @@ impl Operator for Scan {
                     // Compute selectivity for each conjunction
                     selectivity *= sb.compute_selectivity(pred, true)?;
                 }
+                column_stats = sb.input_stat.column_stats.clone();
                 (precise_cardinality as f64) * selectivity
             }
             (Some(precise_cardinality), None) => precise_cardinality as f64,
