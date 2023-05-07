@@ -621,7 +621,6 @@ impl PhysicalPlanBuilder {
                                             }
                                         }).collect::<Result<_>>()?,
                                         params: agg.params.clone(),
-                                        return_type: *agg.return_type.clone(),
                                     },
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
@@ -764,10 +763,15 @@ impl PhysicalPlanBuilder {
                                     sig: AggregateFunctionSignature {
                                         name: agg.func_name.clone(),
                                         args: agg.args.iter().map(|s| {
-                                            s.data_type()
+                                            if let ScalarExpr::BoundColumnRef(col) = s {
+                                                Ok(input_schema.field_with_name(&col.column.index.to_string())?.data_type().clone())
+                                            } else {
+                                                Err(ErrorCode::Internal(
+                                                    "Aggregate function argument must be a BoundColumnRef".to_string()
+                                                ))
+                                            }
                                         }).collect::<Result<_>>()?,
                                         params: agg.params.clone(),
-                                        return_type: *agg.return_type.clone(),
                                     },
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
@@ -864,7 +868,6 @@ impl PhysicalPlanBuilder {
                                 name: agg.func_name.clone(),
                                 args: agg.args.iter().map(|s| s.data_type()).collect::<Result<_>>()?,
                                 params: agg.params.clone(),
-                                return_type: *agg.return_type.clone(),
                             },
                             output_column: w.index,
                             args: agg.args.iter().map(|arg| {
