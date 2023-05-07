@@ -139,17 +139,15 @@ where
     Ok(seq_values)
 }
 
-/// It returns a vec of structured key(such as DatabaseNameIdent), such as:
+/// Return a vec of structured key(such as `DatabaseNameIdent`), such as:
 /// all the `db_name` with prefix `__fd_database/<tenant>/`.
 pub async fn list_keys<K: kvapi::Key>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     key: &K,
-) -> Result<Vec<K>, KVAppError> {
+) -> Result<Vec<K>, MetaError> {
     let res = kv_api.prefix_list_kv(&key.to_string_key()).await?;
 
-    let n = res.len();
-
-    let mut structured_keys = Vec::with_capacity(n);
+    let mut structured_keys = Vec::with_capacity(res.len());
 
     for (str_key, _seq_id) in res.iter() {
         let struct_key = K::from_str_key(str_key).map_err(|e| {
