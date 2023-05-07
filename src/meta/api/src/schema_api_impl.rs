@@ -2321,38 +2321,53 @@ async fn remove_table_copied_files(
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
 ) -> Result<usize, KVAppError> {
-    // List files by tenant, db_name, table_name
-    let dbid_tbname_idlist = TableCopiedFileNameIdent {
-        table_id,
-        // Using a empty file to to list all
-        file: "".to_string(),
-    };
-
     let mut n = 0;
+    let chunk_size = DEFAULT_MGET_SIZE;
 
-    // `list_keys` list all the TableCopiedFileNameIdent of this table.
+    // `list_keys` list all the `TableCopiedFileNameIdent` of the table.
     // But if a upsert_table_copied_file_info run concurrently, there is chance that
     // `list_keys` may lack of some new inserted TableCopiedFileNameIdent.
     // But since TableCopiedFileNameIdent has expire time, they can be purged by expire time.
-    let files = list_keys(kv_api, &dbid_tbname_idlist).await?;
+    let copied_files = list_table_copied_files(kv_api, table_id).await?;
 
-    let keys: Vec<String> = files.iter().map(|file| file.to_string_key()).collect();
-    let mut files_iter = files.into_iter();
-    for c in keys.chunks(DEFAULT_MGET_SIZE) {
-        let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> = mget_pb_values(kv_api, c).await?;
+    for chunk in copied_files.chunks(chunk_size) {
+        // Load the `seq` of every copied file
+        let seqs = {
+            let str_keys: Vec<_> = chunk.iter().map(|f| f.to_string_key()).collect();
 
-        for (file_seq, _opt) in seq_infos {
-            let file = files_iter.next().unwrap();
-            if file_seq != 0 {
-                condition.push(txn_cond_seq(&file, Eq, file_seq));
-                if_then.push(txn_op_del(&file));
+            let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> =
+                mget_pb_values(kv_api, &str_keys).await?;
 
-                n += 1;
+            seq_infos.into_iter().map(|(seq, _)| seq)
+        };
+
+        for (copied_seq, copied_ident) in seqs.zip(chunk) {
+            if copied_seq == 0 {
+                continue;
             }
+
+            condition.push(txn_cond_seq(copied_ident, Eq, copied_seq));
+            if_then.push(txn_op_del(copied_ident));
+            n += 1;
         }
     }
 
     Ok(n)
+}
+
+/// List the copied file identies belonging to a table.
+async fn list_table_copied_files(
+    kv_api: &impl kvapi::KVApi<Error = MetaError>,
+    table_id: u64,
+) -> Result<Vec<TableCopiedFileNameIdent>, MetaError> {
+    let copied_file_ident = TableCopiedFileNameIdent {
+        table_id,
+        file: "".to_string(),
+    };
+
+    let copied_files = list_keys(kv_api, &copied_file_ident).await?;
+
+    Ok(copied_files)
 }
 
 async fn gc_dropped_table(
