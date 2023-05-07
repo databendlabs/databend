@@ -117,6 +117,7 @@ use tracing::debug;
 use tracing::error;
 use ConditionResult::Eq;
 
+use crate::assert_table_exist;
 use crate::convert_share_meta_to_spec;
 use crate::db_has_to_exist;
 use crate::deserialize_struct;
@@ -135,16 +136,17 @@ use crate::remove_db_from_share;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
-use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
+use crate::util::get_table_by_id_or_err;
 use crate::util::get_table_names_by_ids;
 use crate::util::list_tables_from_share_db;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
 use crate::util::remove_table_from_share;
+use crate::util::txn_trials;
 use crate::IdGenerator;
 use crate::SchemaApi;
 use crate::DEFAULT_MGET_SIZE;
@@ -1230,7 +1232,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     return Ok(RenameTableReply { table_id: 0 });
                 }
             } else {
-                table_has_to_exist(
+                assert_table_exist(
                     tb_id_seq,
                     tenant_dbname_tbname,
                     "rename_table: src (db,table)",
@@ -1429,7 +1431,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 };
 
                 let (tb_id_seq, table_id) = get_u64_value(self, &dbid_tbname).await?;
-                table_has_to_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
+                assert_table_exist(tb_id_seq, tenant_dbname_tbname, "get_table")?;
 
                 table_id
             }
@@ -1439,7 +1441,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
         let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
 
-        table_has_to_exist(
+        assert_table_exist(
             tb_meta_seq,
             tenant_dbname_tbname,
             format!("get_table meta by: {}", tenant_dbname_tbname),
@@ -1981,59 +1983,50 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         &self,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply, KVAppError> {
-        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+        let ctx = &func_name!();
+        debug!(req = debug(&req), "SchemaApi: {}", ctx);
 
-        let mut retry = 0;
-        let table_id = req.table_id;
+        let table_id = TableId {
+            table_id: req.table_id,
+        };
 
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_trials(ctx);
+        loop {
+            trials.next().unwrap()?;
 
-            let tbid = TableId { table_id };
+            let (tb_meta_seq, tb_meta) = get_table_by_id_or_err(self, &table_id, ctx).await?;
 
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-
-            if tb_meta_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, ""),
-                )));
-            }
-
-            debug!(
-                ident = display(&tbid),
-                table_meta = debug(&tb_meta),
-                "truncate_table"
-            );
-
-            let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
-            let mut if_then = vec![];
-            remove_table_copied_files(self, table_id, &mut condition, &mut if_then).await?;
-
-            // if_then empty means that there is no copied files in the table.
-            if if_then.is_empty() {
-                return Ok(TruncateTableReply {});
-            }
-
-            // update table meta to make sequence update.
-            if_then.push(txn_op_put(&tbid, serialize_struct(&tb_meta.unwrap())?)); // tb_id -> tb_meta
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
+            let mut txn_req = TxnRequest {
+                condition: vec![txn_cond_seq(&table_id, Eq, tb_meta_seq)],
+                if_then: vec![],
                 else_then: vec![],
             };
 
+            let to_be_removed = remove_table_copied_files(
+                self,
+                table_id.table_id,
+                &mut txn_req.condition,
+                &mut txn_req.if_then,
+            )
+            .await?;
+
+            if to_be_removed == 0 {
+                return Ok(TruncateTableReply {});
+            }
+
+            // update to increase table meta seq.
+            txn_req
+                .if_then
+                .push(txn_op_put(&table_id, serialize_struct(&tb_meta)?)); // tb_id -> tb_meta
+
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
-            debug!(id = debug(&tbid), succ = display(succ), "truncate_table");
+            debug!(id = debug(&table_id), succ = display(succ), ctx);
 
             if succ {
                 return Ok(TruncateTableReply {});
             }
         }
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("upsert_table_copied_file_info", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
@@ -2319,12 +2312,15 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     }
 }
 
+/// remove copied files for a table.
+///
+/// Returns number of files that are going to be removed.
 async fn remove_table_copied_files(
     kv_api: &impl kvapi::KVApi<Error = MetaError>,
     table_id: u64,
     condition: &mut Vec<TxnCondition>,
     if_then: &mut Vec<TxnOp>,
-) -> Result<(), KVAppError> {
+) -> Result<usize, KVAppError> {
     // List files by tenant, db_name, table_name
     let dbid_tbname_idlist = TableCopiedFileNameIdent {
         table_id,
@@ -2332,25 +2328,31 @@ async fn remove_table_copied_files(
         file: "".to_string(),
     };
 
+    let mut n = 0;
+
     // `list_keys` list all the TableCopiedFileNameIdent of this table.
     // But if a upsert_table_copied_file_info run concurrently, there is chance that
     // `list_keys` may lack of some new inserted TableCopiedFileNameIdent.
     // But since TableCopiedFileNameIdent has expire time, they can be purged by expire time.
     let files = list_keys(kv_api, &dbid_tbname_idlist).await?;
+
     let keys: Vec<String> = files.iter().map(|file| file.to_string_key()).collect();
     let mut files_iter = files.into_iter();
     for c in keys.chunks(DEFAULT_MGET_SIZE) {
         let seq_infos: Vec<(u64, Option<TableCopiedFileInfo>)> = mget_pb_values(kv_api, c).await?;
+
         for (file_seq, _opt) in seq_infos {
             let file = files_iter.next().unwrap();
             if file_seq != 0 {
                 condition.push(txn_cond_seq(&file, Eq, file_seq));
                 if_then.push(txn_op_del(&file));
+
+                n += 1;
             }
         }
     }
 
-    Ok(())
+    Ok(n)
 }
 
 async fn gc_dropped_table(
