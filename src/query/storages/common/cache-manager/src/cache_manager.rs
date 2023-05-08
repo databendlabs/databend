@@ -100,7 +100,7 @@ impl CacheManager {
             let table_statistic_cache =
                 Self::new_item_cache(config.table_meta_statistic_count, "table_statistics");
             let segment_info_cache = Self::new_in_memory_cache(
-                config.table_meta_segment_count,
+                config.table_meta_segment_size,
                 CompactSegmentInfoMeter {},
                 "segment_info",
             );

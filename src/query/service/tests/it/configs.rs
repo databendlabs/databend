@@ -134,7 +134,7 @@ fn test_env_config_s3() -> Result<()> {
 
             assert!(configured.cache.enable_table_meta_cache);
             assert!(configured.cache.enable_table_bloom_index_cache);
-            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(1073741824, configured.cache.table_meta_segment_size);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
@@ -254,7 +254,7 @@ fn test_env_config_fs() -> Result<()> {
             assert!(configured.cache.enable_table_meta_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
-            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(1073741824, configured.cache.table_meta_segment_size);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
@@ -379,7 +379,7 @@ fn test_env_config_gcs() -> Result<()> {
             assert!(configured.cache.enable_table_bloom_index_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
-            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(1073741824, configured.cache.table_meta_segment_size);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
@@ -515,7 +515,7 @@ fn test_env_config_oss() -> Result<()> {
             assert!(configured.cache.enable_table_meta_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
-            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(1073741824, configured.cache.table_meta_segment_size);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
@@ -653,7 +653,7 @@ fn test_env_config_webhdfs() -> Result<()> {
             assert!(configured.cache.enable_table_meta_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
-            assert_eq!(10240, configured.cache.table_meta_segment_count);
+            assert_eq!(1073741824, configured.cache.table_meta_segment_size);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
@@ -973,8 +973,8 @@ fn test_env_cache_config_and_defaults() -> Result<()> {
             let default = CacheConfig::default();
             assert!(configured.cache.enable_table_meta_cache);
             assert_eq!(
-                default.table_meta_segment_count,
-                configured.cache.table_meta_segment_count
+                default.table_meta_segment_size,
+                configured.cache.table_meta_segment_size
             );
             assert_eq!(
                 default.table_meta_snapshot_count,
