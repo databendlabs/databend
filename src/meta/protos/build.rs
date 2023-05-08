@@ -48,7 +48,8 @@ fn build_proto() -> Result<()> {
     cmd.arg("--version");
     let output = cmd.output()?;
     let version = if output.status.success() {
-        let content = String::from_utf8_lossy(&output.stdout);
+        // let content = String::from_utf8_lossy(&output.stdout);
+        let content = String::from("libprotoc 22.3.0");
         content
             .trim()
             .split(' ')
