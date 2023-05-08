@@ -28,6 +28,7 @@ use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -52,7 +53,7 @@ type MutationMap = HashMap<usize, (Vec<(usize, Arc<BlockMeta>)>, Vec<usize>)>;
 struct SerializedData {
     data: Vec<u8>,
     location: String,
-    segment: Arc<SegmentInfo>,
+    segment: CompactSegmentInfo,
 }
 
 enum State {
@@ -150,17 +151,14 @@ impl MutationTransform {
     }
 
     #[async_backtrace::framed]
-    async fn write_segments(&self, segments: Vec<SerializedData>) -> Result<()> {
-        let mut tasks = Vec::with_capacity(segments.len());
-        for segment in segments {
+    async fn write_segments(&self, serialized_data: Vec<SerializedData>) -> Result<()> {
+        let mut tasks = Vec::with_capacity(serialized_data.len());
+        for serialized in serialized_data {
             let op = self.dal.clone();
             tasks.push(async move {
-                op.write(&segment.location, segment.data).await?;
+                op.write(&serialized.location, serialized.data).await?;
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    segment_cache.put(
-                        segment.location.clone(),
-                        Arc::new(segment.segment.as_ref().try_into()?),
-                    );
+                    segment_cache.put(serialized.location.clone(), Arc::new(serialized.segment));
                 }
                 Ok::<_, ErrorCode>(())
             });
@@ -297,10 +295,11 @@ impl Processor for MutationTransform {
                             self.abort_operation.add_segment(location.clone());
                             segments_editor
                                 .insert(seg_idx, (location.clone(), SegmentInfo::VERSION));
+                            let new_segment_raw_bytes = new_segment.to_bytes()?;
                             serialized_data.push(SerializedData {
-                                data: new_segment.to_bytes()?,
                                 location,
-                                segment: Arc::new(new_segment),
+                                segment: CompactSegmentInfo::from_slice(&new_segment_raw_bytes)?,
+                                data: new_segment_raw_bytes,
                             });
                         }
                     } else {
