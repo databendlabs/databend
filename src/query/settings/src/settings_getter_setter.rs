@@ -131,7 +131,6 @@ impl Settings {
             Err(Error::new(ErrorKind::InvalidInput, "Value must be greater than 0"))
         }
     }
-    }
 
     pub fn get_storage_io_min_bytes_for_seek(&self) -> Result<u64> {
         self.try_get_u64("storage_io_min_bytes_for_seek")
