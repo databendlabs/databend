@@ -16,7 +16,6 @@ test = false
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-exception = { path = "../../common/exception" }
-common-license = { path = "../../common/license" }
 common-storages-fuse = { path = "../storages/fuse" }
 
 async-backtrace = { workspace = true }

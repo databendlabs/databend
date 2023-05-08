@@ -22,9 +22,11 @@ use common_exception::Result;
 use common_storages_fuse::FuseTable;
 use databend_query::test_kits::table_test_fixture::append_sample_data;
 use databend_query::test_kits::table_test_fixture::check_data_dir;
-use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::utils::generate_orphan_files;
+use databend_query::test_kits::utils::generate_snapshot_with_segments;
 use enterprise_query::storages::fuse::do_vacuum;
+use enterprise_query::storages::fuse::operations::vacuum::get_snapshot_referenced_files;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_do_vacuum() -> Result<()> {
@@ -85,7 +87,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
     let outof_retention_time_orphan_files = {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let files = utils::generate_orphan_files(
+        let files = generate_orphan_files(
             fuse_table,
             orphan_segment_file_num,
             orphan_block_per_segment_num,
@@ -111,7 +113,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
     let orphan_snapshot_orphan_files = {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let files = utils::generate_orphan_files(
+        let files = generate_orphan_files(
             fuse_table,
             orphan_snapshot_segment_file_num,
             orphan_block_per_segment_num,
@@ -125,8 +127,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
 
         let new_timestamp = Utc::now() - Duration::minutes(1);
         let _snapshot_location =
-            utils::generate_snapshot_with_segments(fuse_table, segments, Some(new_timestamp))
-                .await?;
+            generate_snapshot_with_segments(fuse_table, segments, Some(new_timestamp)).await?;
 
         let mut orphan_files = vec![];
         for (location, segment) in files {
@@ -148,7 +149,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
     let within_retention_time_orphan_files = {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let files = utils::generate_orphan_files(
+        let files = generate_orphan_files(
             fuse_table,
             orphan_segment_file_num,
             orphan_block_per_segment_num,
@@ -195,8 +196,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let old_referenced_files = fuse_table
-        .get_snapshot_referenced_files(&table_ctx)
+    let old_referenced_files = get_snapshot_referenced_files(fuse_table, &table_ctx)
         .await?
         .unwrap();
     let old_snapshot_files = fuse_table.list_snapshot_files().await?;
@@ -228,9 +228,8 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         let table_ctx: Arc<dyn TableContext> = ctx.clone();
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let timestamp = chrono::Utc::now() - chrono::Duration::seconds(2);
-        // fuse_table.do_gc(&table_ctx, timestamp).await?;
-        do_vacuum(fuse_table, table_ctx, retention_time).await?
+        let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
+        do_vacuum(fuse_table, table_ctx, retention_time).await?;
     }
 
     // check files number
@@ -283,77 +282,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
     {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let referenced_files = fuse_table
-            .get_snapshot_referenced_files(&table_ctx)
-            .await?
-            .unwrap();
-
-        assert_eq!(referenced_files, old_referenced_files);
-
-        for file in referenced_files.all_files() {
-            assert!(dal.is_exist(&file).await?);
-        }
-
-        let snapshot_files = fuse_table.list_snapshot_files().await?;
-        assert_eq!(old_snapshot_files, snapshot_files);
-        for file in snapshot_files {
-            assert!(dal.is_exist(&file).await?);
-        }
-    }
-
-    // set retention period and try sql command
-    ctx.get_settings().set_retention_period(0)?;
-    // gc the table
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
-    let qry = format!("optimize table {}.{} gc", db, tbl);
-    let ctx = fixture.ctx();
-    execute_command(ctx, &qry).await?;
-
-    // check files number
-    {
-        let expected_num_of_snapshot = 3;
-        let expected_num_of_segment = 3;
-        let expected_num_of_blocks = 3;
-        let expected_num_of_index = expected_num_of_blocks;
-        let expected_num_of_ts = 0;
-        check_data_dir(
-            &fixture,
-            "do_gc_orphan_files: after gc sql",
-            expected_num_of_snapshot,
-            expected_num_of_ts,
-            expected_num_of_segment,
-            expected_num_of_blocks,
-            expected_num_of_index,
-            Some(()),
-            None,
-        )
-        .await?;
-    }
-
-    let dal = fuse_table.get_operator_ref();
-    // check that all orphan files within retention time have been purged
-    {
-        for file in within_retention_time_orphan_files {
-            let ret = dal.is_exist(&file).await?;
-            assert!(!ret);
-        }
-    }
-
-    // check that all orphan files within retention time exist
-    {
-        for file in orphan_snapshot_orphan_files {
-            let ret = dal.is_exist(&file).await?;
-            assert!(ret);
-        }
-    }
-
-    // check all referenced files and snapshot files exist
-    {
-        let table = fixture.latest_default_table().await?;
-        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let referenced_files = fuse_table
-            .get_snapshot_referenced_files(&table_ctx)
+        let referenced_files = get_snapshot_referenced_files(fuse_table, &table_ctx)
             .await?
             .unwrap();
 

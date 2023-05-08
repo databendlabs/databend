@@ -70,6 +70,19 @@ pub async fn generate_snapshot_with_segments(
     Ok(new_snapshot_location)
 }
 
+pub async fn generate_orphan_files(
+    fuse_table: &FuseTable,
+    orphan_segment_number: usize,
+    orphan_block_number_per_segment: usize,
+) -> Result<Vec<(Location, SegmentInfoV2)>> {
+    generate_segments_v2(
+        fuse_table,
+        orphan_segment_number,
+        orphan_block_number_per_segment,
+    )
+    .await
+}
+
 pub async fn generate_segments_v2(
     fuse_table: &FuseTable,
     number_of_segments: usize,

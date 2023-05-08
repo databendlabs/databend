@@ -3199,6 +3199,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-grpc",
+ "common-license",
  "common-meta-api",
  "common-meta-app",
  "common-meta-client",
@@ -5827,7 +5828,6 @@ dependencies = [
  "common-base",
  "common-catalog",
  "common-exception",
- "common-license",
  "common-storages-fuse",
 ]
 

@@ -19,11 +19,11 @@ common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-license = { path = "../../common/license" }
-interface-manager = { path = "../interface-manager" }
 common-storages-fuse = { path = "../storages/fuse" }
+databend-query = { path = "../service" }
+interface-manager = { path = "../interface-manager" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
-databend-query = { path = "../service" }
 
 async-trait = "0.1.57"
 chrono = { workspace = true }
