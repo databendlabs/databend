@@ -72,7 +72,7 @@ impl FuseTable {
             let segment_info = segment_reader.read(&params).await?;
             let mut new_block_metas = Vec::with_capacity(segment_info.blocks.len());
             let segment_writer =
-                SegmentWriter::new(&self.get_operator_ref(), &self.meta_location_generator());
+                SegmentWriter::new(self.get_operator_ref(), self.meta_location_generator());
             for block_meta in &segment_info.blocks {
                 let block_reader =
                     self.create_block_reader(projection.clone(), false, ctx.clone())?;
