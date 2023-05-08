@@ -342,6 +342,11 @@ impl Operator for Join {
             (Distribution::Random, _) => Ok(PhysicalProperty {
                 distribution: build_prop.distribution.clone(),
             }),
+            // If both sides are broadcast, which means broadcast join is enabled, to make sure the current join is broadcast, should return Random.
+            // Then required proper is broadcast, and the join will be broadcast.
+            (Distribution::Broadcast, Distribution::Broadcast) => Ok(PhysicalProperty {
+                distribution: Distribution::Random,
+            }),
             // Otherwise pass through probe side.
             _ => Ok(PhysicalProperty {
                 distribution: probe_prop.distribution.clone(),
@@ -423,8 +428,6 @@ impl Operator for Join {
                     | JoinType::RightSemi
                     | JoinType::RightMark
             )
-            && probe_physical_prop.distribution != Distribution::Broadcast
-            && build_physical_prop.distribution != Distribution::Broadcast
         {
             required.distribution = Distribution::Broadcast;
         } else if child_index == 0 {
