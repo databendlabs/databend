@@ -272,7 +272,7 @@ pub trait FieldDecoderRowBased: FieldDecoder {
                 column.commit_row();
             }
             Err(_) => {
-                if self.common_settings().disable_json_check {
+                if self.common_settings().disable_variant_check {
                     column.put_slice(&buf);
                     column.commit_row();
                 } else {

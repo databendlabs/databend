@@ -77,7 +77,7 @@ impl FastFieldDecoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
-                disable_json_check: false,
+                disable_variant_check: false,
             },
         }
     }
@@ -414,7 +414,7 @@ impl FastFieldDecoderValues {
                 column.commit_row();
             }
             Err(_) => {
-                if self.common_settings().disable_json_check {
+                if self.common_settings().disable_variant_check {
                     column.put_slice(&buf);
                     column.commit_row();
                 } else {

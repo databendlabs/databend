@@ -164,7 +164,8 @@ impl InputContext {
         on_error_map: Arc<DashMap<String, HashMap<u16, InputError>>>,
     ) -> Result<Self> {
         let mut file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings)?;
-        file_format_options_ext.disable_json_check = stage_info.copy_options.disable_json_check;
+        file_format_options_ext.disable_variant_check =
+            stage_info.copy_options.disable_variant_check;
         let on_error_mode = stage_info.copy_options.on_error.clone();
         let plan = Box::new(CopyIntoPlan { stage_info });
         let file_format_params = plan.stage_info.file_format_params.clone();

@@ -67,7 +67,7 @@ fn test_decode_v30_user_stage() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()

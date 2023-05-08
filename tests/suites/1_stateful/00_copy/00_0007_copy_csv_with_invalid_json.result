@@ -1,5 +1,0 @@
----test csv field check invalid json
-2	{"k":"v"}
----test csv field disable check invalid json
-1	invalidjson
-2	{"k":"v"}

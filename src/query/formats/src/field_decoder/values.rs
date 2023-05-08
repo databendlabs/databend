@@ -54,7 +54,7 @@ impl FieldDecoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
-                disable_json_check: options_ext.disable_json_check,
+                disable_variant_check: options_ext.disable_variant_check,
             },
         }
     }

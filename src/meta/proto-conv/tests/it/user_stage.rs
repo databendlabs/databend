@@ -94,7 +94,7 @@ fn test_user_stage_webhdfs_v30() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -138,7 +138,7 @@ fn test_user_stage_fs_v22() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -181,7 +181,7 @@ fn test_user_stage_fs_v21() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -223,7 +223,7 @@ fn test_user_stage_fs_v20() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -266,7 +266,7 @@ fn test_user_stage_fs_v16() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -321,7 +321,7 @@ fn test_user_stage_s3_v16() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -370,7 +370,7 @@ fn test_user_stage_gcs_v16() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -422,7 +422,7 @@ fn test_user_stage_oss_v16() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -476,7 +476,7 @@ fn test_user_stage_oss_v13() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -530,7 +530,7 @@ fn test_user_stage_s3_v11() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -582,7 +582,7 @@ fn test_user_stage_s3_v8() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -625,7 +625,7 @@ fn test_user_stage_fs_v6() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -678,7 +678,7 @@ fn test_user_stage_s3_v6() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -727,7 +727,7 @@ fn test_user_stage_gcs_v6() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -769,7 +769,7 @@ fn test_user_stage_fs_v4() -> anyhow::Result<()> {
             purge: false,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -822,7 +822,7 @@ fn test_user_stage_s3_v4() -> anyhow::Result<()> {
             purge: false,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -870,7 +870,7 @@ fn test_user_stage_gcs_v4() -> anyhow::Result<()> {
             purge: false,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -920,7 +920,7 @@ fn test_user_stage_s3_v1() -> anyhow::Result<()> {
             purge: false,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -965,7 +965,7 @@ fn test_internal_stage_v17() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -1009,7 +1009,7 @@ fn test_user_stage_v19() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()

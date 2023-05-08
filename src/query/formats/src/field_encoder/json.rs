@@ -42,7 +42,7 @@ impl FieldEncoderJSON {
                 inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
-                disable_json_check: options.disable_json_check,
+                disable_variant_check: options.disable_variant_check,
             },
             quote_denormals: false,
             escape_forward_slashes: true,

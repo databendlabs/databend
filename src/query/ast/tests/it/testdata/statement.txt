@@ -7696,7 +7696,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7733,7 +7733,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7752,7 +7752,7 @@ COPY INTO mytable
                 max_files=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7795,7 +7795,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7816,7 +7816,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7861,7 +7861,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7882,7 +7882,7 @@ COPY INTO mytable
                 );
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7927,7 +7927,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7937,7 +7937,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7975,7 +7975,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7985,7 +7985,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8023,7 +8023,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8041,7 +8041,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8078,7 +8078,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8096,7 +8096,7 @@ COPY INTO 's3://mybucket/data.csv'
                 size_limit=10;
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8139,7 +8139,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8157,7 +8157,7 @@ COPY INTO @my_stage
                 size_limit=10;
 ---------- Output ---------
 COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8194,7 +8194,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8216,7 +8216,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key' aws_secret_key='secret_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8262,7 +8262,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8280,7 +8280,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8317,7 +8317,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8335,7 +8335,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8372,7 +8372,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8390,7 +8390,7 @@ COPY INTO mytable
                 force=true;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true DISABLE_JSON_CHECK = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8427,7 +8427,7 @@ Copy(
         single: false,
         purge: false,
         force: true,
-        disable_json_check: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8443,10 +8443,10 @@ COPY INTO mytable
                     skip_header = 1
                 )
                 size_limit=10
-                disable_json_check=true;
+                disable_variant_check=true;
 ---------- Output ---------
 COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_JSON_CHECK = true ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8489,7 +8489,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
-        disable_json_check: true,
+        disable_variant_check: true,
         on_error: "abort",
     },
 )

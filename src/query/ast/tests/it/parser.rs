@@ -334,7 +334,7 @@ fn test_statement() {
                     skip_header = 1
                 )
                 size_limit=10
-                disable_json_check=true;"#,
+                disable_variant_check=true;"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'
