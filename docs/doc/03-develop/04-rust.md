@@ -1,8 +1,6 @@
 ---
 title: Developing with Databend using Rust
 sidebar_label: Rust
-description:
-   Develop with Databend using Rust
 ---
 
 Databend offers a driver (databend-driver) written in Rust, which facilitates the development of applications using the Rust programming language and establishes connectivity with Databend.
@@ -13,7 +11,7 @@ In the following tutorial, you'll learn how to utilize the driver `databend-driv
 
 ## Tutorial: Developing with Databend using Rust
 
-Before you start, make sure you have successfully installed Databend. For how to install Databend, see [How to deploy Databend](/doc/deploy).
+Before you start, make sure you have successfully installed a local Databend. For detailed instructions, see [Local and Docker Deployments](../10-deploy/05-deploying-local.md).
 
 ### Step 1. Prepare a SQL User Account
 
