@@ -3738,6 +3738,7 @@ dependencies = [
  "common-exception",
  "common-license",
  "common-storages-fuse",
+ "databend-query",
  "interface-manager",
  "jwt-simple",
  "storages-common-cache",

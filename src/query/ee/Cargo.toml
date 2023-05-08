@@ -23,6 +23,7 @@ interface-manager = { path = "../interface-manager" }
 common-storages-fuse = { path = "../storages/fuse" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
+databend-query = { path = "../service" }
 
 async-trait = "0.1.57"
 chrono = { workspace = true }
