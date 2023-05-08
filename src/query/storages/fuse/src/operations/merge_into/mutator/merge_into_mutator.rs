@@ -171,8 +171,8 @@ impl MergeIntoOperationAggregator {
                 put_cache: true,
             };
 
-            let segment_info = self.segment_reader.read(&load_param).await?;
-            let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
+            let compact_segment_info = self.segment_reader.read(&load_param).await?;
+            let segment_info: SegmentInfo = compact_segment_info.as_ref().try_into()?;
 
             for (block_index, keys) in block_deletion {
                 let block_meta = &segment_info.blocks[*block_index];

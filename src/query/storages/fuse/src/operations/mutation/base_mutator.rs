@@ -178,7 +178,7 @@ impl BaseMutator {
                 ver: *ver,
                 put_cache: true,
             };
-            let seg: SegmentInfo = segment_reader.read(&params).await?.as_ref().try_into()?;
+            let seg = segment_reader.read(&params).await?;
             new_segment_summaries.push(seg.summary.clone())
         }
 
