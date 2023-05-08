@@ -43,6 +43,7 @@ impl FieldEncoderCSV {
                 nan_bytes: params.nan_display.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
+                disable_variant_check: options_ext.disable_variant_check,
             },
             quote_char: params.quote.as_bytes()[0],
         }

@@ -51,6 +51,7 @@ pub struct CopyStmt {
     pub single: bool,
     pub purge: bool,
     pub force: bool,
+    pub disable_variant_check: bool,
     pub on_error: String,
 }
 
@@ -68,6 +69,7 @@ impl CopyStmt {
             CopyOption::Single(v) => self.single = v,
             CopyOption::Purge(v) => self.purge = v,
             CopyOption::Force(v) => self.force = v,
+            CopyOption::DisableVariantCheck(v) => self.disable_variant_check = v,
             CopyOption::OnError(v) => self.on_error = v,
         }
     }
@@ -120,6 +122,7 @@ impl Display for CopyStmt {
         write!(f, " SINGLE = {}", self.single)?;
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
+        write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
         write!(f, " ON_ERROR = '{}'", self.on_error)?;
 
         Ok(())
@@ -392,5 +395,6 @@ pub enum CopyOption {
     Single(bool),
     Purge(bool),
     Force(bool),
+    DisableVariantCheck(bool),
     OnError(String),
 }
