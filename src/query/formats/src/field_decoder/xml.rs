@@ -54,6 +54,7 @@ impl FieldDecoderXML {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options_ext.timezone,
+                disable_variant_check: options_ext.disable_variant_check,
             },
         }
     }
