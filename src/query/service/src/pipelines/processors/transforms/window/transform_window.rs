@@ -489,29 +489,31 @@ impl<T: Number> TransformWindow<T> {
 
     #[inline]
     fn merge_result_of_current_row(&mut self) -> Result<()> {
-        let window_block = &mut self.blocks[self.current_row.block - self.first_block];
-        let builder = &mut window_block.builder;
-
         match &self.func {
             WindowFunctionImpl::Aggregate(agg) => {
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 agg.merge_result(builder)?;
             }
             WindowFunctionImpl::RowNumber => {
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(ScalarRef::Number(NumberScalar::UInt64(
                     self.current_row_in_partition as u64,
                 )));
             }
             WindowFunctionImpl::Rank => {
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(ScalarRef::Number(NumberScalar::UInt64(
                     self.current_rank as u64,
                 )));
             }
             WindowFunctionImpl::DenseRank => {
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(ScalarRef::Number(NumberScalar::UInt64(
                     self.current_dense_rank as u64,
                 )));
             }
             WindowFunctionImpl::PercentRank => {
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 let percent = if self.partition_size <= 1 {
                     0_f64
                 } else {
@@ -520,7 +522,6 @@ impl<T: Number> TransformWindow<T> {
                 builder.push(ScalarRef::Number(NumberScalar::Float64(percent.into())));
             }
             WindowFunctionImpl::Lag(lag) => {
-                dbg!(&lag.offset);
                 let default_value = match lag.default.clone() {
                     LagLeadDefault::Null => Scalar::Null,
                     LagLeadDefault::Literal(l) => l.clone(),
@@ -537,18 +538,26 @@ impl<T: Number> TransformWindow<T> {
                     }
                 };
 
-                let col = window_block
-                    .block
-                    .get_by_offset(lag.arg)
-                    .value
-                    .as_column()
-                    .unwrap();
-                let result = col.index(self.current_row.row).unwrap();
+                dbg!(self.frame_started);
+                dbg!(&lag.offset);
                 dbg!(&self.frame_start);
-                dbg!(&result);
-
+                dbg!(&self.current_row);
+                let lag_row =
+                    if self.current_row.block == 0 && self.current_row.row < lag.offset as usize {
+                        default_value
+                    } else {
+                        let block = self
+                            .blocks
+                            .get(self.frame_start.block - self.first_block)
+                            .cloned()
+                            .unwrap()
+                            .block;
+                        let col = block.get_by_offset(lag.arg).value.as_column().unwrap();
+                        col.index(self.current_row.row).unwrap().to_owned()
+                    };
                 // let lag_row = ScalarRef::Number(NumberScalar::Int32(88));
-                let lag_row = default_value;
+
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(lag_row.as_ref());
             }
         };
