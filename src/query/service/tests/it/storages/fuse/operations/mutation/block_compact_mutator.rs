@@ -32,6 +32,7 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::test_kits::block_writer::BlockWriter;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::expects_ok;
@@ -43,7 +44,6 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
-use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
 
 #[tokio::test(flavor = "multi_thread")]

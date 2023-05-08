@@ -47,6 +47,7 @@ use common_meta_types::ConnectionError;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardRPCError;
 use common_meta_types::ForwardToLeader;
+use common_meta_types::GrpcConfig;
 use common_meta_types::InvalidReply;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
@@ -287,7 +288,9 @@ impl MetaNode {
         let mut rx = mn.running_rx.clone();
 
         let meta_srv_impl = RaftServiceImpl::create(mn.clone());
-        let meta_srv = RaftServiceServer::new(meta_srv_impl);
+        let meta_srv = RaftServiceServer::new(meta_srv_impl)
+            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
         let ipv4_addr = host.parse::<Ipv4Addr>();
         let addr = match ipv4_addr {
@@ -1127,7 +1130,7 @@ impl MetaNode {
             .await
             .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
 
-        let mut client = RaftServiceClient::connect(format!("http://{}", endpoint))
+        let client = RaftServiceClient::connect(format!("http://{}", endpoint))
             .await
             .map_err(|e| {
                 MetaNetworkError::ConnectionError(ConnectionError::new(
@@ -1135,6 +1138,10 @@ impl MetaNode {
                     format!("address: {}", endpoint),
                 ))
             })?;
+
+        let mut client = client
+            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
         let resp = client.forward(req).await.map_err(|e| {
             MetaNetworkError::from(e)

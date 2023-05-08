@@ -679,7 +679,9 @@ mod tests {
                     }),
                 ],
             });
-            let filter = filter.as_expr_with_col_name()?;
+            let filter = filter
+                .as_expr()?
+                .project_column_ref(|col| col.column_name.clone());
             let pruner =
                 RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
             assert!(!pruner.should_keep(&row_group_stats[0]));
@@ -710,7 +712,9 @@ mod tests {
                     }),
                 ],
             });
-            let filter = filter.as_expr_with_col_name()?;
+            let filter = filter
+                .as_expr()?
+                .project_column_ref(|col| col.column_name.clone());
             let pruner =
                 RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
             assert!(!pruner.should_keep(&row_group_stats[0]));
@@ -741,7 +745,9 @@ mod tests {
                     }),
                 ],
             });
-            let filter = filter.as_expr_with_col_name()?;
+            let filter = filter
+                .as_expr()?
+                .project_column_ref(|col| col.column_name.clone());
             let pruner =
                 RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
             assert!(pruner.should_keep(&row_group_stats[0]));
@@ -782,7 +788,9 @@ mod tests {
                     }),
                 ],
             });
-            let filter = filter.as_expr_with_col_name()?;
+            let filter = filter
+                .as_expr()?
+                .project_column_ref(|col| col.column_name.clone());
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
@@ -814,7 +822,9 @@ mod tests {
                     }),
                 ],
             });
-            let filter = filter.as_expr_with_col_name()?;
+            let filter = filter
+                .as_expr()?
+                .project_column_ref(|col| col.column_name.clone());
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
@@ -846,7 +856,9 @@ mod tests {
                     }),
                 ],
             });
-            let filter = filter.as_expr_with_col_name()?;
+            let filter = filter
+                .as_expr()?
+                .project_column_ref(|col| col.column_name.clone());
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 
@@ -878,7 +890,9 @@ mod tests {
                     }),
                 ],
             });
-            let filter = filter.as_expr_with_col_name()?;
+            let filter = filter
+                .as_expr()?
+                .project_column_ref(|col| col.column_name.clone());
             let pruners = build_column_page_pruners(FunctionContext::default(), &schema, &filter)?;
             let row_selection = filter_pages(&mut reader, &schema, rg, &pruners)?;
 

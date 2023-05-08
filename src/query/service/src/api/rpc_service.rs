@@ -79,7 +79,11 @@ impl RpcService {
         };
 
         let server = builder
-            .add_service(FlightServiceServer::new(flight_api_service))
+            .add_service(
+                FlightServiceServer::new(flight_api_service)
+                    .max_encoding_message_size(usize::MAX)
+                    .max_decoding_message_size(usize::MAX),
+            )
             .serve_with_shutdown(addr, self.shutdown_notify());
 
         tokio::spawn(async_backtrace::location!().frame(server));

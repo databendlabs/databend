@@ -19,11 +19,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
-use common_expression::ConstantFolder;
-use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::property::datum::F64;
@@ -53,8 +49,6 @@ impl<'a> SelectivityEstimator<'a> {
 
     /// Compute the selectivity of a predicate.
     pub fn compute_selectivity(&mut self, predicate: &ScalarExpr, update: bool) -> Result<f64> {
-        // Try to do constant fold first
-        let predicate = &try_constant_fold(predicate)?;
         Ok(match predicate {
             ScalarExpr::BoundColumnRef(_) => {
                 // If a column ref is on top of a predicate, e.g.
@@ -111,8 +105,6 @@ impl<'a> SelectivityEstimator<'a> {
         right: &ScalarExpr,
         update: bool,
     ) -> Result<f64> {
-        // Try to constant fold right right expr
-        let right = try_constant_fold(right)?;
         if let (ScalarExpr::BoundColumnRef(column_ref), ScalarExpr::ConstantExpr(constant)) =
             (left, &right)
         {
@@ -333,18 +325,6 @@ fn compare_equal(datum: &Option<Datum>, column_stat: &ColumnStat) -> f64 {
     } else {
         1.0 / column_stat.ndv
     }
-}
-
-fn try_constant_fold(scalar_expr: &ScalarExpr) -> Result<ScalarExpr> {
-    let expr = scalar_expr.as_expr_with_col_index()?;
-    let (expr, _) = ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-    if let Expr::Constant { scalar, span, .. } = expr {
-        return Ok(ScalarExpr::ConstantExpr(ConstantExpr {
-            span,
-            value: scalar,
-        }));
-    }
-    Ok(scalar_expr.clone())
 }
 
 fn update_statistic(
