@@ -9,5 +9,7 @@ select min(a), max(b), count() from test;
 
 select '1';select 2; select 1+2;
 
+-- ignore this line
+
 select 'bye';
 drop table test;

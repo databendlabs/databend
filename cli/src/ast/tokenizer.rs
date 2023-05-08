@@ -95,7 +95,7 @@ pub enum TokenKind {
 
     EOI,
 
-    #[regex(r"[ \t\r\n\f]+", logos::skip)]
+    #[regex(r"[ \t\r\f]+", logos::skip)]
     Whitespace,
 
     #[regex(r"--[^\t\n\f]*", logos::skip)]
@@ -103,6 +103,9 @@ pub enum TokenKind {
 
     #[regex(r"/\*([^\*]|(\*[^/]))*\*/", logos::skip)]
     CommentBlock,
+
+    #[regex(r"[\n]+")]
+    Newline,
 
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,

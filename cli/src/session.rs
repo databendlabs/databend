@@ -176,33 +176,49 @@ impl Session {
         if line.is_empty() {
             return vec![];
         }
-        if line.starts_with("--") {
-            return vec![];
-        }
 
         if self.query.is_empty() && (line.starts_with('.') || line == "exit" || line == "quit") {
             return vec![line.to_owned()];
         }
 
         if !self.settings.multi_line {
-            return vec![line.to_owned()];
+            if line.starts_with("--") {
+                return vec![];
+            } else {
+                return vec![line.to_owned()];
+            }
         }
 
         self.query.push(' ');
-        self.query.push_str(line);
 
         let mut queries = Vec::new();
-        let mut tokenizer = Tokenizer::new(&self.query);
+        let mut tokenizer = Tokenizer::new(line);
         let mut start = 0;
-
+        let mut in_comment = false;
         while let Some(Ok(token)) = tokenizer.next() {
-            if token.kind == TokenKind::SemiColon {
-                queries.push(self.query[start..token.span.end].to_owned());
-                start = token.span.end;
+            match token.kind {
+                TokenKind::SemiColon => {
+                    let mut sql = self.query.trim().to_owned();
+                    if sql.is_empty() {
+                        continue;
+                    }
+                    sql.push(';');
+                    queries.push(sql);
+                    self.query.clear();
+                }
+                TokenKind::Comment => {
+                    in_comment = true;
+                }
+                TokenKind::Newline | TokenKind::EOI => {
+                    in_comment = false;
+                }
+                _ => {
+                    if !in_comment {
+                        self.query.push_str(&line[start..token.span.end]);
+                    }
+                }
             }
-        }
-        if start != 0 {
-            self.query = self.query[start..].trim().to_owned();
+            start = token.span.end;
         }
         queries
     }
