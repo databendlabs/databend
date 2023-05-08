@@ -2,26 +2,12 @@
 title: Developer Resources
 ---
 
-Learn how to write applications that perform operations on Databend using languages such as `Go`, `Python`, `Node.js`, `Java`, and `Rust`.
+Learn to use programming languages such as Go, Python, Node.js, Java, and Rust to develop applications that interact with Databend. Drivers described in the table below can be used to access Databend or Databend Cloud from these applications, enabling communication with Databend from the supported languages.
 
-Utilize the drivers described in this section to access Databend or Databend Cloud from applications written in the supported languages.
-
-## [Go Driver](./00-golang.md)
-
-Connect to Databend or Databend Cloud and perform all standard operations with an interface for developing applications using the Go programming language.
-
-## [Python Driver](./01-python.md)
-
-Develop Python applications that can connect to Databend or Databend Cloud and perform all standard operations.
-
-## [Node.js Driver](./02-nodejs.md)
-
-Connect to Databend or Databend Cloud with a native asynchronous Node.js interface.
-
-## [JDBC Driver](./03-java.md)
-
-Connect to Databend or Databend Cloud from most client tools/applications that support JDBC.
-
-## [Rust Driver](./04-rust.md)
-
-Connect to Databend or Databend Cloud and perform all standard operations with an interface for developing applications using the Rust programming language.
+| Language 	| Drivers                                                                                                                                   	| Native? 	| Description                                                                                                                                                                                                                                                       	|
+|----------	|-------------------------------------------------------------------------------------------------------------------------------------------	|---------	|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------	|
+| Go       	| [ databend-go ]( https://github.com/databendcloud/databend-go )                                                                           	| Yes     	| Connect to and interact with Databend or Databend Cloud through a native interface designed for Go programming language. [Click here](00-golang.md) for more information about the driver installation, tutorials, and code samples.                                              	|
+| Python   	| [ databend-py ]( https://github.com/databendcloud/databend-py ) & [ databend-sqlalchemy ]( https://github.com/databendcloud/databend-py ) 	| Yes     	| Connect to and interact with Databend or Databend Cloud through a native interface developed for Python programming language. [Click here](01-python.md) for more information about the driver installation, tutorials, and code samples.                                         	|
+| Node.js  	| [MySQL driver for Node.js](https://www.npmjs.com/package/mysql)                                                                           	| No      	| Connect to and interact with Databend or Databend Cloud using the Node.js MySQL driver interface. [Click here](02-nodejs.md) for more information about the driver installation, tutorials, and code samples.                                                                     	|
+| Java     	| [databend-jdbc](https://github.com/databendcloud/databend-jdbc)                                                                           	| Yes     	| Connect to and interact with Databend or Databend Cloud from various client tools and applications through a native interface designed for Java programming language. [Click here](03-jdbc.md) for more information about the driver installation, tutorials, and code samples. 	|
+| Rust     	| [databend-driver](https://github.com/datafuselabs/BendSQL/tree/main/driver)                                                               	| Yes     	| Connect to and interact with Databend or Databend Cloud through a native interface developed for Rust programming language. [Click here](04-rust.md) for more information about the driver installation, tutorials, and code samples.                                           	|
