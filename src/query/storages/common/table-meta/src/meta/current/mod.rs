@@ -19,6 +19,7 @@ pub use v2::ColumnMeta;
 pub use v2::SegmentInfo as SegmentInfoV2;
 pub use v2::TableSnapshot as TableSnapshotV2;
 pub use v3::SegmentInfo;
+pub use v3::SegmentInfoRawBytes;
 pub use v3::TableSnapshot;
 pub use v3::TableSnapshotLite;
 

@@ -21,8 +21,8 @@ use futures::AsyncRead;
 use futures_util::AsyncReadExt;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
-use storages_common_cache_manager::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::SegmentInfoV2;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
@@ -140,7 +140,7 @@ impl VersionedRawDataReader for (SegmentInfoVersion, TableSchemaRef) {
             }
         }?;
 
-        Ok(SegmentInfoRawBytes { bytes })
+        SegmentInfoRawBytes::from_slice(&bytes)
     }
 }
 

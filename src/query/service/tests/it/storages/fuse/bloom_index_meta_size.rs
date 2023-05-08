@@ -45,6 +45,7 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Compression;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::SingleColumnMeta;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
@@ -212,7 +213,7 @@ async fn test_segment_raw_bytes_size() -> common_exception::Result<()> {
     let process = sys.process(pid).unwrap();
     let base_memory_usage = process.memory();
     let scenario = format!(
-        "{} SegmentInfo, {} block per seg ",
+        "{} SegmentInfo(RawBytes), {} block per seg ",
         cache_number, num_block_per_seg
     );
 
@@ -240,6 +241,54 @@ async fn test_segment_raw_bytes_size() -> common_exception::Result<()> {
         }
     }
     show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number);
+
+    Ok(())
+}
+
+// cargo test --test it storages::fuse::bloom_index_meta_size::test_segment_raw_repr_bytes_size --no-fail-fast -- --ignored --exact -Z unstable-options --show-output
+#[tokio::test(flavor = "multi_thread")]
+#[ignore]
+async fn test_segment_raw_repr_bytes_size() -> common_exception::Result<()> {
+    let cache_number = 3000;
+    let num_block_per_seg = 1000;
+
+    let segment_info = build_test_segment_info(num_block_per_seg)?;
+
+    let sys = System::new_all();
+    let pid = get_current_pid().unwrap();
+    let process = sys.process(pid).unwrap();
+    let base_memory_usage = process.memory();
+    let scenario = format!(
+        "{} SegmentInfo(raw repr), {} block per seg ",
+        cache_number, num_block_per_seg
+    );
+
+    eprintln!(
+        "scenario {}, pid {}, base memory {}",
+        scenario, pid, base_memory_usage
+    );
+
+    let cache = InMemoryCacheBuilder::new_item_cache::<SegmentInfoRawBytes>(cache_number as u64);
+    {
+        let mut c = cache.write();
+        for _ in 0..cache_number {
+            let uuid = Uuid::new_v4();
+            let block_metas = segment_info
+                .blocks
+                .iter()
+                .map(|b: &Arc<BlockMeta>| Arc::new(b.as_ref().clone()))
+                .collect::<Vec<_>>();
+            let statistics = segment_info.summary.clone();
+            let segment = SegmentInfo::new(block_metas, statistics);
+            let segment_raw = SegmentInfoRawBytes::try_from(&segment)?;
+            (*c).put(format!("{}", uuid.simple()), Arc::new(segment_raw));
+        }
+    }
+    show_memory_usage(
+        "SegmentInfoCache (raw repr)",
+        base_memory_usage,
+        cache_number,
+    );
 
     Ok(())
 }

@@ -16,5 +16,6 @@ mod segment;
 mod snapshot;
 
 pub use segment::SegmentInfo;
+pub use segment::SegmentInfoRawBytes;
 pub use snapshot::TableSnapshot;
 pub use snapshot::TableSnapshotLite;

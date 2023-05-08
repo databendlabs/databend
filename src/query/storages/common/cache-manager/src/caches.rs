@@ -20,40 +20,17 @@ use common_cache::DefaultHashBuilder;
 use common_cache::Meter;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
-use common_exception::ErrorCode;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::NamedCache;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 
 use crate::cache_manager::CacheManager;
-
-// pub type SegmentInfoCache = NamedCache<InMemoryItemCacheHolder<SegmentInfo>>;
-
-pub struct SegmentInfoRawBytes {
-    pub bytes: Vec<u8>,
-}
-
-impl TryFrom<&SegmentInfoRawBytes> for SegmentInfo {
-    type Error = ErrorCode;
-    fn try_from(value: &SegmentInfoRawBytes) -> Result<Self, Self::Error> {
-        // the bytes are guaranteed to be serialized as current version of SegmentInfo
-        SegmentInfo::from_slice(&value.bytes)
-    }
-}
-
-impl TryFrom<&SegmentInfo> for SegmentInfoRawBytes {
-    type Error = ErrorCode;
-
-    fn try_from(value: &SegmentInfo) -> Result<Self, Self::Error> {
-        let bytes = value.to_bytes()?;
-        Ok(Self { bytes })
-    }
-}
 
 /// In memory object cache of SegmentInfo
 pub type SegmentInfoCache =
@@ -91,13 +68,6 @@ pub trait CachedObject<T> {
     type Cache: CacheAccessor<String, T>;
     fn cache() -> Option<Self::Cache>;
 }
-
-// impl CachedObject<SegmentInfo> for SegmentInfo {
-//    type Cache = SegmentInfoCache;
-//    fn cache() -> Option<Self::Cache> {
-//        CacheManager::instance().get_table_segment_cache()
-//    }
-//}
 
 impl CachedObject<SegmentInfoRawBytes> for SegmentInfoRawBytes {
     type Cache = SegmentInfoCache;
