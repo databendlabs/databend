@@ -172,6 +172,7 @@ impl SegmentInfo {
     }
 }
 
+#[derive(Clone)]
 pub struct RawBlockMeta {
     pub bytes: Vec<u8>,
     pub size: u64,
@@ -179,6 +180,7 @@ pub struct RawBlockMeta {
     pub compression: Compression,
 }
 
+#[derive(Clone)]
 pub struct SegmentInfoRawBytes {
     pub format_version: FormatVersion,
     pub summary: Statistics,

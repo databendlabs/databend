@@ -207,13 +207,14 @@ async fn test_segment_raw_bytes_size() -> common_exception::Result<()> {
     let num_block_per_seg = 1000;
 
     let segment_info = build_test_segment_info(num_block_per_seg)?;
+    let segment_info_bytes = segment_info.to_bytes()?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();
     let process = sys.process(pid).unwrap();
     let base_memory_usage = process.memory();
     let scenario = format!(
-        "{} SegmentInfo(RawBytes), {} block per seg ",
+        "{} SegmentInfo(raw bytes, Vec<u8>), {} block per seg ",
         cache_number, num_block_per_seg
     );
 
@@ -227,20 +228,17 @@ async fn test_segment_raw_bytes_size() -> common_exception::Result<()> {
         let mut c = cache.write();
         for _ in 0..cache_number {
             let uuid = Uuid::new_v4();
-            let block_metas = segment_info
-                .blocks
-                .iter()
-                .map(|b: &Arc<BlockMeta>| Arc::new(b.as_ref().clone()))
-                .collect::<Vec<_>>();
-            let statistics = segment_info.summary.clone();
-            let segment_info = SegmentInfo::new(block_metas, statistics);
             (*c).put(
                 format!("{}", uuid.simple()),
-                Arc::new(segment_info.to_bytes()?),
+                Arc::new(segment_info_bytes.clone()),
             );
         }
     }
-    show_memory_usage("SegmentInfoCache", base_memory_usage, cache_number);
+    show_memory_usage(
+        "SegmentInfoCache(raw bytes Vec<u8>)",
+        base_memory_usage,
+        cache_number,
+    );
 
     Ok(())
 }
@@ -253,11 +251,13 @@ async fn test_segment_raw_repr_bytes_size() -> common_exception::Result<()> {
     let num_block_per_seg = 1000;
 
     let segment_info = build_test_segment_info(num_block_per_seg)?;
+    let segment_raw = SegmentInfoRawBytes::try_from(&segment_info)?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();
     let process = sys.process(pid).unwrap();
     let base_memory_usage = process.memory();
+
     let scenario = format!(
         "{} SegmentInfo(raw repr), {} block per seg ",
         cache_number, num_block_per_seg
@@ -273,15 +273,7 @@ async fn test_segment_raw_repr_bytes_size() -> common_exception::Result<()> {
         let mut c = cache.write();
         for _ in 0..cache_number {
             let uuid = Uuid::new_v4();
-            let block_metas = segment_info
-                .blocks
-                .iter()
-                .map(|b: &Arc<BlockMeta>| Arc::new(b.as_ref().clone()))
-                .collect::<Vec<_>>();
-            let statistics = segment_info.summary.clone();
-            let segment = SegmentInfo::new(block_metas, statistics);
-            let segment_raw = SegmentInfoRawBytes::try_from(&segment)?;
-            (*c).put(format!("{}", uuid.simple()), Arc::new(segment_raw));
+            (*c).put(format!("{}", uuid.simple()), Arc::new(segment_raw.clone()));
         }
     }
     show_memory_usage(
@@ -301,16 +293,8 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
     });
 
     let col_stat = ColumnStatistics {
-        min: Scalar::String(
-            String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?
-                .into_bytes()
-                .into(),
-        ),
-        max: Scalar::String(
-            String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?
-                .into_bytes()
-                .into(),
-        ),
+        min: Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
+        max: Scalar::String(String::from_utf8(vec![b'a'; STATS_STRING_PREFIX_LEN])?.into_bytes()),
         null_count: 0,
         in_memory_size: 0,
         distinct_of_values: None,
@@ -371,7 +355,7 @@ fn build_test_segment_info(num_blocks_per_seg: usize) -> common_exception::Resul
         col_stats: col_stats.clone(),
     };
 
-    Ok(SegmentInfo::new(block_metas, statistics.clone()))
+    Ok(SegmentInfo::new(block_metas, statistics))
 }
 
 fn populate_cache<T>(cache: &InMemoryItemCacheHolder<T>, item: T, num_cache: usize)
