@@ -18,6 +18,7 @@ enable-histogram-metrics = ["metrics/enable-histogram", "storages-common-cache/e
 common-arrow = { path = "../../../common/arrow" }
 common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
+common-cache = { path = "../../../common/cache" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }

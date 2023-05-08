@@ -85,7 +85,6 @@ impl SegmentInfo {
         let compressed = compress(&compression, bytes)?;
 
         Ok(RawBlockMeta {
-            size: compressed.len() as u64,
             bytes: compressed,
             encoding,
             compression,
@@ -178,7 +177,6 @@ impl SegmentInfo {
 #[derive(Clone)]
 pub struct RawBlockMeta {
     pub bytes: Vec<u8>,
-    pub size: u64,
     pub encoding: Encoding,
     pub compression: Compression,
 }
@@ -212,7 +210,6 @@ impl CompactSegmentInfo {
             summary,
             raw_block_metas: RawBlockMeta {
                 bytes: block_metas_raw_bytes,
-                size: blocks_size,
                 encoding,
                 compression,
             },
@@ -224,7 +221,7 @@ impl CompactSegmentInfo {
         let mut reader = Cursor::new(&self.raw_block_metas.bytes);
         read_and_deserialize(
             &mut reader,
-            self.raw_block_metas.size,
+            self.raw_block_metas.bytes.len() as u64,
             &self.raw_block_metas.encoding,
             &self.raw_block_metas.compression,
         )
@@ -237,7 +234,7 @@ impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
         let mut reader = Cursor::new(&value.raw_block_metas.bytes);
         let blocks: Vec<Arc<BlockMeta>> = read_and_deserialize(
             &mut reader,
-            value.raw_block_metas.size,
+            value.raw_block_metas.bytes.len() as u64,
             &value.raw_block_metas.encoding,
             &value.raw_block_metas.compression,
         )?;

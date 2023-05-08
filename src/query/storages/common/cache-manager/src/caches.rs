@@ -13,9 +13,12 @@
 // limitations under the License.
 
 use std::borrow::Borrow;
+use std::hash::BuildHasher;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::FileMetaData;
+use common_cache::Count;
+use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
 use common_cache::Meter;
 use common_catalog::plan::PartStatistics;
@@ -33,8 +36,9 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 use crate::cache_manager::CacheManager;
 
 /// In memory object cache of SegmentInfo
-pub type SegmentInfoCache =
-    NamedCache<InMemoryItemCacheHolder<CompactSegmentInfo, DefaultHashBuilder>>;
+pub type CompactSegmentInfoCache = NamedCache<
+    InMemoryItemCacheHolder<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter>,
+>;
 
 /// In memory object cache of TableSnapshot
 pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>;
@@ -64,20 +68,26 @@ pub type SizedColumnArray = (
 // The `Cache` should return
 // - cache item of Type `T`
 // - and implement `CacheAccessor` properly
-pub trait CachedObject<T> {
-    type Cache: CacheAccessor<String, T>;
+pub trait CachedObject<T, S = DefaultHashBuilder, M = Count>
+where
+    S: BuildHasher,
+    M: CountableMeter<String, Arc<T>>,
+{
+    type Cache: CacheAccessor<String, T, S, M>;
     fn cache() -> Option<Self::Cache>;
 }
 
-impl CachedObject<CompactSegmentInfo> for CompactSegmentInfo {
-    type Cache = SegmentInfoCache;
+impl CachedObject<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter>
+    for CompactSegmentInfo
+{
+    type Cache = CompactSegmentInfoCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_segment_cache()
     }
 }
 
-impl CachedObject<CompactSegmentInfo> for SegmentInfo {
-    type Cache = SegmentInfoCache;
+impl CachedObject<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter> for SegmentInfo {
+    type Cache = CompactSegmentInfoCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_segment_cache()
     }
@@ -132,5 +142,15 @@ impl<K, V> Meter<K, Arc<(V, usize)>> for ColumnArrayMeter {
     fn measure<Q: ?Sized>(&self, _: &Q, v: &Arc<(V, usize)>) -> usize
     where K: Borrow<Q> {
         v.1
+    }
+}
+
+pub struct CompactSegmentInfoMeter;
+
+impl Meter<String, Arc<CompactSegmentInfo>> for CompactSegmentInfoMeter {
+    type Measure = usize;
+
+    fn measure<Q: ?Sized>(&self, _: &Q, value: &Arc<CompactSegmentInfo>) -> Self::Measure {
+        std::mem::size_of::<CompactSegmentInfo>() + value.raw_block_metas.bytes.len()
     }
 }

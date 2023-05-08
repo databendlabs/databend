@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_cache::Count;
+use common_cache::DefaultHashBuilder;
+
 use crate::read::cached_reader::CachedReader;
 use crate::InMemoryBytesCacheHolder;
 use crate::InMemoryItemCacheHolder;
 use crate::NamedCache;
 
-pub type InMemoryItemCacheReader<T, L> = CachedReader<L, NamedCache<InMemoryItemCacheHolder<T>>>;
+// pub type InMemoryItemCacheHolder<T, S = DefaultHashBuilder, M = Count> =
+// Arc<RwLock<ImMemoryCache<T, S, M>>>;
+pub type InMemoryItemCacheReader<T, L, S = DefaultHashBuilder, M = Count> =
+    CachedReader<L, NamedCache<InMemoryItemCacheHolder<T, S, M>>>;
 pub type InMemoryBytesCacheReader<L> = CachedReader<L, NamedCache<InMemoryBytesCacheHolder>>;

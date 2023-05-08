@@ -15,6 +15,7 @@
 use std::io::SeekFrom;
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_cache::DefaultHashBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
@@ -28,6 +29,7 @@ use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
 use storages_common_cache_manager::CacheManager;
+use storages_common_cache_manager::CompactSegmentInfoMeter;
 use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
@@ -43,8 +45,12 @@ pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
 pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
-pub type CompactSegmentInfoReader =
-    InMemoryItemCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
+pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
+    CompactSegmentInfo,
+    LoaderWrapper<(Operator, TableSchemaRef)>,
+    DefaultHashBuilder,
+    CompactSegmentInfoMeter,
+>;
 
 pub struct MetaReaders;
 
