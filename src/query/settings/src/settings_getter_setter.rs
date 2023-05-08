@@ -128,7 +128,7 @@ impl Settings {
             self.try_set_u64("max_storage_io_requests", val)?;
             Ok(())
         } else {
-            Err(Error::new(ErrorKind::InvalidInput, "Value must be greater than 0"))
+            Err(ErrorCode::BadArguments("Value must be greater than 0".into()))
         }
     }
 
