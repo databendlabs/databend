@@ -49,13 +49,12 @@ pub struct FileFormatOptionsExt {
 impl FileFormatOptionsExt {
     pub fn create_from_settings(settings: &Settings) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
-        let disable_json_check = settings.get_disable_json_check()?;
         let options = FileFormatOptionsExt {
             ident_case_sensitive: false,
             headers: 0,
             json_compact: false,
             json_strings: false,
-            disable_json_check,
+            disable_json_check: false,
             timezone,
         };
         Ok(options)
@@ -66,14 +65,13 @@ impl FileFormatOptionsExt {
         settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
-        let disable_json_check = settings.get_disable_json_check()?;
         let mut options = FileFormatOptionsExt {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
             json_compact: false,
             json_strings: false,
+            disable_json_check: false,
             timezone,
-            disable_json_check,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;

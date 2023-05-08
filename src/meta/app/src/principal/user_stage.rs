@@ -474,6 +474,7 @@ pub struct CopyOptions {
     pub purge: bool,
     pub single: bool,
     pub max_file_size: usize,
+    pub disable_json_check: bool,
 }
 
 impl CopyOptions {
@@ -514,6 +515,15 @@ impl CopyOptions {
                 "max_file_size" => {
                     let max_file_size = usize::from_str(v)?;
                     self.max_file_size = max_file_size;
+                }
+                "disable_json_check" => {
+                    let disable_json_check = bool::from_str(v).map_err(|_| {
+                        ErrorCode::StrParseError(format!(
+                            "Cannot parse disable_json_check: {} as bool",
+                            v
+                        ))
+                    })?;
+                    self.disable_json_check = disable_json_check;
                 }
                 _ => {
                     if !ignore_unknown {

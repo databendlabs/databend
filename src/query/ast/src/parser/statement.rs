@@ -954,6 +954,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 single: Default::default(),
                 purge: Default::default(),
                 force: Default::default(),
+                disable_json_check: Default::default(),
                 on_error: "abort".to_string(),
             };
             for opt in opts {
@@ -1984,6 +1985,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(rule! {ON_ERROR ~ "=" ~ #ident}, |(_, _, on_error)| {
             CopyOption::OnError(on_error.to_string())
         }),
+        map(
+            rule! {DISABLE_JSON_CHECK ~ "=" ~ #literal_bool},
+            |(_, _, disable_json_check)| CopyOption::DisableJsonCheck(disable_json_check),
+        ),
     ))(i)
 }
 

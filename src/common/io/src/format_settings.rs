@@ -17,7 +17,6 @@ use chrono_tz::Tz;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FormatSettings {
     pub timezone: Tz,
-    pub disable_json_check: bool,
 }
 
 // only used for tests
@@ -25,7 +24,6 @@ impl Default for FormatSettings {
     fn default() -> Self {
         Self {
             timezone: "UTC".parse::<Tz>().unwrap(),
-            disable_json_check: false,
         }
     }
 }

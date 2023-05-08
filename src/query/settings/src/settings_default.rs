@@ -253,11 +253,6 @@ impl DefaultSettings {
                     desc: "Parquet file with smaller size will be read as a whole file, instead of column by column.",
                     possible_values: None,
                 }),
-                ("disable_json_check", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Disable check JSON syntax, allow insert invalid JSON.",
-                    possible_values: None,
-                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

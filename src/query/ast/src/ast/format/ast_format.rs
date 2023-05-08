@@ -764,6 +764,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let purge_name_node = FormatTreeNode::new(purge_name_ctx);
         children.push(purge_name_node);
 
+        let disable_json_check = format!("DisableJsonCheck {}", copy.disable_json_check);
+        let disable_json_check_ctx = AstFormatContext::new(disable_json_check);
+        let disable_json_check_node = FormatTreeNode::new(disable_json_check_ctx);
+        children.push(disable_json_check_node);
+
         let name = "Copy".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());
         let node = FormatTreeNode::with_children(format_ctx, children);

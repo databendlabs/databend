@@ -141,11 +141,7 @@ impl Session {
         let timezone = tz.parse::<Tz>().map_err(|_| {
             ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
         })?;
-        let disable_json_check = settings.get_disable_json_check()?;
-        let format = FormatSettings {
-            timezone,
-            disable_json_check,
-        };
+        let format = FormatSettings { timezone };
         Ok(format)
     }
 

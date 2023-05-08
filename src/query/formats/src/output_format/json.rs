@@ -42,7 +42,6 @@ impl JSONOutputFormat {
             rows: 0,
             format_settings: FormatSettings {
                 timezone: options.timezone,
-                disable_json_check: options.disable_json_check,
             },
         }
     }

@@ -668,6 +668,7 @@ impl<'a> Binder {
 
             stage.copy_options.single = stmt.single;
             stage.copy_options.purge = stmt.purge;
+            stage.copy_options.disable_json_check = stmt.disable_json_check;
         }
 
         Ok(())

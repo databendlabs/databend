@@ -77,7 +77,7 @@ impl FastFieldDecoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
-                disable_json_check: format.disable_json_check,
+                disable_json_check: false,
             },
         }
     }

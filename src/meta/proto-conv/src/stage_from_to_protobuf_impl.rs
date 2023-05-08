@@ -133,6 +133,7 @@ impl FromToProto for mt::principal::CopyOptions {
             purge: p.purge,
             single: p.single,
             max_file_size,
+            disable_json_check: p.disable_json_check,
         })
     }
 
@@ -161,6 +162,7 @@ impl FromToProto for mt::principal::CopyOptions {
             purge: self.purge,
             single: self.single,
             max_file_size,
+            disable_json_check: self.disable_json_check,
         })
     }
 }

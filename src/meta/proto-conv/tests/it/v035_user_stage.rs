@@ -27,18 +27,15 @@ use crate::common;
 // * only be added when a new version is added,                *
 // * or be removed when an old version is no longer supported. *
 // *************************************************************
-//
-// The message bytes are built from the output of `test_user_stage_fs_latest()`
 #[test]
-fn test_decode_v25_user_stage() -> anyhow::Result<()> {
-    let stage_info_v25 = vec![
+fn test_decode_v35_user_stage() -> anyhow::Result<()> {
+    let stage_info_v35 = vec![
         10, 17, 102, 115, 58, 47, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115, 26,
         25, 10, 23, 18, 21, 10, 13, 47, 100, 105, 114, 47, 116, 111, 47, 102, 105, 108, 101, 115,
-        160, 6, 25, 168, 6, 24, 34, 37, 8, 1, 16, 128, 8, 26, 1, 124, 34, 2, 47, 47, 40, 2, 50, 1,
-        92, 58, 3, 114, 111, 119, 66, 3, 78, 97, 78, 74, 2, 39, 39, 160, 6, 25, 168, 6, 24, 42, 9,
-        10, 2, 48, 2, 16, 142, 8, 24, 1, 50, 4, 116, 101, 115, 116, 56, 100, 66, 29, 10, 8, 100,
-        97, 116, 97, 98, 101, 110, 100, 18, 11, 100, 97, 116, 97, 98, 101, 110, 100, 46, 114, 115,
-        160, 6, 25, 168, 6, 24, 160, 6, 25, 168, 6, 24,
+        160, 6, 35, 168, 6, 24, 42, 11, 10, 2, 48, 2, 16, 142, 8, 24, 1, 56, 1, 50, 4, 116, 101,
+        115, 116, 56, 100, 66, 29, 10, 8, 100, 97, 116, 97, 98, 101, 110, 100, 18, 11, 100, 97,
+        116, 97, 98, 101, 110, 100, 46, 114, 115, 160, 6, 35, 168, 6, 24, 74, 10, 34, 8, 8, 2, 160,
+        6, 35, 168, 6, 24, 160, 6, 35, 168, 6, 24,
     ];
 
     let want = || mt::principal::StageInfo {
@@ -62,7 +59,7 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
-            disable_json_check: false,
+            disable_json_check: true,
         },
         comment: "test".to_string(),
         number_of_files: 100,
@@ -71,7 +68,7 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
             hostname: "databend.rs".to_string(),
         }),
     };
-    common::test_load_old(func_name!(), stage_info_v25.as_slice(), 25, want())?;
+    common::test_load_old(func_name!(), stage_info_v35.as_slice(), 35, want())?;
     common::test_pb_from_to(func_name!(), want())?;
 
     Ok(())
