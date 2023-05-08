@@ -52,7 +52,7 @@ impl<T: ?Sized + Table> ReadDataBlockStream for T {
         let query_id = ctx.get_id();
         let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
         let executor = PipelinePullingExecutor::try_create(pipeline, executor_settings)?;
-        ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+        ctx.set_executor(executor.get_inner())?;
         Ok(Box::pin(PullingExecutorStream::create(executor)?))
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,8 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod catalog;
+/// Grpc default configuration.
+pub struct GrpcConfig {}
 
-pub(crate) mod tls_constants;
+impl GrpcConfig {
+    /// The maximum message size the client or server can **send**.
+    pub const MAX_ENCODING_SIZE: usize = 16 * 1024 * 1024;
 
-pub use catalog::create_catalog;
+    /// The maximum message size the client or server can **receive**.
+    pub const MAX_DECODING_SIZE: usize = 16 * 1024 * 1024;
+}

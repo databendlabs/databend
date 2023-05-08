@@ -527,7 +527,7 @@ jobs:
 
   benchmark:
     needs: [create_release, linux]
-    uses: ./.github/workflows/trusted-benchmark.yml
+    uses: ./.github/workflows/benchmark.yml
     secrets: inherit
     with:
       tag: ${{ needs.create_release.outputs.version }}

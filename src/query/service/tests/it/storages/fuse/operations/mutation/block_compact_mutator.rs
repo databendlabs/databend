@@ -32,6 +32,11 @@ use databend_query::pipelines::executor::ExecutorSettings;
 use databend_query::pipelines::executor::PipelineCompleteExecutor;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::test_kits::block_writer::BlockWriter;
+use databend_query::test_kits::table_test_fixture::execute_command;
+use databend_query::test_kits::table_test_fixture::execute_query;
+use databend_query::test_kits::table_test_fixture::expects_ok;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use rand::thread_rng;
 use rand::Rng;
 use storages_common_cache::LoadParams;
@@ -39,12 +44,7 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
-use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::operations::mutation::segments_compact_mutator::CompactSegmentTestFixture;
-use crate::storages::fuse::table_test_fixture::execute_command;
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::expects_ok;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact() -> Result<()> {
@@ -117,7 +117,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         let query_id = ctx.get_id();
         let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
-        ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+        ctx.set_executor(executor.get_inner())?;
         executor.execute()?;
         Ok(true)
     } else {

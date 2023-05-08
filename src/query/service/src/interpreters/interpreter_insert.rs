@@ -116,10 +116,12 @@ impl InsertInterpreter {
         let select_schema = plan.schema();
 
         // validate schema
-        if select_schema.fields().len() < output_schema.fields().len() {
-            return Err(ErrorCode::BadArguments(
-                "Fields in select statement is less than expected",
-            ));
+        if select_schema.fields().len() != output_schema.fields().len() {
+            return Err(ErrorCode::BadArguments(format!(
+                "Fields in select statement is not equal with expected, select fields: {}, insert fields: {}",
+                select_schema.fields().len(),
+                output_schema.fields().len(),
+            )));
         }
 
         // check if cast needed
@@ -457,7 +459,6 @@ impl Interpreter for InsertInterpreter {
                 };
 
                 let catalog = self.plan.catalog.clone();
-
                 let insert_select_plan = match select_plan {
                     PhysicalPlan::Exchange(ref mut exchange) => {
                         // insert can be dispatched to different nodes
@@ -819,8 +820,8 @@ async fn fill_default_value(
         scalar = wrap_cast(&scalar, field.data_type());
 
         let expr = scalar
-            .as_expr_with_col_index()?
-            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+            .as_expr()?
+            .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
         map_exprs.push(expr);
     } else {
         // If field data type is nullable, then we'll fill it with null.
@@ -915,8 +916,8 @@ async fn exprs_to_scalar(
             wrap_cast(&scalar, field_data_type)
         };
         let expr = scalar
-            .as_expr_with_col_index()?
-            .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
+            .as_expr()?
+            .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
         map_exprs.push(expr);
     }
 

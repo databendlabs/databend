@@ -125,7 +125,7 @@ pub struct TableId {
 
 impl Display for TableId {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.table_id)
+        write!(f, "TableId{{{}}}", self.table_id)
     }
 }
 

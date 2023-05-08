@@ -20,9 +20,9 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::api::HttpService;
 use databend_query::servers::Server;
+use databend_query::test_kits::ConfigBuilder;
 
 use crate::tests::tls_constants::*;
-use crate::tests::ConfigBuilder;
 
 // need to support local_addr, but axum_server do not have local_addr callback
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
