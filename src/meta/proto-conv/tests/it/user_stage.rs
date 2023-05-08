@@ -1018,4 +1018,3 @@ fn test_user_stage_v19() -> anyhow::Result<()> {
     common::test_load_old(func_name!(), user_stage_v19.as_slice(), 19, want)?;
     Ok(())
 }
-
