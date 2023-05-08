@@ -438,7 +438,8 @@ Copy (children 6)
 │   └── FileFormat type = "CSV"
 ├── SizeLimit 10
 ├── MaxFiles 10
-└── Purge false
+├── Purge false
+└── DisableVariantCheck false
 
 query T
 explain ast create database db1 engine=default

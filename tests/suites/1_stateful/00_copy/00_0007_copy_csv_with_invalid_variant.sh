@@ -33,3 +33,5 @@ done
 
 ## Drop table
 echo "drop table if exists test_csv_variant;" | $MYSQL_CLIENT_CONNECT
+
+copy into test_csv_variant from 'fs:///tmp/invalid_json.csv' FILE_FORMAT = (field_delimiter = '\t' record_delimiter = '\n' type = CSV) disable_variant_check = false ON_ERROR = CONTINUE
