@@ -91,9 +91,9 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Introduce Timeout Mechanism to Control the Query Optimization Time
 
-Optimizing complex queries with numerous joins can be time-consuming. To avoid exhaustive search of the entire query plan space, we can set a timeout for optimization. 
+Optimizing complex queries with numerous joins can be a time-consuming task. To avoid performing an exhaustive search of the entire query plan space, we can set a timeout for optimization.
 
-The timeout need not be based on wall time, but rather on a logical time, such as the number of applied transform rules. Once the timeout is reached, instead of generating new transform rules, a greedy search can be performed.
+The timeout can be based on a logical time, such as the number of applied transform rules, rather than wall time. Once the timeout is reached, a greedy search can be performed instead of generating new transform rules.
 
 [Issue #11133 | Introduce timeout mechanism to control the query optimization time](https://github.com/datafuselabs/databend/issues/11133)
 
