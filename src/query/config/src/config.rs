@@ -1891,6 +1891,7 @@ pub struct CacheConfig {
     #[clap(long = "cache-table-meta-snapshot-count", default_value = "256")]
     pub table_meta_snapshot_count: u64,
 
+    /// Max bytes of cached table segment
     #[clap(long = "cache-table-meta-segment-size", default_value = "1073741824")]
     pub table_meta_segment_size: u64,
 
