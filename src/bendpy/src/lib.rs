@@ -44,7 +44,11 @@ pub async fn query_local(ctx: Arc<QueryContext>, sql: &str) -> Result<Block> {
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
     let stream = interpreter.execute(ctx.clone()).await?;
     let blocks = stream.map(|v| v.unwrap()).collect::<Vec<_>>().await;
-    let block = DataBlock::concat(&blocks)?;
+    let block = if !blocks.is_empty() {
+        DataBlock::concat(&blocks)?
+    } else {
+        Ok(DataBlock::empty_with_schema(plan.schema()))
+    };
     Ok(Block(block))
 }
 

@@ -18,9 +18,7 @@ pyo3-asyncio = { version = "0.14", features = ["attributes", "tokio-runtime"] }
 common-config = { path = "../query/config" }
 common-exception = { path = "../common/exception" }
 common-expression = { path = "../query/expression" }
-common-functions = { path = "../query/functions" }
 common-meta-app = { path = "../meta/app" }
-common-storage = { path = "../common/storage" }
 databend-query = { path = "../query/service" }
 
 # # Crates.io dependencies
