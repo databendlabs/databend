@@ -117,7 +117,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         let query_id = ctx.get_id();
         let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
-        ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+        ctx.set_executor(executor.get_inner())?;
         executor.execute()?;
         Ok(true)
     } else {
