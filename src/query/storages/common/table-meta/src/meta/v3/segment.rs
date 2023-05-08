@@ -76,7 +76,8 @@ impl SegmentInfo {
         Encoding::default()
     }
 
-    pub fn block_raw_bytes(&self) -> Result<RawBlockMeta> {
+    // Encode self.blocks as RawBlockMeta.
+    fn block_raw_bytes(&self) -> Result<RawBlockMeta> {
         let encoding = Encoding::default();
         let bytes = encode(&encoding, &self.blocks)?;
 
@@ -151,11 +152,13 @@ impl SegmentInfo {
 
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
         let mut cursor = Cursor::new(bytes);
-        let version = cursor.read_scalar::<u64>()?;
-        let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
-        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
-        let blocks_size: u64 = cursor.read_scalar::<u64>()?;
-        let summary_size: u64 = cursor.read_scalar::<u64>()?;
+        let decode::Header {
+            version,
+            encoding,
+            compression,
+            blocks_size,
+            summary_size,
+        } = decode::decode_header(&mut cursor)?;
 
         let blocks: Vec<Arc<BlockMeta>> =
             read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
@@ -190,15 +193,16 @@ pub struct CompactSegmentInfo {
 impl CompactSegmentInfo {
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
         let mut cursor = Cursor::new(bytes);
-        let version = cursor.read_scalar::<u64>()?;
-        let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
-        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
-        let blocks_size: u64 = cursor.read_scalar::<u64>()?;
-        let summary_size: u64 = cursor.read_scalar::<u64>()?;
+        let decode::Header {
+            version,
+            encoding,
+            compression,
+            blocks_size,
+            summary_size,
+        } = decode::decode_header(&mut cursor)?;
 
-        let mut compressed_data = vec![0; blocks_size as usize];
-        cursor.read_exact(&mut compressed_data)?;
-        let raw_block_metas_bytes = compressed_data;
+        let mut block_metas_raw_bytes = vec![0; blocks_size as usize];
+        cursor.read_exact(&mut block_metas_raw_bytes)?;
 
         let summary: Statistics =
             read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
@@ -207,7 +211,7 @@ impl CompactSegmentInfo {
             format_version: version,
             summary,
             raw_block_metas: RawBlockMeta {
-                bytes: raw_block_metas_bytes,
+                bytes: block_metas_raw_bytes,
                 size: blocks_size,
                 encoding,
                 compression,
@@ -230,7 +234,6 @@ impl CompactSegmentInfo {
 impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
     type Error = ErrorCode;
     fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
-        // SegmentInfo::from_slice(&value.block_meta_bytes)
         let mut reader = Cursor::new(&value.raw_block_metas.bytes);
         let blocks: Vec<Arc<BlockMeta>> = read_and_deserialize(
             &mut reader,
@@ -256,6 +259,35 @@ impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
             format_version: value.format_version,
             summary: value.summary.clone(),
             raw_block_metas: bytes,
+        })
+    }
+}
+
+// segment specific decoding util
+mod decode {
+    use super::*;
+
+    pub struct Header {
+        pub version: u64,
+        pub encoding: Encoding,
+        pub compression: Compression,
+        pub blocks_size: u64,
+        pub summary_size: u64,
+    }
+
+    pub fn decode_header<R>(reader: &mut R) -> Result<Header>
+    where R: Read + Unpin + Send {
+        let version = reader.read_scalar::<u64>()?;
+        let encoding = Encoding::try_from(reader.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(reader.read_scalar::<u8>()?)?;
+        let blocks_size: u64 = reader.read_scalar::<u64>()?;
+        let summary_size: u64 = reader.read_scalar::<u64>()?;
+        Ok(Header {
+            version,
+            encoding,
+            compression,
+            blocks_size,
+            summary_size,
         })
     }
 }

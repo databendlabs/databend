@@ -96,6 +96,7 @@ impl TryFrom<ThriftFileMetaData> for BloomIndexMeta {
                 }
             }
         }
+        col_metas.shrink_to_fit();
         Ok(Self { columns: col_metas })
     }
 }
