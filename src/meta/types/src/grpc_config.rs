@@ -12,22 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::too_many_arguments)]
+/// Grpc default configuration.
+pub struct GrpcConfig {}
 
-pub mod block_writer;
-pub mod config;
-pub mod context;
-#[allow(dead_code)]
-pub mod sessions;
-pub mod table_test_fixture;
-pub mod utils;
+impl GrpcConfig {
+    /// The maximum message size the client or server can **send**.
+    pub const MAX_ENCODING_SIZE: usize = 16 * 1024 * 1024;
 
-pub use config::ConfigBuilder;
-pub use context::create_query_context;
-pub use context::create_query_context_with_cluster;
-pub use context::create_query_context_with_config;
-pub use context::create_query_context_with_session;
-pub use context::ClusterDescriptor;
-pub use sessions::TestGlobalServices;
-pub use sessions::TestGuard;
-pub use table_test_fixture::TestFixture;
+    /// The maximum message size the client or server can **receive**.
+    pub const MAX_DECODING_SIZE: usize = 16 * 1024 * 1024;
+}

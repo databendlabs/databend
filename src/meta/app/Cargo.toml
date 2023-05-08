@@ -42,4 +42,4 @@ ignored = ["num-traits"]
 [build-dependencies]
 common-building = { path = "../../common/building" }
 
-tonic-build = "0.8.0"
+tonic-build = { workspace = true }
