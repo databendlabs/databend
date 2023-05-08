@@ -379,7 +379,7 @@ pub fn execute_pipeline(ctx: Arc<QueryContext>, mut res: PipelineBuildResult) ->
     let mut pipelines = res.sources_pipelines;
     pipelines.push(res.main_pipeline);
     let executor = PipelineCompleteExecutor::from_pipelines(pipelines, executor_settings)?;
-    ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+    ctx.set_executor(executor.get_inner())?;
     executor.execute()
 }
 
