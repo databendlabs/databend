@@ -54,6 +54,7 @@ docker/build-tool/rust-toolchain.toml
 # python
 venv/
 *.pyc
+.venv/
 __pycache__/
 
 *.zip
