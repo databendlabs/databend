@@ -92,6 +92,8 @@ members = [
     "src/meta/service",
     # sqllogictest
     "tests/sqllogictests",
+
+    "src/bendpy",
 ]
 
 [workspace.dependencies]

@@ -303,6 +303,10 @@ impl Session {
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
     ) -> Result<()> {
+        if matches!(self.get_type(), SessionType::Local) {
+            return Ok(());
+        }
+
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
         let user_verified = current_user
