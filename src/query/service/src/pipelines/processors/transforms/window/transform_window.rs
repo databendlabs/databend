@@ -408,38 +408,6 @@ impl<T: Number> TransformWindow<T> {
         }
     }
 
-    fn get_value_from_partition_position(
-        &self,
-        // position: usize,
-        // lag_lead_column_index: usize,
-        // current_row: &RowPtr,
-        // default_value: Option<ScalarRef>,
-    ) -> ScalarRef {
-        // let row_position = RowPtr {
-        //     block: self.partition_start.block,
-        //     row: self.partition_start.row + position,
-        // };
-        // if row_position >= self.partition_start && row_position < self.partition_end {
-        //     let block_index = row_position.block - self.first_block;
-        //     let block = &self.blocks[block_index].block;
-        //     let col = block.get_by_offset(lag_lead_column_index);
-        //     let value = col.value.as_column().unwrap();
-        //     value.index(position).unwrap()
-        // } else {
-        //     // match default_value {
-        //     //     Some(value) => value,
-        //     //     None => {
-        //     //         let block = &self.blocks[current_row.block - self.first_block].block;
-        //     //         let col = &block.columns()[0]; // todo(ariesdevil): use default column index instead
-        //     //         let value = col[current_row.row];
-        //     //         value
-        //     //     }
-        //     // }
-        //     ScalarRef::Null
-        // }
-        ScalarRef::Null
-    }
-
     fn apply_aggregate(&self, agg: &WindowFuncAggImpl) -> Result<()> {
         debug_assert!(self.frame_started);
         debug_assert!(self.frame_ended);
@@ -522,28 +490,17 @@ impl<T: Number> TransformWindow<T> {
                 builder.push(ScalarRef::Number(NumberScalar::Float64(percent.into())));
             }
             WindowFunctionImpl::Lag(lag) => {
-                let default_value = match lag.default.clone() {
-                    LagLeadDefault::Null => Scalar::Null,
-                    LagLeadDefault::Literal(l) => l.clone(),
-                    LagLeadDefault::Index(col) => {
-                        // if self.current_row_in_partition > lag.offset as usize {
-                        //     let block =
-                        //         &self.blocks[self.current_row.block - self.first_block].block;
-                        //     let col = block.columns().get(col).unwrap();
-                        //     Some(col.value.index(self.current_row.row).unwrap())
-                        // } else {
-                        //     None
-                        // }
-                        Scalar::Null
-                    }
-                };
-
-                dbg!(self.frame_started);
-                dbg!(&lag.offset);
-                dbg!(&self.frame_start);
-                dbg!(&self.current_row);
                 let lag_row =
                     if self.current_row.block == 0 && self.current_row.row < lag.offset as usize {
+                        let default_value = match lag.default.clone() {
+                            LagLeadDefault::Null => Scalar::Null,
+                            LagLeadDefault::Index(col) => {
+                                let block =
+                                    &self.blocks[self.current_row.block - self.first_block].block;
+                                let col = block.get_by_offset(col).value.as_column().unwrap();
+                                col.index(self.current_row.row).unwrap().to_owned()
+                            }
+                        };
                         default_value
                     } else {
                         let block = self
@@ -555,7 +512,6 @@ impl<T: Number> TransformWindow<T> {
                         let col = block.get_by_offset(lag.arg).value.as_column().unwrap();
                         col.index(self.current_row.row).unwrap().to_owned()
                     };
-                // let lag_row = ScalarRef::Number(NumberScalar::Int32(88));
 
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(lag_row.as_ref());

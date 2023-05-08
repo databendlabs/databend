@@ -1131,9 +1131,6 @@ impl<'a> TypeChecker<'a> {
         debug_assert!(arguments.len() >= 1);
         debug_assert!(arg_types.len() >= 1);
 
-        dbg!(&arguments);
-        dbg!(&arg_types);
-
         let offset = if arguments.len() >= 2 {
             let off = match &arguments[1] {
                 ScalarExpr::ConstantExpr(con) => match con.value {
@@ -1183,7 +1180,7 @@ impl<'a> TypeChecker<'a> {
                     target_type: Box::new(return_type.clone()),
                 })),
                 _ => Err(ErrorCode::SemanticError(
-                    "default value just support literal value or column",
+                    "default value just support literal value and column, or ignore it",
                 )),
             })
             .transpose()?;

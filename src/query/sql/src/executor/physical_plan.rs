@@ -802,7 +802,6 @@ pub struct AggregateFunctionDesc {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum LagLeadDefault {
     Null,
-    Literal(Scalar),
     Index(IndexType),
 }
 

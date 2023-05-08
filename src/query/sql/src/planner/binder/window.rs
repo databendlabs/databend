@@ -243,12 +243,46 @@ impl<'a> WindowRewriter<'a> {
             }
             WindowFuncType::Lag(lag) => {
                 let new_arg = self.visit(&lag.arg)?;
-                let new_default = match lag.default.clone().map(|d| self.visit(&*d)) {
+                let new_default = match lag.default.clone() {
                     None => None,
-                    Some(d) => Some(Box::new(d?)),
-                };
+                    Some(d) => {
+                        let d = self.visit(&*d)?;
+                        let replaced_default = if let ScalarExpr::BoundColumnRef(column_ref) = &d {
+                            agg_args.push(ScalarItem {
+                                index: column_ref.column.index,
+                                scalar: d.clone(),
+                            });
+                            column_ref.clone().into()
+                        } else {
+                            let name = format!("{}_default_value", &window_func_name);
+                            let index = self
+                                .metadata
+                                .write()
+                                .add_derived_column(name.clone(), d.data_type()?);
 
-                dbg!(&new_default);
+                            let column_binding = ColumnBinding {
+                                database_name: None,
+                                table_name: None,
+                                table_index: None,
+                                column_name: name,
+                                index,
+                                data_type: Box::new(d.data_type()?),
+                                visibility: Visibility::Visible,
+                            };
+                            agg_args.push(ScalarItem {
+                                index,
+                                scalar: d.clone(),
+                            });
+
+                            BoundColumnRef {
+                                span: d.span(),
+                                column: column_binding.clone(),
+                            }
+                            .into()
+                        };
+                        Some(Box::new(replaced_default))
+                    }
+                };
 
                 WindowFuncType::Lag(LagLeadFunction {
                     arg: Box::new(new_arg),

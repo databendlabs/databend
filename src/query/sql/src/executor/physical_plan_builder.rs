@@ -978,12 +978,14 @@ impl PhysicalPlanBuilder {
                         })
                     }
                     WindowFuncType::Lag(lag) => {
-                        let new_default = if let Some(box ScalarExpr::BoundColumnRef(col)) = &lag.default {
-                            LagLeadDefault::Index(col.column.index)
-                        }else if let Some(box ScalarExpr::ConstantExpr(con)) = &lag.default {
-                            LagLeadDefault::Literal(con.value.clone())
-                        } else {
-                            LagLeadDefault::Null
+                        let new_default = match &lag.default {
+                            None => LagLeadDefault::Null,
+                            Some(d) => {
+                                match d {
+                                    box ScalarExpr::BoundColumnRef(col) => LagLeadDefault::Index(col.column.index),
+                                    _ => unreachable!()
+                                }
+                            }
                         };
                         WindowFunction::Lag(LagLeadFunctionDesc {
                             sig: LagLeadFunctionSignature {
