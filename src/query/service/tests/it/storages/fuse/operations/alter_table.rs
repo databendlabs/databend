@@ -101,8 +101,8 @@ async fn check_segment_column_ids(
                 ver: SegmentInfo::VERSION,
                 put_cache: false,
             };
-            let segment_info = segment_reader.read(&params).await?;
-            let segment_info = SegmentInfo::try_from(segment_info.as_ref())?;
+            let compact_segment_info = segment_reader.read(&params).await?;
+            let segment_info = SegmentInfo::try_from(compact_segment_info.as_ref())?;
 
             segment_info.blocks.iter().for_each(|block_meta| {
                 assert_eq!(
