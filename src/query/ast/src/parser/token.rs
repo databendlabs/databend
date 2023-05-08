@@ -417,6 +417,8 @@ pub enum TokenKind {
     DESC,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
+    #[token("DISABLE_VARIANT_CHECK", ignore(ascii_case))]
+    DISABLE_VARIANT_CHECK,
     #[token("DISTINCT", ignore(ascii_case))]
     DISTINCT,
     #[token("DIV", ignore(ascii_case))]

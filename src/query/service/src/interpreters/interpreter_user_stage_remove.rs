@@ -75,8 +75,7 @@ impl Interpreter for RemoveUserStageInterpreter {
                 error!("Failed to delete file: {:?}, error: {}", chunk, e);
             }
 
-            let aborting = self.ctx.get_aborting();
-            if aborting.load(std::sync::atomic::Ordering::SeqCst) {
+            if self.ctx.check_aborting().is_err() {
                 return Ok(PipelineBuildResult::create());
             }
         }

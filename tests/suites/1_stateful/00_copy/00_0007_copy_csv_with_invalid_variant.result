@@ -1,0 +1,5 @@
+---test csv field check invalid variant
+2	{"k":"v"}
+---test csv field disable check invalid variant
+1	invalidvariant
+2	{"k":"v"}

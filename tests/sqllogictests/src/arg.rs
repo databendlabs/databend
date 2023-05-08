@@ -41,6 +41,14 @@ pub struct SqlLogicTestArgs {
     )]
     pub skipped_dir: Option<String>,
 
+    // Set specific file to skip
+    #[arg(
+        short = 'x',
+        long = "skip_file",
+        help = "Skip sqllogictests in specific test file, the arg is optional"
+    )]
+    pub skipped_file: Option<String>,
+
     // Set handler to run tests
     #[arg(
         short = 'l',

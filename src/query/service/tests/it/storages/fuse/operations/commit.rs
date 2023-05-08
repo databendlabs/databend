@@ -14,7 +14,6 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -465,7 +464,11 @@ impl TableContext for CtxDelegation {
         "default".to_owned()
     }
 
-    fn get_aborting(&self) -> Arc<AtomicBool> {
+    fn check_aborting(&self) -> Result<()> {
+        todo!()
+    }
+
+    fn get_error(&self) -> Option<ErrorCode> {
         todo!()
     }
 

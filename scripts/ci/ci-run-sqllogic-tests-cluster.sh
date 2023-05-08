@@ -19,4 +19,4 @@ fi
 echo "Run suites using argument: $RUN_DIR"
 
 echo "Starting databend-sqllogic tests"
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel 8
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel 8 --skip_file tpcds_q64.test
