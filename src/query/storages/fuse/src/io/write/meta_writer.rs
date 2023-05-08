@@ -18,8 +18,8 @@ use common_exception::Result;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::Versioned;
@@ -60,10 +60,10 @@ impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
     ) -> Result<()> {
         let bytes = self.marshal()?;
         data_accessor.write(location, bytes.clone()).await?;
-        if let Some(cache) = SegmentInfoRawBytes::cache() {
+        if let Some(cache) = CompactSegmentInfo::cache() {
             cache.put(
                 location.to_owned(),
-                Arc::new(SegmentInfoRawBytes::try_from(&self)?),
+                Arc::new(CompactSegmentInfo::try_from(&self)?),
             )
         }
         Ok(())

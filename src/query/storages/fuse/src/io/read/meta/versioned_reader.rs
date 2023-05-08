@@ -21,8 +21,8 @@ use futures::AsyncRead;
 use futures_util::AsyncReadExt;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::SegmentInfoV2;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
@@ -113,9 +113,9 @@ impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
 
 #[async_trait::async_trait]
 impl VersionedRawDataReader for (SegmentInfoVersion, TableSchemaRef) {
-    type RawBytesRepresentation = SegmentInfoRawBytes;
+    type RawBytesRepresentation = CompactSegmentInfo;
     #[async_backtrace::framed]
-    async fn read_raw_data<R>(&self, mut reader: R) -> Result<SegmentInfoRawBytes>
+    async fn read_raw_data<R>(&self, mut reader: R) -> Result<CompactSegmentInfo>
     where R: AsyncRead + Unpin + Send {
         let schema = &self.1;
         let bytes = match &self.0 {
@@ -140,7 +140,7 @@ impl VersionedRawDataReader for (SegmentInfoVersion, TableSchemaRef) {
             }
         }?;
 
-        SegmentInfoRawBytes::from_slice(&bytes)
+        CompactSegmentInfo::from_slice(&bytes)
     }
 }
 

@@ -25,8 +25,8 @@ use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::NamedCache;
 use storages_common_index::filters::Xor8Filter;
 use storages_common_index::BloomIndexMeta;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 
@@ -34,7 +34,7 @@ use crate::cache_manager::CacheManager;
 
 /// In memory object cache of SegmentInfo
 pub type SegmentInfoCache =
-    NamedCache<InMemoryItemCacheHolder<SegmentInfoRawBytes, DefaultHashBuilder>>;
+    NamedCache<InMemoryItemCacheHolder<CompactSegmentInfo, DefaultHashBuilder>>;
 
 /// In memory object cache of TableSnapshot
 pub type TableSnapshotCache = NamedCache<InMemoryItemCacheHolder<TableSnapshot>>;
@@ -69,14 +69,14 @@ pub trait CachedObject<T> {
     fn cache() -> Option<Self::Cache>;
 }
 
-impl CachedObject<SegmentInfoRawBytes> for SegmentInfoRawBytes {
+impl CachedObject<CompactSegmentInfo> for CompactSegmentInfo {
     type Cache = SegmentInfoCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_segment_cache()
     }
 }
 
-impl CachedObject<SegmentInfoRawBytes> for SegmentInfo {
+impl CachedObject<CompactSegmentInfo> for SegmentInfo {
     type Cache = SegmentInfoCache;
     fn cache() -> Option<Self::Cache> {
         CacheManager::instance().get_table_segment_cache()

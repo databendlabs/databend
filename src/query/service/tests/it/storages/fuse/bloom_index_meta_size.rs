@@ -42,10 +42,10 @@ use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Compression;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::SingleColumnMeta;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
@@ -251,7 +251,7 @@ async fn test_segment_raw_repr_bytes_size() -> common_exception::Result<()> {
     let num_block_per_seg = 1000;
 
     let segment_info = build_test_segment_info(num_block_per_seg)?;
-    let segment_raw = SegmentInfoRawBytes::try_from(&segment_info)?;
+    let segment_raw = CompactSegmentInfo::try_from(&segment_info)?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();
@@ -268,7 +268,7 @@ async fn test_segment_raw_repr_bytes_size() -> common_exception::Result<()> {
         scenario, pid, base_memory_usage
     );
 
-    let cache = InMemoryCacheBuilder::new_item_cache::<SegmentInfoRawBytes>(cache_number as u64);
+    let cache = InMemoryCacheBuilder::new_item_cache::<CompactSegmentInfo>(cache_number as u64);
     {
         let mut c = cache.write();
         for _ in 0..cache_number {

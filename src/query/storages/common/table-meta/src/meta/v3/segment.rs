@@ -181,13 +181,13 @@ pub struct RawBlockMeta {
 }
 
 #[derive(Clone)]
-pub struct SegmentInfoRawBytes {
+pub struct CompactSegmentInfo {
     pub format_version: FormatVersion,
     pub summary: Statistics,
     pub raw_block_metas: RawBlockMeta,
 }
 
-impl SegmentInfoRawBytes {
+impl CompactSegmentInfo {
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
         let mut cursor = Cursor::new(bytes);
         let version = cursor.read_scalar::<u64>()?;
@@ -203,7 +203,7 @@ impl SegmentInfoRawBytes {
         let summary: Statistics =
             read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
 
-        let segment = SegmentInfoRawBytes {
+        let segment = CompactSegmentInfo {
             format_version: version,
             summary,
             raw_block_metas: RawBlockMeta {
@@ -215,11 +215,21 @@ impl SegmentInfoRawBytes {
         };
         Ok(segment)
     }
+
+    pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
+        let mut reader = Cursor::new(&self.raw_block_metas.bytes);
+        read_and_deserialize(
+            &mut reader,
+            self.raw_block_metas.size,
+            &self.raw_block_metas.encoding,
+            &self.raw_block_metas.compression,
+        )
+    }
 }
 
-impl TryFrom<&SegmentInfoRawBytes> for SegmentInfo {
+impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
     type Error = ErrorCode;
-    fn try_from(value: &SegmentInfoRawBytes) -> Result<Self, Self::Error> {
+    fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
         // SegmentInfo::from_slice(&value.block_meta_bytes)
         let mut reader = Cursor::new(&value.raw_block_metas.bytes);
         let blocks: Vec<Arc<BlockMeta>> = read_and_deserialize(
@@ -237,7 +247,7 @@ impl TryFrom<&SegmentInfoRawBytes> for SegmentInfo {
     }
 }
 
-impl TryFrom<&SegmentInfo> for SegmentInfoRawBytes {
+impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
     type Error = ErrorCode;
 
     fn try_from(value: &SegmentInfo) -> Result<Self, Self::Error> {
