@@ -21,10 +21,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
 
-/// All `ee` interface need to add a fn in `InterfaceManager` trait
-
 #[async_trait::async_trait]
-pub trait InterfaceManager: Sync + Send {
+pub trait VacuumHandler: Sync + Send {
     async fn do_vacuum(
         &self,
         fuse_table: &FuseTable,
@@ -33,16 +31,13 @@ pub trait InterfaceManager: Sync + Send {
     ) -> Result<()>;
 }
 
-pub struct InterfaceManagerWrapper {
-    manager: Box<dyn InterfaceManager>,
+pub struct VacuumHandlerWrapper {
+    handler: Box<dyn VacuumHandler>,
 }
 
-unsafe impl Send for InterfaceManagerWrapper {}
-unsafe impl Sync for InterfaceManagerWrapper {}
-
-impl InterfaceManagerWrapper {
-    pub fn new(manager: Box<dyn InterfaceManager>) -> Self {
-        Self { manager }
+impl VacuumHandlerWrapper {
+    pub fn new(handler: Box<dyn VacuumHandler>) -> Self {
+        Self { handler }
     }
 
     #[async_backtrace::framed]
@@ -52,12 +47,12 @@ impl InterfaceManagerWrapper {
         ctx: Arc<dyn TableContext>,
         retention_time: DateTime<Utc>,
     ) -> Result<()> {
-        self.manager
+        self.handler
             .do_vacuum(fuse_table, ctx, retention_time)
             .await
     }
 }
 
-pub fn get_interface_manager() -> Arc<InterfaceManagerWrapper> {
+pub fn get_interface_manager() -> Arc<VacuumHandlerWrapper> {
     GlobalInstance::get()
 }

@@ -20,15 +20,15 @@ use common_base::base::GlobalInstance;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
-use interface_manager::InterfaceManager;
-use interface_manager::InterfaceManagerWrapper;
+use interface_manager::VacuumHandler;
+use interface_manager::VacuumHandlerWrapper;
 
 use crate::storages::fuse::do_vacuum;
 
-pub struct RealInterfaceManager {}
+pub struct RealVacuumHandler {}
 
 #[async_trait::async_trait]
-impl InterfaceManager for RealInterfaceManager {
+impl VacuumHandler for RealVacuumHandler {
     async fn do_vacuum(
         &self,
         fuse_table: &FuseTable,
@@ -39,10 +39,10 @@ impl InterfaceManager for RealInterfaceManager {
     }
 }
 
-impl RealInterfaceManager {
+impl RealVacuumHandler {
     pub fn init() -> Result<()> {
-        let rm = RealInterfaceManager {};
-        let wrapper = InterfaceManagerWrapper::new(Box::new(rm));
+        let rm = RealVacuumHandler {};
+        let wrapper = VacuumHandlerWrapper::new(Box::new(rm));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
     }

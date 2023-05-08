@@ -16,7 +16,7 @@ use common_config::InnerConfig;
 use common_exception::Result;
 use common_license::license_manager::LicenseManager;
 
-use crate::interface::interface_mgr::RealInterfaceManager;
+use crate::interface::vacuum_handler::RealVacuumHandler;
 use crate::license::license_mgr::RealLicenseManager;
 
 pub struct EnterpriseServices;
@@ -24,7 +24,7 @@ impl EnterpriseServices {
     #[async_backtrace::framed]
     pub async fn init(_config: InnerConfig) -> Result<()> {
         RealLicenseManager::init()?;
-        RealInterfaceManager::init()?;
+        RealVacuumHandler::init()?;
         Ok(())
     }
 }

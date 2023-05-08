@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod interface_mgr;
+pub mod vacuum_handler;
 
-pub use interface_mgr::get_interface_manager;
-pub use interface_mgr::InterfaceManager;
-pub use interface_mgr::InterfaceManagerWrapper;
+pub use vacuum_handler::get_interface_manager;
+pub use vacuum_handler::VacuumHandler;
+pub use vacuum_handler::VacuumHandlerWrapper;

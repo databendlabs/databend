@@ -12,5 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod interface_mgr;
-pub use interface_mgr::RealInterfaceManager;
+pub mod vacuum_handler;
+pub use vacuum_handler::RealVacuumHandler;

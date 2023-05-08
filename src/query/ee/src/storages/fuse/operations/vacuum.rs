@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -283,5 +284,14 @@ pub async fn do_vacuum(
     retention_time: DateTime<Utc>,
 ) -> Result<()> {
     let start = Instant::now();
+    // First, do purge
+    fuse_table.purge(ctx.clone(), None, true).await?;
+    let status = format!(
+        "do_vacuum: purged table, cost:{} sec",
+        start.elapsed().as_secs()
+    );
+    info!(status);
+    ctx.set_status_info(&status);
+
     do_gc_orphan_files(fuse_table, &ctx, retention_time, start).await
 }
