@@ -426,7 +426,7 @@ skipif clickhouse
 query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
-Copy (children 6)
+Copy (children 7)
 ├── CopyUnit (children 1)
 │   └── UriLocation 's3://mybucket/data.csv'
 ├── CopyUnit (children 1)
