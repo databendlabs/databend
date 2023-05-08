@@ -40,9 +40,9 @@ use tracing::info;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
+use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
-use crate::io::SegmentInfoReader;
 use crate::io::WriteSettings;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
@@ -66,7 +66,7 @@ pub struct MergeIntoOperationAggregator {
     data_accessor: Operator,
     write_settings: WriteSettings,
     read_settings: ReadSettings,
-    segment_reader: SegmentInfoReader,
+    segment_reader: CompactSegmentInfoReader,
     block_builder: BlockBuilder,
 }
 

@@ -31,24 +31,18 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use storages_common_table_meta::meta::TableSnapshotV2;
 
-use crate::io::read::meta::segment_reader::load_segment_v3;
 use crate::io::read::meta::snapshot_reader::load_snapshot_v3;
 
 #[async_trait::async_trait]
 pub trait VersionedReader<T> {
-    async fn read<R>(&self, read: R) -> Result<T>
-    where R: AsyncRead + Unpin + Send;
-}
-
-#[async_trait::async_trait]
-pub trait VersionedRawDataReader {
-    type RawBytesRepresentation;
-    async fn read_raw_data<R>(&self, read: R) -> Result<Self::RawBytesRepresentation>
+    type TargetType;
+    async fn read<R>(&self, read: R) -> Result<Self::TargetType>
     where R: AsyncRead + Unpin + Send;
 }
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshot> for SnapshotVersion {
+    type TargetType = TableSnapshot;
     #[async_backtrace::framed]
     async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
@@ -74,6 +68,7 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion {
+    type TargetType = TableSnapshotStatistics;
     #[async_backtrace::framed]
     async fn read<R>(&self, reader: R) -> Result<TableSnapshotStatistics>
     where R: AsyncRead + Unpin + Send {
@@ -85,40 +80,13 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
 }
 
 #[async_trait::async_trait]
-impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
+impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
+    type TargetType = CompactSegmentInfo;
     #[async_backtrace::framed]
-    async fn read<R>(&self, reader: R) -> Result<SegmentInfo>
+    async fn read<R>(&self, mut reader: R) -> Result<CompactSegmentInfo>
     where R: AsyncRead + Unpin + Send {
         let schema = &self.1;
-        let r = match &self.0 {
-            SegmentInfoVersion::V3(_) => load_segment_v3(reader).await?,
-            SegmentInfoVersion::V2(v) => {
-                let data = load_by_version(reader, v).await?;
-                SegmentInfo::from_v2(data)
-            }
-            SegmentInfoVersion::V1(v) => {
-                let data = load_by_version(reader, v).await?;
-                let fields = schema.leaf_fields();
-                SegmentInfo::from_v2(SegmentInfoV2::from_v1(data, &fields))
-            }
-            SegmentInfoVersion::V0(v) => {
-                let data = load_by_version(reader, v).await?;
-                let fields = schema.leaf_fields();
-                SegmentInfo::from_v2(SegmentInfoV2::from_v0(data, &fields))
-            }
-        };
-        Ok(r)
-    }
-}
-
-#[async_trait::async_trait]
-impl VersionedRawDataReader for (SegmentInfoVersion, TableSchemaRef) {
-    type RawBytesRepresentation = CompactSegmentInfo;
-    #[async_backtrace::framed]
-    async fn read_raw_data<R>(&self, mut reader: R) -> Result<CompactSegmentInfo>
-    where R: AsyncRead + Unpin + Send {
-        let schema = &self.1;
-        let bytes = match &self.0 {
+        let bytes_of_current_format = match &self.0 {
             SegmentInfoVersion::V3(_) => {
                 let mut buffer: Vec<u8> = vec![];
                 reader.read_to_end(&mut buffer).await?;
@@ -140,7 +108,7 @@ impl VersionedRawDataReader for (SegmentInfoVersion, TableSchemaRef) {
             }
         }?;
 
-        CompactSegmentInfo::from_slice(&bytes)
+        CompactSegmentInfo::from_slice(&bytes_of_current_format)
     }
 }
 

@@ -29,8 +29,8 @@ use common_expression::Scalar;
 use common_expression::SendableDataBlockStream;
 use common_expression::Value;
 use common_storage::DataOperator;
+use common_storages_fuse::io::CompactSegmentInfoReader;
 use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::SegmentsIO;
 use common_storages_fuse::io::TableMetaLocationGenerator;
@@ -730,7 +730,7 @@ impl CompactSegmentTestFixture {
         case_name: &str,
         new_segment_paths: &[String],
         expected_num_blocks: &[usize],
-        segment_reader: &SegmentInfoReader,
+        segment_reader: &CompactSegmentInfoReader,
     ) -> Result<()> {
         // traverse the paths of new segments  in reversed order
         for (idx, x) in new_segment_paths.iter().rev().enumerate() {

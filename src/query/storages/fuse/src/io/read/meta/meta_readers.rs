@@ -38,20 +38,19 @@ use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 
 use super::versioned_reader::VersionedReader;
 use crate::io::read::meta::meta_readers::thrift_file_meta_read::read_thrift_file_metadata;
-use crate::io::read::meta::versioned_reader::VersionedRawDataReader;
 
 pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
 pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
-pub type SegmentInfoReader =
+pub type CompactSegmentInfoReader =
     InMemoryItemCacheReader<CompactSegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
 
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> SegmentInfoReader {
-        SegmentInfoReader::new(
+    pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> CompactSegmentInfoReader {
+        CompactSegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
             LoaderWrapper((dal, schema)),
         )
@@ -110,7 +109,7 @@ impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
         let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        (version, schema.clone()).read_raw_data(reader).await
+        (version, schema.clone()).read(reader).await
     }
 }
 
