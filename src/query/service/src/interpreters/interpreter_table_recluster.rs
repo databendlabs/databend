@@ -91,7 +91,7 @@ impl Interpreter for ReclusterTableInterpreter {
             let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
             let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
 
-            ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+            ctx.set_executor(executor.get_inner())?;
             executor.execute()?;
             drop(executor);
 
