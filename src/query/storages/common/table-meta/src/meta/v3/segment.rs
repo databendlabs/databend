@@ -135,7 +135,6 @@ impl SegmentInfo {
     pub fn from_slice(bytes: &[u8]) -> Result<Self> {
         let mut cursor = Cursor::new(bytes);
         let version = cursor.read_scalar::<u64>()?;
-        assert_eq!(version, SegmentInfo::VERSION);
         let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
         let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
         let blocks_size: u64 = cursor.read_scalar::<u64>()?;
@@ -146,6 +145,12 @@ impl SegmentInfo {
         let summary: Statistics =
             read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
 
-        Ok(Self::new(blocks, summary))
+        let mut segment = Self::new(blocks, summary);
+
+        // bytes may represent an encoded v[n]::SegmentInfo, where n <= self::SegmentInfo::VERSION
+        // please see PR https://github.com/datafuselabs/databend/pull/11211 for the adjustment of
+        // format_version`'s "semantic"
+        segment.format_version = version;
+        Ok(segment)
     }
 }

@@ -110,8 +110,7 @@ impl Loader<SegmentInfoRawBytes> for LoaderWrapper<(Operator, TableSchemaRef)> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
         let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
-        let bytes = (version, schema.clone()).read_raw_data(reader).await?;
-        Ok(SegmentInfoRawBytes { bytes })
+        (version, schema.clone()).read_raw_data(reader).await
     }
 }
 

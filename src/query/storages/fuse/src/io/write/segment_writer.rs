@@ -14,7 +14,6 @@
 
 use common_exception::Result;
 use opendal::Operator;
-use storages_common_cache_manager::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Versioned;
@@ -43,8 +42,7 @@ impl<'a> SegmentWriter<'a> {
     #[async_backtrace::framed]
     pub async fn write_segment(&self, segment: SegmentInfo) -> Result<Location> {
         let location = self.generate_location();
-        let segment_raw_bytes = SegmentInfoRawBytes::try_from(&segment)?;
-        segment_raw_bytes
+        segment
             .write_meta_through_cache(self.data_accessor, &location.0)
             .await?;
         Ok(location)

@@ -51,21 +51,17 @@ pub trait CachedMetaWriter<T> {
 }
 
 #[async_trait::async_trait]
-impl<T, C> CachedMetaWriter<T> for T
-where
-    T: CachedObject<T, Cache = C> + Send + Sync,
-    T: Marshal,
-    C: CacheAccessor<String, T>,
-{
+impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
     #[async_backtrace::framed]
     async fn write_meta_through_cache(
         self,
         data_accessor: &Operator,
         location: &str,
     ) -> Result<()> {
-        data_accessor.write(location, self.marshal()?).await?;
-        if let Some(cache) = T::cache() {
-            cache.put(location.to_owned(), Arc::new(self))
+        let bytes = self.marshal()?;
+        data_accessor.write(location, bytes.clone()).await?;
+        if let Some(cache) = SegmentInfoRawBytes::cache() {
+            cache.put(location.to_owned(), Arc::new(SegmentInfoRawBytes { bytes }))
         }
         Ok(())
     }
@@ -81,16 +77,6 @@ impl Marshal for SegmentInfo {
         // can we expressed as type constraint?
         assert_eq!(self.format_version, SegmentInfo::VERSION);
         self.to_bytes()
-    }
-}
-
-impl Marshal for SegmentInfoRawBytes {
-    fn marshal(&self) -> Result<Vec<u8>> {
-        // make sure the table meta we write down to object store always has the current version
-        // can we expressed as type constraint?
-        // assert_eq!(self.format_version, SegmentInfo::VERSION);
-        // TODO avoid clone
-        Ok(self.bytes.clone())
     }
 }
 

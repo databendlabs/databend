@@ -21,6 +21,7 @@ use futures::AsyncRead;
 use futures_util::AsyncReadExt;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
+use storages_common_cache_manager::SegmentInfoRawBytes;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoV2;
 use storages_common_table_meta::meta::SegmentInfoVersion;
@@ -41,7 +42,8 @@ pub trait VersionedReader<T> {
 
 #[async_trait::async_trait]
 pub trait VersionedRawDataReader {
-    async fn read_raw_data<R>(&self, read: R) -> Result<Vec<u8>>
+    type RawBytesRepresentation;
+    async fn read_raw_data<R>(&self, read: R) -> Result<Self::RawBytesRepresentation>
     where R: AsyncRead + Unpin + Send;
 }
 
@@ -111,11 +113,12 @@ impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
 
 #[async_trait::async_trait]
 impl VersionedRawDataReader for (SegmentInfoVersion, TableSchemaRef) {
+    type RawBytesRepresentation = SegmentInfoRawBytes;
     #[async_backtrace::framed]
-    async fn read_raw_data<R>(&self, mut reader: R) -> Result<Vec<u8>>
+    async fn read_raw_data<R>(&self, mut reader: R) -> Result<SegmentInfoRawBytes>
     where R: AsyncRead + Unpin + Send {
         let schema = &self.1;
-        match &self.0 {
+        let bytes = match &self.0 {
             SegmentInfoVersion::V3(_) => {
                 let mut buffer: Vec<u8> = vec![];
                 reader.read_to_end(&mut buffer).await?;
@@ -135,7 +138,9 @@ impl VersionedRawDataReader for (SegmentInfoVersion, TableSchemaRef) {
                 let fields = schema.leaf_fields();
                 SegmentInfo::from_v2(SegmentInfoV2::from_v0(data, &fields)).to_bytes()
             }
-        }
+        }?;
+
+        Ok(SegmentInfoRawBytes { bytes })
     }
 }
 
