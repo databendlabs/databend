@@ -311,10 +311,10 @@ explain select * from onecolumn as a left join twocolumn as b on a.x = b.x where
 ----
 EvalScalar
 ├── expressions: [a.x (#0), b.x (#1), b.y (#2)]
-├── estimated rows: 2.20
+├── estimated rows: 1.75
 └── Filter
     ├── filters: [is_true(b.x (#1) > 44 OR a.x (#0) < 43)]
-    ├── estimated rows: 2.20
+    ├── estimated rows: 1.75
     └── HashJoin
         ├── join type: LEFT OUTER
         ├── build keys: [b.x (#1)]

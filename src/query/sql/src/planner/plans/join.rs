@@ -288,7 +288,7 @@ impl Join {
             for (idx, left) in left_statistics.column_stats.iter_mut() {
                 if *idx == left_column_index {
                     if left.histogram.is_some() {
-                        left.histogram = if left.ndv <= 2.0 || left.ndv > join_card {
+                        left.histogram = if left.ndv as u64 <= 2 || left.ndv as u64 > join_card as u64 {
                             None
                         } else {
                             Some(histogram_from_ndv(
@@ -307,7 +307,7 @@ impl Join {
             for (idx, right) in right_statistics.column_stats.iter_mut() {
                 if *idx == right_column_index {
                     if right.histogram.is_some() {
-                        right.histogram = if right.ndv <= 2.0 || right.ndv > join_card {
+                        right.histogram = if right.ndv as u64 <= 2 || right.ndv as u64 > join_card as u64 {
                             None
                         } else {
                             Some(histogram_from_ndv(
