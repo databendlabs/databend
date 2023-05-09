@@ -42,6 +42,19 @@ SELECT number FROM numbers(3);
 +--------+
 ```
 
+You can also alias a column to make the column name more readable and understandable in the result:
+
+```sql
+SELECT number AS total FROM numbers(3);
++--------+
+| total  |
++--------+
+|      0 |
+|      1 |
+|      2 |
++--------+
+```
+
 ## EXCLUDE Parameter
 
 Excludes one or more columns by their names from the result. The parameter is usually used in conjunction with `SELECT * ...` to exclude a few columns from the result instead of retrieving them all.
@@ -108,6 +121,28 @@ SELECT number FROM numbers(3) WHERE number > 1;
 | number |
 +--------+
 |      2 |
++--------+
+```
+
+If you alias a column in the SELECT clause, you can use the alias in the WHERE clause:
+
+```sql
+SELECT number * 2 as a FROM numbers(3) WHERE (a + 1) % 3 = 0
++--------+
+|    a   |
++--------+
+|      2 |
++--------+
+```
+
+If the alias and the column name are the same, the WHERE clause will recognize the alias as the column name:
+
+```sql
+select number * 2 as number from numbers(3) where (number + 1) % 3 = 0
++--------+
+| number |
++--------+
+|      4 |
 +--------+
 ```
 
