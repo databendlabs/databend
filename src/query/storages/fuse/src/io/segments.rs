@@ -22,8 +22,10 @@ use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::LoadParams;
 use storages_common_cache_manager::CacheManager;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Versioned;
 use tracing::Instrument;
 
 use crate::io::MetaReaders;
@@ -53,7 +55,7 @@ impl SegmentsIO {
     // Read one segment file by location.
     // The index is the index of the segment_location in segment_locations.
     #[async_backtrace::framed]
-    async fn read_segment(
+    pub async fn read_segment(
         dal: Operator,
         segment_location: Location,
         table_schema: TableSchemaRef,
@@ -175,16 +177,21 @@ impl SegmentsIO {
     }
 
     #[async_backtrace::framed]
-    async fn write_segment(
+    pub async fn write_segment(
         dal: Operator,
-        segment: SerializedSegment,
+        serialized_segment: SerializedSegment,
         put_cache: bool,
     ) -> Result<()> {
-        dal.write(&segment.path, segment.segment.to_bytes()?)
-            .await?;
+        assert_eq!(
+            serialized_segment.segment.format_version,
+            SegmentInfo::VERSION
+        );
+        let raw_bytes = serialized_segment.segment.to_bytes()?;
+        let compact_segment_info = CompactSegmentInfo::from_slice(&raw_bytes)?;
+        dal.write(&serialized_segment.path, raw_bytes).await?;
         if put_cache {
             if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                segment_cache.put(segment.path.clone(), segment.segment.clone());
+                segment_cache.put(serialized_segment.path, Arc::new(compact_segment_info));
             }
         }
         Ok(())
@@ -199,7 +206,7 @@ impl SegmentsIO {
         let mut iter = segments.into_iter();
         let tasks = std::iter::from_fn(move || {
             iter.next().map(|segment| {
-                Self::write_segment(self.operator.clone(), segment.clone(), put_cache)
+                Self::write_segment(self.operator.clone(), segment, put_cache)
                     .instrument(tracing::debug_span!("write_segment"))
             })
         });

@@ -19,7 +19,6 @@ use std::time::Instant;
 
 use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockThresholds;
@@ -27,10 +26,7 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
 use opendal::Operator;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -38,20 +34,22 @@ use storages_common_table_meta::meta::Versioned;
 use tracing::info;
 
 use crate::io::SegmentsIO;
+use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::mutation::Mutation;
 use crate::operations::mutation::MutationSinkMeta;
 use crate::operations::mutation::MutationTransformMeta;
+use crate::statistics::reducers::deduct_statistics_mut;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 
 type MutationMap = HashMap<usize, (Vec<(usize, Arc<BlockMeta>)>, Vec<usize>)>;
 
-struct SerializedData {
-    data: Vec<u8>,
-    location: String,
-    segment: CompactSegmentInfo,
+struct SegmentLite {
+    index: usize,
+    new_segment_info: Option<(String, Statistics)>,
+    origin_summary: Statistics,
 }
 
 pub struct MutationAggregator {
@@ -61,6 +59,7 @@ pub struct MutationAggregator {
     location_gen: TableMetaLocationGenerator,
 
     base_segments: Vec<Location>,
+    merged_statistics: Statistics,
     thresholds: BlockThresholds,
     abort_operation: AbortOperation,
 
@@ -72,11 +71,13 @@ pub struct MutationAggregator {
 }
 
 impl MutationAggregator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,
         dal: Operator,
         location_gen: TableMetaLocationGenerator,
+        merged_statistics: Statistics,
         base_segments: Vec<Location>,
         thresholds: BlockThresholds,
         total_tasks: usize,
@@ -87,6 +88,7 @@ impl MutationAggregator {
             dal,
             location_gen,
             base_segments,
+            merged_statistics,
             thresholds,
             abort_operation: AbortOperation::default(),
             input_metas: HashMap::new(),
@@ -97,16 +99,65 @@ impl MutationAggregator {
     }
 
     #[async_backtrace::framed]
-    async fn write_segments(&self, serialized_data: Vec<SerializedData>) -> Result<()> {
-        let mut tasks = Vec::with_capacity(serialized_data.len());
-        for serialized in serialized_data {
+    async fn read_segment_lites(
+        &mut self,
+        segment_indices: Vec<usize>,
+    ) -> Result<Vec<SegmentLite>> {
+        let thresholds = self.thresholds;
+        let mut tasks = Vec::with_capacity(segment_indices.len());
+        for index in segment_indices {
+            let (replaced, deleted) = self.input_metas.remove(&index).unwrap();
+            let location = self.base_segments[index].clone();
             let op = self.dal.clone();
+            let schema = self.schema.clone();
+            let location_gen = self.location_gen.clone();
+
             tasks.push(async move {
-                op.write(&serialized.location, serialized.data).await?;
-                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    segment_cache.put(serialized.location.clone(), Arc::new(serialized.segment));
+                let segment_info =
+                    SegmentsIO::read_segment(op.clone(), location, schema, false).await?;
+                // prepare the new segment
+                let mut new_segment =
+                    SegmentInfo::new(segment_info.blocks.clone(), segment_info.summary.clone());
+                // take away the blocks, they are being mutated
+                let mut block_editor = BTreeMap::<_, _>::from_iter(
+                    std::mem::take(&mut new_segment.blocks)
+                        .into_iter()
+                        .enumerate(),
+                );
+
+                for (idx, new_meta) in replaced {
+                    block_editor.insert(idx, new_meta);
                 }
-                Ok::<_, ErrorCode>(())
+                for idx in deleted {
+                    block_editor.remove(&idx);
+                }
+
+                // assign back the mutated blocks to segment
+                new_segment.blocks = block_editor.into_values().collect();
+                if !new_segment.blocks.is_empty() {
+                    // re-calculate the segment statistics
+                    let new_summary = reduce_block_metas(&new_segment.blocks, thresholds)?;
+                    new_segment.summary = new_summary.clone();
+
+                    let location = location_gen.gen_segment_info_location();
+                    let serialized_segment = SerializedSegment {
+                        path: location.clone(),
+                        segment: Arc::new(new_segment),
+                    };
+                    SegmentsIO::write_segment(op, serialized_segment, true).await?;
+
+                    Ok(SegmentLite {
+                        index,
+                        new_segment_info: Some((location, new_summary)),
+                        origin_summary: segment_info.summary.clone(),
+                    })
+                } else {
+                    Ok(SegmentLite {
+                        index,
+                        new_segment_info: None,
+                        origin_summary: segment_info.summary.clone(),
+                    })
+                }
             });
         }
 
@@ -116,12 +167,11 @@ impl MutationAggregator {
             tasks,
             threads_nums,
             permit_nums,
-            "mutation-write-segments-worker".to_owned(),
+            "fuse-req-segments-worker".to_owned(),
         )
         .await?
         .into_iter()
-        .collect::<Result<Vec<_>>>()?;
-        Ok(())
+        .collect::<Result<Vec<_>>>()
     }
 }
 
@@ -172,67 +222,44 @@ impl AsyncAccumulatingTransform for MutationAggregator {
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
-        // Read all segments information in parallel.
-        let segments_io =
-            SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.schema.clone());
-        let segment_locations = self.base_segments.as_slice();
-        let segment_infos = segments_io
-            .read_segments(segment_locations, true)
-            .await?
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
+        let mut recalc_stats = false;
+        if self.input_metas.len() == self.base_segments.len() {
+            self.merged_statistics = Statistics::default();
+            recalc_stats = true;
+        }
 
-        let segments = self.base_segments.clone();
-        let mut summary = Statistics::default();
-        let mut serialized_data = Vec::with_capacity(self.input_metas.len());
-        let mut segments_editor = BTreeMap::<_, _>::from_iter(segments.into_iter().enumerate());
-        for (seg_idx, seg_info) in segment_infos.iter().enumerate() {
-            if let Some((replaced, deleted)) = self.input_metas.get(&seg_idx) {
-                // prepare the new segment
-                let mut new_segment =
-                    SegmentInfo::new(seg_info.blocks.clone(), seg_info.summary.clone());
-                // take away the blocks, they are being mutated
-                let mut block_editor = BTreeMap::<_, _>::from_iter(
-                    std::mem::take(&mut new_segment.blocks)
-                        .into_iter()
-                        .enumerate(),
-                );
-
-                for (idx, new_meta) in replaced {
-                    block_editor.insert(*idx, new_meta.clone());
-                }
-                for idx in deleted {
-                    block_editor.remove(idx);
-                }
-                // assign back the mutated blocks to segment
-                new_segment.blocks = block_editor.into_values().collect();
-                if new_segment.blocks.is_empty() {
-                    segments_editor.remove(&seg_idx);
-                } else {
-                    // re-calculate the segment statistics
-                    let new_summary = reduce_block_metas(&new_segment.blocks, self.thresholds)?;
-                    merge_statistics_mut(&mut summary, &new_summary)?;
-                    new_segment.summary = new_summary;
-
-                    let location = self.location_gen.gen_segment_info_location();
+        let segment_locations = self.base_segments.clone();
+        let mut segments_editor =
+            BTreeMap::<_, _>::from_iter(segment_locations.into_iter().enumerate());
+        let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        let segment_indices = self.input_metas.keys().cloned().collect::<Vec<_>>();
+        for chunk in segment_indices.chunks(chunk_size) {
+            let results = self.read_segment_lites(chunk.to_vec()).await?;
+            for result in results {
+                if let Some((location, summary)) = result.new_segment_info {
                     self.abort_operation.add_segment(location.clone());
-                    segments_editor.insert(seg_idx, (location.clone(), SegmentInfo::VERSION));
-                    serialized_data.push(SerializedData {
-                        data: new_segment.to_bytes()?,
-                        location,
-                        segment: Arc::new(new_segment),
-                    });
+                    segments_editor.insert(result.index, (location.clone(), SegmentInfo::VERSION));
+                    merge_statistics_mut(&mut self.merged_statistics, &summary)?;
+                } else {
+                    segments_editor.remove(&result.index);
                 }
-            } else {
-                merge_statistics_mut(&mut summary, &seg_info.summary)?;
+
+                if !recalc_stats {
+                    deduct_statistics_mut(&mut self.merged_statistics, &result.origin_summary);
+                }
             }
         }
 
         // assign back the mutated segments to snapshot
-        let segments = segments_editor.into_values().collect();
-        self.write_segments(serialized_data).await?;
-        let meta =
-            MutationSinkMeta::create(segments, summary, std::mem::take(&mut self.abort_operation));
+        let segments = segments_editor.into_values().collect::<Vec<_>>();
+        if segments.is_empty() {
+            self.merged_statistics = Statistics::default();
+        }
+        let meta = MutationSinkMeta::create(
+            segments,
+            self.merged_statistics.clone(),
+            self.abort_operation.clone(),
+        );
 
         Ok(Some(DataBlock::empty_with_meta(meta)))
     }

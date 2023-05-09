@@ -118,6 +118,7 @@ impl FuseTable {
                 self.schema(),
                 self.get_operator(),
                 self.meta_location_generator().clone(),
+                snapshot.summary.clone(),
                 snapshot.segments.clone(),
                 self.get_block_thresholds(),
                 total_tasks,

@@ -115,6 +115,22 @@ pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) -> Result<()> {
     Ok(())
 }
 
+// deduct statistics for snapshot summary.
+pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
+    l.row_count -= r.row_count;
+    l.block_count -= r.block_count;
+    l.perfect_block_count -= r.perfect_block_count;
+    l.uncompressed_byte_size -= r.uncompressed_byte_size;
+    l.compressed_byte_size -= r.compressed_byte_size;
+    l.index_size -= r.index_size;
+    for (id, col_stats) in &mut l.col_stats {
+        if let Some(r_col_stats) = r.col_stats.get(id) {
+            col_stats.null_count -= r_col_stats.null_count;
+            col_stats.in_memory_size -= r_col_stats.in_memory_size;
+        }
+    }
+}
+
 pub fn reduce_statistics<T: Borrow<Statistics>>(stats: &[T]) -> Result<Statistics> {
     let mut statistics = Statistics::default();
     for item in stats {
