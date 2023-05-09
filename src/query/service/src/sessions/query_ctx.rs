@@ -430,7 +430,7 @@ impl TableContext for QueryContext {
 
     fn get_settings(&self) -> Arc<Settings> {
         if self.query_settings.get_changes().is_empty() {
-            let session_change = self.shared.get_settings().get_changes();
+            let session_change = self.shared.get_changed_settings();
             unsafe {
                 self.query_settings.unchecked_apply_changes(session_change);
             }
@@ -517,7 +517,7 @@ impl TableContext for QueryContext {
 
     fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
         if self.query_settings.get_changes().is_empty() {
-            let session_change = self.shared.get_settings().get_changes();
+            let session_change = self.shared.get_changed_settings();
             unsafe {
                 self.query_settings.unchecked_apply_changes(session_change);
             }
