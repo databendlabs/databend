@@ -19,6 +19,7 @@ common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-license = { path = "../../common/license" }
+common-settings = { path = "../../query/settings"}
 common-storages-fuse = { path = "../storages/fuse" }
 databend-query = { path = "../service" }
 storages-common-cache = { path = "../storages/common/cache" }
@@ -29,6 +30,7 @@ async-trait = "0.1.57"
 chrono = { workspace = true }
 jwt-simple = "0.11.0"
 tracing = "0.1.36"
+dashmap = "5.4"
 
 [build-dependencies]
 common-building = { path = "../../common/building" }

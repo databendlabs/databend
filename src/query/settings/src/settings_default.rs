@@ -253,6 +253,13 @@ impl DefaultSettings {
                     desc: "Parquet file with smaller size will be read as a whole file, instead of column by column.",
                     possible_values: None,
                 }),
+
+                // enterprise license related settings
+                ("enterprise_license", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_owned()),
+                    desc: "License key for use enterprise features",
+                    possible_values: None,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

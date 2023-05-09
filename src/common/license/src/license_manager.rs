@@ -18,6 +18,7 @@ use common_base::base::GlobalInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use jwt_simple::claims::JWTClaims;
+use common_settings::Settings;
 
 use crate::license::LicenseInfo;
 
@@ -27,6 +28,10 @@ pub trait LicenseManager {
     fn instance() -> Arc<Box<dyn LicenseManager>>
     where Self: Sized;
     fn is_active(&self) -> bool;
+
+    /// Check whether enterprise feature is available given context
+    /// This function returns `LicenseKeyInvalid` error if enterprise license key is not valid or expired.
+    fn check_enterprise_enabled(&self, settings: &Arc<Settings>, tenant: String, feature: String) -> Result<()>;
 
     /// Encodes a raw license string as a JWT using the constant public key.
     ///
@@ -80,6 +85,12 @@ impl LicenseManager for OssLicenseManager {
 
     fn is_active(&self) -> bool {
         false
+    }
+
+    fn check_enterprise_enabled(&self, settings: &Arc<Settings>, tenant: String, feature: String) -> Result<()> {
+        Err(ErrorCode::LicenseKeyInvalid(
+            "Need Commercial License".to_string(),
+        ))
     }
 
     fn make_license(_raw: &str) -> Result<JWTClaims<LicenseInfo>> {

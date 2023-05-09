@@ -1819,6 +1819,7 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
+ "common-settings",
  "jwt-simple",
  "serde",
 ]
@@ -3738,7 +3739,9 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-license",
+ "common-settings",
  "common-storages-fuse",
+ "dashmap",
  "databend-query",
  "jwt-simple",
  "storages-common-cache",

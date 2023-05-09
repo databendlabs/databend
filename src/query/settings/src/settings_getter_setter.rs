@@ -339,4 +339,8 @@ impl Settings {
     pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
         self.try_get_u64("parquet_fast_read_bytes")
     }
+
+    pub fn get_enterprise_license(&self) -> Result<String> {
+        self.try_get_string("enterprise_license")
+    }
 }
