@@ -70,6 +70,7 @@ members = [
     "src/query/storages/parquet",
     "src/query/storages/result_cache",
     "src/query/users",
+    "src/query/ee-features/vacuum-handler",
     # databend-query
     "src/query/service",
     # enterprise
@@ -106,7 +107,7 @@ opendal = { version = "0.33", features = [
     "trust-dns",
 ] }
 ordered-float = { version = "3.6.0", default-features = false }
-jsonb = { version = "0.2.1" }
+jsonb = { version = "0.2.2" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
@@ -124,7 +125,7 @@ thiserror = { version = "1" }
 clap = { version = "3.2.22", features = ["derive", "env"] }
 
 # server
-tonic = { version = "0.9", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
+tonic = { version = "0.9.2", features = ["transport", "codegen", "prost", "tls-roots", "tls"] }
 
 # serialization
 prost = { version = "0.11.0" }
@@ -133,6 +134,7 @@ prost = { version = "0.11.0" }
 # @xuanwo will address this issue upon his return from Mars.
 serde = { version = "=1.0.152", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
+tonic-build = { version = "0.9.2" }
 
 # chrono
 chrono = { version = "0.4.24", features = ["serde"] }
@@ -199,6 +201,6 @@ rpath = false
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
 
-arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c49adfe" }
+arrow-format = { git = "https://github.com/sundy-li/arrow-format", rev = "c8e11341" }
 parquet2 = { git = "https://github.com/jorgecarleitao/parquet2", rev = "ed0e1ff" }
 metrics = { git = "https://github.com/datafuse-extras/metrics.git", rev = "fc2ecd1" }

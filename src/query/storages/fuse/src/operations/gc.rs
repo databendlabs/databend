@@ -101,7 +101,7 @@ impl FuseTable {
         // 3. Read snapshot fields by chunk size(max_storage_io_requests).
         for chunk in snapshot_files.chunks(chunk_size).rev() {
             let results = snapshots_io
-                .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone())
+                .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone(), false)
                 .await?;
             let mut snapshots: Vec<_> = results.into_iter().flatten().collect();
             if snapshots.is_empty() {
@@ -400,7 +400,7 @@ impl FuseTable {
 
     // Purge file by location chunks.
     #[async_backtrace::framed]
-    async fn try_purge_location_files(
+    pub async fn try_purge_location_files(
         &self,
         ctx: Arc<dyn TableContext>,
         locations_to_be_purged: HashSet<String>,
@@ -412,7 +412,7 @@ impl FuseTable {
 
     // Purge file by location chunks.
     #[async_backtrace::framed]
-    async fn try_purge_location_files_and_cache<T, H, M>(
+    pub async fn try_purge_location_files_and_cache<T, H, M>(
         &self,
         ctx: Arc<dyn TableContext>,
         locations_to_be_purged: HashSet<String>,
@@ -432,7 +432,7 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn get_block_locations(
+    pub async fn get_block_locations(
         &self,
         ctx: Arc<dyn TableContext>,
         segment_locations: &[Location],
@@ -480,9 +480,9 @@ impl FuseTable {
 }
 
 #[derive(Default)]
-struct LocationTuple {
-    block_location: HashSet<String>,
-    bloom_location: HashSet<String>,
+pub struct LocationTuple {
+    pub block_location: HashSet<String>,
+    pub bloom_location: HashSet<String>,
 }
 
 impl From<Arc<SegmentInfo>> for LocationTuple {

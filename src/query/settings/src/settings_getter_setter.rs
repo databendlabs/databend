@@ -124,7 +124,11 @@ impl Settings {
     }
 
     pub fn set_max_storage_io_requests(&self, val: u64) -> Result<()> {
-        self.try_set_u64("max_storage_io_requests", val)
+        if val > 0 {
+            self.try_set_u64("max_storage_io_requests", val)
+        } else {
+            Err(ErrorCode::BadArguments("Value must be greater than 0"))
+        }
     }
 
     pub fn get_storage_io_min_bytes_for_seek(&self) -> Result<u64> {

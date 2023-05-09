@@ -40,6 +40,7 @@ use common_meta_types::Entry;
 use common_meta_types::EntryPayload;
 use common_meta_types::KVMeta;
 use common_meta_types::LogId;
+use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::Node;
 use common_meta_types::NodeId;
@@ -628,8 +629,17 @@ impl StateMachine {
         resp: &mut TxnReply,
         log_time_ms: u64,
     ) -> Result<(), MetaStorageError> {
-        let (expired, prev, result) =
-            Self::txn_upsert_kv(txn_tree, &UpsertKV::delete(&delete.key), log_time_ms)?;
+        let upsert = UpsertKV::delete(&delete.key);
+
+        // If `delete.match_seq` is `Some`, only delete the record with the exact `seq`.
+        let upsert = if let Some(seq) = delete.match_seq {
+            upsert.with(MatchSeq::Exact(seq))
+        } else {
+            upsert
+        };
+
+        let (expired, prev, result) = Self::txn_upsert_kv(txn_tree, &upsert, log_time_ms)?;
+        let is_deleted = prev.is_some() && result.is_none();
 
         if expired.is_some() {
             txn_tree.push_change(&delete.key, expired, None);
@@ -638,7 +648,7 @@ impl StateMachine {
 
         let del_resp = TxnDeleteResponse {
             key: delete.key.clone(),
-            success: prev.is_some(),
+            success: is_deleted,
             prev_value: if delete.prev_value {
                 prev.map(to_pb_seq_v)
             } else {

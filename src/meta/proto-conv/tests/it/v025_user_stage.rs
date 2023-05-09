@@ -62,6 +62,7 @@ fn test_decode_v25_user_stage() -> anyhow::Result<()> {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         number_of_files: 100,
