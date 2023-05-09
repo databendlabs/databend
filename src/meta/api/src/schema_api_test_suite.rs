@@ -2440,7 +2440,7 @@ impl SchemaApiTestSuite {
         if delete {
             delete_test_data(mt.as_kv_api(), &dbid_tbname).await?;
         }
-        Ok((table_id, create_table_meta))
+        Ok((table_id, drop_data))
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -2473,7 +2473,9 @@ impl SchemaApiTestSuite {
         info!("create database res: {:?}", res);
 
         assert_eq!(1, res.db_id, "first database id is 1");
-        let drop_on = Some(Utc::now() - Duration::days(1));
+        let one_day_before = Some(Utc::now() - Duration::days(1));
+        let two_day_before = Some(Utc::now() - Duration::days(2));
+
         self.create_out_of_retention_time_table(
             mt,
             tbl_name_ident.clone(),
@@ -2481,7 +2483,7 @@ impl SchemaApiTestSuite {
                 db_id: res.db_id,
                 table_name: tb1_name.to_string(),
             },
-            drop_on,
+            one_day_before,
             true,
         )
         .await?;
@@ -2493,7 +2495,7 @@ impl SchemaApiTestSuite {
                     db_id: res.db_id,
                     table_name: tb1_name.to_string(),
                 },
-                Some(Utc::now() - Duration::days(2)),
+                two_day_before,
                 false,
             )
             .await?;
