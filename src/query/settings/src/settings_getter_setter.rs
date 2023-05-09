@@ -125,12 +125,9 @@ impl Settings {
 
     pub fn set_max_storage_io_requests(&self, val: u64) -> Result<()> {
         if val > 0 {
-            self.try_set_u64("max_storage_io_requests", val);
-            Ok(())
+            self.try_set_u64("max_storage_io_requests", val)
         } else {
-            Err(ErrorCode::BadArguments(
-                "Value must be greater than 0".into(),
-            ))
+            Err(ErrorCode::BadArguments("Value must be greater than 0"))
         }
     }
 
