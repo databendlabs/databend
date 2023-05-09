@@ -51,7 +51,7 @@ pub fn require_property(
                     .child(0)?
                     .children()
                     .iter()
-                    .any(|child| check_partition(child))
+                    .any(check_partition)
                 {
                     children.push(optimized_expr.child(index)?.clone());
                     continue;
