@@ -88,7 +88,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
@@ -1904,58 +1903,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         Ok(GetTableCopiedFileReply {
             file_info: file_infos,
         })
-    }
-
-    async fn upsert_table_copied_file_info(
-        &self,
-        req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply, KVAppError> {
-        let ctx = &func_name!();
-        debug!(req = debug(&req), "SchemaApi: {}", ctx);
-
-        let table_id = TableId {
-            table_id: req.table_id,
-        };
-
-        let mut keys = Vec::with_capacity(req.file_info.len());
-        for file in req.file_info.iter() {
-            let key = TableCopiedFileNameIdent {
-                table_id: table_id.table_id,
-                file: file.0.clone(),
-            };
-            keys.push(key.to_string_key());
-        }
-
-        let mut trials = txn_trials(ctx);
-        loop {
-            trials.next().unwrap()?;
-
-            let (tb_meta_seq, _tb_meta) = get_table_by_id_or_err(self, &table_id, ctx).await?;
-
-            let (condition, if_then) = build_upsert_table_copied_file_info_conditions(
-                &req,
-                tb_meta_seq,
-                req.fail_if_duplicated,
-            )?;
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-            debug!(ident = display(&table_id), succ = display(succ), ctx);
-
-            if succ {
-                return Ok(UpsertTableCopiedFileReply {});
-            } else if req.fail_if_duplicated {
-                // fail fast if txn failed, which caused by file duplication
-                return Err(KVAppError::AppError(AppError::DuplicatedUpsertFiles(
-                    DuplicatedUpsertFiles::new(req.table_id, "upsert_table_copied_file_info"),
-                )));
-            }
-        }
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
