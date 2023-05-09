@@ -32,20 +32,20 @@ pub enum ExecutorTask {
 
 pub struct ExecutorWorkerContext {
     pub query_id: Arc<String>,
-    worker_num: usize,
+    worker_id: usize,
     task: ExecutorTask,
     workers_condvar: Arc<WorkersCondvar>,
 }
 
 impl ExecutorWorkerContext {
     pub fn create(
-        worker_num: usize,
+        worker_id: usize,
         workers_condvar: Arc<WorkersCondvar>,
         query_id: Arc<String>,
     ) -> Self {
         ExecutorWorkerContext {
             query_id,
-            worker_num,
+            worker_id,
             workers_condvar,
             task: ExecutorTask::None,
         }
@@ -55,8 +55,8 @@ impl ExecutorWorkerContext {
         !matches!(&self.task, ExecutorTask::None)
     }
 
-    pub fn get_worker_num(&self) -> usize {
-        self.worker_num
+    pub fn get_worker_id(&self) -> usize {
+        self.worker_id
     }
 
     pub fn set_task(&mut self, task: ExecutorTask) {

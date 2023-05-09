@@ -34,8 +34,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 
@@ -176,15 +174,6 @@ impl Database for DefaultDatabase {
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply> {
         let res = self.ctx.meta.get_table_copied_file_info(req).await?;
-        Ok(res)
-    }
-
-    #[async_backtrace::framed]
-    async fn upsert_table_copied_file_info(
-        &self,
-        req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
-        let res = self.ctx.meta.upsert_table_copied_file_info(req).await?;
         Ok(res)
     }
 
