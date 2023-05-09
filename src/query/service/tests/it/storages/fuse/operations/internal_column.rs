@@ -105,7 +105,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
     for segment in &snapshot.segments {
         segment_name.insert(segment.0.clone());
 
-        let segment_reader = MetaReaders::segment_info_reader(
+        let compact_segment_reader = MetaReaders::segment_info_reader(
             fuse_table.get_operator(),
             TestFixture::default_table_schema(),
         );
@@ -115,8 +115,8 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
             ver: SegmentInfo::VERSION,
             put_cache: false,
         };
-        let segment_info = segment_reader.read(&params).await?;
-        let segment_info = SegmentInfo::try_from(segment_info.as_ref())?;
+        let compact_segment_info = compact_segment_reader.read(&params).await?;
+        let segment_info = SegmentInfo::try_from(compact_segment_info.as_ref())?;
 
         for block in &segment_info.blocks {
             block_name.insert(block.location.0.clone());

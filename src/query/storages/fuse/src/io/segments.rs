@@ -126,8 +126,8 @@ impl SegmentsIO {
             put_cache,
         };
 
-        let segment = reader.read(&load_params).await?;
-        let segment = Arc::new(SegmentInfo::try_from(segment.as_ref())?);
+        let compact_segment = reader.read(&load_params).await?;
+        let segment = Arc::new(SegmentInfo::try_from(compact_segment.as_ref())?);
         Ok(segment.into())
     }
 

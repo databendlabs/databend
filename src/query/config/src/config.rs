@@ -1958,9 +1958,6 @@ pub struct CacheConfig {
     pub table_data_deserialized_data_bytes: u64,
 
     // ----- the following options/args are all deprecated               ----
-    // ----- and turned into Option<T>, to help user migrate the configs ----
-    /// OBSOLETED: Table disk cache size (mb).
-
     /// Max number of cached table segment
     #[clap(long = "cache-table-meta-segment-count")]
     pub table_meta_segment_count: Option<u64>,
