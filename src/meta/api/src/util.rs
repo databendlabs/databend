@@ -339,6 +339,7 @@ pub fn txn_op_del(key: &impl kvapi::Key) -> TxnOp {
         request: Some(Request::Delete(TxnDeleteRequest {
             key: key.to_string_key(),
             prev_value: true,
+            match_seq: None,
         })),
     }
 }
