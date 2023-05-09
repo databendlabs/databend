@@ -784,7 +784,19 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 columns,
             } => {
                 self.visit_table_ref(catalog, database, table);
-                todo!()
+                if let Some(columns) = columns {
+                    let mut columns_children = Vec::with_capacity(columns.len());
+                    for column in columns.iter() {
+                        self.visit_identifier(column);
+                        columns_children.push(self.children.pop().unwrap());
+                    }
+                    let columns_name = "Columns".to_string();
+                    let columns_format_ctx =
+                        AstFormatContext::with_children(columns_name, columns_children.len());
+                    let columns_node =
+                        FormatTreeNode::with_children(columns_format_ctx, columns_children);
+                    self.children.push(columns_node);
+                }
             }
             CopyUnit::StageLocation(v) => {
                 let location_format_ctx =
