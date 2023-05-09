@@ -127,7 +127,7 @@ SELECT number FROM numbers(3) WHERE number > 1;
 If you alias a column in the SELECT clause, you can use the alias in the WHERE clause:
 
 ```sql
-SELECT number * 2 as a FROM numbers(3) WHERE (a + 1) % 3 = 0
+SELECT number * 2 AS a FROM numbers(3) WHERE (a + 1) % 3 = 0
 +--------+
 |    a   |
 +--------+
@@ -138,7 +138,7 @@ SELECT number * 2 as a FROM numbers(3) WHERE (a + 1) % 3 = 0
 If the alias and the column name are the same, the WHERE clause will recognize the alias as the column name:
 
 ```sql
-select number * 2 as number from numbers(3) where (number + 1) % 3 = 0
+SELECT number * 2 AS number FROM numbers(3) WHERE (number + 1) % 3 = 0
 +--------+
 | number |
 +--------+
