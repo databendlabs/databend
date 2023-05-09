@@ -129,12 +129,22 @@ impl WindowFunctionInfo {
             WindowFunction::Rank => Self::Rank,
             WindowFunction::DenseRank => Self::DenseRank,
             WindowFunction::PercentRank => Self::PercentRank,
-            WindowFunction::Lag(lag) => Self::Lag(WindowFuncLagLeadImpl {
-                arg: lag.arg,
-                offset: lag.sig.offset,
-                default: lag.default.clone(),
-                return_type: lag.sig.return_type.clone(),
-            }),
+            WindowFunction::Lag(lag) => {
+                let new_arg = schema.index_of(&lag.arg.to_string())?;
+                let new_default = match &lag.default {
+                    LagLeadDefault::Null => LagLeadDefault::Null,
+                    LagLeadDefault::Index(i) => {
+                        let offset = schema.index_of(&i.to_string())?;
+                        LagLeadDefault::Index(offset)
+                    }
+                };
+                Self::Lag(WindowFuncLagLeadImpl {
+                    arg: new_arg,
+                    offset: lag.sig.offset,
+                    default: new_default,
+                    return_type: lag.sig.return_type.clone(),
+                })
+            }
         })
     }
 }

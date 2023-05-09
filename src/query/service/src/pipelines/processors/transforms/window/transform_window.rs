@@ -510,7 +510,7 @@ impl<T: Number> TransformWindow<T> {
                             .unwrap()
                             .block;
                         let col = block.get_by_offset(lag.arg).value.as_column().unwrap();
-                        col.index(self.current_row.row).unwrap().to_owned()
+                        col.index(self.frame_start.row).unwrap().to_owned()
                     };
 
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
