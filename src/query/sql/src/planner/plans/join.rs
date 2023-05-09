@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::max;
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::fmt::Formatter;
@@ -289,9 +290,7 @@ impl Join {
             for (idx, left) in left_statistics.column_stats.iter_mut() {
                 if *idx == left_column_index {
                     if left.histogram.is_some() {
-                        left.histogram = if left.ndv as u64 <= 2
-                            || left.ndv as u64 > join_card as u64
-                        {
+                        left.histogram = if left.ndv as u64 <= 2 {
                             None
                         } else {
                             if matches!(left.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
@@ -301,7 +300,7 @@ impl Join {
                             }
                             Some(histogram_from_ndv(
                                 left.ndv as u64,
-                                join_card as u64,
+                                max(join_card as u64, left.ndv as u64),
                                 Some((left.min.clone(), left.max.clone())),
                                 DEFAULT_HISTOGRAM_BUCKETS,
                             )?)
@@ -315,9 +314,7 @@ impl Join {
             for (idx, right) in right_statistics.column_stats.iter_mut() {
                 if *idx == right_column_index {
                     if right.histogram.is_some() {
-                        right.histogram = if right.ndv as u64 <= 2
-                            || right.ndv as u64 > join_card as u64
-                        {
+                        right.histogram = if right.ndv as u64 <= 2 {
                             None
                         } else {
                             if matches!(right.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
@@ -327,7 +324,7 @@ impl Join {
                             }
                             Some(histogram_from_ndv(
                                 right.ndv as u64,
-                                join_card as u64,
+                                max(join_card as u64, right.ndv as u64),
                                 Some((right.min.clone(), right.max.clone())),
                                 DEFAULT_HISTOGRAM_BUCKETS,
                             )?)
@@ -604,7 +601,7 @@ fn evaluate_by_histogram(
             }
         }
     }
-    *new_ndv = Some(all_ndv);
+    *new_ndv = Some(all_ndv.ceil());
     Ok(card)
 }
 

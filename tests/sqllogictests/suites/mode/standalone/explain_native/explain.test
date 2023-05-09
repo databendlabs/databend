@@ -589,10 +589,10 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.60
+├── estimated rows: 0.81
 └── Filter
     ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-    ├── estimated rows: 0.60
+    ├── estimated rows: 0.81
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
@@ -623,10 +623,10 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.72
+├── estimated rows: 0.98
 └── Filter
     ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t1.a (#0) = 2]
-    ├── estimated rows: 0.72
+    ├── estimated rows: 0.98
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
@@ -663,10 +663,10 @@ explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3), t3.a (#4), t3.b (#5)]
-├── estimated rows: 16.67
+├── estimated rows: 24.07
 └── Filter
     ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t3.a (#4) = 2]
-    ├── estimated rows: 16.67
+    ├── estimated rows: 24.07
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
@@ -712,16 +712,16 @@ explain select * from t1,t2, t3 where ((t1.a > 1 and t2.a > 2) or (t1.b < 3 and 
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3), t3.a (#4), t3.b (#5)]
-├── estimated rows: 4.91
+├── estimated rows: 6.66
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 4.91
+    ├── estimated rows: 6.66
     ├── Filter(Build)
     │   ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-    │   ├── estimated rows: 0.60
+    │   ├── estimated rows: 0.81
     │   └── HashJoin
     │       ├── join type: CROSS
     │       ├── build keys: []
@@ -761,17 +761,17 @@ explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 1.05
+├── estimated rows: 1.29
 └── Limit
     ├── limit: 3
     ├── offset: 0
-    ├── estimated rows: 1.05
+    ├── estimated rows: 1.29
     └── Sort
         ├── sort keys: [a DESC NULLS LAST]
-        ├── estimated rows: 1.05
+        ├── estimated rows: 1.29
         └── Filter
             ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-            ├── estimated rows: 1.05
+            ├── estimated rows: 1.29
             └── HashJoin
                 ├── join type: CROSS
                 ├── build keys: []
