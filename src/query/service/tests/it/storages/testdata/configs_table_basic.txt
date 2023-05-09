@@ -13,8 +13,8 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'cache'   | 'table_bloom_index_meta_count'             | '3000'                           | ''       |
 | 'cache'   | 'table_data_cache_population_queue_size'   | '65536'                          | ''       |
 | 'cache'   | 'table_data_deserialized_data_bytes'       | '0'                              | ''       |
+| 'cache'   | 'table_meta_segment_bytes'                 | '1073741824'                     | ''       |
 | 'cache'   | 'table_meta_segment_count'                 | 'null'                           | ''       |
-| 'cache'   | 'table_meta_segment_size'                  | '1073741824'                     | ''       |
 | 'cache'   | 'table_meta_snapshot_count'                | '256'                            | ''       |
 | 'cache'   | 'table_meta_statistic_count'               | '256'                            | ''       |
 | 'cache'   | 'table_prune_partitions_count'             | '256'                            | ''       |

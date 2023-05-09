@@ -443,8 +443,8 @@ pub struct CacheConfig {
     /// Max number of cached table snapshot
     pub table_meta_snapshot_count: u64,
 
-    /// Max number of cached table segment
-    pub table_meta_segment_size: u64,
+    /// Max size(in bytes) of cached table segment
+    pub table_meta_segment_bytes: u64,
 
     /// Max number of cached table segment
     pub table_meta_statistic_count: u64,
@@ -537,7 +537,7 @@ impl Default for CacheConfig {
         Self {
             enable_table_meta_cache: true,
             table_meta_snapshot_count: 256,
-            table_meta_segment_size: 1073741824,
+            table_meta_segment_bytes: 1073741824,
             table_meta_statistic_count: 256,
             enable_table_index_bloom: true,
             table_bloom_index_meta_count: 3000,

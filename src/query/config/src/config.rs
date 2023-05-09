@@ -1892,8 +1892,8 @@ pub struct CacheConfig {
     pub table_meta_snapshot_count: u64,
 
     /// Max bytes of cached table segment
-    #[clap(long = "cache-table-meta-segment-size", default_value = "1073741824")]
-    pub table_meta_segment_size: u64,
+    #[clap(long = "cache-table-meta-segment-bytes", default_value = "1073741824")]
+    pub table_meta_segment_bytes: u64,
 
     /// Max number of cached table statistic meta
     #[clap(long = "cache-table-meta-statistic-count", default_value = "256")]
@@ -2068,7 +2068,7 @@ mod cache_config_converters {
             Ok(Self {
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
-                table_meta_segment_size: value.table_meta_segment_size,
+                table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -2088,7 +2088,7 @@ mod cache_config_converters {
             Self {
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
-                table_meta_segment_size: value.table_meta_segment_size,
+                table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
