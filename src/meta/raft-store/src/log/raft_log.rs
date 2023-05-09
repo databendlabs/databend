@@ -29,7 +29,7 @@ use crate::key_spaces::Logs;
 use crate::state_machine::LogMetaKey;
 use crate::state_machine::LogMetaValue;
 
-const TREE_RAFT_LOG: &str = "raft_log";
+pub const TREE_RAFT_LOG: &str = "raft_log";
 
 /// RaftLog stores the logs of a raft node.
 /// It is part of MetaStore.
