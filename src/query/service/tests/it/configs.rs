@@ -290,7 +290,7 @@ fn test_env_config_gcs() -> Result<()> {
             ("CACHE_DISK_PATH", Some("_cache_env")),
             ("CACHE_DISK_MAX_BYTES", Some("512")),
             ("CACHE_TABLE_META_SNAPSHOT_COUNT", Some("256")),
-            ("CACHE_TABLE_META_SEGMENT_BYTES", Some("10240")),
+            ("CACHE_TABLE_META_SEGMENT_SIZE", Some("10240")),
             ("META_ENDPOINTS", Some("0.0.0.0:9191")),
             ("CACHE_TABLE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
@@ -379,7 +379,7 @@ fn test_env_config_gcs() -> Result<()> {
             assert!(configured.cache.enable_table_bloom_index_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
-            assert_eq!(1024, configured.cache.table_meta_segment_size);
+            assert_eq!(10240, configured.cache.table_meta_segment_size);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
@@ -552,7 +552,7 @@ fn test_env_config_webhdfs() -> Result<()> {
             ("CACHE_DISK_PATH", Some("_cache_env")),
             ("CACHE_DISK_MAX_BYTES", Some("512")),
             ("CACHE_TABLE_META_SNAPSHOT_COUNT", Some("256")),
-            ("CACHE_TABLE_META_SEGMENT_COUNT", Some("10240")),
+            ("CACHE_TABLE_META_SEGMENT_SIZE", Some("10240")),
             ("META_ENDPOINTS", Some("0.0.0.0:9191")),
             ("CACHE_TABLE_BLOOM_INDEX_META_COUNT", Some("3000")),
             (
@@ -653,7 +653,7 @@ fn test_env_config_webhdfs() -> Result<()> {
             assert!(configured.cache.enable_table_meta_cache);
             assert_eq!("_cache_env", configured.cache.disk_cache_config.path);
             assert_eq!(512, configured.cache.disk_cache_config.max_bytes);
-            assert_eq!(1073741824, configured.cache.table_meta_segment_size);
+            assert_eq!(10240, configured.cache.table_meta_segment_size);
             assert_eq!(256, configured.cache.table_meta_snapshot_count);
             assert_eq!(3000, configured.cache.table_bloom_index_meta_count);
             assert_eq!(
