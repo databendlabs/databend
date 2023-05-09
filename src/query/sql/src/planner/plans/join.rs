@@ -287,7 +287,7 @@ impl Join {
         if join_card_updated {
             for (idx, left) in left_statistics.column_stats.iter_mut() {
                 if *idx == left_column_index {
-                    if let Some(_) = &left.histogram {
+                    if left.histogram.is_some() {
                         left.histogram = if left.ndv <= 2.0 || left.ndv > join_card {
                             None
                         } else {
@@ -306,7 +306,7 @@ impl Join {
             }
             for (idx, right) in right_statistics.column_stats.iter_mut() {
                 if *idx == right_column_index {
-                    if let Some(_) = &right.histogram {
+                    if right.histogram.is_some() {
                         right.histogram = if right.ndv <= 2.0 || right.ndv > join_card {
                             None
                         } else {
@@ -533,7 +533,7 @@ fn evaluate_by_histogram(
 
                     let right_ndv = right_ndv * percentage;
                     let right_num_rows = right_num_rows * percentage;
-                    
+
                     let max_ndv = f64::max(left_ndv, right_ndv);
                     if max_ndv > 0.0 {
                         all_ndv += left_ndv.min(right_ndv);
