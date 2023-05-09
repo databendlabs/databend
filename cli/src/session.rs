@@ -42,6 +42,7 @@ pub struct Session {
 
     settings: Settings,
     query: String,
+    in_comment_block: bool,
 }
 
 impl Session {
@@ -65,6 +66,7 @@ impl Session {
             is_repl,
             settings,
             query: String::new(),
+            in_comment_block: false,
         })
     }
 
@@ -197,6 +199,27 @@ impl Session {
         let mut in_comment = false;
         while let Some(Ok(token)) = tokenizer.next() {
             match token.kind {
+                TokenKind::CommentBlockStart => {
+                    self.in_comment_block = true;
+                    start = token.span.end;
+                    continue;
+                }
+                TokenKind::CommentBlockEnd => {
+                    if !self.in_comment_block {
+                        panic!("Unexpected comment block end");
+                    }
+                    self.in_comment_block = false;
+                    start = token.span.end;
+                    continue;
+                }
+                _ => {
+                    if self.in_comment_block {
+                        start = token.span.end;
+                        continue;
+                    }
+                }
+            }
+            match token.kind {
                 TokenKind::SemiColon => {
                     let mut sql = self.query.trim().to_owned();
                     if sql.is_empty() {
@@ -212,8 +235,11 @@ impl Session {
                 TokenKind::Newline | TokenKind::EOI => {
                     in_comment = false;
                 }
+                TokenKind::CommentBlockStart | TokenKind::CommentBlockEnd => {
+                    unreachable!("Comment block should be handled before")
+                }
                 _ => {
-                    if !in_comment {
+                    if !in_comment && !self.in_comment_block {
                         self.query.push_str(&line[start..token.span.end]);
                     }
                 }

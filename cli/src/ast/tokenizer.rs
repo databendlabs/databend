@@ -101,8 +101,12 @@ pub enum TokenKind {
     #[regex(r"--[^\t\n\f]*", logos::skip)]
     Comment,
 
-    #[regex(r"/\*([^\*]|(\*[^/]))*\*/", logos::skip)]
-    CommentBlock,
+    // #[regex(r"/\*([^\*]|(\*[^/]))*\*/")]
+    // CommentBlock,
+    #[regex(r"/\*")]
+    CommentBlockStart,
+    #[regex(r"\*/")]
+    CommentBlockEnd,
 
     #[regex(r"[\n]+")]
     Newline,
