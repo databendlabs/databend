@@ -139,6 +139,7 @@ impl MutationAggregator {
                     let new_summary = reduce_block_metas(&new_segment.blocks, thresholds)?;
                     new_segment.summary = new_summary.clone();
 
+                    // write the segment info.
                     let location = location_gen.gen_segment_info_location();
                     let serialized_segment = SerializedSegment {
                         path: location.clone(),
@@ -231,6 +232,7 @@ impl AsyncAccumulatingTransform for MutationAggregator {
         let segment_locations = self.base_segments.clone();
         let mut segments_editor =
             BTreeMap::<_, _>::from_iter(segment_locations.into_iter().enumerate());
+
         let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         let segment_indices = self.input_metas.keys().cloned().collect::<Vec<_>>();
         for chunk in segment_indices.chunks(chunk_size) {
