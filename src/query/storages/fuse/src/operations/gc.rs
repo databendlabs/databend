@@ -17,9 +17,7 @@ use std::hash::BuildHasher;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_cache::Count;
 use common_cache::CountableMeter;
-use common_cache::DefaultHashBuilder;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -27,7 +25,6 @@ use common_exception::Result;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::LoadParams;
 use storages_common_cache_manager::CachedObject;
-use storages_common_cache_manager::CompactSegmentInfoMeter;
 use storages_common_index::BloomIndexMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Location;
@@ -335,7 +332,7 @@ impl FuseTable {
         let blooms_count = blooms_to_be_purged.len();
         if blooms_count > 0 {
             counter.blooms += blooms_count;
-            self.try_purge_location_files_and_cache::<BloomIndexMeta, DefaultHashBuilder, Count>(
+            self.try_purge_location_files_and_cache::<BloomIndexMeta, _, _>(
                 ctx.clone(),
                 blooms_to_be_purged,
             )
@@ -346,7 +343,7 @@ impl FuseTable {
         let segments_count = segments_to_be_purged.len();
         if segments_count > 0 {
             counter.segments += segments_count;
-            self.try_purge_location_files_and_cache::<CompactSegmentInfo, DefaultHashBuilder, CompactSegmentInfoMeter>(
+            self.try_purge_location_files_and_cache::<CompactSegmentInfo, _, _>(
                 ctx.clone(),
                 segments_to_be_purged,
             )
@@ -366,7 +363,7 @@ impl FuseTable {
         let ts_count = ts_to_be_purged.len();
         if ts_count > 0 {
             counter.table_statistics += ts_count;
-            self.try_purge_location_files_and_cache::<TableSnapshotStatistics, DefaultHashBuilder, Count>(
+            self.try_purge_location_files_and_cache::<TableSnapshotStatistics, _, _>(
                 ctx.clone(),
                 ts_to_be_purged,
             )
@@ -377,7 +374,7 @@ impl FuseTable {
         let snapshots_count = snapshots_to_be_purged.len();
         if snapshots_count > 0 {
             counter.snapshots += snapshots_count;
-            self.try_purge_location_files_and_cache::<TableSnapshot, DefaultHashBuilder, Count>(
+            self.try_purge_location_files_and_cache::<TableSnapshot, _, _>(
                 ctx.clone(),
                 snapshots_to_be_purged,
             )
