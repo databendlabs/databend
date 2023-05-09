@@ -257,7 +257,7 @@ impl SchemaApiTestSuite {
         suite.truncate_table(&b.build().await).await?;
         suite.get_tables_from_share(&b.build().await).await?;
         suite
-            .upsert_table_copied_file_info(&b.build().await)
+            .update_table_with_copied_files(&b.build().await)
             .await?;
         Ok(())
     }
@@ -2388,6 +2388,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    /// Return table id and table meta
     #[tracing::instrument(level = "debug", skip_all)]
     async fn create_out_of_retention_time_table<
         MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
@@ -2398,7 +2399,7 @@ impl SchemaApiTestSuite {
         dbid_tbname: DBIdTableName,
         drop_on: Option<DateTime<Utc>>,
         delete: bool,
-    ) -> anyhow::Result<u64> {
+    ) -> anyhow::Result<(u64, TableMeta)> {
         let created_on = Utc::now();
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -2439,7 +2440,7 @@ impl SchemaApiTestSuite {
         if delete {
             delete_test_data(mt.as_kv_api(), &dbid_tbname).await?;
         }
-        Ok(table_id)
+        Ok((table_id, drop_data))
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -2472,7 +2473,9 @@ impl SchemaApiTestSuite {
         info!("create database res: {:?}", res);
 
         assert_eq!(1, res.db_id, "first database id is 1");
-        let drop_on = Some(Utc::now() - Duration::days(1));
+        let one_day_before = Some(Utc::now() - Duration::days(1));
+        let two_day_before = Some(Utc::now() - Duration::days(2));
+
         self.create_out_of_retention_time_table(
             mt,
             tbl_name_ident.clone(),
@@ -2480,11 +2483,11 @@ impl SchemaApiTestSuite {
                 db_id: res.db_id,
                 table_name: tb1_name.to_string(),
             },
-            drop_on,
+            one_day_before,
             true,
         )
         .await?;
-        let table_id = self
+        let (table_id, table_meta) = self
             .create_out_of_retention_time_table(
                 mt,
                 tbl_name_ident.clone(),
@@ -2492,7 +2495,7 @@ impl SchemaApiTestSuite {
                     db_id: res.db_id,
                     table_name: tb1_name.to_string(),
                 },
-                Some(Utc::now() - Duration::days(2)),
+                two_day_before,
                 false,
             )
             .await?;
@@ -2514,7 +2517,14 @@ impl SchemaApiTestSuite {
                 fail_if_duplicated: true,
             };
 
-            let _ = mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta.clone(),
+                copied_files: Some(req),
+            };
+
+            let _ = mt.update_table_meta(req).await?;
 
             let key = TableCopiedFileNameIdent {
                 table_id,
@@ -3187,6 +3197,7 @@ impl SchemaApiTestSuite {
             created_on,
             ..TableMeta::default()
         };
+        let created_on = Utc::now();
 
         info!("--- prepare db and table");
         {
@@ -3203,7 +3214,6 @@ impl SchemaApiTestSuite {
             };
 
             let _ = mt.create_database(plan).await?;
-            let created_on = Utc::now();
 
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -3235,7 +3245,14 @@ impl SchemaApiTestSuite {
                 fail_if_duplicated: true,
             };
 
-            let _ = mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            let _ = mt.update_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -3265,7 +3282,14 @@ impl SchemaApiTestSuite {
                 fail_if_duplicated: true,
             };
 
-            let _ = mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            let _ = mt.update_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -3302,6 +3326,7 @@ impl SchemaApiTestSuite {
             created_on,
             ..TableMeta::default()
         };
+        let created_on = Utc::now();
 
         info!("--- prepare db and table");
         {
@@ -3318,7 +3343,6 @@ impl SchemaApiTestSuite {
             };
 
             let _ = mt.create_database(plan).await?;
-            let created_on = Utc::now();
 
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -3350,7 +3374,14 @@ impl SchemaApiTestSuite {
                 fail_if_duplicated: true,
             };
 
-            let _ = mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            let _ = mt.update_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -4147,7 +4178,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn upsert_table_copied_file_info<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn update_table_with_copied_files<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -4170,6 +4201,8 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
+        let created_on = Utc::now();
+
         info!("--- prepare db and table");
         {
             let plan = CreateDatabaseReq {
@@ -4185,7 +4218,6 @@ impl SchemaApiTestSuite {
             };
 
             let _ = mt.create_database(plan).await?;
-            let created_on = Utc::now();
 
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -4217,7 +4249,14 @@ impl SchemaApiTestSuite {
                 fail_if_duplicated: true,
             };
 
-            let _ = mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            let _ = mt.update_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -4256,7 +4295,14 @@ impl SchemaApiTestSuite {
                 fail_if_duplicated: true,
             };
 
-            let result = mt.upsert_table_copied_file_info(req).await;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            let result = mt.update_table_meta(req).await;
             let err = result.unwrap_err();
             let err = ErrorCode::from(err);
             assert_eq!(ErrorCode::DuplicatedUpsertFiles("").code(), err.code());
@@ -4292,7 +4338,15 @@ impl SchemaApiTestSuite {
                 fail_if_duplicated: false,
             };
 
-            mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            mt.update_table_meta(req).await?;
+
             let req = GetTableCopiedFileReq {
                 table_id,
                 files: vec!["file".to_string(), "file_not_exist".to_string()],

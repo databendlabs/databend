@@ -142,7 +142,7 @@ fn check_merge(s_expr: &SExpr) -> bool {
 
 fn check_partition(s_expr: &SExpr) -> bool {
     if let RelOperator::Exchange(op) = &s_expr.plan {
-        if matches!(op, Exchange::Random) {
+        if matches!(op, Exchange::Random | Exchange::Hash(_)) {
             return true;
         }
     }

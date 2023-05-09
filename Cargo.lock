@@ -3199,6 +3199,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-grpc",
+ "common-license",
  "common-meta-api",
  "common-meta-app",
  "common-meta-client",
@@ -3337,6 +3338,7 @@ dependencies = [
  "common-hashtable",
  "common-http",
  "common-io",
+ "common-license",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -3428,6 +3430,7 @@ dependencies = [
  "unicode-segmentation",
  "url",
  "uuid",
+ "vacuum-handler",
  "walkdir",
  "wiremock",
 ]
@@ -3727,12 +3730,21 @@ name = "enterprise-query"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "async-trait",
+ "chrono",
  "common-base",
  "common-building",
+ "common-catalog",
  "common-config",
  "common-exception",
  "common-license",
+ "common-storages-fuse",
+ "databend-query",
  "jwt-simple",
+ "storages-common-cache",
+ "storages-common-table-meta",
+ "tracing",
+ "vacuum-handler",
 ]
 
 [[package]]
@@ -10416,6 +10428,19 @@ checksum = "1674845326ee10d37ca60470760d4288a6f80f304007d92e5c53bab78c9cfd79"
 dependencies = [
  "getrandom 0.2.8",
  "serde",
+]
+
+[[package]]
+name = "vacuum-handler"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "chrono",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-storages-fuse",
 ]
 
 [[package]]
