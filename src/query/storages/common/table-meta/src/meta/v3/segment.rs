@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use std::io::Cursor;
+use std::io::Read;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_io::prelude::BinaryRead;
 use serde::Deserialize;
@@ -73,6 +75,21 @@ impl SegmentInfo {
     pub fn encoding() -> Encoding {
         Encoding::default()
     }
+
+    // Encode self.blocks as RawBlockMeta.
+    fn block_raw_bytes(&self) -> Result<RawBlockMeta> {
+        let encoding = Encoding::default();
+        let bytes = encode(&encoding, &self.blocks)?;
+
+        let compression = Compression::default();
+        let compressed = compress(&compression, bytes)?;
+
+        Ok(RawBlockMeta {
+            bytes: compressed,
+            encoding,
+            compression,
+        })
+    }
 }
 
 use super::super::v2;
@@ -129,19 +146,145 @@ impl SegmentInfo {
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self> {
+        SegmentInfo::from_slice(&bytes)
+    }
+
+    pub fn from_slice(bytes: &[u8]) -> Result<Self> {
         let mut cursor = Cursor::new(bytes);
-        let version = cursor.read_scalar::<u64>()?;
-        assert_eq!(version, SegmentInfo::VERSION);
-        let encoding = Encoding::try_from(cursor.read_scalar::<u8>()?)?;
-        let compression = MetaCompression::try_from(cursor.read_scalar::<u8>()?)?;
-        let blocks_size: u64 = cursor.read_scalar::<u64>()?;
-        let summary_size: u64 = cursor.read_scalar::<u64>()?;
+        let decode::Header {
+            version,
+            encoding,
+            compression,
+            blocks_size,
+            summary_size,
+        } = decode::decode_header(&mut cursor)?;
 
         let blocks: Vec<Arc<BlockMeta>> =
             read_and_deserialize(&mut cursor, blocks_size, &encoding, &compression)?;
         let summary: Statistics =
             read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
 
-        Ok(Self::new(blocks, summary))
+        let mut segment = Self::new(blocks, summary);
+
+        // bytes may represent an encoded v[n]::SegmentInfo, where n <= self::SegmentInfo::VERSION
+        // please see PR https://github.com/datafuselabs/databend/pull/11211 for the adjustment of
+        // format_version`'s "semantic"
+        segment.format_version = version;
+        Ok(segment)
+    }
+}
+
+#[derive(Clone)]
+pub struct RawBlockMeta {
+    pub bytes: Vec<u8>,
+    pub encoding: Encoding,
+    pub compression: Compression,
+}
+
+#[derive(Clone)]
+pub struct CompactSegmentInfo {
+    pub format_version: FormatVersion,
+    pub summary: Statistics,
+    pub raw_block_metas: RawBlockMeta,
+}
+
+impl CompactSegmentInfo {
+    pub fn from_slice(bytes: &[u8]) -> Result<Self> {
+        let mut cursor = Cursor::new(bytes);
+        let decode::Header {
+            version,
+            encoding,
+            compression,
+            blocks_size,
+            summary_size,
+        } = decode::decode_header(&mut cursor)?;
+
+        let mut block_metas_raw_bytes = vec![0; blocks_size as usize];
+        cursor.read_exact(&mut block_metas_raw_bytes)?;
+
+        let summary: Statistics =
+            read_and_deserialize(&mut cursor, summary_size, &encoding, &compression)?;
+
+        let segment = CompactSegmentInfo {
+            format_version: version,
+            summary,
+            raw_block_metas: RawBlockMeta {
+                bytes: block_metas_raw_bytes,
+                encoding,
+                compression,
+            },
+        };
+        Ok(segment)
+    }
+
+    pub fn block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
+        let mut reader = Cursor::new(&self.raw_block_metas.bytes);
+        read_and_deserialize(
+            &mut reader,
+            self.raw_block_metas.bytes.len() as u64,
+            &self.raw_block_metas.encoding,
+            &self.raw_block_metas.compression,
+        )
+    }
+}
+
+impl TryFrom<&CompactSegmentInfo> for SegmentInfo {
+    type Error = ErrorCode;
+    fn try_from(value: &CompactSegmentInfo) -> Result<Self, Self::Error> {
+        let mut reader = Cursor::new(&value.raw_block_metas.bytes);
+        let blocks: Vec<Arc<BlockMeta>> = read_and_deserialize(
+            &mut reader,
+            value.raw_block_metas.bytes.len() as u64,
+            &value.raw_block_metas.encoding,
+            &value.raw_block_metas.compression,
+        )?;
+
+        Ok(SegmentInfo {
+            format_version: value.format_version,
+            blocks,
+            summary: value.summary.clone(),
+        })
+    }
+}
+
+impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
+    type Error = ErrorCode;
+
+    fn try_from(value: &SegmentInfo) -> Result<Self, Self::Error> {
+        let bytes = value.block_raw_bytes()?;
+        Ok(Self {
+            format_version: value.format_version,
+            summary: value.summary.clone(),
+            raw_block_metas: bytes,
+        })
+    }
+}
+
+// segment specific decoding util
+mod decode {
+    use super::*;
+
+    pub struct Header {
+        pub version: u64,
+        pub encoding: Encoding,
+        pub compression: Compression,
+        pub blocks_size: u64,
+        pub summary_size: u64,
+    }
+
+    pub fn decode_header<R>(reader: &mut R) -> Result<Header>
+    where R: Read + Unpin + Send {
+        let version = reader.read_scalar::<u64>()?;
+        let encoding = Encoding::try_from(reader.read_scalar::<u8>()?)?;
+        let compression = MetaCompression::try_from(reader.read_scalar::<u8>()?)?;
+        let blocks_size: u64 = reader.read_scalar::<u64>()?;
+        let summary_size: u64 = reader.read_scalar::<u64>()?;
+        Ok(Header {
+            version,
+            encoding,
+            compression,
+            blocks_size,
+            summary_size,
+        })
     }
 }
