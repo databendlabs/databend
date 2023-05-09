@@ -259,7 +259,7 @@ async fn test_segment_raw_repr_bytes_size() -> common_exception::Result<()> {
     let base_memory_usage = process.memory();
 
     let scenario = format!(
-        "{} SegmentInfo(raw repr), {} block per seg ",
+        "{} SegmentInfo(compact repr), {} block per seg ",
         cache_number, num_block_per_seg
     );
 
@@ -277,7 +277,7 @@ async fn test_segment_raw_repr_bytes_size() -> common_exception::Result<()> {
         }
     }
     show_memory_usage(
-        "SegmentInfoCache (raw repr)",
+        "SegmentInfoCache (compact repr)",
         base_memory_usage,
         cache_number,
     );
