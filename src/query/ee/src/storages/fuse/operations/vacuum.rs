@@ -145,14 +145,13 @@ async fn get_orphan_files_to_be_purged(
             let prefix = SnapshotsIO::get_s3_prefix_from_file(&location);
             if let Some(prefix) = prefix {
                 fuse_table
-                    .list_files(
-                        prefix,
-                        retention_time,
-                        |_| {},
-                        // filter out all the referenced files
-                        |location| referenced_files.contains(location),
-                        false,
-                    )
+                    .list_files(prefix, |location, modified| {
+                        if let Some(modified) = modified {
+                            modified <= retention_time && !referenced_files.contains(&location)
+                        } else {
+                            false
+                        }
+                    })
                     .await?
             } else {
                 vec![]
