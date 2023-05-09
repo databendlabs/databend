@@ -1910,38 +1910,27 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         &self,
         req: UpsertTableCopiedFileReq,
     ) -> Result<UpsertTableCopiedFileReply, KVAppError> {
-        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+        let ctx = &func_name!();
+        debug!(req = debug(&req), "SchemaApi: {}", ctx);
 
-        let mut retry = 0;
-        let table_id = req.table_id;
+        let table_id = TableId {
+            table_id: req.table_id,
+        };
 
         let mut keys = Vec::with_capacity(req.file_info.len());
         for file in req.file_info.iter() {
             let key = TableCopiedFileNameIdent {
-                table_id,
+                table_id: table_id.table_id,
                 file: file.0.clone(),
             };
             keys.push(key.to_string_key());
         }
 
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let mut trials = txn_trials(ctx);
+        loop {
+            trials.next().unwrap()?;
 
-            let tbid = TableId { table_id };
-
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-
-            if tb_meta_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, ""),
-                )));
-            }
-
-            debug!(
-                ident = display(&tbid),
-                table_meta = debug(&tb_meta),
-                "upsert_table_copied_file_info"
-            );
+            let (tb_meta_seq, _tb_meta) = get_table_by_id_or_err(self, &table_id, ctx).await?;
 
             let (condition, if_then) = build_upsert_table_copied_file_info_conditions(
                 &req,
@@ -1956,12 +1945,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             };
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident = display(&tbid),
-                succ = display(succ),
-                "upsert_table_copied_file_info"
-            );
+            debug!(ident = display(&table_id), succ = display(succ), ctx);
 
             if succ {
                 return Ok(UpsertTableCopiedFileReply {});
@@ -1972,10 +1956,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 )));
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("upsert_table_copied_file_info", TXN_MAX_RETRY_TIMES),
-        )))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
@@ -2020,7 +2000,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 .push(txn_op_put(&table_id, serialize_struct(&tb_meta)?)); // tb_id -> tb_meta
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
-
             debug!(id = debug(&table_id), succ = display(succ), ctx);
 
             if succ {
