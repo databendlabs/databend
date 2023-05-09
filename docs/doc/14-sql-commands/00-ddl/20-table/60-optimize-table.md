@@ -157,9 +157,11 @@ It can save storage space but may affect the Time Travel feature. Consider purgi
 - You've compacted your table and want to remove older, unused data.
 
 **Syntax**
+
 ```sql
 -- Purge historical data
 OPTIMIZE TABLE [database.]table_name PURGE
+
 -- Purge historical data generated before a snapshot or a timestamp was created
 OPTIMIZE TABLE [database.]table_name PURGE BEFORE (SNAPSHOT => '<SNAPSHOT_ID>')
 OPTIMIZE TABLE [database.]table_name PURGE BEFORE (TIMESTAMP => '<TIMESTAMP>'::TIMESTAMP)
@@ -180,6 +182,8 @@ OPTIMIZE TABLE [database.]table_name PURGE BEFORE (TIMESTAMP => '<TIMESTAMP>'::T
 **Example**
 
 ```sql
+SET retention_period=0;
+
 -- Create a table and insert data using three INSERT statements
 CREATE TABLE t(x int);
 
