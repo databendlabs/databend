@@ -22,9 +22,11 @@
 #![feature(thread_id_value)]
 #![feature(backtrace_frames)]
 #![feature(alloc_error_hook)]
+#![feature(return_position_impl_trait_in_trait)]
 
 pub mod base;
 pub mod containers;
+pub mod future;
 pub mod mem_allocator;
 pub mod rangemap;
 pub mod runtime;

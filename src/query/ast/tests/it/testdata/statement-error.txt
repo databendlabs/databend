@@ -306,7 +306,7 @@ error:
   --> SQL:1:38
   |
 1 | COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();
-  |                                      ^^^^^^^^^^ expected `CONNECTION`, `CREDENTIALS`, `LOCATION_PREFIX`, `FILES`, `PATTERN`, `FILE_FORMAT`, or 11 more ...
+  |                                      ^^^^^^^^^^ expected `CONNECTION`, `CREDENTIALS`, `LOCATION_PREFIX`, `FILES`, `PATTERN`, `FILE_FORMAT`, or 12 more ...
 
 
 ---------- Input ----------
@@ -316,7 +316,7 @@ error:
   --> SQL:1:33
   |
 1 | COPY INTO mytable FROM @mystage CREDENTIALS = ();
-  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, `MAX_FILES`, or 8 more ...
+  |                                 ^^^^^^^^^^^ expected `FILES`, `PATTERN`, `FILE_FORMAT`, `VALIDATION_MODE`, `SIZE_LIMIT`, `MAX_FILES`, or 9 more ...
 
 
 ---------- Input ----------

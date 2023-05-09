@@ -71,7 +71,7 @@ If you are interested in learning more, please check out the resources listed be
 - [Website | Roaring Bitmaps](https://roaringbitmap.org/)
 - [Paper | Consistently faster and smaller compressed bitmaps with Roaring](https://arxiv.org/pdf/1603.06549.pdf)
 
-## Improving Hash Join Performance with New Hash Table Design
+### Improving Hash Join Performance with New Hash Table Design
 
 We optimized our previous hash table implementation for aggregation functions, but it significantly limited hash join operation performance. To improve hash join performance, we implemented a dedicated hash table optimized for it. We allocated a fixed-size hash table based on the number of rows in the build stage and replaced the value type with a pointer that supports CAS operations, ensuring memory control without the need for Vec growth. The new implementation significantly improved performance. Check out the resources below for more information:
 

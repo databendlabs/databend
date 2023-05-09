@@ -302,6 +302,7 @@ async fn test_watch() -> anyhow::Result<()> {
                 request: Some(txn_op::Request::Delete(TxnDeleteRequest {
                     key: delete_key.to_string(),
                     prev_value: true,
+                    match_seq: None,
                 })),
             },
             TxnOp {
@@ -449,6 +450,7 @@ async fn test_watch_expired_events() -> anyhow::Result<()> {
                 request: Some(txn_op::Request::Delete(TxnDeleteRequest {
                     key: s("w_b2"),
                     prev_value: true,
+                    match_seq: None,
                 })),
             },
             TxnOp {

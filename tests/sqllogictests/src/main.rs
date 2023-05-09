@@ -213,6 +213,11 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                     continue;
                 }
             }
+            if let Some(ref skip_file) = args.skipped_file {
+                if file_name.eq(skip_file) {
+                    continue;
+                }
+            }
             num_of_tests += parse_file::<DefaultColumnType>(file.as_ref().unwrap().path())
                 .unwrap()
                 .len();
