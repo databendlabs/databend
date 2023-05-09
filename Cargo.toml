@@ -70,6 +70,7 @@ members = [
     "src/query/storages/parquet",
     "src/query/storages/result_cache",
     "src/query/users",
+    "src/query/ee-features/vacuum-handler",
     # databend-query
     "src/query/service",
     # enterprise
