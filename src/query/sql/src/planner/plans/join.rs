@@ -288,16 +288,17 @@ impl Join {
             for (idx, left) in left_statistics.column_stats.iter_mut() {
                 if *idx == left_column_index {
                     if left.histogram.is_some() {
-                        left.histogram = if left.ndv as u64 <= 2 || left.ndv as u64 > join_card as u64 {
-                            None
-                        } else {
-                            Some(histogram_from_ndv(
-                                left.ndv as u64,
-                                join_card as u64,
-                                Some((left.min.clone(), left.max.clone())),
-                                DEFAULT_HISTOGRAM_BUCKETS,
-                            )?)
-                        }
+                        left.histogram =
+                            if left.ndv as u64 <= 2 || left.ndv as u64 > join_card as u64 {
+                                None
+                            } else {
+                                Some(histogram_from_ndv(
+                                    left.ndv as u64,
+                                    join_card as u64,
+                                    Some((left.min.clone(), left.max.clone())),
+                                    DEFAULT_HISTOGRAM_BUCKETS,
+                                )?)
+                            }
                     }
                     continue;
                 }
@@ -307,16 +308,17 @@ impl Join {
             for (idx, right) in right_statistics.column_stats.iter_mut() {
                 if *idx == right_column_index {
                     if right.histogram.is_some() {
-                        right.histogram = if right.ndv as u64 <= 2 || right.ndv as u64 > join_card as u64 {
-                            None
-                        } else {
-                            Some(histogram_from_ndv(
-                                right.ndv as u64,
-                                join_card as u64,
-                                Some((right.min.clone(), right.max.clone())),
-                                DEFAULT_HISTOGRAM_BUCKETS,
-                            )?)
-                        }
+                        right.histogram =
+                            if right.ndv as u64 <= 2 || right.ndv as u64 > join_card as u64 {
+                                None
+                            } else {
+                                Some(histogram_from_ndv(
+                                    right.ndv as u64,
+                                    join_card as u64,
+                                    Some((right.min.clone(), right.max.clone())),
+                                    DEFAULT_HISTOGRAM_BUCKETS,
+                                )?)
+                            }
                     }
                     continue;
                 }
