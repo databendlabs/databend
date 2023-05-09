@@ -290,6 +290,7 @@ pub trait Decimal:
     fn data_type() -> DataType;
     const MIN: Self;
     const MAX: Self;
+    const MAX_VALUE: Self;
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
 
@@ -314,6 +315,7 @@ pub trait Decimal:
 }
 
 impl Decimal for i128 {
+    const MAX_VALUE: i128 = 170141183460469231731687303715884105727_i128;
     fn zero() -> Self {
         0_i128
     }
@@ -351,7 +353,7 @@ impl Decimal for i128 {
     }
 
     fn max_of_max_precision() -> Self {
-        Self::max_for_precision(MAX_DECIMAL128_PRECISION)
+        Self::MAX_VALUE
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -459,6 +461,9 @@ impl Decimal for i128 {
 }
 
 impl Decimal for i256 {
+    const MAX_VALUE: i256 = ethnum::int!(
+        "57896044618658097711785492504343953926634992332820282019728792003956564819967"
+    );
     fn zero() -> Self {
         i256::ZERO
     }
@@ -496,7 +501,7 @@ impl Decimal for i256 {
     }
 
     fn max_of_max_precision() -> Self {
-        Self::max_for_precision(MAX_DECIMAL256_PRECISION)
+        Self::MAX_VALUE
     }
 
     fn min_for_precision(to_precision: u8) -> Self {

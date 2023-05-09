@@ -333,7 +333,8 @@ fn test_statement() {
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10;"#,
+                size_limit=10
+                disable_variant_check=true;"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'

@@ -19,11 +19,9 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::atomic::AtomicBool;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::sync::Weak;
 use std::time::SystemTime;
 
 use common_base::base::tokio::task::JoinHandle;
@@ -205,7 +203,7 @@ impl QueryContext {
         *self.shared.init_query_id.write() = id;
     }
 
-    pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {
+    pub fn set_executor(&self, weak_ptr: Arc<PipelineExecutor>) -> Result<()> {
         self.shared.set_executor(weak_ptr)
     }
 
@@ -359,8 +357,12 @@ impl TableContext for QueryContext {
         self.shared.get_current_catalog()
     }
 
-    fn get_aborting(&self) -> Arc<AtomicBool> {
-        self.shared.get_aborting()
+    fn check_aborting(&self) -> Result<()> {
+        self.shared.check_aborting()
+    }
+
+    fn get_error(&self) -> Option<ErrorCode> {
+        self.shared.get_error()
     }
 
     fn get_current_database(&self) -> String {
