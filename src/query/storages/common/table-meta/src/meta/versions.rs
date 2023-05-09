@@ -53,6 +53,21 @@ pub enum SegmentInfoVersion {
     V3(PhantomData<v3::SegmentInfo>),
 }
 
+impl SegmentInfoVersion {
+    pub fn version(&self) -> u64 {
+        match self {
+            SegmentInfoVersion::V0(a) => Self::ver(a),
+            SegmentInfoVersion::V1(a) => Self::ver(a),
+            SegmentInfoVersion::V2(a) => Self::ver(a),
+            SegmentInfoVersion::V3(a) => Self::ver(a),
+        }
+    }
+
+    fn ver<const V: u64, T: Versioned<V>>(_v: &PhantomData<T>) -> u64 {
+        V
+    }
+}
+
 impl Versioned<0> for v0::TableSnapshot {}
 impl Versioned<1> for v1::TableSnapshot {}
 impl Versioned<2> for v2::TableSnapshot {}
