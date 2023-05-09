@@ -53,6 +53,6 @@ impl VacuumHandlerWrapper {
     }
 }
 
-pub fn get_interface_manager() -> Arc<VacuumHandlerWrapper> {
+pub fn get_vacuum_handler() -> Arc<VacuumHandlerWrapper> {
     GlobalInstance::get()
 }

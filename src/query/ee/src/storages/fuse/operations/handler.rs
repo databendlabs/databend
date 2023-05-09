@@ -20,8 +20,8 @@ use common_base::base::GlobalInstance;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
-use interface_manager::VacuumHandler;
-use interface_manager::VacuumHandlerWrapper;
+use vacuum_handler::VacuumHandler;
+use vacuum_handler::VacuumHandlerWrapper;
 
 use crate::storages::fuse::do_vacuum;
 

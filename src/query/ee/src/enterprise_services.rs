@@ -16,8 +16,8 @@ use common_config::InnerConfig;
 use common_exception::Result;
 use common_license::license_manager::LicenseManager;
 
-use crate::interface::vacuum_handler::RealVacuumHandler;
 use crate::license::license_mgr::RealLicenseManager;
+use crate::storages::fuse::operations::RealVacuumHandler;
 
 pub struct EnterpriseServices;
 impl EnterpriseServices {

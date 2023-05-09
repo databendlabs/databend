@@ -1,6 +1,6 @@
 [package]
-name = "interface-manager"
-description = "interface manager"
+name = "vacuum-handler"
+description = "vacuum handler"
 version = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
@@ -13,10 +13,10 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../common/base" }
-common-catalog = { path = "../catalog" }
-common-exception = { path = "../../common/exception" }
-common-storages-fuse = { path = "../storages/fuse" }
+common-base = { path = "../../../common/base" }
+common-catalog = { path = "../../catalog" }
+common-exception = { path = "../../../common/exception" }
+common-storages-fuse = { path = "../../storages/fuse" }
 
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"

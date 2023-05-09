@@ -21,9 +21,9 @@ common-exception = { path = "../../common/exception" }
 common-license = { path = "../../common/license" }
 common-storages-fuse = { path = "../storages/fuse" }
 databend-query = { path = "../service" }
-interface-manager = { path = "../interface-manager" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
+vacuum-handler = { path = "../ee-features/vacuum-handler" }
 
 async-trait = "0.1.57"
 chrono = { workspace = true }

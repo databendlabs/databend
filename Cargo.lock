@@ -3381,7 +3381,6 @@ dependencies = [
  "headers",
  "hex",
  "http",
- "interface-manager",
  "itertools",
  "jsonb",
  "jwt-simple",
@@ -3431,6 +3430,7 @@ dependencies = [
  "unicode-segmentation",
  "url",
  "uuid",
+ "vacuum-handler",
  "walkdir",
  "wiremock",
 ]
@@ -3740,11 +3740,11 @@ dependencies = [
  "common-license",
  "common-storages-fuse",
  "databend-query",
- "interface-manager",
  "jwt-simple",
  "storages-common-cache",
  "storages-common-table-meta",
  "tracing",
+ "vacuum-handler",
 ]
 
 [[package]]
@@ -5817,19 +5817,6 @@ name = "integer-encoding"
 version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
-
-[[package]]
-name = "interface-manager"
-version = "0.1.0"
-dependencies = [
- "async-backtrace",
- "async-trait",
- "chrono",
- "common-base",
- "common-catalog",
- "common-exception",
- "common-storages-fuse",
-]
 
 [[package]]
 name = "inventory"
@@ -10441,6 +10428,19 @@ checksum = "1674845326ee10d37ca60470760d4288a6f80f304007d92e5c53bab78c9cfd79"
 dependencies = [
  "getrandom 0.2.8",
  "serde",
+]
+
+[[package]]
+name = "vacuum-handler"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "chrono",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-storages-fuse",
 ]
 
 [[package]]

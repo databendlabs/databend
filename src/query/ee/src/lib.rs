@@ -13,6 +13,5 @@
 // limitations under the License.
 
 pub mod enterprise_services;
-pub mod interface;
 pub mod license;
 pub mod storages;
