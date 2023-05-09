@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use enum_as_inner::EnumAsInner;
 
 use super::aggregate::Aggregate;
 use super::dummy_table_scan::DummyTableScan;
@@ -82,7 +83,7 @@ pub enum RelOp {
 }
 
 /// Relational operators
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, EnumAsInner)]
 pub enum RelOperator {
     Scan(Scan),
     Join(Join),

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_exception::ErrorCode;
+
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -64,7 +66,30 @@ impl Rule for RuleUseVectorIndex {
         s_expr: &crate::optimizer::SExpr,
         state: &mut crate::optimizer::rule::TransformResult,
     ) -> common_exception::Result<()> {
-        todo!()
+        let sort_expr = s_expr.children.get(0).unwrap();
+        let sort_operator = s_expr.plan.as_sort().unwrap();
+        let eval_scalar_operator = sort_expr
+            .children
+            .get(0)
+            .unwrap()
+            .plan
+            .as_eval_scalar()
+            .unwrap();
+        if sort_operator.items.len() != 1 || sort_operator.items[0].asc != true {
+            state.add_result(s_expr.clone());
+            return Ok(());
+        }
+        let sort_by = eval_scalar_operator
+            .items
+            .get(sort_operator.items[0].index)
+            .unwrap();
+        match &sort_by.scalar {
+            crate::ScalarExpr::FunctionCall(func) if func.func_name == "cosine_distance" => {
+                
+            }
+            _ => state.add_result(s_expr.clone()),
+        }
+        Ok(())
     }
 
     fn patterns(&self) -> &Vec<crate::optimizer::SExpr> {
