@@ -374,7 +374,7 @@ fn update_statistic(
     mut new_max: Datum,
     selectivity: f64,
 ) -> Result<()> {
-    let new_ndv = column_stat.ndv * selectivity;
+    let new_ndv = (column_stat.ndv * selectivity).ceil();
     column_stat.ndv = new_ndv;
     if matches!(new_min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)) {
         new_min = Datum::Float(F64::from(new_min.to_double()?));
@@ -384,7 +384,7 @@ fn update_statistic(
     column_stat.max = new_max.clone();
     if let Some(histogram) = &column_stat.histogram {
         let num_values = histogram.num_values();
-        let new_num_values = (num_values * selectivity) as u64;
+        let new_num_values = (num_values * selectivity).ceil() as u64;
         let new_ndv = new_ndv as u64;
         if new_ndv <= 2 {
             column_stat.histogram = None;
@@ -408,7 +408,7 @@ fn update_other_statistic_by_selectivity(
 ) {
     for (index, column_stat) in column_stats.iter_mut() {
         if *index != column_index {
-            let new_ndv = column_stat.ndv * selectivity;
+            let new_ndv = (column_stat.ndv * selectivity).ceil();
             column_stat.ndv = new_ndv;
             if let Some(histogram) = &mut column_stat.histogram {
                 let new_ndv = new_ndv as u64;
