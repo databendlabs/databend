@@ -156,6 +156,10 @@ It can save storage space but may affect the Time Travel feature. Consider purgi
 - The storage cost is a major concern, and you don't require historical data for Time Travel or other purposes.
 - You've compacted your table and want to remove older, unused data.
 
+:::note
+Historical data within the default retention period of 12 hours will not be removed. To adjust the retention period according to your needs, you can use the *retention_period* setting. In the Example section below, you can see how the retention period is initially set to 0, enabling you to insert data into the table and immediately remove historical data.
+:::
+
 **Syntax**
 
 ```sql
@@ -182,7 +186,7 @@ OPTIMIZE TABLE [database.]table_name PURGE BEFORE (TIMESTAMP => '<TIMESTAMP>'::T
 **Example**
 
 ```sql
-SET retention_period=0;
+SET retention_period = 0;
 
 -- Create a table and insert data using three INSERT statements
 CREATE TABLE t(x int);
