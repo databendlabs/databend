@@ -15,12 +15,13 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
-use common_expression::RawExpr;
 use common_expression::Scalar;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::Aggregate;
+use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
@@ -32,14 +33,14 @@ use crate::ScalarExpr;
 pub struct RuleTryApplyAggIndex {
     id: RuleID,
     patterns: Vec<SExpr>,
-    metadata: MetadataRef,
+    _metadata: MetadataRef,
 }
 
 impl RuleTryApplyAggIndex {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::TryApplyAggIndex,
-            metadata,
+            _metadata: metadata,
             patterns: vec![
                 // Expression
                 //     |
@@ -79,6 +80,8 @@ impl RuleTryApplyAggIndex {
                         ),
                     ),
                 ),
+                // Expression
+                //     |
                 // Aggregation
                 //     |
                 // Expression
@@ -86,22 +89,30 @@ impl RuleTryApplyAggIndex {
                 //    Scan
                 SExpr::create_unary(
                     PatternPlan {
-                        plan_type: RelOp::Aggregate,
+                        plan_type: RelOp::EvalScalar,
                     }
                     .into(),
                     SExpr::create_unary(
                         PatternPlan {
-                            plan_type: RelOp::EvalScalar,
+                            plan_type: RelOp::Aggregate,
                         }
                         .into(),
-                        SExpr::create_leaf(
+                        SExpr::create_unary(
                             PatternPlan {
-                                plan_type: RelOp::Scan,
+                                plan_type: RelOp::EvalScalar,
                             }
                             .into(),
+                            SExpr::create_leaf(
+                                PatternPlan {
+                                    plan_type: RelOp::Scan,
+                                }
+                                .into(),
+                            ),
                         ),
                     ),
                 ),
+                // Expression
+                //     |
                 // Aggregation
                 //     |
                 // Expression
@@ -111,24 +122,30 @@ impl RuleTryApplyAggIndex {
                 //    Scan
                 SExpr::create_unary(
                     PatternPlan {
-                        plan_type: RelOp::Aggregate,
+                        plan_type: RelOp::EvalScalar,
                     }
                     .into(),
                     SExpr::create_unary(
                         PatternPlan {
-                            plan_type: RelOp::EvalScalar,
+                            plan_type: RelOp::Aggregate,
                         }
                         .into(),
                         SExpr::create_unary(
                             PatternPlan {
-                                plan_type: RelOp::Filter,
+                                plan_type: RelOp::EvalScalar,
                             }
                             .into(),
-                            SExpr::create_leaf(
+                            SExpr::create_unary(
                                 PatternPlan {
-                                    plan_type: RelOp::Scan,
+                                    plan_type: RelOp::Filter,
                                 }
                                 .into(),
+                                SExpr::create_leaf(
+                                    PatternPlan {
+                                        plan_type: RelOp::Scan,
+                                    }
+                                    .into(),
+                                ),
                             ),
                         ),
                     ),
@@ -152,15 +169,45 @@ impl Rule for RuleTryApplyAggIndex {
         s_expr: &SExpr,
         state: &mut crate::optimizer::rule::TransformResult,
     ) -> Result<()> {
-        if s_expr.match_pattern(&self.patterns[0]) || s_expr.match_pattern(&self.patterns[1]) {
-            // EvalScalar - Scan
-            // EvalScalar - Filter - Scan
-            self.without_aggregation(s_expr)
-        } else {
-            // Aggregate - EvalScalar - Scan
-            // Aggregate - EvalScalar - Filter - Scan
-            self.with_aggregation(s_expr)
+        let index_plans = self.get_index_plans();
+        let query_info = Self::collect_information(s_expr)?;
+        let query_predicates = query_info.predicates.map(Self::distinguish_predicates);
+
+        // Search all index plans, find the first matched index to rewrite the query.
+        for plan in index_plans.iter() {
+            let index_info = Self::collect_information(plan)?;
+            let index_predicates = index_info.predicates.map(Self::distinguish_predicates);
+            // 1. Check selection and aggregation.
+            // TODO
+
+            // 2. Check filter predicates.
+            match (&query_predicates, &index_predicates) {
+                (Some((qe, qr, qo)), Some((ie, ir, io))) => {
+                    // 2.1 Check if columns in index predicates exist in query output.
+                    // TODO
+
+                    // 2.2 Check if index predicates are matched with query predicates.
+                    if !Self::check_predicates_equal(qe, ie) {
+                        continue;
+                    }
+                    if !Self::check_predicates_other(qo, io) {
+                        continue;
+                    }
+                    if !Self::check_predicates_range(qr, ir) {
+                        continue;
+                    }
+                }
+                (Some(_), _) => { /* Matched */ }
+                (None, _) => { /* Not matched */ }
+            }
         }
+
+        // Do nothing now.
+        // TODO(agg index)
+        let mut result = s_expr.clone();
+        result.set_applied_rule(&self.id);
+        state.add_result(result);
+        Ok(())
     }
 }
 
@@ -286,29 +333,48 @@ type Predicates<'a> = (
     OtherPredicates<'a>,
 );
 
+// Record information helping to rewrite the query plan.
+struct RewriteInfomartion<'a> {
+    _output: &'a EvalScalar,
+    predicates: Option<&'a [ScalarExpr]>,
+    aggregation: Option<&'a Aggregate>,
+}
+
 impl RuleTryApplyAggIndex {
-    fn with_aggregation(&self, s_expr: &SExpr) -> Result<()> {
-        todo!("agg index")
+    fn collect_information(s_expr: &SExpr) -> Result<RewriteInfomartion<'_>> {
+        // The plan tree should be started with [`EvalScalar`].
+        if let RelOperator::EvalScalar(eval) = s_expr.plan() {
+            let mut info = RewriteInfomartion {
+                _output: eval,
+                predicates: None,
+                aggregation: None,
+            };
+            Self::collect_information_impl(s_expr.child(0)?, &mut info)?;
+            return Ok(info);
+        }
+
+        unreachable!()
     }
 
-    fn without_aggregation(&self, s_expr: &SExpr) -> Result<()> {
-        if let RelOperator::EvalScalar(expr) = s_expr.plan() {
-            match s_expr.child(0)?.plan() {
-                RelOperator::Filter(filter) => {
-                    // 1. Check if the outputs of query and index are matched.
-                    // TODO: check `expr`.
-                    // 2. Check if the predicates of query and index are matched.
-                    // TODO: check `filter`.
-                    todo!("agg index");
-                }
-                RelOperator::Scan(scan) => {
-                    todo!("agg index");
-                }
-                _ => unreachable!(),
+    fn collect_information_impl<'a>(
+        s_expr: &'a SExpr,
+        info: &mut RewriteInfomartion<'a>,
+    ) -> Result<()> {
+        match s_expr.plan() {
+            RelOperator::Aggregate(agg) => {
+                info.aggregation.replace(agg);
             }
-            return Ok(());
+            RelOperator::Filter(filter) => {
+                info.predicates.replace(&filter.predicates);
+            }
+            RelOperator::Scan(_) => {
+                // Finish the recursion.
+                return Ok(());
+            }
+            _ => {}
         }
-        unreachable!()
+
+        Self::collect_information_impl(s_expr.child(0)?, info)
     }
 
     fn get_index_plans(&self) -> Vec<SExpr> {

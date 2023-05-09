@@ -44,7 +44,7 @@ pub enum AggregateMode {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Aggregate {
     pub mode: AggregateMode,
-    // group by scalar expressions, such as: group by col1 asc, col2 desc;
+    // group by scalar expressions, such as: group by col1, col2;
     pub group_items: Vec<ScalarItem>,
     // aggregate scalar expressions, such as: sum(col1), count(*);
     pub aggregate_functions: Vec<ScalarItem>,
