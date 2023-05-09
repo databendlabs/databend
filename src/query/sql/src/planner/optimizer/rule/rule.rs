@@ -63,6 +63,7 @@ pub enum RuleID {
     SplitAggregate,
     FoldCountAggregate,
     PushDownPrewhere,
+    UseVectorIndex,
 
     // Exploration rules
     CommuteJoin,
@@ -100,6 +101,7 @@ impl Display for RuleID {
             RuleID::NormalizeDisjunctiveFilter => write!(f, "NormalizeDisjunctiveFilter"),
             RuleID::FoldCountAggregate => write!(f, "FoldCountAggregate"),
             RuleID::PushDownPrewhere => write!(f, "PushDownPrewhere"),
+            RuleID::UseVectorIndex => write!(f, "UseVectorIndex"),
 
             RuleID::CommuteJoin => write!(f, "CommuteJoin"),
             RuleID::CommuteJoinBaseTable => write!(f, "CommuteJoinBaseTable"),

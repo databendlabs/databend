@@ -25,15 +25,11 @@ use faiss::index_factory;
 use faiss::Index;
 use faiss::MetricType;
 use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
-use uuid::Uuid;
 
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
-use crate::io::SegmentWriter;
 use crate::io::TableMetaLocationGenerator;
 use crate::FuseTable;
 
@@ -59,7 +55,6 @@ impl FuseTable {
         };
         let snapshot = snapshot_reader.read(&params).await?;
         let schema = Arc::new(snapshot.schema.clone());
-        let mut new_segments = Vec::with_capacity(snapshot.segments.len());
         for (seg_loc, _) in &snapshot.segments {
             let segment_reader =
                 MetaReaders::segment_info_reader(self.get_operator(), schema.clone());
@@ -70,9 +65,6 @@ impl FuseTable {
                 put_cache: true,
             };
             let segment_info = segment_reader.read(&params).await?;
-            let mut new_block_metas = Vec::with_capacity(segment_info.blocks.len());
-            let segment_writer =
-                SegmentWriter::new(self.get_operator_ref(), self.meta_location_generator());
             for block_meta in &segment_info.blocks {
                 let block_reader =
                     self.create_block_reader(projection.clone(), false, ctx.clone())?;
@@ -101,42 +93,12 @@ impl FuseTable {
                 index.train(&raw_data).unwrap();
                 index.add(&raw_data).unwrap();
                 let index_bin = serialize(&index).unwrap();
-                let (location, _) = self.meta_location_generator().gen_block_location();
-                self.get_operator().write(&location.0, index_bin).await?;
-                let new_block_meta = BlockMeta {
-                    vector_index_location: Some(location),
-                    ..block_meta.as_ref().clone()
-                };
-                new_block_metas.push(Arc::new(new_block_meta));
+                let index_location = block_meta.location.0.clone() + "_ivf.index";
+                self.get_operator()
+                    .write(&index_location, index_bin)
+                    .await?;
             }
-            let new_segment = SegmentInfo {
-                blocks: new_block_metas,
-                format_version: segment_info.format_version,
-                summary: segment_info.summary.clone(),
-            };
-            let location = segment_writer.write_segment(new_segment).await?;
-            new_segments.push(location);
         }
-        let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
-            &snapshot.timestamp,
-            Some((snapshot.snapshot_id, snapshot.format_version)),
-            snapshot.schema.clone(),
-            snapshot.summary.clone(),
-            new_segments,
-            snapshot.cluster_key_meta.clone(),
-            snapshot.table_statistics_location.clone(),
-        );
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            &self.table_info,
-            &self.meta_location_generator,
-            new_snapshot,
-            None,
-            &None,
-            self.get_operator_ref(),
-        )
-        .await?;
         Ok(())
     }
 }
