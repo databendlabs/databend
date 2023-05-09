@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::F64;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
@@ -288,17 +289,23 @@ impl Join {
             for (idx, left) in left_statistics.column_stats.iter_mut() {
                 if *idx == left_column_index {
                     if left.histogram.is_some() {
-                        left.histogram =
-                            if left.ndv as u64 <= 2 || left.ndv as u64 > join_card as u64 {
-                                None
-                            } else {
-                                Some(histogram_from_ndv(
-                                    left.ndv as u64,
-                                    join_card as u64,
-                                    Some((left.min.clone(), left.max.clone())),
-                                    DEFAULT_HISTOGRAM_BUCKETS,
-                                )?)
+                        left.histogram = if left.ndv as u64 <= 2
+                            || left.ndv as u64 > join_card as u64
+                        {
+                            None
+                        } else {
+                            if matches!(left.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
+                            {
+                                left.min = Datum::Float(F64::from(left.min.to_double()?));
+                                left.max = Datum::Float(F64::from(left.max.to_double()?));
                             }
+                            Some(histogram_from_ndv(
+                                left.ndv as u64,
+                                join_card as u64,
+                                Some((left.min.clone(), left.max.clone())),
+                                DEFAULT_HISTOGRAM_BUCKETS,
+                            )?)
+                        }
                     }
                     continue;
                 }
@@ -308,17 +315,23 @@ impl Join {
             for (idx, right) in right_statistics.column_stats.iter_mut() {
                 if *idx == right_column_index {
                     if right.histogram.is_some() {
-                        right.histogram =
-                            if right.ndv as u64 <= 2 || right.ndv as u64 > join_card as u64 {
-                                None
-                            } else {
-                                Some(histogram_from_ndv(
-                                    right.ndv as u64,
-                                    join_card as u64,
-                                    Some((right.min.clone(), right.max.clone())),
-                                    DEFAULT_HISTOGRAM_BUCKETS,
-                                )?)
+                        right.histogram = if right.ndv as u64 <= 2
+                            || right.ndv as u64 > join_card as u64
+                        {
+                            None
+                        } else {
+                            if matches!(right.min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_))
+                            {
+                                right.min = Datum::Float(F64::from(right.min.to_double()?));
+                                right.max = Datum::Float(F64::from(right.max.to_double()?));
                             }
+                            Some(histogram_from_ndv(
+                                right.ndv as u64,
+                                join_card as u64,
+                                Some((right.min.clone(), right.max.clone())),
+                                DEFAULT_HISTOGRAM_BUCKETS,
+                            )?)
+                        }
                     }
                     continue;
                 }
