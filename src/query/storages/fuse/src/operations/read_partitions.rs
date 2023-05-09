@@ -122,17 +122,17 @@ impl FuseTable {
             segments_location.len()
         );
 
-        type CacheItem = (PartStatistics, Partitions);
-        let cache_key = format!(
-            "{:x}",
-            Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
-        );
-
         let is_derterministic = push_downs
             .as_ref()
             .map(|p| p.is_deterministic)
             .unwrap_or_default();
-        if is_derterministic {
+        if is_derterministic && ctx.get_settings().get_enable_query_result_cache()? {
+            type CacheItem = (PartStatistics, Partitions);
+            let cache_key = format!(
+                "{:x}",
+                Sha256::digest(format!("{:?}_{:?}", segments_location, push_downs))
+            );
+
             if let Some(cache) = CacheItem::cache() {
                 if let Some(data) = cache.get(&cache_key) {
                     info!(
