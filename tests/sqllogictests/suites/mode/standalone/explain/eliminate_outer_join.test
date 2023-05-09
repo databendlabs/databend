@@ -510,10 +510,10 @@ explain select * from t left join t t1 on t.a = t1.a where t1.a <= 1 or t.a < 1
 ----
 EvalScalar
 ├── expressions: [t.a (#0), t1.a (#1)]
-├── estimated rows: 2.56
+├── estimated rows: 3.31
 └── Filter
     ├── filters: [is_true(t1.a (#1) <= 1 OR t.a (#0) < 1)]
-    ├── estimated rows: 2.56
+    ├── estimated rows: 3.31
     └── HashJoin
         ├── join type: LEFT OUTER
         ├── build keys: [t1.a (#1)]
