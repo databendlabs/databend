@@ -104,8 +104,14 @@ impl FuseTable {
             if purge {
                 let snapshot_files = self.list_snapshot_files().await?;
                 let keep_last_snapshot = false;
-                self.do_purge(&ctx, snapshot_files, keep_last_snapshot)
-                    .await?
+                let ret = self
+                    .do_purge(&ctx, snapshot_files, keep_last_snapshot, None)
+                    .await;
+                if let Err(e) = ret {
+                    return Err(e);
+                } else {
+                    return Ok(());
+                }
             }
         }
 
