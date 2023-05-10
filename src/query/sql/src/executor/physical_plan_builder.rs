@@ -1028,7 +1028,7 @@ impl PhysicalPlanBuilder {
                                 common_ty,
                             );
                             ScalarItem {
-                                scalar: cast_expr.into(),
+                                scalar: cast_expr,
                                 index: f.name().parse().unwrap(),
                             }
                         })

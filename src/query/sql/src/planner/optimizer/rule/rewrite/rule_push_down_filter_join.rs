@@ -153,9 +153,8 @@ pub fn try_push_down_filter_join(
 
             JoinPredicate::Both { left, right, op } => {
                 if op == ComparisonOp::Equal {
-                    if join.join_type == JoinType::Cross {
+                    if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
                         join.join_type = JoinType::Inner;
-                    } else if join.join_type == JoinType::Inner {
                         join.left_conditions.push(left.clone());
                         join.right_conditions.push(right.clone());
                         need_push = true;
@@ -163,8 +162,7 @@ pub fn try_push_down_filter_join(
                 } else if matches!(join.join_type, JoinType::Inner) {
                     join.non_equi_conditions.push(predicate.clone());
                     need_push = true;
-                }
-                if !need_push {
+                } else {
                     original_predicates.push(predicate);
                 }
             }
