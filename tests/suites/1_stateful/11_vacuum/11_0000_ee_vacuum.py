@@ -48,7 +48,7 @@ if __name__ == "__main__":
         client1.expect(prompt)
         client1.send("unset enterprise_license")
         client1.expect(prompt)
-        client1.send("set enterprise_license='{}'".format(get_license()))
+        client1.send("set global enterprise_license='{}'".format(get_license()))
         client1.expect(prompt)
 
         insert_data("insert_data")

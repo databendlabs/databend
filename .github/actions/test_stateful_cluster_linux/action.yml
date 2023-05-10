@@ -39,3 +39,5 @@ runs:
       shell: bash
       run: |
         ./scripts/ci/ci-run-stateful-tests-cluster-minio.sh
+      env:
+        DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}

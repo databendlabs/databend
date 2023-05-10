@@ -40,4 +40,4 @@ runs:
       run: |
         ./scripts/ci/ci-run-stateful-tests-standalone-minio.sh
       env:
-        MY_SECRET: ${{ secrets.MY_SECRET }}
+        DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}

@@ -29,3 +29,5 @@ runs:
       uses: ./.github/actions/artifact_failure
       with:
         name: test-stateless-cluster-linux
+      env:
+        DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
