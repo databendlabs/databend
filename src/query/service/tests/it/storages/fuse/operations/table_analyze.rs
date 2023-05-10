@@ -31,6 +31,8 @@ use databend_query::sessions::TableContext;
 use databend_query::sql::plans::Plan;
 use databend_query::sql::Planner;
 use databend_query::test_kits::table_test_fixture::analyze_table;
+use databend_query::test_kits::table_test_fixture::do_deletion;
+use databend_query::test_kits::table_test_fixture::do_update;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
@@ -38,9 +40,6 @@ use futures_util::TryStreamExt;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
-
-use crate::storages::fuse::operations::mutation::do_deletion;
-use crate::storages::fuse::operations::mutation::do_update;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> Result<()> {

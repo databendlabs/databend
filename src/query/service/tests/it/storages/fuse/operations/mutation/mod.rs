@@ -13,11 +13,9 @@
 //  limitations under the License.
 
 mod block_compact_mutator;
-mod mutation;
+mod deletion;
 mod recluster_mutator;
 mod segments_compact_mutator;
 
-pub use mutation::do_deletion;
-pub use mutation::do_update;
 pub use segments_compact_mutator::compact_segment;
 pub use segments_compact_mutator::CompactSegmentTestFixture;
