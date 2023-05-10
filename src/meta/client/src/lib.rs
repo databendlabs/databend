@@ -62,11 +62,11 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 ///   Meta service only responds with MetaAPIError.
 ///
 /// - 2023-05-07: since 1.1.32:
-///   TxnDeleteRequest provides a `match_seq` field to delete a record if its `seq` matches.
+///   Meta service: add: TxnDeleteRequest provides a `match_seq` field to delete a record if its `seq` matches.
 pub static MIN_METASRV_SEMVER: Version = Version {
-    major: 0,
-    minor: 8,
-    patch: 35,
+    major: 1,
+    minor: 1,
+    patch: 32,
     pre: Prerelease::EMPTY,
     build: BuildMetadata::EMPTY,
 };

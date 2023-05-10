@@ -24,6 +24,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::SystemTime;
 
+use chrono_tz::Tz;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -89,6 +90,7 @@ pub struct QueryContext {
     clickhouse_version: String,
     partition_queue: Arc<RwLock<VecDeque<PartInfoPtr>>>,
     shared: Arc<QueryContextShared>,
+    query_settings: Arc<Settings>,
     fragment_id: Arc<AtomicUsize>,
 }
 
@@ -100,12 +102,15 @@ impl QueryContext {
     pub fn create_from_shared(shared: Arc<QueryContextShared>) -> Arc<QueryContext> {
         debug!("Create QueryContext");
 
+        let tenant = GlobalConfig::instance().query.tenant_id.clone();
+        let query_settings = Settings::create(tenant);
         Arc::new(QueryContext {
             partition_queue: Arc::new(RwLock::new(VecDeque::new())),
             version: format!("DatabendQuery {}", *DATABEND_COMMIT_VERSION),
             mysql_version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),
             clickhouse_version: CLICKHOUSE_VERSION.to_string(),
             shared,
+            query_settings,
             fragment_id: Arc::new(AtomicUsize::new(0)),
         })
     }
@@ -387,7 +392,12 @@ impl TableContext for QueryContext {
     }
 
     fn get_format_settings(&self) -> Result<FormatSettings> {
-        self.shared.session.get_format_settings()
+        let tz = self.query_settings.get_timezone()?;
+        let timezone = tz.parse::<Tz>().map_err(|_| {
+            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
+        })?;
+        let format = FormatSettings { timezone };
+        Ok(format)
     }
 
     fn get_tenant(&self) -> String {
@@ -419,6 +429,16 @@ impl TableContext for QueryContext {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
+        if self.query_settings.get_changes().is_empty() {
+            let session_change = self.shared.get_changed_settings();
+            unsafe {
+                self.query_settings.unchecked_apply_changes(session_change);
+            }
+        }
+        self.query_settings.clone()
+    }
+
+    fn get_shard_settings(&self) -> Arc<Settings> {
         self.shared.get_settings()
     }
 
@@ -496,7 +516,13 @@ impl TableContext for QueryContext {
     }
 
     fn get_changed_settings(&self) -> HashMap<String, ChangeValue> {
-        self.shared.get_changed_settings()
+        if self.query_settings.get_changes().is_empty() {
+            let session_change = self.shared.get_changed_settings();
+            unsafe {
+                self.query_settings.unchecked_apply_changes(session_change);
+            }
+        }
+        self.query_settings.get_changes()
     }
 
     // Get the storage data accessor operator from the session manager.
