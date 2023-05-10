@@ -89,29 +89,16 @@ S.ver:           2      3      4
 
 ### Compatibility status
 
-The following is an illustration of current query-meta compatibility.
-It shows that:
-- meta-0.8.30 is compatible with query-0.7.59 upto query-0.8.79;
-- query-0.8.79 is compatible with meta-0.8.30 upto meta-0.9.22; 
-- query-0.8.80 is compatible with meta-0.8.35 upto the latest version;
+The following is an illustration of current query-meta compatibility:
+
+| `Meta\Query`     | [0.7.59, 0.8.80) | [0.8.80, 0.9.41) | [0.9.41, 1.1.34) | [1.1.34, +∞) |
+|:-----------------|:-----------------|:-----------------|:-----------------|:-------------|
+| [0.8.30, 0.8.35) | ✅                | ❌                | ❌                | ❌            |
+| [0.8.35, 0.9.23) | ✅                | ✅                | ✅                | ❌            |
+| [0.9.23, 0.9.42) | ❌                | ✅                | ✅                | ❌            |
+| [0.9.42, 1.1.32) | ❌                | ❌                | ✅                | ❌            |
+| [1.1.32, +∞)     | ❌                | ❌                | ✅                | ✅            |
 
 <img src="/img/deploy/compatibility.excalidraw.png"/>
 
 
-Query versions that are compatible with a specific meta:
-
-| Meta version range: | Query version range: |
-| :--                 | :--                  |
-| [0.8.30, 0.8.35):   | [0.7.59, 0.8.79]     |
-| [0.8.35, 0.9.22):   | [0.7.59, +∞)         |
-| [0.9.23, 0.9.41):   | [0.8.80, +∞)         |
-| [0.9.41, 0.9.42):   | [0.8.80, +∞)         |
-| [0.9.42, +∞):       | [0.9.41, +∞)         |
-
-Meta versions that are compatible with a specific query:
-
-| Query version range: | Meta version range: |
-| :--                  | :--                 |
-| 0.7.59, 0.8.79):     | [0.8.30, 0.9.22]    |
-| 0.8.80, 0.9.41):     | [0.8.35, +∞)        |
-| 0.9.41, +∞):         | [0.8.35, +∞)        |

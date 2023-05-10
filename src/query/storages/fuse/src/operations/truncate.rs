@@ -83,7 +83,10 @@ impl FuseTable {
 
             // best effort to remove the table's copied files.
             catalog
-                .truncate_table(&self.table_info, TruncateTableReq { table_id })
+                .truncate_table(&self.table_info, TruncateTableReq {
+                    table_id,
+                    batch_size: None,
+                })
                 .await?;
 
             // try keep a hit file of last snapshot
