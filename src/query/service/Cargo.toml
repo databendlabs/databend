@@ -15,6 +15,8 @@ test = false
 default = ["simd"]
 simd = ["common-arrow/simd"]
 
+z3-prove = ["common-sql/z3-prove"]
+
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
