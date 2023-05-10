@@ -249,30 +249,22 @@ macro_rules! register_decimal_compare_op {
                 DecimalDataType::binary_result_type(&decimal_a, &decimal_b, false, false, true)
                     .ok()?;
 
+            // Comparison between different decimal types must be same siganature types
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: args_type.clone(),
+                    args_type: vec![
+                        DataType::Decimal(common_type.clone()),
+                        DataType::Decimal(common_type.clone()),
+                    ],
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-                    eval: Box::new(move |args, ctx| {
-                        let lhs = convert_to_decimal(
-                            &args[0],
-                            ctx,
-                            args_type[0].clone(),
-                            DataType::Decimal(common_type.clone()),
-                        );
-                        let rhs = convert_to_decimal(
-                            &args[1],
-                            ctx,
-                            args_type[1].clone(),
-                            DataType::Decimal(common_type.clone()),
-                        );
+                    eval: Box::new(move |args, _ctx| {
                         op_decimal!(
-                            &lhs.as_ref(),
-                            &rhs.as_ref(),
+                            &args[0],
+                            &args[1],
                             &DataType::Decimal(common_type.clone()),
                             $op
                         )
