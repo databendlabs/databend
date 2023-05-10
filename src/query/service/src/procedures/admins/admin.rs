@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use super::tenant_quota::TenantQuotaProcedure;
+use crate::procedures::admins::license_info::LicenseInfoProcedure;
 use crate::procedures::ProcedureFactory;
 
 pub struct AdminProcedure;
@@ -22,6 +23,10 @@ impl AdminProcedure {
         factory.register(
             "admin$tenant_quota",
             Box::new(TenantQuotaProcedure::try_create),
+        );
+        factory.register(
+            "admin$license_info",
+            Box::new(LicenseInfoProcedure::try_create),
         );
     }
 }

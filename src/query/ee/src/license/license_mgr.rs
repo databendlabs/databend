@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use dashmap::DashMap;
 
 use common_base::base::GlobalInstance;
 use common_exception::exception::ErrorCode;
@@ -23,20 +22,24 @@ use common_license::license::LicenseInfo;
 use common_license::license::LICENSE_PUBLIC_KEY;
 use common_license::license_manager::LicenseManager;
 use common_license::license_manager::LicenseManagerWrapper;
+use common_settings::Settings;
+use dashmap::DashMap;
 use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::claims::JWTClaims;
-use jwt_simple::prelude::{Clock, ECDSAP256PublicKeyLike};
-use common_settings::Settings;
+use jwt_simple::prelude::Clock;
+use jwt_simple::prelude::ECDSAP256PublicKeyLike;
 
 pub struct RealLicenseManager {
     // cache available settings to get avoid of unneeded license parsing time.
     pub(crate) cache: DashMap<String, JWTClaims<LicenseInfo>>,
+    public_key: String,
 }
 
 impl LicenseManager for RealLicenseManager {
     fn init() -> Result<()> {
         let rm = RealLicenseManager {
             cache: DashMap::new(),
+            public_key: LICENSE_PUBLIC_KEY.to_string(),
         };
         let wrapper = LicenseManagerWrapper {
             manager: Box::new(rm),
@@ -49,29 +52,35 @@ impl LicenseManager for RealLicenseManager {
         GlobalInstance::get()
     }
 
-    fn is_active(&self) -> bool {
-        true
-    }
-
-    fn check_enterprise_enabled(&self, settings: &Arc<Settings>, tenant: String, feature: String) -> Result<()> {
+    fn check_enterprise_enabled(
+        &self,
+        settings: &Arc<Settings>,
+        tenant: String,
+        feature: String,
+    ) -> Result<()> {
         let license_key = settings.get_enterprise_license().map_err_to_code(
             ErrorCode::LicenseKeyInvalid,
             || format!("use of {feature} requires an enterprise license. failed to load license key for {tenant}"),
         )?;
-        if let Some(v) = self.cache.get(license_key.as_str()) {
-            Self::is_validate_license(v.value())
+
+        if license_key.is_empty() {
+            return Err(ErrorCode::LicenseKeyInvalid("license key is empty"));
         }
 
-        let license = Self::make_license(license_key.as_str()).map_err_to_code(
+        if let Some(v) = self.cache.get(license_key.as_str()) {
+            return Self::verify_license(v.value());
+        }
+
+        let license = self.parse_license(license_key.as_str()).map_err_to_code(
             ErrorCode::LicenseKeyInvalid,
-            || format!("use of {feature} requires an enterprise license. current license invalid for {tenant}"),
+            || format!("use of {feature} requires an enterprise license. current license is invalid for {tenant}"),
         )?;
         self.cache.insert(license_key, license);
         Ok(())
     }
 
-    fn make_license(raw: &str) -> Result<JWTClaims<LicenseInfo>> {
-        let public_key = ES256PublicKey::from_pem(LICENSE_PUBLIC_KEY)
+    fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+        let public_key = ES256PublicKey::from_pem(self.public_key.as_str())
             .map_err_to_code(ErrorCode::LicenseKeyParseError, || "public key load failed")?;
         public_key
             .verify_token::<LicenseInfo>(raw, None)
@@ -83,21 +92,33 @@ impl LicenseManager for RealLicenseManager {
 }
 
 impl RealLicenseManager {
+    // this method mainly used for unit tests
+    pub fn new(public_key: String) -> Self {
+        RealLicenseManager {
+            cache: DashMap::new(),
+            public_key,
+        }
+    }
+
+    // Only need to verify expire since other fields have already verified before enter into cache.
     fn verify_license(l: &JWTClaims<LicenseInfo>) -> Result<()> {
         let now = Clock::now_since_epoch();
         match l.expires_at {
             Some(expire_at) => {
                 if now > expire_at {
-                    Err(ErrorCode::LicenseKeyInvalid(format!(
-                        "license key expired in {:?}", expire_at
-                    )))
+                    return Err(ErrorCode::LicenseKeyInvalid(format!(
+                        "license key expired in {:?}",
+                        expire_at
+                    )));
                 }
             }
-            None => {Err(ErrorCode::LicenseKeyInvalid(format!(
-                "cannot find valid expire time",
-            )))}
+            None => {
+                return Err(ErrorCode::LicenseKeyInvalid(
+                    "cannot find valid expire time",
+                ));
+            }
         }
 
-        return Ok(())
+        Ok(())
     }
 }

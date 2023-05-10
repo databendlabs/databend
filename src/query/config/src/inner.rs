@@ -160,6 +160,7 @@ pub struct QueryConfig {
     pub table_engine_memory_enabled: bool,
     pub wait_timeout_mills: u64,
     pub max_query_log_size: usize,
+    pub databend_enterprise_license: Option<String>,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     pub management_mode: bool,
 
@@ -222,6 +223,7 @@ impl Default for QueryConfig {
             table_engine_memory_enabled: true,
             wait_timeout_mills: 5000,
             max_query_log_size: 10_000,
+            databend_enterprise_license: None,
             management_mode: false,
             parquet_fast_read_bytes: None,
             max_storage_io_requests: None,

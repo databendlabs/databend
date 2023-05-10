@@ -343,4 +343,8 @@ impl Settings {
     pub fn get_enterprise_license(&self) -> Result<String> {
         self.try_get_string("enterprise_license")
     }
+
+    pub fn set_enterprise_license(&self, val: String) -> Result<()> {
+        self.set_setting("enterprise_license".to_string(), val)
+    }
 }

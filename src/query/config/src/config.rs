@@ -1225,6 +1225,8 @@ pub struct QueryConfig {
     #[clap(long)]
     pub max_storage_io_requests: Option<u64>,
 
+    #[clap(long)]
+    pub databend_enterprise_license: Option<String>,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
     pub management_mode: bool,
@@ -1379,6 +1381,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_engine_memory_enabled: self.table_engine_memory_enabled,
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
+            databend_enterprise_license: self.databend_enterprise_license,
             management_mode: self.management_mode,
             parquet_fast_read_bytes: self.parquet_fast_read_bytes,
             max_storage_io_requests: self.max_storage_io_requests,
@@ -1447,6 +1450,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_engine_memory_enabled: inner.table_engine_memory_enabled,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
+            databend_enterprise_license: inner.databend_enterprise_license,
             management_mode: inner.management_mode,
             parquet_fast_read_bytes: inner.parquet_fast_read_bytes,
             max_storage_io_requests: inner.max_storage_io_requests,
