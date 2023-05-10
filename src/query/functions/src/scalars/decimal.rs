@@ -245,17 +245,14 @@ macro_rules! register_decimal_compare_op {
             let decimal_b =
                 DecimalDataType::from_size(args_type[1].get_decimal_properties()?).unwrap();
 
-            let return_type =
+            let common_type =
                 DecimalDataType::binary_result_type(&decimal_a, &decimal_b, false, false, true)
                     .ok()?;
 
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![
-                        DataType::Decimal(decimal_a.clone()),
-                        DataType::Decimal(decimal_b.clone()),
-                    ],
+                    args_type: args_type.clone(),
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
@@ -264,19 +261,19 @@ macro_rules! register_decimal_compare_op {
                         let lhs = convert_to_decimal(
                             &args[0],
                             ctx,
-                            DataType::Decimal(decimal_a.clone()),
-                            DataType::Decimal(return_type.clone()),
+                            args_type[0].clone(),
+                            DataType::Decimal(common_type.clone()),
                         );
                         let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
-                            DataType::Decimal(decimal_b.clone()),
-                            DataType::Decimal(return_type.clone()),
+                            args_type[1].clone(),
+                            DataType::Decimal(common_type.clone()),
                         );
                         op_decimal!(
                             &lhs.as_ref(),
                             &rhs.as_ref(),
-                            &DataType::Decimal(return_type.clone()),
+                            &DataType::Decimal(common_type.clone()),
                             $op
                         )
                     }),
@@ -337,10 +334,7 @@ macro_rules! register_decimal_binary_op {
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![
-                        DataType::Decimal(decimal_a.clone()),
-                        DataType::Decimal(decimal_b.clone()),
-                    ],
+                    args_type: args_type.clone(),
                     return_type: DataType::Decimal(return_type.clone()),
                 },
                 eval: FunctionEval::Scalar {
@@ -349,13 +343,14 @@ macro_rules! register_decimal_binary_op {
                         let lhs = convert_to_decimal(
                             &args[0],
                             ctx,
-                            DataType::Decimal(decimal_a.clone()),
+                            args_type[0].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
+
                         let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
-                            DataType::Decimal(decimal_b.clone()),
+                            args_type[1].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
 

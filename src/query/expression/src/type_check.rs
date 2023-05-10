@@ -490,9 +490,11 @@ pub fn can_auto_cast_to(
                 && (x.leading_digits() <= y.leading_digits()
                     || y.precision() == MAX_DECIMAL256_PRECISION)
         }
-        (DataType::Number(n), DataType::Decimal(d))
-            if !n.is_float() && d.precision() == d.max_precision() =>
-        {
+        (DataType::Number(n), DataType::Decimal(d)) if !n.is_float() => {
+            let properties = n.get_decimal_properties().unwrap();
+            if properties.scale > d.scale() || properties.precision > d.precision() {
+                return false;
+            }
             true
         }
         (DataType::Decimal(_), DataType::Number(n)) if n.is_float() => true,
