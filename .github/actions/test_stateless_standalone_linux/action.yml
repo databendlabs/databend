@@ -23,8 +23,6 @@ runs:
       shell: bash
       run: |
         bash ./scripts/ci/ci-run-stateless-tests-standalone.sh
-      env:
-        DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
 
     - name: Upload failure
       if: failure() || cancelled()

@@ -87,6 +87,8 @@ jobs:
   test_stateless_standalone_linux:
     runs-on: ubuntu-latest
     needs: build_linux
+    env:
+      DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_linux
@@ -102,6 +104,8 @@ jobs:
   test_stateless_cluster_linux:
     runs-on: ubuntu-latest
     needs: build_linux
+    env:
+      DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
@@ -110,6 +114,8 @@ jobs:
   test_stateless_cluster_macos:
     runs-on: macos-11
     needs: build_macos
+    env:
+      DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_macos
@@ -118,6 +124,8 @@ jobs:
   test_stateful_standalone_linux:
     runs-on: ubuntu-latest
     needs: build_linux
+    env:
+      DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
@@ -131,6 +139,8 @@ jobs:
   test_stateful_cluster_linux:
     runs-on: ubuntu-latest
     needs: build_linux
+    env:
+      DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
