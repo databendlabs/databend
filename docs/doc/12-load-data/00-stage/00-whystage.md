@@ -1,12 +1,8 @@
 ---
-title: Undertanding Stages
+title: Understanding Stages
 ---
 
 In Databend, a stage is a storage location where data files are stored before they are loaded into a table or exported to an external system. One of the benefits of using stages in Databend is that it simplifies data file management and access. By using stages, you can easily load data from staged files or unload data into a stage using provided tools and commands, without having to worry about their specific storage location. Moreover, Databend provides APIs and SQL commands that make it easy to manage files in a stage. 
-
-This topic covers the different types of stages available in Databend, and introduces methods to effectively manage stages and staged files.
-
-## Stage Types
 
 Databend offers three different types of stages: User stage, Internal stage, and External stage.
 
@@ -64,29 +60,3 @@ Unlike a user stage, which is automatically created for each user and cannot be 
 An external stage in Databend stores data files outside of the storage backend specified in databend-query.toml. When you create an external stage using the [CREATE STAGE](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command, you'll need to specify the stage location where the data files are stored. The data can be stored on cloud storage services such as AWS S3, and Google Cloud Storage.
 
 One of the benefits of using external stages is that it enables sharing data files among multiple users who have access to the same external storage system. Additionally, you can use external stages to directly load data from files stored in an external storage system into Databend tables, or export Databend data into files that are stored in an external storage system.
-
-## Managing Stages & Files
-
-:::note
-This section only covers the available tools and commands for managing stages and staged files. It does not provide detailed syntax or examples. If you need more information, please refer to the relevant pages linked throughout this section.
-:::
-
-There are a variety of SQL commands available in Databend to help you manage stages:
-
-- [CREATE STAGE](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md): Creates a stage. 
-- [DROP STAGE](../../14-sql-commands/00-ddl/40-stage/02-ddl-drop-stage.md): Removes a stage.
-- [DESC STAGE](../../14-sql-commands/00-ddl/40-stage/03-ddl-desc-stage.md): Shows the properties of a stage.
-- [SHOW STAGES](../../14-sql-commands/00-ddl/40-stage/06-ddl-show-stages.md): Returns a list of the created stages.
-
-To stage a file, that is to say, uploading a local file to a stage, you can use the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md). To list and remove files in a stage, you can use the following commands:
-
-- [LIST FILES](../../14-sql-commands/00-ddl/40-stage/04-ddl-list-stage.md): Returns a list of the staged files in a stage.
-- [REMOVE FILES](../../14-sql-commands/00-ddl/40-stage/05-ddl-remove-stage.md): Removes staged files from a stage.
-
-Please note that some of the commands above do not apply to the User Stage. See the table below for details:
-
-| Stage          | CREATE STAGE | DROP STAGE | DESC STAGE | LIST FILES | REMOVE FILES | SHOW STAGES |
-|----------------|--------------|------------|------------|------------|--------------|-------------|
-| User Stage     | No           | No         | Yes        | Yes        | Yes          | No          |
-| Named Internal | Yes          | Yes        | Yes        | Yes        | Yes          | Yes         |
-| Named External | Yes          | Yes        | Yes        | Yes        | Yes          | Yes         |

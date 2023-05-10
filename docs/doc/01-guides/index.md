@@ -48,6 +48,7 @@ import TabItem from '@theme/TabItem';
 Databend makes it easy to load data from various sources, stage, Amazon S3, local and remote files, and so on.
 
 
+
 ## Data & User Management
 
 To make the most of Databend, learn how to manage your database by inserting, updating, and deleting data, creating and dropping databases and tables, and managing user-defined functions and views. Explore advanced features like generating SQL with AI and managing users, roles, and privileges for fine-grained control.
