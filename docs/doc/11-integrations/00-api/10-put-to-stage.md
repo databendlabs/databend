@@ -5,7 +5,7 @@ description:
   Uploads local data files to the user stage or a named internal / external stage.
 ---
 
-You can utilize the File Upload API to upload local data files to a stage, whether it is the [User Stage](../../14-sql-commands/00-ddl/40-stage/index.md#user-stage) or a named internal/external stage. To initiate the upload process, you need to submit a POST request to the endpoint `http://<http_handler_host>:<http_handler_port>/v1/upload_to_stage`.
+You can utilize the File Upload API to upload local data files to a stage, whether it is the user stage or a named internal/external stage. To initiate the upload process, you need to submit a POST request to the endpoint `http://<http_handler_host>:<http_handler_port>/v1/upload_to_stage`.
 
 :::tip
 By default, <http_handler_host>:<http_handler_port> is set to 0.0.0.0:8000, and it can be customized in the databend-query.toml configuration file.
