@@ -2348,6 +2348,7 @@ dependencies = [
  "chrono",
  "common-arrow",
  "common-base",
+ "common-cache",
  "common-catalog",
  "common-exception",
  "common-expression",
@@ -3199,6 +3200,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-grpc",
+ "common-license",
  "common-meta-api",
  "common-meta-app",
  "common-meta-client",
@@ -3337,6 +3339,7 @@ dependencies = [
  "common-hashtable",
  "common-http",
  "common-io",
+ "common-license",
  "common-management",
  "common-meta-api",
  "common-meta-app",
@@ -3428,6 +3431,7 @@ dependencies = [
  "unicode-segmentation",
  "url",
  "uuid",
+ "vacuum-handler",
  "walkdir",
  "wiremock",
 ]
@@ -3576,9 +3580,12 @@ dependencies = [
 
 [[package]]
 name = "dlv-list"
-version = "0.3.0"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0688c2a7f92e427f44895cd63841bff7b29f8d7a1648b9e7e07a4a365b2e1257"
+checksum = "d529fd73d344663edfd598ccb3f344e46034db51ebd103518eae34338248ad73"
+dependencies = [
+ "const-random",
+]
 
 [[package]]
 name = "downcast"
@@ -3727,12 +3734,21 @@ name = "enterprise-query"
 version = "0.1.0"
 dependencies = [
  "async-backtrace",
+ "async-trait",
+ "chrono",
  "common-base",
  "common-building",
+ "common-catalog",
  "common-config",
  "common-exception",
  "common-license",
+ "common-storages-fuse",
+ "databend-query",
  "jwt-simple",
+ "storages-common-cache",
+ "storages-common-table-meta",
+ "tracing",
+ "vacuum-handler",
 ]
 
 [[package]]
@@ -6434,16 +6450,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a60c7ce501c71e03a9c9c0d35b861413ae925bd979cc7a4e30d060069aaac8d"
 
 [[package]]
-name = "mime_guess"
-version = "2.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4192263c238a5f0d0c6bfd21f336a313a4ce1c450542449ca191bb657b4642ef"
-dependencies = [
- "mime",
- "unicase",
-]
-
-[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6903,9 +6909,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.33.1"
+version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8c582b11500656b4f6210f868a0a26395cdf30183c5597c45d0a34525dd94512"
+checksum = "005c877c4f788a7749825bbc61031ccc950217fac6bcf9965641fbf1bdf991b0"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7113,12 +7119,12 @@ dependencies = [
 
 [[package]]
 name = "ordered-multimap"
-version = "0.4.3"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccd746e37177e1711c20dd619a1620f34f5c8b569c53590a72dedd5344d8924a"
+checksum = "4ed8acf08e98e744e5384c8bc63ceb0364e68a6854187221c18df61c4797690e"
 dependencies = [
  "dlv-list",
- "hashbrown 0.12.3",
+ "hashbrown 0.13.2",
 ]
 
 [[package]]
@@ -8191,14 +8197,13 @@ dependencies = [
 
 [[package]]
 name = "reqsign"
-version = "0.9.4"
+version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f753b768a9d691395e7db3dc74452cc39a5da55293c3fa2241e2aeaf9d94028"
+checksum = "5d36dae58fbc1db90e1cf14ca8fabcba92b7aa3c282d5e46bcdf16b9c28ab04c"
 dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.21.0",
- "bytes",
  "chrono",
  "form_urlencoded",
  "hex",
@@ -8241,7 +8246,6 @@ dependencies = [
  "js-sys",
  "log",
  "mime",
- "mime_guess",
  "once_cell",
  "percent-encoding",
  "pin-project-lite",
@@ -8456,7 +8460,6 @@ dependencies = [
  "pkcs1",
  "pkcs8 0.9.0",
  "rand_core 0.6.4",
- "sha2",
  "signature 2.0.0",
  "subtle",
  "zeroize",
@@ -8475,9 +8478,9 @@ dependencies = [
 
 [[package]]
 name = "rust-ini"
-version = "0.18.0"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6d5f2436026b4f6e79dc829837d467cc7e9a55ee40e750d716713540715a2df"
+checksum = "7e2a3bcec1f113553ef1c88aae6c020a369d03d55b58de9869a0908930385091"
 dependencies = [
  "cfg-if",
  "ordered-multimap",
@@ -10416,6 +10419,19 @@ checksum = "1674845326ee10d37ca60470760d4288a6f80f304007d92e5c53bab78c9cfd79"
 dependencies = [
  "getrandom 0.2.8",
  "serde",
+]
+
+[[package]]
+name = "vacuum-handler"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "chrono",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-storages-fuse",
 ]
 
 [[package]]

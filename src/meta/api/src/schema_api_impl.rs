@@ -88,7 +88,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
@@ -1906,78 +1905,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         })
     }
 
-    async fn upsert_table_copied_file_info(
-        &self,
-        req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply, KVAppError> {
-        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
-
-        let mut retry = 0;
-        let table_id = req.table_id;
-
-        let mut keys = Vec::with_capacity(req.file_info.len());
-        for file in req.file_info.iter() {
-            let key = TableCopiedFileNameIdent {
-                table_id,
-                file: file.0.clone(),
-            };
-            keys.push(key.to_string_key());
-        }
-
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
-
-            let tbid = TableId { table_id };
-
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-
-            if tb_meta_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, ""),
-                )));
-            }
-
-            debug!(
-                ident = display(&tbid),
-                table_meta = debug(&tb_meta),
-                "upsert_table_copied_file_info"
-            );
-
-            let (condition, if_then) = build_upsert_table_copied_file_info_conditions(
-                &req,
-                tb_meta_seq,
-                req.fail_if_duplicated,
-            )?;
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                ident = display(&tbid),
-                succ = display(succ),
-                "upsert_table_copied_file_info"
-            );
-
-            if succ {
-                return Ok(UpsertTableCopiedFileReply {});
-            } else if req.fail_if_duplicated {
-                // fail fast if txn failed, which caused by file duplication
-                return Err(KVAppError::AppError(AppError::DuplicatedUpsertFiles(
-                    DuplicatedUpsertFiles::new(req.table_id, "upsert_table_copied_file_info"),
-                )));
-            }
-        }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("upsert_table_copied_file_info", TXN_MAX_RETRY_TIMES),
-        )))
-    }
-
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
     async fn truncate_table(
         &self,
@@ -2020,7 +1947,6 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 .push(txn_op_put(&table_id, serialize_struct(&tb_meta)?)); // tb_id -> tb_meta
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
-
             debug!(id = debug(&table_id), succ = display(succ), ctx);
 
             if succ {
@@ -2162,6 +2088,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             if let Some(req) = &req.copied_files {
                 let (conditions, match_operations) =
                     build_upsert_table_copied_file_info_conditions(
+                        &tbid,
                         req,
                         tb_meta_seq,
                         req.fail_if_duplicated,
@@ -2816,14 +2743,12 @@ async fn get_table_id_from_share_by_name(
 }
 
 fn build_upsert_table_copied_file_info_conditions(
+    table_id: &TableId,
     req: &UpsertTableCopiedFileReq,
     tb_meta_seq: u64,
     fail_if_duplicated: bool,
 ) -> Result<(Vec<TxnCondition>, Vec<TxnOp>), KVAppError> {
-    let table_id = req.table_id;
-    let tbid = TableId { table_id };
-
-    let mut condition = vec![txn_cond_seq(&tbid, Eq, tb_meta_seq)];
+    let mut condition = vec![txn_cond_seq(table_id, Eq, tb_meta_seq)];
     let mut if_then = vec![];
 
     // `remove_table_copied_files` and `upsert_table_copied_file_info`
@@ -2841,7 +2766,7 @@ fn build_upsert_table_copied_file_info_conditions(
 
     for (file_name, file_info) in file_name_infos {
         let key = TableCopiedFileNameIdent {
-            table_id,
+            table_id: table_id.table_id,
             file: file_name.to_owned(),
         };
         if fail_if_duplicated {

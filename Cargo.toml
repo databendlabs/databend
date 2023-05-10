@@ -70,6 +70,7 @@ members = [
     "src/query/storages/parquet",
     "src/query/storages/result_cache",
     "src/query/users",
+    "src/query/ee-features/vacuum-handler",
     # databend-query
     "src/query/service",
     # enterprise
@@ -97,7 +98,7 @@ members = [
 [workspace.dependencies]
 # databend maintains:
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.33", features = [
+opendal = { version = "0.34", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",
