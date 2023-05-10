@@ -139,8 +139,9 @@ impl FuseTable {
 
                             let keep_last_snapshot = true;
                             let snapshot_files = self.list_snapshot_files().await?;
-                            if let Err(e) =
-                                tbl.do_purge(&ctx, snapshot_files, keep_last_snapshot).await
+                            if let Err(e) = tbl
+                                .do_purge(&ctx, snapshot_files, keep_last_snapshot, None)
+                                .await
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
                                 warn!(

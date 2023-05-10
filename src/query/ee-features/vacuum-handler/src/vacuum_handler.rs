@@ -28,7 +28,8 @@ pub trait VacuumHandler: Sync + Send {
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         retention_time: DateTime<Utc>,
-    ) -> Result<()>;
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<String>>>;
 }
 
 pub struct VacuumHandlerWrapper {
@@ -46,9 +47,10 @@ impl VacuumHandlerWrapper {
         fuse_table: &FuseTable,
         ctx: Arc<dyn TableContext>,
         retention_time: DateTime<Utc>,
-    ) -> Result<()> {
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<String>>> {
         self.handler
-            .do_vacuum(fuse_table, ctx, retention_time)
+            .do_vacuum(fuse_table, ctx, retention_time, dry_run_limit)
             .await
     }
 }
