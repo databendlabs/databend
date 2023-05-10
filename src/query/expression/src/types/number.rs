@@ -383,7 +383,7 @@ impl NumberDataType {
         }
     }
 
-    pub fn get_decimal_properties(self) -> Option<DecimalSize> {
+    pub fn get_decimal_properties(&self) -> Option<DecimalSize> {
         let (precision, scale) = match self {
             NumberDataType::Int8 => (3, 0),
             NumberDataType::Int16 => (5, 0),
