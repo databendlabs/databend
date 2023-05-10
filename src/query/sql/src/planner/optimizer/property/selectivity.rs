@@ -66,8 +66,8 @@ impl<'a> SelectivityEstimator<'a> {
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
-                let left_selectivity = self.compute_selectivity(&func.arguments[0], true)?;
-                let right_selectivity = self.compute_selectivity(&func.arguments[1], true)?;
+                let left_selectivity = self.compute_selectivity(&func.arguments[0], update)?;
+                let right_selectivity = self.compute_selectivity(&func.arguments[1], update)?;
                 left_selectivity * right_selectivity
             }
 
@@ -91,11 +91,13 @@ impl<'a> SelectivityEstimator<'a> {
                         update,
                     );
                 }
-                update_other_statistic_by_selectivity(
-                    usize::MAX,
-                    &mut self.input_stat.column_stats,
-                    DEFAULT_SELECTIVITY,
-                );
+                if update {
+                    update_other_statistic_by_selectivity(
+                        usize::MAX,
+                        &mut self.input_stat.column_stats,
+                        DEFAULT_SELECTIVITY,
+                    );
+                }
 
                 DEFAULT_SELECTIVITY
             }
