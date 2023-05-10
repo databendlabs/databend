@@ -243,6 +243,10 @@ macro_rules! register_decimal_compare_op {
 
             let common_type = common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
 
+            if !common_type.is_decimal() {
+                return None;
+            }
+
             // Comparison between different decimal types must be same siganature types
             let function = Function {
                 signature: FunctionSignature {
