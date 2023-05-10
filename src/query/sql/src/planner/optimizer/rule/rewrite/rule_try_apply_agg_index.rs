@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ use crate::plans::FunctionCall;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
@@ -170,30 +171,56 @@ impl Rule for RuleTryApplyAggIndex {
         state: &mut crate::optimizer::rule::TransformResult,
     ) -> Result<()> {
         let index_plans = self.get_index_plans();
+        if index_plans.is_empty() {
+            return Ok(());
+        }
+
         let query_info = Self::collect_information(s_expr)?;
         let query_predicates = query_info.predicates.map(Self::distinguish_predicates);
 
         // Search all index plans, find the first matched index to rewrite the query.
         for plan in index_plans.iter() {
             let index_info = Self::collect_information(plan)?;
-            let index_predicates = index_info.predicates.map(Self::distinguish_predicates);
             // 1. Check selection and aggregation.
-            // TODO
+            // match (&query_info.aggregation, &index_info.aggregation) {
+            //     (Some((agg_q, args_q)), Some((agg_i, args_i))) => {
+            //         // Group items should be the same.
+            //     }
+            //     (None, Some(_)) => {
+            //         // Not matched.
+            //         continue;
+            //     }
+            //     (Some((agg, args)), None) => {
+            //         // Query's aggregation arguments should be found in index's output.
+            //         for (_, scalar) in args {}
+            //     }
+            //     (None, None) => {}
+            // }
+
+            // All selected columns in query should be contained in index.
+            let mut flag = true;
+            for item in query_info.selection.items.iter() {
+                if !index_info.check_select_item(&item.scalar, &query_info.aggregation) {
+                    flag = false;
+                    break;
+                }
+            }
+            if !flag {
+                continue;
+            }
 
             // 2. Check filter predicates.
+            let output_bound_cols = index_info.output_bound_cols();
+            let index_predicates = index_info.predicates.map(Self::distinguish_predicates);
             match (&query_predicates, &index_predicates) {
                 (Some((qe, qr, qo)), Some((ie, ir, io))) => {
-                    // 2.1 Check if columns in index predicates exist in query output.
-                    // TODO
-
-                    // 2.2 Check if index predicates are matched with query predicates.
                     if !Self::check_predicates_equal(qe, ie) {
                         continue;
                     }
                     if !Self::check_predicates_other(qo, io) {
                         continue;
                     }
-                    if !Self::check_predicates_range(qr, ir) {
+                    if !Self::check_predicates_range(qr, ir, &output_bound_cols) {
                         continue;
                     }
                 }
@@ -214,7 +241,7 @@ impl Rule for RuleTryApplyAggIndex {
 /// [`Range`] is to represent the value range of a column according to the predicates.
 ///
 /// Notes that only conjunctions will be parsed, and disjunctions will be ignored.
-#[derive(Default)]
+#[derive(Default, PartialEq)]
 struct Range<'a> {
     min: Option<&'a Scalar>,
     min_close: bool,
@@ -333,11 +360,33 @@ type Predicates<'a> = (
     OtherPredicates<'a>,
 );
 
+type AggregationInfo<'a> = (&'a Aggregate, HashMap<IndexType, &'a ScalarExpr>);
+
 // Record information helping to rewrite the query plan.
 struct RewriteInfomartion<'a> {
-    _output: &'a EvalScalar,
+    table_index: IndexType,
+    selection: &'a EvalScalar,
     predicates: Option<&'a [ScalarExpr]>,
-    aggregation: Option<&'a Aggregate>,
+    aggregation: Option<AggregationInfo<'a>>,
+}
+
+impl RewriteInfomartion<'_> {
+    // Check the if information contains the select item.
+    fn check_select_item(&self, _item: &ScalarExpr, _agg: &Option<AggregationInfo<'_>>) -> bool {
+        // TODO
+        true
+    }
+
+    fn output_bound_cols(&self) -> ColumnSet {
+        let mut cols = ColumnSet::new();
+        for item in self.selection.items.iter() {
+            if let ScalarExpr::BoundColumnRef(col) = &item.scalar {
+                cols.insert(col.column.index);
+            }
+        }
+
+        cols
+    }
 }
 
 impl RuleTryApplyAggIndex {
@@ -345,7 +394,8 @@ impl RuleTryApplyAggIndex {
         // The plan tree should be started with [`EvalScalar`].
         if let RelOperator::EvalScalar(eval) = s_expr.plan() {
             let mut info = RewriteInfomartion {
-                _output: eval,
+                table_index: 0,
+                selection: eval,
                 predicates: None,
                 aggregation: None,
             };
@@ -362,19 +412,31 @@ impl RuleTryApplyAggIndex {
     ) -> Result<()> {
         match s_expr.plan() {
             RelOperator::Aggregate(agg) => {
-                info.aggregation.replace(agg);
+                let child = s_expr.child(0)?;
+                if let RelOperator::EvalScalar(eval) = child.plan() {
+                    // This eval scalar hold aggregation's arguments.
+                    let args_map = eval
+                        .items
+                        .iter()
+                        .map(|item| (item.index, &item.scalar))
+                        .collect();
+                    info.aggregation.replace((agg, args_map));
+                    Self::collect_information_impl(child.child(0)?, info)
+                } else {
+                    Self::collect_information_impl(child, info)
+                }
             }
             RelOperator::Filter(filter) => {
                 info.predicates.replace(&filter.predicates);
+                Self::collect_information_impl(s_expr.child(0)?, info)
             }
-            RelOperator::Scan(_) => {
+            RelOperator::Scan(scan) => {
+                info.table_index = scan.table_index;
                 // Finish the recursion.
-                return Ok(());
+                Ok(())
             }
-            _ => {}
+            _ => Self::collect_information_impl(s_expr.child(0)?, info),
         }
-
-        Self::collect_information_impl(s_expr.child(0)?, info)
     }
 
     fn get_index_plans(&self) -> Vec<SExpr> {
@@ -469,10 +531,20 @@ impl RuleTryApplyAggIndex {
     ///
     /// - Valid: query predicate: `a > 1`, index predicate: `a > 0`
     /// - Invalid: query predicate: `a > 1`, index predicate: `a > 2`
-    fn check_predicates_range(query: &RangePredicates, index: &RangePredicates) -> bool {
+    fn check_predicates_range(
+        query: &RangePredicates,
+        index: &RangePredicates,
+        index_output_bound_cols: &ColumnSet,
+    ) -> bool {
         for (col, index_range) in index {
             if let Some(query_range) = query.get(col) {
                 if !index_range.contains(query_range) {
+                    return false;
+                }
+                // If query range is not equal to index range,
+                // we need to filter the index data.
+                // So we need to check if the columns in query predicates exist in index output columns.
+                if index_range != query_range && !index_output_bound_cols.contains(col) {
                     return false;
                 }
             } else {
