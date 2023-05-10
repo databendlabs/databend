@@ -5,7 +5,7 @@ description:
   Load data from local file system.
 ---
 
-Uploading your local data files to a stage or bucket before loading them into Databend can be unnecessary. Instead, you can use [BendSQL](../11-integrations/30-access-tool/01-bendsql.md), the Databend native CLI tool, to directly import the data. This simplifies the workflow and can save you storage fees. By using BendSQL to import your local data, you can streamline the process and avoid unnecessary steps. Please note that the files must be in a format supported by Databend, otherwise the data cannot be imported. For more information on the file formats supported by Databend, see [Input & Output File Formats](../13-sql-reference/50-file-format-options.md).
+Uploading your local data files to a stage or bucket before loading them into Databend can be unnecessary. Instead, you can use [BendSQL](../../11-integrations/30-access-tool/01-bendsql.md), the Databend native CLI tool, to directly import the data. This simplifies the workflow and can save you storage fees. By using BendSQL to import your local data, you can streamline the process and avoid unnecessary steps. Please note that the files must be in a format supported by Databend, otherwise the data cannot be imported. For more information on the file formats supported by Databend, see [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
 
 ## Tutorial 1 - Load from a Local File
 

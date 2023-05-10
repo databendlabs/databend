@@ -1,11 +1,9 @@
 ---
 title: Loading from a Stage
 sidebar_label: Loading from a Stage
-description:
-  Load data from user stage, internal or external stage
 ---
 
-Databend enables you to easily import data from files uploaded to either the user stage or an internal/external stage. To do so, you can first use the [File Upload API](../11-integrations/00-api/10-put-to-stage.md) to upload the files to a stage, and then employ the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command to load the data from the staged file. Please note that the files must be in a format supported by Databend, otherwise the data cannot be imported. For more information on the file formats supported by Databend, see [Input & Output File Formats](../13-sql-reference/50-file-format-options.md).
+Databend enables you to easily import data from files uploaded to either the user stage or an internal/external stage. To do so, you can first use the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md) to upload the files to a stage, and then employ the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command to load the data from the staged file. Please note that the files must be in a format supported by Databend, otherwise the data cannot be imported. For more information on the file formats supported by Databend, see [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
 
 ![image](/img/load/load-data-from-stage.jpeg)
 
@@ -40,7 +38,7 @@ Follow this tutorial to upload the sample file to the user stage and load data f
 
 ### Step 1: Upload Sample File
 
-1. Use cURL to make a request to the [File Upload API](../11-integrations/00-api/10-put-to-stage.md):
+1. Use cURL to make a request to the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md):
 
 ```shell title='Upload to User Stage:'
 curl -u root: -H "stage_name:~" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
@@ -63,7 +61,7 @@ books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-04-24 14:45:26.753 +0
 
 ### Step 2. Copy Data into Table
 
-1. Load data into the target table with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command:
+1. Load data into the target table with the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command:
 
 ```sql
 COPY INTO books FROM @~ files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
@@ -87,7 +85,7 @@ Follow this tutorial to upload the sample file to an internal stage and load dat
 
 ### Step 1. Create an Internal Stage
 
-1. Create an internal stage with the [CREATE STAGE](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
+1. Create an internal stage with the [CREATE STAGE](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
 
 ```sql
 CREATE STAGE my_internal_stage;
@@ -104,7 +102,7 @@ my_internal_stage|Internal  |              0|'root'@'127.0.0.1'|       |
 
 ### Step 2: Upload Sample File
 
-1. Use cURL to make a request to the [File Upload API](../11-integrations/00-api/10-put-to-stage.md):
+1. Use cURL to make a request to the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md):
 
 ```shell title='Upload to Internal Stage:'
 curl -u root: -H "stage_name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
@@ -127,7 +125,7 @@ books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-04-24 15:17:44.205 +0
 
 ### Step 3. Copy Data into Table
 
-1. Load data into the target table with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command:
+1. Load data into the target table with the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command:
 
 ```sql
 COPY INTO books FROM @my_internal_stage files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);
@@ -150,7 +148,7 @@ Follow this tutorial to upload the sample file to an external stage and load dat
 
 ### Step 1. Create an External Stage
 
-1. Create an external stage with the [CREATE STAGE](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
+1. Create an external stage with the [CREATE STAGE](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md) command:
 
 ```sql
 CREATE STAGE my_external_stage url = 's3://databend' CONNECTION =(ENDPOINT_URL= 'http://127.0.0.1:9000' aws_key_id='ROOTUSER' aws_secret_key='CHANGEME123');
@@ -168,7 +166,7 @@ my_external_stage|External  |               |'root'@'127.0.0.1'|       |
 
 ### Step 2: Upload Sample File
 
-1. Use cURL to make a request to the [File Upload API](../11-integrations/00-api/10-put-to-stage.md):
+1. Use cURL to make a request to the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md):
 
 ```shell title='Upload to External Stage:'
 curl  -u root: -H "stage_name:my_external_stage" -F "upload=@books.parquet" -XPUT "http://127.0.0.1:8000/v1/upload_to_stage"
@@ -191,7 +189,7 @@ books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-04-24 15:47:40.727 +0
 
 ### Step 3. Copy Data into Table
 
-1. Load data into the target table with the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command:
+1. Load data into the target table with the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command:
 
 ```sql
 COPY INTO books FROM @my_external_stage files=('books.parquet') FILE_FORMAT = (TYPE = PARQUET);

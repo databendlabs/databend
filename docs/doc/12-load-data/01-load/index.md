@@ -3,7 +3,7 @@ title: Loading Data into Databend
 slug: ./
 ---
 
-Databend provides a variety of tools and commands that can help you load your data files into a table. Most of them are straightforward, meaning you can load your data with just a single command. Please note that your data files must be in one of the formats supported by Databend. See [Input & Output File Formats](../13-sql-reference/50-file-format-options.md) for a list of supported file formats.
+Databend provides a variety of tools and commands that can help you load your data files into a table. Most of them are straightforward, meaning you can load your data with just a single command. Please note that your data files must be in one of the formats supported by Databend. See [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md) for a list of supported file formats.
 
 This topic does not cover all of the available data loading methods, but it provides recommendations based on the location where your data files are stored. To find the recommended method and a link to the corresponding details page, toggle the block below:
 
@@ -45,5 +45,5 @@ This topic does not cover all of the available data loading methods, but it prov
 
 Databend offers the ability to query and transform your data before and during the loading process. With this feature, you can preview your data using a SELECT statement in Databend before loading it into a table. Moreover, you can customize your data by selecting a subset of columns, changing the column order, and even converting data types when you load with the COPY INTO command. See the topics below for details:
 
-- [Querying Data in Staged Files](05-querying-stage.md)
+- [Querying Data in Staged Files](../00-stage/05-querying-stage.md)
 - [Transforming Data During Load](06-data-load-transform.md)
