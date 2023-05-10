@@ -24,6 +24,7 @@ use common_expression::Scalar;
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::property::datum::F64;
 use crate::optimizer::ColumnStat;
+use crate::optimizer::ColumnStatSet;
 use crate::optimizer::Datum;
 use crate::optimizer::Statistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
@@ -39,7 +40,7 @@ pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 3f64;
 pub const MAX_SELECTIVITY: f64 = 1f64;
 
 pub struct SelectivityEstimator<'a> {
-    input_stat: &'a mut Statistics,
+    pub input_stat: &'a mut Statistics,
 }
 
 impl<'a> SelectivityEstimator<'a> {
@@ -65,8 +66,8 @@ impl<'a> SelectivityEstimator<'a> {
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
-                let left_selectivity = self.compute_selectivity(&func.arguments[0], true)?;
-                let right_selectivity = self.compute_selectivity(&func.arguments[1], true)?;
+                let left_selectivity = self.compute_selectivity(&func.arguments[0], update)?;
+                let right_selectivity = self.compute_selectivity(&func.arguments[1], update)?;
                 left_selectivity * right_selectivity
             }
 
@@ -88,6 +89,13 @@ impl<'a> SelectivityEstimator<'a> {
                         &func.arguments[0],
                         &func.arguments[1],
                         update,
+                    );
+                }
+                if update {
+                    update_other_statistic_by_selectivity(
+                        usize::MAX,
+                        &mut self.input_stat.column_stats,
+                        DEFAULT_SELECTIVITY,
                     );
                 }
 
@@ -129,24 +137,39 @@ impl<'a> SelectivityEstimator<'a> {
                     // For equal predicate, we just use cardinality of a single
                     // value to estimate the selectivity. This assumes that
                     // the column is in a uniform distribution.
-                    let sel = evaluate_equal(column_stat, constant);
+                    let selectivity = evaluate_equal(column_stat, constant);
                     if update {
-                        update_statistic(column_stat, const_datum.clone(), const_datum, sel)?;
+                        update_statistic(
+                            column_stat,
+                            const_datum.clone(),
+                            const_datum,
+                            selectivity,
+                        )?;
+                        update_other_statistic_by_selectivity(
+                            column_ref.column.index,
+                            &mut self.input_stat.column_stats,
+                            selectivity,
+                        );
                     }
-                    Ok(sel)
+                    Ok(selectivity)
                 }
                 ComparisonOp::NotEqual => {
                     // For not equal predicate, we treat it as opposite of equal predicate.
-                    let sel = 1.0 - evaluate_equal(column_stat, constant);
+                    let selectivity = 1.0 - evaluate_equal(column_stat, constant);
                     if update {
                         update_statistic(
                             column_stat,
                             column_stat.min.clone(),
                             column_stat.max.clone(),
-                            sel,
+                            selectivity,
                         )?;
+                        update_other_statistic_by_selectivity(
+                            column_ref.column.index,
+                            &mut self.input_stat.column_stats,
+                            selectivity,
+                        );
                     }
-                    Ok(sel)
+                    Ok(selectivity)
                 }
                 ComparisonOp::GT => {
                     let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
@@ -175,6 +198,11 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = 1.0 - num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
+                        update_other_statistic_by_selectivity(
+                            column_ref.column.index,
+                            &mut self.input_stat.column_stats,
+                            selectivity,
+                        );
                     }
                     Ok(selectivity)
                 }
@@ -203,6 +231,11 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
+                        update_other_statistic_by_selectivity(
+                            column_ref.column.index,
+                            &mut self.input_stat.column_stats,
+                            selectivity,
+                        );
                     }
                     Ok(selectivity)
                 }
@@ -230,6 +263,11 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = 1.0 - num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
+                        update_other_statistic_by_selectivity(
+                            column_ref.column.index,
+                            &mut self.input_stat.column_stats,
+                            selectivity,
+                        );
                     }
                     Ok(selectivity)
                 }
@@ -257,6 +295,11 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
+                        update_other_statistic_by_selectivity(
+                            column_ref.column.index,
+                            &mut self.input_stat.column_stats,
+                            selectivity,
+                        );
                     }
                     Ok(selectivity)
                 }
@@ -333,7 +376,7 @@ fn update_statistic(
     mut new_max: Datum,
     selectivity: f64,
 ) -> Result<()> {
-    let new_ndv = column_stat.ndv * selectivity;
+    let new_ndv = (column_stat.ndv * selectivity).ceil();
     column_stat.ndv = new_ndv;
     if matches!(new_min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)) {
         new_min = Datum::Float(F64::from(new_min.to_double()?));
@@ -343,7 +386,7 @@ fn update_statistic(
     column_stat.max = new_max.clone();
     if let Some(histogram) = &column_stat.histogram {
         let num_values = histogram.num_values();
-        let new_num_values = (num_values * selectivity) as u64;
+        let new_num_values = (num_values * selectivity).ceil() as u64;
         let new_ndv = new_ndv as u64;
         if new_ndv <= 2 {
             column_stat.histogram = None;
@@ -357,4 +400,28 @@ fn update_statistic(
         )?);
     }
     Ok(())
+}
+
+// Update the histograms of other columns according to selectivity.
+fn update_other_statistic_by_selectivity(
+    column_index: usize,
+    column_stats: &mut ColumnStatSet,
+    selectivity: f64,
+) {
+    for (index, column_stat) in column_stats.iter_mut() {
+        if *index != column_index {
+            let new_ndv = (column_stat.ndv * selectivity).ceil();
+            column_stat.ndv = new_ndv;
+            if let Some(histogram) = &mut column_stat.histogram {
+                let new_ndv = new_ndv as u64;
+                if new_ndv <= 2 {
+                    column_stat.histogram = None;
+                    return;
+                }
+                for bucket in histogram.buckets.iter_mut() {
+                    bucket.update(selectivity);
+                }
+            }
+        }
+    }
 }
