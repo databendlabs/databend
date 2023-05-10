@@ -470,21 +470,21 @@ impl Catalog for DatabaseCatalog {
     // Table index
 
     #[async_backtrace::framed]
-    async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
-        unimplemented!()
+    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
+        self.mutable_catalog.create_index(req).await
     }
 
     #[async_backtrace::framed]
-    async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
-        unimplemented!()
+    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
+        self.mutable_catalog.drop_index(req).await
     }
 
     #[async_backtrace::framed]
     async fn get_indexes_by_table_id(
         &self,
-        _req: ListIndexByTableIdReq,
+        req: ListIndexByTableIdReq,
     ) -> Result<Option<Vec<IndexMeta>>> {
-        unimplemented!()
+        self.mutable_catalog.get_indexes_by_table_id(req).await
     }
 
     fn get_table_function(
