@@ -492,10 +492,7 @@ pub fn can_auto_cast_to(
         }
         (DataType::Number(n), DataType::Decimal(d)) if !n.is_float() => {
             let properties = n.get_decimal_properties().unwrap();
-            if properties.scale > d.scale() || properties.precision > d.precision() {
-                return false;
-            }
-            true
+            properties.scale > d.scale() && properties.precision > d.precision()
         }
         (DataType::Decimal(_), DataType::Number(n)) if n.is_float() => true,
         _ => false,
