@@ -28,4 +28,9 @@ echo "select * from set_var.test order by id" | $MYSQL_CLIENT_CONNECT
 echo "delete /*+SET_VAR(timezone='Asia/Shanghai') SET_VAR(storage_read_buffer_size=200)*/ from set_var.test where id=2" | $MYSQL_CLIENT_CONNECT
 echo "delete /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ from set_var.test where id=4" | $MYSQL_CLIENT_CONNECT
 echo "select * from set_var.test" | $MYSQL_CLIENT_CONNECT
+
+echo "set timezone='America/Toronto'; select /*+SET_VAR(timezone='Asia/Shanghai') */ timezone(); select timezone();" | $MYSQL_CLIENT_CONNECT
+echo "create table set_var.t(c1 timestamp)" | $MYSQL_CLIENT_CONNECT
+# Toronto and Shanghai time diff is 13 hours.
+echo "set timezone='America/Toronto'; insert /*+SET_VAR(timezone='Asia/Shanghai') */ into set_var.t values('2022-02-02 03:00:00'); select /*+SET_VAR(timezone='Asia/Shanghai') */ * from set_var.t; select * from set_var.t;" | $MYSQL_CLIENT_CONNECT
 echo "drop database set_var;" | $MYSQL_CLIENT_CONNECT

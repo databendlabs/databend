@@ -512,6 +512,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_shard_settings(&self) -> Arc<Settings> {
+        todo!()
+    }
+
     fn get_cluster(&self) -> Arc<Cluster> {
         todo!()
     }
