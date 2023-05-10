@@ -180,7 +180,11 @@ pub trait AsyncSystemTable: Send + Sync {
     const NAME: &'static str;
 
     fn get_table_info(&self) -> &TableInfo;
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock>;
+    async fn get_full_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<DataBlock>;
 
     #[async_backtrace::framed]
     async fn get_partitions(
@@ -233,12 +237,20 @@ impl<TTable: 'static + AsyncSystemTable> Table for AsyncOneBlockSystemTable<TTab
     fn read_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _: &DataSourcePlan,
+        plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let inner_table = self.inner_table.clone();
+        let push_downs = plan.push_downs.clone();
         pipeline.add_source(
-            |output| SystemTableAsyncSource::create(output, inner_table.clone(), ctx.clone()),
+            |output| {
+                SystemTableAsyncSource::create(
+                    output,
+                    inner_table.clone(),
+                    ctx.clone(),
+                    push_downs.clone(),
+                )
+            },
             1,
         )?;
 
@@ -250,6 +262,7 @@ struct SystemTableAsyncSource<TTable: 'static + AsyncSystemTable> {
     finished: bool,
     inner: Arc<TTable>,
     context: Arc<dyn TableContext>,
+    push_downs: Option<PushDownInfo>,
 }
 
 impl<TTable: 'static + AsyncSystemTable> SystemTableAsyncSource<TTable>
@@ -259,11 +272,13 @@ where Self: AsyncSource
         output: Arc<OutputPort>,
         inner: Arc<TTable>,
         context: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<ProcessorPtr> {
         AsyncSourcer::create(context.clone(), output, SystemTableAsyncSource::<TTable> {
             inner,
             context,
             finished: false,
+            push_downs,
         })
     }
 }
@@ -280,6 +295,10 @@ impl<TTable: 'static + AsyncSystemTable> AsyncSource for SystemTableAsyncSource<
         }
 
         self.finished = true;
-        Ok(Some(self.inner.get_full_data(self.context.clone()).await?))
+        Ok(Some(
+            self.inner
+                .get_full_data(self.context.clone(), self.push_downs.clone())
+                .await?,
+        ))
     }
 }

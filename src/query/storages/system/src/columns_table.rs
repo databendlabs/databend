@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -23,15 +24,19 @@ use common_expression::infer_table_schema;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
+use common_expression::Expr;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use tracing::log::debug;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -49,8 +54,12 @@ impl AsyncSystemTable for ColumnsTable {
     }
 
     #[async_backtrace::framed]
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let rows = self.dump_table_columns(ctx).await?;
+    async fn get_full_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+    ) -> Result<DataBlock> {
+        let rows = self.dump_table_columns(ctx, push_downs).await?;
         let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut databases: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
@@ -134,17 +143,59 @@ impl ColumnsTable {
     async fn dump_table_columns(
         &self,
         ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<Vec<(String, String, TableField)>> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
-        let databases = catalog.list_databases(tenant.as_str()).await?;
 
+        let mut tables = Vec::new();
+
+        if let Some(push_downs) = push_downs {
+            if let Some(filter) = push_downs.filter {
+                let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                find_eq_table(&expr, &mut |col_name, scalar| {
+                    if col_name == "table" {
+                        if let Scalar::String(s) = scalar {
+                            if let Ok(table) = String::from_utf8(s.clone()) {
+                                tables.push(table);
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        let databases = catalog.list_databases(tenant.as_str()).await?;
         let mut rows: Vec<(String, String, TableField)> = vec![];
         for database in databases {
-            for table in catalog
-                .list_tables(tenant.as_str(), database.name())
-                .await?
-            {
+            let tables = if tables.is_empty() {
+                catalog
+                    .list_tables(tenant.as_str(), database.name())
+                    .await?
+            } else {
+                let mut res = Vec::new();
+                for table in &tables {
+                    match catalog
+                        .get_table(tenant.as_str(), database.name(), table)
+                        .await
+                    {
+                        Ok(table) => {
+                            res.push(table);
+                        }
+                        Err(_) => {
+                            debug!(
+                                "Can not get table {:?}.{:?}.{:?}",
+                                CATALOG_DEFAULT,
+                                database.name(),
+                                table
+                            )
+                        }
+                    }
+                }
+                res
+            };
+
+            for table in tables {
                 let fields = if table.engine() == VIEW_ENGINE {
                     if let Some(query) = table.options().get(QUERY) {
                         let mut planner = Planner::new(ctx.clone());
@@ -166,5 +217,30 @@ impl ColumnsTable {
         }
 
         Ok(rows)
+    }
+}
+
+pub fn find_eq_table(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
+    match expr {
+        Expr::Constant { .. } => {}
+        Expr::ColumnRef { .. } => {}
+        Expr::Cast { expr, .. } => {
+            find_eq_table(expr, visitor);
+        }
+        Expr::FunctionCall { function, args, .. } => {
+            if function.signature.name == "eq" {
+                match args.as_slice() {
+                    [Expr::ColumnRef { id, .. }, Expr::Constant { scalar, .. }]
+                    | [Expr::Constant { scalar, .. }, Expr::ColumnRef { id, .. }] => {
+                        visitor(id, scalar);
+                    }
+                    _ => {}
+                }
+            } else {
+                for arg in args {
+                    find_eq_table(arg, visitor);
+                }
+            }
+        }
     }
 }
