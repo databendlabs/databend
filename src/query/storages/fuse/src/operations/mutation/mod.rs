@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod abort_operation;
-pub mod base_mutator;
+mod abort_operation;
+mod base_mutator;
 mod compact;
 mod mutation_aggregator;
 mod mutation_fill_internal_columns;
@@ -26,6 +26,8 @@ mod recluster_mutator;
 
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
+pub use base_mutator::BlockIndex;
+pub use base_mutator::SegmentIndex;
 pub use compact::BlockCompactMutator;
 pub use compact::CompactAggregator;
 pub use compact::CompactPartInfo;

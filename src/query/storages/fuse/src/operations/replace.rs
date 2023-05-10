@@ -38,7 +38,7 @@ use crate::operations::merge_into::CommitSink;
 use crate::operations::merge_into::MergeIntoOperationAggregator;
 use crate::operations::merge_into::OnConflictField;
 use crate::operations::merge_into::TableMutationAggregator;
-use crate::operations::mutation::base_mutator::SegmentIndex;
+use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::processor_replace_into::ReplaceIntoProcessor;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;

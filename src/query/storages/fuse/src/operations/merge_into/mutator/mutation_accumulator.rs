@@ -32,9 +32,9 @@ use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
 use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry;
 use crate::operations::merge_into::mutation_meta::mutation_log::Replacement;
 use crate::operations::merge_into::mutation_meta::mutation_log::ReplacementLogEntry;
-use crate::operations::mutation::base_mutator::BlockIndex;
-use crate::operations::mutation::base_mutator::SegmentIndex;
 use crate::operations::mutation::AbortOperation;
+use crate::operations::mutation::BlockIndex;
+use crate::operations::mutation::SegmentIndex;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 

@@ -54,8 +54,8 @@ use crate::operations::merge_into::mutation_meta::mutation_log::Replacement;
 use crate::operations::merge_into::mutation_meta::mutation_log::ReplacementLogEntry;
 use crate::operations::merge_into::mutator::deletion_accumulator::DeletionAccumulator;
 use crate::operations::merge_into::OnConflictField;
-use crate::operations::mutation::base_mutator::BlockIndex;
-use crate::operations::mutation::base_mutator::SegmentIndex;
+use crate::operations::mutation::BlockIndex;
+use crate::operations::mutation::SegmentIndex;
 
 // Apply MergeIntoOperations to segments
 pub struct MergeIntoOperationAggregator {
