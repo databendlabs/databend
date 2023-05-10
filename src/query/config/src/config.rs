@@ -1895,9 +1895,9 @@ pub struct CacheConfig {
     #[clap(long = "cache-table-meta-snapshot-count", default_value = "256")]
     pub table_meta_snapshot_count: u64,
 
-    /// Max number of cached table segment
-    #[clap(long = "cache-table-meta-segment-count", default_value = "10240")]
-    pub table_meta_segment_count: u64,
+    /// Max bytes of cached table segment
+    #[clap(long = "cache-table-meta-segment-bytes", default_value = "1073741824")]
+    pub table_meta_segment_bytes: u64,
 
     /// Max number of cached table statistic meta
     #[clap(long = "cache-table-meta-statistic-count", default_value = "256")]
@@ -1960,6 +1960,11 @@ pub struct CacheConfig {
     /// and the access pattern will benefit from caching, consider enabled this cache.
     #[clap(long = "cache-table-data-deserialized-data-bytes", default_value = "0")]
     pub table_data_deserialized_data_bytes: u64,
+
+    // ----- the following options/args are all deprecated               ----
+    /// Max number of cached table segment
+    #[clap(long = "cache-table-meta-segment-count")]
+    pub table_meta_segment_count: Option<u64>,
 }
 
 impl Default for CacheConfig {
@@ -2064,7 +2069,7 @@ mod cache_config_converters {
             Ok(Self {
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
-                table_meta_segment_count: value.table_meta_segment_count,
+                table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -2084,7 +2089,7 @@ mod cache_config_converters {
             Self {
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
-                table_meta_segment_count: value.table_meta_segment_count,
+                table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -2095,6 +2100,7 @@ mod cache_config_converters {
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.into(),
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+                table_meta_segment_count: None,
             }
         }
     }

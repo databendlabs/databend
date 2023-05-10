@@ -37,7 +37,7 @@ use zstd::Decoder as ZstdDecoder;
 use zstd::Encoder as ZstdEncoder;
 
 #[repr(u8)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub enum Compression {
     None = 0,
     #[default]
@@ -105,7 +105,7 @@ pub fn decompress(compression: &Compression, data: Vec<u8>) -> Result<Vec<u8>> {
 }
 
 #[repr(u8)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub enum Encoding {
     #[default]
     Bincode = 1,

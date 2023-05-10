@@ -143,7 +143,7 @@ impl SegmentPruner {
         // Note that it is required to explicitly release this permit before pruning blocks, to avoid deadlock.
         drop(permit);
 
-        let total_bytes = segment_info.total_bytes();
+        let total_bytes = segment_info.summary.uncompressed_byte_size;
         // Perf.
         {
             metrics_inc_segments_range_pruning_before(1);

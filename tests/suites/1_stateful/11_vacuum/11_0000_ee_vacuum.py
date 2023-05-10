@@ -36,7 +36,6 @@ def compact_data(name):
     mycursor = mydb.cursor()
     mycursor.execute("optimize table gc_test all;")
 
-
 if __name__ == "__main__":
     with NativeClient(name="client1>") as client1:
         client1.expect(prompt)
@@ -55,7 +54,17 @@ if __name__ == "__main__":
         mycursor.execute("select a from gc_test order by a;")
         old_datas = mycursor.fetchall()
 
-        client1.send("vacuum table gc_test retain 0 hours;")
+        mycursor.execute('vacuum table gc_test retain 0 hours dry run;')
+        datas = mycursor.fetchall()
+        print(datas)
+
+        mycursor.execute('select a from gc_test order by a;')
+        datas = mycursor.fetchall()
+
+        if old_datas != datas:
+            print("vacuum dry run lose data: %s : %s" % (old_datas, datas))
+
+        client1.send("vacuum table gc_test retain 0 hours;");
         client1.expect(prompt)
 
         mycursor.execute("select a from gc_test order by a;")

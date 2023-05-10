@@ -448,6 +448,7 @@ impl Plan {
                 | Plan::DescribeTable(_)
                 | Plan::ShowGrants(_)
                 | Plan::Presign(_)
+                | Plan::VacuumTable(_)
         )
     }
 }
