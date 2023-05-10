@@ -145,6 +145,7 @@ pub struct SettingsItem {
     pub user_value: UserSettingValue,
     pub default_value: UserSettingValue,
     pub possible_values: Option<Vec<&'static str>>,
+    pub should_report: bool,
 }
 
 pub struct SettingsIter<'a> {
@@ -182,6 +183,7 @@ impl<'a> Iterator for SettingsIter<'a> {
                     user_value: default_value.value.clone(),
                     default_value: default_value.value,
                     possible_values: default_value.possible_values,
+                    should_report: default_value.should_report,
                 },
                 Some(change_value) => SettingsItem {
                     name: key,
@@ -190,6 +192,7 @@ impl<'a> Iterator for SettingsIter<'a> {
                     user_value: change_value.value.clone(),
                     default_value: default_value.value,
                     possible_values: default_value.possible_values,
+                    should_report: default_value.should_report,
                 },
             }),
         }
