@@ -254,7 +254,7 @@ Exchange
         ├── filters: []
         ├── estimated rows: 0.00
         ├── Exchange(Build)
-        │   ├── exchange type: Broadcast
+        │   ├── exchange type: Hash(t2.a (#2))
         │   └── TableScan
         │       ├── table: default.default.t2
         │       ├── read rows: 0
@@ -264,7 +264,7 @@ Exchange
         │       ├── push downs: [filters: [], limit: NONE]
         │       └── estimated rows: 0.00
         └── Exchange(Probe)
-            ├── exchange type: Init-Partition
+            ├── exchange type: Hash(t1.a (#0))
             └── TableScan
                 ├── table: default.default.t1
                 ├── read rows: 0
