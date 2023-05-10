@@ -210,9 +210,9 @@ impl ColumnsTable {
                 let schema = infer_table_schema(&plan.schema())?;
                 Ok(schema.fields().clone())
             } else {
-                return Err(ErrorCode::Internal(
+                Err(ErrorCode::Internal(
                     "Logical error, View Table must have a SelectQuery inside.",
-                ));
+                ))
             }
         } else {
             Ok(table.schema().fields().clone())
