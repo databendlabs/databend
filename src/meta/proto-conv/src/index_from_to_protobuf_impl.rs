@@ -67,7 +67,7 @@ impl FromToProto for mt::IndexMeta {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
-            table_id: 0,
+            table_id: p.table_id,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             drop_on: match p.drop_on {
                 Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
