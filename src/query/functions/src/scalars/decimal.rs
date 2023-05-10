@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::serialize::read_decimal_with_size;
+use common_expression::type_check::common_super_type;
 use common_expression::types::decimal::*;
 use common_expression::types::string::StringColumn;
 use common_expression::types::*;
@@ -240,34 +241,19 @@ macro_rules! register_decimal_compare_op {
                 return None;
             }
 
-            let decimal_a =
-                DecimalDataType::from_size(args_type[0].get_decimal_properties()?).unwrap();
-            let decimal_b =
-                DecimalDataType::from_size(args_type[1].get_decimal_properties()?).unwrap();
-
-            let common_type =
-                DecimalDataType::binary_result_type(&decimal_a, &decimal_b, false, false, true)
-                    .ok()?;
+            let common_type = common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
 
             // Comparison between different decimal types must be same siganature types
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![
-                        DataType::Decimal(common_type.clone()),
-                        DataType::Decimal(common_type.clone()),
-                    ],
+                    args_type: vec![common_type.clone(), common_type.clone()],
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
                     eval: Box::new(move |args, _ctx| {
-                        op_decimal!(
-                            &args[0],
-                            &args[1],
-                            &DataType::Decimal(common_type.clone()),
-                            $op
-                        )
+                        op_decimal!(&args[0], &args[1], &common_type, $op)
                     }),
                 },
             };
