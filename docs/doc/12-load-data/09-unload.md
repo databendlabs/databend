@@ -1,6 +1,5 @@
 ---
 title: Unloading Data from Databend
-slug: ./
 ---
 
 Unloading data refers to the process of extracting or transferring data stored in a database to another storage location. This can involve exporting data from the database to a file or another database, or copying data from the database to a backup or archiving system. 
