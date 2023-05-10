@@ -19,7 +19,6 @@ use common_exception::exception::ErrorCode;
 use common_exception::Result;
 use common_exception::ToErrorCode;
 use common_license::license::LicenseInfo;
-use common_license::license::LICENSE_PUBLIC_KEY;
 use common_license::license_manager::LicenseManager;
 use common_license::license_manager::LicenseManagerWrapper;
 use common_settings::Settings;
@@ -28,6 +27,11 @@ use jwt_simple::algorithms::ES256PublicKey;
 use jwt_simple::claims::JWTClaims;
 use jwt_simple::prelude::Clock;
 use jwt_simple::prelude::ECDSAP256PublicKeyLike;
+
+const LICENSE_PUBLIC_KEY: &str = r#"-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEGsKCbhXU7j56VKZ7piDlLXGhud0a
+pWjW3wxSdeARerxs/BeoWK7FspDtfLaAT8iJe4YEmR0JpkRQ8foWs0ve3w==
+-----END PUBLIC KEY-----"#;
 
 pub struct RealLicenseManager {
     // cache available settings to get avoid of unneeded license parsing time.

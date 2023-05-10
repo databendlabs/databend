@@ -39,3 +39,5 @@ runs:
       shell: bash
       run: |
         ./scripts/ci/ci-run-stateful-tests-standalone-minio.sh
+      env:
+        MY_SECRET: ${{ secrets.MY_SECRET }}
