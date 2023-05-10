@@ -201,7 +201,40 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         .unwrap();
     let old_snapshot_files = fuse_table.list_snapshot_files().await?;
 
-    // after generate orphan files\insert data\analyze table , verify the files number
+    // after generate orphan files\insert data\analyze table, verify the files number
+    {
+        let expected_num_of_snapshot = 3;
+        let expected_num_of_segment = 2 + (orphan_segment_file_num * 3) as u32;
+        let expected_num_of_blocks =
+            2 + (orphan_segment_file_num * orphan_block_per_segment_num * 3) as u32;
+        let expected_num_of_index = expected_num_of_blocks;
+        let expected_num_of_ts = 0;
+        check_data_dir(
+            &fixture,
+            "do_gc_orphan_files: verify generate retention files and referenced files",
+            expected_num_of_snapshot,
+            expected_num_of_ts,
+            expected_num_of_segment,
+            expected_num_of_blocks,
+            expected_num_of_index,
+            Some(()),
+            None,
+        )
+        .await?;
+    }
+
+    // do dry_run gc
+    {
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let table = fixture.latest_default_table().await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
+        let files_opt = do_vacuum(fuse_table, table_ctx, retention_time, Some(1000)).await?;
+        assert!(files_opt.is_some());
+        assert_eq!(files_opt.unwrap().len(), 3);
+    }
+
+    // check that after dry_run gc, files number has not changed
     {
         let expected_num_of_snapshot = 3;
         let expected_num_of_segment = 2 + (orphan_segment_file_num * 3) as u32;
@@ -229,7 +262,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-        do_vacuum(fuse_table, table_ctx, retention_time).await?;
+        do_vacuum(fuse_table, table_ctx, retention_time, None).await?;
     }
 
     // check files number

@@ -16,6 +16,10 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::FromData;
 use common_license::license_manager::get_license_manager;
 use common_sql::plans::VacuumTablePlan;
 use common_storages_fuse::FuseTable;
@@ -25,6 +29,8 @@ use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+
+const DRY_RUN_LIMIT: usize = 1000;
 
 #[allow(dead_code)]
 pub struct VacuumTableInterpreter {
@@ -42,6 +48,10 @@ impl VacuumTableInterpreter {
 impl Interpreter for VacuumTableInterpreter {
     fn name(&self) -> &str {
         "VacuumTableInterpreter"
+    }
+
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
     }
 
     #[async_backtrace::framed]
@@ -63,13 +73,36 @@ impl Interpreter for VacuumTableInterpreter {
             .await?;
         let retention_time = chrono::Utc::now()
             - chrono::Duration::hours(ctx.get_settings().get_retention_period()? as i64);
-        let build_res = PipelineBuildResult::create();
         let ctx = self.ctx.clone();
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let handler = get_vacuum_handler();
-        handler.do_vacuum(fuse_table, ctx, retention_time).await?;
+        let purge_files_opt = handler
+            .do_vacuum(
+                fuse_table,
+                ctx,
+                retention_time,
+                if self.plan.option.dry_run.is_some() {
+                    Some(DRY_RUN_LIMIT)
+                } else {
+                    None
+                },
+            )
+            .await?;
 
-        Ok(build_res)
+        match purge_files_opt {
+            None => return Ok(PipelineBuildResult::create()),
+            Some(purge_files) => {
+                let mut files: Vec<Vec<u8>> = Vec::with_capacity(DRY_RUN_LIMIT);
+                let purge_files = &purge_files[0..DRY_RUN_LIMIT];
+                for file in purge_files.iter() {
+                    files.push(file.to_string().as_bytes().to_vec());
+                }
+
+                PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+                    StringType::from_data(files),
+                ])])
+            }
+        }
     }
 }
