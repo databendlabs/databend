@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -24,10 +23,7 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
 use opendal::Operator;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
 use tracing::debug;
 
 use crate::io::SegmentsIO;
@@ -37,7 +33,6 @@ use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry
 use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
 use crate::operations::merge_into::mutation_meta::mutation_log::Replacement;
 use crate::operations::merge_into::mutator::mutation_accumulator::MutationAccumulator;
-use crate::operations::merge_into::mutator::mutation_accumulator::SerializedSegment;
 use crate::operations::mutation::AbortOperation;
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
@@ -121,63 +116,24 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 impl TableMutationAggregator {
     #[async_backtrace::framed]
     async fn apply_mutations(&mut self) -> Result<CommitMeta> {
-        let base_segments_paths = self.base_segments.clone();
         // NOTE: order matters!
-        let segment_infos = self.read_segments().await?;
+        let segments_io =
+            SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.schema.clone());
+        let segment_locations = self.base_segments.as_slice();
+        let segment_infos = segments_io
+            .read_segments(segment_locations, true)
+            .await?
+            .into_iter()
+            .collect::<Result<Vec<_>>>()?;
 
         let (commit_meta, serialized_segments) = self.mutation_accumulator.apply(
-            base_segments_paths,
+            self.base_segments.clone(),
             &segment_infos,
             self.thresholds,
             &self.location_gen,
         )?;
 
-        self.write_segments(serialized_segments).await?;
+        segments_io.write_segments(serialized_segments).await?;
         Ok::<_, ErrorCode>(commit_meta)
-    }
-
-    #[async_backtrace::framed]
-    async fn read_segments(&self) -> Result<Vec<Arc<SegmentInfo>>> {
-        let segments_io =
-            SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.schema.clone());
-        let segment_locations = self.base_segments.as_slice();
-        let segments = segments_io
-            .read_segments(segment_locations, true)
-            .await?
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
-        Ok(segments)
-    }
-
-    // TODO use batch_meta_writer
-    #[async_backtrace::framed]
-    async fn write_segments(&self, segments: Vec<SerializedSegment>) -> Result<()> {
-        let mut tasks = Vec::with_capacity(segments.len());
-        for segment in segments {
-            let op = self.dal.clone();
-            tasks.push(async move {
-                op.write(&segment.path, segment.raw_data).await?;
-                if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    segment_cache.put(
-                        segment.path.clone(),
-                        Arc::new(segment.segment.as_ref().try_into()?),
-                    );
-                }
-                Ok::<_, ErrorCode>(())
-            });
-        }
-
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        execute_futures_in_parallel(
-            tasks,
-            threads_nums,
-            permit_nums,
-            "mutation-write-segments-worker".to_owned(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?;
-        Ok(())
     }
 }

@@ -25,6 +25,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
 
+use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::merge_into::mutation_meta::mutation_log::AppendOperationLogEntry;
 use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
@@ -36,12 +37,6 @@ use crate::operations::mutation::base_mutator::SegmentIndex;
 use crate::operations::mutation::AbortOperation;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
-
-pub struct SerializedSegment {
-    pub raw_data: Vec<u8>,
-    pub path: String,
-    pub segment: Arc<SegmentInfo>,
-}
 
 #[derive(Default)]
 struct BlockMutations {
@@ -180,7 +175,6 @@ impl MutationAccumulator {
                     // for newly created segment, always use the latest version
                     segments_editor.insert(seg_idx, (location.clone(), SegmentInfo::VERSION));
                     serialized_segments.push(SerializedSegment {
-                        raw_data: new_segment.to_bytes()?,
                         path: location,
                         segment: Arc::new(new_segment),
                     });

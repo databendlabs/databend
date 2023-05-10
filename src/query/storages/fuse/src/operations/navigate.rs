@@ -182,13 +182,7 @@ impl FuseTable {
         );
 
         let files = self
-            .list_files(prefix, |_, modified| {
-                if let Some(modified) = modified {
-                    modified <= time_point
-                } else {
-                    false
-                }
-            })
+            .list_files(prefix, |_, modified| modified <= time_point)
             .await?;
         if files.is_empty() {
             return Err(ErrorCode::TableHistoricalDataNotFound(
@@ -240,11 +234,7 @@ impl FuseTable {
                 if loc.starts_with(&prefix_loc) {
                     location = Some(loc);
                 }
-                if let Some(modified) = modified {
-                    modified <= retention_point
-                } else {
-                    false
-                }
+                modified <= retention_point
             })
             .await?;
         let location = location.ok_or(ErrorCode::TableHistoricalDataNotFound(
@@ -254,14 +244,10 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn list_files(
-        &self,
-        prefix: String,
-        mut filter: impl FnMut(String, Option<DateTime<Utc>>) -> bool,
-    ) -> Result<Vec<String>> {
-        let op = self.operator.clone();
-
+    pub async fn list_files<F>(&self, prefix: String, mut f: F) -> Result<Vec<String>>
+    where F: FnMut(String, DateTime<Utc>) -> bool {
         let mut file_list = vec![];
+        let op = self.operator.clone();
         let mut ds = op.list(&prefix).await?;
         while let Some(de) = ds.try_next().await? {
             let meta = op
@@ -271,8 +257,10 @@ impl FuseTable {
                 EntryMode::FILE => {
                     let modified = meta.last_modified();
                     let location = de.path().to_string();
-                    if filter(location.clone(), modified) {
-                        file_list.push((location, modified));
+                    if let Some(modified) = modified {
+                        if f(location.clone(), modified) {
+                            file_list.push((location, modified));
+                        }
                     }
                 }
                 _ => {

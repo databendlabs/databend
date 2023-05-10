@@ -47,8 +47,11 @@ use crate::statistics::reducers::reduce_block_metas;
 type MutationMap = HashMap<usize, (Vec<(usize, Arc<BlockMeta>)>, Vec<usize>)>;
 
 struct SegmentLite {
+    // segment index.
     index: usize,
+    // new segment location and summary.
     new_segment_info: Option<(String, Statistics)>,
+    // origin segment summary.
     origin_summary: Statistics,
 }
 
@@ -98,11 +101,9 @@ impl MutationAggregator {
         }
     }
 
+    // read the segment info, replace the blocks, and write the new segment info.
     #[async_backtrace::framed]
-    async fn read_segment_lites(
-        &mut self,
-        segment_indices: Vec<usize>,
-    ) -> Result<Vec<SegmentLite>> {
+    async fn generate_segments(&mut self, segment_indices: Vec<usize>) -> Result<Vec<SegmentLite>> {
         let thresholds = self.thresholds;
         let mut tasks = Vec::with_capacity(segment_indices.len());
         for index in segment_indices {
@@ -113,6 +114,7 @@ impl MutationAggregator {
             let location_gen = self.location_gen.clone();
 
             tasks.push(async move {
+                // read the old segment
                 let segment_info =
                     SegmentsIO::read_segment(op.clone(), location, schema, false).await?;
                 // prepare the new segment
@@ -145,7 +147,7 @@ impl MutationAggregator {
                         path: location.clone(),
                         segment: Arc::new(new_segment),
                     };
-                    SegmentsIO::write_segment(op, serialized_segment, true).await?;
+                    SegmentsIO::write_segment(op, serialized_segment).await?;
 
                     Ok(SegmentLite {
                         index,
@@ -229,6 +231,9 @@ impl AsyncAccumulatingTransform for MutationAggregator {
             recalc_stats = true;
         }
 
+        let start = Instant::now();
+        let mut count = 0;
+
         let segment_locations = self.base_segments.clone();
         let mut segments_editor =
             BTreeMap::<_, _>::from_iter(segment_locations.into_iter().enumerate());
@@ -236,19 +241,35 @@ impl AsyncAccumulatingTransform for MutationAggregator {
         let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         let segment_indices = self.input_metas.keys().cloned().collect::<Vec<_>>();
         for chunk in segment_indices.chunks(chunk_size) {
-            let results = self.read_segment_lites(chunk.to_vec()).await?;
+            let results = self.generate_segments(chunk.to_vec()).await?;
             for result in results {
                 if let Some((location, summary)) = result.new_segment_info {
+                    // replace the old segment location with the new one.
                     self.abort_operation.add_segment(location.clone());
                     segments_editor.insert(result.index, (location.clone(), SegmentInfo::VERSION));
                     merge_statistics_mut(&mut self.merged_statistics, &summary)?;
                 } else {
+                    // remove the old segment location.
                     segments_editor.remove(&result.index);
                 }
 
                 if !recalc_stats {
+                    // deduct the old segment summary from the merged summary.
                     deduct_statistics_mut(&mut self.merged_statistics, &result.origin_summary);
                 }
+            }
+
+            // Refresh status
+            {
+                count += chunk.len();
+                let status = format!(
+                    "mutation: generate new segment files:{}/{}, cost:{} sec",
+                    count,
+                    segment_indices.len(),
+                    start.elapsed().as_secs()
+                );
+                self.ctx.set_status_info(&status);
+                info!(status);
             }
         }
 

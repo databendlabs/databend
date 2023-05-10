@@ -146,11 +146,7 @@ async fn get_orphan_files_to_be_purged(
             if let Some(prefix) = prefix {
                 fuse_table
                     .list_files(prefix, |location, modified| {
-                        if let Some(modified) = modified {
-                            modified <= retention_time && !referenced_files.contains(&location)
-                        } else {
-                            false
-                        }
+                        modified <= retention_time && !referenced_files.contains(&location)
                     })
                     .await?
             } else {

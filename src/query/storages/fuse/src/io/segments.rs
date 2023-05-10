@@ -177,11 +177,7 @@ impl SegmentsIO {
     }
 
     #[async_backtrace::framed]
-    pub async fn write_segment(
-        dal: Operator,
-        serialized_segment: SerializedSegment,
-        put_cache: bool,
-    ) -> Result<()> {
+    pub async fn write_segment(dal: Operator, serialized_segment: SerializedSegment) -> Result<()> {
         assert_eq!(
             serialized_segment.segment.format_version,
             SegmentInfo::VERSION
@@ -189,24 +185,19 @@ impl SegmentsIO {
         let raw_bytes = serialized_segment.segment.to_bytes()?;
         let compact_segment_info = CompactSegmentInfo::from_slice(&raw_bytes)?;
         dal.write(&serialized_segment.path, raw_bytes).await?;
-        if put_cache {
-            if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                segment_cache.put(serialized_segment.path, Arc::new(compact_segment_info));
-            }
+        if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
+            segment_cache.put(serialized_segment.path, Arc::new(compact_segment_info));
         }
         Ok(())
     }
 
+    // TODO use batch_meta_writer
     #[async_backtrace::framed]
-    async fn write_segments(
-        &self,
-        segments: Vec<SerializedSegment>,
-        put_cache: bool,
-    ) -> Result<()> {
+    pub async fn write_segments(&self, segments: Vec<SerializedSegment>) -> Result<()> {
         let mut iter = segments.into_iter();
         let tasks = std::iter::from_fn(move || {
             iter.next().map(|segment| {
-                Self::write_segment(self.operator.clone(), segment, put_cache)
+                Self::write_segment(self.operator.clone(), segment)
                     .instrument(tracing::debug_span!("write_segment"))
             })
         });
