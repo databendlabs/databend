@@ -175,7 +175,14 @@ impl FuseTable {
         &self,
         time_point: DateTime<Utc>,
     ) -> Result<(String, Vec<String>)> {
-        let files = self.list_files(time_point, |_| {}).await?;
+        let prefix = format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+        );
+        let files = self
+            .list_files(prefix, time_point, |_| {}, |_| false, true)
+            .await?;
         let location = files[0].clone();
         let reader = MetaReaders::table_snapshot_reader(self.get_operator());
         let ver = TableMetaLocationGenerator::snapshot_version(location.as_str());
@@ -215,12 +222,23 @@ impl FuseTable {
         );
 
         let mut location = None;
+        let prefix = format!(
+            "{}/{}/",
+            self.meta_location_generator().prefix(),
+            FUSE_TBL_SNAPSHOT_PREFIX,
+        );
         let files = self
-            .list_files(retention_point, |loc| {
-                if loc.as_str().starts_with(&prefix_loc) {
-                    location = Some(loc);
-                }
-            })
+            .list_files(
+                prefix,
+                retention_point,
+                |loc| {
+                    if loc.as_str().starts_with(&prefix_loc) {
+                        location = Some(loc);
+                    }
+                },
+                |_| false,
+                true,
+            )
             .await?;
         let location = location.ok_or(ErrorCode::TableHistoricalDataNotFound(
             "No historical data found at given point",
@@ -229,13 +247,17 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn list_files<P>(&self, time_point: DateTime<Utc>, mut pred: P) -> Result<Vec<String>>
-    where P: FnMut(String) {
-        let prefix = format!(
-            "{}/{}/",
-            self.meta_location_generator().prefix(),
-            FUSE_TBL_SNAPSHOT_PREFIX,
-        );
+    pub async fn list_files<P>(
+        &self,
+        prefix: String,
+        time_point: DateTime<Utc>,
+        mut pred: P,
+        filter: impl for<'a> Fn(&'a String) -> bool + Copy + Send + Sync,
+        return_error: bool,
+    ) -> Result<Vec<String>>
+    where
+        P: FnMut(String),
+    {
         let op = self.operator.clone();
 
         let mut file_list = vec![];
@@ -250,7 +272,7 @@ impl FuseTable {
                     let location = de.path().to_string();
                     pred(location.clone());
                     if let Some(modified) = modified {
-                        if modified <= time_point {
+                        if modified <= time_point && !filter(&location) {
                             file_list.push((location, modified));
                         }
                     }
@@ -263,9 +285,13 @@ impl FuseTable {
         }
 
         if file_list.is_empty() {
-            return Err(ErrorCode::TableHistoricalDataNotFound(
-                "No historical data found at given point",
-            ));
+            if return_error {
+                return Err(ErrorCode::TableHistoricalDataNotFound(
+                    "No historical data found at given point",
+                ));
+            } else {
+                return Ok(vec![]);
+            }
         }
 
         file_list.sort_by(|(_, m1), (_, m2)| m2.cmp(m1));

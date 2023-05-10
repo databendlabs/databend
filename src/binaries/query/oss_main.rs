@@ -22,6 +22,8 @@ use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::Runtime;
 use common_config::InnerConfig;
 use common_exception::Result;
+use common_license::license_manager::LicenseManager;
+use common_license::license_manager::OssLicenseManager;
 
 use crate::entry::init_services;
 use crate::entry::start_services;
@@ -47,5 +49,7 @@ fn main() {
 async fn main_entrypoint() -> Result<()> {
     let conf: InnerConfig = InnerConfig::load()?;
     init_services(&conf).await?;
+    // init oss license manager
+    OssLicenseManager::init()?;
     start_services(&conf).await
 }

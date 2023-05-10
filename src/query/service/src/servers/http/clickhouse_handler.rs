@@ -275,7 +275,7 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(InternalServerError)?;
 
-    let settings = ctx.get_settings();
+    let settings = session.get_settings();
     settings
         .set_batch_settings(&params.settings)
         .map_err(BadRequest)?;

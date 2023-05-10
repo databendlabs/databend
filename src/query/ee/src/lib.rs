@@ -14,3 +14,4 @@
 
 pub mod enterprise_services;
 pub mod license;
+pub mod storages;

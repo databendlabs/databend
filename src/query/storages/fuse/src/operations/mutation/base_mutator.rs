@@ -101,7 +101,7 @@ impl BaseMutator {
 
         // apply mutations
         for (seg_idx, replacements) in self.mutations.clone() {
-            let segment = {
+            let compact_segemnt_info = {
                 let (path, version) = &segments[seg_idx];
 
                 // Keep in mind that segment_info_read must need a schema
@@ -113,6 +113,8 @@ impl BaseMutator {
                 };
                 segment_reader.read(&load_params).await?
             };
+
+            let segment: SegmentInfo = compact_segemnt_info.as_ref().try_into()?;
 
             // collects the block locations of the segment being modified
             let block_positions = segment
