@@ -18,6 +18,7 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_sql::plans::DeletePlan;
 use common_sql::plans::Plan;
+use common_sql::plans::UpdatePlan;
 use common_sql::Planner;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
@@ -102,6 +103,44 @@ pub async fn do_deletion(
     let mut pipeline = common_pipeline_core::Pipeline::create();
     fuse_table
         .delete(ctx.clone(), filter, col_indices, &mut pipeline)
+        .await?;
+
+    if !pipeline.is_empty() {
+        pipeline.set_max_threads(settings.get_max_threads()? as usize);
+        let query_id = ctx.get_id();
+        let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+        ctx.set_executor(executor.get_inner())?;
+        executor.execute()?;
+    }
+    Ok(())
+}
+
+pub async fn do_update(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    plan: UpdatePlan,
+) -> Result<()> {
+    let (filter, col_indices) = if let Some(scalar) = &plan.selection {
+        (
+            Some(
+                scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone())
+                    .as_remote_expr(),
+            ),
+            scalar.used_columns().into_iter().collect(),
+        )
+    } else {
+        (None, vec![])
+    };
+    let update_list = plan.generate_update_list(table.schema().into(), col_indices.clone())?;
+
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let settings = ctx.get_settings();
+    let mut pipeline = common_pipeline_core::Pipeline::create();
+    fuse_table
+        .update(ctx.clone(), filter, col_indices, update_list, &mut pipeline)
         .await?;
 
     if !pipeline.is_empty() {

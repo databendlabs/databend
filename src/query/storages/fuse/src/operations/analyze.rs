@@ -95,6 +95,7 @@ impl FuseTable {
                     });
                 }
 
+                // Generate new column statistics for snapshot
                 col_stats = reduce_block_statistics(&stats_of_columns)?;
                 // Status.
                 {

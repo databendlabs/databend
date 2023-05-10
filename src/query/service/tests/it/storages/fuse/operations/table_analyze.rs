@@ -20,18 +20,27 @@ use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
 use common_expression::DataBlock;
+use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::SendableDataBlockStream;
+use common_storages_fuse::io::MetaReaders;
+use common_storages_fuse::statistics::reducers::merge_statistics_mut;
+use common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
 use databend_query::sql::plans::Plan;
 use databend_query::sql::Planner;
+use databend_query::test_kits::table_test_fixture::analyze_table;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures_util::TryStreamExt;
+use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::Statistics;
 
 use crate::storages::fuse::operations::mutation::do_deletion;
+use crate::storages::fuse::operations::mutation::do_update;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_table_modify_column_ndv_statistics() -> Result<()> {
@@ -83,6 +92,75 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
 
     // check count: delete not affect counts
     check_column_ndv_statistics(table.clone(), expected).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_table_update_analyze_statistics() -> Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+
+    // create table
+    fixture.create_default_table().await?;
+    let db_name = fixture.default_db_name();
+    let tb_name = fixture.default_table_name();
+
+    // insert
+    for i in 0..3 {
+        let qry = format!("insert into {}.{}(id) values({})", db_name, tb_name, i);
+        execute_command(ctx.clone(), &qry).await?;
+    }
+
+    // update
+    let query = format!("update {}.{} set id = 3 where id = 0", db_name, tb_name);
+    let mut planner = Planner::new(ctx.clone());
+    let (plan, _) = planner.plan_sql(&query).await?;
+    if let Plan::Update(update) = plan {
+        let table = fixture.latest_default_table().await?;
+        do_update(ctx.clone(), table, *update).await?;
+    }
+
+    // check summary after update
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let after_update = fuse_table.read_table_snapshot().await?.unwrap();
+    let base_summary = after_update.summary.clone();
+    let id_stats = base_summary.col_stats.get(&0).unwrap();
+    assert_eq!(id_stats.max, Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(id_stats.min, Scalar::Number(NumberScalar::Int32(0)));
+
+    // get segments summary
+    let mut segment_summary = Statistics::default();
+    let segment_reader = MetaReaders::segment_info_reader(
+        ctx.get_data_operator()?.operator(),
+        TestFixture::default_table_schema(),
+    );
+    for segment in after_update.segments.iter() {
+        let param = LoadParams {
+            location: segment.0.clone(),
+            len_hint: None,
+            ver: segment.1,
+            put_cache: false,
+        };
+        let compact_segment = segment_reader.read(&param).await?;
+        let segment_info = SegmentInfo::try_from(compact_segment.as_ref())?;
+        merge_statistics_mut(&mut segment_summary, &segment_info.summary)?;
+    }
+
+    // analyze
+    analyze_table(&fixture).await?;
+
+    // check summary after analyze
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let after_analyze = fuse_table.read_table_snapshot().await?.unwrap();
+    let last_summary = after_analyze.summary.clone();
+    let id_stats = last_summary.col_stats.get(&0).unwrap();
+    assert_eq!(id_stats.max, Scalar::Number(NumberScalar::Int32(3)));
+    assert_eq!(id_stats.min, Scalar::Number(NumberScalar::Int32(1)));
+
+    assert_eq!(segment_summary, last_summary);
 
     Ok(())
 }
