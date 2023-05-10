@@ -53,7 +53,7 @@ Databend makes it easy to load data from various sources, stage, Amazon S3, loca
 * [Loading Data from Remote Files](../12-load-data/04-http.md)
 * [Querying Data in Staged Files](../12-load-data/05-querying-stage.md)
 * [Transforming Data During a Load](../12-load-data/06-data-load-transform.md)
-* [Unloading Data from Databend](../12-unload-data/index.md)
+* [Unloading Data from Databend](../12-load-data/09-unload.md)
 
 ## Data & User Management
 
