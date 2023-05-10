@@ -19,9 +19,6 @@ Create an external stage named `unload` with the [CREATE STAGE](../14-sql-comman
 ```sql
 CREATE STAGE unload url='s3://unload/files/' connection=(aws_key_id='1a2b3c' aws_secret_key='4x5y6z');
 ```
-:::note
-The COPY INTO command works for both internal and external stages. Create the one you need to proceed. To learn more about the Databend stage, see [Stage](../14-sql-commands/00-ddl/40-stage/index.md).
-:::
 
 ### Step 2. Export Data
 
