@@ -38,11 +38,10 @@ use opendal::raw::oio::ReadExt;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
-use opendal::raw::RpCreate;
+use opendal::raw::RpCreateDir;
 use opendal::raw::RpDelete;
 use opendal::raw::RpList;
 use opendal::raw::RpRead;
-use opendal::raw::RpScan;
 use opendal::raw::RpStat;
 use opendal::raw::RpWrite;
 use opendal::Error;
@@ -107,7 +106,7 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     }
 
     #[async_backtrace::framed]
-    async fn create_dir(&self, path: &str, args: OpCreate) -> Result<RpCreate> {
+    async fn create_dir(&self, path: &str, args: OpCreateDir) -> Result<RpCreateDir> {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.create_dir(&path, args).await };
@@ -184,15 +183,6 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         self.runtime.spawn(future).await.expect("join must success")
     }
 
-    #[async_backtrace::framed]
-    async fn scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::Pager)> {
-        let op = self.inner.clone();
-        let path = path.to_string();
-        let future = async move { op.scan(&path, args).await };
-        let future = TrackedFuture::create(future);
-        self.runtime.spawn(future).await.expect("join must success")
-    }
-
     fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
         self.inner.blocking_read(path, args)
     }
@@ -203,10 +193,6 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
 
     fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingPager)> {
         self.inner.blocking_list(path, args)
-    }
-
-    fn blocking_scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::BlockingPager)> {
-        self.inner.blocking_scan(path, args)
     }
 }
 

@@ -152,6 +152,16 @@ impl Config {
                 "N/A",
                 "N/A",
             ),
+            Self::check(
+                &self.cache.table_meta_segment_count,
+                "cache-table-meta-segment-count",
+                "cache-table-meta-segment-bytes",
+                r#"
+                    [cache]
+                    table_meta_segment_bytes = [BYTES]
+                    "#,
+                "CACHE_TABLE_META_SEGMENT_BYTES",
+            ),
         ];
 
         let messages = check_results.into_iter().flatten().collect::<Vec<_>>();

@@ -91,12 +91,18 @@ impl<'a, W: AsyncWrite + Send + Unpin> DFQueryResultWriter<'a, W> {
     #[async_backtrace::framed]
     pub async fn write(
         &mut self,
-        query_result: Result<QueryResult>,
+        query_result: Result<(QueryResult, Option<FormatSettings>)>,
         format: &FormatSettings,
     ) -> Result<()> {
         if let Some(writer) = self.inner.take() {
             match query_result {
-                Ok(query_result) => Self::ok(query_result, writer, format).await?,
+                Ok((query_result, query_format)) => {
+                    if let Some(format) = query_format {
+                        Self::ok(query_result, writer, &format).await?
+                    } else {
+                        Self::ok(query_result, writer, format).await?
+                    }
+                }
                 Err(error) => Self::err(&error, writer).await?,
             }
         }
