@@ -72,8 +72,11 @@ impl Interpreter for VacuumTableInterpreter {
             .ctx
             .get_table(&catalog_name, &db_name, &tbl_name)
             .await?;
-        let retention_time = chrono::Utc::now()
-            - chrono::Duration::hours(ctx.get_settings().get_retention_period()? as i64);
+        let hours = match self.plan.option.retain_hours {
+            Some(hours) => hours as i64,
+            None => ctx.get_settings().get_retention_period()? as i64,
+        };
+        let retention_time = chrono::Utc::now() - chrono::Duration::hours(hours);
         let ctx = self.ctx.clone();
 
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
