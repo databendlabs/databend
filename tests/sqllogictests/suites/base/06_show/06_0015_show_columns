@@ -134,4 +134,18 @@ table_name VARCHAR NO (empty) NULL NULL
 table_schema VARCHAR NO (empty) NULL NULL
 
 statement ok
+drop view if exists default.v1;
+
+statement ok
+drop view if exists default.v2;
+
+statement ok
+create view default.v2 as select * from showcolumn.t1 union all select * from showcolumn.t2;
+
+query TTTTTT
+show columns from v2 from default;
+----
+c1 INT NO (empty) NULL NULL
+
+statement ok
 DROP DATABASE showcolumn

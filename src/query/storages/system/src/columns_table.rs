@@ -14,6 +14,10 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::ShowColumnsStmt;
+use common_ast::ast::Statement;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -29,6 +33,8 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::normalize_identifier;
+use common_sql::NameResolutionContext;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -50,7 +56,32 @@ impl AsyncSystemTable for ColumnsTable {
 
     #[async_backtrace::framed]
     async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
-        let rows = self.dump_table_columns(ctx).await?;
+        let query = ctx.get_query_str();
+        let settings = ctx.get_shard_settings();
+        let tokens = tokenize_sql(&query)?;
+        let (stmt, _) = parse_sql(&tokens, settings.get_sql_dialect()?)?;
+        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+        let location = match stmt {
+            Statement::ShowColumns(ShowColumnsStmt {
+                catalog,
+                database,
+                table,
+                ..
+            }) => {
+                let catalog_name = catalog
+                    .as_ref()
+                    .map(|ident| normalize_identifier(ident, &name_resolution_ctx).name)
+                    .unwrap_or_else(|| ctx.get_current_catalog());
+                let database_name = database
+                    .as_ref()
+                    .map(|ident| normalize_identifier(ident, &name_resolution_ctx).name)
+                    .unwrap_or_else(|| ctx.get_current_database());
+                let table_name = normalize_identifier(&table, &name_resolution_ctx).name;
+                Some((catalog_name, database_name, table_name))
+            }
+            _ => None,
+        };
+        let rows = self.dump_table_columns(ctx, location).await?;
         let mut names: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut tables: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
         let mut databases: Vec<Vec<u8>> = Vec::with_capacity(rows.len());
@@ -134,37 +165,57 @@ impl ColumnsTable {
     async fn dump_table_columns(
         &self,
         ctx: Arc<dyn TableContext>,
+        location: Option<(String, String, String)>,
     ) -> Result<Vec<(String, String, TableField)>> {
         let tenant = ctx.get_tenant();
-        let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
-        let databases = catalog.list_databases(tenant.as_str()).await?;
-
         let mut rows: Vec<(String, String, TableField)> = vec![];
-        for database in databases {
-            for table in catalog
-                .list_tables(tenant.as_str(), database.name())
-                .await?
-            {
-                let fields = if table.engine() == VIEW_ENGINE {
-                    if let Some(query) = table.options().get(QUERY) {
-                        let mut planner = Planner::new(ctx.clone());
-                        let (plan, _) = planner.plan_sql(query).await?;
-                        let schema = infer_table_schema(&plan.schema())?;
-                        schema.fields().clone()
-                    } else {
-                        return Err(ErrorCode::Internal(
-                            "Logical error, View Table must have a SelectQuery inside.",
-                        ));
+        if let Some((catalog_name, database_name, table_name)) = location {
+            let catalog = ctx.get_catalog(&catalog_name)?;
+            let table = catalog
+                .get_table(&tenant, &database_name, &table_name)
+                .await?;
+            let fields = self.get_table_field(&ctx, &table).await?;
+            for field in fields {
+                rows.push((database_name.clone(), table.name().into(), field.clone()))
+            }
+        } else {
+            let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
+            let databases = catalog.list_databases(tenant.as_str()).await?;
+
+            for database in databases {
+                for table in catalog
+                    .list_tables(tenant.as_str(), database.name())
+                    .await?
+                {
+                    let fields = self.get_table_field(&ctx, &table).await?;
+                    for field in fields {
+                        rows.push((database.name().into(), table.name().into(), field.clone()))
                     }
-                } else {
-                    table.schema().fields().clone()
-                };
-                for field in fields {
-                    rows.push((database.name().into(), table.name().into(), field.clone()))
                 }
             }
         }
 
         Ok(rows)
+    }
+
+    async fn get_table_field(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        table: &Arc<dyn Table>,
+    ) -> Result<Vec<TableField>> {
+        if table.engine() == VIEW_ENGINE {
+            if let Some(query) = table.options().get(QUERY) {
+                let mut planner = Planner::new(ctx.clone());
+                let (plan, _) = planner.plan_sql(query).await?;
+                let schema = infer_table_schema(&plan.schema())?;
+                Ok(schema.fields().clone())
+            } else {
+                return Err(ErrorCode::Internal(
+                    "Logical error, View Table must have a SelectQuery inside.",
+                ));
+            }
+        } else {
+            Ok(table.schema().fields().clone())
+        }
     }
 }

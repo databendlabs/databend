@@ -26,6 +26,7 @@ common-metrics = { path = "../../../common/metrics" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
 common-sql = { path = "../../sql" }
+common-ast = { path = "../../../query/ast" }
 common-storages-fuse = { path = "../fuse" }
 common-storages-result-cache = { path = "../result_cache" }
 common-storages-view = { path = "../view" }
