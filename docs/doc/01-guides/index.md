@@ -47,6 +47,32 @@ import TabItem from '@theme/TabItem';
 
 Databend makes it easy to load data from various sources, stage, Amazon S3, local and remote files, and so on.
 
+<Tabs>
+<TabItem value="Stage" label="Stage" default>
+
+* [Understanding Stages](../12-load-data/00-stage/00-whystage.md)
+* [Managing Stages](../12-load-data/00-stage/01-manage-stages.md)
+* [Querying Data in Staged Files](../12-load-data/00-stage/05-querying-stage.md)
+
+</TabItem>
+
+<TabItem value="Load" label="Load">
+
+* [Loading from Stage](../12-load-data/01-load/00-stage.md)
+* [Loading from Bucket](../12-load-data/01-load/01-s3.md)
+* [Loading from Local File](../12-load-data/01-load/02-local.md)
+* [Loading from Remote File](../12-load-data/01-load/04-http.md)
+* [Transforming Data During Load](../12-load-data/01-load/06-data-load-transform.md)
+
+</TabItem>
+
+<TabItem value="Unload" label="Unload">
+
+* [Unloading Data](../12-load-data/09-unload.md)
+
+</TabItem>
+
+</Tabs>
 
 
 ## Data & User Management

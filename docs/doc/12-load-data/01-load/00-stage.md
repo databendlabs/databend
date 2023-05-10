@@ -1,6 +1,5 @@
 ---
-title: Loading from a Stage
-sidebar_label: Loading from a Stage
+title: Loading from Stage
 ---
 
 Databend enables you to easily import data from files uploaded to either the user stage or an internal/external stage. To do so, you can first use the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md) to upload the files to a stage, and then employ the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command to load the data from the staged file. Please note that the files must be in a format supported by Databend, otherwise the data cannot be imported. For more information on the file formats supported by Databend, see [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
