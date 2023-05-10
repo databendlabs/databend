@@ -703,13 +703,12 @@ impl DecimalDataType {
             let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
             precision = precision.min(plus_min_precision);
         }
-        Self::from_size(DecimalSize { precision, scale })
-    }
 
-    // Decimal X Number or Number X Decimal
-    pub fn binary_upgrade_to_max_precision(&self) -> Result<DecimalDataType> {
-        let scale = self.scale();
-        let precision = self.max_precision();
+        // if the args both are Decimal128, we need to clamp the precision to 38
+        if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
+            precision = precision.min(MAX_DECIMAL128_PRECISION);
+        }
+
         Self::from_size(DecimalSize { precision, scale })
     }
 }

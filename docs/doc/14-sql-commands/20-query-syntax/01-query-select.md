@@ -44,10 +44,23 @@ SELECT number FROM numbers(3);
 
 You can also alias a column to make the column name more readable and understandable in the result:
 
+- Databend suggests avoiding special characters as much as possible when creating column aliases. However, if special characters are necessary in some cases, the alias should be enclosed in backticks, like this: SELECT price AS \`$CA\` FROM ...
+
+- Databend will automatically convert aliases into lowercase. For example, if you alias a column as *Total*, it will appear as *total* in the result. If the capitalization matters to you, enclose the alias in backticks: \`Total\`.
+
 ```sql
-SELECT number AS total FROM numbers(3);
+SELECT number AS Total FROM numbers(3);
 +--------+
 | total  |
++--------+
+|      0 |
+|      1 |
+|      2 |
++--------+
+
+SELECT number AS `Total` FROM numbers(3);
++--------+
+| Total  |
 +--------+
 |      0 |
 |      1 |
