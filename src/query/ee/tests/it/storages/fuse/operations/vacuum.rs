@@ -230,8 +230,13 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
         let files_opt = do_vacuum(fuse_table, table_ctx, retention_time, Some(1000)).await?;
+
         assert!(files_opt.is_some());
-        assert_eq!(files_opt.unwrap().len(), 3);
+        let purge_files = files_opt.unwrap();
+        for file in &outof_retention_time_orphan_files {
+            assert!(purge_files.contains(file));
+        }
+        assert_eq!(purge_files.len(), outof_retention_time_orphan_files.len());
     }
 
     // check that after dry_run gc, files number has not changed
