@@ -30,7 +30,6 @@ use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
 use opendal::raw::RpList;
 use opendal::raw::RpRead;
-use opendal::raw::RpScan;
 use opendal::raw::RpWrite;
 use opendal::Result;
 
@@ -197,11 +196,6 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
         self.inner.list(path, args).await
     }
 
-    #[async_backtrace::framed]
-    async fn scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::Pager)> {
-        self.inner.scan(path, args).await
-    }
-
     fn blocking_read(&self, path: &str, args: OpRead) -> Result<(RpRead, Self::BlockingReader)> {
         self.inner
             .blocking_read(path, args)
@@ -216,10 +210,6 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
 
     fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingPager)> {
         self.inner.blocking_list(path, args)
-    }
-
-    fn blocking_scan(&self, path: &str, args: OpScan) -> Result<(RpScan, Self::BlockingPager)> {
-        self.inner.blocking_scan(path, args)
     }
 }
 

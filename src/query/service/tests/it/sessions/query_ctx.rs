@@ -39,6 +39,8 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         region: "us-east-2".to_string(),
         endpoint_url: mock_server.uri(),
         bucket: "bucket".to_string(),
+        access_key_id: "access_key_id".to_string(),
+        secret_access_key: "secret_access_key".to_string(),
         disable_credential_loader: true,
         ..Default::default()
     });

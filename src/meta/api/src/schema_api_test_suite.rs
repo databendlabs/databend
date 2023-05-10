@@ -1954,7 +1954,6 @@ impl SchemaApiTestSuite {
                 });
 
                 let upsert_source_table = UpsertTableCopiedFileReq {
-                    table_id,
                     file_info,
                     expire_at: None,
                     fail_if_duplicated: true,
@@ -1993,7 +1992,6 @@ impl SchemaApiTestSuite {
                 });
 
                 let upsert_source_table = UpsertTableCopiedFileReq {
-                    table_id,
                     file_info,
                     expire_at: None,
                     fail_if_duplicated: true,
@@ -2032,7 +2030,6 @@ impl SchemaApiTestSuite {
                 });
 
                 let upsert_source_table = UpsertTableCopiedFileReq {
-                    table_id,
                     file_info,
                     expire_at: None,
                     fail_if_duplicated: true,
@@ -2511,7 +2508,6 @@ impl SchemaApiTestSuite {
             file_info.insert("file".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -3239,7 +3235,6 @@ impl SchemaApiTestSuite {
             file_info.insert("file".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -3276,7 +3271,6 @@ impl SchemaApiTestSuite {
             file_info.insert("file2".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() - 86400) as u64),
                 fail_if_duplicated: true,
@@ -3368,7 +3362,6 @@ impl SchemaApiTestSuite {
             file_info.insert("file".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -4243,7 +4236,6 @@ impl SchemaApiTestSuite {
             file_info.insert("file".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -4289,7 +4281,6 @@ impl SchemaApiTestSuite {
             file_info.insert("file_not_exist".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
@@ -4332,7 +4323,6 @@ impl SchemaApiTestSuite {
             file_info.insert("file_not_exist".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: false,
