@@ -132,6 +132,7 @@ impl TableMutator for SegmentCompactMutator {
             ..Default::default()
         };
 
+        // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table

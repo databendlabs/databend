@@ -173,12 +173,14 @@ impl BlockCompactMutator {
                 self.unchanged_segments_map
                     .insert(segment_idx, segment_locations[checked_end_at - 1].clone());
             }
+            segment_idx += 1;
         }
 
         // combine with the unprocessed segments (which are outside of the limit).
         for segment_location in segment_locations[checked_end_at..].iter() {
             self.unchanged_segments_map
                 .insert(segment_idx, segment_location.clone());
+            segment_idx += 1;
         }
 
         // Status.
