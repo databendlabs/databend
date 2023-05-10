@@ -30,12 +30,16 @@ def insert_data(name):
         sql = "insert into table gc_test values(%d);" % value
         mycursor.execute(sql)
         value += 1
+
+
 def get_license():
     return os.getenv("DATABEND_ENTERPRISE_LICENSE")
+
 
 def compact_data(name):
     mycursor = mydb.cursor()
     mycursor.execute("optimize table gc_test all;")
+
 
 if __name__ == "__main__":
     with NativeClient(name="client1>") as client1:
@@ -59,17 +63,17 @@ if __name__ == "__main__":
         mycursor.execute("select a from gc_test order by a;")
         old_datas = mycursor.fetchall()
 
-        mycursor.execute('vacuum table gc_test retain 0 hours dry run;')
+        mycursor.execute("vacuum table gc_test retain 0 hours dry run;")
         datas = mycursor.fetchall()
         print(datas)
 
-        mycursor.execute('select a from gc_test order by a;')
+        mycursor.execute("select a from gc_test order by a;")
         datas = mycursor.fetchall()
 
         if old_datas != datas:
             print("vacuum dry run lose data: %s : %s" % (old_datas, datas))
 
-        client1.send("vacuum table gc_test retain 0 hours;");
+        client1.send("vacuum table gc_test retain 0 hours;")
         client1.expect(prompt)
 
         mycursor.execute("select a from gc_test order by a;")

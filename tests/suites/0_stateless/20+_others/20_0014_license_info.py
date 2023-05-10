@@ -22,8 +22,10 @@ mydb = mysql.connector.connect(
     host="127.0.0.1", user="root", passwd="root", port="3307"
 )
 
+
 def get_license():
     return os.getenv("DATABEND_ENTERPRISE_LICENSE")
+
 
 if __name__ == "__main__":
     with NativeClient(name="client1>") as client1:
@@ -36,7 +38,9 @@ if __name__ == "__main__":
         client1.expect(prompt)
 
         mycursor = mydb.cursor()
-        mycursor.execute("select * from system.settings where name='enterprise_license';")
+        mycursor.execute(
+            "select * from system.settings where name='enterprise_license';"
+        )
         expect_no_data = mycursor.fetchall()
         print(expect_no_data)
         mycursor = mydb.cursor()
