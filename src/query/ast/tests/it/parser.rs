@@ -180,6 +180,9 @@ fn test_statement() {
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
+        r#"VACUUM TABLE t;"#,
+        r#"VACUUM TABLE t RETAIN 4 HOURS DRY RUN;"#,
+        r#"VACUUM TABLE t RETAIN 40 HOURS;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
         r#"GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';"#,
         r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
@@ -330,7 +333,8 @@ fn test_statement() {
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10;"#,
+                size_limit=10
+                disable_variant_check=true;"#,
         // We used to support COPY FROM a quoted at string
         // r#"COPY INTO mytable
         //         FROM '@external_stage/path/to/file.csv'

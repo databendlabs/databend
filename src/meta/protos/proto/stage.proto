@@ -52,6 +52,7 @@ message StageInfo {
     bool single = 4;
     uint64 max_file_size = 5;
     uint64 split_size = 6;
+    bool disable_variant_check = 7;
   }
 
 

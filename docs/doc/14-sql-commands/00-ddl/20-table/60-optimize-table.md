@@ -4,15 +4,12 @@ title: OPTIMIZE TABLE
 
 Optimizing a table in Databend involves compacting or purging historical data to save storage space and enhance query performance.
 
-**Why do we need to optimize tables?**
+<details>
+  <summary>Why Optimize?</summary>
+    <div>Databend stores data in tables using the Parquet format, which is organized into blocks. Additionally, Databend supports time travel functionality, where each operation that modifies a table generates a Parquet file that captures and reflects the changes made to the table.</div><br/>
 
-If your table has too many blocks, its performance may be affected, as Databend needs to scan many blocks during query execution.
-
-**What causes too many blocks?**
-
-Too many blocks can be caused by long-running insert, delete, or update operations, or by having a small batch size for these operations. This can lead to the generation of many block files.
-
-By optimizing tables in Databend, you can reduce the number of blocks, thus improving query performance and reducing storage space.
+   <div>As a table accumulates more Parquet files over time, it can lead to performance issues and increased storage requirements. To optimize the table's performance, historical Parquet files can be deleted when they are no longer needed. This optimization can help to improve query performance and reduce the amount of storage space used by the table.</div>
+</details>
 
 ## Databend Data Storage: Snapshot, Segment, and Block
 
@@ -159,10 +156,16 @@ It can save storage space but may affect the Time Travel feature. Consider purgi
 - The storage cost is a major concern, and you don't require historical data for Time Travel or other purposes.
 - You've compacted your table and want to remove older, unused data.
 
+:::note
+Historical data within the default retention period of 12 hours will not be removed. To adjust the retention period according to your needs, you can use the *retention_period* setting. In the Example section below, you can see how the retention period is initially set to 0, enabling you to insert data into the table and immediately remove historical data.
+:::
+
 **Syntax**
+
 ```sql
 -- Purge historical data
 OPTIMIZE TABLE [database.]table_name PURGE
+
 -- Purge historical data generated before a snapshot or a timestamp was created
 OPTIMIZE TABLE [database.]table_name PURGE BEFORE (SNAPSHOT => '<SNAPSHOT_ID>')
 OPTIMIZE TABLE [database.]table_name PURGE BEFORE (TIMESTAMP => '<TIMESTAMP>'::TIMESTAMP)
@@ -183,6 +186,8 @@ OPTIMIZE TABLE [database.]table_name PURGE BEFORE (TIMESTAMP => '<TIMESTAMP>'::T
 **Example**
 
 ```sql
+SET retention_period = 0;
+
 -- Create a table and insert data using three INSERT statements
 CREATE TABLE t(x int);
 

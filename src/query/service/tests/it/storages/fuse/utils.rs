@@ -18,12 +18,11 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
-
-use super::table_test_fixture::append_sample_data;
-use super::table_test_fixture::append_sample_data_overwrite;
-use super::table_test_fixture::check_data_dir;
-use super::table_test_fixture::history_should_have_item;
-use super::table_test_fixture::TestFixture;
+use databend_query::test_kits::table_test_fixture::append_sample_data;
+use databend_query::test_kits::table_test_fixture::append_sample_data_overwrite;
+use databend_query::test_kits::table_test_fixture::check_data_dir;
+use databend_query::test_kits::table_test_fixture::history_should_have_item;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 
 pub async fn do_insertions(fixture: &TestFixture) -> Result<()> {
     fixture.create_default_table().await?;
@@ -56,7 +55,7 @@ pub async fn do_purge_test(
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     let table_ctx: Arc<dyn TableContext> = fixture.ctx();
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, true)
+        .do_purge(&table_ctx, snapshot_files, true, None)
         .await?;
 
     check_data_dir(

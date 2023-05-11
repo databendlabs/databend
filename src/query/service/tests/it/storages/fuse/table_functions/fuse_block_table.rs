@@ -16,9 +16,8 @@ use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use databend_query::test_kits::table_test_fixture::*;
 use tokio_stream::StreamExt;
-
-use crate::storages::fuse::table_test_fixture::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_block_table() -> Result<()> {

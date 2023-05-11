@@ -14,6 +14,8 @@ runs:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
         path: ./bins/current
+        artifacts: sqllogictests,meta,query
+
     - name: Test compatibility
       shell: bash
       run: |
@@ -21,6 +23,7 @@ runs:
           bash ./tests/fuse-compat/test-fuse-compat.sh 0.7.151 base
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.0.56 base
           bash ./tests/fuse-compat/test-fuse-compat.sh 1.0.56 01_meta_compression 01_flashback
+
     - name: Upload failure
       if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure

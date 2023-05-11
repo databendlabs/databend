@@ -1,8 +1,6 @@
 ---
 title: Developing with Databend using Golang
 sidebar_label: Golang
-description:
-   Develop with Databend using Golang.
 ---
 
 Databend offers a driver (databend-go) written in Golang, which facilitates the development of applications using the Golang programming language and establishes connectivity with Databend.
@@ -13,7 +11,7 @@ In the following tutorial, you'll learn how to utilize the driver `databend-go` 
 
 ## Tutorial: Developing with Databend using Golang
 
-Before you start, make sure you have successfully installed Databend. For how to install Databend, see [How to deploy Databend](/doc/deploy).
+Before you start, make sure you have successfully installed a local Databend. For detailed instructions, see [Local and Docker Deployments](../10-deploy/05-deploying-local.md).
 
 ### Step 1. Prepare a SQL User Account
 

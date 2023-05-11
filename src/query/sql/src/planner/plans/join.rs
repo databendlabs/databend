@@ -40,6 +40,8 @@ use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::IndexType;
 
+const BROADCAST_JOIN_THRESHOLD: f64 = 20.0;
+
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
     Inner,
@@ -342,6 +344,11 @@ impl Operator for Join {
             (Distribution::Random, _) => Ok(PhysicalProperty {
                 distribution: build_prop.distribution.clone(),
             }),
+            // If both sides are broadcast, which means broadcast join is enabled, to make sure the current join is broadcast, should return Random.
+            // Then required proper is broadcast, and the join will be broadcast.
+            (Distribution::Broadcast, Distribution::Broadcast) => Ok(PhysicalProperty {
+                distribution: Distribution::Random,
+            }),
             // Otherwise pass through probe side.
             _ => Ok(PhysicalProperty {
                 distribution: probe_prop.distribution.clone(),
@@ -414,6 +421,7 @@ impl Operator for Join {
         {
             // TODO(leiysky): we can enforce redistribution here
             required.distribution = Distribution::Serial;
+            return Ok(required);
         } else if ctx.get_settings().get_prefer_broadcast_join()?
             && !matches!(
                 self.join_type,
@@ -423,11 +431,15 @@ impl Operator for Join {
                     | JoinType::RightSemi
                     | JoinType::RightMark
             )
-            && probe_physical_prop.distribution != Distribution::Broadcast
-            && build_physical_prop.distribution != Distribution::Broadcast
         {
-            required.distribution = Distribution::Broadcast;
-        } else if child_index == 0 {
+            let left_stat_info = rel_expr.derive_cardinality_child(0)?;
+            let right_stat_info = rel_expr.derive_cardinality_child(1)?;
+            if right_stat_info.cardinality * BROADCAST_JOIN_THRESHOLD < left_stat_info.cardinality {
+                required.distribution = Distribution::Broadcast;
+                return Ok(required);
+            }
+        }
+        if child_index == 0 {
             required.distribution = Distribution::Hash(self.left_conditions.clone());
         } else {
             required.distribution = Distribution::Hash(self.right_conditions.clone());

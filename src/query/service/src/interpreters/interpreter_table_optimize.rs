@@ -71,8 +71,13 @@ impl Interpreter for OptimizeTableInterpreter {
                 } else {
                     build_res.main_pipeline.set_on_finished(move |may_error| {
                         if may_error.is_none() {
-                            return GlobalIORuntime::instance()
-                                .block_on(async move { purge(ctx, plan, None).await });
+                            return GlobalIORuntime::instance().block_on(async move {
+                                let ret = purge(ctx, table, None).await;
+                                match ret {
+                                    Ok(_) => Ok(()),
+                                    Err(e) => Err(e),
+                                }
+                            });
                         }
                         Err(may_error.as_ref().unwrap().clone())
                     });
@@ -120,7 +125,7 @@ async fn purge(
     ctx: Arc<QueryContext>,
     plan: OptimizeTablePlan,
     instant: Option<NavigationPoint>,
-) -> Result<()> {
+) -> Result<Option<Vec<String>>> {
     // currently, context caches the table, we have to "refresh"
     // the table by using the catalog API directly
     let table = ctx
@@ -129,5 +134,5 @@ async fn purge(
         .await?;
 
     let keep_latest = true;
-    table.purge(ctx, instant, keep_latest).await
+    table.purge(ctx, instant, keep_latest, None).await
 }

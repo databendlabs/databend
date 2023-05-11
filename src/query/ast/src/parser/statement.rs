@@ -600,6 +600,19 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let vacuum_table = map(
+        rule! {
+            VACUUM ~ TABLE ~ #period_separated_idents_1_to_3 ~ #vacuum_table_option
+        },
+        |(_, _, (catalog, database, table), option)| {
+            Statement::VacuumTable(VacuumTableStmt {
+                catalog,
+                database,
+                table,
+                option,
+            })
+        },
+    );
     let analyze_table = map(
         rule! {
             ANALYZE ~ TABLE ~ #period_separated_idents_1_to_3
@@ -941,6 +954,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 single: Default::default(),
                 purge: Default::default(),
                 force: Default::default(),
+                disable_variant_check: Default::default(),
                 on_error: "abort".to_string(),
             };
             for opt in opts {
@@ -1174,6 +1188,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #rename_table : "`RENAME TABLE [<database>.]<table> TO <new_table>`"
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
+            | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"
@@ -1706,6 +1721,28 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
     ))(i)
 }
 
+pub fn vacuum_table_option(i: Input) -> IResult<VacuumTableOption> {
+    alt((map(
+        rule! {
+            (RETAIN ~ #expr ~ HOURS)? ~ (DRY ~ RUN)?
+        },
+        |(retain_hours_opt, dry_run_opt)| {
+            let retain_hours = match retain_hours_opt {
+                Some(retain_hours) => Some(retain_hours.1),
+                None => None,
+            };
+            let dry_run = match dry_run_opt {
+                Some(_) => Some(()),
+                None => None,
+            };
+            VacuumTableOption {
+                retain_hours,
+                dry_run,
+            }
+        },
+    ),))(i)
+}
+
 pub fn kill_target(i: Input) -> IResult<KillTarget> {
     alt((
         value(KillTarget::Query, rule! { QUERY }),
@@ -1732,11 +1769,15 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
     // Parse input like `mytable`
     let table = |i| {
         map(
-            period_separated_idents_1_to_3,
-            |(catalog, database, table)| CopyUnit::Table {
+            rule! {
+            #period_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            },
+            |((catalog, database, table), opt_columns)| CopyUnit::Table {
                 catalog,
                 database,
                 table,
+                columns: opt_columns.map(|(_, columns, _)| columns),
             },
         )(i)
     };
@@ -1948,6 +1989,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(rule! {ON_ERROR ~ "=" ~ #ident}, |(_, _, on_error)| {
             CopyOption::OnError(on_error.to_string())
         }),
+        map(
+            rule! {DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool},
+            |(_, _, disable_variant_check)| CopyOption::DisableVariantCheck(disable_variant_check),
+        ),
     ))(i)
 }
 

@@ -214,6 +214,7 @@ FILE_FORMAT = (
 )
 SIZE_LIMIT = 10
 PURGE = false
+DISABLE_VARIANT_CHECK = false
 
 skipif clickhouse
 query T
@@ -230,6 +231,7 @@ FILE_FORMAT = (
 )
 SIZE_LIMIT = 10
 PURGE = false
+DISABLE_VARIANT_CHECK = false
 
 query T
 explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
@@ -433,7 +435,7 @@ skipif clickhouse
 query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
-Copy (children 6)
+Copy (children 7)
 ├── CopyUnit (children 1)
 │   └── UriLocation 's3://mybucket/data.csv'
 ├── CopyUnit (children 1)
@@ -445,7 +447,8 @@ Copy (children 6)
 │   └── FileFormat type = "CSV"
 ├── SizeLimit 10
 ├── MaxFiles 10
-└── Purge false
+├── Purge false
+└── DisableVariantCheck false
 
 query T
 explain ast create database db1 engine=default

@@ -469,7 +469,7 @@ impl<'a> TypeChecker<'a> {
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: false,
-                    expr: Box::new(scalar.as_raw_expr_with_col_name()),
+                    expr: Box::new(scalar.as_raw_expr()),
                     dest_type: DataType::from(&resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
@@ -493,7 +493,7 @@ impl<'a> TypeChecker<'a> {
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: true,
-                    expr: Box::new(scalar.as_raw_expr_with_col_name()),
+                    expr: Box::new(scalar.as_raw_expr()),
                     dest_type: DataType::from(&resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
@@ -1077,7 +1077,7 @@ impl<'a> TypeChecker<'a> {
         let start_offset = start_offset
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
-                let expr = expr.as_expr_with_col_index()?;
+                let expr = expr.as_expr()?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     debug_assert!(matches!(scalar, Scalar::Number(_)));
@@ -1094,7 +1094,7 @@ impl<'a> TypeChecker<'a> {
         let end_offset = end_offset
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
-                let expr = expr.as_expr_with_col_index()?;
+                let expr = expr.as_expr()?.project_column_ref(|col| col.index);
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     debug_assert!(matches!(scalar, Scalar::Number(_)));
@@ -1358,14 +1358,11 @@ impl<'a> TypeChecker<'a> {
         args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
-        let arguments = args
-            .iter()
-            .map(|v| v.as_raw_expr_with_col_name())
-            .collect::<Vec<_>>();
+        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span,
             name: func_name.to_string(),
-            params: vec![],
+            params: params.clone(),
             args: arguments,
         };
         let registry = &BUILTIN_FUNCTIONS;
@@ -1912,7 +1909,7 @@ impl<'a> TypeChecker<'a> {
                     } else {
                         let box (scalar, _) = self.resolve(args[0]).await?;
 
-                        let expr = scalar.as_expr_with_col_index()?;
+                        let expr = scalar.as_expr()?;
                         check_number::<_, i64>(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
                     }
                 };

@@ -17,5 +17,6 @@ mod raft_state;
 pub(crate) mod raft_state_kv;
 
 pub use raft_state::RaftState;
+pub use raft_state::TREE_RAFT_STATE;
 pub use raft_state_kv::RaftStateKey;
 pub use raft_state_kv::RaftStateValue;

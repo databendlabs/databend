@@ -116,7 +116,7 @@ impl<'a> Binder {
             let (scalar, _) = *type_checker.resolve(&hint.expr).await?;
 
             let scalar = wrap_cast(&scalar, &DataType::String);
-            let expr = scalar.as_expr_with_col_index()?;
+            let expr = scalar.as_expr()?;
 
             let (new_expr, _) =
                 ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
@@ -239,6 +239,7 @@ impl<'a> Binder {
             Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
+            Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 

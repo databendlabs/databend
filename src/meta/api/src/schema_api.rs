@@ -51,8 +51,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableMutationLockReply;
 use common_meta_app::schema::UpsertTableMutationLockReq;
 use common_meta_app::schema::UpsertTableOptionReply;
@@ -131,11 +129,6 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply, KVAppError>;
-
-    async fn upsert_table_copied_file_info(
-        &self,
-        req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply, KVAppError>;
 
     async fn truncate_table(&self, req: TruncateTableReq)
     -> Result<TruncateTableReply, KVAppError>;

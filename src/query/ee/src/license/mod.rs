@@ -13,3 +13,4 @@
 // limitations under the License.
 
 pub mod license_mgr;
+pub use license_mgr::RealLicenseManager;

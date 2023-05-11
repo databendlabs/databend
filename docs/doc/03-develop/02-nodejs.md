@@ -1,15 +1,26 @@
 ---
 title: Developing with Databend using Node.js
 sidebar_label: Node.js
-description:
-   Develop with Databend using Node.js.
 ---
 
-In the following tutorial, you'll learn how to develop a Node.js application that communicates with Databend. The tutorial will walk you through creating a SQL user in Databend and then writing code to create a table, insert data, and perform data queries.
+Databend enables you to develop Node.js programs that interact with Databend using the MySQL driver for Node.js. This driver provides an interface for connecting to Databend and performing operations such as executing SQL queries and retrieving results. With the MySQL driver, you can take advantage of the powerful distributed computing capabilities of Databend and build scalable data processing applications. Visit https://www.npmjs.com/package/mysql for more information about the driver.
+
+To install the MySQL driver for Node.js:
+
+```shell
+npm install --save mysql
+```
+:::note
+Before installing the driver, make sure to fulfill the following prerequisites:
+
+- Node.js must already be installed on the environment where you want to install the driver.
+- Ensure that you can run the `node` and `npm` commands.
+- Depending on your environment, you may require sudo privileges to install the driver.
+:::
 
 ## Tutorial: Developing with Databend using Node.js
 
-Before you start, make sure you have successfully installed Databend. For how to install Databend, see [How to deploy Databend](/doc/deploy).
+Before you start, make sure you have successfully installed a local Databend. For detailed instructions, see [Local and Docker Deployments](../10-deploy/05-deploying-local.md).
 
 ### Step 1. Prepare a SQL User Account
 
@@ -24,15 +35,7 @@ GRANT ALL on *.* TO user1;
 
 ### Step 2. Write a Node.js Program
 
-In this step, you'll create a simple Node.js program that communicates with Databend. The program will involve tasks such as creating a table, inserting data, and executing data queries.
-
-1. Install the MySQL module and add it as a dependency in your Node.js project.
-
-```text
-npm install --save mysql
-```
-
-2. Copy and paste the following code to a file named `databend.js`:
+1. Copy and paste the following code to a file named `databend.js`:
 
 ```js title='databend.js'
 const mysql = require('mysql');
@@ -65,7 +68,7 @@ con.connect((err) => {
       console.log("Table created");
    });
 
-   var sql = "INSERT INTO books VALUES('mybook', 'author', '2022')";
+   var sql = "INSERT INTO books VALUES('Readings in Database Systems', 'Michael Stonebraker', '2004')";
    con.query(sql, function (err, result) {
       if (err) throw err;
       console.log("1 record inserted");
@@ -79,12 +82,12 @@ con.connect((err) => {
 });
 ```
 
-3. Run `nodejs databend.js`:
+2. Run `nodejs databend.js`:
 
 ```text
 Connected to Databend Server!
 Database created
 Table created
 1 record inserted
-[ RowDataPacket { title: 'mybook', author: 'author', date: '2022' } ]
+[ RowDataPacket { title: 'Readings in Database Systems', author: 'Michael Stonebraker', date: '2004' } ]
 ```

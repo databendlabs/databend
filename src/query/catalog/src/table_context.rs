@@ -16,7 +16,6 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::net::SocketAddr;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -108,7 +107,8 @@ pub trait TableContext: Send + Sync {
     fn get_catalog(&self, catalog_name: &str) -> Result<Arc<dyn Catalog>>;
     fn get_id(&self) -> String;
     fn get_current_catalog(&self) -> String;
-    fn get_aborting(&self) -> Arc<AtomicBool>;
+    fn check_aborting(&self) -> Result<()>;
+    fn get_error(&self) -> Option<ErrorCode>;
     fn get_current_database(&self) -> String;
     fn get_current_user(&self) -> Result<UserInfo>;
     fn get_current_role(&self) -> Option<RoleInfo>;
@@ -120,6 +120,7 @@ pub trait TableContext: Send + Sync {
     fn get_function_context(&self) -> Result<FunctionContext>;
     fn get_connection_id(&self) -> String;
     fn get_settings(&self) -> Arc<Settings>;
+    fn get_shard_settings(&self) -> Arc<Settings>;
     fn get_cluster(&self) -> Arc<Cluster>;
     fn get_processes_info(&self) -> Vec<ProcessInfo>;
     fn get_stage_attachment(&self) -> Option<StageAttachment>;

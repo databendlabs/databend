@@ -162,6 +162,8 @@ jobs:
           - "standalone"
           - "crdb"
           - "duckdb"
+          - "tpch"
+          - "tpcds"
         handlers:
           - "mysql,http,clickhouse"
     steps:
@@ -237,6 +239,8 @@ jobs:
           - "ydb"
           - "crdb"
           - "duckdb"
+          - "tpch"
+          - "tpcds"
         handlers:
           - "mysql,http,clickhouse"
     steps:
@@ -334,3 +338,23 @@ jobs:
         timeout-minutes: 10
         with:
           target: x86_64-unknown-linux-gnu
+
+  test_ee_standalone:
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/check_run_ee
+        id: check_ee
+        if: steps.check_ee.outputs.skip-ee-check != 'true'
+      - uses: ./.github/actions/test_ee_standalone_linux
+        timeout-minutes: 20
+        if: steps.check_ee.outputs.skip-ee-check != 'true'
+        env:
+          DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
+          SKIP_EE_TESTS: ${{ steps.check_ee.outputs.skip-ee-check }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-standalone-linux

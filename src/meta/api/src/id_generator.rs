@@ -15,10 +15,10 @@
 use common_meta_kvapi::kvapi;
 
 use crate::schema_api_keys::ID_GEN_DATABASE;
+use crate::schema_api_keys::ID_GEN_MUTATION_LOCK;
 use crate::schema_api_keys::ID_GEN_TABLE;
 use crate::share_api_keys::ID_GEN_SHARE;
 use crate::share_api_keys::ID_GEN_SHARE_ENDPOINT;
-use crate::schema_api_keys::ID_GEN_MUTATION_LOCK;
 
 pub(crate) const PREFIX_ID_GEN: &str = "__fd_id_gen";
 

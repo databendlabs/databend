@@ -47,7 +47,7 @@ for t in ${tables[@]}
 do
     echo "$t"
     insert_sql="insert into $MYSQL_DATABASE.$t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:8000/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${CURDIR}'/data/'$t'.csv"' > /dev/null 2>&1
+    curl -s -u root: -XPUT "http://localhost:8000/v1/streaming_load" -H "database: tpcds" -H "insert_sql: ${insert_sql}" -F 'upload=@"'${CURDIR}'/data/'$t'.csv"' > /dev/null 2>&1
 done
 
 

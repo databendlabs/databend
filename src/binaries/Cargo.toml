@@ -8,9 +8,10 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd", "jemalloc"]
+default = ["simd", "jemalloc", "z3-prove"]
 memory-profiling = ["databend-meta/memory-profiling", "databend-query/memory-profiling", "common-base/memory-profiling"]
 simd = ["databend-meta/simd", "databend-query/simd"]
+z3-prove = ["databend-query/z3-prove"]
 jemalloc = ["common-base/jemalloc"]
 tokio-console = [
     "databend-meta/tokio-console",
@@ -39,6 +40,7 @@ common-config = { path = "../query/config" }
 common-exception = { path = "../common/exception" }
 common-expression = { path = "../query/expression" }
 common-grpc = { path = "../common/grpc" }
+common-license = { path = "../common/license" }
 common-meta-api = { path = "../meta/api" }
 common-meta-app = { path = "../meta/app" }
 common-meta-client = { path = "../meta/client" }
