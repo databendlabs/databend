@@ -8,9 +8,10 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd", "jemalloc"]
+default = ["simd", "jemalloc", "z3-prove"]
 memory-profiling = ["databend-meta/memory-profiling", "databend-query/memory-profiling", "common-base/memory-profiling"]
 simd = ["databend-meta/simd", "databend-query/simd"]
+z3-prove = ["databend-query/z3-prove"]
 jemalloc = ["common-base/jemalloc"]
 tokio-console = [
     "databend-meta/tokio-console",
