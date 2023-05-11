@@ -205,15 +205,17 @@ copyOptions ::=
   [ SIZE_LIMIT = <num> ]
   [ PURGE = <bool> ]
   [ FORCE = <bool> ]
+  [ DISABLE_VARIANT_CHECK = <bool> ]
   [ ON_ERROR = { continue | abort } ]
 ```
 
-| Parameter  | Description                                                                                                                                             | Required |
-|------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| SIZE_LIMIT | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                          | Optional |
-| PURGE      | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                           | Optional |
-| FORCE      | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.       | Optional |
-| ON_ERROR   | Provides options to handle a file containing errors. Select `continue` to skip the file and continue, or `abort` (default) to abort the load operation. | Optional |
+| Parameter             | Description                                                                                                                                             | Required |
+|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| SIZE_LIMIT            | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                          | Optional |
+| PURGE                 | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                           | Optional |
+| FORCE                 | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.       | Optional |
+| DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                           | Optional |
+| ON_ERROR              | Provides options to handle a file containing errors. Select `continue` to skip the file and continue, or `abort` (default) to abort the load operation. | Optional |
 
 :::info
 The parameter ON_ERROR currently does not work for parquet files.

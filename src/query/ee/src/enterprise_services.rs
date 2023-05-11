@@ -17,12 +17,14 @@ use common_exception::Result;
 use common_license::license_manager::LicenseManager;
 
 use crate::license::license_mgr::RealLicenseManager;
+use crate::storages::fuse::operations::RealVacuumHandler;
 
 pub struct EnterpriseServices;
 impl EnterpriseServices {
     #[async_backtrace::framed]
     pub async fn init(_config: InnerConfig) -> Result<()> {
         RealLicenseManager::init()?;
+        RealVacuumHandler::init()?;
         Ok(())
     }
 }

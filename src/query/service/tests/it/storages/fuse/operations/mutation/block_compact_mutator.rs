@@ -40,6 +40,7 @@ use databend_query::test_kits::table_test_fixture::TestFixture;
 use rand::thread_rng;
 use rand::Rng;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
@@ -117,7 +118,7 @@ async fn do_compact(ctx: Arc<QueryContext>, table: Arc<dyn Table>) -> Result<boo
         let query_id = ctx.get_id();
         let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
         let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
-        ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+        ctx.set_executor(executor.get_inner())?;
         executor.execute()?;
         Ok(true)
     } else {
@@ -234,7 +235,7 @@ async fn test_safety() -> Result<()> {
             }
         }
 
-        let segment_reader = MetaReaders::segment_info_reader(
+        let compact_segment_reader = MetaReaders::segment_info_reader(
             ctx.get_data_operator()?.operator(),
             TestFixture::default_table_schema(),
         );
@@ -245,7 +246,8 @@ async fn test_safety() -> Result<()> {
                 ver: unchanged_segment.1,
                 put_cache: false,
             };
-            let segment = segment_reader.read(&param).await?;
+            let compact_segment = compact_segment_reader.read(&param).await?;
+            let segment = SegmentInfo::try_from(compact_segment.as_ref())?;
             blocks_number += segment.blocks.len();
             for b in &segment.blocks {
                 block_ids_after_compaction.insert(b.location.clone());

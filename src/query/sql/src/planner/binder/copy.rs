@@ -70,6 +70,7 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
             ) => {
                 let (catalog_name, database_name, table_name) =
@@ -92,6 +93,7 @@ impl<'a> Binder {
                     &catalog_name,
                     &database_name,
                     &table_name,
+                    columns,
                 )
                 .await
             }
@@ -101,6 +103,7 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
             ) => {
                 let (catalog_name, database_name, table_name) =
@@ -138,6 +141,7 @@ impl<'a> Binder {
                     &catalog_name,
                     &database_name,
                     &table_name,
+                    columns,
                 )
                 .await
             }
@@ -146,9 +150,15 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
                 CopyUnit::StageLocation(stage_location),
             ) => {
+                if columns.is_some() {
+                    return Err(ErrorCode::SyntaxException(
+                        "COPY FROM STAGE does not support column list",
+                    ));
+                }
                 let (catalog_name, database_name, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
 
@@ -168,9 +178,15 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
                 CopyUnit::UriLocation(uri_location),
             ) => {
+                if columns.is_some() {
+                    return Err(ErrorCode::SyntaxException(
+                        "COPY FROM STAGE does not support column list",
+                    ));
+                }
                 let (catalog_name, database_name, table) =
                     self.normalize_object_identifier_triple(catalog, database, table);
 
@@ -220,6 +236,7 @@ impl<'a> Binder {
                     catalog,
                     database,
                     table,
+                    columns,
                 },
             ) => {
                 let (catalog_name, database_name, table_name) =
@@ -248,6 +265,7 @@ impl<'a> Binder {
                     &catalog_name,
                     &database_name,
                     &table_name,
+                    columns,
                 )
                 .await
             }
@@ -271,6 +289,7 @@ impl<'a> Binder {
         dst_catalog_name: &str,
         dst_database_name: &str,
         dst_table_name: &str,
+        columns: &Option<Vec<Identifier>>,
     ) -> Result<Plan> {
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
             .map_err(ErrorCode::SyntaxException)?;
@@ -280,9 +299,13 @@ impl<'a> Binder {
             .get_table(dst_catalog_name, dst_database_name, dst_table_name)
             .await?;
 
+        let schema = match columns {
+            Some(cols) => self.schema_project(&table.schema(), cols)?,
+            None => table.schema(),
+        };
+
         if matches!(stage_info.file_format_params, FileFormatParams::Parquet(_)) {
-            let select_list = table
-                .schema()
+            let select_list = schema
                 .fields()
                 .iter()
                 .map(|f| SelectTarget::AliasedExpr {
@@ -310,18 +333,19 @@ impl<'a> Binder {
                 dst_catalog_name,
                 dst_database_name,
                 dst_table_name,
+                columns,
             )
             .await
         } else {
             let from = DataSourcePlan {
                 catalog: dst_catalog_name.to_string(),
                 source_info: DataSourceInfo::StageSource(StageTableInfo {
-                    schema: table.schema(),
+                    schema: schema.clone(),
                     stage_info,
                     files_info,
                     files_to_copy: None,
                 }),
-                output_schema: table.schema(),
+                output_schema: schema,
                 parts: Partitions::default(),
                 statistics: Default::default(),
                 description: "".to_string(),
@@ -335,7 +359,6 @@ impl<'a> Binder {
                 database_name: dst_database_name.to_string(),
                 table_name: dst_table_name.to_string(),
                 table_id: table.get_id(),
-                schema: table.schema(),
                 from: Box::new(from),
                 validation_mode,
                 force: stmt.force,
@@ -520,6 +543,7 @@ impl<'a> Binder {
         dst_catalog_name: &str,
         dst_database_name: &str,
         dst_table_name: &str,
+        columns: &Option<Vec<Identifier>>,
     ) -> Result<Plan> {
         // Validation mode.
         let validation_mode = ValidationMode::from_str(stmt.validation_mode.as_str())
@@ -627,12 +651,17 @@ impl<'a> Binder {
             formatted_ast: None,
         };
 
+        let schema = match columns {
+            Some(cols) => Some(self.schema_project(&dst_table.schema(), cols)?),
+            None => None,
+        };
+
         Ok(Plan::Copy(Box::new(CopyPlan::IntoTableWithTransform {
             catalog_name: dst_catalog_name.to_string(),
             database_name: dst_database_name.to_string(),
             table_name: dst_table_name.to_string(),
             table_id: dst_table.get_id(),
-            schema: dst_table.schema(),
+            schema,
             from: Box::new(query_plan),
             stage_info: Box::new(stage_info),
             need_copy_file_infos,
@@ -668,6 +697,7 @@ impl<'a> Binder {
 
             stage.copy_options.single = stmt.single;
             stage.copy_options.purge = stmt.purge;
+            stage.copy_options.disable_variant_check = stmt.disable_variant_check;
         }
 
         Ok(())

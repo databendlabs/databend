@@ -954,6 +954,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 single: Default::default(),
                 purge: Default::default(),
                 force: Default::default(),
+                disable_variant_check: Default::default(),
                 on_error: "abort".to_string(),
             };
             for opt in opts {
@@ -1768,11 +1769,15 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
     // Parse input like `mytable`
     let table = |i| {
         map(
-            period_separated_idents_1_to_3,
-            |(catalog, database, table)| CopyUnit::Table {
+            rule! {
+            #period_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            },
+            |((catalog, database, table), opt_columns)| CopyUnit::Table {
                 catalog,
                 database,
                 table,
+                columns: opt_columns.map(|(_, columns, _)| columns),
             },
         )(i)
     };
@@ -1984,6 +1989,10 @@ pub fn copy_option(i: Input) -> IResult<CopyOption> {
         map(rule! {ON_ERROR ~ "=" ~ #ident}, |(_, _, on_error)| {
             CopyOption::OnError(on_error.to_string())
         }),
+        map(
+            rule! {DISABLE_VARIANT_CHECK ~ "=" ~ #literal_bool},
+            |(_, _, disable_variant_check)| CopyOption::DisableVariantCheck(disable_variant_check),
+        ),
     ))(i)
 }
 

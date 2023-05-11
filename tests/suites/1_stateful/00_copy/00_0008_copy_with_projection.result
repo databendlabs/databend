@@ -1,0 +1,9 @@
+copy into test_copy_p3(b, c) from 'fs:///tmp/test_copy_p.csv' FILE_FORMAT = (type = CSV)
+0	1	2
+0	3	4
+copy into test_copy_p3(b, c) from @s_copy_p FILE_FORMAT = (type = PARQUET)
+0	1	2
+0	3	4
+copy into test_copy_p3(b, c) from (select t.b+1, t.c+1 from @s_copy_p t) FILE_FORMAT = (type = PARQUET)
+0	2	3
+0	4	5

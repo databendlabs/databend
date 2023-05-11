@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use jwt_simple::claims::JWTClaims;
 
@@ -60,6 +61,33 @@ pub struct LicenseManagerWrapper {
 }
 unsafe impl Send for LicenseManagerWrapper {}
 unsafe impl Sync for LicenseManagerWrapper {}
+
+pub struct OssLicenseManager {}
+
+impl LicenseManager for OssLicenseManager {
+    fn init() -> Result<()> {
+        let rm = OssLicenseManager {};
+        let wrapper = LicenseManagerWrapper {
+            manager: Box::new(rm),
+        };
+        GlobalInstance::set(Arc::new(wrapper));
+        Ok(())
+    }
+
+    fn instance() -> Arc<Box<dyn LicenseManager>> {
+        GlobalInstance::get()
+    }
+
+    fn is_active(&self) -> bool {
+        false
+    }
+
+    fn make_license(_raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+        Err(ErrorCode::LicenceDenied(
+            "Need Commercial License".to_string(),
+        ))
+    }
+}
 
 pub fn get_license_manager() -> Arc<LicenseManagerWrapper> {
     GlobalInstance::get()

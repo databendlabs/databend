@@ -113,5 +113,5 @@ for t in customer lineitem nation orders partsupp part region supplier
 do
     echo "$t"
     insert_sql="insert into $t file_format = (type = CSV skip_header = 0 field_delimiter = '|' record_delimiter = '\n')"
-    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "insert_sql: ${insert_sql}" -F 'upload=@"./data/'$t'.tbl"' > /dev/null 2>&1
+    curl -s -u root: -XPUT "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/streaming_load" -H "database: tpch" -H "insert_sql: ${insert_sql}" -F 'upload=@"./data/'$t'.tbl"' > /dev/null 2>&1
 done

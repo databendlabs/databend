@@ -241,44 +241,23 @@ macro_rules! register_decimal_compare_op {
                 return None;
             }
 
-            let common_arg_type =
-                common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
-            let return_type = DecimalDataType::binary_result_type(
-                common_arg_type.as_decimal()?,
-                common_arg_type.as_decimal()?,
-                false,
-                false,
-                true,
-            )
-            .ok()?;
+            let common_type = common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
 
+            if !common_type.is_decimal() {
+                return None;
+            }
+
+            // Comparison between different decimal types must be same siganature types
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![common_arg_type.clone(), common_arg_type.clone()],
+                    args_type: vec![common_type.clone(), common_type.clone()],
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-                    eval: Box::new(move |args, ctx| {
-                        let lhs = convert_to_decimal(
-                            &args[0],
-                            ctx,
-                            common_arg_type.clone(),
-                            DataType::Decimal(return_type.clone()),
-                        );
-                        let rhs = convert_to_decimal(
-                            &args[1],
-                            ctx,
-                            common_arg_type.clone(),
-                            DataType::Decimal(return_type.clone()),
-                        );
-                        op_decimal!(
-                            &lhs.as_ref(),
-                            &rhs.as_ref(),
-                            &DataType::Decimal(return_type.clone()),
-                            $op
-                        )
+                    eval: Box::new(move |args, _ctx| {
+                        op_decimal!(&args[0], &args[1], &common_type, $op)
                     }),
                 },
             };
@@ -308,15 +287,17 @@ macro_rules! register_decimal_binary_op {
                 return None;
             }
 
-            let common_arg_type =
-                common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
+            let decimal_a =
+                DecimalDataType::from_size(args_type[0].get_decimal_properties()?).unwrap();
+            let decimal_b =
+                DecimalDataType::from_size(args_type[1].get_decimal_properties()?).unwrap();
 
             let is_multiply = $name == "multiply";
             let is_divide = $name == "divide";
             let is_plus_minus = !is_multiply && !is_divide;
             let return_type = DecimalDataType::binary_result_type(
-                common_arg_type.as_decimal()?,
-                common_arg_type.as_decimal()?,
+                &decimal_a,
+                &decimal_b,
                 is_multiply,
                 is_divide,
                 is_plus_minus,
@@ -335,7 +316,7 @@ macro_rules! register_decimal_binary_op {
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![common_arg_type.clone(), common_arg_type.clone()],
+                    args_type: args_type.clone(),
                     return_type: DataType::Decimal(return_type.clone()),
                 },
                 eval: FunctionEval::Scalar {
@@ -344,15 +325,17 @@ macro_rules! register_decimal_binary_op {
                         let lhs = convert_to_decimal(
                             &args[0],
                             ctx,
-                            common_arg_type.clone(),
+                            args_type[0].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
+
                         let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
-                            common_arg_type.clone(),
+                            args_type[1].clone(),
                             DataType::Decimal(return_type.clone()),
                         );
+
                         op_decimal!(
                             &lhs.as_ref(),
                             &rhs.as_ref(),

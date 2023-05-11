@@ -20,6 +20,7 @@ use std::io::Error;
 use std::io::ErrorKind;
 use std::io::Result;
 
+use itertools::Itertools;
 use url::Url;
 
 use crate::ast::write_quoted_comma_separated_list;
@@ -51,6 +52,7 @@ pub struct CopyStmt {
     pub single: bool,
     pub purge: bool,
     pub force: bool,
+    pub disable_variant_check: bool,
     pub on_error: String,
 }
 
@@ -68,6 +70,7 @@ impl CopyStmt {
             CopyOption::Single(v) => self.single = v,
             CopyOption::Purge(v) => self.purge = v,
             CopyOption::Force(v) => self.force = v,
+            CopyOption::DisableVariantCheck(v) => self.disable_variant_check = v,
             CopyOption::OnError(v) => self.on_error = v,
         }
     }
@@ -120,6 +123,7 @@ impl Display for CopyStmt {
         write!(f, " SINGLE = {}", self.single)?;
         write!(f, " PURGE = {}", self.purge)?;
         write!(f, " FORCE = {}", self.force)?;
+        write!(f, " DISABLE_VARIANT_CHECK = {}", self.disable_variant_check)?;
         write!(f, " ON_ERROR = '{}'", self.on_error)?;
 
         Ok(())
@@ -136,6 +140,7 @@ pub enum CopyUnit {
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
+        columns: Option<Vec<Identifier>>,
     },
     /// StageLocation (a.k.a internal and external stage) can be used
     /// in `INTO` or `FROM`.
@@ -173,8 +178,9 @@ impl Display for CopyUnit {
                 catalog,
                 database,
                 table,
+                columns,
             } => {
-                if let Some(catalog) = catalog {
+                let ret = if let Some(catalog) = catalog {
                     write!(
                         f,
                         "{catalog}.{}.{table}",
@@ -184,6 +190,11 @@ impl Display for CopyUnit {
                     write!(f, "{database}.{table}")
                 } else {
                     write!(f, "{table}")
+                };
+                if let Some(columns) = columns {
+                    write!(f, "({})", columns.iter().map(|c| c.to_string()).join(","))
+                } else {
+                    ret
                 }
             }
             CopyUnit::StageLocation(v) => v.fmt(f),
@@ -392,5 +403,6 @@ pub enum CopyOption {
     Single(bool),
     Purge(bool),
     Force(bool),
+    DisableVariantCheck(bool),
     OnError(String),
 }

@@ -557,12 +557,21 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
         keep_last_snapshot: bool,
-    ) -> Result<()> {
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<String>>> {
         match self.navigate_for_purge(&ctx, instant).await {
-            Ok((table, files)) => table.do_purge(&ctx, files, keep_last_snapshot).await,
+            Ok((table, files)) => {
+                table
+                    .do_purge(&ctx, files, keep_last_snapshot, dry_run_limit)
+                    .await
+            }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
                 warn!("navigate failed: {:?}", e);
-                Ok(())
+                if dry_run_limit.is_some() {
+                    Ok(Some(vec![]))
+                } else {
+                    Ok(None)
+                }
             }
             Err(e) => Err(e),
         }
