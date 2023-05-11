@@ -131,3 +131,26 @@ id|name        |age|onboarded |
  1|John Smith  | 28|2022-01-01|
  2|Jane Doe    | 35|2022-02-15|
 ```
+
+### Tutorial 4 - Performing Arithmetic Operations During Load
+
+In this tutorial, you will create a table with the same columns as the sample file. You will then extract and convert data from the sample file, perform arithmetic operations on the extracted data, and populate the table with the results.
+
+1. Create a table where the 'name' and 'age' columns are swapped.
+
+```sql
+CREATE TABLE employees_new_age (
+  id INT,
+  name VARCHAR,
+  age INT,
+  onboarded timestamp
+);
+```
+
+2. Load data from the staged sample file and perform an arithmetic operation on the 'age' column to increment its values by 1 before inserting it into the target table.
+
+```sql
+COPY INTO employees_new_age
+FROM (SELECT t.id, t.name, t.age + 1, t.onboarded) FROM @~ t)
+FILE_FORMAT = (type = parquet) PATTERN='.*parquet';
+```
