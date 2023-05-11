@@ -231,7 +231,7 @@ Databend is released under a combination of two licenses: the [Apache License 2.
 
 When contributing to Databend, you can find the relevant license header in each file.
 
-For more information, see the [Licensing FAQs](https://databend.rs/doc/faq/license-faqs).
+For more information, see the [LICENSE](LICENSE) file and [Licensing FAQs](https://databend.rs/doc/faq/license-faqs).
 
 ## Acknowledgement
 
