@@ -8,7 +8,7 @@ Databend allows you to directly query data in the files stored in one of the fol
 - Bucket or container created in your object storage, such as Amazon S3, Google Cloud Storage, and Microsoft Azure.
 - Remote server.
 
-During this process, the schema is automatically detected, just like with the [infer_schema](../15-sql-functions/112-table-functions/infer_schema.md) function. This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
+During this process, the schema is automatically detected, just like with the [infer_schema](../../15-sql-functions/112-table-functions/infer_schema.md) function. This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
 
 :::note
 This feature is currently only available for the Parquet file format.
@@ -38,8 +38,8 @@ SELECT <columns> FROM
 
 The file format must be one of the following:
 
-- Built-in file format, see [Input & Output File Formats](../13-sql-reference/50-file-format-options.md).
-- Named file format created by [CREATE FILE FORMAT](../14-sql-commands/00-ddl/100-file-format/01-ddl-create-file-format.md).
+- Built-in file format, see [Input & Output File Formats](../../13-sql-reference/50-file-format-options.md).
+- Named file format created by [CREATE FILE FORMAT](../../14-sql-commands/00-ddl/100-file-format/01-ddl-create-file-format.md).
 
 ### PATTERN
 
@@ -63,7 +63,7 @@ To query data files in a bucket or container, provide necessary connection infor
 - REGION
 - ENABLE_VIRTUAL_HOST_STYLE
 
-They are explained in [Create Stage](../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
+They are explained in [Create Stage](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
 
 ## Examples
 
@@ -77,7 +77,7 @@ This example shows how to query data in a Parquet file stored in different locat
 <Tabs groupId="query2stage">
 <TabItem value="Stages" label="Stages">
 
-Let's assume you have a sample file named [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) and you have uploaded it to your user stage, an internal stage named *my_internal_stage*, and an external stage named *my_external_stage*. To upload files to a stage, use the [File Upload API](../11-integrations/00-api/10-put-to-stage.md).
+Let's assume you have a sample file named [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) and you have uploaded it to your user stage, an internal stage named *my_internal_stage*, and an external stage named *my_external_stage*. To upload files to a stage, use the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md).
 
 ```sql
 -- Query file in user stage
