@@ -46,7 +46,7 @@ use common_pipeline_transforms::processors::transforms::try_create_transform_sor
 use common_profile::ProfSpanSetRef;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::{AggregateExpand, IEJoin};
+use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
@@ -56,6 +56,7 @@ use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
+use common_sql::executor::IEJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
@@ -84,6 +85,7 @@ use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
+use crate::pipelines::processors::transforms::IEJoinState;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
@@ -195,13 +197,15 @@ impl PipelineBuilder {
             PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
-            PhysicalPlan::IEJoin(ie_join) => {
-                self.build_ie_join(ie_join)
-            }
+            PhysicalPlan::IEJoin(ie_join) => self.build_ie_join(ie_join),
         }
     }
 
     fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
+        let state = self.build_ie_join_state(ie_join)?;
+    }
+
+    fn build_ie_join_state(&mut self, ie_join: &IEJoin) -> Result<IEJoinState> {
         todo!()
     }
 
