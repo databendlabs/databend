@@ -57,6 +57,7 @@ venv/
 *.pyc
 .venv/
 __pycache__/
+.python-version
 
 *.zip
 
