@@ -15,7 +15,7 @@ runs:
     - name: Check if PR is from a forked repository
       shell: bash
       id: checker
-      run : |
+      run: |
         if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
           echo "This PR is from a forked repository"
           echo "PR Repo: ${{ github.event.pull_request.head.repo.full_name }}"
