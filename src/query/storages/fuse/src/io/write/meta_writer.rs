@@ -18,6 +18,7 @@ use common_exception::Result;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
@@ -50,21 +51,20 @@ pub trait CachedMetaWriter<T> {
 }
 
 #[async_trait::async_trait]
-impl<T, C> CachedMetaWriter<T> for T
-where
-    T: CachedObject<T, Cache = C> + Send + Sync,
-    T: Marshal,
-    C: CacheAccessor<String, T>,
-{
+impl CachedMetaWriter<SegmentInfo> for SegmentInfo {
     #[async_backtrace::framed]
     async fn write_meta_through_cache(
         self,
         data_accessor: &Operator,
         location: &str,
     ) -> Result<()> {
-        data_accessor.write(location, self.marshal()?).await?;
-        if let Some(cache) = T::cache() {
-            cache.put(location.to_owned(), Arc::new(self))
+        let bytes = self.marshal()?;
+        data_accessor.write(location, bytes.clone()).await?;
+        if let Some(cache) = CompactSegmentInfo::cache() {
+            cache.put(
+                location.to_owned(),
+                Arc::new(CompactSegmentInfo::try_from(&self)?),
+            )
         }
         Ok(())
     }

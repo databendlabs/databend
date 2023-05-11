@@ -13,9 +13,11 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::hash::BuildHasher;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_cache::CountableMeter;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -24,6 +26,7 @@ use storages_common_cache::CacheAccessor;
 use storages_common_cache::LoadParams;
 use storages_common_cache_manager::CachedObject;
 use storages_common_index::BloomIndexMeta;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -47,11 +50,16 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         snapshot_files: Vec<String>,
         keep_last_snapshot: bool,
-    ) -> Result<()> {
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<String>>> {
         // 1. Read the root snapshot.
         let root_snapshot_location_op = self.snapshot_loc().await?;
         if root_snapshot_location_op.is_none() {
-            return Ok(());
+            if dry_run_limit.is_some() {
+                return Ok(Some(vec![]));
+            } else {
+                return Ok(None);
+            }
         }
 
         let root_snapshot_location = root_snapshot_location_op.unwrap();
@@ -70,7 +78,11 @@ impl FuseTable {
                     "concurrent gc: snapshot {:?} already collected. table: {}, ident {}",
                     root_snapshot_location, self.table_info.desc, self.table_info.ident,
                 );
-                return Ok(());
+                if dry_run_limit.is_some() {
+                    return Ok(Some(vec![]));
+                } else {
+                    return Ok(None);
+                }
             }
             Err(e) => return Err(e),
             Ok(v) => v,
@@ -95,10 +107,11 @@ impl FuseTable {
         let mut count = 0;
         let mut remain_snapshots = Vec::<SnapshotLiteExtended>::new();
         let mut counter = PurgeCounter::new();
+        let mut dry_run_purge_files = vec![];
         // 3. Read snapshot fields by chunk size(max_storage_io_requests).
         for chunk in snapshot_files.chunks(chunk_size).rev() {
             let results = snapshots_io
-                .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone())
+                .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone(), false)
                 .await?;
             let mut snapshots: Vec<_> = results.into_iter().flatten().collect();
             if snapshots.is_empty() {
@@ -152,15 +165,32 @@ impl FuseTable {
             }
 
             if !snapshots_to_be_purged.is_empty() {
-                self.partial_purge(
-                    ctx,
-                    &mut counter,
-                    &locations_referenced_by_root,
-                    segments_to_be_purged,
-                    ts_to_be_purged,
-                    snapshots_to_be_purged,
-                )
-                .await?;
+                if let Some(dry_run_limit) = dry_run_limit {
+                    if self
+                        .dry_run_purge(
+                            ctx,
+                            &mut dry_run_purge_files,
+                            dry_run_limit,
+                            &locations_referenced_by_root,
+                            segments_to_be_purged,
+                            ts_to_be_purged,
+                            snapshots_to_be_purged,
+                        )
+                        .await?
+                    {
+                        return Ok(Some(dry_run_purge_files));
+                    }
+                } else {
+                    self.partial_purge(
+                        ctx,
+                        &mut counter,
+                        &locations_referenced_by_root,
+                        segments_to_be_purged,
+                        ts_to_be_purged,
+                        snapshots_to_be_purged,
+                    )
+                    .await?;
+                }
             }
         }
 
@@ -181,29 +211,103 @@ impl FuseTable {
                     ts_to_be_purged.insert(s.table_statistics_location.unwrap());
                 }
             }
-            self.partial_purge(
-                ctx,
-                &mut counter,
-                &locations_referenced_by_root,
-                segments_to_be_purged,
-                ts_to_be_purged,
-                snapshots_to_be_purged,
-            )
-            .await?;
+            if let Some(dry_run_limit) = dry_run_limit {
+                if self
+                    .dry_run_purge(
+                        ctx,
+                        &mut dry_run_purge_files,
+                        dry_run_limit,
+                        &locations_referenced_by_root,
+                        segments_to_be_purged,
+                        ts_to_be_purged,
+                        snapshots_to_be_purged,
+                    )
+                    .await?
+                {
+                    return Ok(Some(dry_run_purge_files));
+                }
+            } else {
+                self.partial_purge(
+                    ctx,
+                    &mut counter,
+                    &locations_referenced_by_root,
+                    segments_to_be_purged,
+                    ts_to_be_purged,
+                    snapshots_to_be_purged,
+                )
+                .await?;
+            }
         }
 
         // 4. purge root snapshots.
-        if !keep_last_snapshot {
-            self.purge_root_snapshot(
-                ctx,
-                &mut counter,
-                root_snapshot_lite,
-                locations_referenced_by_root,
-                root_snapshot_location,
-            )
-            .await?;
+
+        if dry_run_limit.is_some() {
+            Ok(Some(dry_run_purge_files))
+        } else {
+            if !keep_last_snapshot {
+                self.purge_root_snapshot(
+                    ctx,
+                    &mut counter,
+                    root_snapshot_lite,
+                    locations_referenced_by_root,
+                    root_snapshot_location,
+                )
+                .await?;
+            }
+            Ok(None)
         }
-        Ok(())
+    }
+
+    // Return `true` if `purge_files.len()` >= `dry_run_limit`
+    #[allow(clippy::too_many_arguments)]
+    async fn dry_run_purge(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        purge_files: &mut Vec<String>,
+        dry_run_limit: usize,
+        locations_referenced_by_root: &LocationTuple,
+        segments_to_be_purged: HashSet<Location>,
+        ts_to_be_purged: HashSet<String>,
+        snapshots_to_be_purged: HashSet<String>,
+    ) -> Result<bool> {
+        let chunk_size = ctx.get_settings().get_max_storage_io_requests()? as usize;
+        // Purge segments&blocks by chunk size
+        let segment_locations = Vec::from_iter(segments_to_be_purged);
+        for chunk in segment_locations.chunks(chunk_size) {
+            let locations = self.get_block_locations(ctx.clone(), chunk, false).await?;
+
+            for loc in &locations.block_location {
+                if locations_referenced_by_root.block_location.contains(loc) {
+                    continue;
+                }
+                purge_files.push(loc.to_string())
+            }
+            if purge_files.len() >= dry_run_limit {
+                return Ok(true);
+            }
+
+            for loc in &locations.bloom_location {
+                if locations_referenced_by_root.bloom_location.contains(loc) {
+                    continue;
+                }
+                purge_files.push(loc.to_string())
+            }
+            if purge_files.len() >= dry_run_limit {
+                return Ok(true);
+            }
+
+            purge_files.extend(chunk.iter().map(|loc| loc.0.clone()));
+            if purge_files.len() >= dry_run_limit {
+                return Ok(true);
+            }
+        }
+        purge_files.extend(ts_to_be_purged.iter().map(|loc| loc.to_string()));
+        if purge_files.len() >= dry_run_limit {
+            return Ok(true);
+        }
+        purge_files.extend(snapshots_to_be_purged.iter().map(|loc| loc.to_string()));
+
+        Ok(purge_files.len() >= dry_run_limit)
     }
 
     async fn partial_purge(
@@ -329,7 +433,7 @@ impl FuseTable {
         let blooms_count = blooms_to_be_purged.len();
         if blooms_count > 0 {
             counter.blooms += blooms_count;
-            self.try_purge_location_files_and_cache::<BloomIndexMeta>(
+            self.try_purge_location_files_and_cache::<BloomIndexMeta, _, _>(
                 ctx.clone(),
                 blooms_to_be_purged,
             )
@@ -340,7 +444,7 @@ impl FuseTable {
         let segments_count = segments_to_be_purged.len();
         if segments_count > 0 {
             counter.segments += segments_count;
-            self.try_purge_location_files_and_cache::<SegmentInfo>(
+            self.try_purge_location_files_and_cache::<CompactSegmentInfo, _, _>(
                 ctx.clone(),
                 segments_to_be_purged,
             )
@@ -360,7 +464,7 @@ impl FuseTable {
         let ts_count = ts_to_be_purged.len();
         if ts_count > 0 {
             counter.table_statistics += ts_count;
-            self.try_purge_location_files_and_cache::<TableSnapshotStatistics>(
+            self.try_purge_location_files_and_cache::<TableSnapshotStatistics, _, _>(
                 ctx.clone(),
                 ts_to_be_purged,
             )
@@ -371,7 +475,7 @@ impl FuseTable {
         let snapshots_count = snapshots_to_be_purged.len();
         if snapshots_count > 0 {
             counter.snapshots += snapshots_count;
-            self.try_purge_location_files_and_cache::<TableSnapshot>(
+            self.try_purge_location_files_and_cache::<TableSnapshot, _, _>(
                 ctx.clone(),
                 snapshots_to_be_purged,
             )
@@ -397,7 +501,7 @@ impl FuseTable {
 
     // Purge file by location chunks.
     #[async_backtrace::framed]
-    async fn try_purge_location_files(
+    pub async fn try_purge_location_files(
         &self,
         ctx: Arc<dyn TableContext>,
         locations_to_be_purged: HashSet<String>,
@@ -409,13 +513,15 @@ impl FuseTable {
 
     // Purge file by location chunks.
     #[async_backtrace::framed]
-    async fn try_purge_location_files_and_cache<T>(
+    pub async fn try_purge_location_files_and_cache<T, H, M>(
         &self,
         ctx: Arc<dyn TableContext>,
         locations_to_be_purged: HashSet<String>,
     ) -> Result<()>
     where
-        T: CachedObject<T>,
+        T: CachedObject<T, H, M>,
+        H: BuildHasher,
+        M: CountableMeter<String, Arc<T>>,
     {
         if let Some(cache) = T::cache() {
             for loc in locations_to_be_purged.iter() {
@@ -427,7 +533,7 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn get_block_locations(
+    pub async fn get_block_locations(
         &self,
         ctx: Arc<dyn TableContext>,
         segment_locations: &[Location],
@@ -475,9 +581,9 @@ impl FuseTable {
 }
 
 #[derive(Default)]
-struct LocationTuple {
-    block_location: HashSet<String>,
-    bloom_location: HashSet<String>,
+pub struct LocationTuple {
+    pub block_location: HashSet<String>,
+    pub bloom_location: HashSet<String>,
 }
 
 impl From<Arc<SegmentInfo>> for LocationTuple {

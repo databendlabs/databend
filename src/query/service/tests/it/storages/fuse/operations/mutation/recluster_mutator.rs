@@ -26,6 +26,7 @@ use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_storages_fuse::pruning::FusePruner;
+use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
@@ -64,7 +65,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             0,
             meta::Compression::Lz4Raw,
         ));
-        let segment = SegmentInfo::new(vec![test_block_meta], Statistics::default());
+
+        let statistics =
+            reduce_block_metas(&[test_block_meta.as_ref()], BlockThresholds::default())?;
+
+        let segment = SegmentInfo::new(vec![test_block_meta], statistics);
         Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
     };
 

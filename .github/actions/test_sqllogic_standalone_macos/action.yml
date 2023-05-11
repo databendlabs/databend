@@ -21,6 +21,7 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
+        artifacts: sqllogictests,meta,query
     - name: Test setup
       shell: bash
       run: |

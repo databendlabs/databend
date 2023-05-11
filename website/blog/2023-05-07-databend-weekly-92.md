@@ -39,7 +39,7 @@ Stay connected with the latest news about Databend.
 
 A column alias provides a way to create a clean or more descriptive header for a results set.
 
-Databend now supports column aliases in WHERE clause. Note that if the alias name is the same as the column name, the column name should be used first.
+Databend now supports column aliases in WHERE clause. Please note that if the alias and the column name are the same, the WHERE clause will recognize the alias as the column name:
 
 ```sql
 > select number * 2 as number from numbers(3) where (number + 1) % 3 = 0;

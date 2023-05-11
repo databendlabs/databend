@@ -14,3 +14,4 @@
 
 #![feature(unwrap_infallible)]
 mod license;
+mod storages;

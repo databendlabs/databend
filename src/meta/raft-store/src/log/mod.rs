@@ -15,3 +15,4 @@
 mod raft_log;
 
 pub use raft_log::RaftLog;
+pub use raft_log::TREE_RAFT_LOG;

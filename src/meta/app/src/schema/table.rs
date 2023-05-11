@@ -712,7 +712,6 @@ pub struct GetTableCopiedFileReply {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableCopiedFileReq {
-    pub table_id: u64,
     pub file_info: BTreeMap<String, TableCopiedFileInfo>,
     pub expire_at: Option<u64>,
     pub fail_if_duplicated: bool,
@@ -724,6 +723,10 @@ pub struct UpsertTableCopiedFileReply {}
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct TruncateTableReq {
     pub table_id: u64,
+    /// Specify the max number copied file to delete in every sub-transaction.
+    ///
+    /// By default it use `DEFAULT_MGET_SIZE=256`
+    pub batch_size: Option<u64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

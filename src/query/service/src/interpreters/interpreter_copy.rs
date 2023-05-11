@@ -33,7 +33,6 @@ use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_types::MetaId;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storage::StageFileInfo;
@@ -486,7 +485,6 @@ impl CopyInterpreter {
             // 1. Commit data to table.
             let operations = ctx.consume_precommit_blocks();
 
-            let table_id = to_table.get_id();
             let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
 
             let upsert_copied_files_request = {
@@ -498,7 +496,6 @@ impl CopyInterpreter {
                 } else {
                     let fail_if_duplicated = !force;
                     Self::upsert_copied_files_request(
-                        table_id,
                         expire_hours,
                         copied_file_tree,
                         fail_if_duplicated,
@@ -564,7 +561,6 @@ impl CopyInterpreter {
     }
 
     fn upsert_copied_files_request(
-        table_id: MetaId,
         expire_hours: u64,
         copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
         fail_if_duplicated: bool,
@@ -575,7 +571,6 @@ impl CopyInterpreter {
         tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
         let expire_at = expire_hours * 60 * 60 + Utc::now().timestamp() as u64;
         let req = UpsertTableCopiedFileReq {
-            table_id,
             file_info: copy_stage_files,
             expire_at: Some(expire_at),
             fail_if_duplicated,
