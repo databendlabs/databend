@@ -42,8 +42,6 @@ runs:
       shell: bash
       run: |
         artifacts="${{ inputs.artifacts }}"
-        echo "==> building libs ..."
-        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --lib
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
@@ -79,8 +77,6 @@ runs:
       shell: bash
       run: |
         artifacts="${{ inputs.artifacts }}"
-        echo "==> building libs ..."
-        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --lib
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact

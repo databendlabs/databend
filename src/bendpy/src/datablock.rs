@@ -26,7 +26,7 @@ impl Block {
     }
 
     fn show(&self) {
-        println!("{}", self.0.to_string());
+        println!("{}", self.0);
     }
 
     fn num_rows(&self) -> usize {

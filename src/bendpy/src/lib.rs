@@ -53,7 +53,7 @@ fn sql(sql: &str, py: Python) -> PyResult<Block> {
 
 pub async fn query_local(ctx: Arc<QueryContext>, sql: &str) -> Result<Block> {
     let mut planner = Planner::new(ctx.clone());
-    let (plan, _) = planner.plan_sql(&sql).await?;
+    let (plan, _) = planner.plan_sql(sql).await?;
     let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
     let stream = interpreter.execute(ctx.clone()).await?;
     let blocks = stream.map(|v| v.unwrap()).collect::<Vec<_>>().await;
@@ -84,8 +84,7 @@ fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
 
         let user = UserInfo::new_no_auth("root", "127.0.0.1");
         session.set_authed_user(user, None).await.unwrap();
-        let ctx = session.create_query_context().await.unwrap();
-        ctx
+        session.create_query_context().await.unwrap()
     });
 
     m.add("runtime", TokioRuntime(Runtime::new().unwrap()))?;
