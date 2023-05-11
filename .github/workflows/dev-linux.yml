@@ -343,9 +343,9 @@ jobs:
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     steps:
+      - uses: actions/checkout@v3
       - uses: ./.github/actions/check_run_ee
         id: check_ee
-      - uses: actions/checkout@v3
         if: steps.check_ee.outputs.skip-ee-check != 'true'
       - uses: ./.github/actions/test_ee_standalone_linux
         timeout-minutes: 20
