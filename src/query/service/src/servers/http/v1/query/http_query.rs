@@ -274,7 +274,6 @@ impl HttpQuery {
         let block_sender_closer = block_sender.closer();
         let state_clone = state.clone();
         let ctx_clone = ctx.clone();
-        let ctx_clone2 = ctx.clone();
         let sql = request.sql.clone();
         let query_id = id.clone();
         let query_id_clone = id.clone();
@@ -319,7 +318,6 @@ impl HttpQuery {
             block_receiver,
             schema,
             format_settings,
-            ctx_clone2,
         )));
         let query = HttpQuery {
             id,
