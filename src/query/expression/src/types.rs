@@ -44,6 +44,7 @@ pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
 pub use self::decimal::DecimalDataType;
+use self::decimal::DecimalSize;
 pub use self::empty_array::EmptyArrayType;
 pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
@@ -252,6 +253,14 @@ impl DataType {
                 .map(|inner_ty| inner_ty.num_leaf_columns())
                 .sum(),
             _ => 1,
+        }
+    }
+
+    pub fn get_decimal_properties(&self) -> Option<DecimalSize> {
+        match self {
+            DataType::Decimal(decimal_type) => Some(decimal_type.size()),
+            DataType::Number(num_ty) => num_ty.get_decimal_properties(),
+            _ => None,
         }
     }
 }

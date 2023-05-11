@@ -42,6 +42,32 @@ SELECT number FROM numbers(3);
 +--------+
 ```
 
+You can also alias a column to make the column name more readable and understandable in the result:
+
+- Databend suggests avoiding special characters as much as possible when creating column aliases. However, if special characters are necessary in some cases, the alias should be enclosed in backticks, like this: SELECT price AS \`$CA\` FROM ...
+
+- Databend will automatically convert aliases into lowercase. For example, if you alias a column as *Total*, it will appear as *total* in the result. If the capitalization matters to you, enclose the alias in backticks: \`Total\`.
+
+```sql
+SELECT number AS Total FROM numbers(3);
++--------+
+| total  |
++--------+
+|      0 |
+|      1 |
+|      2 |
++--------+
+
+SELECT number AS `Total` FROM numbers(3);
++--------+
+| Total  |
++--------+
+|      0 |
+|      1 |
+|      2 |
++--------+
+```
+
 ## EXCLUDE Parameter
 
 Excludes one or more columns by their names from the result. The parameter is usually used in conjunction with `SELECT * ...` to exclude a few columns from the result instead of retrieving them all.
@@ -108,6 +134,28 @@ SELECT number FROM numbers(3) WHERE number > 1;
 | number |
 +--------+
 |      2 |
++--------+
+```
+
+If you alias a column in the SELECT clause, you can use the alias in the WHERE clause:
+
+```sql
+SELECT number * 2 AS a FROM numbers(3) WHERE (a + 1) % 3 = 0
++--------+
+|    a   |
++--------+
+|      2 |
++--------+
+```
+
+If the alias and the column name are the same, the WHERE clause will recognize the alias as the column name:
+
+```sql
+SELECT number * 2 AS number FROM numbers(3) WHERE (number + 1) % 3 = 0
++--------+
+| number |
++--------+
+|      4 |
 +--------+
 ```
 

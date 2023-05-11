@@ -237,10 +237,11 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
         keep_last_snapshot: bool,
-    ) -> Result<()> {
-        let (_, _, _) = (ctx, instant, keep_last_snapshot);
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<String>>> {
+        let (_, _, _, _) = (ctx, instant, keep_last_snapshot, dry_run_limit);
 
-        Ok(())
+        Ok(None)
     }
 
     #[async_backtrace::framed]

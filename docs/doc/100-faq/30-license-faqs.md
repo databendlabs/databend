@@ -42,6 +42,28 @@ Databend Labs encourage non-commercial academic research involving Databend. For
 | [Role-based access management](https://databend.rs/doc/sql-reference/access-control-privileges) | ✓ | |
 | [Password and certificate authentication ](https://databend.rs/doc/sql-commands/ddl/user/user-create-user#create-a-sha256_password-auth_type-user) | ✓ | |
 | All other features | ✓ | |
+
+## Set a license
+
+In the following example, we assume that you are the `root` user. Then use the `SET GLOBAL SETTING` command to set the license key:
+
+```sql
+SET GLOBAL enterprise_license='you enterprise license key';
+```
+
+## Verify a license
+
+To verify a license, you could use admin procedure `CALL` command to check organization name and expiry date info.
+
+```sql
+call admin$license_info();
++----------------+--------------+--------------------+----------------------------+----------------------------+---------------------------------------+
+| license_issuer | license_type | organization       | issued_at                  | expire_at                  | available_time_until_expiry           |
++----------------+--------------+--------------------+----------------------------+----------------------------+---------------------------------------+
+| databend       | enterprise   | databend           | 2023-05-10 09:13:21.000000 | 2024-05-09 09:13:20.000000 | 11months 30days 2h 3m 31s 802ms 872us |
++----------------+--------------+--------------------+----------------------------+----------------------------+---------------------------------------+
+```
+
 ## FAQs
 
 ### Can I host Databend as a Service for internal use at my organization?

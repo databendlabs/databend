@@ -28,7 +28,7 @@ use common_storages_fuse::io::SnapshotsIO;
 use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::FuseTable;
 use storages_common_cache::LoadParams;
-use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use tracing::info;
 
 use crate::storages::fuse::get_snapshot_referenced_segments;
@@ -204,7 +204,7 @@ pub async fn do_gc_orphan_files(
     // 2.2 Delete all the orphan segment files to be purged
     let purged_file_num = segment_locations_to_be_purged.len();
     fuse_table
-        .try_purge_location_files_and_cache::<SegmentInfo>(
+        .try_purge_location_files_and_cache::<CompactSegmentInfo, _, _>(
             ctx.clone(),
             HashSet::from_iter(segment_locations_to_be_purged.into_iter()),
         )
@@ -278,20 +278,115 @@ pub async fn do_gc_orphan_files(
 }
 
 #[async_backtrace::framed]
+pub async fn do_dry_run_orphan_files(
+    fuse_table: &FuseTable,
+    ctx: &Arc<dyn TableContext>,
+    retention_time: DateTime<Utc>,
+    start: Instant,
+    purge_files: &mut Vec<String>,
+    dry_run_limit: usize,
+) -> Result<()> {
+    // 1. Get all the files referenced by the current snapshot
+    let referenced_files = match get_snapshot_referenced_files(fuse_table, ctx).await? {
+        Some(referenced_files) => referenced_files,
+        None => return Ok(()),
+    };
+    let status = format!(
+        "dry_run orphan: read referenced files:{},{},{}, cost:{} sec",
+        referenced_files.segments.len(),
+        referenced_files.blocks.len(),
+        referenced_files.blocks_index.len(),
+        start.elapsed().as_secs()
+    );
+    info!(status);
+    ctx.set_status_info(&status);
+
+    // 2. Get purge orphan segment files.
+    let segment_locations_to_be_purged =
+        get_orphan_files_to_be_purged(fuse_table, referenced_files.segments, retention_time)
+            .await?;
+    let status = format!(
+        "dry_run orphan: read segment_locations_to_be_purged:{}, cost:{} sec",
+        segment_locations_to_be_purged.len(),
+        start.elapsed().as_secs()
+    );
+    info!(status);
+    ctx.set_status_info(&status);
+
+    purge_files.extend(segment_locations_to_be_purged);
+    if purge_files.len() >= dry_run_limit {
+        return Ok(());
+    }
+
+    // 3. Get purge orphan block files.
+    let block_locations_to_be_purged =
+        get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks, retention_time).await?;
+    let status = format!(
+        "dry_run orphan: read block_locations_to_be_purged:{}, cost:{} sec",
+        block_locations_to_be_purged.len(),
+        start.elapsed().as_secs()
+    );
+    info!(status);
+    ctx.set_status_info(&status);
+    purge_files.extend(block_locations_to_be_purged);
+    if purge_files.len() >= dry_run_limit {
+        return Ok(());
+    }
+
+    // 4. Get purge orphan block index files.
+    let index_locations_to_be_purged =
+        get_orphan_files_to_be_purged(fuse_table, referenced_files.blocks_index, retention_time)
+            .await?;
+    let status = format!(
+        "dry_run orphan: read index_locations_to_be_purged:{}, cost:{} sec",
+        index_locations_to_be_purged.len(),
+        start.elapsed().as_secs()
+    );
+    info!(status);
+    ctx.set_status_info(&status);
+
+    purge_files.extend(index_locations_to_be_purged);
+
+    Ok(())
+}
+
+#[async_backtrace::framed]
 pub async fn do_vacuum(
     fuse_table: &FuseTable,
     ctx: Arc<dyn TableContext>,
     retention_time: DateTime<Utc>,
-) -> Result<()> {
+    dry_run_limit: Option<usize>,
+) -> Result<Option<Vec<String>>> {
     let start = Instant::now();
     // First, do purge
-    fuse_table.purge(ctx.clone(), None, true).await?;
+    let purge_files_opt = fuse_table
+        .purge(ctx.clone(), None, true, dry_run_limit)
+        .await?;
     let status = format!(
         "do_vacuum: purged table, cost:{} sec",
         start.elapsed().as_secs()
     );
     info!(status);
     ctx.set_status_info(&status);
+    if let Some(mut purge_files) = purge_files_opt {
+        let dry_run_limit = dry_run_limit.unwrap();
+        if purge_files.len() >= dry_run_limit {
+            return Ok(Some(purge_files));
+        }
 
-    do_gc_orphan_files(fuse_table, &ctx, retention_time, start).await
+        do_dry_run_orphan_files(
+            fuse_table,
+            &ctx,
+            retention_time,
+            start,
+            &mut purge_files,
+            dry_run_limit,
+        )
+        .await?;
+        Ok(Some(purge_files))
+    } else {
+        debug_assert!(dry_run_limit.is_none());
+        do_gc_orphan_files(fuse_table, &ctx, retention_time, start).await?;
+        Ok(None)
+    }
 }

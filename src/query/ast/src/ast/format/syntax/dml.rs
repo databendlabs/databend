@@ -244,6 +244,7 @@ fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc<'static> {
             catalog,
             database,
             table,
+            columns,
         } => if let Some(catalog) = catalog {
             RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
         } else {
@@ -254,7 +255,23 @@ fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(RcDoc::text(table.to_string())),
+        .append(RcDoc::text(table.to_string()))
+        .append(if let Some(columns) = columns {
+            RcDoc::line()
+                .append(RcDoc::text("("))
+                .append(
+                    interweave_comma(
+                        columns
+                            .into_iter()
+                            .map(|column| RcDoc::text(column.to_string())),
+                    )
+                    .nest(NEST_FACTOR)
+                    .group(),
+                )
+                .append(RcDoc::text(")"))
+        } else {
+            RcDoc::nil()
+        }),
         CopyUnit::StageLocation(v) => RcDoc::text("@")
             .append(RcDoc::text(v.name))
             .append(RcDoc::text(v.path)),

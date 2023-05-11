@@ -19,6 +19,7 @@ common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-license = { path = "../../common/license" }
+common-settings = { path = "../../query/settings" }
 common-storages-fuse = { path = "../storages/fuse" }
 databend-query = { path = "../service" }
 storages-common-cache = { path = "../storages/common/cache" }
@@ -27,6 +28,7 @@ vacuum-handler = { path = "../ee-features/vacuum-handler" }
 
 async-trait = "0.1.57"
 chrono = { workspace = true }
+dashmap = "5.4"
 jwt-simple = "0.11.0"
 tracing = "0.1.36"
 

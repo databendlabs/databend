@@ -15,7 +15,7 @@ name = "databend-sqllogictests"
 
 [dependencies]
 async-trait = "0.1.53"
-clap = { version = "4.0.29", features = ["derive", "env"] }
+clap = { version = "4.1.11", features = ["derive", "env"] }
 common-exception = { path = "../../src/common/exception" }
 env_logger = "0.10.0"
 futures-util = "0.3.25"
