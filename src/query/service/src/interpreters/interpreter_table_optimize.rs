@@ -97,7 +97,11 @@ impl Interpreter for OptimizeTableInterpreter {
                                 .get_catalog(&catalog_name)?
                                 .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
                                 .await?;
-                            purge(ctx, table, action).await
+                            let ret = purge(ctx, table, action).await;
+                            match ret {
+                                Ok(_) => Ok(()),
+                                Err(e) => Err(e),
+                            }
                         });
                     }
 
@@ -114,12 +118,12 @@ async fn purge(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     action: OptimizeTableAction,
-) -> Result<()> {
+) -> Result<Option<Vec<String>>> {
     let instant = if let OptimizeTableAction::Purge(point) = action {
         point
     } else {
         None
     };
     let keep_latest = true;
-    table.purge(ctx, instant, keep_latest).await
+    table.purge(ctx, instant, keep_latest, None).await
 }

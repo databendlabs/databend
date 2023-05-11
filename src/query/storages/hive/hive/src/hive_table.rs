@@ -617,8 +617,9 @@ impl Table for HiveTable {
         _ctx: Arc<dyn TableContext>,
         _instant: Option<NavigationPoint>,
         _keep_last_snapshot: bool,
-    ) -> Result<()> {
-        Ok(())
+        _dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<String>>> {
+        Ok(None)
     }
 
     fn table_statistics(&self) -> Result<Option<TableStatistics>> {

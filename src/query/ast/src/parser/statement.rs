@@ -1769,11 +1769,15 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
     // Parse input like `mytable`
     let table = |i| {
         map(
-            period_separated_idents_1_to_3,
-            |(catalog, database, table)| CopyUnit::Table {
+            rule! {
+            #period_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            },
+            |((catalog, database, table), opt_columns)| CopyUnit::Table {
                 catalog,
                 database,
                 table,
+                columns: opt_columns.map(|(_, columns, _)| columns),
             },
         )(i)
     };

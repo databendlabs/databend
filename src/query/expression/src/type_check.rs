@@ -25,6 +25,7 @@ use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
 use crate::function::FunctionSignature;
 use crate::types::decimal::DecimalSize;
+use crate::types::decimal::MAX_DECIMAL128_PRECISION;
 use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
@@ -489,10 +490,9 @@ pub fn can_auto_cast_to(
                 && (x.leading_digits() <= y.leading_digits()
                     || y.precision() == MAX_DECIMAL256_PRECISION)
         }
-        (DataType::Number(n), DataType::Decimal(d))
-            if !n.is_float() && d.precision() == d.max_precision() =>
-        {
-            true
+        (DataType::Number(n), DataType::Decimal(d)) if !n.is_float() => {
+            let properties = n.get_decimal_properties().unwrap();
+            properties.scale <= d.scale() && properties.precision <= d.precision()
         }
         (DataType::Decimal(_), DataType::Number(n)) if n.is_float() => true,
         _ => false,
@@ -537,8 +537,16 @@ pub fn common_super_type(
         | (decimal_ty @ DataType::Decimal(_), DataType::String) => Some(decimal_ty),
         (DataType::Decimal(a), DataType::Decimal(b)) => {
             let scale = a.scale().max(b.scale());
-            let precision =
-                (a.leading_digits().max(b.leading_digits()) + scale).min(MAX_DECIMAL256_PRECISION);
+            let mut precision = a.leading_digits().max(b.leading_digits()) + scale;
+
+            if a.precision() <= MAX_DECIMAL128_PRECISION
+                && b.precision() <= MAX_DECIMAL128_PRECISION
+            {
+                precision = precision.min(MAX_DECIMAL128_PRECISION);
+            } else {
+                precision = precision.min(MAX_DECIMAL256_PRECISION);
+            }
+
             Some(DataType::Decimal(
                 DecimalDataType::from_size(DecimalSize { precision, scale }).ok()?,
             ))
@@ -547,14 +555,23 @@ pub fn common_super_type(
         | (DataType::Decimal(decimal_ty), DataType::Number(num_ty))
             if !num_ty.is_float() =>
         {
-            let max_precision = decimal_ty.max_precision();
-            let scale = decimal_ty.scale();
-            DecimalDataType::from_size(DecimalSize {
-                precision: max_precision,
-                scale,
-            })
-            .ok()
-            .map(DataType::Decimal)
+            let a = DecimalDataType::from_size(decimal_ty.size()).unwrap();
+            let b = DecimalDataType::from_size(num_ty.get_decimal_properties().unwrap()).unwrap();
+
+            let scale: u8 = a.scale().max(b.scale());
+            let mut precision = a.leading_digits().max(b.leading_digits()) + scale;
+
+            if a.precision() <= MAX_DECIMAL128_PRECISION
+                && b.precision() <= MAX_DECIMAL128_PRECISION
+            {
+                precision = precision.min(MAX_DECIMAL128_PRECISION);
+            } else {
+                precision = precision.min(MAX_DECIMAL256_PRECISION);
+            }
+
+            Some(DataType::Decimal(
+                DecimalDataType::from_size(DecimalSize { precision, scale }).ok()?,
+            ))
         }
         (DataType::Number(num_ty), DataType::Decimal(_))
         | (DataType::Decimal(_), DataType::Number(num_ty))
