@@ -149,12 +149,18 @@ impl ColumnsTable {
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
 
         let mut tables = Vec::new();
-
+        let mut databases = Vec::new();
         if let Some(push_downs) = push_downs {
             if let Some(filter) = push_downs.filter {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_table(&expr, &mut |col_name, scalar| {
-                    if col_name == "table" {
+                find_eq_db_table(&expr, &mut |col_name, scalar| {
+                    if col_name == "database" {
+                        if let Scalar::String(s) = scalar {
+                            if let Ok(database) = String::from_utf8(s.clone()) {
+                                databases.push(database);
+                            }
+                        }
+                    } else if col_name == "table" {
                         if let Scalar::String(s) = scalar {
                             if let Ok(table) = String::from_utf8(s.clone()) {
                                 tables.push(table);
@@ -165,29 +171,37 @@ impl ColumnsTable {
             }
         }
 
-        let databases = catalog.list_databases(tenant.as_str()).await?;
+        if databases.is_empty() {
+            let all_databases = catalog.list_databases(tenant.as_str()).await?;
+            for db in all_databases {
+                databases.push(db.name().to_string());
+            }
+        }
+
         let mut rows: Vec<(String, String, TableField)> = vec![];
         for database in databases {
             let tables = if tables.is_empty() {
-                catalog
-                    .list_tables(tenant.as_str(), database.name())
-                    .await?
+                match catalog.list_tables(tenant.as_str(), &database).await {
+                    Ok(table) => table,
+                    Err(_) => {
+                        debug!(
+                            "list all tables in {:?}.{:?} failed.",
+                            CATALOG_DEFAULT, database
+                        );
+                        vec![]
+                    }
+                }
             } else {
                 let mut res = Vec::new();
                 for table in &tables {
-                    match catalog
-                        .get_table(tenant.as_str(), database.name(), table)
-                        .await
-                    {
+                    match catalog.get_table(tenant.as_str(), &database, table).await {
                         Ok(table) => {
                             res.push(table);
                         }
                         Err(_) => {
                             debug!(
                                 "Can not get table {:?}.{:?}.{:?}",
-                                CATALOG_DEFAULT,
-                                database.name(),
-                                table
+                                CATALOG_DEFAULT, database, table
                             )
                         }
                     }
@@ -211,7 +225,7 @@ impl ColumnsTable {
                     table.schema().fields().clone()
                 };
                 for field in fields {
-                    rows.push((database.name().into(), table.name().into(), field.clone()))
+                    rows.push((database.clone(), table.name().into(), field.clone()))
                 }
             }
         }
@@ -220,13 +234,10 @@ impl ColumnsTable {
     }
 }
 
-pub fn find_eq_table(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
+pub fn find_eq_db_table(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
     match expr {
-        Expr::Constant { .. } => {}
-        Expr::ColumnRef { .. } => {}
-        Expr::Cast { expr, .. } => {
-            find_eq_table(expr, visitor);
-        }
+        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
+        Expr::Cast { expr, .. } => find_eq_db_table(expr, visitor),
         Expr::FunctionCall { function, args, .. } => {
             if function.signature.name == "eq" {
                 match args.as_slice() {
@@ -236,9 +247,12 @@ pub fn find_eq_table(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar
                     }
                     _ => {}
                 }
-            } else {
+            } else if function.signature.name == "and_filters" {
+                // only support this:
+                // 1. where xx and xx and xx
+                // 2. filter: Column `table`
                 for arg in args {
-                    find_eq_table(arg, visitor);
+                    find_eq_db_table(arg, visitor)
                 }
             }
         }
