@@ -14,6 +14,7 @@
 
 use std::cmp::max;
 use std::cmp::Ordering;
+use std::collections::HashSet;
 
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -24,28 +25,32 @@ use common_expression::Scalar;
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::property::datum::F64;
 use crate::optimizer::ColumnStat;
-use crate::optimizer::ColumnStatSet;
 use crate::optimizer::Datum;
 use crate::optimizer::Statistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
+use crate::IndexType;
 
 /// A default selectivity factor for a predicate
 /// that we cannot estimate the selectivity for it.
 /// This factor comes from the paper
 /// "Access Path Selection in a Relational Database Management System"
-pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 3f64;
+pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 10f64;
 pub const MAX_SELECTIVITY: f64 = 1f64;
 
 pub struct SelectivityEstimator<'a> {
     pub input_stat: &'a mut Statistics,
+    pub updated_column_indexes: HashSet<IndexType>,
 }
 
 impl<'a> SelectivityEstimator<'a> {
-    pub fn new(input_stat: &'a mut Statistics) -> Self {
-        Self { input_stat }
+    pub fn new(input_stat: &'a mut Statistics, updated_column_indexes: HashSet<IndexType>) -> Self {
+        Self {
+            input_stat,
+            updated_column_indexes,
+        }
     }
 
     /// Compute the selectivity of a predicate.
@@ -89,13 +94,6 @@ impl<'a> SelectivityEstimator<'a> {
                         &func.arguments[0],
                         &func.arguments[1],
                         update,
-                    );
-                }
-                if update {
-                    update_other_statistic_by_selectivity(
-                        usize::MAX,
-                        &mut self.input_stat.column_stats,
-                        DEFAULT_SELECTIVITY,
                     );
                 }
 
@@ -145,11 +143,7 @@ impl<'a> SelectivityEstimator<'a> {
                             const_datum,
                             selectivity,
                         )?;
-                        update_other_statistic_by_selectivity(
-                            column_ref.column.index,
-                            &mut self.input_stat.column_stats,
-                            selectivity,
-                        );
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -163,11 +157,7 @@ impl<'a> SelectivityEstimator<'a> {
                             column_stat.max.clone(),
                             selectivity,
                         )?;
-                        update_other_statistic_by_selectivity(
-                            column_ref.column.index,
-                            &mut self.input_stat.column_stats,
-                            selectivity,
-                        );
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -198,11 +188,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = 1.0 - num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
-                        update_other_statistic_by_selectivity(
-                            column_ref.column.index,
-                            &mut self.input_stat.column_stats,
-                            selectivity,
-                        );
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -231,11 +217,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
-                        update_other_statistic_by_selectivity(
-                            column_ref.column.index,
-                            &mut self.input_stat.column_stats,
-                            selectivity,
-                        );
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -263,11 +245,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = 1.0 - num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
-                        update_other_statistic_by_selectivity(
-                            column_ref.column.index,
-                            &mut self.input_stat.column_stats,
-                            selectivity,
-                        );
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -295,11 +273,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
-                        update_other_statistic_by_selectivity(
-                            column_ref.column.index,
-                            &mut self.input_stat.column_stats,
-                            selectivity,
-                        );
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -307,6 +281,26 @@ impl<'a> SelectivityEstimator<'a> {
         }
 
         Ok(DEFAULT_SELECTIVITY)
+    }
+
+    // Update other columns' statistic according to selectivity.
+    pub fn update_other_statistic_by_selectivity(&mut self, selectivity: f64) {
+        for (index, column_stat) in self.input_stat.column_stats.iter_mut() {
+            if !self.updated_column_indexes.contains(index) {
+                let new_ndv = (column_stat.ndv * selectivity).ceil();
+                column_stat.ndv = new_ndv;
+                if let Some(histogram) = &mut column_stat.histogram {
+                    let new_ndv = new_ndv as u64;
+                    if new_ndv <= 2 {
+                        column_stat.histogram = None;
+                        return;
+                    }
+                    for bucket in histogram.buckets.iter_mut() {
+                        bucket.update(selectivity);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -400,28 +394,4 @@ fn update_statistic(
         )?);
     }
     Ok(())
-}
-
-// Update the histograms of other columns according to selectivity.
-fn update_other_statistic_by_selectivity(
-    column_index: usize,
-    column_stats: &mut ColumnStatSet,
-    selectivity: f64,
-) {
-    for (index, column_stat) in column_stats.iter_mut() {
-        if *index != column_index {
-            let new_ndv = (column_stat.ndv * selectivity).ceil();
-            column_stat.ndv = new_ndv;
-            if let Some(histogram) = &mut column_stat.histogram {
-                let new_ndv = new_ndv as u64;
-                if new_ndv <= 2 {
-                    column_stat.histogram = None;
-                    return;
-                }
-                for bucket in histogram.buckets.iter_mut() {
-                    bucket.update(selectivity);
-                }
-            }
-        }
-    }
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::table::ColumnStatistics;
@@ -206,12 +207,15 @@ impl Operator for Scan {
                 };
 
                 // Derive cardinality
-                let mut sb = SelectivityEstimator::new(&mut statistics);
+                let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction
                     selectivity *= sb.compute_selectivity(pred, true)?;
                 }
+                // Update other columns's statistic according to selectivity.
+                sb.update_other_statistic_by_selectivity(selectivity);
+
                 column_stats = sb.input_stat.column_stats.clone();
                 (precise_cardinality as f64) * selectivity
             }
