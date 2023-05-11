@@ -1071,11 +1071,10 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .map(|(l, r)| (l.to_string(), r.to_string()))
                     .collect::<Vec<_>>();
-                let fields = left_schema
-                    .fields()
+                let fields = left_indexes
                     .iter()
                     .zip(&common_types)
-                    .map(|(f, ty)| DataField::new(f.name(), ty.clone()))
+                    .map(|(index, ty)| DataField::new(&index.to_string(), ty.clone()))
                     .collect::<Vec<_>>();
 
                 Ok(PhysicalPlan::UnionAll(UnionAll {
