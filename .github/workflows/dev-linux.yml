@@ -259,6 +259,8 @@ jobs:
   test_stateless_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
+    env:
+      DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_linux
@@ -267,6 +269,8 @@ jobs:
   test_stateless_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
+    env:
+      DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
@@ -275,6 +279,8 @@ jobs:
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
+    env:
+      DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
@@ -301,6 +307,8 @@ jobs:
   test_stateful_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
+    env:
+      DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
