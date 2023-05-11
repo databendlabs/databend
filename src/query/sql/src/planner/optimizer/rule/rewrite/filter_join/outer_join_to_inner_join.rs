@@ -30,7 +30,7 @@ pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
         use crate::plans::Filter;
         use crate::plans::JoinType;
 
-        let mut join = join.clone();
+        let mut join = join;
         let filter: Filter = s_expr.plan().clone().try_into()?;
         if let Some(constraint_set) = crate::optimizer::ConstraintSet::new(&filter.predicates) {
             let join_expr = RelExpr::with_s_expr(s_expr.child(0)?);
