@@ -90,6 +90,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "anstream"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ca84f3628370c59db74ee214b3263d58f9aadd9b4fe7e711fd87dc452b7f163"
+dependencies = [
+ "anstyle",
+ "anstyle-parse",
+ "anstyle-query",
+ "anstyle-wincon",
+ "colorchoice",
+ "is-terminal",
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41ed9a86bf92ae6580e0a31281f65a1b1d867c0cc68d5346e2ae128dddfa6a7d"
+
+[[package]]
+name = "anstyle-parse"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e765fd216e48e067936442276d1d57399e37bce53c264d6fefbe298080cb57ee"
+dependencies = [
+ "utf8parse",
+]
+
+[[package]]
+name = "anstyle-query"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5ca11d4be1bab0c8bc8734a9aa7bf4ee8316d462a08c6ac5052f888fef5b494b"
+dependencies = [
+ "windows-sys 0.48.0",
+]
+
+[[package]]
+name = "anstyle-wincon"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "180abfa45703aebe0093f79badacc01b8fd4ea2e35118747e5811127f926e188"
+dependencies = [
+ "anstyle",
+ "windows-sys 0.48.0",
+]
+
+[[package]]
 name = "anyerror"
 version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1294,17 +1343,26 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.8"
+version = "4.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d7ae14b20b94cb02149ed21a86c423859cbe18dc7ed69845cace50e52b40a5"
+checksum = "34d21f9bf1b425d2968943631ec91202fe5e837264063503708b83013f8fc938"
 dependencies = [
- "bitflags",
- "clap_derive 4.1.8",
- "clap_lex 0.3.2",
- "is-terminal",
+ "clap_builder",
+ "clap_derive 4.2.0",
  "once_cell",
+]
+
+[[package]]
+name = "clap_builder"
+version = "4.2.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "914c8c79fb560f238ef6429439a30023c862f7a28e688c58f7203f12b29970bd"
+dependencies = [
+ "anstream",
+ "anstyle",
+ "bitflags",
+ "clap_lex 0.4.1",
  "strsim 0.10.0",
- "termcolor",
 ]
 
 [[package]]
@@ -1322,15 +1380,14 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.1.8"
+version = "4.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44bec8e5c9d09e439c4335b1af0abaab56dcf3b94999a936e1bb47b9134288f0"
+checksum = "3f9644cd56d6b87dbe899ef8b053e331c0637664e9e21a33dfcdc36093f5c5c4"
 dependencies = [
  "heck 0.4.1",
- "proc-macro-error 1.0.4",
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -1344,12 +1401,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.3.2"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "350b9cf31731f9957399229e9b2adc51eeabdfbe9d71d9a0552275fd12710d09"
-dependencies = [
- "os_str_bytes",
-]
+checksum = "8a2dd5a6fe8c6e3502f568a6353e5273bbb15193ad9a89e457b9970798efbea1"
 
 [[package]]
 name = "clru"
@@ -1404,6 +1458,12 @@ dependencies = [
  "termcolor",
  "unicode-width",
 ]
+
+[[package]]
+name = "colorchoice"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
 name = "combine"
@@ -1835,6 +1895,7 @@ version = "0.1.0"
 dependencies = [
  "common-base",
  "common-exception",
+ "common-settings",
  "jwt-simple",
  "serde",
 ]
@@ -3398,6 +3459,7 @@ dependencies = [
  "headers",
  "hex",
  "http",
+ "humantime",
  "itertools",
  "jsonb",
  "jwt-simple",
@@ -3457,7 +3519,7 @@ name = "databend-sqllogictests"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "clap 4.1.8",
+ "clap 4.2.7",
  "common-exception",
  "env_logger 0.10.0",
  "futures-util",
@@ -3758,7 +3820,9 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-license",
+ "common-settings",
  "common-storages-fuse",
+ "dashmap",
  "databend-query",
  "jwt-simple",
  "storages-common-cache",
@@ -6201,7 +6265,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d7b603516767d1ab23d0de09d023e62966c3322f7148297c35cf3d97aa8b37fa"
 dependencies = [
- "clap 4.1.8",
+ "clap 4.2.7",
  "termcolor",
  "threadpool",
 ]
@@ -7038,13 +7102,13 @@ dependencies = [
 [[package]]
 name = "openraft"
 version = "0.8.4"
-source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.2#17a658f41ba193609ee3ac626149ef50592d937c"
+source = "git+https://github.com/drmingdrmer/openraft?tag=v0.8.4-alpha.3#5da9594d3658e5d1637d8e0a896f6724fdc918f9"
 dependencies = [
  "anyerror",
  "anyhow",
  "async-trait",
  "byte-unit",
- "clap 3.2.23",
+ "clap 4.2.7",
  "derive_more",
  "futures",
  "maplit",
@@ -10642,6 +10706,12 @@ name = "utf8-width"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5190c9442dcdaf0ddd50f37420417d219ae5261bbf5db120d0f9bab996c9cba1"
+
+[[package]]
+name = "utf8parse"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "711b9620af191e0cdc7468a8d14e709c3dcdb115b36f838e601583af800a370a"
 
 [[package]]
 name = "uuid"

@@ -31,11 +31,37 @@ runs:
       run: |
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
 
+    - name: Set Build Flags
+      shell: bash
+      run: |
+        case ${{ inputs.target }} in
+          x86_64-unknown-linux-gnu)
+            flags="-C target-feature=+sse4.2"
+            ;;
+          x86_64-unknown-linux-musl)
+            flags="-C target-feature=+sse4.2"
+            ;;
+          aarch64-unknown-linux-gnu)
+            flags=""
+            ;;
+          aarch64-unknown-linux-musl)
+            flags=""
+            ;;
+          *)
+            flags=""
+            ;;
+        esac
+        echo "RUSTFLAGS=${flags} -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
+        target=${{ inputs.target }}
+        echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
+
     # build all binaries for debug
     - name: Build Debug
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
-      run: cargo build --target ${{ inputs.target }} --features ${{ inputs.features }}
+      run: |
+        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }}
+        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Debug for specific artifacts
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts != 'all'
@@ -45,32 +71,8 @@ runs:
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
-
-    - name: Set Release build flags
-      if: env.BUILD_PROFILE == 'release'
-      shell: bash
-      run: |
-        case ${{ inputs.target }} in
-          x86_64-unknown-linux-gnu)
-            flags="-C target-feature=+sse4.2"
-            ;;
-          x86_64-unknown-linux-musl)
-            flags="-C target-feature=+sse4.2 -C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
-            ;;
-          aarch64-unknown-linux-gnu)
-            flags=""
-            ;;
-          aarch64-unknown-linux-musl)
-            flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
-            ;;
-          *)
-            flags=""
-            ;;
-        esac
-        echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
-        target=${{ inputs.target }}
-        echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
 
     - name: Build Release
       if: env.BUILD_PROFILE == 'release'
@@ -80,20 +82,17 @@ runs:
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
+          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 
     - shell: bash
       run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
 
-    - name: Copyobj zlib for gnu binaries
-      if: env.BUILD_PROFILE == 'release' && endsWith(inputs.target, '-gnu')
-      shell: bash
-      run: |
-        artifacts="${{ inputs.artifacts }}"
-        for artifact in ${artifacts//,/ }; do
-          echo "==> compressing zlib debug for databend-$artifact ..."
-          build-tool /usr/bin/${{ env.BUILD_ARCH }}-linux-gnu-objcopy --compress-debug-sections=zlib-gnu ./target/${{ inputs.target }}/release/databend-$artifact
-        done
+    # - name: Compress Binaries with UPX
+    #   if: env.BUILD_PROFILE == 'debug'
+    #   uses: crazy-max/ghaction-upx@v2
+    #   with:
+    #     files: ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Upload artifact
       if: inputs.upload == 'true'

@@ -32,6 +32,10 @@ def insert_data(name):
         value += 1
 
 
+def get_license():
+    return os.getenv("DATABEND_ENTERPRISE_LICENSE")
+
+
 def compact_data(name):
     mycursor = mydb.cursor()
     mycursor.execute("optimize table gc_test all;")
@@ -45,6 +49,10 @@ if __name__ == "__main__":
         client1.expect(prompt)
 
         client1.send("create table gc_test(a int);")
+        client1.expect(prompt)
+        client1.send("unset enterprise_license")
+        client1.expect(prompt)
+        client1.send("set global enterprise_license='{}'".format(get_license()))
         client1.expect(prompt)
 
         insert_data("insert_data")
@@ -70,6 +78,9 @@ if __name__ == "__main__":
 
         mycursor.execute("select a from gc_test order by a;")
         datas = mycursor.fetchall()
+
+        client1.send("unset enterprise_license")
+        client1.expect(prompt)
 
         if old_datas != datas:
             print("vacuum lose data: %s : %s" % (old_datas, datas))
