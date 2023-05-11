@@ -49,6 +49,11 @@ runs:
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
         done
 
+    - name: Compress Binaries with UPX
+      uses: crazy-max/ghaction-upx@v2
+      with:
+        files: ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
+
     - name: Set Release build flags
       if: env.BUILD_PROFILE == 'release'
       shell: bash
