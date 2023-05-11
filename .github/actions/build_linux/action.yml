@@ -85,13 +85,14 @@ runs:
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
         done
 
+    - shell: bash
+      run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
+
     - name: Compress Binaries with UPX
+      if: env.BUILD_PROFILE == 'debug'
       uses: crazy-max/ghaction-upx@v2
       with:
         files: ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
-
-    - shell: bash
-      run: readelf -p .comment ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-query
 
     - name: Upload artifact
       if: inputs.upload == 'true'
