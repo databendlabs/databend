@@ -12,6 +12,12 @@ If you want to obtain trial/enterprise license keys, please check in [here](http
 Once, you obtained your license key, please take a look on our [License FAQs](https://databend.rs/doc/faq/license-faqs/) about how to [SET](https://databend.rs/doc/faq/license-faqs/#set-a-license) a license
 and [VERIFY](https://databend.rs/doc/faq/license-faqs/#verify-a-license) your license.
 
-| Feature               | Description                                                                                                                                                                                                                        |
-|-----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Fail Safe Data Vacuum | This feature reduce the historical/outdated data storage space with fail-safe guarantees by supporting user to dry-run `VACUMM` command and allowing user to retrieve their vacuumed data within given period to prevent data loss |
+
+
+| Feature                    | Description                                                                                                                                                                                                                                                             |
+|----------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Data Vacuum with Fail-Safe | Optimizes data storage:<br/>**1. Reducing historical/outdated data with fail-safe guarantees.** <br/> **2. Supporting `dry-run` of the `VACUUM` command for a safe user experience.** <br/> **3. Allowing data retrieval within a given period to prevent data loss.** |
+
+
+
+
