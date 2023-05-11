@@ -11,6 +11,14 @@ edition = { workspace = true }
 name = "databend"
 crate-type = ["cdylib"]
 
+[profile.release]
+lto = "thin"
+overflow-checks = false
+incremental = false
+opt-level = "s"
+panic = "abort"
+strip = true
+
 [dependencies]
 pyo3 = "0.18.1"
 pyo3-asyncio = { version = "0.14", features = ["attributes", "tokio-runtime"] }
@@ -19,7 +27,7 @@ common-config = { path = "../query/config" }
 common-exception = { path = "../common/exception" }
 common-expression = { path = "../query/expression" }
 common-meta-app = { path = "../meta/app" }
-databend-query = { path = "../query/service" }
+databend-query = { path = "../query/service", features = ["simd"], default-features = false }
 
 # # Crates.io dependencies
 # comfy-table = "6.1.3"

@@ -45,16 +45,16 @@ pub async fn query_local(ctx: Arc<QueryContext>, sql: &str) -> Result<Block> {
     let stream = interpreter.execute(ctx.clone()).await?;
     let blocks = stream.map(|v| v.unwrap()).collect::<Vec<_>>().await;
     let block = if !blocks.is_empty() {
-        DataBlock::concat(&blocks)?
+        DataBlock::concat(&blocks)
     } else {
         Ok(DataBlock::empty_with_schema(plan.schema()))
-    };
+    }?;
     Ok(Block(block))
 }
 
 /// A Python module implemented in Rust.
 #[pymodule]
-fn databend(py: Python, m: &PyModule) -> PyResult<()> {
+fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
     let runtime = Runtime::new().unwrap();
 
     runtime.block_on(async {
