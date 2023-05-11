@@ -115,7 +115,7 @@ pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) -> Result<()> {
     Ok(())
 }
 
-// Deduct statistics, only be used for calculate snapshot summary during update/delete.
+// Deduct statistics, only be used for calculate snapshot summary during update/delete/replace.
 pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.row_count -= r.row_count;
     l.block_count -= r.block_count;
