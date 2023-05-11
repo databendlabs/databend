@@ -7,11 +7,11 @@ license key. However, to use the Enterprise features, you need either a trial or
 
 The page lists Enterprise features.
 
-If you want to obtain trial/enterprise license keys, please check in [here](https://databend.rs/doc/faq/license-faqs#obtain-a-license)
+If you want to obtain trial/enterprise license keys, please check in [here](https://databend.rs/doc/faq/license-faqs#obtain-a-license).
 
-Once, you obtained your license key, please take a look on our [license faq](https://databend.rs/doc/faq/license-faqs/) about how to [set](https://databend.rs/doc/faq/license-faqs/#set-a-license)
-and [verify](https://databend.rs/doc/faq/license-faqs/#verify-a-license) your license.
+Once, you obtained your license key, please take a look on our [License FAQs](https://databend.rs/doc/faq/license-faqs/) about how to [SET](https://databend.rs/doc/faq/license-faqs/#set-a-license) a license
+and [VERIFY](https://databend.rs/doc/faq/license-faqs/#verify-a-license) your license.
 
 | Feature               | Description                                                                                                                                                                                                                        |
 |-----------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Fail safe data vacuum | This feature reduce the historical/outdated data storage space with fail-safe guarantees by supporting user to dry-run `vacuum` command and allowing user to retrieve their vacuumed data within given period to prevent data loss |
+| Fail Safe Data Vacuum | This feature reduce the historical/outdated data storage space with fail-safe guarantees by supporting user to dry-run `VACUMM` command and allowing user to retrieve their vacuumed data within given period to prevent data loss |
