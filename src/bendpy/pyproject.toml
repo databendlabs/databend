@@ -1,0 +1,20 @@
+[build-system]
+requires = ["maturin>=0.14,<0.15"]
+build-backend = "maturin"
+
+[project]
+name = "databend"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+
+[project.urls]
+Documentation = "https://databend.rs"
+Homepage =  "https://databend.rs"
+Repository = "https://github.com/datafuselabs/databend"
+
+[tool.maturin]
+features = ["pyo3/extension-module"]

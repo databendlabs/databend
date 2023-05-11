@@ -93,6 +93,8 @@ members = [
     "src/meta/service",
     # sqllogictest
     "tests/sqllogictests",
+
+    "src/bendpy",
 ]
 
 [workspace.dependencies]
@@ -112,7 +114,7 @@ jsonb = { version = "0.2.2" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.2", features = ["compat-07"] }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.3", features = ["compat-07"] }
 
 # type helper
 derive_more = "0.99.17"
@@ -164,6 +166,7 @@ debug = 1
 lto = "thin"
 overflow-checks = false
 incremental = false
+opt-level = "s"
 # codegen-units = 1       # Reduce number of codegen units to increase optimizations.
 
 # [profile.release.package]
