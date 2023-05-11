@@ -200,6 +200,15 @@ fn new_table_meta() -> mt::TableMeta {
     }
 }
 
+fn new_index_meta() -> mt::IndexMeta {
+    mt::IndexMeta {
+        table_id: 7,
+        created_on: Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap(),
+        drop_on: None,
+        query: "".to_string(),
+    }
+}
+
 pub(crate) fn new_latest_schema() -> TableSchema {
     let b1 = TableDataType::Tuple {
         fields_name: vec!["b11".to_string(), "b12".to_string()],
@@ -266,6 +275,11 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let p = share_account_meta.to_pb()?;
     let got = share::ShareAccountMeta::from_pb(p)?;
     assert_eq!(share_account_meta, got);
+
+    let index = new_index_meta();
+    let p = index.to_pb()?;
+    let got = mt::IndexMeta::from_pb(p)?;
+    assert_eq!(index, got);
     Ok(())
 }
 
@@ -351,6 +365,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("share account:{:?}", buf);
+    }
+
+    // IndexMeta
+    {
+        let index = new_index_meta();
+        let p = index.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("index:{buf:?}");
     }
 
     // TableCopiedFileInfo

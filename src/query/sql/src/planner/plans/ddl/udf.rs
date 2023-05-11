@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 use common_meta_app::principal::UserDefinedFunction;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -24,31 +20,13 @@ pub struct CreateUDFPlan {
     pub udf: UserDefinedFunction,
 }
 
-impl CreateUDFPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterUDFPlan {
     pub udf: UserDefinedFunction,
-}
-
-impl AlterUDFPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropUDFPlan {
     pub if_exists: bool,
     pub name: String,
-}
-
-impl DropUDFPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
