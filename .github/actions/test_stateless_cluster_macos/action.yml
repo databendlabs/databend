@@ -24,7 +24,6 @@ runs:
       run: |
         bash ./scripts/ci/ci-run-stateless-tests-cluster.sh
 
-
     - name: Upload failure
       if: failure() || cancelled()
       uses: ./.github/actions/artifact_failure
