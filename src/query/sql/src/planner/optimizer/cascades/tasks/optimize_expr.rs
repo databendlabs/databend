@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,9 +14,12 @@
 
 use std::collections::hash_map::Entry;
 use std::rc::Rc;
+use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use educe::Educe;
 
 use super::optimize_group::OptimizeGroupTask;
 use super::Task;
@@ -43,8 +46,12 @@ pub enum OptimizeExprEvent {
     OptimizedSelf,
 }
 
-#[derive(Debug)]
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct OptimizeExprTask {
+    #[educe(Debug(ignore))]
+    pub ctx: Arc<dyn TableContext>,
+
     pub state: OptimizeExprState,
 
     pub group_index: IndexType,
@@ -55,8 +62,13 @@ pub struct OptimizeExprTask {
 }
 
 impl OptimizeExprTask {
-    pub fn new(group_index: IndexType, m_expr_index: IndexType) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        group_index: IndexType,
+        m_expr_index: IndexType,
+    ) -> Self {
         Self {
+            ctx,
             state: OptimizeExprState::Init,
             group_index,
             m_expr_index,
@@ -66,11 +78,12 @@ impl OptimizeExprTask {
     }
 
     pub fn with_parent(
+        ctx: Arc<dyn TableContext>,
         group_index: IndexType,
         m_expr_index: IndexType,
         parent: &Rc<SharedCounter>,
     ) -> Self {
-        let mut task = Self::new(group_index, m_expr_index);
+        let mut task = Self::new(ctx, group_index, m_expr_index);
         parent.inc();
         task.parent = Some(parent.clone());
         task
@@ -129,7 +142,8 @@ impl OptimizeExprTask {
             let group = optimizer.memo.group(*child)?;
             if !group.state.optimized() {
                 all_children_optimized = false;
-                let task = OptimizeGroupTask::with_parent(*child, &self.ref_count);
+                let task =
+                    OptimizeGroupTask::with_parent(self.ctx.clone(), *child, &self.ref_count);
                 scheduler.add_task(Task::OptimizeGroup(task));
             }
         }

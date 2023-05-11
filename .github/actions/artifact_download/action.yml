@@ -1,9 +1,6 @@
 name: "Download Artifacts"
 description: "Download build Result Binaries"
 inputs:
-  profile:
-    description: "debug/release"
-    required: true
   sha:
     description: "git sha"
     required: true
@@ -15,9 +12,13 @@ inputs:
     required: false
     default: default
   path:
-    description: "default to ./target/{inputs.profile}/"
+    description: "default to ./target/${BUILD_PROFILE}/"
     required: false
     default: ""
+  artifacts:
+    description: "Artifacts to download, only works with s3"
+    required: false
+    default: "meta,query"
 outputs:
   path:
     description: ""
@@ -28,12 +29,17 @@ outputs:
 runs:
   using: "composite"
   steps:
+    - name: Check Disk Space
+      shell: bash
+      run: |
+        df -h
+
     - name: Get Download Info
       id: info
       shell: bash
       run: |
         if [[ -z "${{ inputs.path }}" ]]; then
-          path="./target/${{ inputs.profile }}"
+          path="./target/${{ env.BUILD_PROFILE }}"
         else
           path="${{ inputs.path }}"
         fi
@@ -49,22 +55,40 @@ runs:
     - uses: actions/download-artifact@v3
       if: steps.info.outputs.src == 'github'
       with:
-        name: ${{ inputs.profile }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
+        name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
         path: ${{ steps.info.outputs.path }}/
+
+    - name: Make Executable
+      if: steps.info.outputs.src == 'github'
+      shell: bash
+      run: |
+        artifacts="${{ inputs.artifacts }}"
+        for artifact in ${artifacts//,/ }; do
+          if [[ "${artifact}" == "open-sharing" ]]; then
+            chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
+          else
+            chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
+          fi
+        done
 
     - name: Download artifact from s3
       if: steps.info.outputs.src == 's3'
       shell: bash
       run: |
-        aws s3 sync \
-          s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
-          ${{ steps.info.outputs.path }}/ --exclude "*" --include "databend-*" --no-progress
-        aws s3 sync \
-          s3://databend-ci/${{ inputs.profile }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/ \
-          ${{ steps.info.outputs.path }}/ --exclude "*" --include "open-sharing" --no-progress || true
+        artifacts="${{ inputs.artifacts }}"
+        for artifact in ${artifacts//,/ }; do
+          if [[ "${artifact}" == "open-sharing" ]]; then
+            echo "==> fetching open-sharing ..."
+            aws s3 cp s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/open-sharing ${{ steps.info.outputs.path }}/open-sharing --no-progress || true
+            chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
+          else
+            echo "==> fetching databend-$artifact ..."
+            aws s3 cp s3://databend-ci/${{ env.BUILD_PROFILE }}/${{ inputs.sha }}/${{ inputs.target }}/${{ inputs.category }}/databend-$artifact ${{ steps.info.outputs.path }}/databend-$artifact --no-progress
+            chmod +x ${{ steps.info.outputs.path }}/databend-$artifact
+          fi
+        done
 
-    - name: make artifacts executable
+    - name: Check Disk Space
       shell: bash
       run: |
-        chmod +x ${{ steps.info.outputs.path }}/databend-*
-        chmod +x ${{ steps.info.outputs.path }}/open-sharing || true
+        df -h

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@
 #![feature(vec_into_raw_parts)]
 #![feature(associated_type_bounds)]
 #![feature(hash_drain_filter)]
+#![feature(io_error_other)]
 
 extern crate core;
 
@@ -46,6 +47,7 @@ pub mod servers;
 pub mod sessions;
 pub mod stream;
 pub mod table_functions;
+pub mod test_kits;
 
 mod global_services;
 

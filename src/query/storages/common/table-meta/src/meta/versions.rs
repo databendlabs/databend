@@ -1,16 +1,16 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::marker::PhantomData;
 
@@ -51,6 +51,21 @@ pub enum SegmentInfoVersion {
     V1(PhantomData<v1::SegmentInfo>),
     V2(PhantomData<v2::SegmentInfo>),
     V3(PhantomData<v3::SegmentInfo>),
+}
+
+impl SegmentInfoVersion {
+    pub fn version(&self) -> u64 {
+        match self {
+            SegmentInfoVersion::V0(a) => Self::ver(a),
+            SegmentInfoVersion::V1(a) => Self::ver(a),
+            SegmentInfoVersion::V2(a) => Self::ver(a),
+            SegmentInfoVersion::V3(a) => Self::ver(a),
+        }
+    }
+
+    fn ver<const V: u64, T: Versioned<V>>(_v: &PhantomData<T>) -> u64 {
+        V
+    }
 }
 
 impl Versioned<0> for v0::TableSnapshot {}

@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -124,7 +124,11 @@ impl Settings {
     }
 
     pub fn set_max_storage_io_requests(&self, val: u64) -> Result<()> {
-        self.try_set_u64("max_storage_io_requests", val)
+        if val > 0 {
+            self.try_set_u64("max_storage_io_requests", val)
+        } else {
+            Err(ErrorCode::BadArguments("Value must be greater than 0"))
+        }
     }
 
     pub fn get_storage_io_min_bytes_for_seek(&self) -> Result<u64> {
@@ -316,11 +320,31 @@ impl Settings {
         self.try_get_string("group_by_shuffle_mode")
     }
 
+    pub fn get_efficiently_memory_group_by(&self) -> Result<bool> {
+        Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
+    }
+
     pub fn set_lazy_topn_threshold(&self, value: u64) -> Result<()> {
         self.try_set_u64("lazy_topn_threshold", value)
     }
 
     pub fn get_lazy_topn_threshold(&self) -> Result<u64> {
         self.try_get_u64("lazy_topn_threshold")
+    }
+
+    pub fn set_parquet_fast_read_bytes(&self, value: u64) -> Result<()> {
+        self.try_set_u64("parquet_fast_read_bytes", value)
+    }
+
+    pub fn get_parquet_fast_read_bytes(&self) -> Result<u64> {
+        self.try_get_u64("parquet_fast_read_bytes")
+    }
+
+    pub fn get_enterprise_license(&self) -> Result<String> {
+        self.try_get_string("enterprise_license")
+    }
+
+    pub fn set_enterprise_license(&self, val: String) -> Result<()> {
+        self.set_setting("enterprise_license".to_string(), val)
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -219,7 +219,11 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                 })
                 .collect::<Vec<_>>();
             jsonb::build_object(kvs.iter().map(|(k, v)| (k, &v[..])), buf)
-                .expect("failed to build jsonb object");
+                .expect("failed to build jsonb object from map");
+            return;
+        }
+        ScalarRef::Bitmap(b) => {
+            buf.extend_from_slice(b);
             return;
         }
         ScalarRef::Tuple(fields) => {
@@ -231,7 +235,7 @@ pub fn cast_scalar_to_variant(scalar: ScalarRef, tz: TzLUT, buf: &mut Vec<u8>) {
                     .map(|(i, bytes)| (format!("{}", i + 1), bytes)),
                 buf,
             )
-            .expect("failed to build jsonb object");
+            .expect("failed to build jsonb object from tuple");
             return;
         }
         ScalarRef::Variant(bytes) => {

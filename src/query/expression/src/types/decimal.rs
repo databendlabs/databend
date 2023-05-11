@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -290,6 +290,7 @@ pub trait Decimal:
     fn data_type() -> DataType;
     const MIN: Self;
     const MAX: Self;
+    const MAX_VALUE: Self;
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
 
@@ -314,6 +315,7 @@ pub trait Decimal:
 }
 
 impl Decimal for i128 {
+    const MAX_VALUE: i128 = 170141183460469231731687303715884105727_i128;
     fn zero() -> Self {
         0_i128
     }
@@ -351,7 +353,7 @@ impl Decimal for i128 {
     }
 
     fn max_of_max_precision() -> Self {
-        Self::max_for_precision(MAX_DECIMAL128_PRECISION)
+        Self::MAX_VALUE
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -459,6 +461,9 @@ impl Decimal for i128 {
 }
 
 impl Decimal for i256 {
+    const MAX_VALUE: i256 = ethnum::int!(
+        "57896044618658097711785492504343953926634992332820282019728792003956564819967"
+    );
     fn zero() -> Self {
         i256::ZERO
     }
@@ -496,7 +501,7 @@ impl Decimal for i256 {
     }
 
     fn max_of_max_precision() -> Self {
-        Self::max_for_precision(MAX_DECIMAL256_PRECISION)
+        Self::MAX_VALUE
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -698,13 +703,12 @@ impl DecimalDataType {
             let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
             precision = precision.min(plus_min_precision);
         }
-        Self::from_size(DecimalSize { precision, scale })
-    }
 
-    // Decimal X Number or Number X Decimal
-    pub fn binary_upgrade_to_max_precision(&self) -> Result<DecimalDataType> {
-        let scale = self.scale();
-        let precision = self.max_precision();
+        // if the args both are Decimal128, we need to clamp the precision to 38
+        if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
+            precision = precision.min(MAX_DECIMAL128_PRECISION);
+        }
+
         Self::from_size(DecimalSize { precision, scale })
     }
 }

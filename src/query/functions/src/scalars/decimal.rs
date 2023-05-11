@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::buffer::Buffer;
 use common_expression::serialize::read_decimal_with_size;
+use common_expression::type_check::common_super_type;
 use common_expression::types::decimal::*;
 use common_expression::types::string::StringColumn;
 use common_expression::types::*;
@@ -240,39 +241,23 @@ macro_rules! register_decimal_compare_op {
                 return None;
             }
 
-            // we use the max precision and scale for the result
-            let return_type = if args_type[0].is_decimal() && args_type[1].is_decimal() {
-                let lhs_type = args_type[0].as_decimal().unwrap();
-                let rhs_type = args_type[1].as_decimal().unwrap();
+            let common_type = common_super_type(args_type[0].clone(), args_type[1].clone(), &[])?;
 
-                DecimalDataType::binary_result_type(&lhs_type, &rhs_type, false, false, true)
-            } else if args_type[0].is_decimal() {
-                let lhs_type = args_type[0].as_decimal().unwrap();
-                lhs_type.binary_upgrade_to_max_precision()
-            } else {
-                let rhs_type = args_type[1].as_decimal().unwrap();
-                rhs_type.binary_upgrade_to_max_precision()
+            if !common_type.is_decimal() {
+                return None;
             }
-            .ok()?;
 
+            // Comparison between different decimal types must be same siganature types
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![
-                        DataType::Decimal(return_type.clone()),
-                        DataType::Decimal(return_type.clone()),
-                    ],
+                    args_type: vec![common_type.clone(), common_type.clone()],
                     return_type: DataType::Boolean,
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
                     eval: Box::new(move |args, _ctx| {
-                        op_decimal!(
-                            &args[0],
-                            &args[1],
-                            &DataType::Decimal(return_type.clone()),
-                            $op
-                        )
+                        op_decimal!(&args[0], &args[1], &common_type, $op)
                     }),
                 },
             };
@@ -302,28 +287,21 @@ macro_rules! register_decimal_binary_op {
                 return None;
             }
 
+            let decimal_a =
+                DecimalDataType::from_size(args_type[0].get_decimal_properties()?).unwrap();
+            let decimal_b =
+                DecimalDataType::from_size(args_type[1].get_decimal_properties()?).unwrap();
+
             let is_multiply = $name == "multiply";
             let is_divide = $name == "divide";
             let is_plus_minus = !is_multiply && !is_divide;
-
-            let return_type = if args_type[0].is_decimal() && args_type[1].is_decimal() {
-                let lhs_type = args_type[0].as_decimal().unwrap();
-                let rhs_type = args_type[1].as_decimal().unwrap();
-
-                DecimalDataType::binary_result_type(
-                    &lhs_type,
-                    &rhs_type,
-                    is_multiply,
-                    is_divide,
-                    is_plus_minus,
-                )
-            } else if args_type[0].is_decimal() {
-                let lhs_type = args_type[0].as_decimal().unwrap();
-                lhs_type.binary_upgrade_to_max_precision()
-            } else {
-                let rhs_type = args_type[1].as_decimal().unwrap();
-                rhs_type.binary_upgrade_to_max_precision()
-            }
+            let return_type = DecimalDataType::binary_result_type(
+                &decimal_a,
+                &decimal_b,
+                is_multiply,
+                is_divide,
+                is_plus_minus,
+            )
             .ok()?;
 
             let mut scale_a = 0;
@@ -338,18 +316,29 @@ macro_rules! register_decimal_binary_op {
             let function = Function {
                 signature: FunctionSignature {
                     name: $name.to_string(),
-                    args_type: vec![
-                        DataType::Decimal(return_type.clone()),
-                        DataType::Decimal(return_type.clone()),
-                    ],
+                    args_type: args_type.clone(),
                     return_type: DataType::Decimal(return_type.clone()),
                 },
                 eval: FunctionEval::Scalar {
                     calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
                     eval: Box::new(move |args, ctx| {
-                        op_decimal!(
+                        let lhs = convert_to_decimal(
                             &args[0],
+                            ctx,
+                            args_type[0].clone(),
+                            DataType::Decimal(return_type.clone()),
+                        );
+
+                        let rhs = convert_to_decimal(
                             &args[1],
+                            ctx,
+                            args_type[1].clone(),
+                            DataType::Decimal(return_type.clone()),
+                        );
+
+                        op_decimal!(
+                            &lhs.as_ref(),
+                            &rhs.as_ref(),
                             ctx,
                             &DataType::Decimal(return_type.clone()),
                             $op,
@@ -373,11 +362,8 @@ pub(crate) fn register_decimal_compare_op(registry: &mut FunctionRegistry) {
     register_decimal_compare_op!(registry, "lt", is_lt);
     register_decimal_compare_op!(registry, "eq", is_eq);
     register_decimal_compare_op!(registry, "gt", is_gt);
-
     register_decimal_compare_op!(registry, "lte", is_le);
-
     register_decimal_compare_op!(registry, "gte", is_ge);
-
     register_decimal_compare_op!(registry, "ne", is_ne);
 }
 
@@ -420,8 +406,8 @@ pub fn register(registry: &mut FunctionRegistry) {
             },
             eval: FunctionEval::Scalar {
                 calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
-                eval: Box::new(move |args, tx| {
-                    convert_to_decimal(args, tx, from_type.clone(), return_type.clone())
+                eval: Box::new(move |args, ctx| {
+                    convert_to_decimal(&args[0], ctx, from_type.clone(), return_type.clone())
                 }),
             },
         })
@@ -513,12 +499,11 @@ pub(crate) fn register_decimal_to_float32(registry: &mut FunctionRegistry) {
 }
 
 fn convert_to_decimal(
-    args: &[ValueRef<AnyType>],
+    arg: &ValueRef<AnyType>,
     ctx: &mut EvalContext,
     from_type: DataType,
     dest_type: DataType,
 ) -> Value<AnyType> {
-    let arg = &args[0];
     match from_type {
         DataType::Number(ty) => {
             if ty.is_float() {
@@ -760,6 +745,51 @@ fn float_to_decimal_internal<T: Number + AsPrimitive<f64>>(
     }
 }
 
+fn decimal_256_to_128(
+    buffer: Buffer<i256>,
+    from_size: DecimalSize,
+    dest_size: DecimalSize,
+    ctx: &mut EvalContext,
+) -> DecimalColumn {
+    let max = i128::max_for_precision(dest_size.precision);
+    let min = i128::min_for_precision(dest_size.precision);
+
+    let values = if dest_size.scale >= from_size.scale {
+        let factor = i256::e((dest_size.scale - from_size.scale) as u32);
+        buffer
+            .iter()
+            .enumerate()
+            .map(|(row, x)| {
+                let x = x * i128::one();
+                match x.checked_mul(factor) {
+                    Some(x) if x <= max && x >= min => *x.low(),
+                    _ => {
+                        ctx.set_error(row, "Decimal overflow");
+                        i128::one()
+                    }
+                }
+            })
+            .collect()
+    } else {
+        let factor = i256::e((from_size.scale - dest_size.scale) as u32);
+        buffer
+            .iter()
+            .enumerate()
+            .map(|(row, x)| {
+                let x = x * i128::one();
+                match x.checked_div(factor) {
+                    Some(x) if x <= max && x >= min => *x.low(),
+                    _ => {
+                        ctx.set_error(row, "Decimal overflow");
+                        i128::one()
+                    }
+                }
+            })
+            .collect()
+    };
+    i128::to_column(values, dest_size)
+}
+
 macro_rules! m_decimal_to_decimal {
     ($from_size: expr, $dest_size: expr, $buffer: expr, $from_type_name: ty, $dest_type_name: ty, $ctx: expr) => {
         // faster path
@@ -802,7 +832,7 @@ macro_rules! m_decimal_to_decimal {
                     .map(|(row, x)| {
                         let x = x * <$dest_type_name>::one();
                         match x.checked_mul(factor) {
-                            Some(x) if x <= max && x >= min => x,
+                            Some(x) if x <= max && x >= min => x as $dest_type_name,
                             _ => {
                                 $ctx.set_error(row, "Decimal overflow");
                                 <$dest_type_name>::one()
@@ -849,8 +879,9 @@ fn decimal_to_decimal(
             let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
             m_decimal_to_decimal! {from_size, *dest_size, buffer, i256, i256, ctx}
         }
-        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(_)) => {
-            unreachable!("Decimal256 to Decimal128 path is unreachable")
+        (DecimalDataType::Decimal256(_), DecimalDataType::Decimal128(dest_size)) => {
+            let (buffer, from_size) = i256::try_downcast_column(&column).unwrap();
+            decimal_256_to_128(buffer, from_size, *dest_size, ctx)
         }
     };
 

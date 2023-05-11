@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -145,6 +145,7 @@ pub struct SettingsItem {
     pub user_value: UserSettingValue,
     pub default_value: UserSettingValue,
     pub possible_values: Option<Vec<&'static str>>,
+    pub display_in_show_settings: bool,
 }
 
 pub struct SettingsIter<'a> {
@@ -182,6 +183,7 @@ impl<'a> Iterator for SettingsIter<'a> {
                     user_value: default_value.value.clone(),
                     default_value: default_value.value,
                     possible_values: default_value.possible_values,
+                    display_in_show_settings: default_value.display_in_show_settings,
                 },
                 Some(change_value) => SettingsItem {
                     name: key,
@@ -190,6 +192,7 @@ impl<'a> Iterator for SettingsIter<'a> {
                     user_value: change_value.value.clone(),
                     default_value: default_value.value,
                     possible_values: default_value.possible_values,
+                    display_in_show_settings: default_value.display_in_show_settings,
                 },
             }),
         }

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,8 +60,12 @@ impl Interpreter for DeleteInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
-            let filter =
-                cast_expr_to_non_null_boolean(scalar.as_expr_with_col_name()?)?.as_remote_expr();
+            let filter = cast_expr_to_non_null_boolean(
+                scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone()),
+            )?
+            .as_remote_expr();
 
             let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {

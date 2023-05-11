@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -58,7 +58,7 @@ impl Interpreter for SettingInterpreter {
                     let _ = tz.parse::<Tz>().map_err(|_| {
                         ErrorCode::InvalidTimezone(format!("Invalid Timezone: {}", var.value))
                     })?;
-                    let settings = self.ctx.get_settings();
+                    let settings = self.ctx.get_shard_settings();
 
                     match var.is_global {
                         true => {
@@ -72,7 +72,7 @@ impl Interpreter for SettingInterpreter {
                     true
                 }
                 _ => {
-                    let settings = self.ctx.get_settings();
+                    let settings = self.ctx.get_shard_settings();
 
                     match var.is_global {
                         true => {

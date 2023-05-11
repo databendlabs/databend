@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,8 +32,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use dyn_clone::DynClone;
@@ -164,17 +162,6 @@ pub trait Database: DynClone + Sync + Send {
     ) -> Result<GetTableCopiedFileReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table_copied_file_info in {} Database",
-            self.name()
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn upsert_table_copied_file_info(
-        &self,
-        _req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
-        Err(ErrorCode::Unimplemented(format!(
-            "UnImplement upsert_table_copied_file_info in {} Database",
             self.name()
         )))
     }

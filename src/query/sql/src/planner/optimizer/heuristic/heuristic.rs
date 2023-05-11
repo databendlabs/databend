@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ use crate::MetadataRef;
 
 pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     vec![
+        RuleID::FoldConstant,
         RuleID::NormalizeDisjunctiveFilter,
         RuleID::NormalizeScalarFilter,
         RuleID::EliminateFilter,
@@ -58,7 +59,7 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.
 pub struct HeuristicOptimizer {
-    _ctx: Arc<dyn TableContext>,
+    ctx: Arc<dyn TableContext>,
     bind_context: Box<BindContext>,
     metadata: MetadataRef,
 }
@@ -70,7 +71,7 @@ impl HeuristicOptimizer {
         metadata: MetadataRef,
     ) -> Self {
         HeuristicOptimizer {
-            _ctx: ctx,
+            ctx,
             bind_context,
             metadata,
         }
@@ -119,9 +120,18 @@ impl HeuristicOptimizer {
         let mut s_expr = s_expr.clone();
 
         for rule_id in DEFAULT_REWRITE_RULES.iter() {
-            let rule = RuleFactory::create_rule(*rule_id, self.metadata.clone())?;
+            let rule = RuleFactory::create_rule(
+                *rule_id,
+                self.metadata.clone(),
+                self.ctx.get_function_context()?,
+            )?;
             let mut state = TransformResult::new();
-            if s_expr.match_pattern(&rule.patterns()[0]) && !s_expr.applied_rule(&rule.id()) {
+            if rule
+                .patterns()
+                .iter()
+                .any(|pattern| s_expr.match_pattern(pattern))
+                && !s_expr.applied_rule(&rule.id())
+            {
                 s_expr.set_applied_rule(&rule.id());
                 rule.apply(&s_expr, &mut state)?;
                 if !state.results().is_empty() {

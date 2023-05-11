@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,8 +75,7 @@ impl Interpreter for RemoveUserStageInterpreter {
                 error!("Failed to delete file: {:?}, error: {}", chunk, e);
             }
 
-            let aborting = self.ctx.get_aborting();
-            if aborting.load(std::sync::atomic::Ordering::SeqCst) {
+            if self.ctx.check_aborting().is_err() {
                 return Ok(PipelineBuildResult::create());
             }
         }

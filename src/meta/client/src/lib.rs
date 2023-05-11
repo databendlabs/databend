@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,7 +37,10 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 
     let semver = semver.strip_prefix('v').unwrap_or(semver);
 
-    Version::parse(semver).unwrap_or_else(|e| panic!("Invalid semver: {:?}: {}", semver, e))
+    Version::parse(semver).expect(
+        "run `git fetch --tags` to slove this error, 
+    to learn more about this error, please visit https://crates.io/crates/semver",
+    )
 });
 
 /// Oldest compatible nightly metasrv version
@@ -57,10 +60,13 @@ pub static METACLI_COMMIT_SEMVER: Lazy<Version> = Lazy::new(|| {
 ///
 /// - 2023-02-17: since 0.9.42:
 ///   Meta service only responds with MetaAPIError.
+///
+/// - 2023-05-07: since 1.1.32:
+///   Meta service: add: TxnDeleteRequest provides a `match_seq` field to delete a record if its `seq` matches.
 pub static MIN_METASRV_SEMVER: Version = Version {
-    major: 0,
-    minor: 8,
-    patch: 35,
+    major: 1,
+    minor: 1,
+    patch: 32,
     pre: Prerelease::EMPTY,
     build: BuildMetadata::EMPTY,
 };

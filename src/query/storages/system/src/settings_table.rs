@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,6 +53,9 @@ impl SyncSystemTable for SettingsTable {
         let mut descs: Vec<String> = vec![];
         let mut types: Vec<String> = vec![];
         for item in settings.into_iter() {
+            if !item.display_in_show_settings {
+                continue;
+            }
             // Name.
             names.push(item.name);
             // Value.

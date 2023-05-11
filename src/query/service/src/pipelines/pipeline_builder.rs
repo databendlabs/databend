@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -102,9 +102,9 @@ use crate::pipelines::processors::JoinHashTable;
 use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
-use crate::pipelines::processors::SinkBuildHashTable;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
+use crate::pipelines::processors::TransformHashJoinBuild;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformResortAddOn;
@@ -229,11 +229,10 @@ impl PipelineBuilder {
         let mut build_res = build_side_builder.finalize(build)?;
 
         assert!(build_res.main_pipeline.is_pulling_pipeline()?);
-
         let create_sink_processor = |input| {
-            let transform = Sinker::<SinkBuildHashTable>::create(
+            let transform = TransformHashJoinBuild::create(
                 input,
-                SinkBuildHashTable::try_create(join_state.clone())?,
+                TransformHashJoinBuild::attach(join_state.clone())?,
             );
 
             if self.enable_profiling {
@@ -565,10 +564,14 @@ impl PipelineBuilder {
             });
         }
 
+        // let is_standalone = self.ctx.get_cluster().is_empty();
+        let settings = self.ctx.get_settings();
+        let efficiently_memory = settings.get_efficiently_memory_group_by()?;
+
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         self.main_pipeline.add_transform(|input, output| {
             let transform = match params.aggregate_functions.is_empty() {
@@ -697,10 +700,13 @@ impl PipelineBuilder {
             });
         }
 
+        let settings = self.ctx.get_settings();
+        let efficiently_memory = settings.get_efficiently_memory_group_by()?;
+
         let group_cols = &params.group_columns;
         let schema_before_group_by = params.input_schema.clone();
         let sample_block = DataBlock::empty_with_schema(schema_before_group_by);
-        let method = DataBlock::choose_hash_method(&sample_block, group_cols)?;
+        let method = DataBlock::choose_hash_method(&sample_block, group_cols, efficiently_memory)?;
 
         let tenant = self.ctx.get_tenant();
         let old_inject = self.exchange_injector.clone();
@@ -1309,9 +1315,9 @@ impl PipelineBuilder {
         for _ in 0..output_size / 2 {
             let input = InputPort::create();
             items.push(PipeItem::create(
-                ProcessorPtr::create(Sinker::<SinkBuildHashTable>::create(
+                ProcessorPtr::create(TransformHashJoinBuild::create(
                     input.clone(),
-                    SinkBuildHashTable::try_create(self.join_state.as_ref().unwrap().clone())?,
+                    TransformHashJoinBuild::attach(self.join_state.as_ref().unwrap().clone())?,
                 )),
                 vec![input],
                 vec![],

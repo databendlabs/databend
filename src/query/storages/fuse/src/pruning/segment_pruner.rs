@@ -1,16 +1,16 @@
-//  Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::sync::Arc;
 
@@ -18,6 +18,7 @@ use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
+use common_expression::SEGMENT_NAME_COL_NAME;
 use futures_util::future;
 use storages_common_cache::LoadParams;
 use storages_common_pruner::BlockMetaIndex;
@@ -56,7 +57,21 @@ impl SegmentPruner {
         }
 
         // Build pruning tasks.
-        let mut segments = segment_locs.into_iter().enumerate();
+        let segments = if let Some(internal_column_pruner) =
+            &self.pruning_ctx.internal_column_pruner
+        {
+            segment_locs
+                .into_iter()
+                .enumerate()
+                .filter(|(_, segment)| {
+                    internal_column_pruner.should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
+                })
+                .collect::<Vec<_>>()
+        } else {
+            segment_locs.into_iter().enumerate().collect::<Vec<_>>()
+        };
+
+        let mut segments = segments.into_iter();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let pruning_tasks = std::iter::from_fn(|| {
             // pruning tasks are executed concurrently, check if limit exceeded before proceeding
@@ -128,7 +143,7 @@ impl SegmentPruner {
         // Note that it is required to explicitly release this permit before pruning blocks, to avoid deadlock.
         drop(permit);
 
-        let total_bytes = segment_info.total_bytes();
+        let total_bytes = segment_info.summary.uncompressed_byte_size;
         // Perf.
         {
             metrics_inc_segments_range_pruning_before(1);

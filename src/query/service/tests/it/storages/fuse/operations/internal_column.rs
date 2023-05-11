@@ -26,15 +26,14 @@ use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::storages::fuse::fuse_part::FusePartInfo;
+use databend_query::test_kits::table_test_fixture::execute_query;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 fn expected_data_block(
     parts: &Partitions,
@@ -52,6 +51,7 @@ fn expected_data_block(
             block_location: block_meta.block_location.clone(),
             segment_location: block_meta.segment_location.clone(),
             snapshot_location: block_meta.snapshot_location.clone().unwrap(),
+            offsets: None,
         };
         for internal_column in internal_columns {
             let column = internal_column.generate_column_values(&internal_column_meta, num_rows);
@@ -105,7 +105,7 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
     for segment in &snapshot.segments {
         segment_name.insert(segment.0.clone());
 
-        let segment_reader = MetaReaders::segment_info_reader(
+        let compact_segment_reader = MetaReaders::segment_info_reader(
             fuse_table.get_operator(),
             TestFixture::default_table_schema(),
         );
@@ -115,7 +115,8 @@ async fn check_partitions(parts: &Partitions, fixture: &TestFixture) -> Result<(
             ver: SegmentInfo::VERSION,
             put_cache: false,
         };
-        let segment_info = segment_reader.read(&params).await?;
+        let compact_segment_info = compact_segment_reader.read(&params).await?;
+        let segment_info = SegmentInfo::try_from(compact_segment_info.as_ref())?;
 
         for block in &segment_info.blocks {
             block_name.insert(block.location.0.clone());

@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_cache::Count;
+use common_cache::DefaultHashBuilder;
+
 use crate::read::cached_reader::CachedReader;
 use crate::InMemoryBytesCacheHolder;
 use crate::InMemoryItemCacheHolder;
 use crate::NamedCache;
 
-pub type InMemoryItemCacheReader<T, L> = CachedReader<L, NamedCache<InMemoryItemCacheHolder<T>>>;
+pub type InMemoryItemCacheReader<T, L, S = DefaultHashBuilder, M = Count> =
+    CachedReader<L, NamedCache<InMemoryItemCacheHolder<T, S, M>>>;
 pub type InMemoryBytesCacheReader<L> = CachedReader<L, NamedCache<InMemoryBytesCacheHolder>>;

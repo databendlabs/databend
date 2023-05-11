@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -1214,7 +1214,19 @@ pub struct QueryConfig {
 
     #[clap(long, default_value = "10000")]
     pub max_query_log_size: usize,
+    /// Parquet file with smaller size will be read as a whole file, instead of column by column.
+    /// For example:
+    /// parquet_fast_read_bytes = 52428800
+    /// will let databend read whole file for parquet file less than 50MB and read column by column
+    /// if file size is greater than 50MB
+    #[clap(long)]
+    pub parquet_fast_read_bytes: Option<u64>,
 
+    #[clap(long)]
+    pub max_storage_io_requests: Option<u64>,
+
+    #[clap(long)]
+    pub databend_enterprise_license: Option<String>,
     /// If in management mode, only can do some meta level operations(database/table/user/stage etc.) with metasrv.
     #[clap(long)]
     pub management_mode: bool,
@@ -1369,7 +1381,10 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             table_engine_memory_enabled: self.table_engine_memory_enabled,
             wait_timeout_mills: self.wait_timeout_mills,
             max_query_log_size: self.max_query_log_size,
+            databend_enterprise_license: self.databend_enterprise_license,
             management_mode: self.management_mode,
+            parquet_fast_read_bytes: self.parquet_fast_read_bytes,
+            max_storage_io_requests: self.max_storage_io_requests,
             jwt_key_file: self.jwt_key_file,
             jwt_key_files: self.jwt_key_files,
             default_storage_format: self.default_storage_format,
@@ -1435,12 +1450,14 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_engine_memory_enabled: inner.table_engine_memory_enabled,
             wait_timeout_mills: inner.wait_timeout_mills,
             max_query_log_size: inner.max_query_log_size,
+            databend_enterprise_license: inner.databend_enterprise_license,
             management_mode: inner.management_mode,
+            parquet_fast_read_bytes: inner.parquet_fast_read_bytes,
+            max_storage_io_requests: inner.max_storage_io_requests,
             jwt_key_file: inner.jwt_key_file,
             jwt_key_files: inner.jwt_key_files,
             default_storage_format: inner.default_storage_format,
             default_compression: inner.default_compression,
-
             users: users_from_inner(inner.idm.users),
             share_endpoint_address: inner.share_endpoint_address,
             share_endpoint_auth_token_file: inner.share_endpoint_auth_token_file,
@@ -1878,9 +1895,9 @@ pub struct CacheConfig {
     #[clap(long = "cache-table-meta-snapshot-count", default_value = "256")]
     pub table_meta_snapshot_count: u64,
 
-    /// Max number of cached table segment
-    #[clap(long = "cache-table-meta-segment-count", default_value = "10240")]
-    pub table_meta_segment_count: u64,
+    /// Max bytes of cached table segment
+    #[clap(long = "cache-table-meta-segment-bytes", default_value = "1073741824")]
+    pub table_meta_segment_bytes: u64,
 
     /// Max number of cached table statistic meta
     #[clap(long = "cache-table-meta-statistic-count", default_value = "256")]
@@ -1943,6 +1960,11 @@ pub struct CacheConfig {
     /// and the access pattern will benefit from caching, consider enabled this cache.
     #[clap(long = "cache-table-data-deserialized-data-bytes", default_value = "0")]
     pub table_data_deserialized_data_bytes: u64,
+
+    // ----- the following options/args are all deprecated               ----
+    /// Max number of cached table segment
+    #[clap(long = "cache-table-meta-segment-count")]
+    pub table_meta_segment_count: Option<u64>,
 }
 
 impl Default for CacheConfig {
@@ -2047,7 +2069,7 @@ mod cache_config_converters {
             Ok(Self {
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
-                table_meta_segment_count: value.table_meta_segment_count,
+                table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_index_bloom: value.enable_table_bloom_index_cache,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -2067,7 +2089,7 @@ mod cache_config_converters {
             Self {
                 enable_table_meta_cache: value.enable_table_meta_cache,
                 table_meta_snapshot_count: value.table_meta_snapshot_count,
-                table_meta_segment_count: value.table_meta_segment_count,
+                table_meta_segment_bytes: value.table_meta_segment_bytes,
                 table_meta_statistic_count: value.table_meta_statistic_count,
                 enable_table_bloom_index_cache: value.enable_table_index_bloom,
                 table_bloom_index_meta_count: value.table_bloom_index_meta_count,
@@ -2078,6 +2100,7 @@ mod cache_config_converters {
                     .table_data_cache_population_queue_size,
                 disk_cache_config: value.disk_cache_config.into(),
                 table_data_deserialized_data_bytes: value.table_data_deserialized_data_bytes,
+                table_meta_segment_count: None,
             }
         }
     }

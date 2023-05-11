@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::DataField;
 use crate::DataSchema;
+use crate::ARROW_EXT_TYPE_BITMAP;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
 use crate::ARROW_EXT_TYPE_VARIANT;
@@ -39,7 +40,7 @@ impl From<&DataType> for ArrowDataType {
         match ty {
             DataType::Null => ArrowDataType::Null,
             DataType::Boolean => ArrowDataType::Boolean,
-            DataType::String => ArrowDataType::LargeBinary,
+            DataType::String | DataType::Bitmap => ArrowDataType::LargeBinary,
             DataType::Number(ty) => with_number_type!(|TYPE| match ty {
                 NumberDataType::TYPE => ArrowDataType::TYPE,
             }),
@@ -140,14 +141,19 @@ impl From<&DataField> for ArrowField {
                     ARROW_EXT_TYPE_VARIANT.to_string(),
                 );
             }
+            DataType::Bitmap => {
+                metadata.insert(EXTENSION_KEY.to_string(), ARROW_EXT_TYPE_BITMAP.to_string());
+            }
             _ => Default::default(),
         };
         match ty {
             ArrowDataType::Struct(_) if f.is_nullable() => {
                 let ty = set_nullable(&ty);
-                ArrowField::new(f.name(), ty, f.is_nullable()).with_metadata(metadata)
+                ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
             }
-            _ => ArrowField::new(f.name(), ty, f.is_nullable()).with_metadata(metadata),
+            // Must set nullable for DataType::Null
+            // Or error: Column 'null' is declared as non-nullable but contains null values
+            _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata),
         }
     }
 }
@@ -194,12 +200,13 @@ impl TryFrom<&ArrowField> for DataType {
             Some(ARROW_EXT_TYPE_EMPTY_ARRAY) => Some(DataType::EmptyArray),
             Some(ARROW_EXT_TYPE_EMPTY_MAP) => Some(DataType::EmptyMap),
             Some(ARROW_EXT_TYPE_VARIANT) => Some(DataType::Variant),
+            Some(ARROW_EXT_TYPE_BITMAP) => Some(DataType::Bitmap),
             _ => None,
         };
 
         if let Some(ty) = extend_type {
             return if f.is_nullable() {
-                Ok(DataType::Nullable(Box::new(ty)))
+                Ok(ty.wrap_nullable())
             } else {
                 Ok(ty)
             };
@@ -248,7 +255,7 @@ impl TryFrom<&ArrowField> for DataType {
             )))?,
         };
         if f.is_nullable() {
-            Ok(DataType::Nullable(Box::new(data_type)))
+            Ok(data_type.wrap_nullable())
         } else {
             Ok(data_type)
         }

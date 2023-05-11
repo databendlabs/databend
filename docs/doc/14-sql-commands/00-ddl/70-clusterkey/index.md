@@ -4,6 +4,12 @@ sidebar_position: 1
 slug: ./
 ---
 
+:::caution
+
+Cluster key is an `EXPERIMENTAL FEATURE`; we don't recommend using it in production.
+
+:::
+
 The cluster key is a data object for tables in Databend. It explicitly tells Databend how to divide and group rows of a table into the storage partitions rather than using the data ingestion order. 
 
 A table's cluster key is usually one or more columns or expressions. If you define a cluster key for a table, Databend reorganizes your data based on the cluster key and stores similar rows into the same or adjacent storage partitions.
@@ -12,4 +18,4 @@ The benefit of defining a cluster key is optimizing the query performance.   The
 
 In Databend, you [SET CLUSTER KEY](dml-set-cluster-key.md) when you create a table, and you can [ALTER CLUSTER KEY](dml-alter-cluster-key.md) if necessary. A fully-clustered table might become chaotic if it continues to have ingestion or Data Manipulation Language operations (such as INSERT, UPDATE, DELETE), you will need to [RECLUSTER TABLE](./dml-recluster-table.md) to fix the chaos.
 
-It's important to note that, most of the time you do not need to set the cluster key. Clustering or re-clustering a table consumes time and your credits if you're in Databend Cloud. Databend recommends setting cluster keys for large tables with slow query issues.
+It's important to note that, most of the time you don't need to set the cluster key. Clustering or re-clustering a table consumes time and your credits if you're in Databend Cloud. Databend recommends setting cluster keys for large tables with slow query issues.

@@ -1,16 +1,16 @@
-//  Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::ops::Range;
 use std::sync::Arc;
@@ -139,8 +139,9 @@ impl FuseTable {
 
                             let keep_last_snapshot = true;
                             let snapshot_files = self.list_snapshot_files().await?;
-                            if let Err(e) =
-                                tbl.do_purge(&ctx, snapshot_files, keep_last_snapshot).await
+                            if let Err(e) = tbl
+                                .do_purge(&ctx, snapshot_files, keep_last_snapshot, None)
+                                .await
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
                                 warn!(
@@ -212,7 +213,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version().await?;
+        let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()
@@ -728,11 +729,23 @@ mod utils {
                 let block_location = &block.location.0;
                 // if deletion operation failed (after DAL retried)
                 // we just left them there, and let the "major GC" collect them
+                info!(
+                    "aborting operation, delete block location: {:?}",
+                    block_location,
+                );
                 let _ = operator.delete(block_location).await;
                 if let Some(index) = &block.bloom_filter_index_location {
+                    info!(
+                        "aborting operation, delete bloom index location: {:?}",
+                        index.0
+                    );
                     let _ = operator.delete(&index.0).await;
                 }
             }
+            info!(
+                "aborting operation, delete segment location: {:?}",
+                entry.segment_location
+            );
             let _ = operator.delete(&entry.segment_location).await;
         }
         Ok(())

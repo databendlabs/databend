@@ -13,16 +13,16 @@
 //  limitations under the License.
 
 use std::str;
+use std::sync::Arc;
 
 use common_exception::Result;
+use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
-
-use super::table_test_fixture::append_sample_data;
-use super::table_test_fixture::append_sample_data_overwrite;
-use super::table_test_fixture::check_data_dir;
-use super::table_test_fixture::execute_command;
-use super::table_test_fixture::history_should_have_item;
-use super::table_test_fixture::TestFixture;
+use databend_query::test_kits::table_test_fixture::append_sample_data;
+use databend_query::test_kits::table_test_fixture::append_sample_data_overwrite;
+use databend_query::test_kits::table_test_fixture::check_data_dir;
+use databend_query::test_kits::table_test_fixture::history_should_have_item;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 
 pub async fn do_insertions(fixture: &TestFixture) -> Result<()> {
     fixture.create_default_table().await?;
@@ -35,7 +35,6 @@ pub async fn do_insertions(fixture: &TestFixture) -> Result<()> {
 
 pub async fn do_purge_test(
     case_name: &str,
-    op: &str,
     snapshot_count: u32,
     table_statistic_count: u32,
     segment_count: u32,
@@ -43,9 +42,6 @@ pub async fn do_purge_test(
     index_count: u32,
 ) -> Result<()> {
     let fixture = TestFixture::new().await;
-    let db = fixture.default_db_name();
-    let tbl = fixture.default_table_name();
-    let qry = format!("optimize table {}.{} {}", db, tbl, op);
 
     // insert, and then insert overwrite (1 snapshot, 1 segment, 1 data block, 1 index block for each insertion);
     do_insertions(&fixture).await?;
@@ -54,9 +50,13 @@ pub async fn do_purge_test(
     append_sample_data_overwrite(1, true, &fixture).await?;
 
     // execute the query
-    let ctx = fixture.ctx();
-    ctx.get_settings().set_retention_period(0)?;
-    execute_command(ctx, &qry).await?;
+    let table = fixture.latest_default_table().await?;
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let snapshot_files = fuse_table.list_snapshot_files().await?;
+    let table_ctx: Arc<dyn TableContext> = fixture.ctx();
+    fuse_table
+        .do_purge(&table_ctx, snapshot_files, true, None)
+        .await?;
 
     check_data_dir(
         &fixture,

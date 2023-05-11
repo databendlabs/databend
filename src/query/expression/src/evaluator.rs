@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -166,6 +166,7 @@ impl<'a> Evaluator<'a> {
 
             Expr::FunctionCall {
                 span,
+                id,
                 function,
                 args,
                 generics,
@@ -193,7 +194,7 @@ impl<'a> Evaluator<'a> {
                 };
                 let (_, eval) = function.eval.as_scalar().unwrap();
                 let result = (eval)(cols_ref.as_slice(), &mut ctx);
-                ctx.render_error(*span, &args, &function.signature.name)?;
+                ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
                 Ok(result)
             }
         };
@@ -211,7 +212,8 @@ impl<'a> Evaluator<'a> {
                 assert_eq!(
                     ConstantFolder::fold_with_domain(
                         expr,
-                        self.input_columns
+                        &self
+                            .input_columns
                             .domains()
                             .into_iter()
                             .enumerate()
@@ -221,7 +223,8 @@ impl<'a> Evaluator<'a> {
                     )
                     .1,
                     None,
-                    "domain calculation should not return any domain for expressions that are possible to fail"
+                    "domain calculation should not return any domain for expressions that are possible to fail with err {}",
+                    result.unwrap_err()
                 );
                 RECURSING.store(false, Ordering::SeqCst);
             }
@@ -881,6 +884,7 @@ impl<'a> Evaluator<'a> {
     pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
         if let Expr::FunctionCall {
             span,
+            id,
             function,
             args,
             return_type,
@@ -903,7 +907,7 @@ impl<'a> Evaluator<'a> {
                     func_ctx: self.func_ctx,
                 };
                 let result = (eval)(&cols_ref, &mut ctx);
-                ctx.render_error(*span, &args, &function.signature.name)?;
+                ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
                 assert_eq!(result.len(), self.input_columns.num_rows());
                 return Ok(result);
             }
@@ -914,7 +918,7 @@ impl<'a> Evaluator<'a> {
 }
 
 pub struct ConstantFolder<'a, Index: ColumnIndex> {
-    input_domains: HashMap<Index, Domain>,
+    input_domains: &'a HashMap<Index, Domain>,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
 }
@@ -936,7 +940,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             .collect();
 
         let folder = ConstantFolder {
-            input_domains,
+            input_domains: &input_domains,
             func_ctx,
             fn_registry,
         };
@@ -948,7 +952,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
     /// domain of the new expression.
     pub fn fold_with_domain(
         expr: &Expr<Index>,
-        input_domains: HashMap<Index, Domain>,
+        input_domains: &'a HashMap<Index, Domain>,
         func_ctx: &'a FunctionContext,
         fn_registry: &'a FunctionRegistry,
     ) -> (Expr<Index>, Option<Domain>) {
@@ -1449,7 +1453,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
 
         let (_, output_domain) = ConstantFolder::fold_with_domain(
             &cast_expr,
-            [(0, domain.clone())].into_iter().collect(),
+            &[(0, domain.clone())].into_iter().collect(),
             self.func_ctx,
             self.fn_registry,
         );

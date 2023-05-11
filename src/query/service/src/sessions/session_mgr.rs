@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -92,9 +92,26 @@ impl SessionManager {
 
         let tenant = GlobalConfig::instance().query.tenant_id.clone();
         let settings = Settings::create(tenant);
+        self.load_config_changes(&settings)?;
         settings.load_global_changes().await?;
 
         self.create_with_settings(typ, settings)
+    }
+
+    pub fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
+        let query_config = &GlobalConfig::instance().query;
+        if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
+            settings.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
+        }
+
+        if let Some(max_storage_io_requests) = query_config.max_storage_io_requests {
+            settings.set_max_storage_io_requests(max_storage_io_requests)?;
+        }
+
+        if let Some(enterprise_license_key) = query_config.databend_enterprise_license.clone() {
+            settings.set_enterprise_license(enterprise_license_key)?;
+        }
+        Ok(())
     }
 
     pub fn create_with_settings(

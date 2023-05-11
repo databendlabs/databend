@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,6 +53,11 @@ pub trait Interpreter: Sync + Send {
         InterpreterMetrics::record_query_start(&ctx);
         log_query_start(&ctx);
 
+        if let Err(err) = ctx.check_aborting() {
+            log_query_finished(&ctx, Some(err.clone()));
+            return Err(err);
+        }
+
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
             Err(build_error) => {
@@ -91,18 +96,18 @@ pub trait Interpreter: Sync + Send {
 
             let complete_executor = PipelineCompleteExecutor::from_pipelines(pipelines, settings)?;
 
-            ctx.set_executor(Arc::downgrade(&complete_executor.get_inner()));
+            ctx.set_executor(complete_executor.get_inner())?;
             complete_executor.execute()?;
-            return Ok(Box::pin(DataBlockStream::create(None, vec![])));
+            Ok(Box::pin(DataBlockStream::create(None, vec![])))
+        } else {
+            let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
+
+            ctx.set_executor(pulling_executor.get_inner())?;
+            Ok(Box::pin(ProgressStream::try_create(
+                Box::pin(PullingExecutorStream::create(pulling_executor)?),
+                ctx.get_result_progress(),
+            )?))
         }
-
-        let pulling_executor = PipelinePullingExecutor::from_pipelines(build_res, settings)?;
-
-        ctx.set_executor(Arc::downgrade(&pulling_executor.get_inner()));
-        Ok(Box::pin(ProgressStream::try_create(
-            Box::pin(PullingExecutorStream::create(pulling_executor)?),
-            ctx.get_result_progress(),
-        )?))
     }
 
     /// The core of the databend processor which will execute the logical plan and build the pipeline

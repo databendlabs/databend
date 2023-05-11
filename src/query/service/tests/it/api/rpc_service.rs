@@ -19,20 +19,18 @@ use std::sync::Arc;
 use common_arrow::arrow_format::flight::data::Empty;
 use common_arrow::arrow_format::flight::service::flight_service_client::FlightServiceClient;
 use common_base::base::tokio;
-use common_base::base::tokio::net::TcpListener;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
 use common_grpc::GrpcConnectionError;
 use common_grpc::RpcClientTlsConfig;
 use databend_query::api::RpcService;
-use tokio_stream::wrappers::TcpListenerStream;
+use databend_query::test_kits::ConfigBuilder;
 
 use crate::tests::tls_constants::TEST_CA_CERT;
 use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
-use crate::tests::ConfigBuilder;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server() -> Result<()> {
@@ -43,7 +41,7 @@ async fn test_tls_rpc_server() -> Result<()> {
             .build(),
     )?;
 
-    let mut listener_address = SocketAddr::from_str("127.0.0.1:0")?;
+    let mut listener_address = SocketAddr::from_str("127.0.0.1:9991")?;
     listener_address = rpc_service.start(listener_address).await?;
 
     let tls_conf = Some(RpcClientTlsConfig {
@@ -70,7 +68,6 @@ async fn test_tls_rpc_server() -> Result<()> {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
     // setup, invalid cert locations
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let mut srv = RpcService {
         config: ConfigBuilder::create()
             .rpc_tls_server_key("../tests/data/certs/none.key")
@@ -78,8 +75,9 @@ async fn test_tls_rpc_server_invalid_server_config() -> Result<()> {
             .build(),
         abort_notify: Arc::new(Default::default()),
     };
-    let stream = TcpListenerStream::new(listener);
-    let r = srv.start_with_incoming(stream).await;
+    let r = srv
+        .start_with_incoming("127.0.0.1:0".parse().unwrap())
+        .await;
     assert!(r.is_err());
     let e = r.unwrap_err();
     assert_eq!(e.code(), ErrorCode::TLSConfigurationFailure("").code());

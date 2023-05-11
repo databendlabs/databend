@@ -13,3 +13,4 @@ Databend Meta is a transactional metadata service.
 - [`sled-store`](./sled-store/) wrapped sled-related operational interfaces.
 - [`store`](./store/), impl with either a local embedded meta store, or a grpc-client of meta service.
 - [`types`](./types/): defines the rust types for metadata.
+- [`ee`](./ee/) contains enterprise functionalities.

@@ -47,6 +47,8 @@ use databend_query::storages::fuse::statistics::gen_columns_statistics;
 use databend_query::storages::fuse::statistics::reducers;
 use databend_query::storages::fuse::statistics::ClusterStatsGenerator;
 use databend_query::storages::fuse::statistics::StatisticsAccumulator;
+use databend_query::test_kits::block_writer::BlockWriter;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use opendal::Operator;
 use rand::Rng;
 use storages_common_table_meta::meta::BlockMeta;
@@ -54,9 +56,6 @@ use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Compression;
 use storages_common_table_meta::meta::Statistics;
-
-use crate::storages::fuse::block_writer::BlockWriter;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[test]
 fn test_ft_stats_block_stats() -> common_exception::Result<()> {

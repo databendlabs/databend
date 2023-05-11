@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -56,7 +56,8 @@ macro_rules! for_common_scalar_values {
             { StringType },
             { DateType },
             { TimestampType },
-            { VariantType }
+            { VariantType },
+            { BitmapType }
         }
     };
 }
@@ -109,6 +110,15 @@ impl<'a, D: AsRef<[&'a str]>> FromData<D, [Vec<u8>; 2]> for StringType {
     fn from_data(d: D) -> Column {
         StringType::upcast_column(StringType::column_from_ref_iter(
             d.as_ref().iter().map(|c| c.as_bytes()),
+            &[],
+        ))
+    }
+}
+
+impl<'a, D: AsRef<[&'a [u8]]>> FromData<D, [Vec<u8>; 2]> for BitmapType {
+    fn from_data(d: D) -> Column {
+        BitmapType::upcast_column(BitmapType::column_from_ref_iter(
+            d.as_ref().iter().copied(),
             &[],
         ))
     }

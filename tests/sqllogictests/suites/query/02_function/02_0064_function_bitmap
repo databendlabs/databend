@@ -1,0 +1,14 @@
+query T
+SELECT to_string(to_bitmap('0, 1, 2'))
+----
+0,1,2
+
+query T
+SELECT to_string(to_bitmap(1024))
+----
+1024
+
+query II
+SELECT build_bitmap([1,4,5])::String, bitmap_count(build_bitmap([1,2,5])), bitmap_count(build_bitmap([1, 66, 69, 70]))
+----
+1,4,5 3 4

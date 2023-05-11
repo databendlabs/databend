@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::runtime::Thread;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
 use crate::optimizer::hyper_dp::join_node::JoinNode;
@@ -43,6 +44,7 @@ const RELATION_THRESHOLD: usize = 10;
 // See the paper for more details.
 // Current, we only support inner join
 pub struct DPhpy {
+    ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
     join_relations: Vec<JoinRelation>,
     // base table index -> index of join_relations
@@ -55,8 +57,9 @@ pub struct DPhpy {
 }
 
 impl DPhpy {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
         Self {
+            ctx,
             metadata,
             join_relations: vec![],
             table_index_map: Default::default(),
@@ -84,7 +87,7 @@ impl DPhpy {
 
         if is_subquery {
             // If it's a subquery, start a new dphyp
-            let mut dphyp = DPhpy::new(self.metadata.clone());
+            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
             let (res, optimized) = dphyp.optimize(s_expr.clone())?;
             if optimized {
                 let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
@@ -141,16 +144,18 @@ impl DPhpy {
                 }
                 if left_is_subquery && right_is_subquery {
                     // Parallel process subquery
+                    let ctx = self.ctx.clone();
                     let metadata = self.metadata.clone();
                     let left_expr = s_expr.children()[0].clone();
                     let left_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(metadata.clone());
+                        let mut dphyp = DPhpy::new(ctx, metadata);
                         (dphyp.optimize(left_expr), dphyp.table_index_map)
                     });
+                    let ctx = self.ctx.clone();
                     let metadata = self.metadata.clone();
                     let right_expr = s_expr.children()[1].clone();
                     let right_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(metadata.clone());
+                        let mut dphyp = DPhpy::new(ctx, metadata);
                         (dphyp.optimize(right_expr), dphyp.table_index_map)
                     });
                     let left_res = left_res.join()?;
@@ -322,13 +327,14 @@ impl DPhpy {
         for (idx, relation) in self.join_relations.iter().enumerate() {
             // Get nodes  in `relation_set_tree`
             let nodes = self.relation_set_tree.get_relation_set_by_index(idx)?;
+            let ce = relation.cardinality()?;
             let join = JoinNode {
                 join_type: JoinType::Inner,
                 leaves: Arc::new(nodes.clone()),
                 children: Arc::new(vec![]),
                 join_conditions: Arc::new(vec![]),
                 cost: 0.0,
-                cardinality: Some(relation.cardinality()?),
+                cardinality: Some(ce),
                 s_expr: None,
             };
             let _ = self.dp_table.insert(nodes, join);
@@ -602,9 +608,18 @@ impl DPhpy {
 
     fn apply_rule(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
-        let rule = RuleFactory::create_rule(RuleID::PushDownFilterJoin, self.metadata.clone())?;
+        let rule = RuleFactory::create_rule(
+            RuleID::PushDownFilterJoin,
+            self.metadata.clone(),
+            self.ctx.get_function_context()?,
+        )?;
         let mut state = TransformResult::new();
-        if s_expr.match_pattern(&rule.patterns()[0]) && !s_expr.applied_rule(&rule.id()) {
+        if rule
+            .patterns()
+            .iter()
+            .any(|pattern| s_expr.match_pattern(pattern))
+            && !s_expr.applied_rule(&rule.id())
+        {
             s_expr.set_applied_rule(&rule.id());
             rule.apply(&s_expr, &mut state)?;
             if !state.results().is_empty() {

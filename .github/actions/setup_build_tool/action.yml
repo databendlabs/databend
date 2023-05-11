@@ -32,7 +32,7 @@ runs:
         export TARGET=${{ inputs.target }}
         export CARGO_INCREMENTAL=0
         export CARGO_TERM_COLOR=always
-        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE
+        export BYPASS_ENV_VARS=${{ inputs.bypass_env_vars }},CARGO_INCREMENTAL,CARGO_TERM_COLOR,BUILD_PROFILE,JEMALLOC_SYS_WITH_LG_PAGE
         EOF
 
         RUNNER_PROVIDER="${RUNNER_PROVIDER:-github}"
@@ -43,7 +43,7 @@ runs:
         export ENABLE_SCCACHE=true
         export SCCACHE_BUCKET=databend-ci
         export SCCACHE_REGION=us-east-2
-        export SCCACHE_S3_KEY_PREFIX="cache/"
+        export SCCACHE_S3_KEY_PREFIX="cache/sccache/"
         export SCCACHE_S3_USE_SSL="true"
         EOF
             ;;
@@ -71,6 +71,7 @@ runs:
         ln -s build-tool $BIN_LOCAL/cargo
         ln -s build-tool $BIN_LOCAL/rustup
         ln -s build-tool $BIN_LOCAL/make
+        ln -s build-tool $BIN_LOCAL/readelf
         ln -s build-tool $BIN_LOCAL/taplo
         ln -s build-tool $BIN_LOCAL/typos
 
@@ -81,3 +82,20 @@ runs:
     - name: check disk space
       shell: bash
       run: df -h
+
+    - uses: everpcpc/actions-cache@v1
+      if: env.RUNNER_PROVIDER == 'aws'
+      env:
+        AWS_REGION: us-east-2
+      with:
+        bucket: "databend-ci"
+        root: "cache/cargo"
+        path: |
+          ~/.cargo/registry/cache
+          ~/.cargo/registry/index
+          ~/.cargo/git/db
+        key: |
+          ${{ runner.os }}/${{ inputs.target }}/${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}/${{ inputs.target }}/
+          ${{ runner.os }}/

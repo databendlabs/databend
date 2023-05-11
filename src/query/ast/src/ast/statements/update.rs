@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,13 @@ use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
+use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::TableReference;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct UpdateStmt {
+    pub hints: Option<Hint>,
     pub table: TableReference,
     pub update_list: Vec<UpdateExpr>,
     pub selection: Option<Expr>,
@@ -35,7 +37,11 @@ pub struct UpdateExpr {
 
 impl Display for UpdateStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "UPDATE {} SET ", self.table)?;
+        write!(f, "UPDATE ")?;
+        if let Some(hints) = &self.hints {
+            write!(f, "{} ", hints)?;
+        }
+        write!(f, "{} SET ", self.table)?;
         write_comma_separated_list(f, &self.update_list)?;
         if let Some(conditions) = &self.selection {
             write!(f, " WHERE {conditions}")?;

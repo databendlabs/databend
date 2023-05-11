@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -133,6 +133,7 @@ impl FromToProto for mt::principal::CopyOptions {
             purge: p.purge,
             single: p.single,
             max_file_size,
+            disable_variant_check: p.disable_variant_check,
         })
     }
 
@@ -161,6 +162,7 @@ impl FromToProto for mt::principal::CopyOptions {
             purge: self.purge,
             single: self.single,
             max_file_size,
+            disable_variant_check: self.disable_variant_check,
         })
     }
 }

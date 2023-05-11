@@ -1,16 +1,16 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::HashMap;
 use std::fmt::Debug;
@@ -163,11 +163,13 @@ impl InputContext {
         block_compact_thresholds: BlockThresholds,
         on_error_map: Arc<DashMap<String, HashMap<u16, InputError>>>,
     ) -> Result<Self> {
+        let mut file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings)?;
+        file_format_options_ext.disable_variant_check =
+            stage_info.copy_options.disable_variant_check;
         let on_error_mode = stage_info.copy_options.on_error.clone();
         let plan = Box::new(CopyIntoPlan { stage_info });
         let file_format_params = plan.stage_info.file_format_params.clone();
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings)?;
 
         let format = Self::get_input_format(&file_format_params)?;
 

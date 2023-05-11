@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -43,7 +43,7 @@ pub struct RaftState {
     pub inner: SledTree,
 }
 
-const TREE_RAFT_STATE: &str = "raft_state";
+pub const TREE_RAFT_STATE: &str = "raft_state";
 
 impl RaftState {
     pub fn is_open(&self) -> bool {

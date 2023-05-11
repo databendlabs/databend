@@ -115,8 +115,8 @@ data_path = "./.databend/stateless_test_data"
 enable_table_meta_cache = true
 # Max number of cached table snapshot. Set it to 0 to disable it.
 table_meta_snapshot_count = 256
-# Max number of cached table segment. Set it to 0 to disable it.
-table_meta_segment_count = 10240
+# Max size (in bytes) of cached table segment. Set it to 0 to disable it.
+table_meta_segment_bytes = 1073741824
 # Max number of cached table statistic meta. Set it to 0 to disable it.
 table_meta_statistic_count = 256
 

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use educe::Educe;
 
 use super::explore_expr::ExploreExprTask;
 use super::Task;
@@ -36,8 +39,12 @@ pub enum ExploreGroupEvent {
     Explored,
 }
 
-#[derive(Debug)]
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct ExploreGroupTask {
+    #[educe(Debug(ignore))]
+    pub ctx: Arc<dyn TableContext>,
+
     pub state: ExploreGroupState,
 
     pub group_index: IndexType,
@@ -48,8 +55,9 @@ pub struct ExploreGroupTask {
 }
 
 impl ExploreGroupTask {
-    pub fn new(group_index: IndexType) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, group_index: IndexType) -> Self {
         Self {
+            ctx,
             state: ExploreGroupState::Init,
             group_index,
             last_explored_m_expr: None,
@@ -58,8 +66,12 @@ impl ExploreGroupTask {
         }
     }
 
-    pub fn with_parent(group_index: IndexType, parent: &Rc<SharedCounter>) -> Self {
-        let mut task = Self::new(group_index);
+    pub fn with_parent(
+        ctx: Arc<dyn TableContext>,
+        group_index: IndexType,
+        parent: &Rc<SharedCounter>,
+    ) -> Self {
+        let mut task = Self::new(ctx, group_index);
         parent.inc();
         task.parent = Some(parent.clone());
         task
@@ -118,8 +130,12 @@ impl ExploreGroupTask {
         }
 
         for m_expr in group.m_exprs.iter().skip(start_index) {
-            let task =
-                ExploreExprTask::with_parent(m_expr.group_index, m_expr.index, &self.ref_count);
+            let task = ExploreExprTask::with_parent(
+                self.ctx.clone(),
+                m_expr.group_index,
+                m_expr.index,
+                &self.ref_count,
+            );
             scheduler.add_task(Task::ExploreExpr(task));
         }
 

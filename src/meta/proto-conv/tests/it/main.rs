@@ -40,3 +40,5 @@ mod v030_user_stage;
 mod v031_copy_max_file;
 mod v032_file_format_params;
 mod v033_table_meta;
+mod v034_schema;
+mod v035_user_stage;

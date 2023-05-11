@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::FunctionContext;
 
 use super::rewrite::RuleEliminateEvalScalar;
+use super::rewrite::RuleFoldConstant;
 use super::rewrite::RuleFoldCountAggregate;
 use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
@@ -51,8 +53,13 @@ use crate::MetadataRef;
 pub struct RuleFactory;
 
 impl RuleFactory {
-    pub fn create_rule(id: RuleID, metadata: MetadataRef) -> Result<RulePtr> {
+    pub fn create_rule(
+        id: RuleID,
+        metadata: MetadataRef,
+        func_ctx: FunctionContext,
+    ) -> Result<RulePtr> {
         match id {
+            RuleID::FoldConstant => Ok(Box::new(RuleFoldConstant::new(func_ctx))),
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => {

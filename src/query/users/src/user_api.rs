@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -57,9 +57,6 @@ impl UserApiProvider {
         quota: Option<TenantQuota>,
     ) -> Result<()> {
         GlobalInstance::set(Self::try_create(conf, idm_config).await?);
-        UserApiProvider::instance()
-            .ensure_builtin_roles(tenant)
-            .await?;
         if let Some(q) = quota {
             let i = UserApiProvider::instance().get_tenant_quota_api_client(tenant)?;
             let res = i.get_quota(MatchSeq::GE(0)).await?;

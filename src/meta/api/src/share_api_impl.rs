@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ use common_tracing::func_name;
 use tracing::debug;
 use tracing::error;
 
+use crate::assert_table_exist;
 use crate::convert_share_meta_to_spec;
 use crate::db_has_to_exist;
 use crate::fetch_id;
@@ -63,7 +64,6 @@ use crate::list_keys;
 use crate::send_txn;
 use crate::serialize_struct;
 use crate::serialize_u64;
-use crate::table_has_to_exist;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
@@ -932,7 +932,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> ShareApi for KV {
                     table_name: table_name.clone(),
                 };
                 let (table_seq, table_id) = get_u64_value(self, &table_name_key).await?;
-                table_has_to_exist(
+                assert_table_exist(
                     table_seq,
                     &TableNameIdent {
                         tenant: req.tenant.clone(),
@@ -1556,7 +1556,7 @@ async fn get_share_object_seq_and_id(
             };
 
             let (table_seq, table_id) = get_u64_value(kv_api, &name_key).await?;
-            table_has_to_exist(
+            assert_table_exist(
                 table_seq,
                 &TableNameIdent {
                     tenant: tenant.to_string(),

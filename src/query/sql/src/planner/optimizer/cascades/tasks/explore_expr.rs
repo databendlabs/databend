@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use educe::Educe;
 
 use super::apply_rule::ApplyRuleTask;
 use super::explore_group::ExploreGroupTask;
@@ -40,8 +43,12 @@ pub enum ExploreExprEvent {
     ExploredSelf,
 }
 
-#[derive(Debug)]
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct ExploreExprTask {
+    #[educe(Debug(ignore))]
+    pub ctx: Arc<dyn TableContext>,
+
     pub state: ExploreExprState,
 
     pub group_index: IndexType,
@@ -52,8 +59,13 @@ pub struct ExploreExprTask {
 }
 
 impl ExploreExprTask {
-    pub fn new(group_index: IndexType, m_expr_index: IndexType) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        group_index: IndexType,
+        m_expr_index: IndexType,
+    ) -> Self {
         Self {
+            ctx,
             state: ExploreExprState::Init,
             group_index,
             m_expr_index,
@@ -63,11 +75,12 @@ impl ExploreExprTask {
     }
 
     pub fn with_parent(
+        ctx: Arc<dyn TableContext>,
         group_index: IndexType,
         m_expr_index: IndexType,
         parent: &Rc<SharedCounter>,
     ) -> Self {
-        let mut task = Self::new(group_index, m_expr_index);
+        let mut task = Self::new(ctx, group_index, m_expr_index);
         parent.inc();
         task.parent = Some(parent.clone());
         task
@@ -128,7 +141,8 @@ impl ExploreExprTask {
             if !group.state.explored() {
                 // If the child group isn't explored, then schedule a `ExploreGroupTask` for it.
                 all_children_explored = false;
-                let explore_group_task = ExploreGroupTask::with_parent(*child, &self.ref_count);
+                let explore_group_task =
+                    ExploreGroupTask::with_parent(self.ctx.clone(), *child, &self.ref_count);
                 scheduler.add_task(Task::ExploreGroup(explore_group_task));
             }
         }
@@ -153,6 +167,7 @@ impl ExploreExprTask {
 
         for rule_id in rule_set.iter() {
             let apply_rule_task = ApplyRuleTask::with_parent(
+                self.ctx.clone(),
                 rule_id,
                 m_expr.group_index,
                 m_expr.index,

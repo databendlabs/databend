@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -437,6 +437,8 @@ pub trait Visitor<'ast>: Sized {
     fn visit_truncate_table(&mut self, _stmt: &'ast TruncateTableStmt) {}
 
     fn visit_optimize_table(&mut self, _stmt: &'ast OptimizeTableStmt) {}
+
+    fn visit_vacuum_table(&mut self, _stmt: &'ast VacuumTableStmt) {}
 
     fn visit_analyze_table(&mut self, _stmt: &'ast AnalyzeTableStmt) {}
 

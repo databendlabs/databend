@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -88,11 +89,16 @@ impl CompactAggregator {
     }
 
     #[async_backtrace::framed]
-    async fn write_segment(dal: Operator, segment: SerializedSegment) -> Result<()> {
-        dal.write(&segment.location, segment.segment.to_bytes()?)
-            .await?;
+    async fn write_segment(dal: Operator, serialized_segment: SerializedSegment) -> Result<()> {
+        assert_eq!(
+            serialized_segment.segment.format_version,
+            SegmentInfo::VERSION
+        );
+        let raw_bytes = serialized_segment.segment.to_bytes()?;
+        let compact_segment_info = CompactSegmentInfo::from_slice(&raw_bytes)?;
+        dal.write(&serialized_segment.location, raw_bytes).await?;
         if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-            segment_cache.put(segment.location.clone(), segment.segment.clone());
+            segment_cache.put(serialized_segment.location, Arc::new(compact_segment_info));
         }
         Ok(())
     }

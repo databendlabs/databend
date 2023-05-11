@@ -1,16 +1,16 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::any::Any;
 use std::sync::Arc;
@@ -22,7 +22,6 @@ use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -30,6 +29,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
+use super::fuse_source::fill_internal_column_meta;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::MergeIOReadResult;
@@ -163,9 +163,8 @@ impl Processor for DeserializeDataTransform {
             // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
             // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
             if self.block_reader.query_internal_columns() {
-                let meta: Option<BlockMetaInfoPtr> =
-                    Some(Box::new(part.block_meta_index().unwrap().to_owned()));
-                self.output_data = Some(data_block.add_meta(meta)?);
+                let data_block = fill_internal_column_meta(data_block, part, None)?;
+                self.output_data = Some(data_block);
             } else {
                 self.output_data = Some(data_block);
             };

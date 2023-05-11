@@ -29,8 +29,8 @@ use common_expression::Scalar;
 use common_expression::SendableDataBlockStream;
 use common_expression::Value;
 use common_storage::DataOperator;
+use common_storages_fuse::io::CompactSegmentInfoReader;
 use common_storages_fuse::io::MetaReaders;
-use common_storages_fuse::io::SegmentInfoReader;
 use common_storages_fuse::io::SegmentWriter;
 use common_storages_fuse::io::SegmentsIO;
 use common_storages_fuse::io::TableMetaLocationGenerator;
@@ -45,6 +45,10 @@ use common_storages_fuse::FuseStorageFormat;
 use common_storages_fuse::FuseTable;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::test_kits::block_writer::BlockWriter;
+use databend_query::test_kits::table_test_fixture::execute_command;
+use databend_query::test_kits::table_test_fixture::execute_query;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
@@ -54,11 +58,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
-
-use crate::storages::fuse::block_writer::BlockWriter;
-use crate::storages::fuse::table_test_fixture::execute_command;
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_compact_segment_normal_case() -> Result<()> {
@@ -731,7 +730,7 @@ impl CompactSegmentTestFixture {
         case_name: &str,
         new_segment_paths: &[String],
         expected_num_blocks: &[usize],
-        segment_reader: &SegmentInfoReader,
+        compact_segment_reader: &CompactSegmentInfoReader,
     ) -> Result<()> {
         // traverse the paths of new segments  in reversed order
         for (idx, x) in new_segment_paths.iter().rev().enumerate() {
@@ -742,9 +741,10 @@ impl CompactSegmentTestFixture {
                 put_cache: false,
             };
 
-            let seg = segment_reader.read(&load_params).await?;
+            let compact_segment = compact_segment_reader.read(&load_params).await?;
+            let segment = SegmentInfo::try_from(compact_segment.as_ref())?;
             assert_eq!(
-                seg.blocks.len(),
+                segment.blocks.len(),
                 expected_num_blocks[idx],
                 "case name :{}, verify_block_number_of_new_segments",
                 case_name
@@ -770,7 +770,7 @@ impl CompactCase {
         limit: Option<usize>,
     ) -> Result<()> {
         // setup & run
-        let segment_reader = MetaReaders::segment_info_reader(
+        let compact_segment_reader = MetaReaders::segment_info_reader(
             ctx.get_data_operator()?.operator(),
             TestFixture::default_table_schema(),
         );
@@ -804,7 +804,7 @@ impl CompactCase {
             self.case_name,
             &r.new_segment_paths,
             &self.expected_block_number_of_new_segments,
-            &segment_reader,
+            &compact_segment_reader,
         )
         .await?;
 
@@ -822,7 +822,8 @@ impl CompactCase {
                 put_cache: false,
             };
 
-            let segment = segment_reader.read(&load_params).await?;
+            let compact_segment = compact_segment_reader.read(&load_params).await?;
+            let segment = SegmentInfo::try_from(compact_segment.as_ref())?;
             merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary)?;
             block_num_of_output_segments.push(segment.blocks.len());
 

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -118,6 +118,8 @@ pub struct TypeChecker<'a> {
     // true if current expr is inside an window function.
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
+
+    allow_ambiguous: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -127,6 +129,7 @@ impl<'a> TypeChecker<'a> {
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
+        allow_ambiguous: bool,
     ) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
         Self {
@@ -138,6 +141,7 @@ impl<'a> TypeChecker<'a> {
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
+            allow_ambiguous,
         }
     }
 
@@ -185,6 +189,7 @@ impl<'a> TypeChecker<'a> {
                     column.as_str(),
                     ident.span,
                     self.aliases,
+                    self.allow_ambiguous,
                 )?;
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
@@ -464,7 +469,7 @@ impl<'a> TypeChecker<'a> {
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: false,
-                    expr: Box::new(scalar.as_raw_expr_with_col_name()),
+                    expr: Box::new(scalar.as_raw_expr()),
                     dest_type: DataType::from(&resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
@@ -488,7 +493,7 @@ impl<'a> TypeChecker<'a> {
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: true,
-                    expr: Box::new(scalar.as_raw_expr_with_col_name()),
+                    expr: Box::new(scalar.as_raw_expr()),
                     dest_type: DataType::from(&resolve_type_name(target_type)?),
                 };
                 let registry = &BUILTIN_FUNCTIONS;
@@ -1072,7 +1077,7 @@ impl<'a> TypeChecker<'a> {
         let start_offset = start_offset
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
-                let expr = expr.as_expr_with_col_index()?;
+                let expr = expr.as_expr()?;
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     debug_assert!(matches!(scalar, Scalar::Number(_)));
@@ -1089,7 +1094,7 @@ impl<'a> TypeChecker<'a> {
         let end_offset = end_offset
             .map(|(mut expr, _)| {
                 expr = wrap_cast(&expr, &common_type);
-                let expr = expr.as_expr_with_col_index()?;
+                let expr = expr.as_expr()?.project_column_ref(|col| col.index);
                 let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
                 if let common_expression::Expr::Constant { scalar, .. } = expr {
                     debug_assert!(matches!(scalar, Scalar::Number(_)));
@@ -1353,14 +1358,11 @@ impl<'a> TypeChecker<'a> {
         args: Vec<ScalarExpr>,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         // Type check
-        let arguments = args
-            .iter()
-            .map(|v| v.as_raw_expr_with_col_name())
-            .collect::<Vec<_>>();
+        let arguments = args.iter().map(|v| v.as_raw_expr()).collect::<Vec<_>>();
         let raw_expr = RawExpr::FunctionCall {
             span,
             name: func_name.to_string(),
-            params: vec![],
+            params: params.clone(),
             args: arguments,
         };
         let registry = &BUILTIN_FUNCTIONS;
@@ -1455,6 +1457,19 @@ impl<'a> TypeChecker<'a> {
                     .into(),
                     data_type,
                 )))
+            }
+            BinaryOperator::Like => {
+                // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
+                if let Expr::Literal {
+                    lit: Literal::String(str),
+                    ..
+                } = right
+                {
+                    return self.resolve_like(op, span, left, right, str).await;
+                }
+                let name = op.to_func_name();
+                self.resolve_function(span, name.as_str(), vec![], &[left, right])
+                    .await
             }
             other => {
                 let name = other.to_func_name();
@@ -1894,7 +1909,7 @@ impl<'a> TypeChecker<'a> {
                     } else {
                         let box (scalar, _) = self.resolve(args[0]).await?;
 
-                        let expr = scalar.as_expr_with_col_index()?;
+                        let expr = scalar.as_expr()?;
                         check_number::<_, i64>(span, &self.func_ctx, &expr, &BUILTIN_FUNCTIONS)?
                     }
                 };
@@ -2202,6 +2217,48 @@ impl<'a> TypeChecker<'a> {
 
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
+    async fn resolve_like(
+        &mut self,
+        op: &BinaryOperator,
+        span: Span,
+        left: &Expr,
+        right: &Expr,
+        like_str: &str,
+    ) -> Result<Box<(ScalarExpr, DataType)>> {
+        if check_const(like_str) {
+            // Convert to equal comparison
+            self.resolve_binary_op(span, &BinaryOperator::Eq, left, right)
+                .await
+        } else if check_prefix(like_str) {
+            // Convert to `a >= like_str and a < like_str + 1`
+            let mut char_vec: Vec<char> = like_str[0..like_str.len() - 1].chars().collect();
+            let len = char_vec.len();
+            let ascii_val = *char_vec.last().unwrap() as u8 + 1;
+            char_vec[len - 1] = ascii_val as char;
+            let like_str_plus: String = char_vec.iter().collect();
+            let (new_left, _) = *self
+                .resolve_binary_op(span, &BinaryOperator::Gte, left, &Expr::Literal {
+                    span: None,
+                    lit: Literal::String(like_str[..like_str.len() - 1].to_owned()),
+                })
+                .await?;
+            let (new_right, _) = *self
+                .resolve_binary_op(span, &BinaryOperator::Lt, left, &Expr::Literal {
+                    span: None,
+                    lit: Literal::String(like_str_plus),
+                })
+                .await?;
+            self.resolve_scalar_function_call(span, "and", vec![], vec![new_left, new_right])
+                .await
+        } else {
+            let name = op.to_func_name();
+            self.resolve_function(span, name.as_str(), vec![], &[left, right])
+                .await
+        }
+    }
+
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn resolve_udf(
         &mut self,
         span: Span,
@@ -2434,6 +2491,7 @@ impl<'a> TypeChecker<'a> {
             inner_column_name.as_str(),
             span,
             self.aliases,
+            self.allow_ambiguous,
         ) {
             Ok(result) => {
                 let (scalar, data_type) = match result {
@@ -2895,6 +2953,7 @@ pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
                 }
             }
         }
+        TypeName::Bitmap => TableDataType::Bitmap,
         TypeName::Tuple {
             fields_type,
             fields_name,
@@ -2947,4 +3006,43 @@ pub fn validate_function_arg(
             }
         }
     }
+}
+
+// Some check functions for like expression
+fn check_const(like_str: &str) -> bool {
+    for char in like_str.chars() {
+        if char == '_' || char == '%' {
+            return false;
+        }
+    }
+    true
+}
+
+fn check_prefix(like_str: &str) -> bool {
+    if like_str.contains("\\%") {
+        return false;
+    }
+    if like_str.len() == 1 && matches!(like_str, "%" | "_") {
+        return false;
+    }
+    if like_str.chars().filter(|c| *c == '%').count() != 1 {
+        return false;
+    }
+
+    let mut i: usize = like_str.len();
+    while i > 0 {
+        if like_str.chars().nth(i - 1).unwrap() != '%' {
+            break;
+        }
+        i -= 1;
+    }
+    if i == like_str.len() {
+        return false;
+    }
+    for j in (0..i).rev() {
+        if like_str.chars().nth(j).unwrap() == '_' {
+            return false;
+        }
+    }
+    true
 }

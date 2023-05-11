@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -237,10 +237,11 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
         keep_last_snapshot: bool,
-    ) -> Result<()> {
-        let (_, _, _) = (ctx, instant, keep_last_snapshot);
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<String>>> {
+        let (_, _, _, _) = (ctx, instant, keep_last_snapshot, dry_run_limit);
 
-        Ok(())
+        Ok(None)
     }
 
     #[async_backtrace::framed]
@@ -363,6 +364,10 @@ pub trait Table: Sync + Send {
             self.name(),
             self.get_table_info().engine(),
         )))
+    }
+
+    fn is_stage_table(&self) -> bool {
+        false
     }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -403,6 +403,30 @@ impl Display for TruncateTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct VacuumTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub option: VacuumTableOption,
+}
+
+impl Display for VacuumTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM TABLE ")?;
+        write_period_separated_list(
+            f,
+            self.catalog
+                .iter()
+                .chain(&self.database)
+                .chain(Some(&self.table)),
+        )?;
+        write!(f, " {}", &self.option)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct OptimizeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
@@ -493,6 +517,24 @@ impl Display for Engine {
 pub enum CompactTarget {
     Block,
     Segment,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct VacuumTableOption {
+    pub retain_hours: Option<Expr>,
+    pub dry_run: Option<()>,
+}
+
+impl Display for VacuumTableOption {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(retain_hours) = &self.retain_hours {
+            write!(f, " RETAIN {} HOURS", retain_hours)?;
+        }
+        if self.dry_run.is_some() {
+            write!(f, " DRY RUN")?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -67,6 +67,50 @@ Some(
     "TabSeparatedWithNamesAndTypes",
 )
 ---------- Input ----------
+describe "name""with""quote";
+---------- Output ---------
+DESCRIBE "name""with""quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"with\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: Some(
+                9..28,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+describe "name""""with""""quote";
+---------- Output ---------
+DESCRIBE "name""""with""""quote"
+---------- AST ------------
+DescribeTable(
+    DescribeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "name\"\"with\"\"quote",
+            quote: Some(
+                '"',
+            ),
+            span: Some(
+                9..32,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 show full tables
 ---------- Output ---------
 SHOW FULL TABLES
@@ -326,6 +370,7 @@ Explain {
                     span: Some(
                         17..32,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -399,6 +444,7 @@ Explain {
                     span: Some(
                         17..33,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -699,6 +745,7 @@ CreateTable(
                         span: Some(
                             76..91,
                         ),
+                        hints: None,
                         distinct: false,
                         select_list: [
                             QualifiedName {
@@ -1453,6 +1500,7 @@ CreateView(
                     span: Some(
                         17..58,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -1563,6 +1611,7 @@ AlterView(
                     span: Some(
                         16..57,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -1703,6 +1752,7 @@ CreateView(
                     span: Some(
                         22..63,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -1821,6 +1871,7 @@ AlterView(
                     span: Some(
                         21..62,
                     ),
+                    hints: None,
                     distinct: false,
                     select_list: [
                         AliasedExpr {
@@ -2320,6 +2371,7 @@ CreateTable(
                         span: Some(
                             21..38,
                         ),
+                        hints: None,
                         distinct: false,
                         select_list: [
                             QualifiedName {
@@ -2520,6 +2572,7 @@ Query(
                 span: Some(
                     0..84,
                 ),
+                hints: None,
                 distinct: true,
                 select_list: [
                     AliasedExpr {
@@ -2729,6 +2782,7 @@ Query(
                 span: Some(
                     0..16,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -2792,6 +2846,7 @@ Query(
                 span: Some(
                     0..19,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -2863,6 +2918,7 @@ Query(
                 span: Some(
                     0..21,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -2962,6 +3018,7 @@ Query(
                 span: Some(
                     0..21,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3102,6 +3159,7 @@ Query(
                 span: Some(
                     0..35,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3243,6 +3301,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3384,6 +3443,7 @@ Query(
                 span: Some(
                     0..47,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3525,6 +3585,7 @@ Query(
                 span: Some(
                     0..45,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3666,6 +3727,7 @@ Query(
                 span: Some(
                     0..40,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3807,6 +3869,7 @@ Query(
                 span: Some(
                     0..45,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -3948,6 +4011,7 @@ Query(
                 span: Some(
                     0..40,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4089,6 +4153,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4230,6 +4295,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4371,6 +4437,7 @@ Query(
                 span: Some(
                     0..46,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4512,6 +4579,7 @@ Query(
                 span: Some(
                     0..41,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4653,6 +4721,7 @@ Query(
                 span: Some(
                     0..42,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4753,6 +4822,7 @@ Query(
                 span: Some(
                     0..43,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4853,6 +4923,7 @@ Query(
                 span: Some(
                     0..42,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -4953,6 +5024,7 @@ Query(
                 span: Some(
                     0..37,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5053,6 +5125,7 @@ Query(
                 span: Some(
                     0..51,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5131,6 +5204,7 @@ Query(
                                         span: Some(
                                             33..50,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5222,6 +5296,7 @@ Query(
                 span: Some(
                     0..51,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5300,6 +5375,7 @@ Query(
                                         span: Some(
                                             33..50,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5391,6 +5467,7 @@ Query(
                 span: Some(
                     0..52,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5469,6 +5546,7 @@ Query(
                                         span: Some(
                                             34..51,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5560,6 +5638,7 @@ Query(
                 span: Some(
                     0..47,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5636,6 +5715,7 @@ Query(
                                         span: Some(
                                             29..46,
                                         ),
+                                        hints: None,
                                         distinct: false,
                                         select_list: [
                                             AliasedExpr {
@@ -5727,6 +5807,7 @@ Query(
                 span: Some(
                     0..45,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -5834,6 +5915,7 @@ Query(
                 span: Some(
                     0..92,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -5927,12 +6009,151 @@ Query(
 
 
 ---------- Input ----------
+select 'stringwith''quote'''
+---------- Output ---------
+SELECT 'stringwith\'quote\''
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..28,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..28,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..28,
+                            ),
+                            lit: String(
+                                "stringwith'quote'",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select 'stringwith"doublequote'
+---------- Output ---------
+SELECT 'stringwith"doublequote'
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..31,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..31,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..31,
+                            ),
+                            lit: String(
+                                "stringwith\"doublequote",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+select '🦈'
+---------- Output ---------
+SELECT '🦈'
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            0..13,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    0..13,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                7..13,
+                            ),
+                            lit: String(
+                                "🦈",
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
 insert into t (c1, c2) values (1, 2), (3, 4);
 ---------- Output ---------
 INSERT INTO t (c1, c2) VALUES (1, 2), (3, 4);
 ---------- AST ------------
 Insert(
     InsertStmt {
+        hints: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -5973,6 +6194,7 @@ INSERT INTO t FORMAT json ;
 ---------- AST ------------
 Insert(
     InsertStmt {
+        hints: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -6000,6 +6222,7 @@ INSERT INTO t SELECT * FROM t2
 ---------- AST ------------
 Insert(
     InsertStmt {
+        hints: None,
         catalog: None,
         database: None,
         table: Identifier {
@@ -6021,6 +6244,7 @@ Insert(
                         span: Some(
                             20..36,
                         ),
+                        hints: None,
                         distinct: false,
                         select_list: [
                             QualifiedName {
@@ -6087,6 +6311,7 @@ Query(
                 span: Some(
                     0..44,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -6718,6 +6943,98 @@ AlterDatabase(
                     31..32,
                 ),
             },
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM TABLE t;
+---------- Output ---------
+VACUUM TABLE t 
+---------- AST ------------
+VacuumTable(
+    VacuumTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                13..14,
+            ),
+        },
+        option: VacuumTableOption {
+            retain_hours: None,
+            dry_run: None,
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM TABLE t RETAIN 4 HOURS DRY RUN;
+---------- Output ---------
+VACUUM TABLE t  RETAIN 4 HOURS DRY RUN
+---------- AST ------------
+VacuumTable(
+    VacuumTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                13..14,
+            ),
+        },
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        22..23,
+                    ),
+                    lit: UInt64(
+                        4,
+                    ),
+                },
+            ),
+            dry_run: Some(
+                (),
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+VACUUM TABLE t RETAIN 40 HOURS;
+---------- Output ---------
+VACUUM TABLE t  RETAIN 40 HOURS
+---------- AST ------------
+VacuumTable(
+    VacuumTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                13..14,
+            ),
+        },
+        option: VacuumTableOption {
+            retain_hours: Some(
+                Literal {
+                    span: Some(
+                        22..24,
+                    ),
+                    lit: UInt64(
+                        40,
+                    ),
+                },
+            ),
+            dry_run: None,
         },
     },
 )
@@ -7379,7 +7696,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7399,6 +7716,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7416,6 +7734,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7434,7 +7753,7 @@ COPY INTO mytable
                 max_files=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 MAX_FILES = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7460,6 +7779,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7477,6 +7797,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7497,7 +7818,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7525,6 +7846,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7542,6 +7864,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7562,7 +7885,7 @@ COPY INTO mytable
                 );
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='http://127.0.0.1:9900' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7590,6 +7913,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7607,6 +7931,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7616,7 +7941,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:9900';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7642,6 +7967,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7654,6 +7980,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7663,7 +7990,7 @@ Copy(
 COPY INTO mytable
                 FROM 'https://127.0.0.1:';
 ---------- Output ---------
-COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7689,6 +8016,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7701,6 +8029,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7718,7 +8047,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7738,6 +8067,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7755,6 +8085,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7772,7 +8103,7 @@ COPY INTO 's3://mybucket/data.csv'
                 size_limit=10;
 ---------- Output ---------
 COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7786,6 +8117,7 @@ Copy(
                     56..63,
                 ),
             },
+            columns: None,
         },
         dst: UriLocation(
             UriLocation {
@@ -7815,6 +8147,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7832,7 +8165,7 @@ COPY INTO @my_stage
                 size_limit=10;
 ---------- Output ---------
 COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7846,6 +8179,7 @@ Copy(
                     41..48,
                 ),
             },
+            columns: None,
         },
         dst: StageLocation(
             StageLocation {
@@ -7869,6 +8203,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7890,7 +8225,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='access_key' aws_secret_key='secret_key' ) FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7919,6 +8254,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7936,6 +8272,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -7953,7 +8290,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -7973,6 +8310,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7990,6 +8328,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8007,7 +8346,7 @@ COPY INTO mytable
                 size_limit=10;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8027,6 +8366,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8044,6 +8384,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8061,7 +8402,7 @@ COPY INTO mytable
                 force=true;
 ---------- Output ---------
 COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SINGLE = false PURGE = false FORCE = true DISABLE_VARIANT_CHECK = false ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8081,6 +8422,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8098,6 +8440,7 @@ Copy(
         single: false,
         purge: false,
         force: true,
+        disable_variant_check: false,
         on_error: "abort",
     },
 )
@@ -8112,10 +8455,11 @@ COPY INTO mytable
                     record_delimiter = '\n'
                     skip_header = 1
                 )
-                size_limit=10;
+                size_limit=10
+                disable_variant_check=true;
 ---------- Output ---------
 COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = ( field_delimiter = ',' record_delimiter = '
-' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false ON_ERROR = 'abort'
+' skip_header = '1' type = 'CSV' ) SIZE_LIMIT = 10 SINGLE = false PURGE = false FORCE = false DISABLE_VARIANT_CHECK = true ON_ERROR = 'abort'
 ---------- AST ------------
 Copy(
     CopyStmt {
@@ -8141,6 +8485,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8158,6 +8503,7 @@ Copy(
         single: false,
         purge: false,
         force: false,
+        disable_variant_check: true,
         on_error: "abort",
     },
 )
@@ -8257,6 +8603,86 @@ Presign(
             StageLocation {
                 name: "my_stage",
                 path: "/path/to/file",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/my\ file.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/my\ file.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/my file.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\"file\".csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\"file\".csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/\"file\".csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\'file\'.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\'file\'.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/'file'.csv",
+            },
+        ),
+        expire: 3600s,
+        content_type: None,
+    },
+)
+
+
+---------- Input ----------
+PRESIGN @my_stage/\\file\\.csv
+---------- Output ---------
+PRESIGN DOWNLOAD @my_stage/\\file\\.csv EXPIRE = 3600
+---------- AST ------------
+Presign(
+    PresignStmt {
+        action: Download,
+        location: StageLocation(
+            StageLocation {
+                name: "my_stage",
+                path: "/\\file\\.csv",
             },
         ),
         expire: 3600s,
@@ -8764,6 +9190,7 @@ UPDATE db1.tb1 SET a = (a + 1), b = 2 WHERE (c > 3)
 ---------- AST ------------
 Update(
     UpdateStmt {
+        hints: None,
         table: Table {
             span: Some(
                 7..14,
@@ -9010,6 +9437,7 @@ Query(
                 span: Some(
                     0..100,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -9108,6 +9536,7 @@ Query(
                 span: Some(
                     0..154,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -9256,6 +9685,7 @@ Query(
                 span: Some(
                     0..83,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     AliasedExpr {
@@ -9377,6 +9807,7 @@ Query(
                 span: Some(
                     0..51,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9509,6 +9940,7 @@ Query(
                 span: Some(
                     0..53,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9639,6 +10071,7 @@ Query(
                 span: Some(
                     0..60,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9783,6 +10216,7 @@ Query(
                 span: Some(
                     0..59,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -9912,6 +10346,7 @@ Query(
                 span: Some(
                     0..39,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {
@@ -10022,6 +10457,7 @@ Query(
                 span: Some(
                     0..41,
                 ),
+                hints: None,
                 distinct: false,
                 select_list: [
                     QualifiedName {

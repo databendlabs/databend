@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ pub async fn bind_table_args(
     let positioned_args = args
         .into_iter()
         .map(|scalar| {
-            let expr = scalar.as_expr_with_col_index()?;
+            let expr = scalar.as_expr()?;
             let (expr, _) =
                 ConstantFolder::fold(&expr, &scalar_binder.get_func_ctx()?, &BUILTIN_FUNCTIONS);
             match expr {

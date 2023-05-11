@@ -1,51 +1,304 @@
 name: Benchmark
 
 on:
-  pull_request:
+  pull_request_target:
     types:
-      - opened
-      - synchronize
-      - reopened
       - labeled
     branches:
       - main
-    paths-ignore:
-      - "docs/**"
-      - "website/**"
-      - "**.md"
-      - "docker/**"
-      - ".devcontainer/**"
+  workflow_call:
+    inputs:
+      tag:
+        description: The tag to run benchmark
+        required: true
+        type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  group: ${{ github.workflow }}-${{ github.head_ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
+permissions:
+  id-token: write
+  pull-requests: write
+  contents: read
+
 env:
+  BENCHMARK_S3_PREFIX: s3://repo.databend.rs/benchmark/clickbench
   BUILD_PROFILE: release
   RUNNER_PROVIDER: aws
 
 jobs:
-  build_release:
-    if: contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
-    timeout-minutes: 30
+  build:
+    if: github.event_name != 'pull_request_target' || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
     runs-on: [self-hosted, X64, Linux, 16c32g]
+    outputs:
+      sha: ${{ steps.metadata.outputs.sha }}
+      head_sha: ${{ steps.metadata.outputs.head_sha }}
+      run_id: ${{ steps.metadata.outputs.run_id }}
+      source: ${{ steps.metadata.outputs.source }}
+      source_id: ${{ steps.metadata.outputs.source_id }}
     steps:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: ./.github/actions/build_linux
+      - name: Build Release
+        uses: ./.github/actions/build_linux
+        if: github.event_name == 'pull_request_target'
+        timeout-minutes: 30
         with:
           target: x86_64-unknown-linux-gnu
-          profile: release
-      - name: Generate benchmark metadata
+          artifacts: meta,query
+      - name: Set Benchmark metadata
+        id: metadata
         run: |
-          echo '{}' > metadata.json
-          yq -i '.sha = "${{ github.sha }}"' metadata.json
-          yq -i '.run_id = "${{ github.run_id }}"' metadata.json
-          yq -i '.pr_id = "${{ github.event.pull_request.number }}"' metadata.json
-          yq -i '.head_sha = "${{ github.event.pull_request.head.sha }}"' metadata.json
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
+          echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "run_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
+          case ${{ github.event_name }} in
+            pull_request_target)
+              echo "head_sha=${{ github.event.pull_request.head.sha }}" >> $GITHUB_OUTPUT
+              echo "source=pr" >> $GITHUB_OUTPUT
+              echo "source_id=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "head_sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+              echo "source=release" >> $GITHUB_OUTPUT
+              echo "source_id=${{ inputs.tag }}" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+  local:
+    needs: build
+    timeout-minutes: 60
+    runs-on: [self-hosted, X64, Linux, 16c32g]
+    strategy:
+      matrix:
+        dataset:
+          - hits
+          # - tpch
+      fail-fast: true
+      max-parallel: 1
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_bendsql
+      - name: Download artifact
+        run: |
+          mkdir -p ./target/release
+          case ${{ needs.build.outputs.source }} in
+            pr)
+              aws s3 sync s3://databend-ci/release/${{ needs.build.outputs.sha }}/x86_64-unknown-linux-gnu/default/ \
+                target/release/ --exclude "*" --include "databend-*" --no-progress
+              ;;
+            release)
+              version=${{ needs.build.outputs.source_id }}
+              target=x86_64-unknown-linux-gnu
+              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
+              tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
+              ;;
+            *)
+              echo "Unknown source: ${{ needs.build.outputs.source }}"
+              exit 1
+              ;;
+          esac
+          chmod +x ./target/release/databend-*
+      - name: Setup Databend Binary
+        shell: bash
+        run: |
+          sudo cp ./target/release/databend-* /usr/local/bin/
+          databend-query --version
+          databend-meta --version
+      - uses: ./.github/actions/benchmark_local
+        timeout-minutes: 30
+        id: benchmark
         with:
-          name: benchmark-metadata
-          path: metadata.json
+          sha: ${{ needs.build.outputs.sha }}
+          run_id: ${{ needs.build.outputs.run_id }}
+          dataset: ${{ matrix.dataset }}
+          source: ${{ needs.build.outputs.source }}
+          source_id: ${{ needs.build.outputs.source_id }}
+
+  docker:
+    needs: build
+    timeout-minutes: 10
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    outputs:
+      tag: ${{ steps.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download artifact
+        run: |
+          mkdir -p ./target/release
+          case ${{ needs.build.outputs.source }} in
+            pr)
+              aws s3 sync s3://databend-ci/release/${{ needs.build.outputs.sha }}/x86_64-unknown-linux-gnu/default/ \
+                target/release/ --exclude "*" --include "databend-*" --no-progress
+              ;;
+            release)
+              version=${{ needs.build.outputs.source_id }}
+              target=x86_64-unknown-linux-gnu
+              aws s3 cp s3://repo.databend.rs/databend/${version}/databend-${version}-${target}.tar.gz distro/ --no-progress
+              tar x -C ./target/release -f ./distro/databend-${version}-${target}.tar.gz --strip-components 1 bin/
+              ;;
+            *)
+              echo "Unknown source: ${{ needs.build.outputs.source }}"
+              exit 1
+              ;;
+          esac
+          chmod +x ./target/release/databend-*
+      - name: Prepare docker build
+        run: |
+          mkdir -p ./distro/linux/amd64
+          cp ./target/release/databend-* ./distro/linux/amd64
+      - uses: ./.github/actions/setup_docker
+        id: login
+        with:
+          repo: databend-query
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+      - name: Prepare for docker
+        id: prepare
+        run: |
+          mkdir -p ./distro/linux/amd64
+          cp ./target/release/databend-query ./distro/linux/amd64/databend-query
+          echo "tag=benchmark-${{ needs.build.outputs.sha }}" >> $GITHUB_OUTPUT
+      - name: push service image
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: ${{ steps.login.outputs.ecr_repo }}:${{ steps.prepare.outputs.tag }}
+          platforms: linux/amd64
+          context: .
+          file: ./docker/debian/query.Dockerfile
+
+  cloud:
+    needs: [build, docker]
+    timeout-minutes: 90
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    strategy:
+      matrix:
+        include:
+          - { dataset: hits, size: Medium }
+          - { dataset: hits, size: Large }
+          - { dataset: tpch, size: Medium }
+          - { dataset: tpch, size: Large }
+      fail-fast: true
+      max-parallel: 1
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/setup_bendsql
+      - uses: ./.github/actions/benchmark_cloud
+        timeout-minutes: 60
+        id: benchmark
+        with:
+          sha: ${{ needs.build.outputs.sha }}
+          run_id: ${{ needs.build.outputs.run_id }}
+          dataset: ${{ matrix.dataset }}
+          source: ${{ needs.build.outputs.source }}
+          source_id: ${{ needs.build.outputs.source_id }}
+          size: ${{ matrix.size }}
+          version: ${{ needs.docker.outputs.tag }}
+          cloud_user: ${{ secrets.BENCHMARK_CLOUD_USER }}
+          cloud_password: ${{ secrets.BENCHMARK_CLOUD_PASSWORD }}
+          cloud_gateway: ${{ secrets.BENCHMARK_CLOUD_GATEWAY }}
+
+  comment_on_pr:
+    name: comment
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: [build, local, cloud]
+    if: needs.build.outputs.source == 'pr'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Dependencies
+        run: |
+          sudo apt update -y
+          sudo apt install -y python3-jinja2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
+          role-duration-seconds: 900
+          aws-region: us-east-2
+      - uses: actions/download-artifact@v3
+        with:
+          name: benchmark-hits
+          path: benchmark/clickbench/results/hits
+      - uses: actions/download-artifact@v3
+        with:
+          name: benchmark-tpch
+          path: benchmark/clickbench/results/tpch
+      - name: Get Report Prefix
+        run: |
+          echo "REPORT_S3_PREFIX=${{ env.BENCHMARK_S3_PREFIX }}/pr/${{ needs.build.outputs.source_id }}/${{ needs.build.outputs.run_id }}" >> $GITHUB_ENV
+      - name: Upload PR clickbench result to repo.databend.rs
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 sync ./results/hits/ ${REPORT_S3_PREFIX}/ --include "*.json"
+          aws s3 sync ./results/tpch/ ${REPORT_S3_PREFIX}/ --include "*.json"
+      - name: Get latest release clickbench result
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 sync "${BENCHMARK_S3_PREFIX}/release/hits/latest/" ./results/hits/
+          aws s3 sync "${BENCHMARK_S3_PREFIX}/release/tpch/latest/" ./results/tpch/
+      - name: Generate clickbench report
+        working-directory: benchmark/clickbench
+        run: |
+          ./update_results.py --dataset hits --pr ${{ needs.build.outputs.source_id }}
+          ./update_results.py --dataset tpch --pr ${{ needs.build.outputs.source_id }}
+      - name: Upload PR clickbench report to repo.databend.rs
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 cp ./results/hits.html ${REPORT_S3_PREFIX}/hits.html
+          aws s3 cp ./results/tpch.html ${REPORT_S3_PREFIX}/tpch.html
+      - name: Comment on PR
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          number: ${{ needs.build.outputs.source_id }}
+          token: ${{ github.token }}
+          body: |
+            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
+            ## ClickBench Report
+            * **hits**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.build.outputs.source_id }}/${{ needs.build.outputs.run_id }}/hits.html
+            * **tpch**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.build.outputs.source_id }}/${{ needs.build.outputs.run_id }}/tpch.html
+
+  archive_for_release:
+    name: archive
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: [build, local, cloud]
+    if: needs.build.outputs.source == 'release'
+    strategy:
+      matrix:
+        dataset:
+          - "tpch"
+          - "hits"
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Dependencies
+        run: |
+          sudo apt update -y
+          sudo apt install -y python3-jinja2
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          role-to-assume: ${{ secrets.REPO_ROLE_ARN }}
+          role-duration-seconds: 900
+          aws-region: us-east-2
+      - uses: actions/download-artifact@v3
+        with:
+          name: benchmark-${{ matrix.dataset }}
+          path: benchmark/clickbench/results/${{ matrix.dataset }}
+      - name: Generate report
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 sync ${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/ ./results/${{ matrix.dataset }}/ --no-progress
+          ./update_results.py --dataset ${{ matrix.dataset }} --release ${{ needs.build.outputs.source_id }}
+      - name: Upload nightly results to repo.databend.rs
+        working-directory: benchmark/clickbench/
+        run: |
+          RESULT_PREFIX="${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/$(date -u +%Y)/$(date -u +%m)/$(date -u +%Y-%m-%d)/${{ needs.build.outputs.source_id }}"
+          LATEST_PREFIX="${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}/latest/latest"
+          for file in ./results/${{ matrix.dataset }}/*.json; do
+            aws s3 cp $file "${RESULT_PREFIX}-$(basename $file)"
+            aws s3 cp $file "${LATEST_PREFIX}-$(basename $file)"
+          done
+      - name: Upload PR clickbench report to repo.databend.rs
+        working-directory: benchmark/clickbench
+        run: |
+          aws s3 cp ./results/${{ matrix.dataset }}.html ${{ env.BENCHMARK_S3_PREFIX }}/release/${{ matrix.dataset }}.html

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono_tz::Tz;
 use common_ast::ast::format_statement;
 use common_ast::ast::ExplainKind;
+use common_ast::ast::Hint;
 use common_ast::ast::Identifier;
 use common_ast::ast::Statement;
 use common_ast::parser::parse_sql;
@@ -23,10 +26,16 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::ConstantFolder;
+use common_expression::Expr;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::principal::UserDefinedFunction;
+use tracing::warn;
 
+use crate::binder::wrap_cast;
 use crate::normalize_identifier;
 use crate::planner::udf_validator::UDFValidator;
 use crate::plans::AlterUDFPlan;
@@ -50,6 +59,7 @@ use crate::ColumnBinding;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
+use crate::TypeChecker;
 use crate::Visibility;
 
 /// Binder is responsible to transform AST of a query into a canonical logical SExpr.
@@ -85,6 +95,49 @@ impl<'a> Binder {
     pub async fn bind(mut self, stmt: &Statement) -> Result<Plan> {
         let mut init_bind_context = BindContext::new();
         self.bind_statement(&mut init_bind_context, stmt).await
+    }
+
+    pub(crate) async fn opt_hints_set_var(
+        &mut self,
+        bind_context: &mut BindContext,
+        hints: &Hint,
+    ) -> Result<()> {
+        let mut type_checker = TypeChecker::new(
+            bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+            false,
+        );
+        let mut hint_settings: HashMap<String, String> = HashMap::new();
+        for hint in &hints.hints_list {
+            let variable = &hint.name.name;
+            let (scalar, _) = *type_checker.resolve(&hint.expr).await?;
+
+            let scalar = wrap_cast(&scalar, &DataType::String);
+            let expr = scalar.as_expr()?;
+
+            let (new_expr, _) =
+                ConstantFolder::fold(&expr, &self.ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+            match new_expr {
+                Expr::Constant { scalar, .. } => {
+                    let value = String::from_utf8(scalar.into_string().unwrap())?;
+                    if variable.to_lowercase().as_str() == "timezone" {
+                        let tz = value.trim_matches(|c| c == '\'' || c == '\"');
+                        tz.parse::<Tz>().map_err(|_| {
+                            ErrorCode::InvalidTimezone(format!("Invalid Timezone: {:?}", value))
+                        })?;
+                    }
+                    hint_settings.entry(variable.to_string()).or_insert(value);
+                }
+                _ => {
+                    warn!("fold hints {:?} failed. value must be constant value", hint);
+                }
+            }
+        }
+
+        self.ctx.get_settings().set_batch_settings(&hint_settings)
     }
 
     #[async_recursion::async_recursion]
@@ -186,6 +239,7 @@ impl<'a> Binder {
             Statement::RenameTable(stmt) => self.bind_rename_table(stmt).await?,
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
+            Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
@@ -235,16 +289,41 @@ impl<'a> Binder {
             Statement::RemoveStage { location, pattern } => {
                 self.bind_remove_stage(location, pattern).await?
             }
-            Statement::Insert(stmt) => self.bind_insert(bind_context, stmt).await?,
-            Statement::Replace(stmt) => self.bind_replace(bind_context, stmt).await?,
+            Statement::Insert(stmt) => {
+                if let Some(hints) = &stmt.hints {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                        warn!("In INSERT resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                    }
+                }
+                self.bind_insert(bind_context, stmt).await?},
+            Statement::Replace(stmt) => {
+                if let Some(hints) = &stmt.hints {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                        warn!("In REPLACE resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                    }
+                }
+                self.bind_replace(bind_context, stmt).await?},
             Statement::Delete {
+                hints,
                 table_reference,
                 selection,
             } => {
+                if let Some(hints) = hints {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                        warn!("In DELETE resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                    }
+                }
                 self.bind_delete(bind_context, table_reference, selection)
                     .await?
             }
-            Statement::Update(stmt) => self.bind_update(bind_context, stmt).await?,
+            Statement::Update(stmt) => {
+                if let Some(hints) = &stmt.hints {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                        warn!("In UPDATE resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                    }
+                }
+                self.bind_update(bind_context, stmt).await?
+            },
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,

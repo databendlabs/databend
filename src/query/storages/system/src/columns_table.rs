@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,7 +17,9 @@ use std::sync::Arc;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
@@ -27,6 +29,8 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_sql::Planner;
+use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 
 use crate::table::AsyncOneBlockSystemTable;
@@ -142,10 +146,16 @@ impl ColumnsTable {
                 .await?
             {
                 let fields = if table.engine() == VIEW_ENGINE {
-                    // information_schema.columns is a view that will query system.columns
-                    // 1. if query information_schema.columns will call dump_table_columns and
-                    //      information_schema also in CATALOG_DEFAULT, will recursion
-                    continue;
+                    if let Some(query) = table.options().get(QUERY) {
+                        let mut planner = Planner::new(ctx.clone());
+                        let (plan, _) = planner.plan_sql(query).await?;
+                        let schema = infer_table_schema(&plan.schema())?;
+                        schema.fields().clone()
+                    } else {
+                        return Err(ErrorCode::Internal(
+                            "Logical error, View Table must have a SelectQuery inside.",
+                        ));
+                    }
                 } else {
                     table.schema().fields().clone()
                 };

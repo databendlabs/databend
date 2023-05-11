@@ -16,12 +16,13 @@ use common_base::base::tokio;
 use common_exception::Result;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-
-use crate::tests::TestGlobalServices;
+use databend_query::test_kits::TestGlobalServices;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_session_setting() -> Result<()> {
-    let _guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let _guard =
+        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
+            .await?;
     let session = SessionManager::instance()
         .create_session(SessionType::Dummy)
         .await?;
@@ -32,6 +33,37 @@ async fn test_session_setting() -> Result<()> {
         settings.set_setting("max_threads".to_string(), "3".to_string())?;
         let actual = settings.get_max_threads()?;
         let expect = 3;
+        assert_eq!(actual, expect);
+    }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_session_setting_override() -> Result<()> {
+    let _guard = TestGlobalServices::setup(
+        databend_query::test_kits::ConfigBuilder::create()
+            .max_storage_io_requests(1000)
+            .parquet_fast_read_bytes(1000000)
+            .build(),
+    )
+    .await?;
+    let session = SessionManager::instance()
+        .create_session(SessionType::Dummy)
+        .await?;
+
+    // Settings.
+    {
+        let settings = session.get_settings();
+        let overrided = settings.get_parquet_fast_read_bytes()?;
+        let expect = 1000000;
+        assert_eq!(overrided, expect);
+        let overrided = settings.get_max_storage_io_requests()?;
+        let expect = 1000;
+        assert_eq!(overrided, expect);
+        settings.set_setting("max_storage_io_requests".to_string(), "3000".to_string())?;
+        let actual = settings.get_max_storage_io_requests()?;
+        let expect = 3000;
         assert_eq!(actual, expect);
     }
 

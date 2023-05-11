@@ -1,16 +1,16 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::hash_map::RandomState;
 use std::collections::HashMap;
@@ -101,7 +101,7 @@ impl BaseMutator {
 
         // apply mutations
         for (seg_idx, replacements) in self.mutations.clone() {
-            let segment = {
+            let compact_segemnt_info = {
                 let (path, version) = &segments[seg_idx];
 
                 // Keep in mind that segment_info_read must need a schema
@@ -113,6 +113,8 @@ impl BaseMutator {
                 };
                 segment_reader.read(&load_params).await?
             };
+
+            let segment: SegmentInfo = compact_segemnt_info.as_ref().try_into()?;
 
             // collects the block locations of the segment being modified
             let block_positions = segment

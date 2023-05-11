@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -231,6 +231,11 @@ pub(crate) fn pretty_copy(copy_stmt: CopyStmt) -> RcDoc<'static> {
                 .append(RcDoc::text("PURGE = "))
                 .append(RcDoc::text(format!("{}", copy_stmt.purge))),
         )
+        .append(
+            RcDoc::line()
+                .append(RcDoc::text("DISABLE_VARIANT_CHECK = "))
+                .append(RcDoc::text(format!("{}", copy_stmt.disable_variant_check))),
+        )
 }
 
 fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc<'static> {
@@ -239,6 +244,7 @@ fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc<'static> {
             catalog,
             database,
             table,
+            columns,
         } => if let Some(catalog) = catalog {
             RcDoc::text(catalog.to_string()).append(RcDoc::text("."))
         } else {
@@ -249,7 +255,23 @@ fn pretty_copy_unit(copy_unit: CopyUnit) -> RcDoc<'static> {
         } else {
             RcDoc::nil()
         })
-        .append(RcDoc::text(table.to_string())),
+        .append(RcDoc::text(table.to_string()))
+        .append(if let Some(columns) = columns {
+            RcDoc::line()
+                .append(RcDoc::text("("))
+                .append(
+                    interweave_comma(
+                        columns
+                            .into_iter()
+                            .map(|column| RcDoc::text(column.to_string())),
+                    )
+                    .nest(NEST_FACTOR)
+                    .group(),
+                )
+                .append(RcDoc::text(")"))
+        } else {
+            RcDoc::nil()
+        }),
         CopyUnit::StageLocation(v) => RcDoc::text("@")
             .append(RcDoc::text(v.name))
             .append(RcDoc::text(v.path)),

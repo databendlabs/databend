@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ use ordered_float::OrderedFloat;
 use serde::Deserialize;
 use serde::Serialize;
 
+use super::decimal::DecimalSize;
 use crate::property::Domain;
 use crate::types::ArgType;
 use crate::types::DataType;
@@ -380,6 +381,21 @@ impl NumberDataType {
                 (true, false) => false,
             },
         }
+    }
+
+    pub fn get_decimal_properties(&self) -> Option<DecimalSize> {
+        let (precision, scale) = match self {
+            NumberDataType::Int8 => (3, 0),
+            NumberDataType::Int16 => (5, 0),
+            NumberDataType::Int32 => (10, 0),
+            NumberDataType::Int64 => (19, 0),
+            NumberDataType::UInt8 => (3, 0),
+            NumberDataType::UInt16 => (5, 0),
+            NumberDataType::UInt32 => (10, 0),
+            NumberDataType::UInt64 => (20, 0),
+            _ => return None,
+        };
+        Some(DecimalSize { precision, scale })
     }
 }
 

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,7 +62,6 @@ pub enum CopyPlan {
         database_name: String,
         table_name: String,
         table_id: MetaId,
-        schema: TableSchemaRef,
         validation_mode: ValidationMode,
         from: Box<DataSourcePlan>,
         force: bool,
@@ -72,7 +71,7 @@ pub enum CopyPlan {
         database_name: String,
         table_name: String,
         table_id: MetaId,
-        schema: TableSchemaRef,
+        schema: Option<TableSchemaRef>,
         stage_info: Box<StageInfo>,
         validation_mode: ValidationMode,
         from: Box<Plan>,

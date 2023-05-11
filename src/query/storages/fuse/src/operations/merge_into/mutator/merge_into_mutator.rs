@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,14 +34,15 @@ use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
 use tracing::info;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockReader;
+use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
-use crate::io::SegmentInfoReader;
 use crate::io::WriteSettings;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
@@ -65,7 +66,7 @@ pub struct MergeIntoOperationAggregator {
     data_accessor: Operator,
     write_settings: WriteSettings,
     read_settings: ReadSettings,
-    segment_reader: SegmentInfoReader,
+    segment_reader: CompactSegmentInfoReader,
     block_builder: BlockBuilder,
 }
 
@@ -126,6 +127,7 @@ impl MergeIntoOperationAggregator {
                     };
                     // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
                     let segment_info = self.segment_reader.read(&load_param).await?;
+                    let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
 
                     // segment level
                     if self.overlapped(&segment_info.summary.col_stats, columns_min_max) {
@@ -169,7 +171,8 @@ impl MergeIntoOperationAggregator {
                 put_cache: true,
             };
 
-            let segment_info = self.segment_reader.read(&load_param).await?;
+            let compact_segment_info = self.segment_reader.read(&load_param).await?;
+            let segment_info: SegmentInfo = compact_segment_info.as_ref().try_into()?;
 
             for (block_index, keys) in block_deletion {
                 let block_meta = &segment_info.blocks[*block_index];

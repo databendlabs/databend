@@ -27,9 +27,8 @@ use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_storages_fuse::table_functions::ClusteringInformationTable;
 use databend_query::sessions::QueryContext;
 use databend_query::stream::ReadDataBlockStream;
+use databend_query::test_kits::table_test_fixture::*;
 use tokio_stream::StreamExt;
-
-use crate::storages::fuse::table_test_fixture::*;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_clustering_information_table_read() -> Result<()> {
@@ -50,7 +49,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
             "+----------+----------+----------+----------+----------+----------+",
             "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5 |",
             "+----------+----------+----------+----------+----------+----------+",
-            "| \"(id)\"   | 0        | 0        | 0        | 0        | {}       |",
+            "| '(id)'   | 0        | 0        | 0        | 0        | {}       |",
             "+----------+----------+----------+----------+----------+----------+",
         ];
 
@@ -73,7 +72,7 @@ async fn test_clustering_information_table_read() -> Result<()> {
             "+----------+----------+----------+----------+----------+-------------+",
             "| Column 0 | Column 1 | Column 2 | Column 3 | Column 4 | Column 5    |",
             "+----------+----------+----------+----------+----------+-------------+",
-            "| \"(id)\"   | 1        | 0        | 0        | 1        | {\"00001\":1} |",
+            "| '(id)'   | 1        | 0        | 0        | 1        | {\"00001\":1} |",
             "+----------+----------+----------+----------+----------+-------------+",
         ];
 

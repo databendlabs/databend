@@ -1,10 +1,6 @@
 name: "Test sqllogic Cluster Linux"
 description: "Running sqllogic tests in cluster mode"
 inputs:
-  profile:
-    description: "The profile for this test"
-    required: true
-    default: "debug"
   target:
     description: ""
     required: true
@@ -23,9 +19,10 @@ runs:
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:
-        profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
+        artifacts: sqllogictests,meta,query
+
     - name: Run sqllogic Tests with Cluster mode
       shell: bash
       env:

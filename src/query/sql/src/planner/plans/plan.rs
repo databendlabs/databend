@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ use common_expression::DataSchemaRefExt;
 
 use super::CreateShareEndpointPlan;
 use super::DropShareEndpointPlan;
+use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
 use crate::plans::insert::Insert;
@@ -158,6 +159,7 @@ pub enum Plan {
     RevertTable(Box<RevertTablePlan>),
     TruncateTable(Box<TruncateTablePlan>),
     OptimizeTable(Box<OptimizeTablePlan>),
+    VacuumTable(Box<VacuumTablePlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
 
@@ -278,6 +280,7 @@ impl Display for Plan {
             Plan::ReclusterTable(_) => write!(f, "ReclusterTable"),
             Plan::TruncateTable(_) => write!(f, "TruncateTable"),
             Plan::OptimizeTable(_) => write!(f, "OptimizeTable"),
+            Plan::VacuumTable(_) => write!(f, "VacuumTable"),
             Plan::AnalyzeTable(_) => write!(f, "AnalyzeTable"),
             Plan::ExistsTable(_) => write!(f, "ExistsTable"),
             Plan::CreateView(_) => write!(f, "CreateView"),
@@ -372,6 +375,7 @@ impl Plan {
             Plan::ReclusterTable(plan) => plan.schema(),
             Plan::TruncateTable(plan) => plan.schema(),
             Plan::OptimizeTable(plan) => plan.schema(),
+            Plan::VacuumTable(plan) => plan.schema(),
             Plan::AnalyzeTable(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
             Plan::CreateView(plan) => plan.schema(),
@@ -444,6 +448,7 @@ impl Plan {
                 | Plan::DescribeTable(_)
                 | Plan::ShowGrants(_)
                 | Plan::Presign(_)
+                | Plan::VacuumTable(_)
         )
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,17 +19,12 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
-use common_expression::ConstantFolder;
-use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::property::datum::F64;
 use crate::optimizer::ColumnStat;
 use crate::optimizer::Datum;
-use crate::optimizer::Histogram;
 use crate::optimizer::Statistics;
 use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::ComparisonOp;
@@ -110,8 +105,6 @@ impl<'a> SelectivityEstimator<'a> {
         right: &ScalarExpr,
         update: bool,
     ) -> Result<f64> {
-        // Try to constant fold right right expr
-        let right = try_constant_fold(right)?;
         if let (ScalarExpr::BoundColumnRef(column_ref), ScalarExpr::ConstantExpr(constant)) =
             (left, &right)
         {
@@ -122,11 +115,6 @@ impl<'a> SelectivityEstimator<'a> {
                 .get_mut(&column_ref.column.index)
             {
                 stat
-            } else {
-                return Ok(DEFAULT_SELECTIVITY);
-            };
-            let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
-                hist
             } else {
                 return Ok(DEFAULT_SELECTIVITY);
             };
@@ -141,13 +129,32 @@ impl<'a> SelectivityEstimator<'a> {
                     // For equal predicate, we just use cardinality of a single
                     // value to estimate the selectivity. This assumes that
                     // the column is in a uniform distribution.
-                    Ok(evaluate_equal(col_hist, column_stat, constant))
+                    let sel = evaluate_equal(column_stat, constant);
+                    if update {
+                        update_statistic(column_stat, const_datum.clone(), const_datum, sel)?;
+                    }
+                    Ok(sel)
                 }
                 ComparisonOp::NotEqual => {
                     // For not equal predicate, we treat it as opposite of equal predicate.
-                    Ok(1.0 - evaluate_equal(col_hist, column_stat, constant))
+                    let sel = 1.0 - evaluate_equal(column_stat, constant);
+                    if update {
+                        update_statistic(
+                            column_stat,
+                            column_stat.min.clone(),
+                            column_stat.max.clone(),
+                            sel,
+                        )?;
+                    }
+                    Ok(sel)
                 }
                 ComparisonOp::GT => {
+                    let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
+                        hist
+                    } else {
+                        // Todo(xudong): use ndv to estimate the selectivity, not directly return `DEFAULT_SELECTIVITY`.
+                        return Ok(DEFAULT_SELECTIVITY);
+                    };
                     // For greater than predicate, we use the number of values
                     // that are greater than the constant value to estimate the
                     // selectivity.
@@ -172,6 +179,11 @@ impl<'a> SelectivityEstimator<'a> {
                     Ok(selectivity)
                 }
                 ComparisonOp::LT => {
+                    let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
+                        hist
+                    } else {
+                        return Ok(DEFAULT_SELECTIVITY);
+                    };
                     // For less than predicate, we treat it as opposite of
                     // greater than predicate.
                     let mut num_greater = 0.0;
@@ -195,6 +207,11 @@ impl<'a> SelectivityEstimator<'a> {
                     Ok(selectivity)
                 }
                 ComparisonOp::GTE => {
+                    let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
+                        hist
+                    } else {
+                        return Ok(DEFAULT_SELECTIVITY);
+                    };
                     // Greater than or equal to predicate is similar to greater than predicate.
                     let mut num_greater = 0.0;
                     let new_min = const_datum.clone();
@@ -217,6 +234,11 @@ impl<'a> SelectivityEstimator<'a> {
                     Ok(selectivity)
                 }
                 ComparisonOp::LTE => {
+                    let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
+                        hist
+                    } else {
+                        return Ok(DEFAULT_SELECTIVITY);
+                    };
                     // Less than or equal to predicate is similar to less than predicate.
                     let mut num_greater = 0.0;
                     let new_max = const_datum.clone();
@@ -257,7 +279,7 @@ fn is_true_constant_predicate(constant: &ConstantExpr) -> bool {
     }
 }
 
-fn evaluate_equal(col_hist: &Histogram, column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
+fn evaluate_equal(column_stat: &ColumnStat, constant: &ConstantExpr) -> f64 {
     let constant_datum = Datum::from_scalar(&constant.value);
     match constant.value.as_ref().infer_data_type() {
         DataType::Null => 0.0,
@@ -271,16 +293,20 @@ fn evaluate_equal(col_hist: &Histogram, column_stat: &ColumnStat, constant: &Con
             | NumberDataType::Int32
             | NumberDataType::Int64
             | NumberDataType::Float32
-            | NumberDataType::Float64 => compare_equal(&constant_datum, col_hist, column_stat),
+            | NumberDataType::Float64 => compare_equal(&constant_datum, column_stat),
         },
-        DataType::Boolean | DataType::String => {
-            compare_equal(&constant_datum, col_hist, column_stat)
+        DataType::Boolean | DataType::String => compare_equal(&constant_datum, column_stat),
+        _ => {
+            if column_stat.ndv == 0.0 {
+                0.0
+            } else {
+                1.0 / column_stat.ndv
+            }
         }
-        _ => 1.0 / col_hist.num_distinct_values(),
     }
 }
 
-fn compare_equal(datum: &Option<Datum>, col_hist: &Histogram, column_stat: &ColumnStat) -> f64 {
+fn compare_equal(datum: &Option<Datum>, column_stat: &ColumnStat) -> f64 {
     let col_min = &column_stat.min;
     let col_max = &column_stat.max;
     if let Some(constant_datum) = datum {
@@ -294,19 +320,11 @@ fn compare_equal(datum: &Option<Datum>, col_hist: &Histogram, column_stat: &Colu
         }
     }
 
-    1.0 / col_hist.num_distinct_values()
-}
-
-fn try_constant_fold(scalar_expr: &ScalarExpr) -> Result<ScalarExpr> {
-    let expr = scalar_expr.as_expr_with_col_index()?;
-    let (expr, _) = ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-    if let Expr::Constant { scalar, span, .. } = expr {
-        return Ok(ScalarExpr::ConstantExpr(ConstantExpr {
-            span,
-            value: scalar,
-        }));
+    if column_stat.ndv == 0.0 {
+        0.0
+    } else {
+        1.0 / column_stat.ndv
     }
-    Ok(scalar_expr.clone())
 }
 
 fn update_statistic(
@@ -328,9 +346,7 @@ fn update_statistic(
         let new_num_values = (num_values * selectivity) as u64;
         let new_ndv = new_ndv as u64;
         if new_ndv <= 2 {
-            if new_num_values == 0 {
-                column_stat.histogram = None;
-            }
+            column_stat.histogram = None;
             return Ok(());
         }
         column_stat.histogram = Some(histogram_from_ndv(

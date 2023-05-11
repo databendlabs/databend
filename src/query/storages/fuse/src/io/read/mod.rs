@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 mod block;
 mod bloom;
-mod meta;
+pub mod meta;
 mod read_settings;
 mod snapshot_history_reader;
 
@@ -23,8 +23,8 @@ pub use block::MergeIOReadResult;
 pub use block::NativeReaderExt;
 pub use block::UncompressedBuffer;
 pub use bloom::BloomBlockFilterReader;
+pub use meta::CompactSegmentInfoReader;
 pub use meta::MetaReaders;
-pub use meta::SegmentInfoReader;
 pub use meta::TableSnapshotReader;
 pub use read_settings::ReadSettings;
 pub use snapshot_history_reader::SnapshotHistoryReader;

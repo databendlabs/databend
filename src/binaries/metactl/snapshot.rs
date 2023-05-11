@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,10 +30,12 @@ use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use common_meta_raft_store::log::RaftLog;
+use common_meta_raft_store::log::TREE_RAFT_LOG;
 use common_meta_raft_store::ondisk::DataVersion;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
 use common_meta_raft_store::state::RaftState;
+use common_meta_raft_store::state::TREE_RAFT_STATE;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
@@ -361,7 +363,7 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
     };
 
     let mut cnt = 0;
-    let mut tree_names = {
+    let mut present_tree_names = {
         let mut tree_names = BTreeSet::new();
         for n in db.tree_names() {
             let name = String::from_utf8(n.to_vec())?;
@@ -370,16 +372,17 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
         tree_names
     };
 
-    let tree_names = if tree_names.contains(TREE_HEADER) {
-        // Always export data header first.
-        tree_names.remove(TREE_HEADER);
-        let mut tree_names = tree_names.into_iter().collect::<Vec<_>>();
-        tree_names.insert(0, TREE_HEADER.to_string());
-        tree_names
-    } else {
-        eprintln!("tree {} not found", TREE_HEADER);
-        tree_names.into_iter().collect::<Vec<_>>()
-    };
+    // Export in header, raft_state, log and other order.
+    let mut tree_names = vec![];
+
+    for name in [TREE_HEADER, TREE_RAFT_STATE, TREE_RAFT_LOG] {
+        if present_tree_names.remove(name) {
+            tree_names.push(name.to_string());
+        } else {
+            eprintln!("tree {} not found", name);
+        }
+    }
+    tree_names.extend(present_tree_names.into_iter().collect::<Vec<_>>());
 
     for tree_name in tree_names.iter() {
         let tree = db.open_tree(tree_name)?;

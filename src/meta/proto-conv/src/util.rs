@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -63,6 +63,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (31, "2023-02-21: Add: CopyOptions::max_files", ),
     (32, "2023-04-05: Add: file_format.proto/FileFormatParams", ),
     (33, "2023-04-13: Update: add `shared_by` field into TableMeta", ),
+    (34, "2023-04-23: Add: metadata.proto/DataType Bitmap type", ),
+    (35, "2023-05-08: Add: CopyOptions::disable_variant_check", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

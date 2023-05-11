@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::Bitmap;
+use common_hashtable::MarkerKind;
+use common_hashtable::RowPtr;
 
-use super::row::RowPtr;
-use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 
 /// ProbeState used for probe phase of hash join.
@@ -34,7 +34,6 @@ pub struct ProbeState {
 
 impl ProbeState {
     pub fn clear(&mut self) {
-        self.build_indexes.clear();
         self.row_state.clear();
         self.valids = None;
     }
@@ -42,7 +41,14 @@ impl ProbeState {
     pub fn with_capacity(capacity: usize) -> Self {
         ProbeState {
             probe_indexes: vec![(0, 0); JOIN_MAX_BLOCK_SIZE],
-            build_indexes: Vec::with_capacity(capacity),
+            build_indexes: vec![
+                RowPtr {
+                    chunk_index: 0,
+                    row_index: 0,
+                    marker: None
+                };
+                JOIN_MAX_BLOCK_SIZE
+            ],
             row_state: Vec::with_capacity(capacity),
             valids: None,
             markers: None,

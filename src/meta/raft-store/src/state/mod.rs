@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,5 +17,6 @@ mod raft_state;
 pub(crate) mod raft_state_kv;
 
 pub use raft_state::RaftState;
+pub use raft_state::TREE_RAFT_STATE;
 pub use raft_state_kv::RaftStateKey;
 pub use raft_state_kv::RaftStateValue;

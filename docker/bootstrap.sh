@@ -61,7 +61,6 @@ function setup_query_storage {
         # force to use s3 storage when minio is enabled
         QUERY_STORAGE_TYPE="s3"
         AWS_S3_ENDPOINT=${AWS_S3_ENDPOINT:-"http://0.0.0.0:9000"}
-        AWS_S3_PRESIGNED_ENDPOINT=${AWS_S3_PRESIGNED_ENDPOINT:-"http://localhost:9000"}
         AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID:-"minioadmin"}
         AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY:-"minioadmin"}
         setup_minio
@@ -85,7 +84,6 @@ bucket = "$AWS_S3_BUCKET"
 endpoint_url = "$AWS_S3_ENDPOINT"
 access_key_id = "$AWS_ACCESS_KEY_ID"
 secret_access_key = "$AWS_SECRET_ACCESS_KEY"
-presign_endpoint_url = "$AWS_S3_PRESIGNED_ENDPOINT"
 EOF
         ;;
 

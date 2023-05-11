@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -40,6 +40,7 @@ use common_exception::Span;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
 use common_functions::BUILTIN_FUNCTIONS;
+use tracing::warn;
 
 use super::sort::OrderItem;
 use crate::binder::join::JoinConditions;
@@ -86,6 +87,14 @@ impl Binder {
         order_by: &[OrderByExpr],
         limit: usize,
     ) -> Result<(SExpr, BindContext)> {
+        if let Some(hints) = &stmt.hints {
+            if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                warn!(
+                    "In SELECT resolve optimize hints {:?} failed, err: {:?}",
+                    hints, e
+                );
+            }
+        }
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
             self.bind_one_table(bind_context, stmt).await?
         } else {
@@ -114,14 +123,6 @@ impl Binder {
         let (new_stmt, new_order_by) = rewriter.rewrite(stmt, order_by)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
         let order_by = new_order_by.as_deref().unwrap_or(order_by);
-
-        let where_scalar = if let Some(expr) = &stmt.selection {
-            let (new_expr, scalar) = self.bind_where(&mut from_context, expr, s_expr).await?;
-            s_expr = new_expr;
-            Some(scalar)
-        } else {
-            None
-        };
 
         // Collect set returning functions
         let set_returning_functions = {
@@ -156,13 +157,31 @@ impl Binder {
         // because `analyze_window` will rewrite the aggregate functions in the window function's arguments.
         self.analyze_window(&mut from_context, &mut select_list)?;
 
+        let aliases = select_list
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect::<Vec<_>>();
+
+        // To support using aliased column in `WHERE` clause,
+        // we should bind where after `select_list` is rewritten.
+        let where_scalar = if let Some(expr) = &stmt.selection {
+            let (new_expr, scalar) = self
+                .bind_where(&mut from_context, &aliases, expr, s_expr)
+                .await?;
+            s_expr = new_expr;
+            Some(scalar)
+        } else {
+            None
+        };
+
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
         let (mut scalar_items, projections) =
             self.analyze_projection(&from_context, &select_list)?;
 
         let having = if let Some(having) = &stmt.having {
             Some(
-                self.analyze_aggregate_having(&mut from_context, &select_list, having)
+                self.analyze_aggregate_having(&mut from_context, &aliases, having)
                     .await?,
             )
         } else {
@@ -173,6 +192,7 @@ impl Binder {
             .analyze_order_items(
                 &mut from_context,
                 &mut scalar_items,
+                &aliases,
                 &projections,
                 order_by,
                 stmt.distinct,
@@ -343,9 +363,11 @@ impl Binder {
     pub(super) async fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
+        aliases: &[(String, ScalarExpr)],
         expr: &Expr,
         child: SExpr,
     ) -> Result<(SExpr, ScalarExpr)> {
+        let last_expr_context = bind_context.expr_context.clone();
         bind_context.set_expr_context(ExprContext::WhereClause);
 
         let mut scalar_binder = ScalarBinder::new(
@@ -353,7 +375,7 @@ impl Binder {
             self.ctx.clone(),
             &self.name_resolution_ctx,
             self.metadata.clone(),
-            &[],
+            aliases,
         );
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
@@ -361,6 +383,7 @@ impl Binder {
             is_having: false,
         };
         let new_expr = SExpr::create_unary(filter_plan.into(), child);
+        bind_context.set_expr_context(last_expr_context);
         Ok((new_expr, scalar))
     }
 

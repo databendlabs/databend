@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Read;
 use std::io::SeekFrom;
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_cache::DefaultHashBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
@@ -25,17 +25,13 @@ use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
 use opendal::Operator;
 use opendal::Reader;
-use serde::de::DeserializeOwned;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
 use storages_common_cache_manager::CacheManager;
+use storages_common_cache_manager::CompactSegmentInfoMeter;
 use storages_common_index::BloomIndexMeta;
-use storages_common_table_meta::meta::decode;
-use storages_common_table_meta::meta::decompress;
-use storages_common_table_meta::meta::Encoding;
-use storages_common_table_meta::meta::MetaCompression;
-use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -49,14 +45,18 @@ pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
 pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
-pub type SegmentInfoReader =
-    InMemoryItemCacheReader<SegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
+pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
+    CompactSegmentInfo,
+    LoaderWrapper<(Operator, TableSchemaRef)>,
+    DefaultHashBuilder,
+    CompactSegmentInfoMeter,
+>;
 
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> SegmentInfoReader {
-        SegmentInfoReader::new(
+    pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> CompactSegmentInfoReader {
+        CompactSegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
             LoaderWrapper((dal, schema)),
         )
@@ -109,9 +109,9 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
 }
 
 #[async_trait::async_trait]
-impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
+impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<SegmentInfo> {
+    async fn load(&self, params: &LoadParams) -> Result<CompactSegmentInfo> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
         let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;
@@ -248,22 +248,4 @@ mod thrift_file_meta_read {
         let meta = ThriftFileMetaData::read_from_in_protocol(&mut prot)?;
         Ok(meta)
     }
-}
-
-pub fn read_and_deserialize<R, T>(
-    reader: &mut R,
-    size: u64,
-    encoding: &Encoding,
-    compression: &MetaCompression,
-) -> Result<T>
-where
-    R: Read + Unpin + Send,
-    T: DeserializeOwned,
-{
-    let mut compressed_data = vec![0; size as usize];
-    reader.read_exact(&mut compressed_data)?;
-
-    let decompressed_data = decompress(compression, compressed_data)?;
-
-    decode(encoding, &decompressed_data)
 }

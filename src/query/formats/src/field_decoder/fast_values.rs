@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -77,6 +77,7 @@ impl FastFieldDecoderValues {
                 nan_bytes: NAN_BYTES_LOWER.as_bytes().to_vec(),
                 inf_bytes: INF_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: format.timezone,
+                disable_variant_check: false,
             },
         }
     }
@@ -133,6 +134,7 @@ impl FastFieldDecoderValues {
             ColumnBuilder::String(c) => self.read_string(c, reader, positions),
             ColumnBuilder::Array(c) => self.read_array(c, reader, positions),
             ColumnBuilder::Map(c) => self.read_map(c, reader, positions),
+            ColumnBuilder::Bitmap(_) => Err(ErrorCode::Unimplemented("not implement")),
             ColumnBuilder::Tuple(fields) => self.read_tuple(fields, reader, positions),
             ColumnBuilder::Variant(c) => self.read_variant(c, reader, positions),
             _ => unimplemented!(),
@@ -412,10 +414,15 @@ impl FastFieldDecoderValues {
                 column.commit_row();
             }
             Err(_) => {
-                return Err(ErrorCode::BadBytes(format!(
-                    "Invalid JSON value: {:?}",
-                    String::from_utf8_lossy(&buf)
-                )));
+                if self.common_settings().disable_variant_check {
+                    column.put_slice(&buf);
+                    column.commit_row();
+                } else {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "Invalid JSON value: {:?}",
+                        String::from_utf8_lossy(&buf)
+                    )));
+                }
             }
         }
         Ok(())

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ use common_exception::ToErrorCode;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
+use common_io::prelude::FormatSettings;
 use common_sql::Planner;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
@@ -208,7 +209,8 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
             .await
             .map_err(|err| err.display_with_sql(query));
 
-        let format = self.base.session.get_format_settings()?;
+        let format = self.base.session.get_format_settings();
+
         let mut write_result = writer.write(query_result, &format).await;
 
         if let Err(cause) = write_result {
@@ -310,7 +312,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
     #[tracing::instrument(level = "debug", skip(self))]
     #[async_backtrace::framed]
-    async fn do_query(&mut self, query: &str) -> Result<QueryResult> {
+    async fn do_query(&mut self, query: &str) -> Result<(QueryResult, Option<FormatSettings>)> {
         match self.federated_server_command_check(query) {
             Some((schema, data_block)) => {
                 info!("Federated query: {}", query);
@@ -318,12 +320,15 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                     info!("Federated response: {:?}", data_block);
                 }
                 let has_result = data_block.num_rows() > 0;
-                Ok(QueryResult::create(
-                    DataBlockStream::create(None, vec![data_block]).boxed(),
+                Ok((
+                    QueryResult::create(
+                        DataBlockStream::create(None, vec![data_block]).boxed(),
+                        None,
+                        has_result,
+                        schema,
+                        query.to_string(),
+                    ),
                     None,
-                    has_result,
-                    schema,
-                    query.to_string(),
                 ))
             }
             None => {
@@ -342,12 +347,16 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
                         let (blocks, extra_info) =
                             Self::exec_query(interpreter.clone(), &context).await?;
                         let schema = interpreter.schema();
-                        Ok(QueryResult::create(
-                            blocks,
-                            extra_info,
-                            has_result_set,
-                            schema,
-                            query.to_string(),
+                        let format = context.get_format_settings()?;
+                        Ok((
+                            QueryResult::create(
+                                blocks,
+                                extra_info,
+                                has_result_set,
+                                schema,
+                                query.to_string(),
+                            ),
+                            Some(format),
                         ))
                     }
                     Err(e) => {
@@ -410,7 +419,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
 
         let do_query = self.do_query(&init_query).await;
         match do_query {
-            Ok(_) => Ok(()),
+            Ok((_, _)) => Ok(()),
             Err(error_code) => Err(error_code),
         }
     }

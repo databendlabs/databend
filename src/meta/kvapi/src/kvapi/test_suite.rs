@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -62,6 +62,12 @@ impl kvapi::TestSuite {
         self.kv_mget(&builder.build().await).await?;
         self.kv_txn_absent_seq_0(&builder.build().await).await?;
         self.kv_transaction(&builder.build().await).await?;
+        self.kv_transaction_delete_match_seq_none(&builder.build().await)
+            .await?;
+        self.kv_transaction_delete_match_seq_some_not_match(&builder.build().await)
+            .await?;
+        self.kv_transaction_delete_match_seq_some_match(&builder.build().await)
+            .await?;
         self.kv_delete_by_prefix_transaction(&builder.build().await)
             .await?;
 
@@ -772,6 +778,7 @@ impl kvapi::TestSuite {
                     request: Some(txn_op::Request::Delete(TxnDeleteRequest {
                         key: txn_key1.clone(),
                         prev_value: true,
+                        match_seq: None,
                     })),
                 },
                 // get k1
@@ -897,6 +904,112 @@ impl kvapi::TestSuite {
 
             self.check_transaction_responses(&resp, &expected, true);
         }
+        Ok(())
+    }
+
+    /// If `TxnDeleteRequest.match_seq` is not set,
+    /// the delete operation will always be executed.
+    pub async fn kv_transaction_delete_match_seq_none<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        info!("--- {}", func_name!());
+        let key = || "txn_1_K1".to_string();
+        let val = || b"v1".to_vec();
+
+        kv.upsert_kv(UpsertKVReq::update(key(), &val())).await?;
+
+        let txn = TxnRequest {
+            condition: vec![],
+            if_then: vec![TxnOp::delete(key())],
+            else_then: vec![],
+        };
+
+        let resp = kv.transaction(txn).await?;
+
+        let expected = vec![TxnOpResponse::delete(
+            key(),
+            true,
+            Some(to_pb_seq_v(SeqV::new(1, val()))),
+        )];
+
+        self.check_transaction_responses(&resp, &expected, true);
+
+        let got = kv.get_kv(&key()).await?;
+        assert_eq!(None, got, "successful delete");
+
+        Ok(())
+    }
+
+    /// If `TxnDeleteRequest.match_seq` is Some,
+    /// no delete because the current seq is not equal to `match_seq`.
+    pub async fn kv_transaction_delete_match_seq_some_not_match<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        info!("--- {}", func_name!());
+        let key = || "txn_1_K1".to_string();
+        let val = || b"v1".to_vec();
+
+        kv.upsert_kv(UpsertKVReq::update(key(), &val())).await?;
+
+        let txn = TxnRequest {
+            condition: vec![],
+            if_then: vec![TxnOp::delete_exact(key(), Some(100))],
+            else_then: vec![],
+        };
+
+        let resp = kv.transaction(txn).await?;
+
+        let expected = vec![TxnOpResponse::delete(
+            key(),
+            false,
+            Some(to_pb_seq_v(SeqV::new(1, val()))),
+        )];
+
+        self.check_transaction_responses(&resp, &expected, true);
+
+        let got = kv.get_kv(&key()).await?;
+        assert_eq!(
+            Some(SeqV::new(1, val())),
+            got,
+            "not deleted due to non-matching seq"
+        );
+
+        Ok(())
+    }
+
+    /// If `TxnDeleteRequest.match_seq` is Some,
+    /// delete because the current seq equal to `match_seq`.
+    pub async fn kv_transaction_delete_match_seq_some_match<KV: kvapi::KVApi>(
+        &self,
+        kv: &KV,
+    ) -> anyhow::Result<()> {
+        info!("--- {}", func_name!());
+        let key = || "txn_1_K1".to_string();
+        let val = || b"v1".to_vec();
+
+        kv.upsert_kv(UpsertKVReq::update(key(), &val())).await?;
+
+        let txn = TxnRequest {
+            condition: vec![],
+            if_then: vec![TxnOp::delete_exact(key(), Some(1))],
+            else_then: vec![],
+        };
+
+        let resp = kv.transaction(txn).await?;
+
+        let expected = vec![TxnOpResponse::delete(
+            key(),
+            true,
+            Some(to_pb_seq_v(SeqV::new(1, val()))),
+        )];
+
+        self.check_transaction_responses(&resp, &expected, true);
+
+        let got = kv.get_kv(&key()).await?;
+        assert_eq!(None, got, "successful delete");
+
         Ok(())
     }
 }

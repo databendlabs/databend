@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -112,7 +112,8 @@ impl Operator for Filter {
         } else {
             for (_, column_stat) in statistics.column_stats.iter_mut() {
                 if cardinality < input_cardinality {
-                    column_stat.ndv = (column_stat.ndv * cardinality / input_cardinality).ceil();
+                    column_stat.histogram = None;
+                    column_stat.ndv = (column_stat.ndv * selectivity).ceil();
                 }
             }
             statistics.column_stats

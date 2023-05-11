@@ -11,7 +11,7 @@ EvalScalar
 ├── expressions: [1]
 ├── estimated rows: 0.67
 └── Filter
-    ├── filters: [range_t.c (#0) > "efg"]
+    ├── filters: [range_t.c (#0) > 'efg']
     ├── estimated rows: 0.67
     └── TableScan
         ├── table: default.default.range_t
@@ -20,7 +20,7 @@ EvalScalar
         ├── partitions total: 1
         ├── partitions scanned: 0
         ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
-        ├── push downs: [filters: [range_t.c (#0) > "efg"], limit: NONE]
+        ├── push downs: [filters: [range_t.c (#0) > 'efg'], limit: NONE]
         ├── output columns: [c]
         └── estimated rows: 2.00
 
@@ -50,10 +50,10 @@ explain select number from numbers(10) where number > 5 and try_cast(get(try_par
 ----
 EvalScalar
 ├── expressions: [numbers.number (#0)]
-├── estimated rows: 0.37
+├── estimated rows: 0.00
 └── Filter
-    ├── filters: [numbers.number (#0) > 5, is_true(TRY_CAST(get(try_parse_json(to_string(numbers.number (#0))), "xx") AS String NULL) < "10"), false]
-    ├── estimated rows: 0.37
+    ├── filters: [false]
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 0
@@ -69,10 +69,10 @@ explain select number from numbers(10) where number > 5 and try_cast(get(try_par
 ----
 EvalScalar
 ├── expressions: [numbers.number (#0)]
-├── estimated rows: 0.37
+├── estimated rows: 0.00
 └── Filter
-    ├── filters: [numbers.number (#0) > 5, is_true(TRY_CAST(get(try_parse_json(to_string(numbers.number (#0))), "xx") AS String NULL) < "10"), false]
-    ├── estimated rows: 0.37
+    ├── filters: [false]
+    ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 0

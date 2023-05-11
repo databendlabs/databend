@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ pub use cache::Cache;
 pub use meter::bytes_meter::BytesMeter;
 pub use meter::count_meter::Count;
 pub use meter::count_meter::CountableMeter;
+pub use meter::count_meter::CountableMeterWithMeasure;
 pub use meter::file_meter::FileSize;
 #[cfg(feature = "heapsize")]
 #[cfg(not(target_os = "macos"))]

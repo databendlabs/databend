@@ -1,16 +1,17 @@
-//  Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 #[cfg(feature = "dev")]
 use std::io::Cursor;
 use std::io::Error;
@@ -24,6 +25,7 @@ use common_exception::Result;
 use rmp_serde::Deserializer;
 #[cfg(feature = "dev")]
 use rmp_serde::Serializer;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use serde::Serialize;
 use serde_json::from_slice;
@@ -35,7 +37,7 @@ use zstd::Decoder as ZstdDecoder;
 use zstd::Encoder as ZstdEncoder;
 
 #[repr(u8)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub enum Compression {
     None = 0,
     #[default]
@@ -103,7 +105,7 @@ pub fn decompress(compression: &Compression, data: Vec<u8>) -> Result<Vec<u8>> {
 }
 
 #[repr(u8)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub enum Encoding {
     #[default]
     Bincode = 1,
@@ -176,4 +178,22 @@ pub fn decode<'a, T: Deserialize<'a>>(encoding: &Encoding, data: &'a [u8]) -> Re
             encoding
         ))),
     }
+}
+
+pub fn read_and_deserialize<R, T>(
+    reader: &mut R,
+    size: u64,
+    encoding: &Encoding,
+    compression: &Compression,
+) -> Result<T>
+where
+    R: Read + Unpin + Send,
+    T: DeserializeOwned,
+{
+    let mut compressed_data = vec![0; size as usize];
+    reader.read_exact(&mut compressed_data)?;
+
+    let decompressed_data = decompress(compression, compressed_data)?;
+
+    decode(encoding, &decompressed_data)
 }

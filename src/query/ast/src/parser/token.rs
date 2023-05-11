@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,6 +52,7 @@ impl<'a> std::fmt::Debug for Token<'a> {
 pub struct Tokenizer<'a> {
     source: &'a str,
     lexer: Lexer<'a, TokenKind>,
+    prev_token: Option<TokenKind>,
     eoi: bool,
 }
 
@@ -61,6 +62,7 @@ impl<'a> Tokenizer<'a> {
             source,
             lexer: TokenKind::lexer(source),
             eoi: false,
+            prev_token: None,
         }
     }
 }
@@ -74,11 +76,43 @@ impl<'a> Iterator for Tokenizer<'a> {
                 "unable to recognize the rest tokens".to_string(),
             )
             .set_span(Some((self.lexer.span().start..self.source.len()).into())))),
-            Some(kind) => Some(Ok(Token {
-                source: self.source,
-                kind,
-                span: self.lexer.span().into(),
-            })),
+            Some(kind) => {
+                // Skip hint-like comment that is in the invalid position.
+                if !matches!(
+                    self.prev_token,
+                    Some(
+                        TokenKind::INSERT
+                            | TokenKind::SELECT
+                            | TokenKind::REPLACE
+                            | TokenKind::UPDATE
+                            | TokenKind::DELETE
+                    )
+                ) && kind == TokenKind::HintPrefix
+                {
+                    loop {
+                        match self.next() {
+                            // Hint-like comment ended. Return the next token.
+                            Some(Ok(token)) if token.kind == TokenKind::HintSuffix => {
+                                return self.next();
+                            }
+                            // Do not skip EOI.
+                            Some(Ok(token)) if token.kind == TokenKind::EOI => {
+                                return Some(Ok(token));
+                            }
+                            // In the comment, skip the contents.
+                            Some(Ok(_)) => continue,
+                            Some(Err(err)) => return Some(Err(err)),
+                            None => return None,
+                        }
+                    }
+                }
+                self.prev_token = Some(kind);
+                Some(Ok(Token {
+                    source: self.source,
+                    kind,
+                    span: self.lexer.span().into(),
+                }))
+            }
             None if !self.eoi => {
                 self.eoi = true;
                 Some(Ok(Token::new_eoi(self.source)))
@@ -102,7 +136,7 @@ pub enum TokenKind {
     #[regex(r"--[^\t\n\f]*", logos::skip)]
     Comment,
 
-    #[regex(r"/\*([^\*]|(\*[^/]))*\*/", logos::skip)]
+    #[regex(r"/\*[^\+]([^\*]|(\*[^/]))*\*/", logos::skip)]
     CommentBlock,
 
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
@@ -113,7 +147,7 @@ pub enum TokenKind {
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
     QuotedString,
 
-    #[regex(r#"@([^\s`;'"])+"#)]
+    #[regex(r#"@([^\s`;'"]|\\\s|\\'|\\"|\\\\)+"#)]
     AtString,
 
     #[regex(r"[xX]'[a-fA-F0-9]*'")]
@@ -129,6 +163,12 @@ pub enum TokenKind {
     LiteralFloat,
 
     // Symbols
+    #[token("/*+")]
+    HintPrefix,
+
+    #[token("*/")]
+    HintSuffix,
+
     #[token("==")]
     DoubleEq,
     #[token("=")]
@@ -279,6 +319,8 @@ pub enum TokenKind {
     BIGINT,
     #[token("BINARY", ignore(ascii_case))]
     BINARY,
+    #[token("BITMAP", ignore(ascii_case))]
+    BITMAP,
     #[token("BOOL", ignore(ascii_case))]
     BOOL,
     #[token("BOOLEAN", ignore(ascii_case))]
@@ -375,6 +417,8 @@ pub enum TokenKind {
     DESC,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
+    #[token("DISABLE_VARIANT_CHECK", ignore(ascii_case))]
+    DISABLE_VARIANT_CHECK,
     #[token("DISTINCT", ignore(ascii_case))]
     DISTINCT,
     #[token("DIV", ignore(ascii_case))]
@@ -391,6 +435,8 @@ pub enum TokenKind {
     DOWNLOAD,
     #[token("DROP", ignore(ascii_case))]
     DROP,
+    #[token("DRY", ignore(ascii_case))]
+    DRY,
     #[token("EXCEPT", ignore(ascii_case))]
     EXCEPT,
     #[token("EXCLUDE", ignore(ascii_case))]
@@ -467,6 +513,8 @@ pub enum TokenKind {
     FUNCTIONS,
     #[token("TABLE_FUNCTIONS", ignore(ascii_case))]
     TABLE_FUNCTIONS,
+    #[token("SET_VAR", ignore(ascii_case))]
+    SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
     #[token("GLOBAL", ignore(ascii_case))]
@@ -485,6 +533,8 @@ pub enum TokenKind {
     HIVE,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
+    #[token("HOURS", ignore(ascii_case))]
+    HOURS,
     #[token("ICEBERG", ignore(ascii_case))]
     ICEBERG,
     #[token("INTERSECT", ignore(ascii_case))]
@@ -669,10 +719,14 @@ pub enum TokenKind {
     PRIVILEGES,
     #[token("REMOVE", ignore(ascii_case))]
     REMOVE,
+    #[token("RETAIN", ignore(ascii_case))]
+    RETAIN,
     #[token("REVOKE", ignore(ascii_case))]
     REVOKE,
     #[token("RECURSIVE", ignore(ascii_case))]
     RECURSIVE,
+    #[token("RUN", ignore(ascii_case))]
+    RUN,
     #[token("GRANTS", ignore(ascii_case))]
     GRANTS,
     #[token("RIGHT", ignore(ascii_case))]
@@ -827,6 +881,8 @@ pub enum TokenKind {
     USERS,
     #[token("USING", ignore(ascii_case))]
     USING,
+    #[token("VACUUM", ignore(ascii_case))]
+    VACUUM,
     #[token("VALUES", ignore(ascii_case))]
     VALUES,
     #[token("VALIDATION_MODE", ignore(ascii_case))]
@@ -896,6 +952,8 @@ impl TokenKind {
                 | MySQLLiteralHex
                 | LiteralInteger
                 | LiteralFloat
+                | HintPrefix
+                | HintSuffix
                 | DoubleEq
                 | Eq
                 | NotEq
@@ -939,6 +997,7 @@ impl TokenKind {
                 | Abs
                 | SquareRoot
                 | CubeRoot
+                | Placeholder
                 | EOI
         )
     }

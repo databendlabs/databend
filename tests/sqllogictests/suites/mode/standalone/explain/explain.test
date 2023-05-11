@@ -35,10 +35,10 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.14
+├── estimated rows: 0.18
 └── Filter
     ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
-    ├── estimated rows: 0.14
+    ├── estimated rows: 0.18
     └── HashJoin
         ├── join type: INNER
         ├── build keys: [t1.a (#0)]
@@ -214,6 +214,7 @@ FILE_FORMAT = (
 )
 SIZE_LIMIT = 10
 PURGE = false
+DISABLE_VARIANT_CHECK = false
 
 skipif clickhouse
 query T
@@ -230,6 +231,7 @@ FILE_FORMAT = (
 )
 SIZE_LIMIT = 10
 PURGE = false
+DISABLE_VARIANT_CHECK = false
 
 query T
 explain syntax create table t3(a int64, b uint64, c float64, d string, e array(int32), f tuple(f1 bool, f2 string)) engine=fuse cluster by (a, b, c) comment='test' compression='LZ4'
@@ -433,7 +435,7 @@ skipif clickhouse
 query T
 explain ast copy into t1 from 's3://mybucket/data.csv' file_format = ( type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1) size_limit=10 max_files=10
 ----
-Copy (children 6)
+Copy (children 7)
 ├── CopyUnit (children 1)
 │   └── UriLocation 's3://mybucket/data.csv'
 ├── CopyUnit (children 1)
@@ -445,7 +447,8 @@ Copy (children 6)
 │   └── FileFormat type = "CSV"
 ├── SizeLimit 10
 ├── MaxFiles 10
-└── Purge false
+├── Purge false
+└── DisableVariantCheck false
 
 query T
 explain ast create database db1 engine=default
@@ -595,10 +598,10 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.71
+├── estimated rows: 0.47
 └── Filter
     ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-    ├── estimated rows: 0.71
+    ├── estimated rows: 0.47
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
@@ -635,19 +638,19 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 1.91
+├── estimated rows: 0.87
 └── Filter
     ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t1.a (#0) = 2]
-    ├── estimated rows: 1.91
+    ├── estimated rows: 0.87
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
         ├── probe keys: []
         ├── filters: []
-        ├── estimated rows: 3.52
+        ├── estimated rows: 2.78
         ├── Filter(Build)
         │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3 OR t1.a (#0) = 2]
-        │   ├── estimated rows: 0.70
+        │   ├── estimated rows: 0.56
         │   └── TableScan
         │       ├── table: default.default.t1
         │       ├── read rows: 1
@@ -678,10 +681,10 @@ explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3), t3.a (#4), t3.b (#5)]
-├── estimated rows: 19.44
+├── estimated rows: 19.06
 └── Filter
     ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t3.a (#4) = 2]
-    ├── estimated rows: 19.44
+    ├── estimated rows: 19.06
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
@@ -727,16 +730,16 @@ explain select * from t1,t2, t3 where ((t1.a > 1 and t2.a > 2) or (t1.b < 3 and 
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3), t3.a (#4), t3.b (#5)]
-├── estimated rows: 5.49
+├── estimated rows: 3.68
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 5.49
+    ├── estimated rows: 3.68
     ├── Filter(Build)
     │   ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-    │   ├── estimated rows: 0.71
+    │   ├── estimated rows: 0.47
     │   └── HashJoin
     │       ├── join type: CROSS
     │       ├── build keys: []
@@ -785,17 +788,17 @@ explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 1.01
+├── estimated rows: 0.79
 └── Limit
     ├── limit: 3
     ├── offset: 0
-    ├── estimated rows: 1.01
+    ├── estimated rows: 0.79
     └── Sort
         ├── sort keys: [a DESC NULLS LAST]
-        ├── estimated rows: 1.01
+        ├── estimated rows: 0.79
         └── Filter
             ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-            ├── estimated rows: 1.01
+            ├── estimated rows: 0.79
             └── HashJoin
                 ├── join type: CROSS
                 ├── build keys: []
@@ -989,7 +992,7 @@ EvalScalar
 ├── expressions: [t4.a (#0), t4.b (#1)]
 ├── estimated rows: 0.00
 └── Filter
-    ├── filters: [t4.a (#0) = 1, is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")]
+    ├── filters: [t4.a (#0) = 1, is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')]
     ├── estimated rows: 0.00
     └── TableScan
         ├── table: default.default.t4
@@ -997,7 +1000,7 @@ EvalScalar
         ├── read bytes: 0
         ├── partitions total: 0
         ├── partitions scanned: 0
-        ├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
+        ├── push downs: [filters: [and_filters(CAST(t4.a (#0) = 1 AS Boolean NULL), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
         └── estimated rows: 0.00
 
 statement ok
@@ -1013,10 +1016,10 @@ EvalScalar
 ├── expressions: [v4.a (#0), v4.b (#2)]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL)]
+    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
     ├── estimated rows: 0.00
     └── Filter
-        ├── filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")]
+        ├── filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')]
         ├── estimated rows: 0.00
         └── TableScan
             ├── table: default.default.t4
@@ -1024,7 +1027,7 @@ EvalScalar
             ├── read bytes: 0
             ├── partitions total: 0
             ├── partitions scanned: 0
-            ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL) = "xx")], limit: NONE]
+            ├── push downs: [filters: [is_true(TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL) = 'xx')], limit: NONE]
             └── estimated rows: 0.00
 
 query T
@@ -1034,7 +1037,7 @@ EvalScalar
 ├── expressions: [v4.a (#0), v4.b (#2)]
 ├── estimated rows: 0.00
 └── EvalScalar
-    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), "bb") AS String NULL)]
+    ├── expressions: [t4.a (#0), TRY_CAST(get(try_parse_json(t4.b (#1)), 'bb') AS String NULL)]
     ├── estimated rows: 0.00
     └── Filter
         ├── filters: [t4.a (#0) > 100]

@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -158,7 +158,10 @@ impl TableMutationAggregator {
             tasks.push(async move {
                 op.write(&segment.path, segment.raw_data).await?;
                 if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-                    segment_cache.put(segment.path.clone(), segment.segment.clone());
+                    segment_cache.put(
+                        segment.path.clone(),
+                        Arc::new(segment.segment.as_ref().try_into()?),
+                    );
                 }
                 Ok::<_, ErrorCode>(())
             });

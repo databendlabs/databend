@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,7 +23,6 @@ use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::VirtualColumnInfo;
-use common_catalog::plan::ROW_ID;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -34,10 +33,10 @@ use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
-use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
+use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use itertools::Itertools;
 
@@ -232,7 +231,7 @@ impl PhysicalPlanBuilder {
         let row_id_col_index = metadata
             .columns()
             .iter()
-            .position(|col| col.name() == ROW_ID)
+            .position(|col| col.name() == ROW_ID_COL_NAME)
             .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
         let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
 
@@ -331,9 +330,10 @@ impl PhysicalPlanBuilder {
 
                 if !metadata.lazy_columns().is_empty() {
                     // Lazy materilaztion is enabled.
-                    if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID.to_string()) {
-                        let internal_column =
-                            INTERNAL_COLUMN_FACTORY.get_internal_column(ROW_ID).unwrap();
+                    if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID_COL_NAME.to_string()) {
+                        let internal_column = INTERNAL_COLUMN_FACTORY
+                            .get_internal_column(ROW_ID_COL_NAME)
+                            .unwrap();
                         let index = self
                             .metadata
                             .write()
@@ -349,7 +349,7 @@ impl PhysicalPlanBuilder {
                 if !project_internal_columns.is_empty() {
                     let mut schema = table_schema.as_ref().clone();
                     for internal_column in project_internal_columns.values() {
-                        schema.add_internal_column(
+                        schema.add_internal_field(
                             internal_column.column_name(),
                             internal_column.table_data_type(),
                             internal_column.column_id(),
@@ -675,6 +675,10 @@ impl PhysicalPlanBuilder {
                                     }
                                 };
 
+                                let settings = self.ctx.get_settings();
+                                let efficiently_memory =
+                                    settings.get_efficiently_memory_group_by()?;
+
                                 let group_by_key_index =
                                     aggregate_partial.output_schema()?.num_fields() - 1;
                                 let group_by_key_data_type =
@@ -683,6 +687,7 @@ impl PhysicalPlanBuilder {
                                             .iter()
                                             .map(|v| v.scalar.data_type())
                                             .collect::<Result<Vec<_>>>()?,
+                                        efficiently_memory,
                                     )?
                                     .data_type();
 
@@ -1110,12 +1115,14 @@ impl PhysicalPlanBuilder {
             .filter(|p| !p.is_empty())
             .map(
                 |predicates: &Vec<ScalarExpr>| -> Result<RemoteExpr<String>> {
-                    let predicates: Result<Vec<Expr<String>>> = predicates
+                    let predicates = predicates
                         .iter()
-                        .map(|p| p.as_expr_with_col_name())
-                        .collect();
+                        .map(|p| {
+                            Ok(p.as_expr()?
+                                .project_column_ref(|col| col.column_name.clone()))
+                        })
+                        .collect::<Result<Vec<_>>>()?;
 
-                    let predicates = predicates?;
                     let expr = predicates
                         .into_iter()
                         .reduce(|lhs, rhs| {
@@ -1131,10 +1138,10 @@ impl PhysicalPlanBuilder {
                         .unwrap();
 
                     let expr = cast_expr_to_non_null_boolean(expr)?;
-
                     let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
 
                     is_deterministic = expr.is_deterministic(&BUILTIN_FUNCTIONS);
+
                     Ok(expr.as_remote_expr())
                 },
             )
@@ -1191,9 +1198,12 @@ impl PhysicalPlanBuilder {
                         })
                     })
                     .expect("there should be at least one predicate in prewhere");
-                let expr = cast_expr_to_non_null_boolean(predicate.as_expr_with_col_name()?)?;
-                let (filter, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                let filter = filter.as_remote_expr();
+                let filter = cast_expr_to_non_null_boolean(
+                    predicate
+                        .as_expr()?
+                        .project_column_ref(|col| col.column_name.clone()),
+                )?
+                .as_remote_expr();
                 let virtual_columns = self.build_virtual_columns(&prewhere.prewhere_columns);
 
                 Ok::<PrewhereInfo, ErrorCode>(PrewhereInfo {

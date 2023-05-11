@@ -14,7 +14,6 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -83,6 +82,9 @@ use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
+use databend_query::test_kits::block_writer::BlockWriter;
+use databend_query::test_kits::table_test_fixture::execute_query;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
@@ -90,10 +92,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use walkdir::WalkDir;
 
-use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -465,7 +464,11 @@ impl TableContext for CtxDelegation {
         "default".to_owned()
     }
 
-    fn get_aborting(&self) -> Arc<AtomicBool> {
+    fn check_aborting(&self) -> Result<()> {
+        todo!()
+    }
+
+    fn get_error(&self) -> Option<ErrorCode> {
         todo!()
     }
 
@@ -506,6 +509,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
+        todo!()
+    }
+
+    fn get_shard_settings(&self) -> Arc<Settings> {
         todo!()
     }
 

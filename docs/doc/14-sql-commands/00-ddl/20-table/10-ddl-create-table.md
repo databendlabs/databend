@@ -23,38 +23,19 @@ Databend aims to be easy to use by design and does NOT require any of those oper
 ```sql
 CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
 (
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <constant_expr> }],
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <constant_expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
     ...
-) [CLUSTER BY(<expr> [, <expr>, ...] )]
-
-<data_type>:
-  TINYINT
-| SMALLINT 
-| INT
-| BIGINT
-| FLOAT
-| DOUBLE
-| DATE
-| TIMESTAMP 
-| VARCHAR
-| ARRAY
-| VARIANT
+)
 ```
+:::note
+- For available data types in Databend, see [Data Types](../../../13-sql-reference/10-data-types/index.md).
 
-:::tip
-Data type reference:
-* [Boolean Data Types](../../../13-sql-reference/10-data-types/00-data-type-logical-types.md)
-* [Numeric Data Types](../../../13-sql-reference/10-data-types/10-data-type-numeric-types.md)
-* [Date & Time Data Types](../../../13-sql-reference/10-data-types/20-data-type-time-date-types.md)
-* [String Data Types](../../../13-sql-reference/10-data-types/30-data-type-string-types.md)
-* [Array Data Types](../../../13-sql-reference/10-data-types/40-data-type-array-types.md)
-* [Tuple Data Types](../../../13-sql-reference/10-data-types/41-data-type-tuple-types.md)
-* [Map Data Types](../../../13-sql-reference/10-data-types/42-data-type-map.md)
-* [Semi-structured Data Types](../../../13-sql-reference/10-data-types/43-data-type-variant.md)
+- Databend suggests avoiding special characters as much as possible when naming columns. However, if special characters are necessary in some cases, the alias should be enclosed in backticks, like this: CREATE TABLE price(\`$CA\` int);
+
+- Databend will automatically convert column names into lowercase. For example, if you name a column as *Total*, it will appear as *total* in the result.
 :::
 
-For detailed information about the CLUSTER BY clause, see [SET CLUSTER KEY](../70-clusterkey/dml-set-cluster-key.md).
 
 ## CREATE TABLE ... LIKE
 
@@ -66,10 +47,9 @@ CREATE TABLE [IF NOT EXISTS] [db.]table_name
 LIKE [db.]origin_table_name
 ```
 
-This command does not include any data or attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
+This command does not include any data or attributes (such as `CLUSTER BY`, `TRANSIENT`, and `COMPRESSION`) from the original table, and instead creates a new table using the default system settings.
 
 :::note WORKAROUND
-- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
 - `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
 
 ```sql
@@ -92,7 +72,6 @@ AS SELECT query
 This command does not include any attributes (such as CLUSTER BY, TRANSIENT, and COMPRESSION) from the original table, and instead creates a new table using the default system settings.
 
 :::note WORKAROUND
-- `CLUSTER BY` can be added back using [ALTER TABLE](90-alter-table-column.md). See [ALTER CLUSTER KEY](../../00-ddl/70-clusterkey/dml-alter-cluster-key.md) for details.
 - `TRANSIENT` and `COMPRESSION` can be explicitly specified when you create a new table with this command. For example,
 
 ```sql
@@ -217,9 +196,9 @@ DESC t_null;
 
 ## Default Values
 ```sql
-DEFAULT <constant_expression>
+DEFAULT <expr>
 ```
-Specify a default value(constant expression) inserted in the column if a value is not specified via an INSERT or CREATE TABLE AS SELECT statement.
+Specify a default value inserted in the column if a value is not specified via an `INSERT` or `CREATE TABLE AS SELECT` statement.
 
 For example:
 ```sql

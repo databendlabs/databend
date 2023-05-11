@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -349,6 +349,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::RenameTable(stmt) => visitor.visit_rename_table(stmt),
         Statement::TruncateTable(stmt) => visitor.visit_truncate_table(stmt),
         Statement::OptimizeTable(stmt) => visitor.visit_optimize_table(stmt),
+        Statement::VacuumTable(stmt) => visitor.visit_vacuum_table(stmt),
         Statement::AnalyzeTable(stmt) => visitor.visit_analyze_table(stmt),
         Statement::ExistsTable(stmt) => visitor.visit_exists_table(stmt),
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),

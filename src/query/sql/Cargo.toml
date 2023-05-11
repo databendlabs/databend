@@ -10,13 +10,18 @@ edition = { workspace = true }
 doctest = false
 test = false
 
+[features]
+default = []
+
+z3-prove = ["common-constraint", "z3"]
+
 [dependencies] # In alphabetical order
 # Workspace dependencies
 common-ast = { path = "../ast" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
-common-constraint = { path = "../constraint" }
+common-constraint = { path = "../constraint", optional = true }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-functions = { path = "../functions" }
@@ -45,6 +50,7 @@ async-backtrace = { workspace = true }
 async-recursion = "1.0.0"
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 ctor = "0.1.26"
 dashmap = "5.4"
 educe = "0.4"
@@ -65,4 +71,4 @@ simsearch = "0.2"
 time = "0.3.14"
 tracing = "0.1.36"
 url = { version = "2.3" }
-z3 = { version = "0.11.2", features = ["static-link-z3"] }
+z3 = { version = "0.11.2", features = ["static-link-z3"], optional = true }

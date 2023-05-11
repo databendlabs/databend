@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -34,6 +34,7 @@ use crate::types::DataType;
 use crate::types::NumberDataType;
 use crate::with_number_type;
 use crate::Scalar;
+use crate::ARROW_EXT_TYPE_BITMAP;
 use crate::ARROW_EXT_TYPE_EMPTY_ARRAY;
 use crate::ARROW_EXT_TYPE_EMPTY_MAP;
 use crate::ARROW_EXT_TYPE_VARIANT;
@@ -47,6 +48,11 @@ pub const ROW_ID_COLUMN_ID: u32 = u32::MAX;
 pub const BLOCK_NAME_COLUMN_ID: u32 = u32::MAX - 1;
 pub const SEGMENT_NAME_COLUMN_ID: u32 = u32::MAX - 2;
 pub const SNAPSHOT_NAME_COLUMN_ID: u32 = u32::MAX - 3;
+
+pub const ROW_ID_COL_NAME: &str = "_row_id";
+pub const SNAPSHOT_NAME_COL_NAME: &str = "_snapshot_name";
+pub const SEGMENT_NAME_COL_NAME: &str = "_segment_name";
+pub const BLOCK_NAME_COL_NAME: &str = "_block_name";
 
 #[inline]
 pub fn is_internal_column_id(column_id: ColumnId) -> bool {
@@ -104,6 +110,7 @@ pub enum TableDataType {
     Nullable(Box<TableDataType>),
     Array(Box<TableDataType>),
     Map(Box<TableDataType>),
+    Bitmap,
     Tuple {
         fields_name: Vec<String>,
         fields_type: Vec<TableDataType>,
@@ -352,7 +359,7 @@ impl TableSchema {
     }
 
     // Every internal column has constant column id, no need to generate column id of internal columns.
-    pub fn add_internal_column(
+    pub fn add_internal_field(
         &mut self,
         name: &str,
         data_type: TableDataType,
@@ -360,6 +367,10 @@ impl TableSchema {
     ) {
         let field = TableField::new_from_column_id(name, data_type, column_id);
         self.fields.push(field);
+    }
+
+    pub fn remove_internal_fields(&mut self) {
+        self.fields.retain(|f| !is_internal_column_id(f.column_id));
     }
 
     pub fn drop_column(&mut self, column: &str) -> Result<()> {
@@ -800,7 +811,7 @@ impl DataField {
         DataField {
             name: name.to_string(),
             default_expr: None,
-            data_type: DataType::Nullable(Box::new(data_type)),
+            data_type: data_type.wrap_nullable(),
         }
     }
 
@@ -970,6 +981,7 @@ impl From<&TableDataType> for DataType {
             TableDataType::Nullable(ty) => DataType::Nullable(Box::new((&**ty).into())),
             TableDataType::Array(ty) => DataType::Array(Box::new((&**ty).into())),
             TableDataType::Map(ty) => DataType::Map(Box::new((&**ty).into())),
+            TableDataType::Bitmap => DataType::Bitmap,
             TableDataType::Tuple { fields_type, .. } => {
                 DataType::Tuple(fields_type.iter().map(Into::into).collect())
             }
@@ -1226,6 +1238,7 @@ impl From<&ArrowField> for TableDataType {
                 ARROW_EXT_TYPE_VARIANT => TableDataType::Variant,
                 ARROW_EXT_TYPE_EMPTY_ARRAY => TableDataType::EmptyArray,
                 ARROW_EXT_TYPE_EMPTY_MAP => TableDataType::EmptyMap,
+                ARROW_EXT_TYPE_BITMAP => TableDataType::Bitmap,
                 _ => unimplemented!("data_type: {:?}", f.data_type()),
             },
             // this is safe, because we define the datatype firstly
@@ -1337,6 +1350,11 @@ impl From<&DataType> for ArrowDataType {
                     false,
                 )
             }
+            DataType::Bitmap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_BITMAP.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
             DataType::Tuple(types) => {
                 let fields = types
                     .iter()
@@ -1417,6 +1435,11 @@ impl From<&TableDataType> for ArrowDataType {
                     false,
                 )
             }
+            TableDataType::Bitmap => ArrowDataType::Extension(
+                ARROW_EXT_TYPE_BITMAP.to_string(),
+                Box::new(ArrowDataType::LargeBinary),
+                None,
+            ),
             TableDataType::Tuple {
                 fields_name,
                 fields_type,
@@ -1464,6 +1487,7 @@ pub fn infer_schema_type(data_type: &DataType) -> Result<TableDataType> {
         DataType::Map(inner_type) => {
             Ok(TableDataType::Map(Box::new(infer_schema_type(inner_type)?)))
         }
+        DataType::Bitmap => Ok(TableDataType::Bitmap),
         DataType::Variant => Ok(TableDataType::Variant),
         DataType::Tuple(fields) => {
             let fields_type = fields

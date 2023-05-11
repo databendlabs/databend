@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,8 +13,11 @@
 // limitations under the License.
 
 use std::rc::Rc;
+use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use educe::Educe;
 
 use super::optimize_expr::OptimizeExprTask;
 use super::Task;
@@ -40,8 +43,12 @@ pub enum OptimizeGroupEvent {
     Optimized,
 }
 
-#[derive(Debug)]
+#[derive(Educe)]
+#[educe(Debug)]
 pub struct OptimizeGroupTask {
+    #[educe(Debug(ignore))]
+    pub ctx: Arc<dyn TableContext>,
+
     pub state: OptimizeGroupState,
     pub group_index: IndexType,
     pub last_optimized_expr_index: Option<IndexType>,
@@ -51,8 +58,9 @@ pub struct OptimizeGroupTask {
 }
 
 impl OptimizeGroupTask {
-    pub fn new(group_index: IndexType) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, group_index: IndexType) -> Self {
         Self {
+            ctx,
             state: OptimizeGroupState::Init,
             group_index,
             last_optimized_expr_index: None,
@@ -61,8 +69,12 @@ impl OptimizeGroupTask {
         }
     }
 
-    pub fn with_parent(group_index: IndexType, parent: &Rc<SharedCounter>) -> Self {
-        let mut task = Self::new(group_index);
+    pub fn with_parent(
+        ctx: Arc<dyn TableContext>,
+        group_index: IndexType,
+        parent: &Rc<SharedCounter>,
+    ) -> Self {
+        let mut task = Self::new(ctx, group_index);
         parent.inc();
         task.parent = Some(parent.clone());
         task
@@ -114,7 +126,8 @@ impl OptimizeGroupTask {
     ) -> Result<OptimizeGroupEvent> {
         let group = optimizer.memo.group(self.group_index)?;
         if !group.state.explored() {
-            let task = ExploreGroupTask::with_parent(group.group_index, &self.ref_count);
+            let task =
+                ExploreGroupTask::with_parent(self.ctx.clone(), group.group_index, &self.ref_count);
             scheduler.add_task(Task::ExploreGroup(task));
             Ok(OptimizeGroupEvent::Exploring)
         } else {
@@ -140,8 +153,12 @@ impl OptimizeGroupTask {
         }
 
         for m_expr in group.m_exprs.iter() {
-            let task =
-                OptimizeExprTask::with_parent(self.group_index, m_expr.index, &self.ref_count);
+            let task = OptimizeExprTask::with_parent(
+                self.ctx.clone(),
+                self.group_index,
+                m_expr.index,
+                &self.ref_count,
+            );
             scheduler.add_task(Task::OptimizeExpr(task));
         }
 

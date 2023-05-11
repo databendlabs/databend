@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -121,7 +121,7 @@ impl PushDownInfo {
 
             if let RemoteExpr::<String>::ColumnRef { id, .. } = &order.0 {
                 // TODO: support sub column of nested type.
-                let field = schema.field_with_name(id).unwrap();
+                let field = schema.field_with_name(id).ok()?;
                 if !support(&field.data_type().into()) {
                     return None;
                 }

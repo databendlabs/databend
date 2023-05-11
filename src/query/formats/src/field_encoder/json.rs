@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ impl FieldEncoderJSON {
                 inf_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                 null_bytes: NULL_BYTES_LOWER.as_bytes().to_vec(),
                 timezone: options.timezone,
+                disable_variant_check: options.disable_variant_check,
             },
             quote_denormals: false,
             escape_forward_slashes: true,

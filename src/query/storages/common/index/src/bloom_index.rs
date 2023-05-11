@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -96,7 +96,7 @@ impl TryFrom<ThriftFileMetaData> for BloomIndexMeta {
                 }
             }
         }
-        // col_metas.shrink_to_fit();
+        col_metas.shrink_to_fit();
         Ok(Self { columns: col_metas })
     }
 }
@@ -481,58 +481,58 @@ fn visit_expr_column_eq_constant(
             ..
         } if function.signature.name == "eq" => match args.as_slice() {
             [
-                Expr::ColumnRef { id, data_type, .. },
-                Expr::Constant { scalar, .. },
+                Expr::ColumnRef {
+                    id,
+                    data_type: column_type,
+                    ..
+                },
+                Expr::Constant {
+                    scalar,
+                    data_type: scalar_type,
+                    ..
+                },
             ]
             | [
-                Expr::Constant { scalar, .. },
-                Expr::ColumnRef { id, data_type, .. },
+                Expr::Constant {
+                    scalar,
+                    data_type: scalar_type,
+                    ..
+                },
+                Expr::ColumnRef {
+                    id,
+                    data_type: column_type,
+                    ..
+                },
             ] => {
+                debug_assert_eq!(scalar_type, column_type);
                 // If the visitor returns a new expression, then replace with the current expression.
-                if let Some(new_expr) = visitor(*span, id, scalar, data_type, return_type)? {
+                if let Some(new_expr) = visitor(*span, id, scalar, column_type, return_type)? {
                     *expr = new_expr;
                     return Ok(());
                 }
             }
             [
                 Expr::FunctionCall { id, args, .. },
-                Expr::Constant { scalar, .. },
+                Expr::Constant {
+                    scalar,
+                    data_type: scalar_type,
+                    ..
+                },
             ]
             | [
-                Expr::Constant { scalar, .. },
+                Expr::Constant {
+                    scalar,
+                    data_type: scalar_type,
+                    ..
+                },
                 Expr::FunctionCall { id, args, .. },
             ] => {
                 if id.name() == "get" {
                     if let Some(new_expr) =
-                        visit_map_column(*span, args, scalar, return_type, visitor)?
+                        visit_map_column(*span, args, scalar, scalar_type, return_type, visitor)?
                     {
                         *expr = new_expr;
                         return Ok(());
-                    }
-                }
-            }
-            [
-                Expr::FunctionCall { id, args, .. },
-                Expr::Cast {
-                    expr: box cast_expr,
-                    ..
-                },
-            ]
-            | [
-                Expr::Cast {
-                    expr: box cast_expr,
-                    ..
-                },
-                Expr::FunctionCall { id, args, .. },
-            ] => {
-                if let Expr::Constant { scalar, .. } = cast_expr {
-                    if id.name() == "get" {
-                        if let Some(new_expr) =
-                            visit_map_column(*span, args, scalar, return_type, visitor)?
-                        {
-                            *expr = new_expr;
-                            return Ok(());
-                        }
                     }
                 }
             }
@@ -561,6 +561,7 @@ fn visit_map_column(
     span: Span,
     args: &[Expr<String>],
     scalar: &Scalar,
+    scalar_type: &DataType,
     return_type: &DataType,
     visitor: &mut impl FnMut(Span, &str, &Scalar, &DataType, &DataType) -> Result<Option<Expr<String>>>,
 ) -> Result<Option<Expr<String>>> {
@@ -570,6 +571,7 @@ fn visit_map_column(
                 DataType::Tuple(kv_tys) => kv_tys[1].clone(),
                 _ => unreachable!(),
             };
+            debug_assert_eq!(&val_type.wrap_nullable(), scalar_type);
             return visitor(span, id, scalar, &val_type, return_type);
         }
     }

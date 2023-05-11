@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -90,6 +90,34 @@ impl DropTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }
+}
+
+/// Vacuum
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VacuumTablePlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub option: VacuumTableOption,
+}
+
+impl VacuumTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        if self.option.dry_run.is_some() {
+            Arc::new(DataSchema::new(vec![DataField::new(
+                "Files",
+                DataType::String,
+            )]))
+        } else {
+            Arc::new(DataSchema::empty())
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VacuumTableOption {
+    pub retain_hours: Option<usize>,
+    pub dry_run: Option<()>,
 }
 
 /// Optimize.

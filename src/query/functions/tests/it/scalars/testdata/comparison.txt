@@ -1,5 +1,5 @@
 ast            : '1'='2'
-raw expr       : eq("1", "2")
+raw expr       : eq('1', '2')
 checked expr   : eq<String, String>("1", "2")
 optimized expr : false
 output type    : Boolean
@@ -27,7 +27,7 @@ output         : false
 
 ast            : 1.0=1
 raw expr       : eq(1.0, 1)
-checked expr   : eq<Decimal(38, 1), Decimal(38, 1)>(to_decimal<Decimal(2, 1)>(38, 1)(1.0_d128(2,1)), to_decimal<UInt8>(38, 1)(1_u8))
+checked expr   : eq<Decimal(4, 1), Decimal(4, 1)>(to_decimal<Decimal(2, 1)>(4, 1)(1.0_d128(2,1)), to_decimal<UInt8>(4, 1)(1_u8))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -143,7 +143,7 @@ has tried possible overloads:
 
 
 ast            : (1, 'a') = (1, 'a')
-raw expr       : eq(tuple(1, "a"), tuple(1, "a"))
+raw expr       : eq(tuple(1, 'a'), tuple(1, 'a'))
 checked expr   : eq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -152,7 +152,7 @@ output         : true
 
 
 ast            : (1, 'a') = (1, 'b')
-raw expr       : eq(tuple(1, "a"), tuple(1, "b"))
+raw expr       : eq(tuple(1, 'a'), tuple(1, 'b'))
 checked expr   : eq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
@@ -161,7 +161,7 @@ output         : false
 
 
 ast            : today()='2020-01-01'
-raw expr       : eq(today(), "2020-01-01")
+raw expr       : eq(today(), '2020-01-01')
 checked expr   : eq<Date, Date>(today<>(), to_date<String>("2020-01-01"))
 optimized expr : false
 output type    : Boolean
@@ -211,7 +211,7 @@ evaluation (internal):
 
 ast            : 1.1=1.1
 raw expr       : eq(1.1, 1.1)
-checked expr   : eq<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)))
+checked expr   : eq<Decimal(2, 1), Decimal(2, 1)>(1.1_d128(2,1), 1.1_d128(2,1))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -219,7 +219,7 @@ output         : true
 
 
 ast            : parse_json('[1,2,3,["a","b","c"]]') = parse_json('[1,2,3,["a","b","c"]]')
-raw expr       : eq(parse_json("[1,2,3,[\"a\",\"b\",\"c\"]]"), parse_json("[1,2,3,[\"a\",\"b\",\"c\"]]"))
+raw expr       : eq(parse_json('[1,2,3,["a","b","c"]]'), parse_json('[1,2,3,["a","b","c"]]'))
 checked expr   : eq<Variant, Variant>(parse_json<String>("[1,2,3,[\"a\",\"b\",\"c\"]]"), parse_json<String>("[1,2,3,[\"a\",\"b\",\"c\"]]"))
 optimized expr : true
 output type    : Boolean
@@ -236,13 +236,13 @@ evaluation:
 +--------+------------------------------------------+------------------------------------------+---------+
 | Type   | String                                   | String                                   | Boolean |
 | Domain | {"-32768"..="{\"k\":\"v\",\"a\":\"b\"}"} | {"-32768"..="{\"k\":\"v\",\"a\":\"d\"}"} | Unknown |
-| Row 0  | "null"                                   | "null"                                   | true    |
-| Row 1  | "true"                                   | "true"                                   | true    |
-| Row 2  | "9223372036854775807"                    | "9223372036854775807"                    | true    |
-| Row 3  | "-32768"                                 | "-32768"                                 | true    |
-| Row 4  | "1234.5678"                              | "1234.5678"                              | true    |
-| Row 5  | "{\"k\":\"v\",\"a\":\"b\"}"              | "{\"k\":\"v\",\"a\":\"d\"}"              | false   |
-| Row 6  | "[1,2,3,[\"a\",\"b\",\"c\"]]"            | "[1,2,3,[\"a\",\"b\",\"c\"]]"            | true    |
+| Row 0  | 'null'                                   | 'null'                                   | true    |
+| Row 1  | 'true'                                   | 'true'                                   | true    |
+| Row 2  | '9223372036854775807'                    | '9223372036854775807'                    | true    |
+| Row 3  | '-32768'                                 | '-32768'                                 | true    |
+| Row 4  | '1234.5678'                              | '1234.5678'                              | true    |
+| Row 5  | '{"k":"v","a":"b"}'                      | '{"k":"v","a":"d"}'                      | false   |
+| Row 6  | '[1,2,3,["a","b","c"]]'                  | '[1,2,3,["a","b","c"]]'                  | true    |
 +--------+------------------------------------------+------------------------------------------+---------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -263,13 +263,13 @@ evaluation:
 +--------+------------------------------------------+------------------------------------------+---------------+
 | Type   | String                                   | String                                   | Boolean       |
 | Domain | {"-32768"..="{\"k\":\"v\",\"a\":\"b\"}"} | {"-32768"..="{\"k\":\"v\",\"a\":\"d\"}"} | {FALSE, TRUE} |
-| Row 0  | "null"                                   | "null"                                   | true          |
-| Row 1  | "true"                                   | "true"                                   | true          |
-| Row 2  | "9223372036854775807"                    | "9223372036854775807"                    | true          |
-| Row 3  | "-32768"                                 | "-32768"                                 | true          |
-| Row 4  | "1234.5678"                              | "1234.5678"                              | true          |
-| Row 5  | "{\"k\":\"v\",\"a\":\"b\"}"              | "{\"k\":\"v\",\"a\":\"d\"}"              | false         |
-| Row 6  | "[1,2,3,[\"a\",\"b\",\"c\"]]"            | "[1,2,3,[\"a\",\"b\",\"c\"]]"            | true          |
+| Row 0  | 'null'                                   | 'null'                                   | true          |
+| Row 1  | 'true'                                   | 'true'                                   | true          |
+| Row 2  | '9223372036854775807'                    | '9223372036854775807'                    | true          |
+| Row 3  | '-32768'                                 | '-32768'                                 | true          |
+| Row 4  | '1234.5678'                              | '1234.5678'                              | true          |
+| Row 5  | '{"k":"v","a":"b"}'                      | '{"k":"v","a":"d"}'                      | false         |
+| Row 6  | '[1,2,3,["a","b","c"]]'                  | '[1,2,3,["a","b","c"]]'                  | true          |
 +--------+------------------------------------------+------------------------------------------+---------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -282,7 +282,7 @@ evaluation (internal):
 
 
 ast            : '1'!='2'
-raw expr       : noteq("1", "2")
+raw expr       : noteq('1', '2')
 checked expr   : noteq<String, String>("1", "2")
 optimized expr : true
 output type    : Boolean
@@ -345,7 +345,7 @@ output         : false
 
 
 ast            : ['a'] != ['a']
-raw expr       : noteq(array("a"), array("a"))
+raw expr       : noteq(array('a'), array('a'))
 checked expr   : noteq<T0=String><Array(T0), Array(T0)>(array<T0=String><T0>("a"), array<T0=String><T0>("a"))
 optimized expr : false
 output type    : Boolean
@@ -354,7 +354,7 @@ output         : false
 
 
 ast            : ['a'] != ['b']
-raw expr       : noteq(array("a"), array("b"))
+raw expr       : noteq(array('a'), array('b'))
 checked expr   : noteq<T0=String><Array(T0), Array(T0)>(array<T0=String><T0>("a"), array<T0=String><T0>("b"))
 optimized expr : true
 output type    : Boolean
@@ -408,7 +408,7 @@ has tried possible overloads:
 
 
 ast            : (1, 'a') != (1, 'a')
-raw expr       : noteq(tuple(1, "a"), tuple(1, "a"))
+raw expr       : noteq(tuple(1, 'a'), tuple(1, 'a'))
 checked expr   : noteq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -417,7 +417,7 @@ output         : false
 
 
 ast            : (1, 'a') != (1, 'b')
-raw expr       : noteq(tuple(1, "a"), tuple(1, "b"))
+raw expr       : noteq(tuple(1, 'a'), tuple(1, 'b'))
 checked expr   : noteq<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
@@ -435,7 +435,7 @@ output         : true
 
 
 ast            : parse_json('"databend"') != parse_json('"databend"')
-raw expr       : noteq(parse_json("\"databend\""), parse_json("\"databend\""))
+raw expr       : noteq(parse_json('"databend"'), parse_json('"databend"'))
 checked expr   : noteq<Variant, Variant>(parse_json<String>("\"databend\""), parse_json<String>("\"databend\""))
 optimized expr : false
 output type    : Boolean
@@ -452,10 +452,10 @@ evaluation:
 +--------+----------------------------------+----------------------------------+---------+
 | Type   | String                           | String                           | Boolean |
 | Domain | {"9223372036854775807"..="true"} | {"9223372036854775807"..="true"} | Unknown |
-| Row 0  | "null"                           | "null"                           | false   |
-| Row 1  | "true"                           | "true"                           | false   |
-| Row 2  | "9223372036854775807"            | "9223372036854775807"            | false   |
-| Row 3  | "[1,2,3,[\"a\",\"b\",\"c\"]]"    | "[1,2,3,[\"a\",\"b\",\"c\"]]"    | false   |
+| Row 0  | 'null'                           | 'null'                           | false   |
+| Row 1  | 'true'                           | 'true'                           | false   |
+| Row 2  | '9223372036854775807'            | '9223372036854775807'            | false   |
+| Row 3  | '[1,2,3,["a","b","c"]]'          | '[1,2,3,["a","b","c"]]'          | false   |
 +--------+----------------------------------+----------------------------------+---------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -476,10 +476,10 @@ evaluation:
 +--------+----------------------------------+----------------------------------+---------------+
 | Type   | String                           | String                           | Boolean       |
 | Domain | {"9223372036854775807"..="true"} | {"9223372036854775807"..="true"} | {FALSE, TRUE} |
-| Row 0  | "null"                           | "null"                           | false         |
-| Row 1  | "true"                           | "true"                           | false         |
-| Row 2  | "9223372036854775807"            | "9223372036854775807"            | false         |
-| Row 3  | "[1,2,3,[\"a\",\"b\",\"c\"]]"    | "[1,2,3,[\"a\",\"b\",\"c\"]]"    | false         |
+| Row 0  | 'null'                           | 'null'                           | false         |
+| Row 1  | 'true'                           | 'true'                           | false         |
+| Row 2  | '9223372036854775807'            | '9223372036854775807'            | false         |
+| Row 3  | '[1,2,3,["a","b","c"]]'          | '[1,2,3,["a","b","c"]]'          | false         |
 +--------+----------------------------------+----------------------------------+---------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -492,7 +492,7 @@ evaluation (internal):
 
 
 ast            : '1'<'2'
-raw expr       : lt("1", "2")
+raw expr       : lt('1', '2')
 checked expr   : lt<String, String>("1", "2")
 optimized expr : true
 output type    : Boolean
@@ -511,7 +511,7 @@ output         : false
 
 ast            : 1.1<1.1
 raw expr       : lt(1.1, 1.1)
-checked expr   : lt<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)))
+checked expr   : lt<Decimal(2, 1), Decimal(2, 1)>(1.1_d128(2,1), 1.1_d128(2,1))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}
@@ -564,7 +564,7 @@ output         : true
 
 
 ast            : (1, 'b') < (1, 'a')
-raw expr       : lt(tuple(1, "b"), tuple(1, "a"))
+raw expr       : lt(tuple(1, 'b'), tuple(1, 'a'))
 checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -573,7 +573,7 @@ output         : false
 
 
 ast            : (1, 'a') < (1, 'b')
-raw expr       : lt(tuple(1, "a"), tuple(1, "b"))
+raw expr       : lt(tuple(1, 'a'), tuple(1, 'b'))
 checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
@@ -582,7 +582,7 @@ output         : true
 
 
 ast            : (1, 'a') < (2, 'a')
-raw expr       : lt(tuple(1, "a"), tuple(2, "a"))
+raw expr       : lt(tuple(1, 'a'), tuple(2, 'a'))
 checked expr   : lt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -600,7 +600,7 @@ output         : true
 
 
 ast            : parse_json('"true"') < parse_json('"false"')
-raw expr       : lt(parse_json("\"true\""), parse_json("\"false\""))
+raw expr       : lt(parse_json('"true"'), parse_json('"false"'))
 checked expr   : lt<Variant, Variant>(parse_json<String>("\"true\""), parse_json<String>("\"false\""))
 optimized expr : false
 output type    : Boolean
@@ -612,19 +612,19 @@ ast            : parse_json(lhs) >= parse_json(rhs)
 raw expr       : gte(parse_json(lhs::String), parse_json(rhs::String))
 checked expr   : gte<Variant, Variant>(parse_json<String>(lhs), parse_json<String>(rhs))
 evaluation:
-+--------+-------------------------------+-------------------------------+---------+
-|        | lhs                           | rhs                           | Output  |
-+--------+-------------------------------+-------------------------------+---------+
-| Type   | String                        | String                        | Boolean |
-| Domain | {"-32768"..="true"}           | {"-33768"..="true"}           | Unknown |
-| Row 0  | "null"                        | "null"                        | true    |
-| Row 1  | "true"                        | "true"                        | true    |
-| Row 2  | "9223372036854775807"         | "9223372036854775800"         | true    |
-| Row 3  | "-32768"                      | "-33768"                      | true    |
-| Row 4  | "1234.5678"                   | "1234.5678"                   | true    |
-| Row 5  | "1.912e2"                     | "1.912e2"                     | true    |
-| Row 6  | "[1,2,3,[\"a\",\"b\",\"c\"]]" | "[0,2,3,[\"a\",\"b\",\"c\"]]" | true    |
-+--------+-------------------------------+-------------------------------+---------+
++--------+-------------------------+-------------------------+---------+
+|        | lhs                     | rhs                     | Output  |
++--------+-------------------------+-------------------------+---------+
+| Type   | String                  | String                  | Boolean |
+| Domain | {"-32768"..="true"}     | {"-33768"..="true"}     | Unknown |
+| Row 0  | 'null'                  | 'null'                  | true    |
+| Row 1  | 'true'                  | 'true'                  | true    |
+| Row 2  | '9223372036854775807'   | '9223372036854775800'   | true    |
+| Row 3  | '-32768'                | '-33768'                | true    |
+| Row 4  | '1234.5678'             | '1234.5678'             | true    |
+| Row 5  | '1.912e2'               | '1.912e2'               | true    |
+| Row 6  | '[1,2,3,["a","b","c"]]' | '[0,2,3,["a","b","c"]]' | true    |
++--------+-------------------------+-------------------------+---------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                          |
@@ -639,19 +639,19 @@ ast            : lhs < rhs
 raw expr       : lt(lhs::String, rhs::String)
 checked expr   : lt<String, String>(lhs, rhs)
 evaluation:
-+--------+-------------------------------+-------------------------------+---------------+
-|        | lhs                           | rhs                           | Output        |
-+--------+-------------------------------+-------------------------------+---------------+
-| Type   | String                        | String                        | Boolean       |
-| Domain | {"-32768"..="true"}           | {"-33768"..="true"}           | {FALSE, TRUE} |
-| Row 0  | "null"                        | "null"                        | false         |
-| Row 1  | "true"                        | "true"                        | false         |
-| Row 2  | "9223372036854775807"         | "9223372036854775800"         | false         |
-| Row 3  | "-32768"                      | "-33768"                      | true          |
-| Row 4  | "1234.5678"                   | "1234.5678"                   | false         |
-| Row 5  | "1.912e2"                     | "1.912e2"                     | false         |
-| Row 6  | "[1,2,3,[\"a\",\"b\",\"c\"]]" | "[0,2,3,[\"a\",\"b\",\"c\"]]" | false         |
-+--------+-------------------------------+-------------------------------+---------------+
++--------+-------------------------+-------------------------+---------------+
+|        | lhs                     | rhs                     | Output        |
++--------+-------------------------+-------------------------+---------------+
+| Type   | String                  | String                  | Boolean       |
+| Domain | {"-32768"..="true"}     | {"-33768"..="true"}     | {FALSE, TRUE} |
+| Row 0  | 'null'                  | 'null'                  | false         |
+| Row 1  | 'true'                  | 'true'                  | false         |
+| Row 2  | '9223372036854775807'   | '9223372036854775800'   | false         |
+| Row 3  | '-32768'                | '-33768'                | true          |
+| Row 4  | '1234.5678'             | '1234.5678'             | false         |
+| Row 5  | '1.912e2'               | '1.912e2'               | false         |
+| Row 6  | '[1,2,3,["a","b","c"]]' | '[0,2,3,["a","b","c"]]' | false         |
++--------+-------------------------+-------------------------+---------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
 | Column | Data                                                                                                                                                                                                          |
@@ -663,7 +663,7 @@ evaluation (internal):
 
 
 ast            : '5'<='2'
-raw expr       : lte("5", "2")
+raw expr       : lte('5', '2')
 checked expr   : lte<String, String>("5", "2")
 optimized expr : false
 output type    : Boolean
@@ -682,7 +682,7 @@ output         : true
 
 ast            : 1.1<=2.1
 raw expr       : lte(1.1, 2.1)
-checked expr   : lte<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(2.1_d128(2,1)))
+checked expr   : lte<Decimal(2, 1), Decimal(2, 1)>(1.1_d128(2,1), 2.1_d128(2,1))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -735,7 +735,7 @@ output         : true
 
 
 ast            : (1, 'b') <= (1, 'a')
-raw expr       : lte(tuple(1, "b"), tuple(1, "a"))
+raw expr       : lte(tuple(1, 'b'), tuple(1, 'a'))
 checked expr   : lte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -744,7 +744,7 @@ output         : false
 
 
 ast            : (1, 'a') <= (1, 'b')
-raw expr       : lte(tuple(1, "a"), tuple(1, "b"))
+raw expr       : lte(tuple(1, 'a'), tuple(1, 'b'))
 checked expr   : lte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : true
 output type    : Boolean
@@ -753,7 +753,7 @@ output         : true
 
 
 ast            : (1, 'a') <= (2, 'a')
-raw expr       : lte(tuple(1, "a"), tuple(2, "a"))
+raw expr       : lte(tuple(1, 'a'), tuple(2, 'a'))
 checked expr   : lte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -762,7 +762,7 @@ output         : true
 
 
 ast            : parse_json('null') <= parse_json('null')
-raw expr       : lte(parse_json("null"), parse_json("null"))
+raw expr       : lte(parse_json('null'), parse_json('null'))
 checked expr   : lte<Variant, Variant>(parse_json<String>("null"), parse_json<String>("null"))
 optimized expr : true
 output type    : Boolean
@@ -797,9 +797,9 @@ evaluation:
 +--------+------------------------------------------------+------------------------------------------------+---------+
 | Type   | String                                         | String                                         | Boolean |
 | Domain | {"\"databend\""..="{\"k\":\"v\",\"a\":\"b\"}"} | {"\"databend\""..="{\"k\":\"a\",\"a\":\"d\"}"} | Unknown |
-| Row 0  | "\"databend\""                                 | "\"databend\""                                 | true    |
-| Row 1  | "{\"k\":\"v\",\"a\":\"b\"}"                    | "{\"k\":\"a\",\"a\":\"d\"}"                    | true    |
-| Row 2  | "[1,2,3,[\"a\",\"b\",\"c\"]]"                  | "[0,2,3,[\"a\",\"b\",\"c\"]]"                  | false   |
+| Row 0  | '"databend"'                                   | '"databend"'                                   | true    |
+| Row 1  | '{"k":"v","a":"b"}'                            | '{"k":"a","a":"d"}'                            | true    |
+| Row 2  | '[1,2,3,["a","b","c"]]'                        | '[0,2,3,["a","b","c"]]'                        | false   |
 +--------+------------------------------------------------+------------------------------------------------+---------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -820,9 +820,9 @@ evaluation:
 +--------+------------------------------------------------+------------------------------------------------+---------------+
 | Type   | String                                         | String                                         | Boolean       |
 | Domain | {"\"databend\""..="{\"k\":\"v\",\"a\":\"b\"}"} | {"\"databend\""..="{\"k\":\"a\",\"a\":\"d\"}"} | {FALSE, TRUE} |
-| Row 0  | "\"databend\""                                 | "\"databend\""                                 | true          |
-| Row 1  | "{\"k\":\"v\",\"a\":\"b\"}"                    | "{\"k\":\"a\",\"a\":\"d\"}"                    | false         |
-| Row 2  | "[1,2,3,[\"a\",\"b\",\"c\"]]"                  | "[0,2,3,[\"a\",\"b\",\"c\"]]"                  | false         |
+| Row 0  | '"databend"'                                   | '"databend"'                                   | true          |
+| Row 1  | '{"k":"v","a":"b"}'                            | '{"k":"a","a":"d"}'                            | false         |
+| Row 2  | '[1,2,3,["a","b","c"]]'                        | '[0,2,3,["a","b","c"]]'                        | false         |
 +--------+------------------------------------------------+------------------------------------------------+---------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -835,7 +835,7 @@ evaluation (internal):
 
 
 ast            : '3'>'2'
-raw expr       : gt("3", "2")
+raw expr       : gt('3', '2')
 checked expr   : gt<String, String>("3", "2")
 optimized expr : true
 output type    : Boolean
@@ -854,7 +854,7 @@ output         : false
 
 ast            : 1.2>1.1
 raw expr       : gt(1.2, 1.1)
-checked expr   : gt<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.2_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)))
+checked expr   : gt<Decimal(2, 1), Decimal(2, 1)>(1.2_d128(2,1), 1.1_d128(2,1))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -907,7 +907,7 @@ output         : false
 
 
 ast            : (1, 'b') > (1, 'a')
-raw expr       : gt(tuple(1, "b"), tuple(1, "a"))
+raw expr       : gt(tuple(1, 'b'), tuple(1, 'a'))
 checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -916,7 +916,7 @@ output         : true
 
 
 ast            : (1, 'a') > (1, 'b')
-raw expr       : gt(tuple(1, "a"), tuple(1, "b"))
+raw expr       : gt(tuple(1, 'a'), tuple(1, 'b'))
 checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
@@ -925,7 +925,7 @@ output         : false
 
 
 ast            : (1, 'a') > (2, 'a')
-raw expr       : gt(tuple(1, "a"), tuple(2, "a"))
+raw expr       : gt(tuple(1, 'a'), tuple(2, 'a'))
 checked expr   : gt<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -952,7 +952,7 @@ output         : false
 
 
 ast            : parse_json('{"k":"v","a":"b"}') > parse_json('{"k":"v","a":"d"}')
-raw expr       : gt(parse_json("{\"k\":\"v\",\"a\":\"b\"}"), parse_json("{\"k\":\"v\",\"a\":\"d\"}"))
+raw expr       : gt(parse_json('{"k":"v","a":"b"}'), parse_json('{"k":"v","a":"d"}'))
 checked expr   : gt<Variant, Variant>(parse_json<String>("{\"k\":\"v\",\"a\":\"b\"}"), parse_json<String>("{\"k\":\"v\",\"a\":\"d\"}"))
 optimized expr : false
 output type    : Boolean
@@ -969,11 +969,11 @@ evaluation:
 +--------+-----------------------+-----------------------+---------+
 | Type   | String                | String                | Boolean |
 | Domain | {"-32768"..="true"}   | {"-32768"..="true"}   | Unknown |
-| Row 0  | "null"                | "null"                | false   |
-| Row 1  | "true"                | "true"                | false   |
-| Row 2  | "9223372036854775807" | "9223372036854775806" | true    |
-| Row 3  | "-32768"              | "-32768"              | false   |
-| Row 4  | "1234.5678"           | "1234.5678"           | false   |
+| Row 0  | 'null'                | 'null'                | false   |
+| Row 1  | 'true'                | 'true'                | false   |
+| Row 2  | '9223372036854775807' | '9223372036854775806' | true    |
+| Row 3  | '-32768'              | '-32768'              | false   |
+| Row 4  | '1234.5678'           | '1234.5678'           | false   |
 +--------+-----------------------+-----------------------+---------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
@@ -994,11 +994,11 @@ evaluation:
 +--------+-----------------------+-----------------------+---------------+
 | Type   | String                | String                | Boolean       |
 | Domain | {"-32768"..="true"}   | {"-32768"..="true"}   | {FALSE, TRUE} |
-| Row 0  | "null"                | "null"                | false         |
-| Row 1  | "true"                | "true"                | false         |
-| Row 2  | "9223372036854775807" | "9223372036854775806" | true          |
-| Row 3  | "-32768"              | "-32768"              | false         |
-| Row 4  | "1234.5678"           | "1234.5678"           | false         |
+| Row 0  | 'null'                | 'null'                | false         |
+| Row 1  | 'true'                | 'true'                | false         |
+| Row 2  | '9223372036854775807' | '9223372036854775806' | true          |
+| Row 3  | '-32768'              | '-32768'              | false         |
+| Row 4  | '1234.5678'           | '1234.5678'           | false         |
 +--------+-----------------------+-----------------------+---------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1011,7 +1011,7 @@ evaluation (internal):
 
 
 ast            : '2'>='1'
-raw expr       : gte("2", "1")
+raw expr       : gte('2', '1')
 checked expr   : gte<String, String>("2", "1")
 optimized expr : true
 output type    : Boolean
@@ -1030,7 +1030,7 @@ output         : false
 
 ast            : 1.1>=1.1
 raw expr       : gte(1.1, 1.1)
-checked expr   : gte<Decimal(3, 1), Decimal(3, 1)>(to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)), to_decimal<Decimal(2, 1)>(3, 1)(1.1_d128(2,1)))
+checked expr   : gte<Decimal(2, 1), Decimal(2, 1)>(1.1_d128(2,1), 1.1_d128(2,1))
 optimized expr : true
 output type    : Boolean
 output domain  : {TRUE}
@@ -1083,7 +1083,7 @@ output         : false
 
 
 ast            : (1, 'b') >= (1, 'a')
-raw expr       : gte(tuple(1, "b"), tuple(1, "a"))
+raw expr       : gte(tuple(1, 'b'), tuple(1, 'a'))
 checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "b"), tuple<UInt8, String>(1_u8, "a"))
 optimized expr : true
 output type    : Boolean
@@ -1092,7 +1092,7 @@ output         : true
 
 
 ast            : (1, 'a') >= (1, 'b')
-raw expr       : gte(tuple(1, "a"), tuple(1, "b"))
+raw expr       : gte(tuple(1, 'a'), tuple(1, 'b'))
 checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(1_u8, "b"))
 optimized expr : false
 output type    : Boolean
@@ -1101,7 +1101,7 @@ output         : false
 
 
 ast            : (1, 'a') >= (2, 'a')
-raw expr       : gte(tuple(1, "a"), tuple(2, "a"))
+raw expr       : gte(tuple(1, 'a'), tuple(2, 'a'))
 checked expr   : gte<T0=UInt8, T1=String><Tuple(T0, T1), Tuple(T0, T1)>(tuple<UInt8, String>(1_u8, "a"), tuple<UInt8, String>(2_u8, "a"))
 optimized expr : false
 output type    : Boolean
@@ -1128,7 +1128,7 @@ output         : true
 
 
 ast            : parse_json('1.912e2') >= parse_json('1.912e2')
-raw expr       : gte(parse_json("1.912e2"), parse_json("1.912e2"))
+raw expr       : gte(parse_json('1.912e2'), parse_json('1.912e2'))
 checked expr   : gte<Variant, Variant>(parse_json<String>("1.912e2"), parse_json<String>("1.912e2"))
 optimized expr : true
 output type    : Boolean
@@ -1145,13 +1145,13 @@ evaluation:
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------+
 | Type   | String                                                    | String                                                    | Boolean |
 | Domain | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"b\"}"} | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"d\"}"} | Unknown |
-| Row 0  | "9223372036854775807"                                     | "9223372036854775806"                                     | true    |
-| Row 1  | "-32768"                                                  | "-32768"                                                  | true    |
-| Row 2  | "1234.5678"                                               | "1234.5678"                                               | true    |
-| Row 3  | "1.912e2"                                                 | "1.912e2"                                                 | true    |
-| Row 4  | "\"\\\\\\\"abc\\\\\\\"\""                                 | "\"\\\\\\\"abc\\\\\\\"\""                                 | true    |
-| Row 5  | "{\"k\":\"v\",\"a\":\"b\"}"                               | "{\"k\":\"v\",\"a\":\"d\"}"                               | false   |
-| Row 6  | "[1,2,3,[\"a\",\"b\",\"d\"]]"                             | "[1,2,3,[\"a\",\"b\",\"c\"]]"                             | true    |
+| Row 0  | '9223372036854775807'                                     | '9223372036854775806'                                     | true    |
+| Row 1  | '-32768'                                                  | '-32768'                                                  | true    |
+| Row 2  | '1234.5678'                                               | '1234.5678'                                               | true    |
+| Row 3  | '1.912e2'                                                 | '1.912e2'                                                 | true    |
+| Row 4  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'                                           | true    |
+| Row 5  | '{"k":"v","a":"b"}'                                       | '{"k":"v","a":"d"}'                                       | false   |
+| Row 6  | '[1,2,3,["a","b","d"]]'                                   | '[1,2,3,["a","b","c"]]'                                   | true    |
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1172,13 +1172,13 @@ evaluation:
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------------+
 | Type   | String                                                    | String                                                    | Boolean       |
 | Domain | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"b\"}"} | {"\"\\\\\\\"abc\\\\\\\"\""..="{\"k\":\"v\",\"a\":\"d\"}"} | {FALSE, TRUE} |
-| Row 0  | "9223372036854775807"                                     | "9223372036854775806"                                     | true          |
-| Row 1  | "-32768"                                                  | "-32768"                                                  | true          |
-| Row 2  | "1234.5678"                                               | "1234.5678"                                               | true          |
-| Row 3  | "1.912e2"                                                 | "1.912e2"                                                 | true          |
-| Row 4  | "\"\\\\\\\"abc\\\\\\\"\""                                 | "\"\\\\\\\"abc\\\\\\\"\""                                 | true          |
-| Row 5  | "{\"k\":\"v\",\"a\":\"b\"}"                               | "{\"k\":\"v\",\"a\":\"d\"}"                               | false         |
-| Row 6  | "[1,2,3,[\"a\",\"b\",\"d\"]]"                             | "[1,2,3,[\"a\",\"b\",\"c\"]]"                             | true          |
+| Row 0  | '9223372036854775807'                                     | '9223372036854775806'                                     | true          |
+| Row 1  | '-32768'                                                  | '-32768'                                                  | true          |
+| Row 2  | '1234.5678'                                               | '1234.5678'                                               | true          |
+| Row 3  | '1.912e2'                                                 | '1.912e2'                                                 | true          |
+| Row 4  | '"\\\"abc\\\""'                                           | '"\\\"abc\\\""'                                           | true          |
+| Row 5  | '{"k":"v","a":"b"}'                                       | '{"k":"v","a":"d"}'                                       | false         |
+| Row 6  | '[1,2,3,["a","b","d"]]'                                   | '[1,2,3,["a","b","c"]]'                                   | true          |
 +--------+-----------------------------------------------------------+-----------------------------------------------------------+---------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -1191,7 +1191,7 @@ evaluation (internal):
 
 
 ast            : '1' like '2'
-raw expr       : like("1", "2")
+raw expr       : like('1', '2')
 checked expr   : like<String, String>("1", "2")
 optimized expr : false
 output type    : Boolean
@@ -1201,7 +1201,8 @@ output         : false
 
 ast            : 'hello
 ' like 'h%'
-raw expr       : like("hello\n", "h%")
+raw expr       : like('hello
+', 'h%')
 checked expr   : like<String, String>("hello\n", "h%")
 optimized expr : true
 output type    : Boolean
@@ -1211,7 +1212,8 @@ output         : true
 
 ast            : 'h
 ' like 'h_'
-raw expr       : like("h\n", "h_")
+raw expr       : like('h
+', 'h_')
 checked expr   : like<String, String>("h\n", "h_")
 optimized expr : true
 output type    : Boolean
@@ -1220,7 +1222,7 @@ output         : true
 
 
 ast            : '%' like '\%'
-raw expr       : like("%", "\\%")
+raw expr       : like('%', '\%')
 checked expr   : like<String, String>("%", "\\%")
 optimized expr : true
 output type    : Boolean
@@ -1229,7 +1231,7 @@ output         : true
 
 
 ast            : 'v%xx' like '_\%%'
-raw expr       : like("v%xx", "_\\%%")
+raw expr       : like('v%xx', '_\%%')
 checked expr   : like<String, String>("v%xx", "_\\%%")
 optimized expr : true
 output type    : Boolean
@@ -1238,7 +1240,7 @@ output         : true
 
 
 ast            : lhs like 'a%'
-raw expr       : like(lhs::String, "a%")
+raw expr       : like(lhs::String, 'a%')
 checked expr   : like<String, String>(lhs, "a%")
 evaluation:
 +--------+-----------------+---------------+
@@ -1246,10 +1248,10 @@ evaluation:
 +--------+-----------------+---------------+
 | Type   | String          | Boolean       |
 | Domain | {"abc"..="abf"} | {FALSE, TRUE} |
-| Row 0  | "abc"           | true          |
-| Row 1  | "abd"           | true          |
-| Row 2  | "abe"           | true          |
-| Row 3  | "abf"           | true          |
+| Row 0  | 'abc'           | true          |
+| Row 1  | 'abd'           | true          |
+| Row 2  | 'abe'           | true          |
+| Row 3  | 'abf'           | true          |
 +--------+-----------------+---------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------+
@@ -1257,6 +1259,54 @@ evaluation (internal):
 +--------+------------------------------------------------------------------------------+
 | lhs    | StringColumn { data: 0x616263616264616265616266, offsets: [0, 3, 6, 9, 12] } |
 | Output | Boolean([0b____1111])                                                        |
++--------+------------------------------------------------------------------------------+
+
+
+ast            : lhs like 'b%'
+raw expr       : like(lhs::String, 'b%')
+checked expr   : like<String, String>(lhs, "b%")
+optimized expr : false
+evaluation:
++--------+-----------------+---------+
+|        | lhs             | Output  |
++--------+-----------------+---------+
+| Type   | String          | Boolean |
+| Domain | {"abc"..="abf"} | {FALSE} |
+| Row 0  | 'abc'           | false   |
+| Row 1  | 'abd'           | false   |
+| Row 2  | 'abe'           | false   |
+| Row 3  | 'abf'           | false   |
++--------+-----------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------+
+| Column | Data                                                                         |
++--------+------------------------------------------------------------------------------+
+| lhs    | StringColumn { data: 0x616263616264616265616266, offsets: [0, 3, 6, 9, 12] } |
+| Output | Boolean([0b____0000])                                                        |
++--------+------------------------------------------------------------------------------+
+
+
+ast            : lhs like 'c'
+raw expr       : like(lhs::String, 'c')
+checked expr   : like<String, String>(lhs, "c")
+optimized expr : false
+evaluation:
++--------+-----------------+---------+
+|        | lhs             | Output  |
++--------+-----------------+---------+
+| Type   | String          | Boolean |
+| Domain | {"abc"..="abf"} | {FALSE} |
+| Row 0  | 'abc'           | false   |
+| Row 1  | 'abd'           | false   |
+| Row 2  | 'abe'           | false   |
+| Row 3  | 'abf'           | false   |
++--------+-----------------+---------+
+evaluation (internal):
++--------+------------------------------------------------------------------------------+
+| Column | Data                                                                         |
++--------+------------------------------------------------------------------------------+
+| lhs    | StringColumn { data: 0x616263616264616265616266, offsets: [0, 3, 6, 9, 12] } |
+| Output | Boolean([0b____0000])                                                        |
 +--------+------------------------------------------------------------------------------+
 
 
@@ -1269,10 +1319,10 @@ evaluation:
 +--------+-----------------+-----------------+---------------+
 | Type   | String          | String          | Boolean       |
 | Domain | {"abc"..="abf"} | {"_b_"..="abe"} | {FALSE, TRUE} |
-| Row 0  | "abc"           | "a%"            | true          |
-| Row 1  | "abd"           | "_b_"           | true          |
-| Row 2  | "abe"           | "abe"           | true          |
-| Row 3  | "abf"           | "a"             | false         |
+| Row 0  | 'abc'           | 'a%'            | true          |
+| Row 1  | 'abd'           | '_b_'           | true          |
+| Row 2  | 'abe'           | 'abe'           | true          |
+| Row 3  | 'abf'           | 'a'             | false         |
 +--------+-----------------+-----------------+---------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------+
@@ -1293,12 +1343,12 @@ evaluation:
 +--------+--------------+--------------+---------------+
 | Type   | String       | String       | Boolean       |
 | Domain | {""..="abf"} | {""..="abe"} | {FALSE, TRUE} |
-| Row 0  | "abc"        | "^a"         | true          |
-| Row 1  | "abd"        | "^b"         | false         |
-| Row 2  | "abe"        | "abe"        | true          |
-| Row 3  | "abf"        | "a"          | true          |
-| Row 4  | "abc"        | ""           | false         |
-| Row 5  | ""           | ""           | true          |
+| Row 0  | 'abc'        | '^a'         | true          |
+| Row 1  | 'abd'        | '^b'         | false         |
+| Row 2  | 'abe'        | 'abe'        | true          |
+| Row 3  | 'abf'        | 'a'          | true          |
+| Row 4  | 'abc'        | ''           | false         |
+| Row 5  | ''           | ''           | true          |
 +--------+--------------+--------------+---------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------+
@@ -1319,12 +1369,12 @@ evaluation:
 +--------+--------------+--------------+---------------+
 | Type   | String       | String       | Boolean       |
 | Domain | {""..="abf"} | {""..="abe"} | {FALSE, TRUE} |
-| Row 0  | "abc"        | "^a"         | true          |
-| Row 1  | "abd"        | "^b"         | false         |
-| Row 2  | "abe"        | "abe"        | true          |
-| Row 3  | "abf"        | "a"          | true          |
-| Row 4  | "abc"        | ""           | false         |
-| Row 5  | ""           | ""           | true          |
+| Row 0  | 'abc'        | '^a'         | true          |
+| Row 1  | 'abd'        | '^b'         | false         |
+| Row 2  | 'abe'        | 'abe'        | true          |
+| Row 3  | 'abf'        | 'a'          | true          |
+| Row 4  | 'abc'        | ''           | false         |
+| Row 5  | ''           | ''           | true          |
 +--------+--------------+--------------+---------------+
 evaluation (internal):
 +--------+--------------------------------------------------------------------------------------------+

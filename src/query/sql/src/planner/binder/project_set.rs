@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -134,7 +134,7 @@ impl Binder {
                 _ => unreachable!(),
             };
 
-            let srf_expr = srf_scalar.as_expr_with_col_index()?;
+            let srf_expr = srf_scalar.as_expr()?;
             let return_types = srf_expr.data_type().as_tuple().unwrap();
 
             if return_types.len() > 1 {

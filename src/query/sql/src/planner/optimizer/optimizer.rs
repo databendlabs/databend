@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -151,7 +151,8 @@ pub fn optimize_query(
     let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
     let mut result = heuristic.optimize(s_expr)?;
     if ctx.get_settings().get_enable_dphyp()? {
-        let (dp_res, optimized) = DPhpy::new(metadata.clone()).optimize(result.clone())?;
+        let (dp_res, optimized) =
+            DPhpy::new(ctx.clone(), metadata.clone()).optimize(result.clone())?;
         result = dp_res;
         if !optimized {
             // Callback to CascadesOptimizer

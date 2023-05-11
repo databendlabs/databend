@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,6 +32,7 @@ use common_meta_types::Entry;
 use common_meta_types::LogId;
 use common_meta_types::MetaStartupError;
 use common_meta_types::Snapshot;
+use common_meta_types::SnapshotData;
 use common_meta_types::SnapshotMeta;
 use common_meta_types::StorageError;
 use common_meta_types::StoredMembership;
@@ -146,7 +147,7 @@ impl RaftLogReader<TypeConfig> for RaftStore {
 }
 
 #[async_trait]
-impl RaftSnapshotBuilder<TypeConfig, Cursor<Vec<u8>>> for RaftStore {
+impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
     async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
         self.do_build_snapshot().await
@@ -155,7 +156,6 @@ impl RaftSnapshotBuilder<TypeConfig, Cursor<Vec<u8>>> for RaftStore {
 
 #[async_trait]
 impl RaftStorage<TypeConfig> for RaftStore {
-    type SnapshotData = Cursor<Vec<u8>>;
     type LogReader = RaftStore;
     type SnapshotBuilder = RaftStore;
 
@@ -289,7 +289,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
     }
 
     #[tracing::instrument(level = "debug", skip(self), fields(id=self.id))]
-    async fn begin_receiving_snapshot(&mut self) -> Result<Box<Self::SnapshotData>, StorageError> {
+    async fn begin_receiving_snapshot(&mut self) -> Result<Box<SnapshotData>, StorageError> {
         server_metrics::incr_applying_snapshot(1);
         Ok(Box::new(Cursor::new(Vec::new())))
     }
@@ -298,7 +298,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
     async fn install_snapshot(
         &mut self,
         meta: &SnapshotMeta,
-        snapshot: Box<Self::SnapshotData>,
+        snapshot: Box<SnapshotData>,
     ) -> Result<(), StorageError> {
         // TODO(xp): disallow installing a snapshot with smaller last_applied.
 

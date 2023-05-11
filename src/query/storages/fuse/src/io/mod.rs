@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@
 
 mod files;
 mod locations;
-mod read;
+pub mod read;
 mod segments;
 mod snapshots;
 mod write;
@@ -23,11 +23,11 @@ pub use files::Files;
 pub use locations::TableMetaLocationGenerator;
 pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
+pub use read::CompactSegmentInfoReader;
 pub use read::MergeIOReadResult;
 pub use read::MetaReaders;
 pub use read::NativeReaderExt;
 pub use read::ReadSettings;
-pub use read::SegmentInfoReader;
 pub use read::SnapshotHistoryReader;
 pub use read::TableSnapshotReader;
 pub use read::UncompressedBuffer;

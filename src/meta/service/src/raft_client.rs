@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::Endpoint;
+use common_meta_types::GrpcConfig;
 use common_meta_types::NodeId;
 use common_metrics::counter;
 use tonic::transport::channel::Channel;
@@ -52,7 +53,10 @@ impl RaftClientApi for RaftClient {
             target, endpoint_str
         );
 
-        counter::WithCount::new(RaftServiceClient::new(channel), PeerCounter {
+        let cli = RaftServiceClient::new(channel)
+            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+        counter::WithCount::new(cli, PeerCounter {
             target,
             endpoint,
             endpoint_str,

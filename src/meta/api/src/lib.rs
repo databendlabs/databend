@@ -1,16 +1,16 @@
-//  Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
@@ -39,6 +39,7 @@ pub(crate) use schema_api_impl::get_db_or_err;
 pub use schema_api_test_suite::SchemaApiTestSuite;
 pub use share_api::ShareApi;
 pub use share_api_test_suite::ShareApiTestSuite;
+pub use util::assert_table_exist;
 pub use util::convert_share_meta_to_spec;
 pub use util::db_has_to_exist;
 pub use util::deserialize_struct;
@@ -60,7 +61,6 @@ pub use util::remove_db_from_share;
 pub use util::send_txn;
 pub use util::serialize_struct;
 pub use util::serialize_u64;
-pub use util::table_has_to_exist;
 pub use util::txn_cond_seq;
 pub use util::txn_op_del;
 pub use util::txn_op_put;

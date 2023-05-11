@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -309,7 +309,7 @@ impl ScheduleQueue {
                 processor,
                 context.query_id.clone(),
                 executor,
-                context.get_worker_num(),
+                context.get_worker_id(),
                 context.get_workers_condvar().clone(),
                 global.clone(),
             )
@@ -328,7 +328,7 @@ impl ScheduleQueue {
         proc: ProcessorPtr,
         query_id: Arc<String>,
         executor: &PipelineExecutor,
-        wakeup_worker_num: usize,
+        wakeup_worker_id: usize,
         workers_condvar: Arc<WorkersCondvar>,
         global_queue: Arc<ExecutorTasksQueue>,
     ) {
@@ -339,7 +339,7 @@ impl ScheduleQueue {
                 .async_runtime
                 .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
                     query_id,
-                    wakeup_worker_num,
+                    wakeup_worker_id,
                     proc.clone(),
                     global_queue,
                     workers_condvar,

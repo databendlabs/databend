@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -48,7 +48,7 @@ impl Interpreter for UnSettingInterpreter {
         let mut keys: Vec<String> = vec![];
         let mut values: Vec<String> = vec![];
         let mut is_globals: Vec<bool> = vec![];
-        let settings = self.ctx.get_settings();
+        let settings = self.ctx.get_shard_settings();
         for var in plan.vars {
             let (ok, value) = match var.to_lowercase().as_str() {
                 // To be compatible with some drivers
@@ -56,7 +56,7 @@ impl Interpreter for UnSettingInterpreter {
                 setting => {
                     if matches!(settings.get_setting_level(setting)?, Global) {
                         self.ctx
-                            .get_settings()
+                            .get_shard_settings()
                             .try_drop_global_setting(setting)
                             .await?;
                     }
@@ -85,7 +85,7 @@ impl Interpreter for UnSettingInterpreter {
             if ok {
                 // reset the current ctx settings to default val
                 self.ctx
-                    .get_settings()
+                    .get_shard_settings()
                     .set_setting(var.clone(), value.clone())?;
                 // set affect
                 keys.push(var);

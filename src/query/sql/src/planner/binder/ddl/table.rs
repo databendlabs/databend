@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ use common_ast::ast::TableReference;
 use common_ast::ast::TruncateTableStmt;
 use common_ast::ast::UndropTableStmt;
 use common_ast::ast::UriLocation;
+use common_ast::ast::VacuumTableStmt;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
@@ -99,6 +100,8 @@ use crate::plans::RewriteKind;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumTableOption;
+use crate::plans::VacuumTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Planner;
@@ -608,7 +611,7 @@ impl Binder {
             }
             AlterTableAction::AddColumn { column } => {
                 let (schema, field_default_exprs, field_comments) = self
-                    .analyze_create_table_schema_by_columns(&[column.clone()])
+                    .analyze_create_table_schema_by_columns(&[column.clone()], true)
                     .await?;
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
                     catalog,
@@ -814,6 +817,47 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_table(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumTableStmt,
+    ) -> Result<Plan> {
+        let VacuumTableStmt {
+            catalog,
+            database,
+            table,
+            option,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let option = {
+            let retain_hours = match option.retain_hours {
+                Some(Expr::Literal {
+                    lit: Literal::UInt64(uint),
+                    ..
+                }) => Some(uint as usize),
+                Some(_) => {
+                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
+                }
+                _ => None,
+            };
+
+            VacuumTableOption {
+                retain_hours,
+                dry_run: option.dry_run,
+            }
+        };
+        Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
+            catalog,
+            database,
+            table,
+            option,
+        })))
+    }
+
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_analyze_table(
         &mut self,
         stmt: &AnalyzeTableStmt,
@@ -859,6 +903,7 @@ impl Binder {
     async fn analyze_create_table_schema_by_columns(
         &self,
         columns: &[ColumnDefinition],
+        is_add_column: bool,
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         let mut bind_context = BindContext::new();
         let mut scalar_binder = ScalarBinder::new(
@@ -880,32 +925,33 @@ impl Binder {
                 if let Some(default_expr) = &column.default_expr {
                     let (expr, _) = scalar_binder.bind(default_expr).await?;
                     let is_try = schema_data_type.is_nullable();
-                    let cast_expr_to_field_type = ScalarExpr::CastExpr(CastExpr {
+                    let cast_expr = ScalarExpr::CastExpr(CastExpr {
                         span: expr.span(),
                         is_try,
                         target_type: Box::new(DataType::from(&schema_data_type)),
                         argument: Box::new(expr),
                     })
-                    .as_expr_with_col_index()?;
+                    .as_expr()?;
 
-                    if !cast_expr_to_field_type.is_deterministic(&BUILTIN_FUNCTIONS) {
+                    // Added columns are not allowed to use expressions,
+                    // as the default values will be generated at at each query.
+                    if is_add_column && !cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                         return Err(ErrorCode::SemanticError(format!(
-                            "default expression {cast_expr_to_field_type} is not a valid constant. Please provide a valid constant expression as the default value.",
+                            "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.", cast_expr.sql_display(),
                         )));
                     }
 
-                    let (fold_to_constant, _) = ConstantFolder::fold(
-                        &cast_expr_to_field_type,
-                        &self.ctx.get_function_context()?,
-                        &BUILTIN_FUNCTIONS,
-                    );
-                    if let common_expression::Expr::Constant { .. } = fold_to_constant {
-                        Some(default_expr.to_string())
+                    let expr = if cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                        let (fold_to_constant, _) = ConstantFolder::fold(
+                            &cast_expr,
+                            &self.ctx.get_function_context()?,
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        fold_to_constant
                     } else {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "default expression {cast_expr_to_field_type} is not a valid constant expression. Please provide a valid constant expression as the default value.",
-                        )));
-                    }
+                        cast_expr
+                    };
+                    Some(expr.sql_display())
                 } else {
                     None
                 }
@@ -924,7 +970,8 @@ impl Binder {
     ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
         match source {
             CreateTableSource::Columns(columns) => {
-                self.analyze_create_table_schema_by_columns(columns).await
+                self.analyze_create_table_schema_by_columns(columns, false)
+                    .await
             }
             CreateTableSource::Like {
                 catalog,
@@ -936,10 +983,15 @@ impl Binder {
                 let table = self.ctx.get_table(&catalog, &database, &table).await?;
 
                 if table.engine() == VIEW_ENGINE {
-                    let query = table.get_table_info().options().get(QUERY).unwrap();
-                    let mut planner = Planner::new(self.ctx.clone());
-                    let (plan, _) = planner.plan_sql(query).await?;
-                    Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
+                    if let Some(query) = table.get_table_info().options().get(QUERY) {
+                        let mut planner = Planner::new(self.ctx.clone());
+                        let (plan, _) = planner.plan_sql(query).await?;
+                        Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
+                    } else {
+                        Err(ErrorCode::Internal(
+                            "Logical error, View Table must have a SelectQuery inside.",
+                        ))
+                    }
                 } else {
                     Ok((table.schema(), vec![], table.field_comments().clone()))
                 }
@@ -1013,7 +1065,7 @@ impl Binder {
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            let expr = cluster_key.as_expr_with_col_index()?;
+            let expr = cluster_key.as_expr()?;
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",

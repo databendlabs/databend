@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
 
 pub mod any;
 pub mod array;
+pub mod bitmap;
 pub mod boolean;
 pub mod date;
 pub mod decimal;
@@ -39,9 +40,11 @@ use serde::Serialize;
 
 pub use self::any::AnyType;
 pub use self::array::ArrayType;
+pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
 pub use self::decimal::DecimalDataType;
+use self::decimal::DecimalSize;
 pub use self::empty_array::EmptyArrayType;
 pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;
@@ -75,6 +78,7 @@ pub enum DataType {
     Nullable(Box<DataType>),
     Array(Box<DataType>),
     Map(Box<DataType>),
+    Bitmap,
     Tuple(Vec<DataType>),
     Variant,
     Generic(usize),
@@ -83,7 +87,7 @@ pub enum DataType {
 impl DataType {
     pub fn wrap_nullable(&self) -> Self {
         match self {
-            DataType::Nullable(_) => self.clone(),
+            DataType::Null | DataType::Nullable(_) => self.clone(),
             _ => Self::Nullable(Box::new(self.clone())),
         }
     }
@@ -174,6 +178,7 @@ impl DataType {
         }
     }
 
+    #[inline]
     pub fn is_decimal(&self) -> bool {
         matches!(self, DataType::Decimal(_ty))
     }
@@ -248,6 +253,14 @@ impl DataType {
                 .map(|inner_ty| inner_ty.num_leaf_columns())
                 .sum(),
             _ => 1,
+        }
+    }
+
+    pub fn get_decimal_properties(&self) -> Option<DecimalSize> {
+        match self {
+            DataType::Decimal(decimal_type) => Some(decimal_type.size()),
+            DataType::Number(num_ty) => num_ty.get_decimal_properties(),
+            _ => None,
         }
     }
 }

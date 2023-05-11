@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_pipeline_core::processors::port::InputPort;
-use storages_common_pruner::BlockMetaIndex;
 
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -32,7 +31,7 @@ use crate::pipelines::processors::Processor;
 
 pub struct FillInternalColumnProcessor {
     internal_columns: BTreeMap<FieldIndex, InternalColumn>,
-    data_blocks: VecDeque<(BlockMetaIndex, DataBlock)>,
+    data_blocks: VecDeque<(InternalColumnMeta, DataBlock)>,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
@@ -83,8 +82,9 @@ impl Processor for FillInternalColumnProcessor {
         if self.input.has_data() {
             let mut data_block = self.input.pull_data().unwrap()?;
             if let Some(source_meta) = data_block.take_meta() {
-                if let Some(block_meta) = BlockMetaIndex::downcast_from(source_meta) {
-                    self.data_blocks.push_back((block_meta, data_block));
+                if let Some(internal_column_meta) = InternalColumnMeta::downcast_from(source_meta) {
+                    self.data_blocks
+                        .push_back((internal_column_meta, data_block));
                     return Ok(Event::Sync);
                 }
             }
@@ -102,16 +102,9 @@ impl Processor for FillInternalColumnProcessor {
     }
 
     fn process(&mut self) -> Result<()> {
-        if let Some((block_meta, data_block)) = self.data_blocks.pop_front() {
+        if let Some((internal_column_meta, data_block)) = self.data_blocks.pop_front() {
             let mut data_block = data_block;
             let num_rows = data_block.num_rows();
-            let internal_column_meta = InternalColumnMeta {
-                segment_id: block_meta.segment_id,
-                block_id: block_meta.block_id,
-                block_location: block_meta.block_location.clone(),
-                segment_location: block_meta.segment_location.clone(),
-                snapshot_location: block_meta.snapshot_location.unwrap(),
-            };
             for internal_column in self.internal_columns.values() {
                 let column =
                     internal_column.generate_column_values(&internal_column_meta, num_rows);

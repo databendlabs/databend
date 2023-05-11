@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,6 +33,8 @@ use super::semantic::DistinctToGroupBy;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
+use crate::plans::Insert;
+use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::Binder;
 use crate::Metadata;
@@ -117,7 +119,21 @@ impl Planner {
             }
             .await;
 
-            if res.is_err() && matches!(tokenizer.peek(), Some(Ok(_))) {
+            let mut maybe_partial_insert = false;
+            if is_insert_stmt && matches!(tokenizer.peek(), Some(Ok(_))) {
+                if let Ok((
+                    Plan::Insert(box Insert {
+                        source: InsertInputSource::SelectPlan(_),
+                        ..
+                    }),
+                    _,
+                )) = &res
+                {
+                    maybe_partial_insert = true;
+                }
+            }
+
+            if maybe_partial_insert || (res.is_err() && matches!(tokenizer.peek(), Some(Ok(_)))) {
                 // Remove the previous EOI.
                 tokens.pop();
                 // Tokenize more and try again.
@@ -125,7 +141,6 @@ impl Planner {
                     let iter = (&mut tokenizer)
                         .take(tokens.len() * 2)
                         .take_while(|token| token.is_ok())
-                        .chain(std::iter::once(Ok(Token::new_eoi(sql))))
                         .map(|token| token.unwrap())
                         // Make sure the tokens stream is always ended with EOI.
                         .chain(std::iter::once(Token::new_eoi(sql)));

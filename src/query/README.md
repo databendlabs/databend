@@ -20,3 +20,5 @@ Databend Query is a Distributed Query Engine at scale.
 - [`storages`](./storages/) relates to table engines, including the commonly used fuse engine and indexes etc.
 - [`streams`](./streams/) contains data sources and streams.
 - [`users`](./users/), role-based access and control.
+- [`ee`](ee/) contains enterprise functionalities.
+- [`ee-features`](ee-features/) contains enterprise features.

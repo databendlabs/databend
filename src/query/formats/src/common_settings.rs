@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -22,4 +22,5 @@ pub struct CommonSettings {
     pub nan_bytes: Vec<u8>,
     pub inf_bytes: Vec<u8>,
     pub timezone: Tz,
+    pub disable_variant_check: bool,
 }

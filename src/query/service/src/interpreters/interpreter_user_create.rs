@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -53,7 +53,6 @@ impl Interpreter for CreateUserInterpreter {
         let tenant = self.ctx.get_tenant();
 
         let user_mgr = UserApiProvider::instance();
-        user_mgr.ensure_builtin_roles(&tenant).await?;
         let users = user_mgr.get_users(&tenant).await?;
 
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;

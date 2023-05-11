@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -17,11 +17,13 @@ use std::fmt::Formatter;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
+use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::InsertSource;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ReplaceStmt {
+    pub hints: Option<Hint>,
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -32,7 +34,11 @@ pub struct ReplaceStmt {
 
 impl Display for ReplaceStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        write!(f, "REPLACE INTO ")?;
+        write!(f, "REPLACE ")?;
+        if let Some(hints) = &self.hints {
+            write!(f, "{} ", hints)?;
+        }
+        write!(f, "INTO ")?;
         write_period_separated_list(
             f,
             self.catalog

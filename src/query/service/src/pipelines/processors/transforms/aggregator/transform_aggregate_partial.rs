@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -179,10 +179,6 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
             .group_columns
             .iter()
             .map(|&index| block.get_by_offset(index))
-            .collect::<Vec<_>>();
-
-        let group_columns = group_columns
-            .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
 

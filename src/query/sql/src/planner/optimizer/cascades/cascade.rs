@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ use crate::MetadataRef;
 /// A cascades-style search engine to enumerate possible alternations of a relational expression and
 /// find the optimal one.
 pub struct CascadesOptimizer {
+    pub(crate) ctx: Arc<dyn TableContext>,
     pub(crate) memo: Memo,
     pub(crate) cost_model: Box<dyn CostModel>,
     /// group index -> best cost context
@@ -54,6 +55,7 @@ impl CascadesOptimizer {
             RuleSet::create()
         };
         Ok(CascadesOptimizer {
+            ctx,
             memo: Memo::create(),
             cost_model: Box::new(DefaultCostModel),
             best_cost_map: HashMap::new(),
@@ -77,7 +79,7 @@ impl CascadesOptimizer {
             .ok_or_else(|| ErrorCode::Internal("Root group cannot be None after initialization"))?
             .group_index;
 
-        let root_task = OptimizeGroupTask::new(root_index);
+        let root_task = OptimizeGroupTask::new(self.ctx.clone(), root_index);
         let mut scheduler = Scheduler::new();
         scheduler.add_task(Task::OptimizeGroup(root_task));
         scheduler.run(self)?;

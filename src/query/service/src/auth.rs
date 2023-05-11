@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -83,9 +83,6 @@ impl AuthMgr {
 
                 let tenant = session.get_current_tenant();
                 let identity = UserIdentity::new(&user_name, "%");
-
-                // ensure the builtin roles like ACCOUNT_ADMIN, PUBLIC exists
-                user_api.ensure_builtin_roles(&tenant).await?;
 
                 // create a new user for this identity if not exists
                 let user = match user_api.get_user(&tenant, identity.clone()).await {

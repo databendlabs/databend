@@ -38,6 +38,8 @@ use crate::client::MySQLClient;
 use crate::error::DSqlLogicTestError;
 use crate::error::Result;
 use crate::util::get_files;
+use crate::util::prepare_tpcds_data;
+use crate::util::prepare_tpch_data;
 
 mod arg;
 mod client;
@@ -76,6 +78,28 @@ impl sqllogictest::AsyncDB for Databend {
 pub async fn main() -> Result<()> {
     env_logger::init();
     let args = SqlLogicTestArgs::parse();
+    match (&args.dir, &args.skipped_dir) {
+        (None, None) => {
+            prepare_tpch_data()?;
+            prepare_tpcds_data()?;
+        }
+        (Some(dir), _) => {
+            if dir == "tpch" {
+                prepare_tpch_data()?;
+            }
+            if dir == "tpcds" {
+                prepare_tpcds_data()?;
+            }
+        }
+        (None, Some(skipped_dir)) => {
+            if skipped_dir != "tpch" {
+                prepare_tpch_data()?;
+            }
+            if skipped_dir != "tpcds" {
+                prepare_tpcds_data()?;
+            }
+        }
+    }
     let handlers = match &args.handlers {
         Some(hs) => hs.iter().map(|s| s.as_str()).collect(),
         None => vec![HANDLER_MYSQL, HANDLER_HTTP, HANDLER_CLICKHOUSE],
@@ -186,6 +210,11 @@ async fn run_suits(suits: ReadDir, client_type: ClientType) -> Result<()> {
                 .to_string();
             if let Some(ref specific_file) = args.file {
                 if !file_name.contains(specific_file) {
+                    continue;
+                }
+            }
+            if let Some(ref skip_file) = args.skipped_file {
+                if file_name.eq(skip_file) {
                     continue;
                 }
             }

@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -30,11 +30,12 @@ use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_hashtable::HashtableLike;
+use common_hashtable::HashJoinHashtableLike;
+use common_hashtable::MarkerKind;
+use common_hashtable::RowPtr;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-use crate::pipelines::processors::transforms::hash_join::desc::MarkerKind;
-use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
 
@@ -54,17 +55,33 @@ impl JoinHashTable {
     }
 
     #[inline]
-    pub(crate) fn probe_key<'a, H: HashtableLike<Value = Vec<RowPtr>>>(
+    pub(crate) fn contains<'a, H: HashJoinHashtableLike>(
         &self,
         hash_table: &'a H,
         key: &'a H::Key,
         valids: &Option<Bitmap>,
         i: usize,
-    ) -> Option<H::EntryRef<'a>> {
+    ) -> bool {
         if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
-            return hash_table.entry(key);
+            return hash_table.contains(key);
         }
-        None
+        false
+    }
+
+    #[inline]
+    pub(crate) fn probe_key<'a, H: HashJoinHashtableLike>(
+        &self,
+        hash_table: &'a H,
+        key: &'a H::Key,
+        valids: &Option<Bitmap>,
+        i: usize,
+        vec_ptr: *mut RowPtr,
+        occupied: usize,
+    ) -> (usize, u64) {
+        if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
+            return hash_table.probe_hash_table(key, vec_ptr, occupied, JOIN_MAX_BLOCK_SIZE);
+        }
+        (0, 0)
     }
 
     pub(crate) fn create_marker_block(
@@ -253,7 +270,11 @@ impl JoinHashTable {
         &self,
         unmatched_build_indexes: &Vec<RowPtr>,
     ) -> Result<DataBlock> {
-        let data_blocks = self.row_space.datablocks();
+        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
@@ -316,7 +337,11 @@ impl JoinHashTable {
     }
 
     pub(crate) fn rest_block(&self) -> Result<DataBlock> {
-        let data_blocks = self.row_space.datablocks();
+        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());

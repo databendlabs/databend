@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 use std::time::Duration;
@@ -30,6 +31,7 @@ use common_base::base::tokio::time::sleep;
 use common_base::containers::ItemManager;
 use common_base::containers::Pool;
 use common_base::containers::TtlHashMap;
+use common_base::future::TimingFutureExt;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_base::runtime::UnlimitedFuture;
@@ -51,6 +53,7 @@ use common_meta_types::protobuf::RaftRequest;
 use common_meta_types::protobuf::WatchRequest;
 use common_meta_types::protobuf::WatchResponse;
 use common_meta_types::ConnectionError;
+use common_meta_types::GrpcConfig;
 use common_meta_types::InvalidArgument;
 use common_meta_types::MetaClientError;
 use common_meta_types::MetaError;
@@ -392,23 +395,38 @@ impl MetaGrpcClient {
 
             let resp = match req {
                 message::Request::Get(r) => {
-                    let resp = self.kv_api(r).await;
+                    let resp = self
+                        .kv_api(r)
+                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                        .await;
                     message::Response::Get(resp)
                 }
                 message::Request::MGet(r) => {
-                    let resp = self.kv_api(r).await;
+                    let resp = self
+                        .kv_api(r)
+                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                        .await;
                     message::Response::MGet(resp)
                 }
                 message::Request::PrefixList(r) => {
-                    let resp = self.kv_api(r).await;
+                    let resp = self
+                        .kv_api(r)
+                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                        .await;
                     message::Response::PrefixList(resp)
                 }
                 message::Request::Upsert(r) => {
-                    let resp = self.kv_api(r).await;
+                    let resp = self
+                        .kv_api(r)
+                        .timed_ge(threshold(), info_spent("MetaGrpcClient::kv_api"))
+                        .await;
                     message::Response::Upsert(resp)
                 }
                 message::Request::Txn(r) => {
-                    let resp = self.transaction(r).await;
+                    let resp = self
+                        .transaction(r)
+                        .timed_ge(threshold(), info_spent("MetaGrpcClient::transaction"))
+                        .await;
                     message::Response::Txn(resp)
                 }
                 message::Request::Watch(r) => {
@@ -530,7 +548,9 @@ impl MetaGrpcClient {
             let channel = self.make_channel(Some(addr)).await;
             match channel {
                 Ok(c) => {
-                    let mut client = MetaServiceClient::new(c.clone());
+                    let mut client = MetaServiceClient::new(c.clone())
+                        .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+                        .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
                     let new_token = Self::handshake(
                         &mut client,
@@ -540,11 +560,15 @@ impl MetaGrpcClient {
                         &self.password,
                     )
                     .await;
+
                     match new_token {
                         Ok(token) => {
-                            return Ok(MetaServiceClient::with_interceptor(c, AuthInterceptor {
-                                token,
-                            }));
+                            let client =
+                                MetaServiceClient::with_interceptor(c, AuthInterceptor { token })
+                                    .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+                                    .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
+
+                            return Ok(client);
                         }
                         Err(handshake_err) => {
                             warn!("handshake error when make client: {:?}", handshake_err);
@@ -876,8 +900,15 @@ impl MetaGrpcClient {
 
         let req = common_tracing::inject_span_to_tonic_request(req);
 
-        let mut client = self.make_client().await?;
-        let result = client.kv_api(req).await;
+        let mut client = self
+            .make_client()
+            .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client-1"))
+            .await?;
+
+        let result = client
+            .kv_api(req)
+            .timed_ge(threshold(), info_spent("client::kv_api-1"))
+            .await;
 
         debug!(reply = debug(&result), "MetaGrpcClient::kv_api reply");
 
@@ -886,7 +917,10 @@ impl MetaGrpcClient {
             Err(s) => {
                 if status_is_retryable(&s) {
                     self.mark_as_unhealthy().await;
-                    let mut client = self.make_client().await?;
+                    let mut client = self
+                        .make_client()
+                        .timed_ge(threshold(), info_spent("MetaGrpcClient::make_client-2"))
+                        .await?;
                     let req: Request<RaftRequest> = read_req.try_into().map_err(|e| {
                         MetaNetworkError::InvalidArgument(InvalidArgument::new(
                             e,
@@ -894,7 +928,11 @@ impl MetaGrpcClient {
                         ))
                     })?;
                     let req = common_tracing::inject_span_to_tonic_request(req);
-                    Ok(client.kv_api(req).await?.into_inner())
+                    Ok(client
+                        .kv_api(req)
+                        .timed_ge(threshold(), info_spent("client::kv_api-2"))
+                        .await?
+                        .into_inner())
                 } else {
                     Err(s)
                 }
@@ -964,5 +1002,19 @@ impl Interceptor for AuthInterceptor {
         let metadata = req.metadata_mut();
         metadata.insert_bin(AUTH_TOKEN_KEY, MetadataValue::from_bytes(&self.token));
         Ok(req)
+    }
+}
+
+fn threshold() -> Duration {
+    Duration::from_millis(300)
+}
+
+fn info_spent(msg: impl Display) -> impl Fn(Duration, Duration) {
+    move |total, busy| {
+        info!(
+            total = ?total,
+            busy = ?busy,
+            "{} spent", msg
+        );
     }
 }

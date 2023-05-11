@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ use crate::optimizer::util::contains_project_set;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
+use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
 use crate::plans::WindowFuncType;
@@ -169,18 +170,27 @@ impl UnusedColumnPruner {
                     // column index here. The used columns will be included in its EvalScalar child.
                     required.insert(i.index);
                 });
-                Ok(SExpr::create_unary(
-                    RelOperator::Aggregate(Aggregate {
-                        group_items: p.group_items.clone(),
-                        aggregate_functions: used,
-                        from_distinct: p.from_distinct,
-                        mode: p.mode,
-                        limit: p.limit,
-                        grouping_id_index: p.grouping_id_index,
-                        grouping_sets: p.grouping_sets.clone(),
-                    }),
-                    self.keep_required_columns(expr.child(0)?, required)?,
-                ))
+
+                // If the aggregate is empty, we remove the aggregate operator and replace it with
+                // a DummyTableScan which returns exactly one row.
+                if p.group_items.is_empty() && used.is_empty() {
+                    Ok(SExpr::create_leaf(RelOperator::DummyTableScan(
+                        DummyTableScan,
+                    )))
+                } else {
+                    Ok(SExpr::create_unary(
+                        RelOperator::Aggregate(Aggregate {
+                            group_items: p.group_items.clone(),
+                            aggregate_functions: used,
+                            from_distinct: p.from_distinct,
+                            mode: p.mode,
+                            limit: p.limit,
+                            grouping_id_index: p.grouping_id_index,
+                            grouping_sets: p.grouping_sets.clone(),
+                        }),
+                        self.keep_required_columns(expr.child(0)?, required)?,
+                    ))
+                }
             }
             RelOperator::Window(p) => {
                 if required.contains(&p.index) {

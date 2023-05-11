@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,6 +18,10 @@ fn hex_safe(n: u8) -> char {
 }
 
 pub fn escape_string(s: &str) -> String {
+    escape_string_with_quote(s, None)
+}
+
+pub fn escape_string_with_quote(s: &str, quote: Option<char>) -> String {
     let chars = s.chars().peekable();
     let mut s = String::new();
 
@@ -26,8 +30,8 @@ pub fn escape_string(s: &str) -> String {
             '\t' => s.push_str("\\t"),
             '\r' => s.push_str("\\r"),
             '\n' => s.push_str("\\n"),
-            '\'' => s.push_str("\\\'"),
-            '"' => s.push_str("\\\""),
+            '\'' => s.push_str(if quote == Some('"') { "\'" } else { "\\\'" }),
+            '"' => s.push_str(if quote == Some('\'') { "\"" } else { "\\\"" }),
             '\\' => s.push_str("\\\\"),
             '\x00'..='\x1F' => {
                 s.push('\\');

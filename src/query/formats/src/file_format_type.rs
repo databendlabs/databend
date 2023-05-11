@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -42,6 +42,7 @@ pub struct FileFormatOptionsExt {
     pub headers: usize,
     pub json_compact: bool,
     pub json_strings: bool,
+    pub disable_variant_check: bool,
     pub timezone: Tz,
 }
 
@@ -53,6 +54,7 @@ impl FileFormatOptionsExt {
             headers: 0,
             json_compact: false,
             json_strings: false,
+            disable_variant_check: false,
             timezone,
         };
         Ok(options)
@@ -63,12 +65,12 @@ impl FileFormatOptionsExt {
         settings: &Settings,
     ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
-
         let mut options = FileFormatOptionsExt {
             ident_case_sensitive: settings.get_unquoted_ident_case_sensitive()?,
             headers: 0,
             json_compact: false,
             json_strings: false,
+            disable_variant_check: false,
             timezone,
         };
         let suf = &clickhouse_type.suffixes;

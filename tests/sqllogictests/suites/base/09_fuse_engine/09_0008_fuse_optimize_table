@@ -224,10 +224,10 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1
 2 4
 
 statement ok
-optimize table t2 compact segment limit 2 /* right-assoc can not be compact further*/
+optimize table t2 compact segment limit 2 /* right-assoc can not be compact further*/ /*+ test hint */
 
 query II
-select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1 /* can not be compacted further */
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't2') limit 1 /* can not be compacted further */ /*+ test hint */
 ----
 2 4
 

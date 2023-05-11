@@ -1,10 +1,10 @@
 ast            : md5('Abc')
-raw expr       : md5("Abc")
+raw expr       : md5('Abc')
 checked expr   : md5<String>("Abc")
 optimized expr : "35593b7ce5020eae3ca68fd5b6f3e031"
 output type    : String
 output domain  : {"35593b7ce5020eae3ca68fd5b6f3e031"..="35593b7ce5020eae3ca68fd5b6f3e031"}
-output         : "35593b7ce5020eae3ca68fd5b6f3e031"
+output         : '35593b7ce5020eae3ca68fd5b6f3e031'
 
 
 ast            : md5(NULL)
@@ -25,9 +25,9 @@ evaluation:
 +--------+-------------------+------------------------------------+
 | Type   | String            | String                             |
 | Domain | {"Abc"..="ß😀山"} | Unknown                            |
-| Row 0  | "Abc"             | "35593b7ce5020eae3ca68fd5b6f3e031" |
-| Row 1  | "Dobrý den"       | "1ef0b4dab5588fe3f63cd84f6f1d6ab2" |
-| Row 2  | "ß😀山"           | "b814c09d48b62faafc315df44a35863e" |
+| Row 0  | 'Abc'             | '35593b7ce5020eae3ca68fd5b6f3e031' |
+| Row 1  | 'Dobrý den'       | '1ef0b4dab5588fe3f63cd84f6f1d6ab2' |
+| Row 2  | 'ß😀山'           | 'b814c09d48b62faafc315df44a35863e' |
 +--------+-------------------+------------------------------------+
 evaluation (internal):
 +--------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -39,12 +39,12 @@ evaluation (internal):
 
 
 ast            : sha('Abc')
-raw expr       : sha("Abc")
+raw expr       : sha('Abc')
 checked expr   : sha<String>("Abc")
 optimized expr : "915858afa2278f25527f192038108346164b47f2"
 output type    : String
 output domain  : {"915858afa2278f25527f192038108346164b47f2"..="915858afa2278f25527f192038108346164b47f2"}
-output         : "915858afa2278f25527f192038108346164b47f2"
+output         : '915858afa2278f25527f192038108346164b47f2'
 
 
 ast            : sha(NULL)
@@ -65,9 +65,9 @@ evaluation:
 +--------+-------------------+--------------------------------------------+
 | Type   | String            | String                                     |
 | Domain | {"Abc"..="ß😀山"} | Unknown                                    |
-| Row 0  | "Abc"             | "915858afa2278f25527f192038108346164b47f2" |
-| Row 1  | "Dobrý den"       | "c66d056c9fb2c9e6cd74b4555f64c0af4a7bc599" |
-| Row 2  | "ß😀山"           | "e978809ba007678383c2db3decbaf02eb0bf72a8" |
+| Row 0  | 'Abc'             | '915858afa2278f25527f192038108346164b47f2' |
+| Row 1  | 'Dobrý den'       | 'c66d056c9fb2c9e6cd74b4555f64c0af4a7bc599' |
+| Row 2  | 'ß😀山'           | 'e978809ba007678383c2db3decbaf02eb0bf72a8' |
 +--------+-------------------+--------------------------------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -79,12 +79,12 @@ evaluation (internal):
 
 
 ast            : blake3('Abc')
-raw expr       : blake3("Abc")
+raw expr       : blake3('Abc')
 checked expr   : blake3<String>("Abc")
 optimized expr : "1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111"
 output type    : String
 output domain  : {"1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111"..="1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111"}
-output         : "1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111"
+output         : '1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111'
 
 
 ast            : blake3(NULL)
@@ -105,9 +105,9 @@ evaluation:
 +--------+-------------------+--------------------------------------------------------------------+
 | Type   | String            | String                                                             |
 | Domain | {"Abc"..="ß😀山"} | Unknown                                                            |
-| Row 0  | "Abc"             | "1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111" |
-| Row 1  | "Dobrý den"       | "0b449419834e5d285d3b95f892b5494db8d7798c11602ccde1f51c33a159677f" |
-| Row 2  | "ß😀山"           | "56475d2e89dba36b511ddaa8e4e8e995c094f59f5fbfa0af5929f3f399d9a810" |
+| Row 0  | 'Abc'             | '1f7aa3978949c4275797ac6056c0108e852a5d07c49838a00799194957b82111' |
+| Row 1  | 'Dobrý den'       | '0b449419834e5d285d3b95f892b5494db8d7798c11602ccde1f51c33a159677f' |
+| Row 2  | 'ß😀山'           | '56475d2e89dba36b511ddaa8e4e8e995c094f59f5fbfa0af5929f3f399d9a810' |
 +--------+-------------------+--------------------------------------------------------------------+
 evaluation (internal):
 +--------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -119,21 +119,21 @@ evaluation (internal):
 
 
 ast            : sha2('Abc',0)
-raw expr       : sha2("Abc", 0)
+raw expr       : sha2('Abc', 0)
 checked expr   : sha2<String, UInt64>("Abc", to_uint64<UInt8>(0_u8))
 optimized expr : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
 output type    : String
 output domain  : {"06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"..="06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"}
-output         : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
+output         : '06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b'
 
 
 ast            : sha2('Abc',256)
-raw expr       : sha2("Abc", 256)
+raw expr       : sha2('Abc', 256)
 checked expr   : sha2<String, UInt64>("Abc", to_uint64<UInt16>(256_u16))
 optimized expr : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
 output type    : String
 output domain  : {"06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"..="06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"}
-output         : "06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b"
+output         : '06d90109c8cce34ec0c776950465421e176f08b831a938b3c6e76cb7bee8790b'
 
 
 ast            : sha2(NULL,0)
@@ -154,9 +154,9 @@ evaluation:
 +--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
 | Type   | String            | UInt16      | String                                                                                                                             |
 | Domain | {"Abc"..="ß😀山"} | {224..=512} | Unknown                                                                                                                            |
-| Row 0  | "Abc"             | 224         | "11d86770f501294c6b395942a39f60fe286a15e06282abcb2294cfa0"                                                                         |
-| Row 1  | "Dobrý den"       | 384         | "1a5c66c918718c627e360e56833d2f6c638fd1a67086792606cfefe50089289ca34b52a72a833e6f2661b64417068846"                                 |
-| Row 2  | "ß😀山"           | 512         | "3bd4ca36a66c0675e695f3fc44af703cd6c110085adf105138ef56e6768a639f16a9c27b651a0c64f685b24be835e0a62485575477e06d530574865bf1670d30" |
+| Row 0  | 'Abc'             | 224         | '11d86770f501294c6b395942a39f60fe286a15e06282abcb2294cfa0'                                                                         |
+| Row 1  | 'Dobrý den'       | 384         | '1a5c66c918718c627e360e56833d2f6c638fd1a67086792606cfefe50089289ca34b52a72a833e6f2661b64417068846'                                 |
+| Row 2  | 'ß😀山'           | 512         | '3bd4ca36a66c0675e695f3fc44af703cd6c110085adf105138ef56e6768a639f16a9c27b651a0c64f685b24be835e0a62485575477e06d530574865bf1670d30' |
 +--------+-------------------+-------------+------------------------------------------------------------------------------------------------------------------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
@@ -169,7 +169,7 @@ evaluation (internal):
 
 
 ast            : city64withseed('Abc',0)
-raw expr       : city64withseed("Abc", 0)
+raw expr       : city64withseed('Abc', 0)
 checked expr   : city64withseed<String, UInt8>("Abc", 0_u8)
 optimized expr : 8309941215813243361_u64
 output type    : UInt64
@@ -178,7 +178,7 @@ output         : 8309941215813243361
 
 
 ast            : city64withseed('Abc',256)
-raw expr       : city64withseed("Abc", 256)
+raw expr       : city64withseed('Abc', 256)
 checked expr   : city64withseed<String, UInt16>("Abc", 256_u16)
 optimized expr : 10246934130793054423_u64
 output type    : UInt64
@@ -187,7 +187,7 @@ output         : 10246934130793054423
 
 
 ast            : city64withseed('Abc',256.3)
-raw expr       : city64withseed("Abc", 256.3)
+raw expr       : city64withseed('Abc', 256.3)
 checked expr   : city64withseed<String, Float32>("Abc", to_float32<Decimal(4, 1)>(256.3_d128(4,1)))
 optimized expr : 10246934130793054423_u64
 output type    : UInt64
@@ -215,15 +215,15 @@ output         : 2939704650099116301
 
 ast            : city64withseed(1.1, 12)
 raw expr       : city64withseed(1.1, 12)
-checked expr   : city64withseed<Decimal(38, 0), UInt8>(to_decimal<Decimal(2, 1)>(38, 0)(1.1_d128(2,1)), 12_u8)
-optimized expr : 10350043282552431796_u64
+checked expr   : city64withseed<Float32, UInt8>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)), 12_u8)
+optimized expr : 14184975929553424950_u64
 output type    : UInt64
-output domain  : {10350043282552431796..=10350043282552431796}
-output         : 10350043282552431796
+output domain  : {14184975929553424950..=14184975929553424950}
+output         : 14184975929553424950
 
 
 ast            : city64withseed('1234567890', 12.12)
-raw expr       : city64withseed("1234567890", 12.12)
+raw expr       : city64withseed('1234567890', 12.12)
 checked expr   : city64withseed<String, Float32>("1234567890", to_float32<Decimal(4, 2)>(12.12_d128(4,2)))
 optimized expr : 10660895976650300430_u64
 output type    : UInt64
@@ -267,9 +267,9 @@ evaluation:
 +--------+-------------------+-----------+----------------------------+
 | Type   | String            | UInt16    | UInt64                     |
 | Domain | {"Abc"..="ß😀山"} | {10..=12} | {0..=18446744073709551615} |
-| Row 0  | "Abc"             | 10        | 10385767944629066306       |
-| Row 1  | "Dobrý den"       | 11        | 12123249488783690377       |
-| Row 2  | "ß😀山"           | 12        | 14631005279260459058       |
+| Row 0  | 'Abc'             | 10        | 10385767944629066306       |
+| Row 1  | 'Dobrý den'       | 11        | 12123249488783690377       |
+| Row 2  | 'ß😀山'           | 12        | 14631005279260459058       |
 +--------+-------------------+-----------+----------------------------+
 evaluation (internal):
 +--------+------------------------------------------------------------------------------------------------+
@@ -282,7 +282,7 @@ evaluation (internal):
 
 
 ast            : siphash64('Abc')
-raw expr       : siphash64("Abc")
+raw expr       : siphash64('Abc')
 checked expr   : siphash64<String>("Abc")
 optimized expr : 17684958587550623602_u64
 output type    : UInt64
@@ -310,11 +310,11 @@ output         : 12447382539015599056
 
 ast            : siphash64(1.1)
 raw expr       : siphash64(1.1)
-checked expr   : siphash64<Decimal(38, 0)>(to_decimal<Decimal(2, 1)>(38, 0)(1.1_d128(2,1)))
-optimized expr : 9886797495896358906_u64
+checked expr   : siphash64<Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
+optimized expr : 2120135555285830191_u64
 output type    : UInt64
-output domain  : {9886797495896358906..=9886797495896358906}
-output         : 9886797495896358906
+output domain  : {2120135555285830191..=2120135555285830191}
+output         : 2120135555285830191
 
 
 ast            : siphash64(to_date(100000))
@@ -336,7 +336,7 @@ output         : NULL
 
 
 ast            : siphash64(parse_json('{"a":1}'))
-raw expr       : siphash64(parse_json("{\"a\":1}"))
+raw expr       : siphash64(parse_json('{"a":1}'))
 checked expr   : siphash64<Variant>(parse_json<String>("{\"a\":1}"))
 optimized expr : 10266916306474055689_u64
 output type    : UInt64
@@ -362,8 +362,8 @@ evaluation:
 +--------+-------------------------+----------------------------+
 | Type   | String                  | UInt64                     |
 | Domain | {"Dobrý den"..="ß😀山"} | {0..=18446744073709551615} |
-| Row 0  | "Dobrý den"             | 5782510256878119795        |
-| Row 1  | "ß😀山"                 | 1354619631122873228        |
+| Row 0  | 'Dobrý den'             | 5782510256878119795        |
+| Row 1  | 'ß😀山'                 | 1354619631122873228        |
 +--------+-------------------------+----------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
@@ -375,7 +375,7 @@ evaluation (internal):
 
 
 ast            : xxhash64('Abc')
-raw expr       : xxhash64("Abc")
+raw expr       : xxhash64('Abc')
 checked expr   : xxhash64<String>("Abc")
 optimized expr : 11989503812394966078_u64
 output type    : UInt64
@@ -403,11 +403,11 @@ output         : 14922725725041217620
 
 ast            : xxhash64(1.1)
 raw expr       : xxhash64(1.1)
-checked expr   : xxhash64<Decimal(38, 0)>(to_decimal<Decimal(2, 1)>(38, 0)(1.1_d128(2,1)))
-optimized expr : 7790381849595394832_u64
+checked expr   : xxhash64<Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
+optimized expr : 2344681381137403510_u64
 output type    : UInt64
-output domain  : {7790381849595394832..=7790381849595394832}
-output         : 7790381849595394832
+output domain  : {2344681381137403510..=2344681381137403510}
+output         : 2344681381137403510
 
 
 ast            : xxhash64(to_date(100000))
@@ -429,7 +429,7 @@ output         : NULL
 
 
 ast            : xxhash64(parse_json('{"a":1}'))
-raw expr       : xxhash64(parse_json("{\"a\":1}"))
+raw expr       : xxhash64(parse_json('{"a":1}'))
 checked expr   : xxhash64<Variant>(parse_json<String>("{\"a\":1}"))
 optimized expr : 13558435650847720346_u64
 output type    : UInt64
@@ -455,8 +455,8 @@ evaluation:
 +--------+-------------------------+----------------------------+
 | Type   | String                  | UInt64                     |
 | Domain | {"Dobrý den"..="ß😀山"} | {0..=18446744073709551615} |
-| Row 0  | "Dobrý den"             | 314761032262035578         |
-| Row 1  | "ß😀山"                 | 656695431091154575         |
+| Row 0  | 'Dobrý den'             | 314761032262035578         |
+| Row 1  | 'ß😀山'                 | 656695431091154575         |
 +--------+-------------------------+----------------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+
@@ -468,7 +468,7 @@ evaluation (internal):
 
 
 ast            : xxhash32('Abc')
-raw expr       : xxhash32("Abc")
+raw expr       : xxhash32('Abc')
 checked expr   : xxhash32<String>("Abc")
 optimized expr : 3980406955_u32
 output type    : UInt32
@@ -496,11 +496,11 @@ output         : 2833116583
 
 ast            : xxhash32(1.1)
 raw expr       : xxhash32(1.1)
-checked expr   : xxhash32<Decimal(38, 0)>(to_decimal<Decimal(2, 1)>(38, 0)(1.1_d128(2,1)))
-optimized expr : 3061175237_u32
+checked expr   : xxhash32<Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
+optimized expr : 1309932719_u32
 output type    : UInt32
-output domain  : {3061175237..=3061175237}
-output         : 3061175237
+output domain  : {1309932719..=1309932719}
+output         : 1309932719
 
 
 ast            : xxhash32(to_date(100000))
@@ -522,7 +522,7 @@ output         : NULL
 
 
 ast            : xxhash32(parse_json('{"a":1}'))
-raw expr       : xxhash32(parse_json("{\"a\":1}"))
+raw expr       : xxhash32(parse_json('{"a":1}'))
 checked expr   : xxhash32<Variant>(parse_json<String>("{\"a\":1}"))
 optimized expr : 3886246173_u32
 output type    : UInt32
@@ -548,8 +548,8 @@ evaluation:
 +--------+-------------------------+------------------+
 | Type   | String                  | UInt32           |
 | Domain | {"Dobrý den"..="ß😀山"} | {0..=4294967295} |
-| Row 0  | "Dobrý den"             | 19285785         |
-| Row 1  | "ß😀山"                 | 1401072642       |
+| Row 0  | 'Dobrý den'             | 19285785         |
+| Row 1  | 'ß😀山'                 | 1401072642       |
 +--------+-------------------------+------------------+
 evaluation (internal):
 +--------+---------------------------------------------------------------------------------------+

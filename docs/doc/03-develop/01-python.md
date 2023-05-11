@@ -1,22 +1,37 @@
 ---
 title: Developing with Databend using Python
 sidebar_label: Python
-description:
-   Develop with Databend using Python.
 ---
 
-Databend offers the following options enabling you to develop applications using the Python programming language and establish connectivity with Databend:
+Databend offers the following Python packages enabling you to develop Python applications that interact with Databend:
 
-- [databend-py](https://github.com/databendcloud/databend-py): Python driver, including support for native HTTP interfaces.
-- [databend-sqlalchemy](https://github.com/databendcloud/databend-sqlalchemy): Databend SQLAlchemy dialect.
+- [databend-py](https://github.com/databendcloud/databend-py): Provides a direct interface to the Databend database. It allows you to perform standard Databend operations such as user login, database and table creation, data insertion/loading, and querying.
 
-Click the links above for their installation instructions, examples, and the source code on GitHub.
+- [databend-sqlalchemy](https://github.com/databendcloud/databend-py): Provides a SQL toolkit and [Object-Relational Mapping](https://en.wikipedia.org/wiki/Object%E2%80%93relational_mapping) to interface with the Databend database. [SQLAlchemy](https://www.sqlalchemy.org/) is a popular SQL toolkit and ORM for Python, and databend-SQLAlchemy is a dialect for SQLAlchemy that allows you to use SQLAlchemy to interact with Databend.
 
-In the following tutorial, you'll learn how to utilize the available options above to develop your applications. The tutorial will walk you through creating a SQL user in Databend and then writing Python code to create a table, insert data, and perform data queries.
+To install the latest databend-py or databend-sqlalchemy package:
+
+```shell
+# install databend_py
+pip install databend_py
+
+# install databend-sqlalchemy
+pip install databend-sqlalchemy
+```
+
+:::note
+Both packages require Python version 3.5 or higher to run, so before using them, make sure that your Python environment meets the requirements. To check your Python version, run "python --version" in your command prompt. 
+:::
+
+In the following tutorial, you'll learn how to utilize the packages above to develop your Python applications. The tutorial will walk you through creating a SQL user in Databend and then writing Python code to create a table, insert data, and perform data queries.
+
+:::tip
+You can also connect to and interact with Databend from Jupyter Notebook. For more information, see [Jupyter Notebook](../11-integrations/20-gui-tool/00-jupyter.md).
+:::
 
 ## Tutorial: Developing with Databend using Python
 
-Before you start, make sure you have successfully installed Databend. For how to install Databend, see [How to deploy Databend](/doc/deploy).
+Before you start, make sure you have successfully installed a local Databend. For detailed instructions, see [Local and Docker Deployments](../10-deploy/05-deploying-local.md).
 
 ### Step 1. Prepare a SQL User Account
 
@@ -39,6 +54,8 @@ import TabItem from '@theme/TabItem';
 <Tabs groupId="python">
 <TabItem value="databend-py" label="databend-py">
 
+You will use the databend-py library to create a client instance and execute SQL queries directly.
+
 1. Install databend-py.
 
 ```shell
@@ -47,36 +64,36 @@ pip install databend-py
 2. Copy and paste the following code to the file `main.py`:
 
 ```python title='main.py'
-#!/usr/bin/env python3
-
 from databend_py import Client
 
+# Setting secure=False means the client will connect to Databend using HTTP instead of HTTPS.
 client = Client('user1:abc123@127.0.0.1', port=8000, secure=False)
 
-# Create database, table.
-client.execute("CREATE DATABASE IF NOT EXISTS book_db")
-client.execute("USE book_db")
-client.execute("CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)")
+client.execute("CREATE DATABASE IF NOT EXISTS bookstore")
+client.execute("USE bookstore")
+client.execute("CREATE TABLE IF NOT EXISTS booklist(title VARCHAR, author VARCHAR, date VARCHAR)")
+client.execute("INSERT INTO booklist VALUES('Readings in Database Systems', 'Michael Stonebraker', '2004')")
 
-# Insert new book.
-client.execute("INSERT INTO books VALUES('mybook', 'author', '2022')")
-
-# Query.
-_, results = client.execute("SELECT * FROM books")
+_, results = client.execute("SELECT * FROM booklist")
 for (title, author, date) in results:
   print("{} {} {}".format(title, author, date))
-client.execute('drop table books')
-client.execute('drop database book_db')
+client.execute('drop table booklist')
+client.execute('drop database bookstore')
+
+# Close Connect.
+client.disconnect()
 ```
 
 3. Run `python main.py`:
 
 ```text
-mybook author 2022
+Readings in Database Systems Michael Stonebraker 2004
 ```
 </TabItem>
 
-<TabItem value="databend-sqlalchemy" label="databend-sqlalchemy">
+<TabItem value="databend-sqlalchemy with Object" label="databend-sqlalchemy (Connector)">
+
+You will use the databend-sqlalchemy library to create a connector instance and execute SQL queries using the cursor object.
 
 1. Install databend-sqlalchemy.
 
@@ -87,28 +104,75 @@ pip install databend-sqlalchemy
 2. Copy and paste the following code to the file `main.py`:
 
 ```python title='main.py'
-#!/usr/bin/env python3
-
 from databend_sqlalchemy import connector
 
 conn = connector.connect(f"http://user1:abc123@127.0.0.1:8000").cursor()
-conn.execute("CREATE DATABASE IF NOT EXISTS book_db")
-conn.execute("USE book_db")
-conn.execute("CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)")
-conn.execute("INSERT INTO books VALUES('mybook', 'author', '2022')")
-conn.execute('SELECT * FROM books')
+conn.execute("CREATE DATABASE IF NOT EXISTS bookstore")
+conn.execute("USE bookstore")
+conn.execute("CREATE TABLE IF NOT EXISTS booklist(title VARCHAR, author VARCHAR, date VARCHAR)")
+conn.execute("INSERT INTO booklist VALUES('Readings in Database Systems', 'Michael Stonebraker', '2004')")
+conn.execute('SELECT * FROM booklist')
+
 results = conn.fetchall()
-for result in results:
-    print(result)
-conn.execute('drop table books')
-conn.execute('drop database book_db')
+for (title, author, date) in results:
+  print("{} {} {}".format(title, author, date))
+conn.execute('drop table booklist')
+conn.execute('drop database bookstore')
+
+# Close Connect.
+conn.close()
 ```
 
 3. Run `python main.py`:
 
 ```text
-('mybook', 'author', '2022')
+Readings in Database Systems Michael Stonebraker 2004
+```
+</TabItem>
+
+<TabItem value="databend-sqlalchemy with Engine" label="databend-sqlalchemy (Engine)">
+
+You will use the databend-sqlalchemy library to create an engine instance and execute SQL queries using the connect method to create connections that can execute queries.
+
+1. Install databend-sqlalchemy.
+
+```shell
+pip install databend-sqlalchemy
 ```
 
+2. Copy and paste the following code to the file `main.py`:
+
+```python title='main.py'
+from sqlalchemy import create_engine, text
+
+# Setting secure=False means the client will connect to Databend using HTTP instead of HTTPS.
+engine = create_engine("databend://user1:abc123@127.0.0.1:8000/default?secure=False")
+
+connection1 = engine.connect()
+connection2 = engine.connect()
+
+with connection1.begin() as trans:
+    connection1.execute(text("CREATE DATABASE IF NOT EXISTS bookstore"))
+    connection1.execute(text("USE bookstore"))
+    connection1.execute(text("CREATE TABLE IF NOT EXISTS booklist(title VARCHAR, author VARCHAR, date VARCHAR)"))
+    connection1.execute(text("INSERT INTO booklist VALUES('Readings in Database Systems', 'Michael Stonebraker', '2004')"))
+
+result = connection2.execute(text("SELECT * FROM booklist"))
+results = result.fetchall()
+
+for (title, author, date) in results:
+    print("{} {} {}".format(title, author, date))
+
+# Close Connect.
+connection1.close()
+connection2.close()
+engine.dispose()
+```
+
+3. Run `python main.py`:
+
+```text
+Readings in Database Systems Michael Stonebraker 2004
+```
 </TabItem>
 </Tabs>

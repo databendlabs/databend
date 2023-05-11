@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -52,8 +52,8 @@ impl ExecutorTasksQueue {
             Vec::with_capacity(workers_tasks.workers_waiting_status.waiting_size());
 
         while workers_tasks.workers_waiting_status.waiting_size() != 0 {
-            let worker_num = workers_tasks.workers_waiting_status.wakeup_any_worker();
-            wakeup_workers.push(worker_num);
+            let worker_id = workers_tasks.workers_waiting_status.wakeup_any_worker();
+            wakeup_workers.push(worker_id);
         }
 
         drop(workers_tasks);
@@ -72,7 +72,7 @@ impl ExecutorTasksQueue {
         let mut workers_tasks = self.workers_tasks.lock();
 
         if !workers_tasks.is_empty() {
-            let task = workers_tasks.pop_task(context.get_worker_num());
+            let task = workers_tasks.pop_task(context.get_worker_id());
 
             context.set_task(task);
 
@@ -80,7 +80,7 @@ impl ExecutorTasksQueue {
 
             if !workers_tasks.is_empty() && workers_tasks.workers_waiting_status.waiting_size() != 0
             {
-                let worker_id = context.get_worker_num();
+                let worker_id = context.get_worker_id();
                 let mut wakeup_worker_id = workers_tasks.best_worker_id(worker_id + 1);
 
                 if workers_tasks
@@ -111,12 +111,12 @@ impl ExecutorTasksQueue {
             return;
         }
 
-        let worker_num = context.get_worker_num();
-        workers_tasks.workers_waiting_status.wait_worker(worker_num);
+        let worker_id = context.get_worker_id();
+        workers_tasks.workers_waiting_status.wait_worker(worker_id);
         drop(workers_tasks);
         context
             .get_workers_condvar()
-            .wait(worker_num, self.finished.clone());
+            .wait(worker_id, self.finished.clone());
     }
 
     pub fn init_sync_tasks(&self, tasks: VecDeque<ProcessorPtr>) {
@@ -137,7 +137,7 @@ impl ExecutorTasksQueue {
     pub fn push_tasks(&self, ctx: &mut ExecutorWorkerContext, mut tasks: VecDeque<ExecutorTask>) {
         let mut workers_tasks = self.workers_tasks.lock();
 
-        let worker_id = ctx.get_worker_num();
+        let worker_id = ctx.get_worker_id();
         while let Some(task) = tasks.pop_front() {
             workers_tasks.push_task(worker_id, task);
         }

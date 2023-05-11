@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -55,7 +55,10 @@ impl Interpreter for ReclusterTableInterpreter {
 
         // Build extras via push down scalar
         let extras = if let Some(scalar) = &plan.push_downs {
-            let filter = scalar.as_expr_with_col_name()?.as_remote_expr();
+            let filter = scalar
+                .as_expr()?
+                .project_column_ref(|col| col.column_name.clone())
+                .as_remote_expr();
 
             Some(PushDownInfo {
                 filter: Some(filter),
@@ -88,7 +91,7 @@ impl Interpreter for ReclusterTableInterpreter {
             let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
             let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
 
-            ctx.set_executor(Arc::downgrade(&executor.get_inner()));
+            ctx.set_executor(executor.get_inner())?;
             executor.execute()?;
             drop(executor);
 

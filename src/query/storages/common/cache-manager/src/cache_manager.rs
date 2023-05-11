@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -31,11 +31,12 @@ use storages_common_cache::TableDataCacheBuilder;
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
 use crate::caches::ColumnArrayCache;
+use crate::caches::CompactSegmentInfoCache;
 use crate::caches::FileMetaDataCache;
-use crate::caches::SegmentInfoCache;
 use crate::caches::TableSnapshotCache;
 use crate::caches::TableSnapshotStatisticCache;
 use crate::ColumnArrayMeter;
+use crate::CompactSegmentInfoMeter;
 use crate::PrunePartitionsCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
@@ -44,7 +45,7 @@ static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 pub struct CacheManager {
     table_snapshot_cache: Option<TableSnapshotCache>,
     table_statistic_cache: Option<TableSnapshotStatisticCache>,
-    segment_info_cache: Option<SegmentInfoCache>,
+    segment_info_cache: Option<CompactSegmentInfoCache>,
     bloom_index_filter_cache: Option<BloomIndexFilterCache>,
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     prune_partitions_cache: Option<PrunePartitionsCache>,
@@ -98,8 +99,11 @@ impl CacheManager {
                 Self::new_item_cache(config.table_meta_snapshot_count, "table_snapshot");
             let table_statistic_cache =
                 Self::new_item_cache(config.table_meta_statistic_count, "table_statistics");
-            let segment_info_cache =
-                Self::new_item_cache(config.table_meta_segment_count, "segment_info");
+            let segment_info_cache = Self::new_in_memory_cache(
+                config.table_meta_segment_bytes,
+                CompactSegmentInfoMeter {},
+                "segment_info",
+            );
             let bloom_index_filter_cache =
                 Self::new_item_cache(config.table_bloom_index_filter_count, "bloom_index_filter");
             let bloom_index_meta_cache = Self::new_item_cache(
@@ -139,7 +143,7 @@ impl CacheManager {
         self.table_statistic_cache.clone()
     }
 
-    pub fn get_table_segment_cache(&self) -> Option<SegmentInfoCache> {
+    pub fn get_table_segment_cache(&self) -> Option<CompactSegmentInfoCache> {
         self.segment_info_cache.clone()
     }
 

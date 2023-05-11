@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -201,6 +201,21 @@ fn compare_variant(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynCompar
     }))
 }
 
+fn compare_decimal256(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
+    let left = left
+        .as_any()
+        .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<common_arrow::arrow::types::i256>>()
+        .unwrap()
+        .clone();
+    let right = right
+        .as_any()
+        .downcast_ref::<common_arrow::arrow::array::PrimitiveArray<common_arrow::arrow::types::i256>>()
+        .unwrap()
+        .clone();
+
+    Ok(Box::new(move |i, j| left.value(i).cmp(&right.value(j))))
+}
+
 fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparator> {
     match left.data_type() {
         ArrowType::Extension(name, _, _) => {
@@ -213,6 +228,7 @@ fn build_compare(left: &dyn Array, right: &dyn Array) -> ArrowResult<DynComparat
                 )))
             }
         }
+        ArrowType::Decimal256(_, _) => compare_decimal256(left, right),
         _ => arrow_ord::build_compare(left, right),
     }
 }

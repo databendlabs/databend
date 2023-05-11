@@ -1,10 +1,6 @@
 name: "Test old metasrv is compatible with new query"
 description: "Download old binaries and current binaries, run stateless test with old `meta` and latest `query`"
 inputs:
-  profile:
-    description: ""
-    required: true
-    default: "debug"
   target:
     description: ""
     required: true
@@ -15,10 +11,10 @@ runs:
     - name: Download artifact
       uses: ./.github/actions/artifact_download
       with:
-        profile: ${{ inputs.profile }}
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
         path: ./bins/current
+        artifacts: sqllogictests,meta,query
 
     - name: Test compatibility
       shell: bash

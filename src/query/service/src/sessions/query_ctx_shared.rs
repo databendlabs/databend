@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -134,6 +134,11 @@ impl QueryContextShared {
         *guard = Some(err);
     }
 
+    pub fn get_error(&self) -> Option<ErrorCode> {
+        let guard = self.error.lock();
+        (*guard).clone()
+    }
+
     pub fn set_on_error_map(&self, map: Arc<DashMap<String, HashMap<u16, InputError>>>) {
         let mut guard = self.on_error_map.write();
         *guard = Some(map);
@@ -172,6 +177,18 @@ impl QueryContextShared {
 
     pub fn get_aborting(&self) -> Arc<AtomicBool> {
         self.aborting.clone()
+    }
+
+    pub fn check_aborting(&self) -> Result<()> {
+        if self.aborting.load(Ordering::Acquire) {
+            Err(self.get_error().unwrap_or_else(|| {
+                ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                )
+            }))
+        } else {
+            Ok(())
+        }
     }
 
     pub fn get_current_database(&self) -> String {
@@ -328,9 +345,18 @@ impl QueryContextShared {
         *guard = Some(affect);
     }
 
-    pub fn set_executor(&self, weak_ptr: Weak<PipelineExecutor>) {
-        let mut executor = self.executor.write();
-        *executor = weak_ptr;
+    pub fn set_executor(&self, executor: Arc<PipelineExecutor>) -> Result<()> {
+        let mut guard = self.executor.write();
+        match self.check_aborting() {
+            Ok(_) => {
+                *guard = Arc::downgrade(&executor);
+                Ok(())
+            }
+            Err(err) => {
+                executor.finish(Some(err.clone()));
+                Err(err)
+            }
+        }
     }
 
     pub fn push_precommit_block(&self, block: DataBlock) {

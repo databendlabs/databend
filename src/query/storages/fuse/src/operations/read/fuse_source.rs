@@ -1,26 +1,29 @@
-//  Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
-//  Licensed under the Apache License, Version 2.0 (the "License");
-//  you may not use this file except in compliance with the License.
-//  You may obtain a copy of the License at
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
 //
-//      http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
-//  Unless required by applicable law or agreed to in writing, software
-//  distributed under the License is distributed on an "AS IS" BASIS,
-//  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-//  See the License for the specific language governing permissions and
-//  limitations under the License.
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::InternalColumnMeta;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::StealablePartitions;
 use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::BlockMetaInfoPtr;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
@@ -260,4 +263,24 @@ pub fn adjust_threads_and_request(
         max_io_requests = std::cmp::min(max_io_requests, block_nums);
     }
     (max_threads, max_io_requests)
+}
+
+pub(super) fn fill_internal_column_meta(
+    data_block: DataBlock,
+    fuse_part: &FusePartInfo,
+    offsets: Option<Vec<usize>>,
+) -> Result<DataBlock> {
+    // Fill `BlockMetaInfoPtr` if query internal columns
+    let block_meta = fuse_part.block_meta_index().unwrap();
+    let internal_column_meta = InternalColumnMeta {
+        segment_id: block_meta.segment_id,
+        block_id: block_meta.block_id,
+        block_location: block_meta.block_location.clone(),
+        segment_location: block_meta.segment_location.clone(),
+        snapshot_location: block_meta.snapshot_location.as_ref().unwrap().clone(),
+        offsets,
+    };
+
+    let meta: Option<BlockMetaInfoPtr> = Some(Box::new(internal_column_meta));
+    data_block.add_meta(meta)
 }

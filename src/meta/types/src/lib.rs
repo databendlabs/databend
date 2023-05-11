@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -25,6 +25,7 @@ mod cmd;
 pub mod config;
 mod endpoint;
 pub mod errors;
+mod grpc_config;
 mod log_entry;
 mod match_seq;
 mod message;
@@ -71,6 +72,7 @@ pub use errors::meta_network_errors::MetaNetworkError;
 pub use errors::meta_network_errors::MetaNetworkResult;
 pub use errors::meta_startup_errors::MetaStartupError;
 pub use errors::rpc_errors::ForwardRPCError;
+pub use grpc_config::GrpcConfig;
 pub use log_entry::LogEntry;
 pub use match_seq::MatchSeq;
 pub use match_seq::MatchSeqExt;
@@ -141,3 +143,72 @@ pub use crate::raft_types::VoteResponse;
 // pub use crate::raft_types::InitializeError;
 // pub use crate::raft_types::RaftChangeMembershipError;
 // pub use crate::raft_types::RaftWriteError;
+
+impl TxnCondition {
+    /// Create a txn condition that checks if the `seq` matches.
+    pub fn eq_seq(key: impl ToString, seq: u64) -> Self {
+        Self {
+            key: key.to_string(),
+            expected: ConditionResult::Eq as i32,
+            target: Some(txn_condition::Target::Seq(seq)),
+        }
+    }
+}
+
+impl TxnOp {
+    /// Create a txn operation that puts a record.
+    pub fn put(key: impl ToString, value: Vec<u8>) -> TxnOp {
+        Self::put_with_expire(key, value, None)
+    }
+
+    /// Create a txn operation that puts a record with expiration time.
+    pub fn put_with_expire(key: impl ToString, value: Vec<u8>, expire_at: Option<u64>) -> TxnOp {
+        TxnOp {
+            request: Some(txn_op::Request::Put(TxnPutRequest {
+                key: key.to_string(),
+                value,
+                prev_value: true,
+                expire_at,
+            })),
+        }
+    }
+
+    /// Create a new `TxnOp` with a `Delete` operation.
+    pub fn delete(key: impl ToString) -> Self {
+        Self::delete_exact(key, None)
+    }
+
+    /// Create a new `TxnOp` with a `Delete` operation that will be executed only when the `seq` matches.
+    pub fn delete_exact(key: impl ToString, seq: Option<u64>) -> Self {
+        TxnOp {
+            request: Some(txn_op::Request::Delete(TxnDeleteRequest {
+                key: key.to_string(),
+                prev_value: true,
+                match_seq: seq,
+            })),
+        }
+    }
+}
+
+impl TxnOpResponse {
+    /// Create a new `TxnOpResponse` of a `Delete` operation.
+    pub fn delete(key: impl ToString, success: bool, prev_value: Option<protobuf::SeqV>) -> Self {
+        TxnOpResponse {
+            response: Some(txn_op_response::Response::Delete(TxnDeleteResponse {
+                key: key.to_string(),
+                success,
+                prev_value,
+            })),
+        }
+    }
+
+    /// Create a new `TxnOpResponse` of a `Put` operation.
+    pub fn put(key: impl ToString, prev_value: Option<protobuf::SeqV>) -> Self {
+        TxnOpResponse {
+            response: Some(txn_op_response::Response::Put(TxnPutResponse {
+                key: key.to_string(),
+                prev_value,
+            })),
+        }
+    }
+}

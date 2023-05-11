@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ use common_base::base::tokio::task::JoinHandle;
 use common_base::base::Stoppable;
 use common_meta_types::protobuf::meta_service_server::MetaServiceServer;
 use common_meta_types::protobuf::FILE_DESCRIPTOR_SET;
+use common_meta_types::GrpcConfig;
 use common_meta_types::MetaNetworkError;
 use futures::future::Either;
 use tonic::transport::Identity;
@@ -93,7 +94,9 @@ impl GrpcServer {
         info!("gRPC addr: {}", addr);
 
         let grpc_impl = MetaServiceImpl::create(meta_node.clone());
-        let grpc_srv = MetaServiceServer::new(grpc_impl);
+        let grpc_srv = MetaServiceServer::new(grpc_impl)
+            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
         let j = tokio::spawn(
             async move {

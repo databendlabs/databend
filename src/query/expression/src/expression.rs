@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -104,12 +104,6 @@ pub enum Expr<Index: ColumnIndex = usize> {
     },
 }
 
-// impl<Index: ColumnIndex> Hash for Expr<Index> {
-//     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-//         self.sql_display().hash(state);
-//     }
-// }
-
 /// Serializable expression used to share executable expression between nodes.
 ///
 /// The remote node will recover the `Arc` pointer within `FunctionCall` by looking
@@ -160,6 +154,51 @@ impl<Index: ColumnIndex> RawExpr<Index> {
         let mut buf = HashMap::new();
         walk(self, &mut buf);
         buf
+    }
+
+    pub fn project_column_ref<ToIndex: ColumnIndex>(
+        &self,
+        f: impl Fn(&Index) -> ToIndex + Copy,
+    ) -> RawExpr<ToIndex> {
+        match self {
+            RawExpr::Constant { span, scalar } => RawExpr::Constant {
+                span: *span,
+                scalar: scalar.clone(),
+            },
+            RawExpr::ColumnRef {
+                span,
+                id,
+                data_type,
+                display_name,
+            } => RawExpr::ColumnRef {
+                span: *span,
+                id: f(id),
+                data_type: data_type.clone(),
+                display_name: display_name.clone(),
+            },
+            RawExpr::Cast {
+                span,
+                is_try,
+                expr,
+                dest_type,
+            } => RawExpr::Cast {
+                span: *span,
+                is_try: *is_try,
+                expr: Box::new(expr.project_column_ref(f)),
+                dest_type: dest_type.clone(),
+            },
+            RawExpr::FunctionCall {
+                span,
+                name,
+                params,
+                args,
+            } => RawExpr::FunctionCall {
+                span: *span,
+                name: name.clone(),
+                params: params.clone(),
+                args: args.iter().map(|expr| expr.project_column_ref(f)).collect(),
+            },
+        }
     }
 }
 
@@ -315,75 +354,6 @@ impl<Index: ColumnIndex> Expr<Index> {
                     .non_deterministic
                     && args.iter().all(|arg| arg.is_deterministic(registry))
             }
-        }
-    }
-}
-
-impl Expr<usize> {
-    pub fn project_column_ref_with_unnest_offset(
-        &self,
-        f: impl Fn(&usize) -> usize + Copy,
-        offset: &mut usize,
-    ) -> Expr<usize> {
-        match self {
-            Expr::Constant {
-                span,
-                scalar,
-                data_type,
-            } => Expr::Constant {
-                span: *span,
-                scalar: scalar.clone(),
-                data_type: data_type.clone(),
-            },
-            Expr::ColumnRef {
-                span,
-                id,
-                data_type,
-                display_name,
-            } => {
-                let id = if *id == usize::MAX {
-                    let id = *offset;
-                    *offset += 1;
-                    id
-                } else {
-                    f(id)
-                };
-                Expr::ColumnRef {
-                    span: *span,
-                    id,
-                    data_type: data_type.clone(),
-                    display_name: display_name.clone(),
-                }
-            }
-            Expr::Cast {
-                span,
-                is_try,
-                expr,
-                dest_type,
-            } => Expr::Cast {
-                span: *span,
-                is_try: *is_try,
-                expr: Box::new(expr.project_column_ref_with_unnest_offset(f, offset)),
-                dest_type: dest_type.clone(),
-            },
-            Expr::FunctionCall {
-                span,
-                id,
-                function,
-                generics,
-                args,
-                return_type,
-            } => Expr::FunctionCall {
-                span: *span,
-                id: id.clone(),
-                function: function.clone(),
-                generics: generics.clone(),
-                args: args
-                    .iter()
-                    .map(|expr| expr.project_column_ref_with_unnest_offset(f, offset))
-                    .collect(),
-                return_type: return_type.clone(),
-            },
         }
     }
 }

@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@ use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use futures::AsyncRead;
+use futures_util::AsyncReadExt;
 use serde::de::DeserializeOwned;
 use serde_json::from_slice;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoV2;
 use storages_common_table_meta::meta::SegmentInfoVersion;
@@ -29,22 +31,23 @@ use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use storages_common_table_meta::meta::TableSnapshotV2;
 
-use crate::io::read::meta::segment_reader::load_segment_v3;
 use crate::io::read::meta::snapshot_reader::load_snapshot_v3;
 
 #[async_trait::async_trait]
 pub trait VersionedReader<T> {
-    async fn read<R>(&self, read: R) -> Result<T>
+    type TargetType;
+    async fn read<R>(&self, read: R) -> Result<Self::TargetType>
     where R: AsyncRead + Unpin + Send;
 }
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshot> for SnapshotVersion {
+    type TargetType = TableSnapshot;
     #[async_backtrace::framed]
     async fn read<R>(&self, reader: R) -> Result<TableSnapshot>
     where R: AsyncRead + Unpin + Send {
         let r = match self {
-            SnapshotVersion::V3(v) => load_snapshot_v3(reader, v).await?,
+            SnapshotVersion::V3(_) => load_snapshot_v3(reader).await?,
             SnapshotVersion::V2(v) => {
                 let mut ts = load_by_version(reader, v).await?;
                 ts.schema = TableSchema::init_if_need(ts.schema);
@@ -65,6 +68,7 @@ impl VersionedReader<TableSnapshot> for SnapshotVersion {
 
 #[async_trait::async_trait]
 impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion {
+    type TargetType = TableSnapshotStatistics;
     #[async_backtrace::framed]
     async fn read<R>(&self, reader: R) -> Result<TableSnapshotStatistics>
     where R: AsyncRead + Unpin + Send {
@@ -76,29 +80,35 @@ impl VersionedReader<TableSnapshotStatistics> for TableSnapshotStatisticsVersion
 }
 
 #[async_trait::async_trait]
-impl VersionedReader<SegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
+impl VersionedReader<CompactSegmentInfo> for (SegmentInfoVersion, TableSchemaRef) {
+    type TargetType = CompactSegmentInfo;
     #[async_backtrace::framed]
-    async fn read<R>(&self, reader: R) -> Result<SegmentInfo>
+    async fn read<R>(&self, mut reader: R) -> Result<CompactSegmentInfo>
     where R: AsyncRead + Unpin + Send {
         let schema = &self.1;
-        let r = match &self.0 {
-            SegmentInfoVersion::V3(v) => load_segment_v3(reader, v).await?,
+        let bytes_of_current_format = match &self.0 {
+            SegmentInfoVersion::V3(_) => {
+                let mut buffer: Vec<u8> = vec![];
+                reader.read_to_end(&mut buffer).await?;
+                Ok(buffer)
+            }
             SegmentInfoVersion::V2(v) => {
                 let data = load_by_version(reader, v).await?;
-                SegmentInfo::from_v2(data)
+                SegmentInfo::from_v2(data).to_bytes()
             }
             SegmentInfoVersion::V1(v) => {
                 let data = load_by_version(reader, v).await?;
                 let fields = schema.leaf_fields();
-                SegmentInfo::from_v2(SegmentInfoV2::from_v1(data, &fields))
+                SegmentInfo::from_v2(SegmentInfoV2::from_v1(data, &fields)).to_bytes()
             }
             SegmentInfoVersion::V0(v) => {
                 let data = load_by_version(reader, v).await?;
                 let fields = schema.leaf_fields();
-                SegmentInfo::from_v2(SegmentInfoV2::from_v0(data, &fields))
+                SegmentInfo::from_v2(SegmentInfoV2::from_v0(data, &fields)).to_bytes()
             }
-        };
-        Ok(r)
+        }?;
+
+        CompactSegmentInfo::from_slice(&bytes_of_current_format)
     }
 }
 
@@ -108,7 +118,6 @@ where
     R: AsyncRead + Unpin + Send,
 {
     let mut buffer: Vec<u8> = vec![];
-    use futures::AsyncReadExt;
     reader.read_to_end(&mut buffer).await?;
     Ok(from_slice::<T>(&buffer)?)
 }

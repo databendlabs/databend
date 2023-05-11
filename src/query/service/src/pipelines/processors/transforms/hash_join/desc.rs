@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,20 +19,13 @@ use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_hashtable::RowPtr;
 use common_sql::executor::HashJoin;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::transforms::hash_join::row::RowPtr;
 use crate::sql::plans::JoinType;
 
 pub const JOIN_MAX_BLOCK_SIZE: usize = 65535;
-
-#[derive(Clone, Copy, Eq, PartialEq, Debug, Hash)]
-pub enum MarkerKind {
-    True,
-    False,
-    Null,
-}
 
 pub struct MarkJoinDesc {
     // pub(crate) marker_index: Option<IndexType>,

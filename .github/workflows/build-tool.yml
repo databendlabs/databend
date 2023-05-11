@@ -70,6 +70,7 @@ jobs:
       - name: Get rust toolchain version
         id: toolchain
         run: |
+          # version=$(taplo get -f scripts/setup/rust-toolchain.toml '.toolchain.channel')
           version=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' scripts/setup/rust-toolchain.toml)
           echo "TOOLCHAIN=${version}" >> $GITHUB_OUTPUT
 

@@ -84,7 +84,7 @@ checked expr   : humanize_size<Float64>(to_float64<UInt8>(100_u8))
 optimized expr : "100.00 B"
 output type    : String
 output domain  : {"100.00 B"..="100.00 B"}
-output         : "100.00 B"
+output         : '100.00 B'
 
 
 ast            : humanize_size(1024.33)
@@ -93,7 +93,7 @@ checked expr   : humanize_size<Float64>(to_float64<Decimal(6, 2)>(1024.33_d128(6
 optimized expr : "1.00 KiB"
 output type    : String
 output domain  : {"1.00 KiB"..="1.00 KiB"}
-output         : "1.00 KiB"
+output         : '1.00 KiB'
 
 
 ast            : humanize_number(100)
@@ -102,7 +102,7 @@ checked expr   : humanize_number<Float64>(to_float64<UInt8>(100_u8))
 optimized expr : "100"
 output type    : String
 output domain  : {"100"..="100"}
-output         : "100"
+output         : '100'
 
 
 ast            : humanize_number(1024.33)
@@ -111,7 +111,7 @@ checked expr   : humanize_number<Float64>(to_float64<Decimal(6, 2)>(1024.33_d128
 optimized expr : "1.02 thousand"
 output type    : String
 output domain  : {"1.02 thousand"..="1.02 thousand"}
-output         : "1.02 thousand"
+output         : '1.02 thousand'
 
 
 ast            : typeof(humanize_size(100))
@@ -120,7 +120,7 @@ checked expr   : typeof<T0=String><T0>(humanize_size<Float64>(to_float64<UInt8>(
 optimized expr : "VARCHAR"
 output type    : String
 output domain  : {"VARCHAR"..="VARCHAR"}
-output         : "VARCHAR"
+output         : 'VARCHAR'
 
 
 ast            : typeof(a)
@@ -128,7 +128,7 @@ raw expr       : typeof(a::Float64)
 checked expr   : typeof<T0=Float64><T0>(a)
 output type    : String
 output domain  : {""..}
-output         : "DOUBLE"
+output         : 'DOUBLE'
 
 
 ast            : sleep(2)
@@ -144,7 +144,7 @@ error:
   --> SQL:1:1
   |
 1 | sleep(300.2)
-  | ^^^^^^^^^^^^ The maximum sleep time is 300 seconds. Requested: 300.2s while evaluating function `sleep(300.2)`
+  | ^^^^^^^^^^^^ The maximum sleep time is 3 seconds. Requested: 300.2s while evaluating function `sleep(300.2)`
 
 
 
@@ -154,7 +154,7 @@ checked expr   : typeof<T0=Boolean><T0>(ignore<T0=UInt8><T0>(100_u8))
 optimized expr : "BOOLEAN"
 output type    : String
 output domain  : {"BOOLEAN"..="BOOLEAN"}
-output         : "BOOLEAN"
+output         : 'BOOLEAN'
 
 
 ast            : ignore(100)
@@ -167,7 +167,7 @@ output         : false
 
 
 ast            : ignore(100, 'str')
-raw expr       : ignore(100, "str")
+raw expr       : ignore(100, 'str')
 checked expr   : ignore<T0=UInt8, T1=String><T0, T1>(100_u8, "str")
 optimized expr : false
 output type    : Boolean
@@ -198,7 +198,7 @@ evaluation (internal):
 
 
 ast            : inet_aton('1.2.3.4')
-raw expr       : inet_aton("1.2.3.4")
+raw expr       : inet_aton('1.2.3.4')
 checked expr   : inet_aton<String>("1.2.3.4")
 optimized expr : 16909060_u32
 output type    : UInt32
@@ -207,7 +207,7 @@ output         : 16909060
 
 
 ast            : try_inet_aton('10.0.5.9000')
-raw expr       : try_inet_aton("10.0.5.9000")
+raw expr       : try_inet_aton('10.0.5.9000')
 checked expr   : try_inet_aton<String>("10.0.5.9000")
 optimized expr : NULL
 output type    : UInt32 NULL
@@ -216,7 +216,7 @@ output         : NULL
 
 
 ast            : try_inet_aton('10.0.5.9')
-raw expr       : try_inet_aton("10.0.5.9")
+raw expr       : try_inet_aton('10.0.5.9')
 checked expr   : try_inet_aton<String>("10.0.5.9")
 optimized expr : 167773449_u32
 output type    : UInt32 NULL
@@ -230,7 +230,7 @@ checked expr   : inet_ntoa<Int64>(to_int64<UInt32>(16909060_u32))
 optimized expr : "1.2.3.4"
 output type    : String
 output domain  : {"1.2.3.4"..="1.2.3.4"}
-output         : "1.2.3.4"
+output         : '1.2.3.4'
 
 
 ast            : try_inet_ntoa(121211111111111)
