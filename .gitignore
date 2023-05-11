@@ -38,6 +38,7 @@ tls/certs/
 .databend/
 checksums.txt
 distro/
+dist/
 test/
 
 # fuzz

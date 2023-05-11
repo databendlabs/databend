@@ -689,6 +689,7 @@ dependencies = [
  "databend-query",
  "pyo3 0.18.3",
  "pyo3-asyncio",
+ "pyo3-build-config 0.18.3",
  "tokio",
  "tokio-stream",
 ]

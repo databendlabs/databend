@@ -6,6 +6,9 @@ license = { workspace = true }
 publish = { workspace = true }
 edition = { workspace = true }
 
+[build-dependencies]
+pyo3-build-config = "0.18.3"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
 name = "databend"
@@ -17,7 +20,14 @@ overflow-checks = false
 incremental = false
 opt-level = "s"
 panic = "abort"
+codegen-units = 1
 strip = true
+
+[profile.release.package]
+arrow2 = { codegen-units = 4 }
+common-functions = { codegen-units = 16 }
+common-expression = { codegen-units = 16 }
+databend-query = { codegen-units = 4 }
 
 [dependencies]
 pyo3 = "0.18.1"
