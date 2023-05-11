@@ -7,7 +7,7 @@ pub struct Block(pub DataBlock);
 
 #[pymethods]
 impl Block {
-    fn __repr__(&self, py: Python) -> PyResult<String> {
+    fn __repr__(&self, _py: Python) -> PyResult<String> {
         Ok(self.0.to_string())
     }
 

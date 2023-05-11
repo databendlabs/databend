@@ -3,7 +3,6 @@
 mod datablock;
 mod utils;
 
-use std::fmt::Write;
 use std::sync::Arc;
 
 use common_config::InnerConfig;

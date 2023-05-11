@@ -1,7 +1,5 @@
 use std::future::Future;
-use std::sync::Arc;
 
-use databend_query::sessions::QueryContext;
 use pyo3::prelude::*;
 use tokio::runtime::Runtime;
 
