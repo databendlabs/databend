@@ -16,7 +16,6 @@ crate-type = ["cdylib"]
 
 [dependencies]
 pyo3 = { version = "0.18.1", features = ["extension-module", "abi3", "abi3-py37"] }
-pyo3-asyncio = { version = "0.14", features = ["attributes", "tokio-runtime"] }
 # Workspace dependencies
 common-config = { path = "../query/config" }
 common-exception = { path = "../common/exception" }
