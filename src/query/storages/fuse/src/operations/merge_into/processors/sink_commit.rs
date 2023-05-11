@@ -20,6 +20,7 @@ use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use opendal::Operator;
 use storages_common_table_meta::meta::Location;
@@ -34,7 +35,7 @@ use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::commit::Conflict;
 use crate::operations::commit::MutatorConflictDetector;
-use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
+use crate::operations::merge_into::mutation_meta::CommitMeta;
 use crate::operations::mutation::AbortOperation;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
@@ -144,7 +145,7 @@ impl Processor for CommitSink {
             .unwrap()?
             .get_meta()
             .cloned()
-            .ok_or_else(|| ErrorCode::Internal("No block meta. It's a bug"))?;
+            .ok_or(ErrorCode::Internal("No block meta. It's a bug"))?;
         self.state = State::ReadMeta(input_meta);
         self.input.finish();
         Ok(Event::Sync)
@@ -153,7 +154,8 @@ impl Processor for CommitSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::ReadMeta(input_meta) => {
-                let meta = CommitMeta::from_meta(&input_meta)?;
+                let meta = CommitMeta::downcast_ref_from(&input_meta)
+                    .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?;
 
                 self.merged_segments = meta.segments.clone();
                 self.merged_statistics = meta.summary.clone();
