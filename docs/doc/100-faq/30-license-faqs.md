@@ -37,11 +37,11 @@ Databend Labs encourage non-commercial academic research involving Databend. For
 
 ## Feature licensing
 | Feature | Apache 2.0 | Elastic 2.0(paid) |
-| --- | --- | --- |
-| Fail safe orphan data vacuum | | ✓ |
+| --- |---| --- |
+| Fail safe orphan data vacuum |   | ✓ |
 | [Role-based access management](https://databend.rs/doc/sql-reference/access-control-privileges) | ✓ | |
 | [Password and certificate authentication ](https://databend.rs/doc/sql-commands/ddl/user/user-create-user#create-a-sha256_password-auth_type-user) | ✓ | |
-| All other features | | ✓ |
+| All other features | ✓ | |
 ## FAQs
 
 ### Can I host Databend as a Service for internal use at my organization?
