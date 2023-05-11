@@ -12,11 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::sync::Arc;
 
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
+use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 
 use crate::pipelines::processors::transforms::IEJoinState;
@@ -68,5 +70,19 @@ impl TransformIEJoin {
             table_id,
             step: IEJoinStep::Sink,
         })
+    }
+}
+
+impl Processor for TransformIEJoin {
+    fn name(&self) -> String {
+        todo!()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        todo!()
+    }
+
+    fn event(&mut self) -> common_exception::Result<Event> {
+        todo!()
     }
 }

@@ -91,6 +91,7 @@ use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
+use crate::pipelines::processors::transforms::TransformIEJoin;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
@@ -203,10 +204,59 @@ impl PipelineBuilder {
 
     fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
         let state = self.build_ie_join_state(ie_join)?;
+        self.expand_right_side_pipeline(ie_join, state.clone())?;
+        self.build_left_side(ie_join, state)
     }
 
-    fn build_ie_join_state(&mut self, ie_join: &IEJoin) -> Result<IEJoinState> {
+    fn build_ie_join_state(&mut self, ie_join: &IEJoin) -> Result<Arc<IEJoinState>> {
         todo!()
+    }
+
+    fn expand_right_side_pipeline(
+        &mut self,
+        ie_join: &IEJoin,
+        state: Arc<IEJoinState>,
+    ) -> Result<()> {
+        self.build_pipeline(&ie_join.right)?;
+        self.main_pipeline.add_transform(|input, output| {
+            let transform = TransformIEJoin::create(input, output, state.clone(), 1);
+            if self.enable_profiling {
+                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    transform,
+                    ie_join.plan_id,
+                    self.prof_span_set.clone(),
+                )))
+            } else {
+                Ok(ProcessorPtr::create(transform))
+            }
+        })?;
+        Ok(())
+    }
+
+    fn build_left_side(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {
+        let left_side_context = QueryContext::create_from(self.ctx.clone());
+        let left_side_builder = PipelineBuilder::create(
+            left_side_context,
+            self.enable_profiling,
+            self.prof_span_set.clone(),
+        );
+        let mut left_res = left_side_builder.finalize(&ie_join.left)?;
+        left_res.main_pipeline.add_transform(|input, output| {
+            let transform = TransformIEJoin::create(input, output, state.clone(), 0);
+            if self.enable_profiling {
+                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    transform,
+                    ie_join.plan_id,
+                    self.prof_span_set.clone(),
+                )))
+            } else {
+                Ok(ProcessorPtr::create(transform))
+            }
+        })?;
+        self.pipelines.push(left_res.main_pipeline);
+        self.pipelines
+            .extend(left_res.sources_pipelines.into_iter());
+        Ok(())
     }
 
     fn build_join(&mut self, join: &HashJoin) -> Result<()> {
