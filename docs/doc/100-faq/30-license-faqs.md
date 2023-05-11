@@ -35,14 +35,6 @@ All Databend code is included in the same binary. No license key is required to 
 Databend Labs encourage non-commercial academic research involving Databend. For such projects, please [contact us](https://www.databend.com/contact-us) for possible long term licenses)
 :::
 
-## Feature licensing
-| Feature | Apache 2.0 | Elastic 2.0(paid) |
-| --- |---| --- |
-| Fail safe orphan data vacuum |   | ✓ |
-| [Role-based access management](https://databend.rs/doc/sql-reference/access-control-privileges) | ✓ | |
-| [Password and certificate authentication ](https://databend.rs/doc/sql-commands/ddl/user/user-create-user#create-a-sha256_password-auth_type-user) | ✓ | |
-| All other features | ✓ | |
-
 ## Set a license
 
 In the following example, we assume that you are the `root` user. Then use the `SET GLOBAL SETTING` command to set the license key:
