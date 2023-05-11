@@ -36,22 +36,22 @@ runs:
       run: |
         case ${{ inputs.target }} in
           x86_64-unknown-linux-gnu)
-            flags="-C target-feature=+sse4.2 -C link-arg=-Wl,--compress-debug-sections=zlib"
+            flags="-C target-feature=+sse4.2"
             ;;
           x86_64-unknown-linux-musl)
-            flags="-C target-feature=+sse4.2 -C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
+            flags="-C target-feature=+sse4.2"
             ;;
           aarch64-unknown-linux-gnu)
-            flags="-C link-arg=-Wl,--compress-debug-sections=zlib"
+            flags=""
             ;;
           aarch64-unknown-linux-musl)
-            flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
+            flags=""
             ;;
           *)
             flags=""
             ;;
         esac
-        echo "RUSTFLAGS=${flags}" >> $GITHUB_ENV
+        echo "RUSTFLAGS=${flags} -C link-arg=-Wl,--compress-debug-sections=zlib" >> $GITHUB_ENV
         target=${{ inputs.target }}
         echo "BUILD_ARCH=${target/-unknown-linux-*}" >> $GITHUB_ENV
 
@@ -59,7 +59,9 @@ runs:
     - name: Build Debug
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
       shell: bash
-      run: cargo build --target ${{ inputs.target }} --features ${{ inputs.features }}
+      run: |
+        cargo build --target ${{ inputs.target }} --features ${{ inputs.features }}
+        ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
 
     - name: Build Debug for specific artifacts
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts != 'all'
@@ -71,6 +73,7 @@ runs:
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --bin databend-$artifact
+          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 
     - name: Build Release
@@ -83,6 +86,7 @@ runs:
         for artifact in ${artifacts//,/ }; do
           echo "==> building databend-$artifact ..."
           cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
+          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
         done
 
     - shell: bash
