@@ -15,7 +15,6 @@
 use std::cmp::min;
 use std::sync::Arc;
 
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
@@ -58,11 +57,11 @@ impl Interpreter for VacuumTableInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
-        if !license_manager.manager.is_active() {
-            return Err(ErrorCode::LicenceDenied(
-                "Need Commercial License".to_string(),
-            ));
-        }
+        license_manager.manager.check_enterprise_enabled(
+            &self.ctx.get_settings(),
+            self.ctx.get_tenant(),
+            "vacuum".to_string(),
+        )?;
 
         let catalog_name = self.plan.catalog.clone();
         let db_name = self.plan.database.clone();
