@@ -25,7 +25,7 @@ ANALYZE TABLE [database.]table_name
 
     - It does not display the estimated results after execution. To show the estimated results, use the function [FUSE_STATISTIC](../../../15-sql-functions/111-system-functions/fuse_statistic.md).
     - The command does not identify distinct values by comparing them but by counting the number of storage segments and blocks. This might lead to a significant difference between the estimated results and the actual value, for example, multiple blocks holding the same value. In this case, Databend recommends compacting the storage segments and blocks to merge them as much as possible before you run the estimation.
-    - The column statistics at the snapshot level may be amplified after the table has been updated/deleted. You can correct the column statistics by performing analyze statement.
+    - The column statistics at the snapshot level may be amplified after execute update/delete/replace statements. You can correct the column statistics by performing analyze statement.
 
 ## Examples
 
