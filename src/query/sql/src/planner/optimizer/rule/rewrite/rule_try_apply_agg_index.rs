@@ -15,21 +15,29 @@
 use std::collections::HashMap;
 
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::Scalar;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
+use crate::plans::AggregateFunction;
+use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
+use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
+use crate::ColumnBinding;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
+use crate::Visibility;
 
 pub struct RuleTryApplyAggIndex {
     id: RuleID,
@@ -176,31 +184,38 @@ impl Rule for RuleTryApplyAggIndex {
         }
 
         let query_info = Self::collect_information(s_expr)?;
+        if !query_info.can_apply_index() {
+            return Ok(());
+        }
+
         let query_predicates = query_info.predicates.map(Self::distinguish_predicates);
+        let query_group_items = query_info.formatted_group_items();
 
         // Search all index plans, find the first matched index to rewrite the query.
         for plan in index_plans.iter() {
             let index_info = Self::collect_information(plan)?;
-            // 1. Check selection and aggregation.
-            // match (&query_info.aggregation, &index_info.aggregation) {
-            //     (Some((agg_q, args_q)), Some((agg_i, args_i))) => {
-            //         // Group items should be the same.
-            //     }
-            //     (None, Some(_)) => {
-            //         // Not matched.
-            //         continue;
-            //     }
-            //     (Some((agg, args)), None) => {
-            //         // Query's aggregation arguments should be found in index's output.
-            //         for (_, scalar) in args {}
-            //     }
-            //     (None, None) => {}
-            // }
+            debug_assert!(index_info.can_apply_index());
 
-            // All selected columns in query should be contained in index.
+            // 1. Check if group items are the same.
+            // TODO: support aggregate from index data (if index data is not aggregated)
+            let index_group_items = index_info.formatted_group_items();
+            if query_group_items != index_group_items {
+                continue;
+            }
+
+            // 2. Check query output and try to rewrite it.
+            let index_selection = index_info.formatted_selection();
+            let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
             let mut flag = true;
             for item in query_info.selection.items.iter() {
-                if !index_info.check_select_item(&item.scalar, &query_info.aggregation) {
+                if let Some(rewritten) =
+                    Self::rewrite_query_item(&query_info, &item.scalar, &index_selection)
+                {
+                    new_selection.push(ScalarItem {
+                        index: item.index,
+                        scalar: rewritten,
+                    });
+                } else {
                     flag = false;
                     break;
                 }
@@ -209,9 +224,10 @@ impl Rule for RuleTryApplyAggIndex {
                 continue;
             }
 
-            // 2. Check filter predicates.
+            // 3. Check filter predicates.
             let output_bound_cols = index_info.output_bound_cols();
             let index_predicates = index_info.predicates.map(Self::distinguish_predicates);
+            let mut new_predicates = Vec::new();
             match (&query_predicates, &index_predicates) {
                 (Some((qe, qr, qo)), Some((ie, ir, io))) => {
                     if !Self::check_predicates_equal(qe, ie) {
@@ -220,20 +236,47 @@ impl Rule for RuleTryApplyAggIndex {
                     if !Self::check_predicates_other(qo, io) {
                         continue;
                     }
-                    if !Self::check_predicates_range(qr, ir, &output_bound_cols) {
+                    if let Some(preds) =
+                        Self::check_predicates_range(qr, ir, &output_bound_cols, &index_selection)
+                    {
+                        new_predicates.extend(preds);
+                    } else {
                         continue;
                     }
                 }
-                (Some(_), _) => { /* Matched */ }
-                (None, _) => { /* Not matched */ }
+                (Some((qe, qr, qo)), None) => {
+                    if !qe.is_empty() {
+                        continue;
+                    }
+                    if !qo.is_empty() {
+                        continue;
+                    }
+                    if let Some(preds) = Self::check_predicates_range(
+                        qr,
+                        &HashMap::new(),
+                        &output_bound_cols,
+                        &index_selection,
+                    ) {
+                        new_predicates.extend(preds);
+                    } else {
+                        continue;
+                    }
+                }
+                (None, Some(_)) => {
+                    // Not matched.
+                    continue;
+                }
+                (None, None) => { /* Matched */ }
             }
+
+            let mut result = s_expr.clone();
+            result.set_applied_rule(&self.id);
+            Self::push_down_index_scan(&mut result, new_selection, new_predicates);
+            state.add_result(result);
+
+            return Ok(());
         }
 
-        // Do nothing now.
-        // TODO(agg index)
-        let mut result = s_expr.clone();
-        result.set_applied_rule(&self.id);
-        state.add_result(result);
         Ok(())
     }
 }
@@ -344,6 +387,110 @@ impl<'a> Range<'a> {
 
         true
     }
+
+    fn to_scalar(&self, index: IndexType, data_type: &DataType) -> Option<ScalarExpr> {
+        let col = BoundColumnRef {
+            span: None,
+            column: ColumnBinding {
+                database_name: None,
+                table_name: None,
+                table_index: None,
+                column_name: index.to_string(),
+                index,
+                data_type: Box::new(data_type.clone()),
+                visibility: Visibility::Visible,
+            },
+        };
+        match (self.min, self.max) {
+            (Some(min), Some(max)) => Some(
+                FunctionCall {
+                    span: None,
+                    func_name: "and".to_string(),
+                    params: vec![],
+                    arguments: vec![
+                        FunctionCall {
+                            span: None,
+                            func_name: if self.min_close {
+                                "gte".to_string()
+                            } else {
+                                "gt".to_string()
+                            },
+                            params: vec![],
+                            arguments: vec![
+                                col.clone().into(),
+                                ConstantExpr {
+                                    span: None,
+                                    value: min.clone(),
+                                }
+                                .into(),
+                            ],
+                        }
+                        .into(),
+                        FunctionCall {
+                            span: None,
+                            func_name: if self.max_close {
+                                "lte".to_string()
+                            } else {
+                                "lt".to_string()
+                            },
+                            params: vec![],
+                            arguments: vec![
+                                col.into(),
+                                ConstantExpr {
+                                    span: None,
+                                    value: max.clone(),
+                                }
+                                .into(),
+                            ],
+                        }
+                        .into(),
+                    ],
+                }
+                .into(),
+            ),
+            (Some(min), None) => Some(
+                FunctionCall {
+                    span: None,
+                    func_name: if self.min_close {
+                        "gte".to_string()
+                    } else {
+                        "gt".to_string()
+                    },
+                    params: vec![],
+                    arguments: vec![
+                        col.into(),
+                        ConstantExpr {
+                            span: None,
+                            value: min.clone(),
+                        }
+                        .into(),
+                    ],
+                }
+                .into(),
+            ),
+            (None, Some(max)) => Some(
+                FunctionCall {
+                    span: None,
+                    func_name: if self.max_close {
+                        "lte".to_string()
+                    } else {
+                        "lt".to_string()
+                    },
+                    params: vec![],
+                    arguments: vec![
+                        col.into(),
+                        ConstantExpr {
+                            span: None,
+                            value: max.clone(),
+                        }
+                        .into(),
+                    ],
+                }
+                .into(),
+            ),
+            _ => None,
+        }
+    }
 }
 
 /// Each element is the operands of each equal predicate.
@@ -361,6 +508,7 @@ type Predicates<'a> = (
 );
 
 type AggregationInfo<'a> = (&'a Aggregate, HashMap<IndexType, &'a ScalarExpr>);
+type SelectionMap<'a> = HashMap<String, (IndexType, &'a ScalarExpr)>;
 
 // Record information helping to rewrite the query plan.
 struct RewriteInfomartion<'a> {
@@ -371,12 +519,6 @@ struct RewriteInfomartion<'a> {
 }
 
 impl RewriteInfomartion<'_> {
-    // Check the if information contains the select item.
-    fn check_select_item(&self, _item: &ScalarExpr, _agg: &Option<AggregationInfo<'_>>) -> bool {
-        // TODO
-        true
-    }
-
     fn output_bound_cols(&self) -> ColumnSet {
         let mut cols = ColumnSet::new();
         for item in self.selection.items.iter() {
@@ -386,6 +528,97 @@ impl RewriteInfomartion<'_> {
         }
 
         cols
+    }
+
+    fn can_apply_index(&self) -> bool {
+        if let Some((agg, _)) = self.aggregation {
+            if !agg.grouping_sets.is_empty() {
+                // Grouping sets is not supported.
+                return false;
+            }
+        }
+
+        true
+    }
+
+    fn formatted_group_items(&self) -> Vec<String> {
+        if let Some((agg, _)) = self.aggregation {
+            let mut cols = Vec::with_capacity(agg.group_items.len());
+            for item in agg.group_items.iter() {
+                cols.push(self.format_scalar(&item.scalar));
+            }
+            cols.sort();
+            return cols;
+        }
+        vec![]
+    }
+
+    fn formatted_selection(&self) -> SelectionMap<'_> {
+        let mut outputs = HashMap::with_capacity(self.selection.items.len());
+        for (index, item) in self.selection.items.iter().enumerate() {
+            let key = self.format_scalar(&item.scalar);
+            outputs.insert(key, (index, &item.scalar));
+        }
+        outputs
+    }
+
+    // If the column ref is already rewritten, recover it.
+    fn actual_column_ref<'a>(&'a self, col: &'a ScalarExpr) -> &'a ScalarExpr {
+        if let ScalarExpr::BoundColumnRef(col) = col {
+            if let Some((agg, args)) = &self.aggregation {
+                // Check if the col is an aggregation function.
+                if let Some(func) = agg
+                    .aggregate_functions
+                    .iter()
+                    .find(|item| item.index == col.column.index)
+                {
+                    return &func.scalar;
+                }
+                // Check if the col is an argument of aggregation function.
+                if let Some(arg) = args.get(&col.column.index) {
+                    return arg;
+                }
+            }
+        }
+        col
+    }
+
+    fn format_scalar(&self, scalar: &ScalarExpr) -> String {
+        match scalar {
+            ScalarExpr::BoundColumnRef(_) => match self.actual_column_ref(scalar) {
+                ScalarExpr::BoundColumnRef(col) => {
+                    format!("{}", col.column.index)
+                }
+                s => self.format_scalar(s),
+            },
+            ScalarExpr::ConstantExpr(val) => format!("CAST({})", val.value),
+            ScalarExpr::FunctionCall(func) => format!(
+                "{}({})",
+                &func.func_name,
+                func.arguments
+                    .iter()
+                    .map(|arg| { self.format_scalar(arg) })
+                    .collect::<Vec<String>>()
+                    .join(", ")
+            ),
+            ScalarExpr::AggregateFunction(agg) => {
+                format!(
+                    "{}<{}>({})",
+                    &agg.func_name,
+                    agg.params
+                        .iter()
+                        .map(|i| i.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", "),
+                    agg.args
+                        .iter()
+                        .map(|arg| { self.format_scalar(arg) })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+            _ => unreachable!(), // Window fucntion and subquery will not appear in index.
+        }
     }
 }
 
@@ -522,37 +755,59 @@ impl RuleTryApplyAggIndex {
         true
     }
 
-    /// Check if other predicates of the index fit the query.
+    /// Check if range predicates of the index fit the query.
     ///
-    /// For each predicate of index, the column side should be found in the query.
+    /// For each predicate of query, the column side should be found in the index.
     /// And the range of the predicate in index should be more wide than the one in query.
     ///
     /// For example:
     ///
     /// - Valid: query predicate: `a > 1`, index predicate: `a > 0`
     /// - Invalid: query predicate: `a > 1`, index predicate: `a > 2`
+    ///
+    /// Returns an [`Option`]:
+    ///
+    /// - If not matched, returns [None].
+    /// - If matched, returns columns need to be filtered.
     fn check_predicates_range(
         query: &RangePredicates,
         index: &RangePredicates,
         index_output_bound_cols: &ColumnSet,
-    ) -> bool {
-        for (col, index_range) in index {
-            if let Some(query_range) = query.get(col) {
+        index_selection: &SelectionMap<'_>,
+    ) -> Option<Vec<ScalarExpr>> {
+        let mut out = Vec::new();
+        for (col, query_range) in query {
+            if let Some(index_range) = index.get(col) {
                 if !index_range.contains(query_range) {
-                    return false;
+                    return None;
                 }
                 // If query range is not equal to index range,
                 // we need to filter the index data.
                 // So we need to check if the columns in query predicates exist in index output columns.
-                if index_range != query_range && !index_output_bound_cols.contains(col) {
-                    return false;
+                if index_range != query_range {
+                    if !index_output_bound_cols.contains(col) {
+                        return None;
+                    }
+                    let (new_index, scalar) = index_selection[&col.to_string()];
+                    out.push((*col, new_index, scalar.data_type().ok()?))
                 }
+            } else if !index_output_bound_cols.contains(col) {
+                // If the column is not in index predicates, it should be in index output columns.
+                return None;
             } else {
-                return false;
+                let (new_index, scalar) = index_selection[&col.to_string()];
+                out.push((*col, new_index, scalar.data_type().ok()?))
             }
         }
 
-        true
+        Some(
+            out.iter()
+                .filter_map(|(col, new_index, ty)| {
+                    let range = &query[col];
+                    range.to_scalar(*new_index, ty)
+                })
+                .collect(),
+        )
     }
 
     /// Check if other predicates of the index fit the query.
@@ -566,5 +821,125 @@ impl RuleTryApplyAggIndex {
             }
         }
         true
+    }
+
+    fn try_create_column_binding(
+        index_selection: &SelectionMap<'_>,
+        formatted_scalar: &str,
+    ) -> Option<BoundColumnRef> {
+        if let Some((index, scalar)) = index_selection.get(formatted_scalar) {
+            Some(BoundColumnRef {
+                span: None,
+                column: ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    table_index: None,
+                    column_name: formatted_scalar.to_string(),
+                    index: *index,
+                    data_type: Box::new(scalar.data_type().ok()?),
+                    visibility: Visibility::Visible,
+                },
+            })
+        } else {
+            None
+        }
+    }
+
+    fn rewrite_by_selection(
+        query_info: &RewriteInfomartion<'_>,
+        scalar: &ScalarExpr,
+        index_selection: &SelectionMap<'_>,
+    ) -> Option<ScalarExpr> {
+        if let Some(col) =
+            Self::try_create_column_binding(index_selection, &query_info.format_scalar(scalar))
+        {
+            Some(col.into())
+        } else {
+            Self::rewrite_query_item(query_info, scalar, index_selection)
+        }
+    }
+
+    /// Check if `query_item` scalar contains output from index,
+    /// and rewrite scalar with output from index.
+    ///
+    /// If `query_item` contains items that are not in index outputs,
+    /// returns [None];
+    /// else returns the rewritten scalar.
+    fn rewrite_query_item(
+        query_info: &RewriteInfomartion<'_>,
+        query_item: &ScalarExpr,
+        index_selection: &SelectionMap<'_>,
+    ) -> Option<ScalarExpr> {
+        // Every call will format the scalars,
+        // a more effecient way to be determined.
+        match query_item {
+            ScalarExpr::BoundColumnRef(_) => match query_info.actual_column_ref(query_item) {
+                ScalarExpr::BoundColumnRef(col) => {
+                    let col = Self::try_create_column_binding(
+                        index_selection,
+                        &col.column.index.to_string(),
+                    )?;
+                    Some(col.into())
+                }
+                s => Self::rewrite_query_item(query_info, s, index_selection),
+            },
+            ScalarExpr::ConstantExpr(_) => Some(query_item.clone()),
+            ScalarExpr::CastExpr(cast) => {
+                let new_arg =
+                    Self::rewrite_by_selection(query_info, &cast.argument, index_selection)?;
+                Some(
+                    CastExpr {
+                        span: None,
+                        is_try: cast.is_try,
+                        argument: Box::new(new_arg),
+                        target_type: cast.target_type.clone(),
+                    }
+                    .into(),
+                )
+            }
+            ScalarExpr::FunctionCall(func) => {
+                let mut new_args = Vec::with_capacity(func.arguments.len());
+                for arg in func.arguments.iter() {
+                    let new_arg = Self::rewrite_by_selection(query_info, arg, index_selection)?;
+                    new_args.push(new_arg);
+                }
+                Some(
+                    FunctionCall {
+                        span: None,
+                        func_name: func.func_name.clone(),
+                        params: func.params.clone(),
+                        arguments: new_args,
+                    }
+                    .into(),
+                )
+            }
+            ScalarExpr::AggregateFunction(agg) => {
+                let mut new_args = Vec::with_capacity(agg.args.len());
+                for arg in agg.args.iter() {
+                    let new_arg = Self::rewrite_by_selection(query_info, arg, index_selection)?;
+                    new_args.push(new_arg);
+                }
+                Some(
+                    AggregateFunction {
+                        func_name: agg.func_name.clone(),
+                        distinct: agg.distinct,
+                        params: agg.params.clone(),
+                        return_type: agg.return_type.clone(),
+                        args: new_args,
+                        display_name: agg.display_name.clone(),
+                    }
+                    .into(),
+                )
+            }
+            _ => unreachable!(), // Window fucntion and subquery will not appear in index.
+        }
+    }
+
+    fn push_down_index_scan(
+        _s_expr: &mut SExpr,
+        _new_selection: Vec<ScalarItem>,
+        _new_predicates: Vec<ScalarExpr>,
+    ) {
+        todo!("agg index")
     }
 }
