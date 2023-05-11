@@ -2,7 +2,7 @@
 title: Transforming Data During Load
 ---
 
-Databend provides a powerful feature that allows you to transform data while loading it into a table using the [COPY INTO](../14-sql-commands/10-dml/dml-copy-into-table.md) command. This functionality simplifies your ETL (extract, transform, load) pipeline with basic transformations. By transforming data during a load, you can avoid the use of temporary tables, streamline your ETL process, and improve performance.
+Databend provides a powerful feature that allows you to transform data while loading it into a table using the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command. This functionality simplifies your ETL (extract, transform, load) pipeline with basic transformations. By transforming data during a load, you can avoid the use of temporary tables, streamline your ETL process, and improve performance.
 
 The COPY INTO command supports column reordering, column omission, and casts using a SELECT statement. This means that your data files don't need to have the same number and ordering of columns as your target table. You can also convert data types during the load, which is particularly useful if you need to change the format of data in your source files to match the data type of the target table.
 
@@ -16,7 +16,7 @@ This section provides three brief tutorials that offer practical guidance on how
 
 ### Before You Begin
 
-Download the sample file [employees.parquet](https://datasets.databend.rs/employees.parquet) and then upload it to your user stage using the [File Upload API](../11-integrations/00-api/10-put-to-stage.md). If you query the file after upload, you will find that it contains these records:
+Download the sample file [employees.parquet](https://datasets.databend.rs/employees.parquet) and then upload it to your user stage using the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md). If you query the file after upload, you will find that it contains these records:
 
 ```sql
 SELECT * FROM @~/employees.parquet;
