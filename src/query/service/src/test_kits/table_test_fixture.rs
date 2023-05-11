@@ -43,6 +43,8 @@ use common_meta_app::storage::StorageParams;
 use common_pipeline_sources::BlocksSource;
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlan;
+use common_sql::plans::DeletePlan;
+use common_sql::plans::UpdatePlan;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use futures::TryStreamExt;
@@ -396,6 +398,75 @@ pub async fn append_sample_data(num_blocks: usize, fixture: &TestFixture) -> Res
 pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
     let table = fixture.latest_default_table().await?;
     table.analyze(fixture.ctx.clone()).await
+}
+
+pub async fn do_deletion(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    plan: DeletePlan,
+) -> Result<()> {
+    let (filter, col_indices) = if let Some(scalar) = &plan.selection {
+        (
+            Some(
+                scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone())
+                    .as_remote_expr(),
+            ),
+            scalar.used_columns().into_iter().collect(),
+        )
+    } else {
+        (None, vec![])
+    };
+
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let mut res = PipelineBuildResult::create();
+    fuse_table
+        .delete(ctx.clone(), filter, col_indices, &mut res.main_pipeline)
+        .await?;
+
+    if !res.main_pipeline.is_empty() {
+        execute_pipeline(ctx, res)?;
+    }
+    Ok(())
+}
+
+pub async fn do_update(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    plan: UpdatePlan,
+) -> Result<()> {
+    let (filter, col_indices) = if let Some(scalar) = &plan.selection {
+        (
+            Some(
+                scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone())
+                    .as_remote_expr(),
+            ),
+            scalar.used_columns().into_iter().collect(),
+        )
+    } else {
+        (None, vec![])
+    };
+    let update_list = plan.generate_update_list(table.schema().into(), col_indices.clone())?;
+
+    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    let mut res = PipelineBuildResult::create();
+    fuse_table
+        .update(
+            ctx.clone(),
+            filter,
+            col_indices,
+            update_list,
+            &mut res.main_pipeline,
+        )
+        .await?;
+
+    if !res.main_pipeline.is_empty() {
+        execute_pipeline(ctx, res)?;
+    }
+    Ok(())
 }
 
 pub async fn append_sample_data_overwrite(

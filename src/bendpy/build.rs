@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod deletion_accumulator;
-pub mod merge_into_mutator;
-mod mutation_accumulator;
-
-pub use mutation_accumulator::MutationAccumulator;
+fn main() {
+    pyo3_build_config::add_extension_module_link_args();
+}

@@ -20,7 +20,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use storages_common_table_meta::meta::BlockMeta;
 
-use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
+use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CompactSourceMeta {
