@@ -85,6 +85,7 @@ use crate::BaseTableColumn;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
+use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::TableInternalColumn;
@@ -974,28 +975,22 @@ impl PhysicalPlanBuilder {
                 let left_schema = self.build(s_expr.child(0)?).await?.output_schema()?;
                 let right_schema = self.build(s_expr.child(1)?).await?.output_schema()?;
 
-                debug_assert!(
-                    op.pairs
-                        .iter()
-                        .zip(left_schema.fields())
-                        .zip(right_schema.fields())
-                        .all(|(((l, r), lfield), rfield)| &l.to_string() == lfield.name()
-                            && &r.to_string() == rfield.name())
-                );
+                let common_types = op.pairs.iter().map(|(l, r)| {
+                    let left_field = left_schema.field_with_name(&l.to_string()).unwrap();
+                    let right_field = right_schema.field_with_name(&r.to_string()).unwrap();
 
-                let common_types = left_schema.fields().iter().zip(right_schema.fields()).map(|(l, r)| {
                     let common_type = common_super_type(
-                        l.data_type().clone(),
-                        r.data_type().clone(),
+                        left_field.data_type().clone(),
+                        right_field.data_type().clone(),
                         &BUILTIN_FUNCTIONS.default_cast_rules,
                     );
                     common_type.ok_or_else(|| {
                         ErrorCode::SemanticError(format!(
                             "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
-                            l.name(),
-                            l.data_type(),
-                            r.name(),
-                            r.data_type()
+                            left_field.name(),
+                            left_field.data_type(),
+                            right_field.name(),
+                            right_field.data_type()
                         ))
                     })
                 }).collect::<Result<Vec<_>>>()?;
@@ -1004,11 +999,13 @@ impl PhysicalPlanBuilder {
                     plan_builder: &mut PhysicalPlanBuilder,
                     plan: SExpr,
                     plan_schema: &DataSchema,
+                    indexes: &[IndexType],
                     common_types: &[DataType],
                 ) -> Result<PhysicalPlan> {
-                    let scalar_items = plan_schema
-                        .fields()
+                    debug_assert!(indexes.len() == common_types.len());
+                    let scalar_items = indexes
                         .iter()
+                        .map(|index| plan_schema.field_with_name(&index.to_string()).unwrap())
                         .zip(common_types)
                         .filter(|(f, common_ty)| f.data_type() != *common_ty)
                         .map(|(f, common_ty)| {
@@ -1050,10 +1047,13 @@ impl PhysicalPlanBuilder {
                     Ok(new_plan)
                 }
 
+                let left_indexes = op.pairs.iter().map(|(l, _)| *l).collect::<Vec<_>>();
+                let right_indexes = op.pairs.iter().map(|(_, r)| *r).collect::<Vec<_>>();
                 let left_plan = cast_plan(
                     self,
                     s_expr.child(0)?.clone(),
                     left_schema.as_ref(),
+                    &left_indexes,
                     &common_types,
                 )
                 .await?;
@@ -1061,6 +1061,7 @@ impl PhysicalPlanBuilder {
                     self,
                     s_expr.child(1)?.clone(),
                     right_schema.as_ref(),
+                    &right_indexes,
                     &common_types,
                 )
                 .await?;
