@@ -115,7 +115,7 @@ pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) -> Result<()> {
     Ok(())
 }
 
-// deduct statistics for snapshot summary.
+// Deduct statistics, only be used for calculate snapshot summary during update/delete.
 pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.row_count -= r.row_count;
     l.block_count -= r.block_count;
@@ -125,6 +125,8 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.index_size -= r.index_size;
     for (id, col_stats) in &mut l.col_stats {
         if let Some(r_col_stats) = r.col_stats.get(id) {
+            // The MinMax of a column cannot be recalculated by the right statistics,
+            // so we skip deduct the MinMax statistics here.
             col_stats.null_count -= r_col_stats.null_count;
             col_stats.in_memory_size -= r_col_stats.in_memory_size;
         }

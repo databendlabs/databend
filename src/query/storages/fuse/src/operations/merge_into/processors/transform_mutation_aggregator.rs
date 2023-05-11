@@ -13,9 +13,9 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoPtr;
 use common_expression::BlockThresholds;
@@ -24,71 +24,49 @@ use common_expression::TableSchemaRef;
 use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
 use opendal::Operator;
 use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::Statistics;
 use tracing::debug;
+use tracing::info;
 
-use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::merge_into::mutation_meta::mutation_log::CommitMeta;
-use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry;
-use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
-use crate::operations::merge_into::mutation_meta::mutation_log::Replacement;
-use crate::operations::merge_into::mutator::mutation_accumulator::MutationAccumulator;
-use crate::operations::mutation::AbortOperation;
+use crate::operations::merge_into::mutation_meta::CommitMeta;
+use crate::operations::merge_into::mutation_meta::MutationLogs;
+use crate::operations::merge_into::mutator::MutationAccumulator;
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
 pub struct TableMutationAggregator {
-    mutation_accumulator: MutationAccumulator,
-    base_segments: Vec<Location>,
-    thresholds: BlockThresholds,
-    location_gen: TableMetaLocationGenerator,
-    abort_operation: AbortOperation,
     ctx: Arc<dyn TableContext>,
-    schema: TableSchemaRef,
-    dal: Operator,
+    mutation_accumulator: MutationAccumulator,
+
+    start_time: Instant,
+    finished_tasks: usize,
 }
 
 impl TableMutationAggregator {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         base_segments: Vec<Location>,
+        base_summary: Statistics,
         thresholds: BlockThresholds,
         location_gen: TableMetaLocationGenerator,
         schema: TableSchemaRef,
         dal: Operator,
     ) -> Self {
-        TableMutationAggregator {
-            mutation_accumulator: Default::default(),
-            base_segments,
-            thresholds,
-            location_gen,
-            abort_operation: Default::default(),
-            ctx,
+        let mutation_accumulator = MutationAccumulator::new(
+            ctx.clone(),
             schema,
             dal,
-        }
-    }
-}
+            location_gen,
+            thresholds,
+            base_segments,
+            base_summary,
+        );
 
-impl TableMutationAggregator {
-    pub fn accumulate_mutation(&mut self, mutations: MutationLogs) {
-        for entry in &mutations.entries {
-            self.mutation_accumulator.accumulate_log_entry(entry);
-            // TODO wrap this aborts in mutation accumulator
-            match entry {
-                MutationLogEntry::Replacement(mutation) => {
-                    if let Replacement::Replaced(block_meta) = &mutation.op {
-                        self.abort_operation.add_block(block_meta);
-                    }
-                }
-                MutationLogEntry::Append(append) => {
-                    for block_meta in &append.segment_info.blocks {
-                        self.abort_operation.add_block(block_meta);
-                    }
-                    // TODO can we avoid this clone?
-                    self.abort_operation
-                        .add_segment(append.segment_location.clone());
-                }
-            }
+        TableMutationAggregator {
+            ctx,
+            mutation_accumulator,
+            start_time: Instant::now(),
+            finished_tasks: 0,
         }
     }
 }
@@ -100,40 +78,29 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         let mutation = MutationLogs::try_from(data)?;
-        self.accumulate_mutation(mutation);
+        for entry in &mutation.entries {
+            self.mutation_accumulator.accumulate_log_entry(entry);
+        }
+
+        // Refresh status
+        {
+            self.finished_tasks += mutation.entries.len();
+            let status = format!(
+                "mutation: run tasks:{}, cost:{} sec",
+                self.finished_tasks,
+                self.start_time.elapsed().as_secs()
+            );
+            self.ctx.set_status_info(&status);
+            info!(status);
+        }
         Ok(None)
     }
 
     #[async_backtrace::framed]
     async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
-        let mutations: CommitMeta = self.apply_mutations().await?;
+        let mutations: CommitMeta = self.mutation_accumulator.apply().await?;
         debug!("mutations {:?}", mutations);
         let block_meta: BlockMetaInfoPtr = Box::new(mutations);
         Ok(Some(DataBlock::empty_with_meta(block_meta)))
-    }
-}
-
-impl TableMutationAggregator {
-    #[async_backtrace::framed]
-    async fn apply_mutations(&mut self) -> Result<CommitMeta> {
-        // NOTE: order matters!
-        let segments_io =
-            SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.schema.clone());
-        let segment_locations = self.base_segments.as_slice();
-        let segment_infos = segments_io
-            .read_segments(segment_locations, true)
-            .await?
-            .into_iter()
-            .collect::<Result<Vec<_>>>()?;
-
-        let (commit_meta, serialized_segments) = self.mutation_accumulator.apply(
-            self.base_segments.clone(),
-            &segment_infos,
-            self.thresholds,
-            &self.location_gen,
-        )?;
-
-        segments_io.write_segments(serialized_segments).await?;
-        Ok::<_, ErrorCode>(commit_meta)
     }
 }

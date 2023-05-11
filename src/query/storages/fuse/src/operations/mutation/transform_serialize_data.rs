@@ -24,14 +24,16 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use opendal::Operator;
-use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
-use crate::operations::mutation::Mutation;
-use crate::operations::mutation::MutationTransformMeta;
+use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
+use crate::operations::merge_into::mutation_meta::MutationLogEntry;
+use crate::operations::merge_into::mutation_meta::MutationLogs;
+use crate::operations::merge_into::mutation_meta::Replacement;
+use crate::operations::merge_into::mutation_meta::ReplacementLogEntry;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -43,7 +45,7 @@ enum State {
     Consume,
     NeedSerialize(DataBlock, Option<ClusterStatistics>),
     Serialized(BlockSerialization),
-    Output(Mutation),
+    Output(Replacement),
 }
 
 pub struct SerializeDataTransform {
@@ -134,12 +136,12 @@ impl Processor for SerializeDataTransform {
             let meta = SerializeDataMeta::downcast_ref_from(&meta).unwrap();
             self.index = meta.index.clone();
             if input_data.is_empty() {
-                self.state = State::Output(Mutation::Deleted);
+                self.state = State::Output(Replacement::Deleted);
             } else {
                 self.state = State::NeedSerialize(input_data, meta.cluster_stats.clone());
             }
         } else {
-            self.state = State::Output(Mutation::DoNothing);
+            self.state = State::Output(Replacement::DoNothing);
         }
         Ok(Event::Sync)
     }
@@ -156,8 +158,14 @@ impl Processor for SerializeDataTransform {
                 self.state = State::Serialized(serialized);
             }
             State::Output(op) => {
-                let meta = MutationTransformMeta::create(self.index.clone(), op);
-                self.output_data = Some(DataBlock::empty_with_meta(meta));
+                let entry = ReplacementLogEntry {
+                    index: self.index.clone(),
+                    op,
+                };
+                let meta = MutationLogs {
+                    entries: vec![MutationLogEntry::Replacement(entry)],
+                };
+                self.output_data = Some(DataBlock::empty_with_meta(Box::new(meta)));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -184,7 +192,7 @@ impl Processor for SerializeDataTransform {
                     .await?;
                 }
                 let block_meta = Arc::new(serialized.block_meta);
-                self.state = State::Output(Mutation::Replaced(block_meta));
+                self.state = State::Output(Replacement::Replaced(block_meta));
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

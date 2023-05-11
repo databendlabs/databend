@@ -35,10 +35,10 @@ use tracing::info;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::merge_into::mutation_meta::CommitMeta;
 use crate::operations::mutation::compact::CompactSourceMeta;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::mutation::BlockCompactMutator;
-use crate::operations::mutation::MutationSinkMeta;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
 
@@ -166,11 +166,11 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         let merged_segments = std::mem::take(&mut self.merged_segments)
             .into_values()
             .collect();
-        let meta = MutationSinkMeta::create(
+        let meta = CommitMeta::new(
             merged_segments,
             std::mem::take(&mut self.merged_statistics),
             std::mem::take(&mut self.abort_operation),
         );
-        Ok(Some(DataBlock::empty_with_meta(meta)))
+        Ok(Some(DataBlock::empty_with_meta(Box::new(meta))))
     }
 }

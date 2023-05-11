@@ -33,7 +33,7 @@ use storages_common_table_meta::meta::Statistics;
 use tracing::info;
 
 use crate::io::SegmentsIO;
-use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
+use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
 use crate::operations::mutation::CompactPartInfo;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::deduct_statistics_mut;
@@ -244,7 +244,6 @@ impl BlockCompactMutator {
                 CompactPartInfo::create(blocks, BlockMetaIndex {
                     segment_idx,
                     block_idx,
-                    range: None,
                 })
             })
             .collect();

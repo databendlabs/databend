@@ -31,9 +31,9 @@ use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
+use crate::operations::merge_into::CommitSink;
+use crate::operations::merge_into::TableMutationAggregator;
 use crate::operations::mutation::MutationAction;
-use crate::operations::mutation::MutationAggregator;
-use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
@@ -78,23 +78,15 @@ impl FuseTable {
             filter = None;
         }
 
-        // Status.
-        {
-            let status = "mutation: begin to run update tasks";
-            ctx.set_status_info(status);
-            info!(status);
-        }
-
-        let total_tasks = self
-            .try_add_update_source(
-                ctx.clone(),
-                filter,
-                col_indices,
-                update_list,
-                &snapshot,
-                pipeline,
-            )
-            .await?;
+        self.try_add_update_source(
+            ctx.clone(),
+            filter,
+            col_indices,
+            update_list,
+            &snapshot,
+            pipeline,
+        )
+        .await?;
         if pipeline.is_empty() {
             return Ok(());
         }
@@ -113,24 +105,22 @@ impl FuseTable {
         pipeline.resize(1)?;
 
         pipeline.add_transform(|input, output| {
-            let aggregator = MutationAggregator::new(
+            let aggregator = TableMutationAggregator::create(
                 ctx.clone(),
+                snapshot.segments.clone(),
+                snapshot.summary.clone(),
+                self.get_block_thresholds(),
+                self.meta_location_generator().clone(),
                 self.schema(),
                 self.get_operator(),
-                self.meta_location_generator().clone(),
-                snapshot.summary.clone(),
-                snapshot.segments.clone(),
-                self.get_block_thresholds(),
-                total_tasks,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
             )))
         })?;
 
-        pipeline.add_sink(|input| {
-            MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
-        })?;
+        pipeline
+            .add_sink(|input| CommitSink::try_create(self, ctx.clone(), snapshot.clone(), input))?;
         Ok(())
     }
 
@@ -143,7 +133,7 @@ impl FuseTable {
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         base_snapshot: &TableSnapshot,
         pipeline: &mut Pipeline,
-    ) -> Result<usize> {
+    ) -> Result<()> {
         let all_column_indices = self.all_column_indices();
         let schema = self.schema();
 
@@ -254,8 +244,18 @@ impl FuseTable {
                 },
                 max_threads,
             )?;
+
+            // Status.
+            {
+                let status = format!(
+                    "delete: begin to run delete tasks, total tasks: {}",
+                    total_tasks
+                );
+                ctx.set_status_info(&status);
+                info!(status);
+            }
         }
 
-        Ok(total_tasks)
+        Ok(())
     }
 }

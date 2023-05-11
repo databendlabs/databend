@@ -251,9 +251,9 @@ impl<'a> SegmentCompactor<'a> {
         if fragments_compacted {
             // if some compaction occurred, the reminders
             // which are outside of the limit should also be collected
-            for segment_location in reverse_locations[checked_end_at..].iter() {
-                compaction.segments_locations.push(segment_location.clone());
-            }
+            compaction
+                .segments_locations
+                .extend(reverse_locations[checked_end_at..].iter().cloned());
         }
         // reverse the segments back
         compaction.segments_locations.reverse();

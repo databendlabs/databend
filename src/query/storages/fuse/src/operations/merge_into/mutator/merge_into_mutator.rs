@@ -47,11 +47,11 @@ use crate::io::WriteSettings;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::UniqueKeyDigest;
-use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
-use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogEntry;
-use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
-use crate::operations::merge_into::mutation_meta::mutation_log::Replacement;
-use crate::operations::merge_into::mutation_meta::mutation_log::ReplacementLogEntry;
+use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
+use crate::operations::merge_into::mutation_meta::MutationLogEntry;
+use crate::operations::merge_into::mutation_meta::MutationLogs;
+use crate::operations::merge_into::mutation_meta::Replacement;
+use crate::operations::merge_into::mutation_meta::ReplacementLogEntry;
 use crate::operations::merge_into::mutator::deletion_accumulator::DeletionAccumulator;
 use crate::operations::merge_into::OnConflictField;
 use crate::operations::mutation::BlockIndex;
@@ -278,7 +278,6 @@ impl MergeIntoOperationAggregator {
                 index: BlockMetaIndex {
                     segment_idx: segment_index,
                     block_idx: block_index,
-                    range: None,
                 },
                 op: Replacement::Deleted,
             };
@@ -319,7 +318,6 @@ impl MergeIntoOperationAggregator {
             index: BlockMetaIndex {
                 segment_idx: segment_index,
                 block_idx: block_index,
-                range: None,
             },
             op: Replacement::Replaced(Arc::new(new_block_meta)),
         };
