@@ -46,7 +46,7 @@ use common_pipeline_transforms::processors::transforms::try_create_transform_sor
 use common_profile::ProfSpanSetRef;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::AggregateExpand;
+use common_sql::executor::{AggregateExpand, IEJoin};
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
@@ -195,7 +195,14 @@ impl PipelineBuilder {
             PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
+            PhysicalPlan::IEJoin(ie_join) => {
+                self.build_ie_join(ie_join)
+            }
         }
+    }
+
+    fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
+        todo!()
     }
 
     fn build_join(&mut self, join: &HashJoin) -> Result<()> {

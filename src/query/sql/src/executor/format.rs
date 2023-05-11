@@ -41,6 +41,7 @@ use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
+use crate::executor::IEJoin;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::Window;
 use crate::planner::MetadataRef;
@@ -146,6 +147,7 @@ fn to_format_tree(
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
+        PhysicalPlan::IEJoin(plan) => ie_join_to_format_tree(plan, metadata, prof_span_set),
     }
 }
 
@@ -636,6 +638,14 @@ fn row_fetch_to_format_tree(
         "RowFetch".to_string(),
         children,
     ))
+}
+
+fn ie_join_to_format_tree(
+    _plan: &IEJoin,
+    _metadata: &MetadataRef,
+    _prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::with_children("IEJoin".to_string(), vec![]))
 }
 
 fn hash_join_to_format_tree(
