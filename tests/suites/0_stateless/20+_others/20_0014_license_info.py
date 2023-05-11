@@ -31,6 +31,7 @@ if __name__ == "__main__":
     with NativeClient(name="client1>") as client1:
         client1.expect(prompt)
         client1.expect("")
+        print(get_license())
 
         client1.send("unset enterprise_license;")
         client1.expect(prompt)
