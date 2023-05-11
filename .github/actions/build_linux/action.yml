@@ -36,13 +36,13 @@ runs:
       run: |
         case ${{ inputs.target }} in
           x86_64-unknown-linux-gnu)
-            flags="-C target-feature=+sse4.2 -C link-arg=-Wl,--compress-debug-sections=zlib-gnu"
+            flags="-C target-feature=+sse4.2 -C link-arg=-Wl,--compress-debug-sections=zlib"
             ;;
           x86_64-unknown-linux-musl)
             flags="-C target-feature=+sse4.2 -C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
             ;;
           aarch64-unknown-linux-gnu)
-            flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gnu"
+            flags="-C link-arg=-Wl,--compress-debug-sections=zlib"
             ;;
           aarch64-unknown-linux-musl)
             flags="-C link-arg=-Wl,--compress-debug-sections=zlib-gabi"
