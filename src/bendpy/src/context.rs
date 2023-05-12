@@ -53,12 +53,10 @@ impl PySessionContext {
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
         let res = wait_for_future(py, plan_sql(&self.ctx, sql));
         match res {
-            Err(err) => {
-                return Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
-                    "Error: {}",
-                    err
-                )));
-            }
+            Err(err) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
+                "Error: {}",
+                err
+            ))),
             Ok(res) => {
                 // if res.df.has_result_set() {
                 //     return Ok(res);

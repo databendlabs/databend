@@ -36,7 +36,6 @@ use common_meta_app::schema::TableMeta;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
-use tracing::log::debug;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -181,29 +180,16 @@ impl ColumnsTable {
         let mut rows: Vec<(String, String, TableField)> = vec![];
         for database in databases {
             let tables = if tables.is_empty() {
-                match catalog.list_tables(tenant.as_str(), &database).await {
-                    Ok(table) => table,
-                    Err(_) => {
-                        debug!(
-                            "list all tables in {:?}.{:?} failed.",
-                            CATALOG_DEFAULT, database
-                        );
-                        vec![]
-                    }
+                if let Ok(table) = catalog.list_tables(tenant.as_str(), &database).await {
+                    table
+                } else {
+                    vec![]
                 }
             } else {
                 let mut res = Vec::new();
                 for table in &tables {
-                    match catalog.get_table(tenant.as_str(), &database, table).await {
-                        Ok(table) => {
-                            res.push(table);
-                        }
-                        Err(_) => {
-                            debug!(
-                                "Can not get table {:?}.{:?}.{:?}",
-                                CATALOG_DEFAULT, database, table
-                            )
-                        }
+                    if let Ok(table) = catalog.get_table(tenant.as_str(), &database, table).await {
+                        res.push(table);
                     }
                 }
                 res

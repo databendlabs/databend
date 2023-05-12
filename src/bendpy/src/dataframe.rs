@@ -62,7 +62,7 @@ impl PyDataFrame {
         let blocks = wait_for_future(py, self.df_collect());
         Ok(PyDataBlocks {
             blocks: blocks.unwrap(),
-            schema: self.df.schema().clone(),
+            schema: self.df.schema(),
         })
     }
 
