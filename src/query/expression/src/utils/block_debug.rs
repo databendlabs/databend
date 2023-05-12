@@ -12,13 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use comfy_table::Cell;
+use comfy_table::CellAlignment;
+use comfy_table::Table;
 use common_exception::Result;
 
 use crate::DataBlock;
+use crate::DataSchemaRef;
 
 /// ! Create a visual representation of record batches
 pub fn pretty_format_blocks(results: &[DataBlock]) -> Result<String> {
-    let block = DataBlock::concat(results)?;
+    let block: DataBlock = DataBlock::concat(results)?;
     Ok(block.to_string())
 }
 
@@ -68,4 +72,47 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
         "{:#?}\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
         test_name, expected_lines, actual_lines
     );
+}
+
+pub fn table_format_blocks(schema: &DataSchemaRef, blocks: &[DataBlock]) -> Result<String> {
+    let table = create_table(schema, blocks);
+    Ok(table.to_string())
+}
+
+/// Convert a series of rows into a table
+fn create_table(schema: &DataSchemaRef, results: &[DataBlock]) -> Table {
+    let mut table = Table::new();
+    table.load_preset("││──├─┼┤│    ──┌┐└┘");
+    if results.is_empty() {
+        return table;
+    }
+
+    let mut header = Vec::with_capacity(schema.fields().len());
+    let mut aligns = Vec::with_capacity(schema.fields().len());
+    for field in schema.fields() {
+        let cell = Cell::new(format!("{}\n{}", field.name(), field.data_type(),))
+            .set_alignment(CellAlignment::Center);
+
+        header.push(cell);
+
+        if field.data_type().remove_nullable().is_numeric() {
+            aligns.push(CellAlignment::Right);
+        } else {
+            aligns.push(CellAlignment::Left);
+        }
+    }
+    table.set_header(header);
+
+    for block in results {
+        for row in 0..block.num_rows() {
+            let mut cells = Vec::new();
+            for (align, block_entry) in aligns.iter().zip(block.columns()) {
+                let cell = Cell::new(block_entry.value.index(row).unwrap()).set_alignment(*align);
+                cells.push(cell);
+            }
+            table.add_row(cells);
+        }
+    }
+
+    table
 }
