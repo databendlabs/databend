@@ -100,7 +100,7 @@ use crate::sessions::TableContext;
 // Pre-generate the positions of `(`, `'` and `\`
 static PATTERNS: &[&str] = &["(", "'", "\\"];
 
-static INSERT_TOKEN_FINDER: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(PATTERNS));
+static INSERT_TOKEN_FINDER: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(PATTERNS).unwrap());
 
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
@@ -570,7 +570,7 @@ impl AsyncSource for ValueSource {
         let mut estimated_rows = 0;
         let mut positions = VecDeque::new();
         for mat in INSERT_TOKEN_FINDER.find_iter(&self.data) {
-            if mat.pattern() == 0 {
+            if mat.pattern() == 0.into() {
                 estimated_rows += 1;
                 continue;
             }

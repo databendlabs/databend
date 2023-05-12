@@ -52,20 +52,18 @@ pub fn fill_missing_columns(
         .map(DataField::from)
         .collect::<Vec<_>>();
 
-    // Fill missing default columns.
-    if source_schema.fields().len() < with_default_fields.len() {
-        let output_schema = DataSchemaRefExt::create(with_default_fields.clone());
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformResortAddOn::try_create(
-                ctx.clone(),
-                transform_input_port,
-                transform_output_port,
-                source_schema.clone(),
-                output_schema.clone(),
-                table.clone(),
-            )
-        })?;
-    }
+    // Fill missing default columns and resort the columns.
+    let output_schema = DataSchemaRefExt::create(with_default_fields.clone());
+    pipeline.add_transform(|transform_input_port, transform_output_port| {
+        TransformResortAddOn::try_create(
+            ctx.clone(),
+            transform_input_port,
+            transform_output_port,
+            source_schema.clone(),
+            output_schema.clone(),
+            table.clone(),
+        )
+    })?;
 
     // Fill computed columns.
     if with_default_fields.len() < with_computed_fields.len() {
