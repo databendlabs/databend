@@ -26,6 +26,7 @@ use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check;
 use common_expression::type_check::check_function;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
@@ -35,6 +36,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
+use common_expression::RawExpr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
@@ -80,6 +82,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
+use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
 use crate::ColumnBinding;
@@ -855,8 +858,98 @@ impl PhysicalPlanBuilder {
                 Ok(result)
             }
             RelOperator::Window(w) => {
-                let input = self.build(s_expr.child(0)?).await?;
-                let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
+                let input_schema = self.build(s_expr.child(0)?).await?.output_schema()?;
+
+                let mut w = w.clone();
+
+                // Unify the data type for range frame.
+                if w.frame.units.is_range() {
+                    assert!(w.order_by.len() == 1);
+                    let order_by = &mut w.order_by[0].order_by_item.scalar;
+
+                    let mut start = match &mut w.frame.start_bound {
+                        WindowFuncFrameBound::Preceding(scalar)
+                        | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
+                        _ => None,
+                    };
+                    let mut end = match &mut w.frame.end_bound {
+                        WindowFuncFrameBound::Preceding(scalar)
+                        | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
+                        _ => None,
+                    };
+
+                    let mut common_ty = order_by
+                        .resolve_and_check(&*input_schema)?
+                        .data_type()
+                        .clone();
+                    for scalar in start.iter().chain(end.iter()) {
+                        let ty = scalar.as_ref().infer_data_type();
+                        common_ty = common_super_type(
+                            common_ty.clone(),
+                            ty.clone(),
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        )
+                        .ok_or_else(|| {
+                            ErrorCode::IllegalDataType(format!(
+                                "Cannot find common type for {:?} and {:?}",
+                                common_ty, ty
+                            ))
+                        })?;
+                    }
+
+                    *order_by = wrap_cast(order_by, &common_ty);
+                    for scalar in start.iter_mut().chain(end.iter_mut()) {
+                        let raw_expr = RawExpr::<usize>::Cast {
+                            span: w.span,
+                            is_try: false,
+                            expr: Box::new(RawExpr::Constant {
+                                span: w.span,
+                                scalar: scalar.clone(),
+                            }),
+                            dest_type: common_ty.clone(),
+                        };
+                        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+                        let (expr, _) = ConstantFolder::fold(
+                            &expr,
+                            &FunctionContext::default(),
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        if let common_expression::Expr::Constant {
+                            scalar: new_scalar, ..
+                        } = expr
+                        {
+                            if new_scalar.is_positive() {
+                                **scalar = new_scalar;
+                            }
+                        }
+                        return Err(ErrorCode::SemanticError(
+                            "Only positive numbers are allowed in RANGE offset".to_string(),
+                        )
+                        .set_span(w.span));
+                    }
+                }
+
+                // Generate a `EvalScalar` as the input of `Window`.
+                let mut scalar_items: Vec<ScalarItem> = Vec::new();
+                for arg in &w.arguments {
+                    scalar_items.push(arg.clone());
+                }
+                for part in &w.partition_by {
+                    scalar_items.push(part.clone());
+                }
+                for order in &w.order_by {
+                    scalar_items.push(order.order_by_item.clone())
+                }
+                let input = if !scalar_items.is_empty() {
+                    let eval_scalar = crate::planner::plans::EvalScalar {
+                        items: scalar_items,
+                    };
+                    SExpr::create_unary(eval_scalar.into(), s_expr.child(0)?.clone())
+                } else {
+                    s_expr.child(0)?.clone()
+                };
+                let input = self.build(&input).await?;
+
                 let order_by_items = w
                     .order_by
                     .iter()
@@ -866,6 +959,7 @@ impl PhysicalPlanBuilder {
                         order_by: v.order_by_item.index,
                     })
                     .collect::<Vec<_>>();
+                let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
 
                 let func = match &w.function {
                     WindowFuncType::Aggregate(agg) => {

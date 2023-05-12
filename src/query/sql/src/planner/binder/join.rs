@@ -24,8 +24,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use common_expression::type_check::common_super_type;
-use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -34,7 +32,6 @@ use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
-use crate::planner::binder::wrap_cast;
 use crate::planner::binder::Binder;
 use crate::planner::semantic::NameResolutionContext;
 use crate::plans::BoundColumnRef;
@@ -612,34 +609,14 @@ impl<'a> JoinConditionResolver<'a> {
 
     fn add_equi_conditions(
         &self,
-        mut left: ScalarExpr,
-        mut right: ScalarExpr,
+        left: ScalarExpr,
+        right: ScalarExpr,
         left_join_conditions: &mut Vec<ScalarExpr>,
         right_join_conditions: &mut Vec<ScalarExpr>,
     ) -> Result<bool> {
         let left_used_columns = left.used_columns();
         let right_used_columns = right.used_columns();
         let (left_columns, right_columns) = self.left_right_columns()?;
-
-        // Bump types of left conditions and right conditions
-        let left_type = left.data_type()?;
-        let right_type = right.data_type()?;
-        if left_type.ne(&right_type) {
-            let least_super_type = common_super_type(
-                left_type.clone(),
-                right_type.clone(),
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            )
-            .ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "Left type {left_type} and right type {right_type} cannot be matched"
-                ))
-            })?;
-            // Wrap cast for both left and right, `cast` can change the physical type of the data block
-            // Related issue: https://github.com/datafuselabs/databend/issues/7650
-            left = wrap_cast(&left, &least_super_type);
-            right = wrap_cast(&right, &least_super_type);
-        }
 
         if !left_used_columns.is_empty() && !right_used_columns.is_empty() {
             if left_used_columns.is_subset(&left_columns)
@@ -656,6 +633,7 @@ impl<'a> JoinConditionResolver<'a> {
                 return Ok(true);
             }
         }
+
         Ok(false)
     }
 
