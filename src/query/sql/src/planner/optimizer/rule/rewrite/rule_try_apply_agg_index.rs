@@ -617,7 +617,7 @@ impl RewriteInfomartion<'_> {
                         .join(", ")
                 )
             }
-            _ => unreachable!(), // Window fucntion and subquery will not appear in index.
+            _ => unreachable!(), // Window function and subquery will not appear in index.
         }
     }
 }
@@ -871,7 +871,7 @@ impl RuleTryApplyAggIndex {
         index_selection: &SelectionMap<'_>,
     ) -> Option<ScalarExpr> {
         // Every call will format the scalars,
-        // a more effecient way to be determined.
+        // a more efficient way to be determined.
         match query_item {
             ScalarExpr::BoundColumnRef(_) => match query_info.actual_column_ref(query_item) {
                 ScalarExpr::BoundColumnRef(col) => {
@@ -931,7 +931,7 @@ impl RuleTryApplyAggIndex {
                     .into(),
                 )
             }
-            _ => unreachable!(), // Window fucntion and subquery will not appear in index.
+            _ => unreachable!(), // Window function and subquery will not appear in index.
         }
     }
 
