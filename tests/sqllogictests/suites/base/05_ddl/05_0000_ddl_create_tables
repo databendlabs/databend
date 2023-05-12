@@ -256,3 +256,36 @@ create table tt_v2 (id int) engine=fuse SNAPSHOT_LOCATION='xx'
 
 statement error 1301
 create table t(a int) x=x
+
+statement ok
+drop table if exists t_without_engine_desc;
+
+statement ok
+drop table if exists t_with_engine_desc;
+
+statement ok
+drop table if exists t_with_wrong_engine_desc;
+
+statement ok
+create table t_without_engine_desc(id int);
+
+statement ok
+create table t_with_engine_desc(id int) engine=NULL;
+
+statement error 2302
+create table t_with_engine_desc(id int);
+
+statement error 2302
+create table t_with_engine_desc(id int) engine=NULL;
+
+statement error 1005
+create table t_with_wrong_engine_desc(id int) engine=abc;
+
+statement ok
+drop table if exists t_without_engine_desc;
+
+statement ok
+drop table if exists t_with_engine_desc;
+
+statement ok
+drop table if exists t_with_wrong_engine_desc;

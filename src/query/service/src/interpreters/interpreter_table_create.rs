@@ -106,16 +106,13 @@ impl Interpreter for CreateTableInterpreter {
             })
             .cloned();
 
-        match engine_desc {
-            Some(engine) => {
-                if self.plan.cluster_key.is_some() && !engine.support_cluster_key {
-                    return Err(ErrorCode::UnsupportedEngineParams(format!(
-                        "Unsupported cluster key for engine: {}",
-                        engine.engine_name
-                    )));
-                }
+        if let Some(engine) = engine_desc {
+            if self.plan.cluster_key.is_some() && !engine.support_cluster_key {
+                return Err(ErrorCode::UnsupportedEngineParams(format!(
+                    "Unsupported cluster key for engine: {}",
+                    engine.engine_name
+                )));
             }
-            None => {}
         }
 
         match &self.plan.as_select {
