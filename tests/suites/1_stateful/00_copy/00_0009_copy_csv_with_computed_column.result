@@ -1,8 +1,8 @@
 ---test csv field with computed columns
-1	'Beijing'	100	'gnijieB'	102
-2	'Shanghai'	80	'iahgnahS'	82
-3	'Guangzhou'	60	'uohzgnauG'	62
-4	'Shenzhen'	70	'nehznehS'	72
-5	'Shenzhen'	55	'nehznehS'	57
-6	'Beijing'	99	'gnijieB'	101
+1	'gnijieB'	102	'Beijing'	100
+2	'iahgnahS'	82	'Shanghai'	80
+3	'uohzgnauG'	62	'Guangzhou'	60
+4	'nehznehS'	72	'Shenzhen'	70
+5	'nehznehS'	57	'Shenzhen'	55
+6	'gnijieB'	101	'Beijing'	99
 

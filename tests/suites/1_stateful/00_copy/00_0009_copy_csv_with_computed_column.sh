@@ -13,10 +13,10 @@ cat <<EOF | $MYSQL_CLIENT_CONNECT
 CREATE TABLE sample
 (
     Id     INT,
-    City   VARCHAR,
-    Score  INT,
     City2  VARCHAR AS (reverse(City)) STORED,
     Score2 INT64 AS (Score + 2) VIRTUAL
+    City   VARCHAR,
+    Score  INT,
 );
 EOF
 
