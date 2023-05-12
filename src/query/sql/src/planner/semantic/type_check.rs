@@ -42,7 +42,6 @@ use common_exception::Span;
 use common_expression::infer_schema_type;
 use common_expression::type_check;
 use common_expression::type_check::check_number;
-use common_expression::type_check::common_super_type;
 use common_expression::types::decimal::DecimalDataType;
 use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::decimal::DecimalSize;
@@ -1675,22 +1674,7 @@ impl<'a> TypeChecker<'a> {
         let mut child_scalar = None;
         if let Some(expr) = child_expr {
             assert_eq!(output_context.columns.len(), 1);
-            let box (mut scalar, scalar_data_type) = self.resolve(&expr).await?;
-            if scalar_data_type != *data_type {
-                // Make comparison scalar type keep consistent
-                let coercion_type = common_super_type(
-                    scalar_data_type.clone(),
-                    *data_type.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                )
-                    .ok_or_else(|| {
-                        ErrorCode::Internal(format!(
-                            "Subquery type {scalar_data_type} and expression {data_type} cannot be matched"
-                        ))
-                    })?;
-                scalar = wrap_cast(&scalar, &coercion_type);
-                data_type = Box::new(coercion_type);
-            }
+            let box (scalar, _) = self.resolve(&expr).await?;
             child_scalar = Some(Box::new(scalar));
         }
 

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+. "$CURDIR"/../../../shell_env.sh
+
+for((i=1;i<=1000;i++));  
+do   
+echo "INSERT INTO test_vacuum.a VALUES ($i)" | $MYSQL_CLIENT_CONNECT
+done  
