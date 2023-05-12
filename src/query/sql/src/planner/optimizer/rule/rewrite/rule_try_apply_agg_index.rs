@@ -21,6 +21,7 @@ use common_expression::Scalar;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
@@ -269,9 +270,8 @@ impl Rule for RuleTryApplyAggIndex {
                 (None, None) => { /* Matched */ }
             }
 
-            let mut result = s_expr.clone();
+            let mut result = Self::push_down_index_scan(s_expr, new_selection, new_predicates)?;
             result.set_applied_rule(&self.id);
-            Self::push_down_index_scan(&mut result, new_selection, new_predicates);
             state.add_result(result);
 
             return Ok(());
@@ -936,10 +936,23 @@ impl RuleTryApplyAggIndex {
     }
 
     fn push_down_index_scan(
-        _s_expr: &mut SExpr,
-        _new_selection: Vec<ScalarItem>,
-        _new_predicates: Vec<ScalarExpr>,
-    ) {
-        todo!("agg index")
+        s_expr: &SExpr,
+        selection: Vec<ScalarItem>,
+        predicates: Vec<ScalarExpr>,
+    ) -> Result<SExpr> {
+        Ok(match s_expr.plan() {
+            RelOperator::Scan(scan) => {
+                let mut new_scan = scan.clone();
+                new_scan.agg_index = Some(AggIndexInfo {
+                    selection,
+                    predicates,
+                });
+                s_expr.replace_plan(new_scan.into())
+            }
+            _ => {
+                let child = Self::push_down_index_scan(s_expr.child(0)?, selection, predicates)?;
+                s_expr.replace_children(vec![child])
+            }
+        })
     }
 }
