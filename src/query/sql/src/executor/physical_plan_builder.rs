@@ -1020,6 +1020,7 @@ impl PhysicalPlanBuilder {
                                         index: f.name().parse().unwrap(),
                                         data_type: Box::new(f.data_type().clone()),
                                         visibility: Visibility::Visible,
+                                        virtual_computed_expr: None,
                                     },
                                 }),
                                 common_ty,
