@@ -1,0 +1,65 @@
+name: Python Release Build
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    tags: ["*-nightly*"]
+    branches: ["branch-*"]
+
+jobs:
+  generate_ver:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Generate version
+        run: |
+            tag=`git describe --tags --abbrev=0 | sed 's/-nightly//g' | sed 's/v//g'`
+            sed -i "s#0.1.2#$tag#g"" src/bendpy/cargo.toml
+
+  build-manylinux:
+    needs: [generate_ver]
+    name: Manylinux
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        env:
+          RUST_BACKTRACE: 1
+        with:
+          rust-toolchain: nightly
+          target: x86_64
+          manylinux: auto
+          rustup-components: rust-std rustfmt # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
+          args: --release --strip --manylinux 2014 --sdist --out dist
+
+  # build-sdist:
+  #   needs: [generate_ver]
+  #   name: Source distribution
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Build sdist
+  #       uses: PyO3/maturin-action@v1
+  #       with:
+  #         rust-toolchain: stable
+  #         manylinux: auto
+  #         rustup-components: rust-std rustfmt
+  #         args: --release --strip --sdist --out dist
+
+  release:
+      name: Release
+      runs-on: ubuntu-latest
+      if: "startsWith(github.ref, 'refs/tags/')"
+      needs: [build-manylinuxs]
+      steps:
+        - uses: pypa/gh-action-pypi-publish@release/v1
+        - name: Publish package to PyPI
+          with:
+            password: ${{ secrets.PYPI_API_TOKEN }}
+            repository-url: https://pypi.org/project/databend/
+            packages-dir: dist/
+
