@@ -25,7 +25,13 @@ pub type LogIndex = u64;
 pub type Term = u64;
 
 openraft::declare_raft_types!(
-    pub TypeConfig: D = LogEntry, R = AppliedState, NodeId = NodeId, Node = MembershipNode, Entry = openraft::entry::Entry<TypeConfig>
+    pub TypeConfig:
+        D = LogEntry,
+        R = AppliedState,
+        NodeId = NodeId,
+        Node = MembershipNode,
+        Entry = openraft::entry::Entry<TypeConfig>,
+        SnapshotData = Cursor<Vec<u8>>
 );
 
 pub type CommittedLeaderId = openraft::CommittedLeaderId<NodeId>;
@@ -40,7 +46,7 @@ pub type Entry = openraft::Entry<TypeConfig>;
 
 pub type SnapshotMeta = openraft::SnapshotMeta<NodeId, MembershipNode>;
 pub type SnapshotData = Cursor<Vec<u8>>;
-pub type Snapshot = openraft::Snapshot<NodeId, MembershipNode, SnapshotData>;
+pub type Snapshot = openraft::Snapshot<TypeConfig>;
 
 pub type RaftMetrics = openraft::RaftMetrics<NodeId, MembershipNode>;
 
