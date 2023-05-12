@@ -238,7 +238,7 @@ use the `QueryResponse.session_id ` for `QueryRequest.session.id`.
 
 #### client-side session
 
-the handler will return info about changed setting or current database in the  `affect` field,
+The handler will return info about changed setting or current database in the  `affect` field,
 client can remember these changes and put them in the session field in the following requests.
 
 when use client side session,  response will contain `session` field, which is `session` field in request together with the affect applied to it.
