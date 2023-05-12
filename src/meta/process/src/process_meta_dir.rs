@@ -16,13 +16,13 @@ use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
 
-use crate::Config;
+use crate::examples::Config;
 
-/// Rewrite protobuf encoded logs and applied record.
+/// Rewrite protobuf encoded logs and applied record in a sled db.
 ///
 /// The `convert` rewrite an entry if needed.
 /// If nothing needs to do, it should return `Ok(None)`
-pub fn rewrite<F>(config: &Config, convert: F) -> anyhow::Result<()>
+pub fn process_sled_db<F>(config: &Config, convert: F) -> anyhow::Result<()>
 where F: Fn(RaftStoreEntry) -> Result<Option<RaftStoreEntry>, anyhow::Error> {
     let raft_config = &config.raft_config;
 

@@ -9,7 +9,6 @@ edition = "2021"
 members = [
     # Binaries
     "src/binaries",
-    "src/binaries/meta-upgrade-09",
     # Common
     "src/common/arrow",
     "src/common/auth",
@@ -80,6 +79,7 @@ members = [
     "src/meta/app",
     "src/meta/embedded",
     "src/meta/kvapi",
+    "src/meta/process",
     "src/meta/raft-store",
     "src/meta/sled-store",
     "src/meta/stoerr",

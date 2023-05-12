@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::catalog::Catalog;
 use common_catalog::catalog::CatalogManager;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -47,7 +48,11 @@ impl AsyncSystemTable for DatabasesTable {
     }
 
     #[async_backtrace::framed]
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalogs = CatalogManager::instance();
         let catalogs: Vec<(String, Arc<dyn Catalog>)> = catalogs

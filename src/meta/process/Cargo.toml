@@ -1,0 +1,26 @@
+[package]
+name = "common-meta-process"
+description = "process meta-service data"
+version = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+publish = { workspace = true }
+edition = { workspace = true }
+
+[dependencies]
+# Workspace dependencies
+common-meta-app = { path = "../app" }
+common-meta-kvapi = { path = "../kvapi" }
+common-meta-raft-store = { path = "../raft-store" }
+common-meta-sled-store = { path = "../sled-store" }
+common-meta-types = { path = "../types" }
+common-proto-conv = { path = "../proto-conv" }
+common-protos = { path = "../protos" }
+common-tracing = { path = "../../common/tracing" }
+
+# Crates.io dependencies
+anyhow = { workspace = true }
+clap = { workspace = true }
+openraft = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }

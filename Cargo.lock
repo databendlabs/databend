@@ -2033,6 +2033,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "common-meta-process"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.23",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
+ "common-tracing",
+ "openraft 0.8.4",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "common-meta-raft-store"
 version = "0.1.0"
 dependencies = [
@@ -3357,26 +3377,6 @@ dependencies = [
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
-]
-
-[[package]]
-name = "databend-meta-upgrade-09"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 3.2.23",
- "common-meta-app",
- "common-meta-kvapi",
- "common-meta-raft-store",
- "common-meta-sled-store",
- "common-meta-types",
- "common-proto-conv",
- "common-protos",
- "common-tracing",
- "openraft 0.8.4",
- "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
