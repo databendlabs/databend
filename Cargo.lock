@@ -867,7 +867,6 @@ version = "0.1.2"
 dependencies = [
  "arrow",
  "arrow-schema",
- "common-base",
  "common-config",
  "common-exception",
  "common-expression",
