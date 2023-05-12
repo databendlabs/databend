@@ -1074,7 +1074,7 @@ insert into b values(2, 1683648000)
 
 # left join to inner join
 query T
-select * from a left join b on a.id = b.id where a.c1 between 1683648000 and 1683734400 and b.c1 between 1683648000 and 1683734400 limit 1;
+explain select * from a left join b on a.id = b.id where a.c1 between 1683648000 and 1683734400 and b.c1 between 1683648000 and 1683734400 limit 1;
 ----
 EvalScalar
 ├── expressions: [a.id (#0), a.c1 (#1), b.id (#2), b.c1 (#3)]
