@@ -16,7 +16,6 @@ use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use chrono_tz::Tz;
 use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -46,6 +45,7 @@ pub struct Session {
     pub(in crate::sessions) session_ctx: Arc<SessionContext>,
     status: Arc<RwLock<SessionStatus>>,
     pub(in crate::sessions) mysql_connection_id: Option<u32>,
+    format_settings: FormatSettings,
 }
 
 impl Session {
@@ -62,6 +62,7 @@ impl Session {
             status,
             session_ctx,
             mysql_connection_id,
+            format_settings: FormatSettings::default(),
         }))
     }
 
@@ -135,14 +136,12 @@ impl Session {
     }
 
     // only used for values and mysql output
-    pub fn get_format_settings(&self) -> Result<FormatSettings> {
-        let settings = self.session_ctx.get_settings();
-        let tz = settings.get_timezone()?;
-        let timezone = tz.parse::<Tz>().map_err(|_| {
-            ErrorCode::InvalidTimezone("Timezone has been checked and should be valid")
-        })?;
-        let format = FormatSettings { timezone };
-        Ok(format)
+    pub fn set_format_settings(&mut self, other: FormatSettings) {
+        self.format_settings = other
+    }
+
+    pub fn get_format_settings(&self) -> FormatSettings {
+        self.format_settings.clone()
     }
 
     pub fn get_current_query_id(&self) -> Option<String> {
@@ -303,6 +302,10 @@ impl Session {
         object: &GrantObject,
         privilege: Vec<UserPrivilegeType>,
     ) -> Result<()> {
+        if matches!(self.get_type(), SessionType::Local) {
+            return Ok(());
+        }
+
         // 1. check user's privilege set
         let current_user = self.get_current_user()?;
         let user_verified = current_user

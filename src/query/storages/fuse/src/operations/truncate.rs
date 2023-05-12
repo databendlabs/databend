@@ -83,7 +83,10 @@ impl FuseTable {
 
             // best effort to remove the table's copied files.
             catalog
-                .truncate_table(&self.table_info, TruncateTableReq { table_id })
+                .truncate_table(&self.table_info, TruncateTableReq {
+                    table_id,
+                    batch_size: None,
+                })
                 .await?;
 
             // try keep a hit file of last snapshot
@@ -101,8 +104,14 @@ impl FuseTable {
             if purge {
                 let snapshot_files = self.list_snapshot_files().await?;
                 let keep_last_snapshot = false;
-                self.do_purge(&ctx, snapshot_files, keep_last_snapshot)
-                    .await?
+                let ret = self
+                    .do_purge(&ctx, snapshot_files, keep_last_snapshot, None)
+                    .await;
+                if let Err(e) = ret {
+                    return Err(e);
+                } else {
+                    return Ok(());
+                }
             }
         }
 

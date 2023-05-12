@@ -3357,20 +3357,20 @@ ORDER BY i_category,
          revenueratio
 LIMIT 100;
 ----
-AAAAAAAABGAAAAAA More reg Books fiction 57.09 577.44 20.98263438
-AAAAAAAALIAAAAAA Lines shall describe explicitly northern, firm systems. Later Books fiction 2.99 2174.55 79.01736561
-AAAAAAAAIGAAAAAA Connections must constitute only eastern leaves. Primary, elderly times make expectations. Never tory stores build very points. Books mystery 2.33 12229.28 100.00000000
-AAAAAAAABJAAAAAA Prospects know Books self-help 59.77 573.27 100.00000000
-AAAAAAAALCAAAAAA Resources shall not continue thus similar, practical results. Practical words f Books travel 6.08 64.65 2.35789704
-AAAAAAAAMEAAAAAA Original interests see of course british, important terms. Yet appropriate principles conclude in a arrangements; good countries would get sometimes;  Books travel 3.84 2677.20 97.64210295
-AAAAAAAAAIAAAAAA Great, tiny animals adopt then outcomes. Terms sweep less dry, physical signs. National, black terms adapt for a reasons; groups shall  Home curtains/drapes 4.06 803.88 100.00000000
-AAAAAAAADHAAAAAA Policies used to decrease social forms; well massive parts admire lacking, necessary cities. More rational areas deceive therefore only facilities. Yet persist Home furniture 2.68 228.20 100.00000000
-AAAAAAAAICAAAAAA Usually other children must stop shares. Relations Home lighting 9.93 3487.54 100.00000000
-AAAAAAAACIAAAAAA Final orders give else. International, living personnel may miss significant companies. Black, american numbers put then  Sports fishing 1.70 2250.40 62.84664235
-AAAAAAAAPBAAAAAA Bright advisers explain i Sports fishing 8.48 1330.38 37.15335764
-AAAAAAAAAEAAAAAA Public, annual h Sports optics 2.02 20.14 0.49552209
-AAAAAAAAMFAAAAAA New, quick observations merge too worth a children; shares could live there crucial mountains. Simply eastern pounds shall crush immediately married long wives. Corporate, import Sports optics 4.48 4044.26 99.50447790
-AAAAAAAAAKAAAAAA Legs cannot make much across a children. Well industrial ports see so. Equal, full systems rise police. Labour departments will leave. Political, social  Sports sailing 1.17 45.44 100.00000000
+AAAAAAAABGAAAAAA More reg Books fiction 57.09 577.44 20.982634
+AAAAAAAALIAAAAAA Lines shall describe explicitly northern, firm systems. Later Books fiction 2.99 2174.55 79.017365
+AAAAAAAAIGAAAAAA Connections must constitute only eastern leaves. Primary, elderly times make expectations. Never tory stores build very points. Books mystery 2.33 12229.28 100.000000
+AAAAAAAABJAAAAAA Prospects know Books self-help 59.77 573.27 100.000000
+AAAAAAAALCAAAAAA Resources shall not continue thus similar, practical results. Practical words f Books travel 6.08 64.65 2.357897
+AAAAAAAAMEAAAAAA Original interests see of course british, important terms. Yet appropriate principles conclude in a arrangements; good countries would get sometimes;  Books travel 3.84 2677.20 97.642102
+AAAAAAAAAIAAAAAA Great, tiny animals adopt then outcomes. Terms sweep less dry, physical signs. National, black terms adapt for a reasons; groups shall  Home curtains/drapes 4.06 803.88 100.000000
+AAAAAAAADHAAAAAA Policies used to decrease social forms; well massive parts admire lacking, necessary cities. More rational areas deceive therefore only facilities. Yet persist Home furniture 2.68 228.20 100.000000
+AAAAAAAAICAAAAAA Usually other children must stop shares. Relations Home lighting 9.93 3487.54 100.000000
+AAAAAAAACIAAAAAA Final orders give else. International, living personnel may miss significant companies. Black, american numbers put then  Sports fishing 1.70 2250.40 62.846642
+AAAAAAAAPBAAAAAA Bright advisers explain i Sports fishing 8.48 1330.38 37.153357
+AAAAAAAAAEAAAAAA Public, annual h Sports optics 2.02 20.14 0.495522
+AAAAAAAAMFAAAAAA New, quick observations merge too worth a children; shares could live there crucial mountains. Simply eastern pounds shall crush immediately married long wives. Corporate, import Sports optics 4.48 4044.26 99.504477
+AAAAAAAAAKAAAAAA Legs cannot make much across a children. Well industrial ports see so. Equal, full systems rise police. Labour departments will leave. Political, social  Sports sailing 1.17 45.44 100.000000
 
 # Q13
 query I
@@ -3557,106 +3557,106 @@ ORDER BY channel NULLS FIRST,
          i_category_id NULLS FIRST
 LIMIT 100;
 ----
-NULL NULL NULL NULL 5873545.3200 1353
-catalog NULL NULL NULL 813316.2500 168
-catalog 1002001 NULL NULL 38898.3600 7
-catalog 1002001 2 NULL 12226.9000 3
-catalog 1002001 2 6 12226.9000 3
-catalog 1002001 4 NULL 26671.4600 4
-catalog 1002001 4 5 26671.4600 4
-catalog 1002002 NULL NULL 6595.6200 4
-catalog 1002002 3 NULL 6595.6200 4
-catalog 1002002 3 1 6595.6200 4
-catalog 1004001 NULL NULL 11009.2400 2
-catalog 1004001 3 NULL 11009.2400 2
-catalog 1004001 3 5 11009.2400 2
-catalog 1004002 NULL NULL 55339.8700 7
-catalog 1004002 3 NULL 35712.0700 3
-catalog 1004002 3 1 35712.0700 3
-catalog 1004002 4 NULL 19627.8000 4
-catalog 1004002 4 1 19627.8000 4
-catalog 2001002 NULL NULL 12977.9100 4
-catalog 2001002 1 NULL 12977.9100 4
-catalog 2001002 1 2 12977.9100 4
-catalog 2002002 NULL NULL 18697.2300 8
-catalog 2002002 2 NULL 18697.2300 8
-catalog 2002002 2 2 18697.2300 8
-catalog 2003002 NULL NULL 5401.5500 1
-catalog 2003002 3 NULL 5401.5500 1
-catalog 2003002 3 2 5401.5500 1
-catalog 2004001 NULL NULL 53328.2600 13
-catalog 2004001 2 NULL 13088.0800 3
-catalog 2004001 2 1 6389.4400 2
-catalog 2004001 2 9 6698.6400 1
-catalog 2004001 4 NULL 21765.2000 5
-catalog 2004001 4 6 13842.3500 4
-catalog 2004001 4 10 7922.8500 1
-catalog 2004001 10 NULL 18474.9800 5
-catalog 2004001 10 6 18474.9800 5
-catalog 2004002 NULL NULL 45015.2700 8
-catalog 2004002 4 NULL 45015.2700 8
-catalog 2004002 4 2 45015.2700 8
-catalog 3001001 NULL NULL 15573.7300 5
-catalog 3001001 1 NULL 10534.6400 3
-catalog 3001001 1 2 10534.6400 3
-catalog 3001001 3 NULL 5039.0900 2
-catalog 3001001 3 10 5039.0900 2
-catalog 3002001 NULL NULL 11599.1800 2
-catalog 3002001 10 NULL 11599.1800 2
-catalog 3002001 10 10 11599.1800 2
-catalog 3003002 NULL NULL 11691.7900 3
-catalog 3003002 3 NULL 11691.7900 3
-catalog 3003002 3 3 11691.7900 3
-catalog 3004002 NULL NULL 23948.1500 5
-catalog 3004002 3 NULL 9333.4800 1
-catalog 3004002 3 3 9333.4800 1
-catalog 3004002 4 NULL 14614.6700 4
-catalog 3004002 4 3 14614.6700 4
-catalog 4002001 NULL NULL 17752.2400 4
-catalog 4002001 13 NULL 17752.2400 4
-catalog 4002001 13 9 17752.2400 4
-catalog 4002002 NULL NULL 7706.1200 1
-catalog 4002002 3 NULL 7706.1200 1
-catalog 4002002 3 4 7706.1200 1
-catalog 4003001 NULL NULL 14007.1600 3
-catalog 4003001 3 NULL 14007.1600 3
-catalog 4003001 3 10 14007.1600 3
-catalog 4004001 NULL NULL 28688.4000 5
-catalog 4004001 4 NULL 28688.4000 5
-catalog 4004001 4 6 28688.4000 5
-catalog 5002002 NULL NULL 16928.6700 4
-catalog 5002002 2 NULL 16928.6700 4
-catalog 5002002 2 5 16928.6700 4
-catalog 5003002 NULL NULL 21719.6200 4
-catalog 5003002 3 NULL 21719.6200 4
-catalog 5003002 3 5 21719.6200 4
-catalog 6004007 NULL NULL 13246.4000 2
-catalog 6004007 2 NULL 13246.4000 2
-catalog 6004007 2 2 13246.4000 2
-catalog 6007005 NULL NULL 12569.7500 3
-catalog 6007005 7 NULL 12569.7500 3
-catalog 6007005 7 5 12569.7500 3
-catalog 6011003 NULL NULL 17811.5300 5
-catalog 6011003 4 NULL 17811.5300 5
-catalog 6011003 4 5 17811.5300 5
-catalog 6015002 NULL NULL 14696.3000 2
-catalog 6015002 15 NULL 14696.3000 2
-catalog 6015002 15 6 14696.3000 2
-catalog 6016006 NULL NULL 31290.5200 3
-catalog 6016006 3 NULL 31290.5200 3
-catalog 6016006 3 6 31290.5200 3
-catalog 7003008 NULL NULL 29154.8900 4
-catalog 7003008 3 NULL 29154.8900 4
-catalog 7003008 3 7 29154.8900 4
-catalog 7008001 NULL NULL 5613.6400 3
-catalog 7008001 8 NULL 5613.6400 3
-catalog 7008001 8 3 5613.6400 3
-catalog 8004001 NULL NULL 18520.6200 2
-catalog 8004001 4 NULL 18520.6200 2
-catalog 8004001 4 5 18520.6200 2
-catalog 8007003 NULL NULL 5725.6500 1
-catalog 8007003 1 NULL 5725.6500 1
-catalog 8007003 1 2 5725.6500 1
+NULL NULL NULL NULL 5873545.32 1353
+catalog NULL NULL NULL 813316.25 168
+catalog 1002001 NULL NULL 38898.36 7
+catalog 1002001 2 NULL 12226.90 3
+catalog 1002001 2 6 12226.90 3
+catalog 1002001 4 NULL 26671.46 4
+catalog 1002001 4 5 26671.46 4
+catalog 1002002 NULL NULL 6595.62 4
+catalog 1002002 3 NULL 6595.62 4
+catalog 1002002 3 1 6595.62 4
+catalog 1004001 NULL NULL 11009.24 2
+catalog 1004001 3 NULL 11009.24 2
+catalog 1004001 3 5 11009.24 2
+catalog 1004002 NULL NULL 55339.87 7
+catalog 1004002 3 NULL 35712.07 3
+catalog 1004002 3 1 35712.07 3
+catalog 1004002 4 NULL 19627.80 4
+catalog 1004002 4 1 19627.80 4
+catalog 2001002 NULL NULL 12977.91 4
+catalog 2001002 1 NULL 12977.91 4
+catalog 2001002 1 2 12977.91 4
+catalog 2002002 NULL NULL 18697.23 8
+catalog 2002002 2 NULL 18697.23 8
+catalog 2002002 2 2 18697.23 8
+catalog 2003002 NULL NULL 5401.55 1
+catalog 2003002 3 NULL 5401.55 1
+catalog 2003002 3 2 5401.55 1
+catalog 2004001 NULL NULL 53328.26 13
+catalog 2004001 2 NULL 13088.08 3
+catalog 2004001 2 1 6389.44 2
+catalog 2004001 2 9 6698.64 1
+catalog 2004001 4 NULL 21765.20 5
+catalog 2004001 4 6 13842.35 4
+catalog 2004001 4 10 7922.85 1
+catalog 2004001 10 NULL 18474.98 5
+catalog 2004001 10 6 18474.98 5
+catalog 2004002 NULL NULL 45015.27 8
+catalog 2004002 4 NULL 45015.27 8
+catalog 2004002 4 2 45015.27 8
+catalog 3001001 NULL NULL 15573.73 5
+catalog 3001001 1 NULL 10534.64 3
+catalog 3001001 1 2 10534.64 3
+catalog 3001001 3 NULL 5039.09 2
+catalog 3001001 3 10 5039.09 2
+catalog 3002001 NULL NULL 11599.18 2
+catalog 3002001 10 NULL 11599.18 2
+catalog 3002001 10 10 11599.18 2
+catalog 3003002 NULL NULL 11691.79 3
+catalog 3003002 3 NULL 11691.79 3
+catalog 3003002 3 3 11691.79 3
+catalog 3004002 NULL NULL 23948.15 5
+catalog 3004002 3 NULL 9333.48 1
+catalog 3004002 3 3 9333.48 1
+catalog 3004002 4 NULL 14614.67 4
+catalog 3004002 4 3 14614.67 4
+catalog 4002001 NULL NULL 17752.24 4
+catalog 4002001 13 NULL 17752.24 4
+catalog 4002001 13 9 17752.24 4
+catalog 4002002 NULL NULL 7706.12 1
+catalog 4002002 3 NULL 7706.12 1
+catalog 4002002 3 4 7706.12 1
+catalog 4003001 NULL NULL 14007.16 3
+catalog 4003001 3 NULL 14007.16 3
+catalog 4003001 3 10 14007.16 3
+catalog 4004001 NULL NULL 28688.40 5
+catalog 4004001 4 NULL 28688.40 5
+catalog 4004001 4 6 28688.40 5
+catalog 5002002 NULL NULL 16928.67 4
+catalog 5002002 2 NULL 16928.67 4
+catalog 5002002 2 5 16928.67 4
+catalog 5003002 NULL NULL 21719.62 4
+catalog 5003002 3 NULL 21719.62 4
+catalog 5003002 3 5 21719.62 4
+catalog 6004007 NULL NULL 13246.40 2
+catalog 6004007 2 NULL 13246.40 2
+catalog 6004007 2 2 13246.40 2
+catalog 6007005 NULL NULL 12569.75 3
+catalog 6007005 7 NULL 12569.75 3
+catalog 6007005 7 5 12569.75 3
+catalog 6011003 NULL NULL 17811.53 5
+catalog 6011003 4 NULL 17811.53 5
+catalog 6011003 4 5 17811.53 5
+catalog 6015002 NULL NULL 14696.30 2
+catalog 6015002 15 NULL 14696.30 2
+catalog 6015002 15 6 14696.30 2
+catalog 6016006 NULL NULL 31290.52 3
+catalog 6016006 3 NULL 31290.52 3
+catalog 6016006 3 6 31290.52 3
+catalog 7003008 NULL NULL 29154.89 4
+catalog 7003008 3 NULL 29154.89 4
+catalog 7003008 3 7 29154.89 4
+catalog 7008001 NULL NULL 5613.64 3
+catalog 7008001 8 NULL 5613.64 3
+catalog 7008001 8 3 5613.64 3
+catalog 8004001 NULL NULL 18520.62 2
+catalog 8004001 4 NULL 18520.62 2
+catalog 8004001 4 5 18520.62 2
+catalog 8007003 NULL NULL 5725.65 1
+catalog 8007003 1 NULL 5725.65 1
+catalog 8007003 1 2 5725.65 1
 
 # Q15
 query I
@@ -3941,30 +3941,30 @@ ORDER BY i_category NULLS FIRST,
          revenueratio NULLS FIRST
 LIMIT 100;
 ----
-AAAAAAAABGAAAAAA More reg Books fiction 57.09 12969.90 49.98007717
-AAAAAAAADEAAAAAA Already  Books fiction 1.47 11845.19 45.64595797
-AAAAAAAALIAAAAAA Lines shall describe explicitly northern, firm systems. Later Books fiction 2.99 1135.05 4.37396484
-AAAAAAAAIGAAAAAA Connections must constitute only eastern leaves. Primary, elderly times make expectations. Never tory stores build very points. Books mystery 2.33 7156.75 100.00000000
-AAAAAAAAKHAAAAAA Well lovely hands know even  Books parenting 2.62 8427.48 100.00000000
-AAAAAAAANJAAAAAA Recent performances get yet other publications; current patients could not carry comparatively intense, vital times. Wide problems smooth truly. Tomorrow used years catch a Books reference 2.21 25579.86 100.00000000
-AAAAAAAABJAAAAAA Prospects know Books self-help 59.77 615.92 5.42612507
-AAAAAAAAJHAAAAAA However increasing dates meet. Large, ready goals mean now blind structures. Crea Books self-help 38.79 10735.09 94.57387492
-AAAAAAAALCAAAAAA Resources shall not continue thus similar, practical results. Practical words f Books travel 6.08 40750.01 74.41872144
-AAAAAAAAMEAAAAAA Original interests see of course british, important terms. Yet appropriate principles conclude in a arrangements; good countries would get sometimes;  Books travel 3.84 14007.73 25.58127855
-AAAAAAAAACAAAAAA Ce Home curtains/drapes 1.77 7311.58 60.76258431
-AAAAAAAAAIAAAAAA Great, tiny animals adopt then outcomes. Terms sweep less dry, physical signs. National, black terms adapt for a reasons; groups shall  Home curtains/drapes 4.06 4721.45 39.23741568
-AAAAAAAADHAAAAAA Policies used to decrease social forms; well massive parts admire lacking, necessary cities. More rational areas deceive therefore only facilities. Yet persist Home furniture 2.68 3149.53 100.00000000
-AAAAAAAAPHAAAAAA High, black homes shall not greet also magnificent facts; inc, environmental areas say well howev Home kids 3.66 3092.75 100.00000000
-AAAAAAAAICAAAAAA Usually other children must stop shares. Relations Home lighting 9.93 1552.03 35.21985889
-AAAAAAAAOJAAAAAA Great, absent relations should participate alone wonderful issues; chains will care on behalf of a police. Substantial activities exert grey, free Home lighting 9.17 2854.66 64.78014110
-AAAAAAAANGAAAAAA Solutions may not go central, interesting sectors. Enterprises resist inte Home rugs 9.46 10907.48 100.00000000
-AAAAAAAAKKAAAAAA Important, glad rights change however. Only regular arms ought to operate in a minutes. Units fail quite like a centuries. Simply safe branches accompany major tenants;  Sports camping 1.65 1384.02 100.00000000
-AAAAAAAACIAAAAAA Final orders give else. International, living personnel may miss significant companies. Black, american numbers put then  Sports fishing 1.70 6924.44 100.00000000
-AAAAAAAAMKAAAAAA Automatic, black developments get thus new profits. Chemicals describe widely similar temperatures. Easy features used to emphasize different  Sports hockey 0.83 10869.87 81.20054233
-AAAAAAAAOAAAAAAA Important grounds rip there just big vehicles. Journalists w Sports hockey 1.85 2516.58 18.79945766
-AAAAAAAAMFAAAAAA New, quick observations merge too worth a children; shares could live there crucial mountains. Simply eastern pounds shall crush immediately married long wives. Corporate, import Sports optics 4.48 4287.88 100.00000000
-AAAAAAAACGAAAAAA Years know merely religious reasons. New animals modernise well racial pieces. Various, chi Sports outdoor 3.16 4585.36 100.00000000
-AAAAAAAAAKAAAAAA Legs cannot make much across a children. Well industrial ports see so. Equal, full systems rise police. Labour departments will leave. Political, social  Sports sailing 1.17 13646.97 100.00000000
+AAAAAAAABGAAAAAA More reg Books fiction 57.09 12969.90 49.980077
+AAAAAAAADEAAAAAA Already  Books fiction 1.47 11845.19 45.645957
+AAAAAAAALIAAAAAA Lines shall describe explicitly northern, firm systems. Later Books fiction 2.99 1135.05 4.373964
+AAAAAAAAIGAAAAAA Connections must constitute only eastern leaves. Primary, elderly times make expectations. Never tory stores build very points. Books mystery 2.33 7156.75 100.000000
+AAAAAAAAKHAAAAAA Well lovely hands know even  Books parenting 2.62 8427.48 100.000000
+AAAAAAAANJAAAAAA Recent performances get yet other publications; current patients could not carry comparatively intense, vital times. Wide problems smooth truly. Tomorrow used years catch a Books reference 2.21 25579.86 100.000000
+AAAAAAAABJAAAAAA Prospects know Books self-help 59.77 615.92 5.426125
+AAAAAAAAJHAAAAAA However increasing dates meet. Large, ready goals mean now blind structures. Crea Books self-help 38.79 10735.09 94.573874
+AAAAAAAALCAAAAAA Resources shall not continue thus similar, practical results. Practical words f Books travel 6.08 40750.01 74.418721
+AAAAAAAAMEAAAAAA Original interests see of course british, important terms. Yet appropriate principles conclude in a arrangements; good countries would get sometimes;  Books travel 3.84 14007.73 25.581278
+AAAAAAAAACAAAAAA Ce Home curtains/drapes 1.77 7311.58 60.762584
+AAAAAAAAAIAAAAAA Great, tiny animals adopt then outcomes. Terms sweep less dry, physical signs. National, black terms adapt for a reasons; groups shall  Home curtains/drapes 4.06 4721.45 39.237415
+AAAAAAAADHAAAAAA Policies used to decrease social forms; well massive parts admire lacking, necessary cities. More rational areas deceive therefore only facilities. Yet persist Home furniture 2.68 3149.53 100.000000
+AAAAAAAAPHAAAAAA High, black homes shall not greet also magnificent facts; inc, environmental areas say well howev Home kids 3.66 3092.75 100.000000
+AAAAAAAAICAAAAAA Usually other children must stop shares. Relations Home lighting 9.93 1552.03 35.219858
+AAAAAAAAOJAAAAAA Great, absent relations should participate alone wonderful issues; chains will care on behalf of a police. Substantial activities exert grey, free Home lighting 9.17 2854.66 64.780141
+AAAAAAAANGAAAAAA Solutions may not go central, interesting sectors. Enterprises resist inte Home rugs 9.46 10907.48 100.000000
+AAAAAAAAKKAAAAAA Important, glad rights change however. Only regular arms ought to operate in a minutes. Units fail quite like a centuries. Simply safe branches accompany major tenants;  Sports camping 1.65 1384.02 100.000000
+AAAAAAAACIAAAAAA Final orders give else. International, living personnel may miss significant companies. Black, american numbers put then  Sports fishing 1.70 6924.44 100.000000
+AAAAAAAAMKAAAAAA Automatic, black developments get thus new profits. Chemicals describe widely similar temperatures. Easy features used to emphasize different  Sports hockey 0.83 10869.87 81.200542
+AAAAAAAAOAAAAAAA Important grounds rip there just big vehicles. Journalists w Sports hockey 1.85 2516.58 18.799457
+AAAAAAAAMFAAAAAA New, quick observations merge too worth a children; shares could live there crucial mountains. Simply eastern pounds shall crush immediately married long wives. Corporate, import Sports optics 4.48 4287.88 100.000000
+AAAAAAAACGAAAAAA Years know merely religious reasons. New animals modernise well racial pieces. Various, chi Sports outdoor 3.16 4585.36 100.000000
+AAAAAAAAAKAAAAAA Legs cannot make much across a children. Well industrial ports see so. Equal, full systems rise police. Labour departments will leave. Political, social  Sports sailing 1.17 13646.97 100.000000
 
 # Q21
 query I
@@ -5048,66 +5048,66 @@ ORDER BY lochierarchy DESC NULLS FIRST,
          rank_within_parent NULLS FIRST
 LIMIT 100;
 ----
--0.43061352 NULL NULL 2 1
--0.53984695 Electronics NULL 1 1
--0.53512105 Sports NULL 1 2
--0.47425282 Men NULL 1 3
--0.43532046 Music NULL 1 4
--0.42231456 Books NULL 1 5
--0.42099827 Women NULL 1 6
--0.40351436 Jewelry NULL 1 7
--0.35682142 Children NULL 1 8
--0.31464814 Home NULL 1 9
--0.28980263 Shoes NULL 1 10
--0.51332491 Books sports 0 1
--0.48539565 Books fiction 0 2
--0.45606917 Books self-help 0 3
--0.39053620 Books reference 0 4
--0.36138837 Books arts 0 5
--0.29464497 Books travel 0 6
--0.27174055 Books business 0 7
--0.45148336 Children newborn 0 1
--0.39557985 Children school-uniforms 0 2
--0.28330803 Children toddlers 0 3
--0.81890022 Electronics monitors 0 1
--0.80320377 Electronics memory 0 2
--0.60167183 Electronics audio 0 3
--0.56175467 Electronics stereo 0 4
--0.53929536 Electronics musical 0 5
--0.50053507 Electronics televisions 0 6
--0.48598486 Electronics karoke 0 7
--0.42723866 Electronics dvd/vcr players 0 8
--0.37393889 Electronics scanners 0 9
--0.45344180 Home rugs 0 1
--0.42686134 Home kids 0 2
--0.32725678 Home decor 0 3
--0.23145620 Home furniture 0 4
--0.22314455 Home bedding 0 5
--0.55293691 Jewelry costume 0 1
--0.47934007 Jewelry jewelry boxes 0 2
--0.47778793 Jewelry consignment 0 3
--0.46688001 Jewelry pendants 0 4
--0.45384981 Jewelry estate 0 5
--0.40929522 Jewelry diamonds 0 6
--0.39523003 Jewelry semi-precious 0 7
--0.35561926 Jewelry custom 0 8
--0.29714226 Jewelry gold 0 9
--0.17733800 Jewelry mens watch 0 10
--0.56089240 Men sports-apparel 0 1
--0.45552345 Men shirts 0 2
--0.44909660 Men pants 0 3
--0.44511199 Men accessories 0 4
--0.50028186 Music pop 0 1
--0.43040760 Music country 0 2
--0.35900640 Music classical 0 3
--0.38778780 Shoes mens 0 1
--0.26178356 Shoes womens 0 2
--0.74028053 Sports fishing 0 1
--0.45676410 Sports sailing 0 2
--0.32519059 Sports guns 0 3
--0.46626687 Women swimwear 0 1
--0.39813200 Women fragrances 0 2
--0.35544337 Women maternity 0 3
+-0.430613 NULL NULL 2 1
+-0.539846 Electronics NULL 1 1
+-0.535121 Sports NULL 1 2
+-0.474252 Men NULL 1 3
+-0.435320 Music NULL 1 4
+-0.422314 Books NULL 1 5
+-0.420998 Women NULL 1 6
+-0.403514 Jewelry NULL 1 7
+-0.356821 Children NULL 1 8
+-0.314648 Home NULL 1 9
+-0.289802 Shoes NULL 1 10
+-0.513324 Books sports 0 1
+-0.485395 Books fiction 0 2
+-0.456069 Books self-help 0 3
+-0.390536 Books reference 0 4
+-0.361388 Books arts 0 5
+-0.294644 Books travel 0 6
+-0.271740 Books business 0 7
+-0.451483 Children newborn 0 1
+-0.395579 Children school-uniforms 0 2
+-0.283308 Children toddlers 0 3
+-0.818900 Electronics monitors 0 1
+-0.803203 Electronics memory 0 2
+-0.601671 Electronics audio 0 3
+-0.561754 Electronics stereo 0 4
+-0.539295 Electronics musical 0 5
+-0.500535 Electronics televisions 0 6
+-0.485984 Electronics karoke 0 7
+-0.427238 Electronics dvd/vcr players 0 8
+-0.373938 Electronics scanners 0 9
+-0.453441 Home rugs 0 1
+-0.426861 Home kids 0 2
+-0.327256 Home decor 0 3
+-0.231456 Home furniture 0 4
+-0.223144 Home bedding 0 5
+-0.552936 Jewelry costume 0 1
+-0.479340 Jewelry jewelry boxes 0 2
+-0.477787 Jewelry consignment 0 3
+-0.466880 Jewelry pendants 0 4
+-0.453849 Jewelry estate 0 5
+-0.409295 Jewelry diamonds 0 6
+-0.395230 Jewelry semi-precious 0 7
+-0.355619 Jewelry custom 0 8
+-0.297142 Jewelry gold 0 9
+-0.177338 Jewelry mens watch 0 10
+-0.560892 Men sports-apparel 0 1
+-0.455523 Men shirts 0 2
+-0.449096 Men pants 0 3
+-0.445111 Men accessories 0 4
+-0.500281 Music pop 0 1
+-0.430407 Music country 0 2
+-0.359006 Music classical 0 3
+-0.387787 Shoes mens 0 1
+-0.261783 Shoes womens 0 2
+-0.740280 Sports fishing 0 1
+-0.456764 Sports sailing 0 2
+-0.325190 Sports guns 0 3
+-0.466266 Women swimwear 0 1
+-0.398132 Women fragrances 0 2
+-0.355443 Women maternity 0 3
 
 # Q37
 query I
@@ -7402,7 +7402,7 @@ select
  order by w_warehouse_name NULLS FIRST
 LIMIT 100;
 ----
-Conventional childr 977787 Midway Williamson County TN United States DHL,BARIAN 2001 79417.2700 770435.8500 2869.7300 1006705.2200 383807.4500 29521.5500 46131.3000 637320.7300 1147028.9500 1273316.7800 352755.7100 2947754.5700 0.0811 0.7878 0.0029 1.0295 0.3925 0.0300 0.0471 0.6517 1.1730 1.3021 0.3607 3.0147 2173511.1900 1582382.2600 95844.1900 3529601.5800 1341204.5800 2040444.2800 1674369.4900 828824.8200 3481140.6300 1899141.6200 1455888.9600 2688024.2900
+Conventional childr 977787 Midway Williamson County TN United States DHL,BARIAN 2001 79417.27 770435.85 2869.73 1006705.22 383807.45 29521.55 46131.30 637320.73 1147028.95 1273316.78 352755.71 2947754.57 0.07 0.78 0.00 1.02 0.38 0.02 0.04 0.64 1.16 1.29 0.35 3.01 2173511.19 1582382.26 95844.19 3529601.58 1341204.58 2040444.28 1674369.49 828824.82 3481140.63 1899141.62 1455888.96 2688024.29
 
 
 # Q67
@@ -7452,106 +7452,106 @@ ORDER BY i_category NULLS FIRST,
          rk NULLS FIRST
 LIMIT 100;
 ----
-NULL NULL NULL NULL NULL NULL NULL NULL 11332462.2600 1
-Books NULL NULL NULL NULL NULL NULL NULL 1480754.1200 1
-Books arts NULL NULL NULL NULL NULL NULL 191751.7000 6
-Books arts amalgmaxi #12 NULL NULL NULL NULL NULL 191751.7000 6
-Books arts amalgmaxi #12 antipri NULL NULL NULL NULL 108042.7000 25
-Books arts amalgmaxi #12 antipri 2000 NULL NULL NULL 108042.7000 25
-Books arts amalgmaxi #12 antipri 2000 3 NULL NULL 48527.8300 53
-Books arts amalgmaxi #12 antipri 2000 3 9 NULL 30406.6900 73
-Books arts amalgmaxi #12 antipri 2000 3 9 AAAAAAAABAAAAAAA 30406.6900 73
-Books arts amalgmaxi #12 antipri 2000 4 NULL NULL 40372.6300 61
-Books arts amalgmaxi #12 ationbarought NULL NULL NULL NULL 83709.0000 45
-Books arts amalgmaxi #12 ationbarought 2000 NULL NULL NULL 83709.0000 45
-Books arts amalgmaxi #12 ationbarought 2000 4 NULL NULL 37897.8800 65
-Books fiction NULL NULL NULL NULL NULL NULL 356542.3400 2
-Books fiction scholarunivamalg #2 NULL NULL NULL NULL NULL 87317.1500 41
-Books fiction scholarunivamalg #2 ationn st NULL NULL NULL NULL 87317.1500 41
-Books fiction scholarunivamalg #2 ationn st 2000 NULL NULL NULL 87317.1500 41
-Books fiction scholarunivamalg #2 ationn st 2000 3 NULL NULL 26518.9600 83
-Books fiction scholarunivamalg #2 ationn st 2000 4 NULL NULL 39207.8800 63
-Books fiction scholarunivamalg #8 NULL NULL NULL NULL NULL 269225.1900 4
-Books fiction scholarunivamalg #8 ationcally NULL NULL NULL NULL 160803.2100 8
-Books fiction scholarunivamalg #8 ationcally 2000 NULL NULL NULL 160803.2100 8
-Books fiction scholarunivamalg #8 ationcally 2000 3 NULL NULL 59977.4600 49
-Books fiction scholarunivamalg #8 ationcally 2000 3 8 NULL 28848.4900 77
-Books fiction scholarunivamalg #8 ationcally 2000 3 8 AAAAAAAABAAAAAAA 28848.4900 77
-Books fiction scholarunivamalg #8 ationcally 2000 3 9 NULL 24342.2800 91
-Books fiction scholarunivamalg #8 ationcally 2000 3 9 AAAAAAAABAAAAAAA 24342.2800 91
-Books fiction scholarunivamalg #8 ationcally 2000 4 NULL NULL 76843.7200 47
-Books fiction scholarunivamalg #8 ationcally 2000 4 11 NULL 23915.4100 95
-Books fiction scholarunivamalg #8 ationcally 2000 4 11 AAAAAAAABAAAAAAA 23915.4100 95
-Books fiction scholarunivamalg #8 ationcally 2000 4 12 NULL 36062.4200 68
-Books fiction scholarunivamalg #8 ationcally 2000 4 12 AAAAAAAABAAAAAAA 36062.4200 68
-Books fiction scholarunivamalg #8 n stpriought NULL NULL NULL NULL 108421.9800 23
-Books fiction scholarunivamalg #8 n stpriought 2000 NULL NULL NULL 108421.9800 23
-Books fiction scholarunivamalg #8 n stpriought 2000 4 NULL NULL 56209.7900 50
-Books fiction scholarunivamalg #8 n stpriought 2000 4 12 NULL 34656.3000 70
-Books fiction scholarunivamalg #8 n stpriought 2000 4 12 AAAAAAAABAAAAAAA 34656.3000 70
-Books mystery NULL NULL NULL NULL NULL NULL 140757.9900 14
-Books mystery corpunivamalg #9 NULL NULL NULL NULL NULL 140757.9900 14
-Books mystery corpunivamalg #9 esebarought NULL NULL NULL NULL 140757.9900 14
-Books mystery corpunivamalg #9 esebarought 2000 NULL NULL NULL 140757.9900 14
-Books mystery corpunivamalg #9 esebarought 2000 3 NULL NULL 36771.7000 67
-Books mystery corpunivamalg #9 esebarought 2000 3 9 NULL 24051.7000 93
-Books mystery corpunivamalg #9 esebarought 2000 3 9 AAAAAAAABAAAAAAA 24051.7000 93
-Books mystery corpunivamalg #9 esebarought 2000 4 NULL NULL 72375.8600 48
-Books mystery corpunivamalg #9 esebarought 2000 4 11 NULL 29458.3700 75
-Books mystery corpunivamalg #9 esebarought 2000 4 11 AAAAAAAABAAAAAAA 29458.3700 75
-Books mystery corpunivamalg #9 esebarought 2000 4 12 NULL 28733.9700 79
-Books mystery corpunivamalg #9 esebarought 2000 4 12 AAAAAAAABAAAAAAA 28733.9700 79
-Books parenting NULL NULL NULL NULL NULL NULL 150994.6000 10
-Books parenting corpmaxi #3 NULL NULL NULL NULL NULL 150994.6000 10
-Books parenting corpmaxi #3 ableableought NULL NULL NULL NULL 150994.6000 10
-Books parenting corpmaxi #3 ableableought 2000 NULL NULL NULL 150994.6000 10
-Books parenting corpmaxi #3 ableableought 2000 1 NULL NULL 24844.3600 88
-Books parenting corpmaxi #3 ableableought 2000 2 NULL NULL 25978.6800 86
-Books parenting corpmaxi #3 ableableought 2000 3 NULL NULL 53748.2800 52
-Books parenting corpmaxi #3 ableableought 2000 3 9 NULL 42534.9900 59
-Books parenting corpmaxi #3 ableableought 2000 3 9 AAAAAAAABAAAAAAA 42534.9900 59
-Books parenting corpmaxi #3 ableableought 2000 4 NULL NULL 46423.2800 55
-Books reference NULL NULL NULL NULL NULL NULL 94371.7000 37
-Books reference brandmaxi #2 NULL NULL NULL NULL NULL 94371.7000 37
-Books reference brandmaxi #2 ationantiought NULL NULL NULL NULL 94371.7000 37
-Books reference brandmaxi #2 ationantiought 2000 NULL NULL NULL 94371.7000 37
-Books reference brandmaxi #2 ationantiought 2000 3 NULL NULL 31974.6900 72
-Books reference brandmaxi #2 ationantiought 2000 3 9 NULL 24820.0100 89
-Books reference brandmaxi #2 ationantiought 2000 3 9 AAAAAAAABAAAAAAA 24820.0100 89
-Books reference brandmaxi #2 ationantiought 2000 4 NULL NULL 37284.0900 66
-Books reference brandmaxi #2 ationantiought 2000 4 11 NULL 22351.6500 98
-Books reference brandmaxi #2 ationantiought 2000 4 11 AAAAAAAABAAAAAAA 22351.6500 98
-Books self-help NULL NULL NULL NULL NULL NULL 345808.3900 3
-Books self-help exportiunivamalg #2 NULL NULL NULL NULL NULL 208057.4300 5
-Books self-help exportiunivamalg #2 antieseought NULL NULL NULL NULL 96511.4700 35
-Books self-help exportiunivamalg #2 antieseought 2000 NULL NULL NULL 96511.4700 35
-Books self-help exportiunivamalg #2 antieseought 2000 4 NULL NULL 47177.8200 54
-Books self-help exportiunivamalg #2 oughtableought NULL NULL NULL NULL 111545.9600 21
-Books self-help exportiunivamalg #2 oughtableought 2000 NULL NULL NULL 111545.9600 21
-Books self-help exportiunivamalg #2 oughtableought 2000 3 NULL NULL 40117.1100 62
-Books self-help exportiunivamalg #2 oughtableought 2000 4 NULL NULL 55820.5600 51
-Books self-help exportiunivamalg #2 oughtableought 2000 4 12 NULL 22230.9300 100
-Books self-help exportiunivamalg #2 oughtableought 2000 4 12 AAAAAAAABAAAAAAA 22230.9300 100
-Books self-help exportiunivamalg #6 NULL NULL NULL NULL NULL 137750.9600 18
-Books self-help exportiunivamalg #6 ationpriought NULL NULL NULL NULL 137750.9600 18
-Books self-help exportiunivamalg #6 ationpriought 2000 NULL NULL NULL 137750.9600 18
-Books self-help exportiunivamalg #6 ationpriought 2000 1 NULL NULL 25333.3000 87
-Books self-help exportiunivamalg #6 ationpriought 2000 4 NULL NULL 83792.6700 44
-Books self-help exportiunivamalg #6 ationpriought 2000 4 11 NULL 45533.8300 57
-Books self-help exportiunivamalg #6 ationpriought 2000 4 11 AAAAAAAABAAAAAAA 45533.8300 57
-Books self-help exportiunivamalg #6 ationpriought 2000 4 12 NULL 28333.8000 81
-Books self-help exportiunivamalg #6 ationpriought 2000 4 12 AAAAAAAABAAAAAAA 28333.8000 81
-Books sports NULL NULL NULL NULL NULL NULL 100852.4700 27
-Books sports edu packunivamalg #12 NULL NULL NULL NULL NULL 100852.4700 27
-Books sports edu packunivamalg #12 oughtation NULL NULL NULL NULL 100852.4700 27
-Books sports edu packunivamalg #12 oughtation 2000 NULL NULL NULL 100852.4700 27
-Books sports edu packunivamalg #12 oughtation 2000 2 NULL NULL 22998.1300 97
-Books sports edu packunivamalg #12 oughtation 2000 3 NULL NULL 37972.4200 64
-Books travel NULL NULL NULL NULL NULL NULL 99674.9300 31
-Books travel univunivamalg #8 NULL NULL NULL NULL NULL 99674.9300 31
-Books travel univunivamalg #8 priese NULL NULL NULL NULL 99674.9300 31
-Books travel univunivamalg #8 priese 2000 NULL NULL NULL 99674.9300 31
-Books travel univunivamalg #8 priese 2000 4 NULL NULL 46253.7700 56
+NULL NULL NULL NULL NULL NULL NULL NULL 11332462.26 1
+Books NULL NULL NULL NULL NULL NULL NULL 1480754.12 1
+Books arts NULL NULL NULL NULL NULL NULL 191751.70 6
+Books arts amalgmaxi #12 NULL NULL NULL NULL NULL 191751.70 6
+Books arts amalgmaxi #12 antipri NULL NULL NULL NULL 108042.70 25
+Books arts amalgmaxi #12 antipri 2000 NULL NULL NULL 108042.70 25
+Books arts amalgmaxi #12 antipri 2000 3 NULL NULL 48527.83 53
+Books arts amalgmaxi #12 antipri 2000 3 9 NULL 30406.69 73
+Books arts amalgmaxi #12 antipri 2000 3 9 AAAAAAAABAAAAAAA 30406.69 73
+Books arts amalgmaxi #12 antipri 2000 4 NULL NULL 40372.63 61
+Books arts amalgmaxi #12 ationbarought NULL NULL NULL NULL 83709.00 45
+Books arts amalgmaxi #12 ationbarought 2000 NULL NULL NULL 83709.00 45
+Books arts amalgmaxi #12 ationbarought 2000 4 NULL NULL 37897.88 65
+Books fiction NULL NULL NULL NULL NULL NULL 356542.34 2
+Books fiction scholarunivamalg #2 NULL NULL NULL NULL NULL 87317.15 41
+Books fiction scholarunivamalg #2 ationn st NULL NULL NULL NULL 87317.15 41
+Books fiction scholarunivamalg #2 ationn st 2000 NULL NULL NULL 87317.15 41
+Books fiction scholarunivamalg #2 ationn st 2000 3 NULL NULL 26518.96 83
+Books fiction scholarunivamalg #2 ationn st 2000 4 NULL NULL 39207.88 63
+Books fiction scholarunivamalg #8 NULL NULL NULL NULL NULL 269225.19 4
+Books fiction scholarunivamalg #8 ationcally NULL NULL NULL NULL 160803.21 8
+Books fiction scholarunivamalg #8 ationcally 2000 NULL NULL NULL 160803.21 8
+Books fiction scholarunivamalg #8 ationcally 2000 3 NULL NULL 59977.46 49
+Books fiction scholarunivamalg #8 ationcally 2000 3 8 NULL 28848.49 77
+Books fiction scholarunivamalg #8 ationcally 2000 3 8 AAAAAAAABAAAAAAA 28848.49 77
+Books fiction scholarunivamalg #8 ationcally 2000 3 9 NULL 24342.28 91
+Books fiction scholarunivamalg #8 ationcally 2000 3 9 AAAAAAAABAAAAAAA 24342.28 91
+Books fiction scholarunivamalg #8 ationcally 2000 4 NULL NULL 76843.72 47
+Books fiction scholarunivamalg #8 ationcally 2000 4 11 NULL 23915.41 95
+Books fiction scholarunivamalg #8 ationcally 2000 4 11 AAAAAAAABAAAAAAA 23915.41 95
+Books fiction scholarunivamalg #8 ationcally 2000 4 12 NULL 36062.42 68
+Books fiction scholarunivamalg #8 ationcally 2000 4 12 AAAAAAAABAAAAAAA 36062.42 68
+Books fiction scholarunivamalg #8 n stpriought NULL NULL NULL NULL 108421.98 23
+Books fiction scholarunivamalg #8 n stpriought 2000 NULL NULL NULL 108421.98 23
+Books fiction scholarunivamalg #8 n stpriought 2000 4 NULL NULL 56209.79 50
+Books fiction scholarunivamalg #8 n stpriought 2000 4 12 NULL 34656.30 70
+Books fiction scholarunivamalg #8 n stpriought 2000 4 12 AAAAAAAABAAAAAAA 34656.30 70
+Books mystery NULL NULL NULL NULL NULL NULL 140757.99 14
+Books mystery corpunivamalg #9 NULL NULL NULL NULL NULL 140757.99 14
+Books mystery corpunivamalg #9 esebarought NULL NULL NULL NULL 140757.99 14
+Books mystery corpunivamalg #9 esebarought 2000 NULL NULL NULL 140757.99 14
+Books mystery corpunivamalg #9 esebarought 2000 3 NULL NULL 36771.70 67
+Books mystery corpunivamalg #9 esebarought 2000 3 9 NULL 24051.70 93
+Books mystery corpunivamalg #9 esebarought 2000 3 9 AAAAAAAABAAAAAAA 24051.70 93
+Books mystery corpunivamalg #9 esebarought 2000 4 NULL NULL 72375.86 48
+Books mystery corpunivamalg #9 esebarought 2000 4 11 NULL 29458.37 75
+Books mystery corpunivamalg #9 esebarought 2000 4 11 AAAAAAAABAAAAAAA 29458.37 75
+Books mystery corpunivamalg #9 esebarought 2000 4 12 NULL 28733.97 79
+Books mystery corpunivamalg #9 esebarought 2000 4 12 AAAAAAAABAAAAAAA 28733.97 79
+Books parenting NULL NULL NULL NULL NULL NULL 150994.60 10
+Books parenting corpmaxi #3 NULL NULL NULL NULL NULL 150994.60 10
+Books parenting corpmaxi #3 ableableought NULL NULL NULL NULL 150994.60 10
+Books parenting corpmaxi #3 ableableought 2000 NULL NULL NULL 150994.60 10
+Books parenting corpmaxi #3 ableableought 2000 1 NULL NULL 24844.36 88
+Books parenting corpmaxi #3 ableableought 2000 2 NULL NULL 25978.68 86
+Books parenting corpmaxi #3 ableableought 2000 3 NULL NULL 53748.28 52
+Books parenting corpmaxi #3 ableableought 2000 3 9 NULL 42534.99 59
+Books parenting corpmaxi #3 ableableought 2000 3 9 AAAAAAAABAAAAAAA 42534.99 59
+Books parenting corpmaxi #3 ableableought 2000 4 NULL NULL 46423.28 55
+Books reference NULL NULL NULL NULL NULL NULL 94371.70 37
+Books reference brandmaxi #2 NULL NULL NULL NULL NULL 94371.70 37
+Books reference brandmaxi #2 ationantiought NULL NULL NULL NULL 94371.70 37
+Books reference brandmaxi #2 ationantiought 2000 NULL NULL NULL 94371.70 37
+Books reference brandmaxi #2 ationantiought 2000 3 NULL NULL 31974.69 72
+Books reference brandmaxi #2 ationantiought 2000 3 9 NULL 24820.01 89
+Books reference brandmaxi #2 ationantiought 2000 3 9 AAAAAAAABAAAAAAA 24820.01 89
+Books reference brandmaxi #2 ationantiought 2000 4 NULL NULL 37284.09 66
+Books reference brandmaxi #2 ationantiought 2000 4 11 NULL 22351.65 98
+Books reference brandmaxi #2 ationantiought 2000 4 11 AAAAAAAABAAAAAAA 22351.65 98
+Books self-help NULL NULL NULL NULL NULL NULL 345808.39 3
+Books self-help exportiunivamalg #2 NULL NULL NULL NULL NULL 208057.43 5
+Books self-help exportiunivamalg #2 antieseought NULL NULL NULL NULL 96511.47 35
+Books self-help exportiunivamalg #2 antieseought 2000 NULL NULL NULL 96511.47 35
+Books self-help exportiunivamalg #2 antieseought 2000 4 NULL NULL 47177.82 54
+Books self-help exportiunivamalg #2 oughtableought NULL NULL NULL NULL 111545.96 21
+Books self-help exportiunivamalg #2 oughtableought 2000 NULL NULL NULL 111545.96 21
+Books self-help exportiunivamalg #2 oughtableought 2000 3 NULL NULL 40117.11 62
+Books self-help exportiunivamalg #2 oughtableought 2000 4 NULL NULL 55820.56 51
+Books self-help exportiunivamalg #2 oughtableought 2000 4 12 NULL 22230.93 100
+Books self-help exportiunivamalg #2 oughtableought 2000 4 12 AAAAAAAABAAAAAAA 22230.93 100
+Books self-help exportiunivamalg #6 NULL NULL NULL NULL NULL 137750.96 18
+Books self-help exportiunivamalg #6 ationpriought NULL NULL NULL NULL 137750.96 18
+Books self-help exportiunivamalg #6 ationpriought 2000 NULL NULL NULL 137750.96 18
+Books self-help exportiunivamalg #6 ationpriought 2000 1 NULL NULL 25333.30 87
+Books self-help exportiunivamalg #6 ationpriought 2000 4 NULL NULL 83792.67 44
+Books self-help exportiunivamalg #6 ationpriought 2000 4 11 NULL 45533.83 57
+Books self-help exportiunivamalg #6 ationpriought 2000 4 11 AAAAAAAABAAAAAAA 45533.83 57
+Books self-help exportiunivamalg #6 ationpriought 2000 4 12 NULL 28333.80 81
+Books self-help exportiunivamalg #6 ationpriought 2000 4 12 AAAAAAAABAAAAAAA 28333.80 81
+Books sports NULL NULL NULL NULL NULL NULL 100852.47 27
+Books sports edu packunivamalg #12 NULL NULL NULL NULL NULL 100852.47 27
+Books sports edu packunivamalg #12 oughtation NULL NULL NULL NULL 100852.47 27
+Books sports edu packunivamalg #12 oughtation 2000 NULL NULL NULL 100852.47 27
+Books sports edu packunivamalg #12 oughtation 2000 2 NULL NULL 22998.13 97
+Books sports edu packunivamalg #12 oughtation 2000 3 NULL NULL 37972.42 64
+Books travel NULL NULL NULL NULL NULL NULL 99674.93 31
+Books travel univunivamalg #8 NULL NULL NULL NULL NULL 99674.93 31
+Books travel univunivamalg #8 priese NULL NULL NULL NULL 99674.93 31
+Books travel univunivamalg #8 priese 2000 NULL NULL NULL 99674.93 31
+Books travel univunivamalg #8 priese 2000 4 NULL NULL 46253.77 56
 
 # Q68
 query I
@@ -8285,103 +8285,103 @@ ORDER BY ss_sold_year,
 LIMIT 100;
 ----
 2000 1 17 1.84 92 42.04 46.49 50 97.29 79.40
-2000 1 102 0.95 52 92.54 80.61 55 10.35 2.90
-2000 1 656 0.21 7 90.00 67.12 34 37.40 37.09
+2000 1 102 0.94 52 92.54 80.61 55 10.35 2.90
+2000 1 656 0.2 7 90.00 67.12 34 37.40 37.09
 2000 2 256 0.12 6 10.36 12.48 50 14.32 8.23
 2000 2 480 0.71 45 23.60 25.90 63 18.03 17.13
-2000 5 99 0.09 8 49.55 32.85 92 134.71 163.29
+2000 5 99 0.08 8 49.55 32.85 92 134.71 163.29
 2000 5 480 0.57 50 3.39 0.61 87 45.83 53.59
 2000 7 912 0.68 66 41.64 63.70 97 59.16 130.04
 2000 8 99 0.48 14 29.18 8.09 29 43.48 71.42
-2000 8 325 0.86 54 83.44 44.68 63 37.87 50.55
+2000 8 325 0.85 54 83.44 44.68 63 37.87 50.55
 2000 8 501 1.69 71 88.22 88.76 42 59.15 33.59
-2000 8 568 5.69 91 106.86 72.31 16 88.70 22.13
-2000 8 607 1.24 94 69.87 8.44 76 15.60 12.40
+2000 8 568 5.68 91 106.86 72.31 16 88.70 22.13
+2000 8 607 1.23 94 69.87 8.44 76 15.60 12.40
 2000 8 937 4.0 32 28.49 43.91 8 35.73 79.14
 2000 11 99 3.17 73 35.63 42.50 23 82.52 81.30
-2000 11 344 0.98 79 55.29 9.50 81 60.39 6.55
+2000 11 344 0.97 79 55.29 9.50 81 60.39 6.55
 2000 11 937 1.46 95 65.04 109.88 65 69.73 181.29
 2000 14 107 0.56 56 14.00 3.35 100 88.42 44.86
-2000 17 604 0.94 72 123.05 73.86 77 67.61 55.35
+2000 17 604 0.93 72 123.05 73.86 77 67.61 55.35
 2000 17 665 0.34 10 54.29 71.17 29 29.05 6.83
-2000 17 668 4.06 73 86.26 8.00 18 73.06 66.67
+2000 17 668 4.05 73 86.26 8.00 18 73.06 66.67
 2000 17 710 0.23 15 58.10 48.10 65 96.14 100.82
-2000 19 539 0.49 33 32.33 41.35 68 124.61 67.61
-2000 19 566 0.61 53 80.97 85.69 87 80.36 84.40
+2000 19 539 0.48 33 32.33 41.35 68 124.61 67.61
+2000 19 566 0.6 53 80.97 85.69 87 80.36 84.40
 2000 19 682 0.48 47 58.06 39.08 97 13.10 18.56
 2000 19 922 26.5 53 32.46 10.43 2 36.78 51.51
 2000 20 321 2.38 31 17.31 17.66 13 84.13 160.90
 2000 20 501 0.3 10 4.27 1.33 33 12.91 0.30
-2000 20 822 1.17 69 86.20 136.53 59 61.54 130.02
-2000 25 665 0.11 7 31.24 17.68 65 85.15 143.04
-2000 26 354 0.19 18 5.00 4.84 96 89.99 166.35
+2000 20 822 1.16 69 86.20 136.53 59 61.54 130.02
+2000 25 665 0.1 7 31.24 17.68 65 85.15 143.04
+2000 26 354 0.18 18 5.00 4.84 96 89.99 166.35
 2000 26 498 0.4 24 57.11 26.55 60 85.59 76.73
-2000 26 784 0.95 69 7.68 5.25 73 76.72 121.29
+2000 26 784 0.94 69 7.68 5.25 73 76.72 121.29
 2000 26 878 2.07 58 7.20 4.41 28 53.28 28.79
 2000 29 65 16.4 82 18.74 2.16 5 81.49 12.09
 2000 29 335 0.35 32 76.21 8.09 91 2.15 1.16
-2000 29 501 1.76 86 37.64 18.80 49 95.25 65.69
+2000 29 501 1.75 86 37.64 18.80 49 95.25 65.69
 2000 29 843 1.04 73 59.61 61.15 70 23.06 20.37
 2000 29 990 0.2 10 62.00 53.94 49 88.35 21.73
 2000 29 994 0.53 16 94.38 60.13 30 1.47 1.36
-2000 31 4 0.93 13 87.20 36.16 14 81.43 75.69
-2000 31 182 0.38 29 66.79 45.75 77 51.10 66.77
+2000 31 4 0.92 13 87.20 36.16 14 81.43 75.69
+2000 31 182 0.37 29 66.79 45.75 77 51.10 66.77
 2000 31 452 1.03 67 74.01 79.09 65 47.16 29.87
 2000 31 797 1.17 68 54.67 16.40 58 83.23 74.15
-2000 31 811 0.69 64 22.04 20.23 93 96.84 86.61
-2000 31 847 0.85 39 5.06 2.09 46 39.69 11.38
+2000 31 811 0.68 64 22.04 20.23 93 96.84 86.61
+2000 31 847 0.84 39 5.06 2.09 46 39.69 11.38
 2000 32 499 0.45 14 78.30 41.34 31 46.56 18.66
-2000 32 526 3.38 98 73.01 12.70 29 37.96 72.46
-2000 35 101 0.68 67 92.84 159.63 99 7.43 8.50
-2000 35 849 1.37 52 42.05 44.12 38 37.80 1.44
+2000 32 526 3.37 98 73.01 12.70 29 37.96 72.46
+2000 35 101 0.67 67 92.84 159.63 99 7.43 8.50
+2000 35 849 1.36 52 42.05 44.12 38 37.80 1.44
 2000 37 434 0.66 35 66.97 50.92 53 56.72 83.66
 2000 37 480 0.85 64 7.91 4.43 75 78.16 115.85
 2000 38 393 0.89 51 59.78 39.21 57 51.37 21.18
 2000 38 596 6.15 80 56.53 3.30 13 19.19 8.28
-2000 41 101 0.91 70 61.92 99.52 77 51.86 50.65
-2000 41 481 0.88 7 96.16 60.71 8 29.52 59.77
+2000 41 101 0.9 70 61.92 99.52 77 51.86 50.65
+2000 41 481 0.87 7 96.16 60.71 8 29.52 59.77
 2000 43 603 0.55 42 96.87 4.01 76 44.44 45.68
-2000 43 942 0.58 26 58.68 46.94 45 98.64 84.33
+2000 43 942 0.57 26 58.68 46.94 45 98.64 84.33
 2000 44 382 6.21 87 6.91 1.38 14 81.32 40.08
 2000 47 526 1.72 74 65.42 57.48 43 8.90 8.68
-2000 49 354 0.61 60 75.68 67.84 99 48.12 60.79
-2000 49 445 1.17 91 79.33 2.74 78 49.74 9.40
+2000 49 354 0.6 60 75.68 67.84 99 48.12 60.79
+2000 49 445 1.16 91 79.33 2.74 78 49.74 9.40
 2000 50 193 2.41 94 63.22 32.52 39 1.80 1.71
 2000 50 194 0.23 22 97.27 177.37 94 25.46 54.04
-2000 50 391 0.2 16 59.10 37.51 81 96.87 94.94
-2000 50 393 1.05 67 82.86 21.75 64 82.54 154.31
-2000 50 962 2.63 84 4.69 1.01 32 62.01 101.08
-2000 50 985 0.26 24 17.04 8.34 93 20.29 33.41
+2000 50 391 0.19 16 59.10 37.51 81 96.87 94.94
+2000 50 393 1.04 67 82.86 21.75 64 82.54 154.31
+2000 50 962 2.62 84 4.69 1.01 32 62.01 101.08
+2000 50 985 0.25 24 17.04 8.34 93 20.29 33.41
 2000 53 604 2.18 96 13.93 15.83 44 46.16 34.99
-2000 53 797 0.69 44 69.41 114.93 64 77.27 33.49
+2000 53 797 0.68 44 69.41 114.93 64 77.27 33.49
 2000 53 811 1.18 84 78.58 75.59 71 23.80 18.35
-2000 55 238 1.63 70 46.93 64.19 43 44.72 42.14
+2000 55 238 1.62 70 46.93 64.19 43 44.72 42.14
 2000 55 370 1.34 82 1.44 1.00 61 97.61 137.03
 2000 55 512 0.48 24 13.58 14.69 50 95.12 49.91
 2000 55 684 0.07 2 79.29 46.31 28 46.22 36.24
 2000 56 388 0.03 3 44.25 14.77 90 15.81 25.52
 2000 56 638 1.37 59 76.30 33.13 43 4.27 7.88
-2000 59 539 0.19 16 84.54 82.24 85 62.07 66.90
-2000 61 370 1.26 97 20.19 8.85 77 40.18 100.06
+2000 59 539 0.18 16 84.54 82.24 85 62.07 66.90
+2000 61 370 1.25 97 20.19 8.85 77 40.18 100.06
 2000 61 495 1.44 49 84.29 47.34 34 56.10 52.30
 2000 61 602 0.13 7 57.58 54.01 52 65.10 28.35
-2000 61 684 0.53 51 5.35 1.50 97 63.81 16.25
+2000 61 684 0.52 51 5.35 1.50 97 63.81 16.25
 2000 61 982 0.09 7 26.83 25.22 74 43.88 69.07
 2000 62 498 0.3 27 55.17 36.57 89 2.42 2.17
 2000 65 169 9.4 47 93.06 109.67 5 36.69 51.72
-2000 65 182 4.67 56 19.06 12.63 12 98.17 137.55
+2000 65 182 4.66 56 19.06 12.63 12 98.17 137.55
 2000 65 928 0.48 25 13.75 5.51 52 57.55 32.87
-2000 65 933 0.86 79 86.28 132.10 92 94.69 187.89
+2000 65 933 0.85 79 86.28 132.10 92 94.69 187.89
 2000 67 94 2.5 35 28.17 13.23 14 39.29 37.31
 2000 67 761 12.2 61 20.72 9.13 5 27.61 25.35
 2000 67 841 1.01 79 41.08 29.17 78 25.77 34.78
-2000 67 878 0.83 76 22.82 14.77 92 82.50 100.75
-2000 68 37 0.1 9 94.94 67.67 91 74.13 130.52
+2000 67 878 0.82 76 22.82 14.77 92 82.50 100.75
+2000 68 37 0.09 9 94.94 67.67 91 74.13 130.52
 2000 68 65 2.76 69 15.89 4.09 25 25.80 22.95
-2000 68 122 1.95 76 28.79 1.18 39 17.33 22.92
-2000 68 375 2.88 95 30.91 20.69 33 84.01 46.92
-2000 68 391 5.64 62 53.06 37.93 11 25.78 37.76
-2000 68 808 2.28 41 25.44 0.45 18 89.72 117.53
+2000 68 122 1.94 76 28.79 1.18 39 17.33 22.92
+2000 68 375 2.87 95 30.91 20.69 33 84.01 46.92
+2000 68 391 5.63 62 53.06 37.93 11 25.78 37.76
+2000 68 808 2.27 41 25.44 0.45 18 89.72 117.53
 2000 71 668 0.89 65 43.58 8.59 73 68.38 9.23
 2000 73 596 3.7 74 69.38 6.32 20 88.71 1.33
 
@@ -9456,32 +9456,32 @@ ORDER BY i_category  NULLS FIRST,
          i_item_desc  NULLS FIRST,
          revenueratio NULLS FIRST;
 ----
-AAAAAAAABGAAAAAA More reg Books fiction 57.09 4776.72 36.81318046
-AAAAAAAADEAAAAAA Already  Books fiction 1.47 2433.01 18.75069842
-AAAAAAAALIAAAAAA Lines shall describe explicitly northern, firm systems. Later Books fiction 2.99 5765.84 44.43612111
-AAAAAAAAIGAAAAAA Connections must constitute only eastern leaves. Primary, elderly times make expectations. Never tory stores build very points. Books mystery 2.33 2020.50 100.00000000
-AAAAAAAAKHAAAAAA Well lovely hands know even  Books parenting 2.62 812.31 100.00000000
-AAAAAAAANJAAAAAA Recent performances get yet other publications; current patients could not carry comparatively intense, vital times. Wide problems smooth truly. Tomorrow used years catch a Books reference 2.21 361.00 100.00000000
-AAAAAAAABJAAAAAA Prospects know Books self-help 59.77 4781.65 97.49456115
-AAAAAAAAJHAAAAAA However increasing dates meet. Large, ready goals mean now blind structures. Crea Books self-help 38.79 122.88 2.50543884
-AAAAAAAALCAAAAAA Resources shall not continue thus similar, practical results. Practical words f Books travel 6.08 13248.42 74.01285798
-AAAAAAAAMEAAAAAA Original interests see of course british, important terms. Yet appropriate principles conclude in a arrangements; good countries would get sometimes;  Books travel 3.84 4651.74 25.98714201
-AAAAAAAAACAAAAAA Ce Home curtains/drapes 1.77 3684.06 55.38981980
-AAAAAAAAAIAAAAAA Great, tiny animals adopt then outcomes. Terms sweep less dry, physical signs. National, black terms adapt for a reasons; groups shall  Home curtains/drapes 4.06 2967.09 44.61018019
-AAAAAAAADHAAAAAA Policies used to decrease social forms; well massive parts admire lacking, necessary cities. More rational areas deceive therefore only facilities. Yet persist Home furniture 2.68 292.95 100.00000000
-AAAAAAAAPHAAAAAA High, black homes shall not greet also magnificent facts; inc, environmental areas say well howev Home kids 3.66 6354.18 100.00000000
-AAAAAAAAICAAAAAA Usually other children must stop shares. Relations Home lighting 9.93 16068.15 65.47845115
-AAAAAAAAOJAAAAAA Great, absent relations should participate alone wonderful issues; chains will care on behalf of a police. Substantial activities exert grey, free Home lighting 9.17 8471.45 34.52154884
-AAAAAAAANGAAAAAA Solutions may not go central, interesting sectors. Enterprises resist inte Home rugs 9.46 20720.95 100.00000000
-AAAAAAAAKKAAAAAA Important, glad rights change however. Only regular arms ought to operate in a minutes. Units fail quite like a centuries. Simply safe branches accompany major tenants;  Sports camping 1.65 786.60 100.00000000
-AAAAAAAACIAAAAAA Final orders give else. International, living personnel may miss significant companies. Black, american numbers put then  Sports fishing 1.70 3687.63 37.83663154
-AAAAAAAAPBAAAAAA Bright advisers explain i Sports fishing 8.48 6058.56 62.16336845
-AAAAAAAAMKAAAAAA Automatic, black developments get thus new profits. Chemicals describe widely similar temperatures. Easy features used to emphasize different  Sports hockey 0.83 4688.92 80.72820180
-AAAAAAAAOAAAAAAA Important grounds rip there just big vehicles. Journalists w Sports hockey 1.85 1119.36 19.27179819
-AAAAAAAAAEAAAAAA Public, annual h Sports optics 2.02 6766.08 47.59167584
-AAAAAAAAMFAAAAAA New, quick observations merge too worth a children; shares could live there crucial mountains. Simply eastern pounds shall crush immediately married long wives. Corporate, import Sports optics 4.48 7450.86 52.40832415
-AAAAAAAACGAAAAAA Years know merely religious reasons. New animals modernise well racial pieces. Various, chi Sports outdoor 3.16 4899.56 100.00000000
-AAAAAAAAAKAAAAAA Legs cannot make much across a children. Well industrial ports see so. Equal, full systems rise police. Labour departments will leave. Political, social  Sports sailing 1.17 710.10 100.00000000
+AAAAAAAABGAAAAAA More reg Books fiction 57.09 4776.72 36.813180
+AAAAAAAADEAAAAAA Already  Books fiction 1.47 2433.01 18.750698
+AAAAAAAALIAAAAAA Lines shall describe explicitly northern, firm systems. Later Books fiction 2.99 5765.84 44.436121
+AAAAAAAAIGAAAAAA Connections must constitute only eastern leaves. Primary, elderly times make expectations. Never tory stores build very points. Books mystery 2.33 2020.50 100.000000
+AAAAAAAAKHAAAAAA Well lovely hands know even  Books parenting 2.62 812.31 100.000000
+AAAAAAAANJAAAAAA Recent performances get yet other publications; current patients could not carry comparatively intense, vital times. Wide problems smooth truly. Tomorrow used years catch a Books reference 2.21 361.00 100.000000
+AAAAAAAABJAAAAAA Prospects know Books self-help 59.77 4781.65 97.494561
+AAAAAAAAJHAAAAAA However increasing dates meet. Large, ready goals mean now blind structures. Crea Books self-help 38.79 122.88 2.505438
+AAAAAAAALCAAAAAA Resources shall not continue thus similar, practical results. Practical words f Books travel 6.08 13248.42 74.012857
+AAAAAAAAMEAAAAAA Original interests see of course british, important terms. Yet appropriate principles conclude in a arrangements; good countries would get sometimes;  Books travel 3.84 4651.74 25.987142
+AAAAAAAAACAAAAAA Ce Home curtains/drapes 1.77 3684.06 55.389819
+AAAAAAAAAIAAAAAA Great, tiny animals adopt then outcomes. Terms sweep less dry, physical signs. National, black terms adapt for a reasons; groups shall  Home curtains/drapes 4.06 2967.09 44.610180
+AAAAAAAADHAAAAAA Policies used to decrease social forms; well massive parts admire lacking, necessary cities. More rational areas deceive therefore only facilities. Yet persist Home furniture 2.68 292.95 100.000000
+AAAAAAAAPHAAAAAA High, black homes shall not greet also magnificent facts; inc, environmental areas say well howev Home kids 3.66 6354.18 100.000000
+AAAAAAAAICAAAAAA Usually other children must stop shares. Relations Home lighting 9.93 16068.15 65.478451
+AAAAAAAAOJAAAAAA Great, absent relations should participate alone wonderful issues; chains will care on behalf of a police. Substantial activities exert grey, free Home lighting 9.17 8471.45 34.521548
+AAAAAAAANGAAAAAA Solutions may not go central, interesting sectors. Enterprises resist inte Home rugs 9.46 20720.95 100.000000
+AAAAAAAAKKAAAAAA Important, glad rights change however. Only regular arms ought to operate in a minutes. Units fail quite like a centuries. Simply safe branches accompany major tenants;  Sports camping 1.65 786.60 100.000000
+AAAAAAAACIAAAAAA Final orders give else. International, living personnel may miss significant companies. Black, american numbers put then  Sports fishing 1.70 3687.63 37.836631
+AAAAAAAAPBAAAAAA Bright advisers explain i Sports fishing 8.48 6058.56 62.163368
+AAAAAAAAMKAAAAAA Automatic, black developments get thus new profits. Chemicals describe widely similar temperatures. Easy features used to emphasize different  Sports hockey 0.83 4688.92 80.728201
+AAAAAAAAOAAAAAAA Important grounds rip there just big vehicles. Journalists w Sports hockey 1.85 1119.36 19.271798
+AAAAAAAAAEAAAAAA Public, annual h Sports optics 2.02 6766.08 47.591675
+AAAAAAAAMFAAAAAA New, quick observations merge too worth a children; shares could live there crucial mountains. Simply eastern pounds shall crush immediately married long wives. Corporate, import Sports optics 4.48 7450.86 52.408324
+AAAAAAAACGAAAAAA Years know merely religious reasons. New animals modernise well racial pieces. Various, chi Sports outdoor 3.16 4899.56 100.000000
+AAAAAAAAAKAAAAAA Legs cannot make much across a children. Well industrial ports see so. Equal, full systems rise police. Labour departments will leave. Political, social  Sports sailing 1.17 710.10 100.000000
 
 # Q99
 query I

@@ -267,20 +267,24 @@ where
 
 /// Returns an [`Iterator`] that indicate to try to submit a txn or give up.
 ///
-/// It return `TXN_MAX_RETRY_TIMES` `Ok` items followed by an `Err` which is a max-retries exceeded error.
+/// It return `n` `Ok` items followed by an `Err` which is a max-retries exceeded error.
 ///
 /// For example:
 /// ```
 /// fn update_table() -> Result<(), AppError> {
-///     let mut trials = txn_trials("update_table");
+///     let mut trials = txn_trials(3, "update_table");
 ///     loop {
 ///         trials.next().unwrap()?;
 ///         // do something
 ///     }
 /// }
 /// ```
-pub fn txn_trials<'a>(ctx: impl Display + 'a) -> impl Iterator<Item = Result<u32, AppError>> + 'a {
-    let n = TXN_MAX_RETRY_TIMES;
+pub fn txn_trials<'a>(
+    n: Option<u32>,
+    ctx: impl Display + 'a,
+) -> impl Iterator<Item = Result<u32, AppError>> + 'a {
+    let n = n.unwrap_or(TXN_MAX_RETRY_TIMES);
+
     (1..=(n + 1)).map(move |i| {
         if i <= n {
             Ok(i)

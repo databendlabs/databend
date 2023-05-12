@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod abort_operation;
-pub mod base_mutator;
+mod abort_operation;
+mod base_mutator;
 mod compact;
-pub mod mutation_fill_internal_columns;
-pub mod mutation_meta;
+mod mutation_fill_internal_columns;
+mod mutation_meta;
 mod mutation_part;
-pub mod mutation_sink;
 mod mutation_source;
-mod mutation_transform;
-pub mod recluster_mutator;
-mod serialize_data_transform;
+mod recluster_mutator;
+mod transform_serialize_data;
 
 pub use abort_operation::AbortOperation;
 pub use base_mutator::BaseMutator;
+pub use base_mutator::BlockIndex;
+pub use base_mutator::SegmentIndex;
 pub use compact::BlockCompactMutator;
 pub use compact::CompactAggregator;
 pub use compact::CompactPartInfo;
@@ -34,14 +34,9 @@ pub use compact::SegmentCompactMutator;
 pub use compact::SegmentCompactionState;
 pub use compact::SegmentCompactor;
 pub use mutation_fill_internal_columns::FillInternalColumnProcessor;
-pub use mutation_meta::Mutation;
-pub use mutation_meta::MutationSinkMeta;
-pub use mutation_meta::MutationTransformMeta;
 pub use mutation_meta::SerializeDataMeta;
 pub use mutation_part::MutationPartInfo;
-pub use mutation_sink::MutationSink;
 pub use mutation_source::MutationAction;
 pub use mutation_source::MutationSource;
-pub use mutation_transform::MutationTransform;
 pub use recluster_mutator::ReclusterMutator;
-pub use serialize_data_transform::SerializeDataTransform;
+pub use transform_serialize_data::SerializeDataTransform;
