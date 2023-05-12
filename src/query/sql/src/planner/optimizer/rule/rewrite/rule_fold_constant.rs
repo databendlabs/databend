@@ -119,7 +119,11 @@ impl RuleFoldConstant {
 
     fn fold_constant(&self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         let expr = scalar.as_expr()?;
-        let (new_expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+        let (new_expr, _) = ConstantFolder::fold_with_untrusted_column_type(
+            &expr,
+            &self.func_ctx,
+            &BUILTIN_FUNCTIONS,
+        );
         let new_scalar = ScalarExpr::from_expr(&new_expr)?;
         Ok(new_scalar)
     }
