@@ -12,23 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::future::Future;
-
-use ctor::ctor;
+use common_expression::DataSchemaRef;
 use pyo3::prelude::*;
-use tokio::runtime::Runtime;
 
-#[ctor]
-pub(crate) static RUNTIME: Runtime = tokio::runtime::Builder::new_multi_thread()
-    .enable_all()
-    .build()
-    .unwrap();
+#[pyclass(name = "Schema", module = "databend", subclass)]
 
-/// Utility to collect rust futures with GIL released
-pub fn wait_for_future<F: Future>(py: Python, f: F) -> F::Output
-where
-    F: Send,
-    F::Output: Send,
-{
-    py.allow_threads(|| RUNTIME.block_on(f))
+pub struct PySchema {
+    pub(crate) schema: DataSchemaRef,
+}
+
+#[pymethods]
+impl PySchema {
+    fn __repr__(&self, _py: Python) -> PyResult<String> {
+        Ok(format!("{:?}", self.schema))
+    }
 }
