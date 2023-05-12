@@ -51,15 +51,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "aho-corasick"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67fc08ce920c31afb70f013dcce1bfc3a3195de6a228474e45e1f145b36f8d04"
-dependencies = [
- "memchr",
-]
-
-[[package]]
 name = "alloc-no-stdlib"
 version = "2.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -363,7 +354,7 @@ dependencies = [
  "parquet2",
  "rand 0.8.5",
  "regex",
- "regex-syntax 0.6.28",
+ "regex-syntax",
  "rustc_version",
  "serde",
  "serde_derive",
@@ -1883,7 +1874,7 @@ dependencies = [
 name = "common-io"
 version = "0.1.0"
 dependencies = [
- "aho-corasick 0.7.20",
+ "aho-corasick",
  "bincode 2.0.0-rc.2",
  "bytes",
  "chrono",
@@ -2039,6 +2030,26 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "common-meta-process"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap 3.2.23",
+ "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-raft-store",
+ "common-meta-sled-store",
+ "common-meta-types",
+ "common-proto-conv",
+ "common-protos",
+ "common-tracing",
+ "openraft 0.8.4",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -3369,30 +3380,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "databend-meta-upgrade-09"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap 3.2.23",
- "common-meta-app",
- "common-meta-kvapi",
- "common-meta-raft-store",
- "common-meta-sled-store",
- "common-meta-types",
- "common-proto-conv",
- "common-protos",
- "common-tracing",
- "openraft 0.8.4",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
- "aho-corasick 0.7.20",
+ "aho-corasick",
  "arrow-array",
  "arrow-cast",
  "arrow-flight",
@@ -6312,7 +6303,7 @@ dependencies = [
  "fnv",
  "proc-macro2",
  "quote",
- "regex-syntax 0.6.28",
+ "regex-syntax",
  "syn 1.0.109",
 ]
 
@@ -8316,13 +8307,13 @@ dependencies = [
 
 [[package]]
 name = "regex"
-version = "1.8.1"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af83e617f331cc6ae2da5443c602dfa5af81e517212d9d611a5b3ba1777b5370"
+checksum = "48aaa5748ba571fb95cd2c85c09f629215d3a6ece942baa100950af03a34f733"
 dependencies = [
- "aho-corasick 1.0.1",
+ "aho-corasick",
  "memchr",
- "regex-syntax 0.7.1",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -8331,7 +8322,7 @@ version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
 dependencies = [
- "regex-syntax 0.6.28",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -8339,12 +8330,6 @@ name = "regex-syntax"
 version = "0.6.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "456c603be3e8d448b072f410900c09faf164fbce2d480456f50eea6e25f9c848"
-
-[[package]]
-name = "regex-syntax"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5996294f19bd3aae0453a862ad728f60e6600695733dd5df01da90c54363a3c"
 
 [[package]]
 name = "rend"
