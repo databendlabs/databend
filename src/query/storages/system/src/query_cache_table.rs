@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -50,7 +51,11 @@ impl AsyncSystemTable for QueryCacheTable {
     }
 
     #[async_backtrace::framed]
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<DataBlock> {
         let meta_client = UserApiProvider::instance().get_meta_store_client();
         let result_cache_mgr = ResultCacheMetaManager::create(meta_client, 0);
         let tenant = ctx.get_tenant();
