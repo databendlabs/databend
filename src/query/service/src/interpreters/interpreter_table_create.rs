@@ -82,20 +82,21 @@ impl Interpreter for CreateTableInterpreter {
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let engine = self.plan.engine;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
-        let tables = catalog
-            .list_tables(&self.plan.tenant, &self.plan.database)
-            .await?;
-        if quota.max_tables_per_database != 0
-            && tables.len() >= quota.max_tables_per_database as usize
-        {
-            return Err(ErrorCode::TenantQuotaExceeded(format!(
-                "Max tables per database quota exceeded: {}",
-                quota.max_tables_per_database
-            )));
-        };
-        let name_not_duplicate = tables
-            .iter()
-            .all(|table| table.name() != self.plan.table.as_str());
+        if quota.max_tables_per_database > 0 {
+            // Note:
+            // max_tables_per_database is a config quota. Default is 0.
+            // If a database has lot of tables, list_tables will be slow.
+            // So We check get it when max_tables_per_database != 0
+            let tables = catalog
+                .list_tables(&self.plan.tenant, &self.plan.database)
+                .await?;
+            if tables.len() >= quota.max_tables_per_database as usize {
+                return Err(ErrorCode::TenantQuotaExceeded(format!(
+                    "Max tables per database quota exceeded: {}",
+                    quota.max_tables_per_database
+                )));
+            }
+        }
 
         let engine_desc: Option<StorageDescription> = catalog
             .get_table_engines()
@@ -114,14 +115,7 @@ impl Interpreter for CreateTableInterpreter {
                     )));
                 }
             }
-            None => {
-                if name_not_duplicate {
-                    return Err(ErrorCode::UnknownTableEngine(format!(
-                        "Unknown table engine {}",
-                        engine
-                    )));
-                }
-            }
+            None => {}
         }
 
         match &self.plan.as_select {
