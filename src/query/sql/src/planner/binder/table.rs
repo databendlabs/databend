@@ -711,14 +711,11 @@ impl Binder {
                             }
                         })
                         .collect(),
-                    push_down_predicates: None,
-                    limit: None,
-                    order_by: None,
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,
                     },
-                    prewhere: None,
+                    ..Default::default()
                 }
                 .into(),
             ),

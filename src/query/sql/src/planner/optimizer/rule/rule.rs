@@ -64,6 +64,7 @@ pub enum RuleID {
     SplitAggregate,
     FoldCountAggregate,
     PushDownPrewhere,
+    TryApplyAggIndex,
 
     // Exploration rules
     CommuteJoin,
@@ -111,6 +112,7 @@ impl Display for RuleID {
             RuleID::EagerAggregation => write!(f, "EagerAggregation"),
             RuleID::RightExchangeJoin => write!(f, "RightExchangeJoin"),
             RuleID::ExchangeJoin => write!(f, "ExchangeJoin"),
+            RuleID::TryApplyAggIndex => write!(f, "TryApplyAggIndex"),
         }
     }
 }
