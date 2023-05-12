@@ -27,6 +27,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
+use common_expression::type_check::check_cast;
 use common_expression::type_check::check_function;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
@@ -464,6 +465,63 @@ impl PhysicalPlanBuilder {
                     _ => probe_side.output_schema()?,
                 };
 
+                assert_eq!(join.left_conditions.len(), join.right_conditions.len());
+                let mut left_join_conditions = Vec::new();
+                let mut right_join_conditions = Vec::new();
+                for (left_condition, right_condition) in join
+                    .left_conditions
+                    .iter()
+                    .zip(join.right_conditions.iter())
+                {
+                    let left_expr = left_condition
+                        .resolve_and_check(probe_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            probe_schema.index_of(&index.to_string()).unwrap()
+                        });
+                    let right_expr = right_condition
+                        .resolve_and_check(build_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            build_schema.index_of(&index.to_string()).unwrap()
+                        });
+
+                    // Unify the data types of the left and right expressions.
+                    let left_type = left_expr.data_type();
+                    let right_type = right_expr.data_type();
+                    let common_ty = common_super_type(
+                        left_type.clone(),
+                        right_type.clone(),
+                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                    )
+                    .ok_or_else(|| {
+                        ErrorCode::IllegalDataType(format!(
+                            "Cannot find common type for {:?} and {:?}",
+                            left_type, right_type
+                        ))
+                    })?;
+                    let left_expr = check_cast(
+                        left_expr.span(),
+                        false,
+                        left_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    let right_expr = check_cast(
+                        right_expr.span(),
+                        false,
+                        right_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+
+                    let (left_expr, _) =
+                        ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let (right_expr, _) =
+                        ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+                    left_join_conditions.push(left_expr.as_remote_expr());
+                    right_join_conditions.push(right_expr.as_remote_expr());
+                }
+
                 let merged_schema = DataSchemaRefExt::create(
                     probe_schema
                         .fields()
@@ -472,68 +530,14 @@ impl PhysicalPlanBuilder {
                         .cloned()
                         .collect::<Vec<_>>(),
                 );
-                let mut left_join_conditions = Vec::new();
-                let mut right_join_conditions = Vec::new();
-                for (left_join_condition, right_join_condition) in join
-                    .left_conditions
-                    .iter()
-                    .zip(join.right_conditions.iter())
-                {
-                    let left_type = left_join_condition.data_type()?;
-                    let right_type = right_join_condition.data_type()?;
-                    if left_type != right_type {
-                        let common_type = common_super_type(
-                            left_type.clone(),
-                            right_type.clone(),
-                            &BUILTIN_FUNCTIONS.default_cast_rules,
-                        );
-                        if let Some(common_type) = common_type {
-                            let left = wrap_cast(left_join_condition, &common_type);
-                            let right = wrap_cast(right_join_condition, &common_type);
-                            left_join_conditions.push(left);
-                            right_join_conditions.push(right);
-                        } else {
-                            return Err(ErrorCode::IllegalDataType(format!(
-                                "Cannot find common type for {:?} and {:?}",
-                                left_type, right_type
-                            )));
-                        }
-                    } else {
-                        left_join_conditions.push(left_join_condition.clone());
-                        right_join_conditions.push(right_join_condition.clone());
-                    }
-                }
+
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     plan_id: self.next_plan_id(),
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
                     join_type: join.join_type.clone(),
-                    build_keys: right_join_conditions
-                        .iter()
-                        .map(|scalar| {
-                            let expr = scalar
-                                .resolve_and_check(build_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    build_schema.index_of(&index.to_string()).unwrap()
-                                });
-                            let (expr, _) =
-                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                            Ok(expr.as_remote_expr())
-                        })
-                        .collect::<Result<_>>()?,
-                    probe_keys: left_join_conditions
-                        .iter()
-                        .map(|scalar| {
-                            let expr = scalar
-                                .resolve_and_check(probe_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    probe_schema.index_of(&index.to_string()).unwrap()
-                                });
-                            let (expr, _) =
-                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                            Ok(expr.as_remote_expr())
-                        })
-                        .collect::<Result<_>>()?,
+                    build_keys: right_join_conditions,
+                    probe_keys: left_join_conditions,
                     non_equi_conditions: join
                         .non_equi_conditions
                         .iter()
