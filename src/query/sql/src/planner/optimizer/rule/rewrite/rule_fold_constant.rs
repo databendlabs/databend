@@ -17,7 +17,6 @@ use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::wrap_cast;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -120,18 +119,9 @@ impl RuleFoldConstant {
 
     fn fold_constant(&self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
         let expr = scalar.as_expr()?;
-        let old_type = expr.data_type().clone();
-
         let (new_expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let new_scalar = ScalarExpr::from_expr(&new_expr)?;
-        let new_type = new_scalar.data_type()?;
-
-        // Ensure constant folding does not change the type of the expression.
-        if new_type == old_type {
-            Ok(new_scalar)
-        } else {
-            Ok(wrap_cast(&new_scalar, &old_type))
-        }
+        Ok(new_scalar)
     }
 }
 
