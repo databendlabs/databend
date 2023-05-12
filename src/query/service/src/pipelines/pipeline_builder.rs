@@ -81,7 +81,7 @@ use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::pipelines::processors::transforms::{build_partition_bucket, TransformIEJoinRight};
+use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -92,6 +92,7 @@ use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::TransformIEJoinLeft;
+use crate::pipelines::processors::transforms::TransformIEJoinRight;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
@@ -212,11 +213,7 @@ impl PipelineBuilder {
         Ok(Arc::new(IEJoinState::new(ie_join)))
     }
 
-    fn build_left_side(
-        &mut self,
-        ie_join: &IEJoin,
-        state: Arc<IEJoinState>,
-    ) -> Result<()> {
+    fn build_left_side(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {
         self.build_pipeline(&ie_join.left)?;
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformIEJoinLeft::create(input, output, state.clone());
@@ -233,7 +230,11 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn expand_right_side_pipeline(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {
+    fn expand_right_side_pipeline(
+        &mut self,
+        ie_join: &IEJoin,
+        state: Arc<IEJoinState>,
+    ) -> Result<()> {
         let right_side_context = QueryContext::create_from(self.ctx.clone());
         let right_side_builder = PipelineBuilder::create(
             right_side_context,

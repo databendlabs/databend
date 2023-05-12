@@ -33,6 +33,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::IEJoinCondition;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
@@ -536,7 +537,7 @@ pub struct IEJoin {
     pub right: Box<PhysicalPlan>,
     /// The first two conditions: (>, >=, <, <=)
     /// Condition's left/right side only contains one table's column
-    pub conditions: Vec<RemoteExpr>,
+    pub conditions: Vec<IEJoinCondition>,
     /// The other conditions
     pub other_conditions: Vec<RemoteExpr>,
     /// Now only support inner join, will support left/right join later

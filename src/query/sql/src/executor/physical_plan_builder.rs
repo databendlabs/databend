@@ -1634,6 +1634,9 @@ impl PhysicalPlanBuilder {
         let left_side = self.build(s_expr.child(0)?).await?;
         let right_side = self.build(s_expr.child(1)?).await?;
 
+        let left_schema = left_side.output_schema()?;
+        let right_schema = right_side.output_schema()?;
+
         let merged_schema = DataSchemaRefExt::create(
             left_side
                 .output_schema()?
@@ -1650,7 +1653,9 @@ impl PhysicalPlanBuilder {
             right: Box::new(right_side),
             conditions: ie_conditions
                 .iter()
-                .map(|scalar| resolve_scalar(scalar, &merged_schema))
+                .map(|scalar| {
+                    resolve_ie_scalar(scalar, &left_schema, &right_schema, &left_prop, &right_prop)
+                })
                 .collect::<Result<_>>()?,
             other_conditions: other_conditions
                 .iter()
@@ -1667,6 +1672,49 @@ fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchemaRef) -> Result<RemoteE
         .resolve_and_check(schema.as_ref())?
         .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
     Ok(expr.as_remote_expr())
+}
+
+fn resolve_ie_scalar(
+    expr: &ScalarExpr,
+    left_schema: &DataSchemaRef,
+    right_schema: &DataSchemaRef,
+    left_prop: &RelationalProperty,
+    right_prop: &RelationalProperty,
+) -> Result<IEJoinCondition> {
+    match expr {
+        ScalarExpr::FunctionCall(func) => {
+            let mut left = None;
+            let mut right = None;
+            for arg in func.arguments.iter() {
+                let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
+                match join_predicate {
+                    JoinPredicate::Left(_) => {
+                        left = Some(
+                            arg.resolve_and_check(left_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    left_schema.index_of(&index.to_string()).unwrap()
+                                }),
+                        );
+                    }
+                    JoinPredicate::Right(_) => {
+                        right = Some(
+                            arg.resolve_and_check(right_schema.as_ref())?
+                                .project_column_ref(|index| {
+                                    right_schema.index_of(&index.to_string()).unwrap()
+                                }),
+                        );
+                    }
+                    JoinPredicate::Both { .. } | JoinPredicate::Other(_) => unreachable!(),
+                }
+            }
+            Ok(IEJoinCondition {
+                left_expr: left.unwrap().as_remote_expr(),
+                right_expr: right.unwrap().as_remote_expr(),
+                operator: func.func_name.to_string(),
+            })
+        }
+        _ => unreachable!(),
+    }
 }
 
 fn check_ie_join_condition(
@@ -1695,4 +1743,12 @@ fn check_ie_join_condition(
         }
     }
     false
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct IEJoinCondition {
+    pub left_expr: RemoteExpr,
+    pub right_expr: RemoteExpr,
+    // "gt" | "lt" | "gte" | "lte"
+    pub operator: String,
 }

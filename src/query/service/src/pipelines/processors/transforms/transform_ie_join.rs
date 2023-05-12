@@ -15,6 +15,7 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_exception::Result;
 use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
@@ -76,22 +77,61 @@ impl Processor for TransformIEJoinLeft {
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
-        todo!()
+        self
     }
 
-    fn event(&mut self) -> common_exception::Result<Event> {
-        todo!()
+    fn event(&mut self) -> Result<Event> {
+        match self.step {
+            IEJoinStep::Sink => {
+                if self.input_data.is_some() {
+                    return Ok(Event::Sync);
+                }
+                if self.input_port.is_finished() {
+                    self.step = IEJoinStep::Merge;
+                    return Ok(Event::Sync);
+                }
+                match self.input_port.has_data() {
+                    true => {
+                        self.input_data = Some(self.input_port.pull_data().unwrap()?);
+                        Ok(Event::Sync)
+                    }
+                    false => {
+                        self.input_port.set_need_data();
+                        Ok(Event::NeedData)
+                    }
+                }
+            }
+            IEJoinStep::Merge => {
+                todo!()
+            }
+            IEJoinStep::Finalize => {
+                todo!()
+            }
+        }
     }
 
     fn interrupt(&self) {
         todo!()
     }
 
-    fn process(&mut self) -> common_exception::Result<()> {
-        todo!()
+    fn process(&mut self) -> Result<()> {
+        match self.step {
+            IEJoinStep::Sink => {
+                if let Some(data_block) = self.input_data.take() {
+                    self.state.sink_left(data_block)?;
+                }
+            }
+            IEJoinStep::Merge => {
+                todo!()
+            }
+            IEJoinStep::Finalize => {
+                todo!()
+            }
+        }
+        Ok(())
     }
 
-    async fn async_process(&mut self) -> common_exception::Result<()> {
+    async fn async_process(&mut self) -> Result<()> {
         todo!()
     }
 }
@@ -100,7 +140,7 @@ pub struct TransformIEJoinRight {
     input_port: Arc<InputPort>,
     input_data: Option<DataBlock>,
     state: Arc<IEJoinState>,
-    step:IEJoinStep,
+    step: IEJoinStep,
 }
 
 impl TransformIEJoinRight {
@@ -124,22 +164,36 @@ impl Processor for TransformIEJoinRight {
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
-        todo!()
+        self
     }
 
-    fn event(&mut self) -> common_exception::Result<Event> {
-        todo!()
+    fn event(&mut self) -> Result<Event> {
+        if self.input_data.is_some() {
+            return Ok(Event::Sync);
+        }
+        if self.input_port.is_finished() {
+            self.state.set_right_finished();
+        }
+        match self.input_port.has_data() {
+            true => {
+                self.input_data = Some(self.input_port.pull_data().unwrap()?);
+                Ok(Event::Sync)
+            }
+            false => {
+                self.input_port.set_need_data();
+                Ok(Event::NeedData)
+            }
+        }
     }
 
     fn interrupt(&self) {
         todo!()
     }
 
-    fn process(&mut self) -> common_exception::Result<()> {
-        todo!()
-    }
-
-    async fn async_process(&mut self) -> common_exception::Result<()> {
-        todo!()
+    fn process(&mut self) -> Result<()> {
+        if let Some(data_block) = self.input_data.take() {
+            self.state.sink_right(data_block)?;
+        }
+        Ok(())
     }
 }
