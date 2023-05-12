@@ -45,37 +45,34 @@ enum IEJoinStep {
 // 6. Generate bit array with bitmap
 // 7. Execute ie join algorithm
 // 8. Generate final result and stream to next processor
-pub struct TransformIEJoin {
+pub struct TransformIEJoinLeft {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
     input_data: Option<DataBlock>,
     state: Arc<IEJoinState>,
-    // Left table is 0, right table is 1
-    table_id: u8,
     step: IEJoinStep,
 }
 
-impl TransformIEJoin {
+impl TransformIEJoinLeft {
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         ie_join_state: Arc<IEJoinState>,
-        table_id: u8,
     ) -> Box<dyn Processor> {
-        Box::new(TransformIEJoin {
+        Box::new(TransformIEJoinLeft {
             input_port,
             output_port,
             input_data: None,
             state: ie_join_state,
-            table_id,
             step: IEJoinStep::Sink,
         })
     }
 }
 
-impl Processor for TransformIEJoin {
+#[async_trait::async_trait]
+impl Processor for TransformIEJoinLeft {
     fn name(&self) -> String {
-        todo!()
+        "TransformIEJoinLeft".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -83,6 +80,66 @@ impl Processor for TransformIEJoin {
     }
 
     fn event(&mut self) -> common_exception::Result<Event> {
+        todo!()
+    }
+
+    fn interrupt(&self) {
+        todo!()
+    }
+
+    fn process(&mut self) -> common_exception::Result<()> {
+        todo!()
+    }
+
+    async fn async_process(&mut self) -> common_exception::Result<()> {
+        todo!()
+    }
+}
+
+pub struct TransformIEJoinRight {
+    input_port: Arc<InputPort>,
+    input_data: Option<DataBlock>,
+    state: Arc<IEJoinState>,
+    step:IEJoinStep,
+}
+
+impl TransformIEJoinRight {
+    pub fn create(
+        input_port: Arc<InputPort>,
+        ie_join_state: Arc<IEJoinState>,
+    ) -> Box<dyn Processor> {
+        Box::new(TransformIEJoinRight {
+            input_port,
+            input_data: None,
+            state: ie_join_state,
+            step: IEJoinStep::Sink,
+        })
+    }
+}
+
+#[async_trait::async_trait]
+impl Processor for TransformIEJoinRight {
+    fn name(&self) -> String {
+        "TransformIEJoinRight".to_string()
+    }
+
+    fn as_any(&mut self) -> &mut dyn Any {
+        todo!()
+    }
+
+    fn event(&mut self) -> common_exception::Result<Event> {
+        todo!()
+    }
+
+    fn interrupt(&self) {
+        todo!()
+    }
+
+    fn process(&mut self) -> common_exception::Result<()> {
+        todo!()
+    }
+
+    async fn async_process(&mut self) -> common_exception::Result<()> {
         todo!()
     }
 }

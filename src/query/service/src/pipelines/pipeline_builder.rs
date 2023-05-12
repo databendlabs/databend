@@ -81,7 +81,7 @@ use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
-use crate::pipelines::processors::transforms::build_partition_bucket;
+use crate::pipelines::processors::transforms::{build_partition_bucket, TransformIEJoinRight};
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
@@ -91,7 +91,7 @@ use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformIEJoin;
+use crate::pipelines::processors::transforms::TransformIEJoinLeft;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
@@ -209,17 +209,17 @@ impl PipelineBuilder {
     }
 
     fn build_ie_join_state(&mut self, ie_join: &IEJoin) -> Result<Arc<IEJoinState>> {
-        todo!()
+        Ok(Arc::new(IEJoinState::new(ie_join)))
     }
 
-    fn expand_right_side_pipeline(
+    fn build_left_side(
         &mut self,
         ie_join: &IEJoin,
         state: Arc<IEJoinState>,
     ) -> Result<()> {
-        self.build_pipeline(&ie_join.right)?;
+        self.build_pipeline(&ie_join.left)?;
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformIEJoin::create(input, output, state.clone(), 1);
+            let transform = TransformIEJoinLeft::create(input, output, state.clone());
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
@@ -233,16 +233,16 @@ impl PipelineBuilder {
         Ok(())
     }
 
-    fn build_left_side(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {
-        let left_side_context = QueryContext::create_from(self.ctx.clone());
-        let left_side_builder = PipelineBuilder::create(
-            left_side_context,
+    fn expand_right_side_pipeline(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {
+        let right_side_context = QueryContext::create_from(self.ctx.clone());
+        let right_side_builder = PipelineBuilder::create(
+            right_side_context,
             self.enable_profiling,
             self.prof_span_set.clone(),
         );
-        let mut left_res = left_side_builder.finalize(&ie_join.left)?;
-        left_res.main_pipeline.add_transform(|input, output| {
-            let transform = TransformIEJoin::create(input, output, state.clone(), 0);
+        let mut right_res = right_side_builder.finalize(&ie_join.right)?;
+        right_res.main_pipeline.add_sink(|input| {
+            let transform = TransformIEJoinRight::create(input, state.clone());
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
@@ -253,9 +253,9 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })?;
-        self.pipelines.push(left_res.main_pipeline);
+        self.pipelines.push(right_res.main_pipeline);
         self.pipelines
-            .extend(left_res.sources_pipelines.into_iter());
+            .extend(right_res.sources_pipelines.into_iter());
         Ok(())
     }
 

@@ -12,9 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::DataBlock;
+use parking_lot::RwLock;
+use common_expression::{DataBlock, RemoteExpr};
+use common_sql::executor::IEJoin;
+use common_sql::plans::JoinType;
 
 pub struct IEJoinState {
-    left_table: DataBlock,
-    right_table: DataBlock,
+    left_table: RwLock<DataBlock>,
+    right_table: RwLock<DataBlock>,
+    join_type: JoinType,
+    conditions: Vec<RemoteExpr>,
+    other_conditions: Vec<RemoteExpr>,
+}
+
+
+impl IEJoinState {
+    pub fn new(ie_join: &IEJoin) -> Self {
+        IEJoinState {
+            left_table: RwLock::new(DataBlock::empty()),
+            right_table: RwLock::new(DataBlock::empty()),
+            join_type: ie_join.join_type.clone(),
+            conditions: ie_join.conditions.clone(),
+            other_conditions: ie_join.other_conditions.clone(),
+        }
+    }
 }
