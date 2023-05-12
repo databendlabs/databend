@@ -308,9 +308,7 @@ pub fn sort_merge_by_data_type(
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: &[DataBlock],
-) -> Result<Vec<DataBlock>>
-
-{
+) -> Result<Vec<DataBlock>> {
     match data_type {
         DataType::Number(num_ty) => {
             with_number_mapped_type!(|NUM_TYPE| match num_ty {

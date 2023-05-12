@@ -18,6 +18,8 @@ use common_expression::types::DataType;
 use common_expression::types::NumberColumnBuilder;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
+use common_expression::types::UInt64Type;
+use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
 use common_expression::BlockEntry;
 use common_expression::Column;
@@ -30,6 +32,7 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::SortColumnDescription;
 use common_expression::Value;
+use common_expression::ValueRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_transforms::processors::transforms::sort_merge_by_data_type;
 use common_pipeline_transforms::processors::transforms::Compactor;
@@ -44,7 +47,7 @@ pub struct IEJoinState {
     // L2: sort `sorted_blocks` again, by the second join key
     l2_sorted_blocks: RwLock<Vec<DataBlock>>,
     // permutation array
-    p_array: RwLock<Vec<usize>>,
+    p_array: RwLock<Vec<u64>>,
     // data schema of sorted blocks
     data_schema: DataSchemaRef,
     // Sort description for L1
@@ -232,6 +235,22 @@ impl IEJoinState {
             }],
             &sorted_blocks,
         )?;
+        // The pos col of l2 sorted blocks is permutation array
+        let mut p_array = self.p_array.write();
+        for block in l2_sorted_blocks.iter() {
+            let column = &block
+                .columns()
+                .last()
+                .unwrap()
+                .value
+                .try_downcast::<UInt64Type>()
+                .unwrap();
+            if let ValueRef::Column(col) = column.as_ref() {
+                for val in UInt64Type::iter_column(&col) {
+                    p_array.push(val)
+                }
+            }
+        }
         Ok(())
     }
 
