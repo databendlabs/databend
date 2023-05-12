@@ -62,6 +62,10 @@ pub enum UserPrivilegeType {
     DropRole = 1 << 14,
     // Privilege to Drop user.
     DropUser = 1 << 15,
+    // Privilege to Create DataMask.
+    CreateDataMask = 1 << 16,
+    // Privilege to Drop DataMask.
+    DropDataMask = 1 << 17,
     // TODO: remove this later
     Set = 1 << 4,
 }
@@ -83,6 +87,8 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Grant
         | CreateStage
         | Set
+        | CreateDataMask
+        | DropDataMask
     }
 );
 
@@ -105,6 +111,8 @@ impl std::fmt::Display for UserPrivilegeType {
             UserPrivilegeType::CreateStage => "CREATE STAGE",
             UserPrivilegeType::Grant => "GRANT",
             UserPrivilegeType::Set => "SET",
+            UserPrivilegeType::CreateDataMask => "CREATE DATAMASK",
+            UserPrivilegeType::DropDataMask => "DROP DATAMASK",
         })
     }
 }

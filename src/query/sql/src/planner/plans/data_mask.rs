@@ -12,21 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod data_mask;
-pub mod expr;
-#[allow(clippy::module_inception)]
-mod parser;
-pub mod query;
-pub mod quote;
-mod share;
-mod stage;
-pub mod statement;
-pub mod token;
-pub mod unescape;
+use std::sync::Arc;
 
-pub use parser::parse_comma_separated_exprs;
-pub use parser::parse_expr;
-pub use parser::parse_sql;
-pub use parser::parser_values_with_placeholder;
-pub use parser::tokenize_sql;
-pub use token::all_reserved_keywords;
+use common_ast::ast::DataMaskPolicy;
+use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
+
+// Create Or replace data mask policy.
+#[derive(Clone, Debug, PartialEq)]
+pub struct CreateDatamaskPolicyPlan {
+    pub create: bool,
+    pub name: String,
+    pub policy: DataMaskPolicy,
+}
+
+impl CreateDatamaskPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}

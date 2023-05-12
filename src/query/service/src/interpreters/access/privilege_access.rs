@@ -472,6 +472,13 @@ impl AccessChecker for PrivilegeAccess {
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;
             }
+            Plan::CreateDatamaskPolicy(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![
+                        UserPrivilegeType::CreateDataMask,
+                    ])
+                    .await?;
+            }
             // Note: No need to check privileges
             Plan::Presign(_) => {}
             Plan::ExplainAst { .. } => {}

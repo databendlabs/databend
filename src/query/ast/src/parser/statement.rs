@@ -32,6 +32,7 @@ use nom::Slice;
 
 use crate::ast::*;
 use crate::input::Input;
+use crate::parser::data_mask::data_mask_policy;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::query::*;
@@ -1143,6 +1144,21 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
 
+    // data mark policy
+    let data_mask_policy = map(
+        rule! {
+            CREATE ~ MASKING ~ POLICY ~ #ident ~ #data_mask_policy
+        },
+        |(_, _, _, name, policy)| {
+            let stmt = CreateDatamaskPolicyStmt {
+                create: true,
+                name: name.to_string(),
+                policy,
+            };
+            Statement::CreateDatamaskPolicy(stmt)
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -1247,6 +1263,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
         ),
         // share
+        rule!(
+            #data_mask_policy: "`[CREATE|REPLACE] MASKING POLICY mask_name as (val1 val_type1 [, val type]) -> return type case`"
+        ),
+        // data mask
         rule!(
             #create_share_endpoint: "`CREATE SHARE ENDPOINT [IF NOT EXISTS] <endpoint_name> URL=endpoint_location tenant=tenant_name ARGS=(arg=..) [ COMMENT = '<string_literal>' ]`"
             | #show_share_endpoints: "`SHOW SHARE ENDPOINT`"

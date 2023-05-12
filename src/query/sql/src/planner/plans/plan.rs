@@ -22,6 +22,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
+use super::data_mask::CreateDatamaskPolicyPlan;
 use super::CreateShareEndpointPlan;
 use super::DropShareEndpointPlan;
 use super::VacuumTablePlan;
@@ -226,6 +227,9 @@ pub enum Plan {
     ShowShares(Box<ShowSharesPlan>),
     ShowObjectGrantPrivileges(Box<ShowObjectGrantPrivilegesPlan>),
     ShowGrantTenantsOfShare(Box<ShowGrantTenantsOfSharePlan>),
+
+    // Data mask
+    CreateDatamaskPolicy(Box<CreateDatamaskPolicyPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -331,6 +335,9 @@ impl Display for Plan {
             Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
             Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
             Plan::RevertTable(..) => write!(f, "RevertTable"),
+            Plan::CreateDatamaskPolicy(..) => {
+                write!(f, "Create Or Replace Data Mask Policy")
+            }
         }
     }
 }
@@ -424,6 +431,7 @@ impl Plan {
             Plan::ShowObjectGrantPrivileges(plan) => plan.schema(),
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
             Plan::RevertTable(plan) => plan.schema(),
+            Plan::CreateDatamaskPolicy(plan) => plan.schema(),
         }
     }
 

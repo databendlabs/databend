@@ -2058,6 +2058,16 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_create_or_replace_data_mask_policy(&mut self, stmt: &'ast CreateDatamaskPolicyStmt) {
+        let ctx = AstFormatContext::new(format!("DataMaskPolicyName {}", stmt.name));
+        let child = FormatTreeNode::new(ctx);
+
+        let name = "CreateDatamaskPolicy".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
     fn visit_with(&mut self, with: &'ast With) {
         let mut children = Vec::with_capacity(with.ctes.len());
         for cte in with.ctes.iter() {

@@ -385,6 +385,10 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::CreateDatamaskPolicy(p) => Ok(Arc::new(CreateDataMaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

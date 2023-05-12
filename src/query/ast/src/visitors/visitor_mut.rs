@@ -542,6 +542,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_grants_of_share(&mut self, _stmt: &mut ShowGrantsOfShareStmt) {}
 
+    fn visit_create_or_replace_data_mask_policy(&mut self, _stmt: &mut CreateDatamaskPolicyStmt) {}
+
     fn visit_with(&mut self, with: &mut With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter_mut() {

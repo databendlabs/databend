@@ -599,6 +599,8 @@ pub enum TokenKind {
     LIST,
     #[token("LZO", ignore(ascii_case))]
     LZO,
+    #[token("MASKING", ignore(ascii_case))]
+    MASKING,
     #[token("MAP", ignore(ascii_case))]
     MAP,
     #[token("MAX_FILE_SIZE", ignore(ascii_case))]
@@ -671,6 +673,8 @@ pub enum TokenKind {
     PIPELINE,
     #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
     PLAINTEXT_PASSWORD,
+    #[token("POLICY", ignore(ascii_case))]
+    POLICY,
     #[token("POSITION", ignore(ascii_case))]
     POSITION,
     #[token("PROCESSLIST", ignore(ascii_case))]

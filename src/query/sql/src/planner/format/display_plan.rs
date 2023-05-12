@@ -130,6 +130,9 @@ impl Plan {
             Plan::ShowObjectGrantPrivileges(p) => Ok(format!("{:?}", p)),
             Plan::ShowGrantTenantsOfShare(p) => Ok(format!("{:?}", p)),
             Plan::RevertTable(p) => Ok(format!("{:?}", p)),
+
+            // data mask
+            Plan::CreateDatamaskPolicy(p) => Ok(format!("{:?}", p)),
         }
     }
 }
