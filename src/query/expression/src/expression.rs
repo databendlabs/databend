@@ -29,7 +29,7 @@ use crate::function::FunctionRegistry;
 use crate::types::DataType;
 use crate::values::Scalar;
 
-pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq {}
+pub trait ColumnIndex: Debug + Clone + Serialize + Hash + Eq + 'static {}
 
 impl ColumnIndex for usize {}
 
