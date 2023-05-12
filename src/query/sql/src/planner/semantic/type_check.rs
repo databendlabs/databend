@@ -1031,14 +1031,8 @@ impl<'a> TypeChecker<'a> {
 
     #[async_backtrace::framed]
     async fn resolve_window_range_frame(&mut self, frame: WindowFrame) -> Result<WindowFuncFrame> {
-        let start_offset = self
-            .resolve_range_offset(&frame.start_bound)
-            .await?
-            .map(|scalar| scalar);
-        let end_offset = self
-            .resolve_range_offset(&frame.end_bound)
-            .await?
-            .map(|scalar| scalar);
+        let start_offset = self.resolve_range_offset(&frame.start_bound).await?;
+        let end_offset = self.resolve_range_offset(&frame.end_bound).await?;
 
         let units = match frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
