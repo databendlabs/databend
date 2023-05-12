@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -50,6 +51,7 @@ pub struct TransformIEJoinLeft {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
     input_data: Option<DataBlock>,
+    output_data_blocks: VecDeque<DataBlock>,
     state: Arc<IEJoinState>,
     step: IEJoinStep,
 }
@@ -64,6 +66,7 @@ impl TransformIEJoinLeft {
             input_port,
             output_port,
             input_data: None,
+            output_data_blocks: Default::default(),
             state: ie_join_state,
             step: IEJoinStep::Sink,
         })
@@ -102,10 +105,21 @@ impl Processor for TransformIEJoinLeft {
                 }
             }
             IEJoinStep::Merge => {
-                todo!()
+                return Ok(Event::Sync);
             }
             IEJoinStep::Finalize => {
-                todo!()
+                if self.output_port.is_finished() {
+                    self.input_port.finish();
+                    return Ok(Event::Finished);
+                }
+
+                if !self.output_data_blocks.is_empty() {
+                    let data = self.output_data_blocks.pop_front().unwrap();
+                    self.output_port.push_data(Ok(data));
+                    return Ok(Event::NeedConsume);
+                }
+
+                return Ok(Event::Sync);
             }
         }
     }
@@ -122,17 +136,15 @@ impl Processor for TransformIEJoinLeft {
                 }
             }
             IEJoinStep::Merge => {
-                todo!()
+                self.state.merge_sort()?;
+                self.step = IEJoinStep::Finalize;
             }
             IEJoinStep::Finalize => {
-                todo!()
+                self.output_data_blocks
+                    .push_back(self.state.finalize(65536)?);
             }
         }
         Ok(())
-    }
-
-    async fn async_process(&mut self) -> Result<()> {
-        todo!()
     }
 }
 

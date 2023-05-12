@@ -301,3 +301,48 @@ pub fn try_create_transform_sort_merge(
         )
     }
 }
+
+pub fn sort_merge_by_data_type(
+    data_type: &DataType,
+    data_schema: DataSchemaRef,
+    block_size: usize,
+    sort_desc: Vec<SortColumnDescription>,
+    data_blocks: &[DataBlock],
+) -> Result<Vec<DataBlock>>
+
+{
+    match data_type {
+        DataType::Number(num_ty) => {
+            with_number_mapped_type!(|NUM_TYPE| match num_ty {
+                NumberDataType::NUM_TYPE => {
+                    let compactor = SortMergeCompactor::<
+                        SimpleRows<NumberType<NUM_TYPE>>,
+                        SimpleRowConverter<NumberType<NUM_TYPE>>,
+                    >::try_create(
+                        data_schema, block_size, None, sort_desc
+                    )?;
+                    compactor.compact_final(data_blocks)
+                }
+            })
+        }
+        DataType::Date => {
+            let compactor =
+                SimpleDateCompactor::try_create(data_schema, block_size, None, sort_desc)?;
+            compactor.compact_final(data_blocks)
+        }
+        DataType::Timestamp => {
+            let compactor =
+                SimpleTimestampCompactor::try_create(data_schema, block_size, None, sort_desc)?;
+            compactor.compact_final(data_blocks)
+        }
+        DataType::String => {
+            let compactor =
+                SimpleStringCompactor::try_create(data_schema, block_size, None, sort_desc)?;
+            compactor.compact_final(data_blocks)
+        }
+        _ => {
+            let compactor = CommonCompactor::try_create(data_schema, block_size, None, sort_desc)?;
+            compactor.compact_final(data_blocks)
+        }
+    }
+}
