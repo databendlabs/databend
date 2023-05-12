@@ -1050,3 +1050,72 @@ EvalScalar
             ├── partitions scanned: 0
             ├── push downs: [filters: [t4.a (#0) > 100], limit: NONE]
             └── estimated rows: 0.00
+
+statement ok
+drop table if exists a
+
+statement ok
+drop table if exists b
+
+statement ok
+create table a(id int, c1 INT NULL)
+
+statement ok
+create table b(id int, c1 INT NULL)
+
+statement ok
+insert into a values(1, 1683648000)
+
+statement ok
+insert into b values(1, 1683648000)
+
+statement ok
+insert into b values(2, 1683648000)
+
+# left join to inner join
+query T
+select * from a left join b on a.id = b.id where a.c1 between 1683648000 and 1683734400 and b.c1 between 1683648000 and 1683734400 limit 1;
+----
+EvalScalar
+├── expressions: [a.id (#0), a.c1 (#1), b.id (#2), b.c1 (#3)]
+├── estimated rows: 0.02
+└── Limit
+    ├── limit: 1
+    ├── offset: 0
+    ├── estimated rows: 0.02
+    └── HashJoin
+        ├── join type: INNER
+        ├── build keys: [CAST(a.id (#0) AS Int32 NULL)]
+        ├── probe keys: [CAST(b.id (#2) AS Int32 NULL)]
+        ├── filters: []
+        ├── estimated rows: 0.02
+        ├── Filter(Build)
+        │   ├── filters: [is_true(a.c1 (#1) >= 1683648000), is_true(a.c1 (#1) <= 1683734400)]
+        │   ├── estimated rows: 0.11
+        │   └── TableScan
+        │       ├── table: default.default.a
+        │       ├── read rows: 1
+        │       ├── read bytes: 72
+        │       ├── partitions total: 1
+        │       ├── partitions scanned: 1
+        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+        │       ├── push downs: [filters: [and_filters(a.c1 (#1) >= 1683648000, a.c1 (#1) <= 1683734400)], limit: NONE]
+        │       └── estimated rows: 1.00
+        └── Filter(Probe)
+            ├── filters: [is_true(b.c1 (#3) >= 1683648000), is_true(b.c1 (#3) <= 1683734400)]
+            ├── estimated rows: 0.22
+            └── TableScan
+                ├── table: default.default.b
+                ├── read rows: 2
+                ├── read bytes: 144
+                ├── partitions total: 2
+                ├── partitions scanned: 2
+                ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [and_filters(b.c1 (#3) >= 1683648000, b.c1 (#3) <= 1683734400)], limit: NONE]
+                └── estimated rows: 2.00
+
+statement ok
+drop table a;
+
+statement ok
+drop table b;
