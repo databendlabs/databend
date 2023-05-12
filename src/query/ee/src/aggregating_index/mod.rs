@@ -12,21 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_config::InnerConfig;
-use common_exception::Result;
-use common_license::license_manager::LicenseManager;
+mod aggregating_index_handler;
+pub mod query_rewrite;
 
-use crate::aggregating_index::RealAggregatingIndexHandler;
-use crate::license::license_mgr::RealLicenseManager;
-use crate::storages::fuse::operations::RealVacuumHandler;
-
-pub struct EnterpriseServices;
-impl EnterpriseServices {
-    #[async_backtrace::framed]
-    pub async fn init(_config: InnerConfig) -> Result<()> {
-        RealLicenseManager::init()?;
-        RealVacuumHandler::init()?;
-        RealAggregatingIndexHandler::init()?;
-        Ok(())
-    }
-}
+pub use aggregating_index_handler::RealAggregatingIndexHandler;
