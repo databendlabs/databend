@@ -308,6 +308,7 @@ impl DefaultSettings {
                     value: UserSettingValue::UInt64(5),
                     desc: "Sets the seconds that the table mutation lock will expire in.",
                     possible_values: None,
+                    display_in_show_settings: true,
                 }),
             ]);
 
