@@ -18,7 +18,7 @@ on:
         type: string
 
 jobs:
-  release:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
