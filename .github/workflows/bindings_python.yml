@@ -32,6 +32,23 @@ jobs:
         with:
           fetch-depth: 0
 
+      - uses: everpcpc/actions-cache@v1
+        if: env.RUNNER_PROVIDER == 'aws'
+        env:
+          AWS_REGION: us-east-2
+        with:
+          bucket: "databend-ci"
+          root: "cache/cargo"
+          path: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
+          key: |
+            ${{ runner.os }}/${{ matrix.target }}/${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}/${{ matrix.target }}/
+            ${{ runner.os }}/
+
       - name: Generate version
         working-directory: src/bendpy
         run: |
