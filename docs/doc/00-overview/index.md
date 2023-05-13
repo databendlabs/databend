@@ -5,7 +5,7 @@ slug: /
 
 Welcome to the Databend documentation! Databend is an **open-source**, **elastic**, and **workload-aware** modern cloud data warehouse designed to meet businesses' massive-scale analytics needs at low cost and with low complexity.
 
-<iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/Ysp0do8Ci-8" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+<iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/Ysp0do8Ci-8" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe>
 
 This welcome page guides you through the features, architecture, and other important details about Databend.
 
