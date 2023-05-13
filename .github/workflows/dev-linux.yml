@@ -16,6 +16,7 @@ on:
       - "docker/**"
       - "scripts/setup/**"
       - ".devcontainer/**"
+      - ".github/**"
   merge_group:
     types:
       - checks_requested
