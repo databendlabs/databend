@@ -95,7 +95,6 @@ impl Rule for RuleFoldCountAggregate {
                             span: item.scalar.span(),
                             value: Scalar::Number(NumberScalar::UInt64(table_card)),
                         });
-                        return Ok(());
                     } else {
                         let col_set = agg_func.args[0].used_columns();
                         for index in col_set {
@@ -107,8 +106,6 @@ impl Rule for RuleFoldCountAggregate {
                                         table_card - card.null_count,
                                     )),
                                 });
-                            } else {
-                                return Ok(());
                             }
                         }
                     }
