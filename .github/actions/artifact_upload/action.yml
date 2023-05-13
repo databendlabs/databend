@@ -7,6 +7,10 @@ inputs:
   target:
     description: ""
     required: true
+  path:
+    description: "default to ./target/${BUILD_TARGET}/${BUILD_PROFILE}/"
+    required: false
+    default: ""
   category:
     description: "default/hive"
     required: false
@@ -28,20 +32,25 @@ runs:
           src="github"
         fi
         echo "src=${src}" >> $GITHUB_OUTPUT
+        if [[ -z "${{ inputs.path }}" ]]; then
+          echo "path=./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}" >> $GITHUB_OUTPUT
+        else
+          echo "path=${{ inputs.path }}" >> $GITHUB_OUTPUT
+        fi
 
     - name: Upload artifact to github
       if: steps.info.outputs.src == 'github'
       uses: actions/upload-artifact@v3
       with:
         name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
-        path: ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-*
+        path: ${{ steps.info.outputs.path }}/databend-*
 
     - name: Upload open-sharing to github
       if: steps.info.outputs.src == 'github'
       uses: actions/upload-artifact@v3
       with:
         name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
-        path: ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/open-sharing
+        path: ${{ steps.info.outputs.path }}/open-sharing
 
     - name: Upload artifacts to s3
       if: steps.info.outputs.src == 's3'

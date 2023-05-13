@@ -15,6 +15,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
+env:
+  RUNNER_PROVIDER: github
+
 jobs:
   build_linux:
     name: build ${{ matrix.target }}
@@ -44,13 +47,18 @@ jobs:
          RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
          echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
 
-      - name: Get Docker opts
+      - name: Get opts
         id: opts
         run: |
           if [[ "${RUNNER_PROVIDER}" == "aws" ]]; then
-            DOCKER_OPTS=""
+            echo "DOCKER_OPTS=" >> $GITHUB_OUTPUT
           else
-            DOCKER_OPTS=" --env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true --env ACTIONS_RUNTIME_TOKEN=${ACTIONS_RUNTIME_TOKEN}"
+            echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true --env ACTIONS_RUNTIME_TOKEN=${ACTIONS_RUNTIME_TOKEN}" >> $GITHUB_OUTPUT
+          fi
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "BUILD_ARGS=--strip --sdist --out dist" >> $GITHUB_OUTPUT
+          else
+            echo "BUILD_ARGS=--release --strip --sdist --out dist" >> $GITHUB_OUTPUT
           fi
 
       - name: Build wheels
@@ -64,10 +72,9 @@ jobs:
           manylinux: auto
           # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
           rustup-components: rust-std rustfmt
-          args: --release --strip --sdist --out dist
+          args: ${{ steps.opts.outputs.BUILD_ARGS }}
           docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
-          before-script-linux: |
-            ../../scripts/setup/dev_setup.sh -yb
+          before-script-linux: ../../scripts/setup/dev_setup.sh -yb
 
       - name: Upload artifact
         if: github.event_name == 'pull_request'
