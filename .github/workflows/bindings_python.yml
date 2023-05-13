@@ -16,12 +16,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RUNNER_PROVIDER: github
+  RUNNER_PROVIDER: aws
 
 jobs:
   build_linux:
     name: ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     strategy:
       matrix:
         target:
@@ -50,6 +50,7 @@ jobs:
       # NOTE: for exporting ACTIONS_RUNTIME_TOKEN and ACTIONS_CACHE_URL
       - name: Expose GitHub Runtime
         uses: crazy-max/ghaction-github-runtime@v2
+        if: env.RUNNER_PROVIDER == 'github'
 
       - name: Get opts
         id: opts
@@ -61,10 +62,10 @@ jobs:
           fi
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "BUILD_ARGS=--strip --sdist --out dist" >> $GITHUB_OUTPUT
-            echo "BUILD_PROFILE=debug" >> $GITHUB_OUTPUT
+            echo "BUILD_PROFILE=debug" >> $GITHUB_ENV
           else
             echo "BUILD_ARGS=--release --strip --sdist --out dist" >> $GITHUB_OUTPUT
-            echo "BUILD_PROFILE=release" >> $GITHUB_OUTPUT
+            echo "BUILD_PROFILE=release" >> $GITHUB_ENV
           fi
 
       - name: Build wheels
