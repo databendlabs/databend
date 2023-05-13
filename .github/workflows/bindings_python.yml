@@ -39,7 +39,7 @@ jobs:
             GIT_TAG=$(git describe --tags --abbrev=0)
             echo "LATEST TAG: $GIT_TAG"
             VERSION=${GIT_TAG/v/}
-            sed -i "s#0.1.2#$VERSION#g" Cargo.toml
+            sed -i "s#version = 0.0.0#version = $VERSION#g" Cargo.toml
 
       - name: Build wheels
         env:
