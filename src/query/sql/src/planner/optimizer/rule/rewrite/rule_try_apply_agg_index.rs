@@ -160,23 +160,19 @@ impl Rule for RuleTryApplyAggIndex {
         _s_expr: &SExpr,
         _state: &mut crate::optimizer::rule::TransformResult,
     ) -> Result<()> {
-        // let index_plans = self.get_index_plans();
-        // if index_plans.is_empty() {
-        //     // No enterprise liscense or no index.
-        //     return Ok(());
-        // }
-
-        // let handler = get_agg_index_handler();
-
-        // // if let Some(mut new_expr) =
-
-        // Ok(())
-        todo!("agg index")
+        let index_plans = self.get_index_plans();
+        if index_plans.is_empty() {
+            // No enterprise license or no index.
+            return Ok(());
+        }
+        // TODO(agg index)
+        Ok(())
     }
 }
 
-// impl RuleTryApplyAggIndex {
-//     fn get_index_plans(&self) -> Vec<SExpr> {
-//         todo!("agg index")
-//     }
-// }
+impl RuleTryApplyAggIndex {
+    fn get_index_plans(&self) -> Vec<SExpr> {
+        // TODO(agg index)
+        vec![]
+    }
+}

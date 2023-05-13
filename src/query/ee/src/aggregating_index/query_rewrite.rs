@@ -17,6 +17,7 @@ use std::collections::HashMap;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Scalar;
+use common_sql::binder::split_conjunctions;
 use common_sql::optimizer::SExpr;
 use common_sql::plans::AggIndexInfo;
 use common_sql::plans::Aggregate;
@@ -245,7 +246,7 @@ impl<'a> Range<'a> {
                 database_name: None,
                 table_name: None,
                 table_index: None,
-                column_name: index.to_string(),
+                column_name: format!("index_col_{index}"),
                 index,
                 data_type: Box::new(data_type.clone()),
                 visibility: Visibility::Visible,
@@ -361,11 +362,11 @@ type AggregationInfo<'a> = (&'a Aggregate, HashMap<IndexType, &'a ScalarExpr>);
 type SelectionMap<'a> = HashMap<String, (IndexType, &'a ScalarExpr)>;
 
 // Record information helping to rewrite the query plan.
-struct RewriteInfomartion<'a> {
+pub struct RewriteInfomartion<'a> {
     table_index: IndexType,
-    selection: &'a EvalScalar,
-    predicates: Option<&'a [ScalarExpr]>,
-    aggregation: Option<AggregationInfo<'a>>,
+    pub selection: &'a EvalScalar,
+    pub predicates: Option<&'a [ScalarExpr]>,
+    pub aggregation: Option<AggregationInfo<'a>>,
 }
 
 impl RewriteInfomartion<'_> {
@@ -441,7 +442,7 @@ impl RewriteInfomartion<'_> {
                 }
                 s => self.format_scalar(s),
             },
-            ScalarExpr::ConstantExpr(val) => format!("CAST({})", val.value),
+            ScalarExpr::ConstantExpr(val) => format!("{}", val.value),
             ScalarExpr::FunctionCall(func) => format!(
                 "{}({})",
                 &func.func_name,
@@ -450,6 +451,11 @@ impl RewriteInfomartion<'_> {
                     .map(|arg| { self.format_scalar(arg) })
                     .collect::<Vec<String>>()
                     .join(", ")
+            ),
+            ScalarExpr::CastExpr(cast) => format!(
+                "CAST({} AS {})",
+                self.format_scalar(&cast.argument),
+                cast.target_type
             ),
             ScalarExpr::AggregateFunction(agg) => {
                 format!(
@@ -646,8 +652,9 @@ fn check_predicates_range(
         out.iter()
             .filter_map(|(col, new_index, ty)| {
                 let range = &query[col];
-                range.to_scalar(*new_index, ty)
+                Some(split_conjunctions(&range.to_scalar(*new_index, ty)?))
             })
+            .flatten()
             .collect(),
     )
 }
@@ -676,7 +683,7 @@ fn try_create_column_binding(
                 database_name: None,
                 table_name: None,
                 table_index: None,
-                column_name: formatted_scalar.to_string(),
+                column_name: format!("index_col_{index}"),
                 index: *index,
                 data_type: Box::new(scalar.data_type().ok()?),
                 visibility: Visibility::Visible,
