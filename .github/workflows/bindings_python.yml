@@ -17,6 +17,10 @@ on:
         required: false
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -35,7 +39,7 @@ jobs:
             GIT_TAG=$(git describe --tags --abbrev=0)
             echo "LATEST TAG: $GIT_TAG"
             VERSION=${GIT_TAG/v/}
-            sed -i "s#0.1.2#$GIT_TAG#g" Cargo.toml
+            sed -i "s#0.1.2#$VERSION#g" Cargo.toml
 
       - name: Build wheels
         env:
