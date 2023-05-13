@@ -45,7 +45,7 @@ jobs:
       - name: Get Toolchain
         id: toolchain
         run: |
-         RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)"
+         RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
          echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
 
       - name: Get Docker opts
