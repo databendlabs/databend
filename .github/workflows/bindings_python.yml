@@ -20,7 +20,7 @@ env:
 
 jobs:
   build_linux:
-    name: build ${{ matrix.target }}
+    name: ${{ matrix.target }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
