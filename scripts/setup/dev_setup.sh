@@ -349,6 +349,8 @@ function install_rustup {
 		PATH="${HOME}/.cargo/bin:${PATH}"
 		source $HOME/.cargo/env
 	fi
+
+	rustup show
 }
 
 function install_cargo_binary {
