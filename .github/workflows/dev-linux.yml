@@ -16,8 +16,10 @@ on:
       - "docker/**"
       - "scripts/setup/**"
       - ".devcontainer/**"
+      # DEBUG:(everpcpc)
       - ".github/**"
       - "src/bendpy/**"
+      - "Cargo.lock"
   merge_group:
     types:
       - checks_requested
