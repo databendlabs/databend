@@ -34,10 +34,6 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      # - name: Setup Build Tool
-      #   uses: ./.github/actions/setup_build_tool
-      #   with:
-      #     bypass_env_vars: RUSTFLAGS,RUST_LOG
 
       - name: Generate version
         working-directory: src/bendpy
