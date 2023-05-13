@@ -73,6 +73,13 @@ jobs:
           before-script-linux: |
             ../../scripts/setup/dev_setup.sh -yb
 
+      - name: Upload artifact
+        uses: ./.github/actions/artifact_upload
+        with:
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+          category: python
+
       - name: Publish package to PyPI
         if: github.event_name != 'pull_request'
         uses: pypa/gh-action-pypi-publish@release/v1
