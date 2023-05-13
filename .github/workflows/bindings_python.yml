@@ -68,7 +68,7 @@ jobs:
           manylinux: auto
           # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
           rustup-components: rust-std rustfmt
-          args: --release --strip --manylinux 2014 --sdist --out dist
+          args: --release --strip --sdist --out dist
           docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
           before-script-linux: |
             ../../scripts/setup/dev_setup.sh -yb
