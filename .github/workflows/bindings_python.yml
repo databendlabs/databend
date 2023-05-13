@@ -54,7 +54,7 @@ jobs:
           if [[ "${RUNNER_PROVIDER}" == "aws" ]]; then
             DOCKER_OPTS=""
           else
-            DOCKER_OPTS=" --env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true"
+            DOCKER_OPTS=" --env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=truen --env ACTIONS_RUNTIME_TOKEN=${ACTIONS_RUNTIME_TOKEN}"
           fi
 
       - name: Build wheels
