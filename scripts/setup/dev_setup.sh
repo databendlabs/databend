@@ -8,6 +8,12 @@ set -e
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
+# NOTE: never use sudo under macos
+PRE_COMMAND=()
+if [[ "$(whoami)" != 'root' ]] && [[ ${PACKAGE_MANAGER} != "brew" ]]; then
+	PRE_COMMAND=(sudo)
+fi
+
 function add_to_profile {
 	eval "$1"
 	FOUND=$(grep -c "$1" "${HOME}/.profile" || true)
@@ -30,10 +36,6 @@ function update_path_and_profile {
 function install_pkg {
 	package=$1
 	PACKAGE_MANAGER=$2
-	PRE_COMMAND=()
-	if [ "$(whoami)" != 'root' ]; then
-		PRE_COMMAND=(sudo)
-	fi
 	if which "$package" &>/dev/null; then
 		echo "$package is already installed"
 	else
@@ -189,8 +191,8 @@ function install_sccache {
 		SCCACHE_RELEASE="https://github.com/mozilla/sccache/releases/"
 		curl -fLo sccache.tar.gz "${SCCACHE_RELEASE}/download/${download_version}/${download_target}.tar.gz"
 		tar -xzf sccache.tar.gz
-		sudo cp "${download_target}/sccache" /usr/local/bin/
-		sudo chmod +x /usr/local/bin/sccache
+		"${PRE_COMMAND[@]}" cp "${download_target}/sccache" /usr/local/bin/
+		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/sccache
 		rm -rf "${download_target}"
 		rm sccache.tar.gz
 		;;
@@ -217,9 +219,9 @@ function install_protobuf {
 		PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 		curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-${arch}.zip
 		unzip protoc-3.15.8-linux-${arch}.zip -d protoc-3.15.8
-		sudo cp protoc-3.15.8/bin/protoc /usr/local/bin/
-		sudo rm -rf protoc-3.15.8*
-		sudo chmod +x /usr/local/bin/protoc
+		"${PRE_COMMAND[@]}" cp protoc-3.15.8/bin/protoc /usr/local/bin/
+		"${PRE_COMMAND[@]}" rm -rf protoc-3.15.8*
+		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/protoc
 		;;
 	esac
 
@@ -536,12 +538,6 @@ elif [[ "$(uname)" == "Darwin" ]]; then
 else
 	echo "Unknown OS. Abort."
 	exit 1
-fi
-
-# NOTE: never use sudo under macos
-PRE_COMMAND=()
-if [[ "$(whoami)" != 'root' ]] && [[ ${PACKAGE_MANAGER} != "brew" ]]; then
-	PRE_COMMAND=(sudo)
 fi
 
 if [[ "$AUTO_APPROVE" == "false" ]]; then
