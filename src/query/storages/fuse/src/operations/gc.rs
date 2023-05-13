@@ -544,7 +544,7 @@ impl FuseTable {
 
         let fuse_segments = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
         let results = fuse_segments
-            .read_segments_into::<LocationTuple>(segment_locations, put_cache)
+            .read_segments::<LocationTuple>(segment_locations, put_cache)
             .await?;
         for (idx, location_tuple) in results.into_iter().enumerate() {
             let location_tuple = match location_tuple {
@@ -586,8 +586,8 @@ pub struct LocationTuple {
     pub bloom_location: HashSet<String>,
 }
 
-impl From<Arc<SegmentInfo>> for LocationTuple {
-    fn from(value: Arc<SegmentInfo>) -> Self {
+impl From<SegmentInfo> for LocationTuple {
+    fn from(value: SegmentInfo) -> Self {
         let mut block_location = HashSet::new();
         let mut bloom_location = HashSet::new();
         for block_meta in &value.blocks {
