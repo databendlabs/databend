@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_app::principal::UserInfo;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
@@ -29,14 +30,14 @@ use crate::utils::RUNTIME;
 #[pyclass(name = "SessionContext", module = "databend", subclass)]
 #[derive(Clone)]
 pub(crate) struct PySessionContext {
-    pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) session: Arc<Session>,
 }
 
 #[pymethods]
 impl PySessionContext {
     #[new]
     fn new() -> PyResult<Self> {
-        let ctx = RUNTIME.block_on(async {
+        let session = RUNTIME.block_on(async {
             let session = SessionManager::instance()
                 .create_session(SessionType::Local)
                 .await
@@ -44,14 +45,16 @@ impl PySessionContext {
 
             let user = UserInfo::new_no_auth("root", "127.0.0.1");
             session.set_authed_user(user, None).await.unwrap();
-            session.create_query_context().await.unwrap()
+            session
         });
 
-        Ok(PySessionContext { ctx })
+        Ok(PySessionContext { session })
     }
 
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
-        let res = wait_for_future(py, plan_sql(&self.ctx, sql));
+        let ctx = wait_for_future(py, self.session.create_query_context()).unwrap();
+        let res = wait_for_future(py, plan_sql(&ctx, sql));
+
         match res {
             Err(err) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
                 "Error: {}",
