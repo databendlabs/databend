@@ -847,26 +847,27 @@ impl PhysicalPlanBuilder {
                 let mut w = w.clone();
 
                 // Unify the data type for range frame.
-                if w.frame.units.is_range() {
-                    assert!(w.order_by.len() == 1);
+                if w.frame.units.is_range() && w.order_by.len() == 1 {
                     let order_by = &mut w.order_by[0].order_by_item.scalar;
 
                     let mut start = match &mut w.frame.start_bound {
                         WindowFuncFrameBound::Preceding(scalar)
                         | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
                         _ => None,
-                    };
+                    }
+                    .unwrap();
                     let mut end = match &mut w.frame.end_bound {
                         WindowFuncFrameBound::Preceding(scalar)
                         | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
                         _ => None,
-                    };
+                    }
+                    .unwrap();
 
                     let mut common_ty = order_by
                         .resolve_and_check(&*input_schema)?
                         .data_type()
                         .clone();
-                    for scalar in start.iter().chain(end.iter()) {
+                    for scalar in [&mut start, &mut end] {
                         let ty = scalar.as_ref().infer_data_type();
                         common_ty = common_super_type(
                             common_ty.clone(),
@@ -882,7 +883,7 @@ impl PhysicalPlanBuilder {
                     }
 
                     *order_by = wrap_cast(order_by, &common_ty);
-                    for scalar in start.iter_mut().chain(end.iter_mut()) {
+                    for scalar in [&mut start, &mut end] {
                         let raw_expr = RawExpr::<usize>::Cast {
                             span: w.span,
                             is_try: false,
