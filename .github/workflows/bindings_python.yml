@@ -74,6 +74,7 @@ jobs:
             ../../scripts/setup/dev_setup.sh -yb
 
       - name: Upload artifact
+        if: github.event_name == 'pull_request'
         uses: ./.github/actions/artifact_upload
         with:
           sha: ${{ github.sha }}
