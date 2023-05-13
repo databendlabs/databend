@@ -46,7 +46,7 @@ runs:
         path: ${{ steps.info.outputs.path }}/databend-*
 
     - name: Upload open-sharing to github
-      if: steps.info.outputs.src == 'github'
+      if: steps.info.outputs.src == 'github' && inputs.category == 'default'
       uses: actions/upload-artifact@v3
       with:
         name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
