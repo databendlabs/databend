@@ -67,8 +67,6 @@ jobs:
           fi
 
       - name: Build wheels
-        env:
-          RUST_BACKTRACE: 1
         uses: PyO3/maturin-action@v1
         with:
           rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
