@@ -17,6 +17,7 @@ on:
       - "scripts/setup/**"
       - ".devcontainer/**"
       - ".github/**"
+      - "src/bendpy/**"
   merge_group:
     types:
       - checks_requested
