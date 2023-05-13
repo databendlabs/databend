@@ -26,6 +26,7 @@ use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check;
 use common_expression::type_check::check_function;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
@@ -1100,25 +1101,44 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .zip(op.right_runtime_filters.iter())
                 {
-                    left_runtime_filters.insert(
-                        left.0.clone(),
-                        left.1
-                            .resolve_and_check(left_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                left_schema.index_of(&index.to_string()).unwrap()
-                            })
-                            .as_remote_expr(),
-                    );
-                    right_runtime_filters.insert(
-                        right.0.clone(),
-                        right
-                            .1
-                            .resolve_and_check(right_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                right_schema.index_of(&index.to_string()).unwrap()
-                            })
-                            .as_remote_expr(),
-                    );
+                    let left_expr = left
+                        .1
+                        .resolve_and_check(left_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            left_schema.index_of(&index.to_string()).unwrap()
+                        });
+                    let right_expr = right
+                        .1
+                        .resolve_and_check(right_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            right_schema.index_of(&index.to_string()).unwrap()
+                        });
+
+                    let common_ty = common_super_type(left_expr.data_type().clone(), right_expr.data_type().clone(), &BUILTIN_FUNCTIONS.default_cast_rules)
+                        .ok_or_else(|| ErrorCode::SemanticError(format!("RuntimeFilter's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}", left.0, left_expr.data_type(), right.0, right_expr.data_type())))?;
+
+                    let left_expr = type_check::check_cast(
+                        left_expr.span(),
+                        false,
+                        left_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    let right_expr = type_check::check_cast(
+                        right_expr.span(),
+                        false,
+                        right_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+
+                    let (left_expr, _) =
+                        ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let (right_expr, _) =
+                        ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+                    left_runtime_filters.insert(left.0.clone(), left_expr.as_remote_expr());
+                    right_runtime_filters.insert(right.0.clone(), right_expr.as_remote_expr());
                 }
                 Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
                     plan_id: self.next_plan_id(),
