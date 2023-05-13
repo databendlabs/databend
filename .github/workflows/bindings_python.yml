@@ -83,6 +83,7 @@ jobs:
           sha: ${{ github.sha }}
           target: ${{ matrix.target }}
           category: python
+          path: src/bendpy/dist
 
       - name: Publish package to PyPI
         if: github.event_name != 'pull_request'
