@@ -47,6 +47,7 @@ jobs:
          RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
          echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
 
+      # for exporting ACTIONS_RUNTIME_TOKEN and ACTIONS_CACHE_URL
       - name: Expose GitHub Runtime
         uses: crazy-max/ghaction-github-runtime@v2
 
