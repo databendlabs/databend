@@ -55,7 +55,7 @@ jobs:
           args: --release --strip --manylinux 2014 --sdist --out dist
 
       - name: Publish package to PyPI
-        if: github.event_name == 'push'
+        if: github.event_name != 'pull_request'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
