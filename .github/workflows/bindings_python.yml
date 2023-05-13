@@ -1,12 +1,6 @@
 name: Bindings Python
 
 on:
-  # push:
-  #   tags:
-  #     - "v*"
-  # schedule:
-  #   # Release at 00:00 UTC+8
-  #   - cron: "0 16 * * *"
   pull_request:
     branches:
       - main
