@@ -561,7 +561,8 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::EvalScalar(eval_scalar) => {
-                self.build_eval_scalar(input, eval_scalar, stat_info).await
+                let input = self.build(s_expr.child(0)?).await?;
+                self.build_eval_scalar(input, eval_scalar, stat_info)
             }
 
             RelOperator::Filter(filter) => {
@@ -840,7 +841,7 @@ impl PhysicalPlanBuilder {
                 Ok(result)
             }
             RelOperator::Window(w) => {
-                let input = self.build(&input).await?;
+                let input = self.build(s_expr.child(0)?).await?;
                 let input_schema = input.output_schema()?;
 
                 let mut w = w.clone();
@@ -1247,7 +1248,7 @@ impl PhysicalPlanBuilder {
     }
 
     fn build_eval_scalar(
-        &self,
+        &mut self,
         input: PhysicalPlan,
         eval_scalar: &crate::planner::plans::EvalScalar,
         stat_info: PlanStatsInfo,
