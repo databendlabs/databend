@@ -17,17 +17,8 @@ use std::sync::Arc;
 use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::plans::BoundColumnRef;
-use common_sql::plans::CastExpr;
-use common_sql::plans::FunctionCall;
-use common_sql::BindContext;
-use common_sql::ColumnBinding;
-use common_sql::ScalarExpr;
-use common_sql::Visibility;
 
 use crate::interpreters::common::MutationLockHeartbeat;
 use crate::interpreters::Interpreter;
@@ -82,71 +73,9 @@ impl Interpreter for UpdateInterpreter {
             (None, vec![])
         };
 
-        let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef {
-            span: None,
-            column: ColumnBinding {
-                database_name: None,
-                table_name: None,
-                table_index: None,
-                column_name: "_predicate".to_string(),
-                index: tbl.schema().num_fields(),
-                data_type: Box::new(DataType::Boolean),
-                visibility: Visibility::Visible,
-            },
-        });
-
-        let schema: DataSchema = tbl.schema().into();
-        let update_list = self.plan.update_list.iter().try_fold(
-            Vec::with_capacity(self.plan.update_list.len()),
-            |mut acc, (index, scalar)| {
-                let field = schema.field(*index);
-                let left = ScalarExpr::CastExpr(CastExpr {
-                    span: scalar.span(),
-                    is_try: false,
-                    argument: Box::new(scalar.clone()),
-                    target_type: Box::new(field.data_type().clone()),
-                });
-                let scalar = if col_indices.is_empty() {
-                    // The condition is always true.
-                    // Replace column to the result of the following expression:
-                    // CAST(expression, type)
-                    left
-                } else {
-                    // Replace column to the result of the following expression:
-                    // if(condition, CAST(expression, type), column)
-                    let mut right = None;
-                    for column_binding in self.plan.bind_context.columns.iter() {
-                        if BindContext::match_column_binding(
-                            Some(db_name),
-                            Some(tbl_name),
-                            field.name(),
-                            column_binding,
-                        ) {
-                            right = Some(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                span: None,
-                                column: column_binding.clone(),
-                            }));
-                            break;
-                        }
-                    }
-                    let right = right.ok_or_else(|| ErrorCode::Internal("It's a bug"))?;
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "if".to_string(),
-                        params: vec![],
-                        arguments: vec![predicate.clone(), left, right],
-                    })
-                };
-                acc.push((
-                    *index,
-                    scalar
-                        .as_expr()?
-                        .project_column_ref(|col| col.column_name.clone())
-                        .as_remote_expr(),
-                ));
-                Ok::<_, ErrorCode>(acc)
-            },
-        )?;
+        let update_list = self
+            .plan
+            .generate_update_list(tbl.schema().into(), col_indices.clone())?;
 
         // Add table mutation lock.
         let table_info = tbl.get_table_info().clone();

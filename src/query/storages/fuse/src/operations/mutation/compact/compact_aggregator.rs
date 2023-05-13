@@ -17,38 +17,30 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
+use common_expression::TableSchemaRefExt;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
 use opendal::Operator;
-use storages_common_cache::CacheAccessor;
-use storages_common_cache_manager::CacheManager;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
 use tracing::info;
-use tracing::Instrument;
 
+use crate::io::SegmentsIO;
+use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::merge_into::mutation_meta::CommitMeta;
 use crate::operations::mutation::compact::CompactSourceMeta;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::mutation::BlockCompactMutator;
-use crate::operations::mutation::MutationSinkMeta;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
-
-#[derive(Clone)]
-struct SerializedSegment {
-    location: String,
-    segment: Arc<SegmentInfo>,
-}
 
 pub struct CompactAggregator {
     ctx: Arc<dyn TableContext>,
@@ -86,45 +78,6 @@ impl CompactAggregator {
             start_time: Instant::now(),
             total_tasks: mutator.compact_tasks.len(),
         }
-    }
-
-    #[async_backtrace::framed]
-    async fn write_segment(dal: Operator, serialized_segment: SerializedSegment) -> Result<()> {
-        assert_eq!(
-            serialized_segment.segment.format_version,
-            SegmentInfo::VERSION
-        );
-        let raw_bytes = serialized_segment.segment.to_bytes()?;
-        let compact_segment_info = CompactSegmentInfo::from_slice(&raw_bytes)?;
-        dal.write(&serialized_segment.location, raw_bytes).await?;
-        if let Some(segment_cache) = CacheManager::instance().get_table_segment_cache() {
-            segment_cache.put(serialized_segment.location, Arc::new(compact_segment_info));
-        }
-        Ok(())
-    }
-
-    #[async_backtrace::framed]
-    async fn write_segments(&self, segments: Vec<SerializedSegment>) -> Result<()> {
-        let mut iter = segments.iter();
-        let tasks = std::iter::from_fn(move || {
-            iter.next().map(|segment| {
-                Self::write_segment(self.dal.clone(), segment.clone())
-                    .instrument(tracing::debug_span!("write_segment"))
-            })
-        });
-
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        execute_futures_in_parallel(
-            tasks,
-            threads_nums,
-            permit_nums,
-            "compact-write-segments-worker".to_owned(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<Vec<_>>>()?;
-        Ok(())
     }
 }
 
@@ -177,7 +130,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             self.merged_segments
                 .insert(segment_idx, (location.clone(), SegmentInfo::VERSION));
             serialized_segments.push(SerializedSegment {
-                location,
+                path: location,
                 segment: Arc::new(new_segment),
             });
         }
@@ -192,8 +145,13 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             self.ctx.set_status_info(&status);
             info!(status);
         }
-        // write segments.
-        self.write_segments(serialized_segments).await?;
+        // write segments, schema in segments_io is useless here.
+        let segments_io = SegmentsIO::create(
+            self.ctx.clone(),
+            self.dal.clone(),
+            TableSchemaRefExt::create(vec![]),
+        );
+        segments_io.write_segments(serialized_segments).await?;
 
         // Refresh status
         {
@@ -208,12 +166,12 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         let merged_segments = std::mem::take(&mut self.merged_segments)
             .into_values()
             .collect();
-        let meta = MutationSinkMeta::create(
+        let meta = CommitMeta::new(
             merged_segments,
             std::mem::take(&mut self.merged_statistics),
             std::mem::take(&mut self.abort_operation),
             true,
         );
-        Ok(Some(DataBlock::empty_with_meta(meta)))
+        Ok(Some(DataBlock::empty_with_meta(Box::new(meta))))
     }
 }

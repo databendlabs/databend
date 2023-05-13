@@ -22,7 +22,6 @@ use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
@@ -37,20 +36,18 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::pipe::Pipe;
-use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::BlockOperator;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::info;
 
+use crate::operations::merge_into::CommitSink;
+use crate::operations::merge_into::TableMutationAggregator;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
-use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::MutationSource;
-use crate::operations::mutation::MutationTransform;
 use crate::operations::mutation::SerializeDataTransform;
-use crate::pipelines::processors::port::InputPort;
-use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::Pipeline;
 use crate::pruning::FusePruner;
 use crate::FuseTable;
@@ -59,9 +56,9 @@ impl FuseTable {
     /// The flow of Pipeline is as follows:
     /// +---------------+      +-----------------------+
     /// |MutationSource1| ---> |SerializeDataTransform1|   ------
-    /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
-    /// |     ...       | ---> |          ...          |   ...   | ---> |MutationTransform| ---> |MutationSink|
-    /// +---------------+      +-----------------------+         |      +-----------------+      +------------+
+    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
+    /// |     ...       | ---> |          ...          |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
+    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
     /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
     /// +---------------+      +-----------------------+
     #[async_backtrace::framed]
@@ -126,6 +123,9 @@ impl FuseTable {
 
         self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
             .await?;
+        if pipeline.is_empty() {
+            return Ok(());
+        }
 
         if pipeline.is_empty() {
             return Ok(());
@@ -143,11 +143,25 @@ impl FuseTable {
             )
         })?;
 
-        self.try_add_mutation_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
+        pipeline.resize(1)?;
 
-        pipeline.add_sink(|input| {
-            MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
+        pipeline.add_transform(|input, output| {
+            let aggregator = TableMutationAggregator::create(
+                ctx.clone(),
+                snapshot.segments.clone(),
+                snapshot.summary.clone(),
+                self.get_block_thresholds(),
+                self.meta_location_generator().clone(),
+                self.schema(),
+                self.get_operator(),
+            );
+            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                input, output, aggregator,
+            )))
         })?;
+
+        pipeline
+            .add_sink(|input| CommitSink::try_create(self, ctx.clone(), snapshot.clone(), input))?;
         Ok(())
     }
 
@@ -198,7 +212,7 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
-        let max_threads = self
+        let total_tasks = self
             .mutation_block_pruning(
                 ctx.clone(),
                 Some(filter.clone()),
@@ -206,8 +220,18 @@ impl FuseTable {
                 base_snapshot,
             )
             .await?;
-        if max_threads == 0 {
+        if total_tasks == 0 {
             return Ok(());
+        }
+
+        // Status.
+        {
+            let status = format!(
+                "delete: begin to run delete tasks, total tasks: {}",
+                total_tasks
+            );
+            ctx.set_status_info(&status);
+            info!(status);
         }
 
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
@@ -243,6 +267,8 @@ impl FuseTable {
         projection.sort_by_key(|&i| source_col_indices[i]);
         let ops = vec![BlockOperator::Project { projection }];
 
+        let max_threads =
+            std::cmp::min(ctx.get_settings().get_max_threads()? as usize, total_tasks);
         // Add source pipe.
         pipeline.add_source(
             |output| {
@@ -258,7 +284,8 @@ impl FuseTable {
                 )
             },
             max_threads,
-        )
+        )?;
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -306,48 +333,10 @@ impl FuseTable {
                 .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
                 .collect(),
         );
-        let max_threads =
-            std::cmp::min(ctx.get_settings().get_max_threads()? as usize, parts.len());
+
+        let part_num = parts.len();
         ctx.set_partitions(parts)?;
-        Ok(max_threads)
-    }
-
-    pub fn try_add_mutation_transform(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        base_segments: Vec<Location>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        if pipeline.is_empty() {
-            return Err(ErrorCode::Internal("The pipeline is empty."));
-        }
-
-        match pipeline.output_len() {
-            0 => Err(ErrorCode::Internal("The output of the last pipe is 0.")),
-            last_pipe_size => {
-                let mut inputs_port = Vec::with_capacity(last_pipe_size);
-                for _ in 0..last_pipe_size {
-                    inputs_port.push(InputPort::create());
-                }
-                let output_port = OutputPort::create();
-                pipeline.add_pipe(Pipe::create(inputs_port.len(), 1, vec![PipeItem::create(
-                    MutationTransform::try_create(
-                        ctx,
-                        self.schema(),
-                        inputs_port.clone(),
-                        output_port.clone(),
-                        self.get_operator(),
-                        self.meta_location_generator().clone(),
-                        base_segments,
-                        self.get_block_thresholds(),
-                    )?,
-                    inputs_port,
-                    vec![output_port],
-                )]));
-
-                Ok(())
-            }
-        }
+        Ok(part_num)
     }
 
     pub fn all_column_indices(&self) -> Vec<FieldIndex> {

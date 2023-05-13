@@ -16,6 +16,7 @@ default = ["simd", "z3-prove"]
 simd = ["common-arrow/simd"]
 
 z3-prove = ["common-sql/z3-prove"]
+disable_initial_exec_tls = ["common-base/disable_initial_exec_tls"]
 
 tokio-console = ["common-tracing/console", "common-base/tracing"]
 memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling"]
@@ -143,7 +144,7 @@ pin-project-lite = "0.2.9"
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 prost = { version = "0.11", default-features = false }
 rand = "0.8.5"
-regex = "1.6.0"
+regex = "1.8.1"
 reqwest = { workspace = true }
 scopeguard = "1.1.0"
 serde = { workspace = true }

@@ -47,8 +47,8 @@ use crate::metrics::metrics_inc_block_index_write_nums;
 use crate::metrics::metrics_inc_block_write_bytes;
 use crate::metrics::metrics_inc_block_write_milliseconds;
 use crate::metrics::metrics_inc_block_write_nums;
-use crate::operations::merge_into::mutation_meta::mutation_log::AppendOperationLogEntry;
-use crate::operations::merge_into::mutation_meta::mutation_log::MutationLogs;
+use crate::operations::merge_into::mutation_meta::AppendOperationLogEntry;
+use crate::operations::merge_into::mutation_meta::MutationLogs;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::StatisticsAccumulator;
 

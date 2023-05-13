@@ -15,7 +15,8 @@ Before upgrading, make sure you have completed the following tasks:
 
 - Back up your Meta data. For how to back up and restore Meta data, see [Backup and Restore Schema Data](10-backup-and-restore-schema.md).
 
-- Go to the [Download](https://databend.rs/download) page and download the right installation package for your platform.
+- Go to the download page and download the right installation package for your platform.
+  Note that `databend-meta-upgrade-09` is only packaged in [`v1.1.33`](https://github.com/datafuselabs/databend/releases/tag/v1.1.33-nightly) or previous release.
 
 ## Step 1: Upgrade databend-query
 

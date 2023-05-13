@@ -25,11 +25,15 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
+use tracing::info;
 
+use crate::operations::merge_into::CommitSink;
+use crate::operations::merge_into::TableMutationAggregator;
 use crate::operations::mutation::MutationAction;
-use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
@@ -83,6 +87,9 @@ impl FuseTable {
             pipeline,
         )
         .await?;
+        if pipeline.is_empty() {
+            return Ok(());
+        }
 
         if pipeline.is_empty() {
             return Ok(());
@@ -99,11 +106,25 @@ impl FuseTable {
             )
         })?;
 
-        self.try_add_mutation_transform(ctx.clone(), snapshot.segments.clone(), pipeline)?;
+        pipeline.resize(1)?;
 
-        pipeline.add_sink(|input| {
-            MutationSink::try_create(self, ctx.clone(), snapshot.clone(), input)
+        pipeline.add_transform(|input, output| {
+            let aggregator = TableMutationAggregator::create(
+                ctx.clone(),
+                snapshot.segments.clone(),
+                snapshot.summary.clone(),
+                self.get_block_thresholds(),
+                self.meta_location_generator().clone(),
+                self.schema(),
+                self.get_operator(),
+            );
+            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                input, output, aggregator,
+            )))
         })?;
+
+        pipeline
+            .add_sink(|input| CommitSink::try_create(self, ctx.clone(), snapshot.clone(), input))?;
         Ok(())
     }
 
@@ -204,7 +225,7 @@ impl FuseTable {
             (Arc::new(None), None)
         };
 
-        let max_threads = self
+        let total_tasks = self
             .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
             .await?;
         if max_threads > 0 {
@@ -224,6 +245,37 @@ impl FuseTable {
                 },
                 max_threads,
             )?;
+        }
+
+        if total_tasks != 0 {
+            let max_threads =
+                std::cmp::min(ctx.get_settings().get_max_threads()? as usize, total_tasks);
+            // Add source pipe.
+            pipeline.add_source(
+                |output| {
+                    MutationSource::try_create(
+                        ctx.clone(),
+                        MutationAction::Update,
+                        output,
+                        filter_expr.clone(),
+                        block_reader.clone(),
+                        remain_reader.clone(),
+                        ops.clone(),
+                        self.storage_format,
+                    )
+                },
+                max_threads,
+            )?;
+
+            // Status.
+            {
+                let status = format!(
+                    "delete: begin to run delete tasks, total tasks: {}",
+                    total_tasks
+                );
+                ctx.set_status_info(&status);
+                info!(status);
+            }
         }
 
         Ok(())

@@ -22,10 +22,10 @@ use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransfo
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
+use crate::operations::merge_into::CommitSink;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactAggregator;
 use crate::operations::mutation::CompactSource;
-use crate::operations::mutation::MutationSink;
 use crate::operations::mutation::SegmentCompactMutator;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
@@ -104,9 +104,9 @@ impl FuseTable {
     /// The flow of Pipeline is as follows:
     /// +--------------+
     /// |CompactSource1|  ------
-    /// +--------------+        |      +-----------------+      +------------+
-    /// |    ...       |  ...   | ---> |CompactAggregator| ---> |MutationSink|
-    /// +--------------+        |      +-----------------+      +------------+
+    /// +--------------+        |      +-----------------+      +----------+
+    /// |    ...       |  ...   | ---> |CompactAggregator| ---> |CommitSink|
+    /// +--------------+        |      +-----------------+      +----------+
     /// |CompactSourceN|  ------
     /// +--------------+
     #[async_backtrace::framed]
@@ -179,7 +179,7 @@ impl FuseTable {
         })?;
 
         pipeline.add_sink(|input| {
-            MutationSink::try_create(
+            CommitSink::try_create(
                 self,
                 ctx.clone(),
                 mutator.compact_params.base_snapshot.clone(),

@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
@@ -21,9 +22,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
+use tracing::info;
 use tracing::warn;
 
 use crate::io::SegmentsIO;
+use crate::statistics::reduce_block_statistics;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -50,35 +53,65 @@ impl FuseTable {
             let mut sum_map = HashMap::new();
             let mut row_count_sum = 0;
             let mut block_count_sum: u64 = 0;
+            let mut read_segment_count = 0;
+            let mut col_stats = HashMap::new();
 
+            let start = Instant::now();
             let segments_io = SegmentsIO::create(ctx.clone(), self.operator.clone(), self.schema());
-            let segments = segments_io.read_segments(&snapshot.segments, true).await?;
-            for segment in segments {
-                let segment = segment?;
-                segment.blocks.iter().for_each(|block| {
-                    let block = block.as_ref();
-                    let row_count = block.row_count;
-                    if row_count != 0 {
-                        block_count_sum += 1;
-                        row_count_sum += row_count;
-                        for (i, col_stat) in block.col_stats.iter() {
-                            let density = match col_stat.distinct_of_values {
-                                Some(ndv) => ndv as f64 / row_count as f64,
-                                None => 0.0,
-                            };
+            let max_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+            let number_segments = snapshot.segments.len();
+            for chunk in snapshot.segments.chunks(max_io_requests) {
+                let mut stats_of_columns = Vec::new();
+                if !col_stats.is_empty() {
+                    stats_of_columns.push(col_stats.clone());
+                }
 
-                            match sum_map.get_mut(i) {
-                                Some(sum) => {
-                                    *sum += density;
-                                }
-                                None => {
-                                    let _ = sum_map.insert(*i, density);
+                let segments = segments_io.read_segments(chunk, true).await?;
+                for segment in segments {
+                    let segment = segment?;
+                    stats_of_columns.push(segment.summary.col_stats.clone());
+                    segment.blocks.iter().for_each(|block| {
+                        let block = block.as_ref();
+                        let row_count = block.row_count;
+                        if row_count != 0 {
+                            block_count_sum += 1;
+                            row_count_sum += row_count;
+                            for (i, col_stat) in block.col_stats.iter() {
+                                let density = match col_stat.distinct_of_values {
+                                    Some(ndv) => ndv as f64 / row_count as f64,
+                                    None => 0.0,
+                                };
+
+                                match sum_map.get_mut(i) {
+                                    Some(sum) => {
+                                        *sum += density;
+                                    }
+                                    None => {
+                                        let _ = sum_map.insert(*i, density);
+                                    }
                                 }
                             }
                         }
-                    }
-                });
+                    });
+                }
+
+                // Generate new column statistics for snapshot
+                col_stats = reduce_block_statistics(&stats_of_columns)?;
+
+                // Status.
+                {
+                    read_segment_count += chunk.len();
+                    let status = format!(
+                        "analyze: read segment files:{}/{}, cost:{} sec",
+                        read_segment_count,
+                        number_segments,
+                        start.elapsed().as_secs()
+                    );
+                    ctx.set_status_info(&status);
+                    info!(status);
+                }
             }
+
             let mut ndv_map = HashMap::new();
             for (i, sum) in sum_map.iter() {
                 let density_avg = *sum / block_count_sum as f64;
@@ -96,6 +129,7 @@ impl FuseTable {
 
             // 4. Save table statistics
             let mut new_snapshot = TableSnapshot::from_previous(&snapshot);
+            new_snapshot.summary.col_stats = col_stats;
             new_snapshot.table_statistics_location = Some(table_statistics_location);
             FuseTable::commit_to_meta_server(
                 ctx.as_ref(),
