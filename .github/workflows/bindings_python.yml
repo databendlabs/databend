@@ -35,7 +35,7 @@ jobs:
             GIT_TAG=$(git describe --tags --abbrev=0)
             # GIT_TAG="1.1.33"
             echo "LATEST TAG: $GIT_TAG"
-            sed -i "s#0.1.2#$GIT_TAG#g" cargo.toml
+            sed -i "s#0.1.2#$GIT_TAG#g" Cargo.toml
 
       - name: Build wheels
         env:
