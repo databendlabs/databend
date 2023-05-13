@@ -4,11 +4,11 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      tags:
-        description: The tags to be released
-        required: false
+      tag:
+        description: The tag to release
+        required: true
         type: string
 
 concurrency:
@@ -52,11 +52,15 @@ jobs:
       - name: Generate version
         working-directory: src/bendpy
         run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             GIT_TAG=$(git describe --tags --abbrev=0)
-            echo "LATEST TAG: $GIT_TAG"
-            VERSION=${GIT_TAG/v/}
-            VERSION=${VERSION/-nightly/}
-            sed -i "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml
+          else
+            GIT_TAG=${{ github.event.inputs.tag }}
+          fi
+          echo "building version: $GIT_TAG"
+          VERSION=${GIT_TAG/v/}
+          VERSION=${VERSION/-nightly/}
+          sed -i "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml
 
       - name: Get Toolchain
         id: toolchain
