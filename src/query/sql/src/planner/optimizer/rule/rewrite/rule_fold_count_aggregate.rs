@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::types::DataType;
 use common_expression::types::NumberScalar;
 use common_expression::Scalar;
 
@@ -78,47 +77,13 @@ impl Rule for RuleFoldCountAggregate {
         let is_simple_count = agg.group_items.is_empty()
             && agg.aggregate_functions.iter().all(|agg| match &agg.scalar {
                 ScalarExpr::AggregateFunction(agg_func) => {
-                    agg_func.func_name == "count"
-                        && (agg_func.args.is_empty()
-                            || !matches!(
-                                agg_func.args[0].data_type(),
-                                Ok(DataType::Nullable(_)) | Ok(DataType::Null)
-                            ))
-                        && !agg_func.distinct
+                    agg_func.func_name == "count" && !agg_func.distinct
                 }
                 _ => false,
             });
 
-        let simple_nullable_count = agg.group_items.is_empty()
-            && agg.aggregate_functions.iter().all(|agg| match &agg.scalar {
-                ScalarExpr::AggregateFunction(agg_func) => {
-                    agg_func.func_name == "count"
-                        && (agg_func.args.is_empty()
-                            || matches!(agg_func.args[0].data_type(), Ok(DataType::Nullable(_))))
-                        && !agg_func.distinct
-                }
-                _ => false,
-            });
-
-        if let (true, Some(card)) = (
+        if let (true, column_stats, Some(table_card)) = (
             is_simple_count,
-            input_stat_info.statistics.precise_cardinality,
-        ) {
-            let mut scalars = agg.aggregate_functions;
-            for item in scalars.iter_mut() {
-                item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
-                    span: item.scalar.span(),
-                    value: Scalar::Number(NumberScalar::UInt64(card)),
-                });
-            }
-            let eval_scalar = EvalScalar { items: scalars };
-            let dummy_table_scan = DummyTableScan;
-            state.add_result(SExpr::create_unary(
-                eval_scalar.into(),
-                SExpr::create_leaf(dummy_table_scan.into()),
-            ));
-        } else if let (true, column_stats, Some(table_card)) = (
-            simple_nullable_count,
             input_stat_info.statistics.column_stats,
             input_stat_info.statistics.precise_cardinality,
         ) {
