@@ -42,20 +42,34 @@ jobs:
             VERSION=${VERSION/-nightly/}
             sed -i "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml
 
+      - name: Get Toolchain
+        id: toolchain
+        run: |
+         RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)"
+         echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
+
+      - name: Get Docker opts
+        id: opts
+        run: |
+          if [[ "${RUNNER_PROVIDER}" == "aws" ]]; then
+            DOCKER_OPTS=""
+          else
+            DOCKER_OPTS=" --env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true"
+          fi
+
       - name: Build wheels
         env:
           RUST_BACKTRACE: 1
         uses: PyO3/maturin-action@v1
         with:
-          rust-toolchain: nightly
+          rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
           working-directory: src/bendpy
           target: x86_64
           manylinux: auto
           # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
           rustup-components: rust-std rustfmt
           args: --release --strip --manylinux 2014 --sdist --out dist
-          docker-options: |
-            --env SCCACHE_GHA_ENABLED=true
+          docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
           before-script-linux: |
             ../../scripts/setup/dev_setup.sh -yb
 
