@@ -151,6 +151,7 @@ impl RulePushDownFilterScan {
                     .collect::<Result<Vec<WindowOrderBy>>>()?;
 
                 Ok(ScalarExpr::WindowFunction(WindowFunc {
+                    span: window.span,
                     display_name: window.display_name.clone(),
                     func,
                     partition_by,

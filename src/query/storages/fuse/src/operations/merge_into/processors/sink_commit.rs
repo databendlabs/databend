@@ -24,6 +24,7 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
 use opendal::Operator;
 use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 
@@ -250,8 +251,9 @@ impl Processor for CommitSink {
                         .collect();
                     let segments_io =
                         SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.table.schema());
-                    let append_segment_infos =
-                        segments_io.read_segments(&appended_segments, true).await?;
+                    let append_segment_infos = segments_io
+                        .read_segments::<Arc<SegmentInfo>>(&appended_segments, true)
+                        .await?;
                     for result in append_segment_infos.into_iter() {
                         let appended_segment = result?;
                         merge_statistics_mut(
