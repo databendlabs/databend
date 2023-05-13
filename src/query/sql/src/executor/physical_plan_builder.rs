@@ -854,20 +854,18 @@ impl PhysicalPlanBuilder {
                         WindowFuncFrameBound::Preceding(scalar)
                         | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
                         _ => None,
-                    }
-                    .unwrap();
+                    };
                     let mut end = match &mut w.frame.end_bound {
                         WindowFuncFrameBound::Preceding(scalar)
                         | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
                         _ => None,
-                    }
-                    .unwrap();
+                    };
 
                     let mut common_ty = order_by
                         .resolve_and_check(&*input_schema)?
                         .data_type()
                         .clone();
-                    for scalar in [&mut start, &mut end] {
+                    for scalar in start.iter_mut().chain(end.iter_mut()) {
                         let ty = scalar.as_ref().infer_data_type();
                         common_ty = common_super_type(
                             common_ty.clone(),
@@ -883,7 +881,7 @@ impl PhysicalPlanBuilder {
                     }
 
                     *order_by = wrap_cast(order_by, &common_ty);
-                    for scalar in [&mut start, &mut end] {
+                    for scalar in start.iter_mut().chain(end.iter_mut()) {
                         let raw_expr = RawExpr::<usize>::Cast {
                             span: w.span,
                             is_try: false,
