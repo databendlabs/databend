@@ -77,7 +77,7 @@ jobs:
           # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
           rustup-components: rust-std rustfmt
           args: ${{ steps.opts.outputs.BUILD_ARGS }}
-          # docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
+          docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
           before-script-linux: ../../scripts/setup/dev_setup.sh -yb
 
       - name: Upload artifact
