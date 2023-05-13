@@ -60,7 +60,7 @@ impl SegmentsIO {
         segment_location: Location,
         table_schema: TableSchemaRef,
         put_cache: bool,
-    ) -> Result<Arc<SegmentInfo>> {
+    ) -> Result<SegmentInfo> {
         let (path, ver) = segment_location;
         let reader = MetaReaders::segment_info_reader(dal, table_schema);
 
@@ -73,95 +73,33 @@ impl SegmentsIO {
         };
 
         let raw_bytes = reader.read(&load_params).await?;
-        let segment_info = SegmentInfo::try_from(raw_bytes.as_ref())?;
-        Ok(Arc::new(segment_info))
+        SegmentInfo::try_from(raw_bytes.as_ref())
     }
 
     // Read all segments information from s3 in concurrently.
     #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
-    pub async fn read_segments(
-        &self,
-        segment_locations: &[Location],
-        put_cache: bool,
-    ) -> Result<Vec<Result<Arc<SegmentInfo>>>> {
-        if segment_locations.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // combine all the tasks.
-        let mut iter = segment_locations.iter();
-        let schema = self.schema.clone();
-        let tasks = std::iter::from_fn(move || {
-            if let Some(location) = iter.next() {
-                let location = location.clone();
-                Some(
-                    Self::read_segment(self.operator.clone(), location, schema.clone(), put_cache)
-                        .instrument(tracing::debug_span!("read_segment")),
-                )
-            } else {
-                None
-            }
-        });
-
-        let threads_nums = self.ctx.get_settings().get_max_threads()? as usize;
-        let permit_nums = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
-        execute_futures_in_parallel(
-            tasks,
-            threads_nums,
-            permit_nums,
-            "fuse-req-segments-worker".to_owned(),
-        )
-        .await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn read_segment_into<T>(
-        dal: Operator,
-        segment_location: Location,
-        table_schema: TableSchemaRef,
-        put_cache: bool,
-    ) -> Result<T>
-    where
-        T: From<Arc<SegmentInfo>> + Send + 'static,
-    {
-        let (path, ver) = segment_location;
-        let reader = MetaReaders::segment_info_reader(dal, table_schema);
-
-        // Keep in mind that segment_info_read must need a schema
-        let load_params = LoadParams {
-            location: path.clone(),
-            len_hint: None,
-            ver,
-            put_cache,
-        };
-
-        let compact_segment = reader.read(&load_params).await?;
-        let segment = Arc::new(SegmentInfo::try_from(compact_segment.as_ref())?);
-        Ok(segment.into())
-    }
-
-    #[tracing::instrument(level = "debug", skip_all)]
-    #[async_backtrace::framed]
-    pub async fn read_segments_into<T>(
+    pub async fn read_segments<T>(
         &self,
         segment_locations: &[Location],
         put_cache: bool,
     ) -> Result<Vec<Result<T>>>
     where
-        T: From<Arc<SegmentInfo>> + Send + 'static,
+        T: From<SegmentInfo> + Send + 'static,
     {
         // combine all the tasks.
         let mut iter = segment_locations.iter();
-        let tasks = std::iter::from_fn(move || {
+        let tasks = std::iter::from_fn(|| {
             iter.next().map(|location| {
-                Self::read_segment_into(
-                    self.operator.clone(),
-                    location.clone(),
-                    self.schema.clone(),
-                    put_cache,
-                )
-                .instrument(tracing::debug_span!("read_location_tuples"))
+                let dal = self.operator.clone();
+                let table_schema = self.schema.clone();
+                let segment_location = location.clone();
+                async move {
+                    let segment =
+                        Self::read_segment(dal, segment_location, table_schema, put_cache).await?;
+                    Ok(segment.into())
+                }
+                .instrument(tracing::debug_span!("read_segments"))
             })
         });
 
