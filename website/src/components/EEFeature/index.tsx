@@ -4,16 +4,17 @@ import clsx from 'clsx';
 import React, { FC, ReactElement, useEffect } from 'react';
 import styles from './styles.module.scss';
 interface IProps {
-  feature: string;
-  wholeDesc?: string;
   featureTitle?: string;
+  featureName: string;
+  wholeDesc?: string;
+  
 }
-const EEFeature: FC<IProps> = ({feature, wholeDesc, featureTitle}): ReactElement=> {
+const EEFeature: FC<IProps> = ({featureName, wholeDesc, featureTitle}): ReactElement=> {
   function A() {
     return <>please contact <a target='_blank' href={'https://www.databend.com/contact-us'}>Databend Support.</a></>
   }
   useEffect(()=> {
-    const h1 = document.querySelector('.theme-doc-markdown')?.querySelector('header')?.firstChild as HTMLElement;
+    const h1 = document?.querySelector('.theme-doc-markdown')?.querySelector('header')?.firstChild as HTMLElement;
     if (h1) {
       h1?.classList?.add('DOCITEM-PAGE-EE-TIPS-BEFORE-DOM');
     }
@@ -29,7 +30,7 @@ const EEFeature: FC<IProps> = ({feature, wholeDesc, featureTitle}): ReactElement
              {wholeDesc} <A />
             </>
           : <>
-             {feature} require Enterprise Edition. To inquire about upgrading, <A />
+             {featureName} require Enterprise Edition. To inquire about upgrading, <A />
             </>
         }
       </div>
