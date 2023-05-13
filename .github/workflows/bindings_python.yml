@@ -1,12 +1,15 @@
-name: Python Release Build
+name: Bindings Python
 
 on:
-  push:
-    tags:
-      - "v*"
-  schedule:
-    # Release at 00:00 UTC+8
-    - cron: "0 16 * * *"
+  # push:
+  #   tags:
+  #     - "v*"
+  # schedule:
+  #   # Release at 00:00 UTC+8
+  #   - cron: "0 16 * * *"
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       tags:
@@ -19,22 +22,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
+          fetch-depth: 0
+      # - name: Setup Build Tool
+      #   uses: ./.github/actions/setup_build_tool
+      #   with:
+      #     bypass_env_vars: RUSTFLAGS,RUST_LOG
+
       - name: Generate version
+        working-directory: src/bendpy
         run: |
-            tag=`git describe --tags --abbrev=0 | sed 's/-nightly//g' | sed 's/v//g'`
-            sed -i "s#0.1.2#$tag#g"" src/bendpy/cargo.toml
+            GIT_TAG=$(git describe --tags --abbrev=0)
+            # GIT_TAG="1.1.33"
+            echo "LATEST TAG: $GIT_TAG"
+            sed -i "s#0.1.2#$GIT_TAG#g" cargo.toml
 
       - name: Build wheels
-        uses: PyO3/maturin-action@v1
         env:
           RUST_BACKTRACE: 1
+        uses: PyO3/maturin-action@v1
         with:
           rust-toolchain: nightly
+          working-directory: src/bendpy
           target: x86_64
           manylinux: auto
           # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
@@ -42,8 +51,9 @@ jobs:
           args: --release --strip --manylinux 2014 --sdist --out dist
 
       - name: Publish package to PyPI
+        if: github.event_name == 'push'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
           repository-url: https://pypi.org/project/databend/
-          packages-dir: dist/
+          packages-dir: src/bendpy/dist/
