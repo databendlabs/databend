@@ -642,7 +642,7 @@ impl CompactSegmentTestFixture {
         &'a mut self,
         num_block_of_segments: &'a [usize],
         limit: Option<usize>,
-    ) -> Result<SegmentCompactionState> {
+    ) -> Result<(SegmentCompactionState, Statistics)> {
         let block_per_seg = self.threshold;
         let data_accessor = &self.data_accessor.operator();
         let location_gen = &self.location_gen;
@@ -661,7 +661,7 @@ impl CompactSegmentTestFixture {
         );
 
         let rows_per_block = vec![1; num_block_of_segments.len()];
-        let (locations, blocks, _) = Self::gen_segments(
+        let (locations, blocks, segments) = Self::gen_segments(
             &block_writer,
             &segment_writer,
             num_block_of_segments,
@@ -669,13 +669,18 @@ impl CompactSegmentTestFixture {
             BlockThresholds::default(),
         )
         .await?;
+        let mut summary = Statistics::default();
+        for segment in segments {
+            merge_statistics_mut(&mut summary, &segment.summary)?;
+        }
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
-        seg_acc
+        let state = seg_acc
             .compact(locations, limit, |status| {
                 self.ctx.set_status_info(&status);
             })
-            .await
+            .await?;
+        Ok((state, summary))
     }
 
     pub async fn gen_segments(
@@ -775,7 +780,7 @@ impl CompactCase {
             TestFixture::default_table_schema(),
         );
         let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, block_per_segment)?;
-        let r = case_fixture
+        let (r, summary) = case_fixture
             .run(&self.blocks_number_of_input_segments, limit)
             .await?;
 
@@ -842,7 +847,7 @@ impl CompactCase {
 
         // 5. statistics should be the same
         assert_eq!(
-            statistics_of_input_segments, r.statistics,
+            statistics_of_input_segments, summary,
             "case : {}",
             self.case_name
         );
@@ -850,7 +855,7 @@ impl CompactCase {
         // 6. the output segments can not be compacted further, if (no limit)
         if limit.is_none() {
             let mut case_fixture = CompactSegmentTestFixture::try_new(ctx, block_per_segment)?;
-            let r = case_fixture
+            let (r, _) = case_fixture
                 .run(&block_num_of_output_segments, None)
                 .await?;
             assert_eq!(

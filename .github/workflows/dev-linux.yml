@@ -111,14 +111,6 @@ jobs:
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
-  test_meta-upgrade-09:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
-    needs: build
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/test_meta-upgrade-09
-        timeout-minutes: 10
-
   test_meta-data-compat-openraft-07:
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build

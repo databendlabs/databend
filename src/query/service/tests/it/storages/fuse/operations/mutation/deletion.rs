@@ -12,19 +12,12 @@
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
 
-use std::sync::Arc;
-
 use common_base::base::tokio;
 use common_exception::Result;
-use common_sql::plans::DeletePlan;
 use common_sql::plans::Plan;
 use common_sql::Planner;
-use common_storages_factory::Table;
-use common_storages_fuse::FuseTable;
-use databend_query::pipelines::executor::ExecutorSettings;
-use databend_query::pipelines::executor::PipelineCompleteExecutor;
-use databend_query::sessions::QueryContext;
 use databend_query::sessions::TableContext;
+use databend_query::test_kits::table_test_fixture::do_deletion;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::expects_ok;
@@ -75,42 +68,5 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         expected,
     )
     .await?;
-    Ok(())
-}
-
-pub async fn do_deletion(
-    ctx: Arc<QueryContext>,
-    table: Arc<dyn Table>,
-    plan: DeletePlan,
-) -> Result<()> {
-    let (filter, col_indices) = if let Some(scalar) = &plan.selection {
-        (
-            Some(
-                scalar
-                    .as_expr()?
-                    .project_column_ref(|col| col.column_name.clone())
-                    .as_remote_expr(),
-            ),
-            scalar.used_columns().into_iter().collect(),
-        )
-    } else {
-        (None, vec![])
-    };
-
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let settings = ctx.get_settings();
-    let mut pipeline = common_pipeline_core::Pipeline::create();
-    fuse_table
-        .delete(ctx.clone(), filter, col_indices, &mut pipeline)
-        .await?;
-
-    if !pipeline.is_empty() {
-        pipeline.set_max_threads(settings.get_max_threads()? as usize);
-        let query_id = ctx.get_id();
-        let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
-        let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
-        ctx.set_executor(executor.get_inner())?;
-        executor.execute()?;
-    }
     Ok(())
 }

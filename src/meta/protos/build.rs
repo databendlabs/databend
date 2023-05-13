@@ -49,23 +49,18 @@ fn build_proto() -> Result<()> {
     let output = cmd.output()?;
     let version = if output.status.success() {
         let content = String::from_utf8_lossy(&output.stdout);
-        content
-            .trim()
-            .split(' ')
-            .last()
-            .ok_or_else(|| {
-                Error::new(
-                    ErrorKind::Other,
-                    format!("protoc --version got unexpected output: {}", content),
-                )
-            })?
-            .parse::<Version>()
-            .map_err(|err| {
-                Error::new(
-                    ErrorKind::Other,
-                    format!("protoc --version doesn't return valid version: {:?}", err),
-                )
-            })?
+        let content = content.trim().split(' ').last().ok_or_else(|| {
+            Error::new(
+                ErrorKind::Other,
+                format!("protoc --version got unexpected output: {}", content),
+            )
+        })?;
+        lenient_semver::parse(content).map_err(|err| {
+            Error::new(
+                ErrorKind::Other,
+                format!("protoc --version doesn't return valid version: {:?}", err),
+            )
+        })?
     } else {
         return Err(Error::new(
             ErrorKind::Other,
