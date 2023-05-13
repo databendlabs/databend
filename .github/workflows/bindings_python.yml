@@ -22,13 +22,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
+  build_linux:
+    name: build ${{ matrix.target }}
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         target:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
-    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
