@@ -210,12 +210,11 @@ impl<'a> SegmentCompactor<'a> {
         let mut is_end = false;
         for chunk in reverse_locations.chunks(chunk_size) {
             let segment_infos = segments_io
-                .read_segments(chunk, false)
-                .await?
-                .into_iter()
-                .collect::<Result<Vec<_>>>()?;
+                .read_segments::<Arc<SegmentInfo>>(chunk, false)
+                .await?;
 
             for (segment, location) in segment_infos.into_iter().zip(chunk.iter()) {
+                let segment = segment?;
                 self.add(segment, location.clone()).await?;
                 let compacted = self.num_fragments_compacted();
                 checked_end_at += 1;
