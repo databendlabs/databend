@@ -45,7 +45,7 @@ function install_pkg {
 			"${PRE_COMMAND[@]}" apt-get install --no-install-recommends -yq "${package}"
 			;;
 		yum)
-			"${PRE_COMMAND[@]}" yum install -yq "${package}"
+			"${PRE_COMMAND[@]}" yum install -y -q "${package}"
 			;;
 		pacman)
 			"${PRE_COMMAND[@]}" pacman --quiet --noconfirm -Syu "$package"
