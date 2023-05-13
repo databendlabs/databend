@@ -561,29 +561,7 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::EvalScalar(eval_scalar) => {
-                let input = self.build(s_expr.child(0)?).await?;
-                let input_schema = input.output_schema()?;
-                let exprs = eval_scalar
-                    .items
-                    .iter()
-                    .map(|item| {
-                        let expr = item
-                            .scalar
-                            .resolve_and_check(input_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                input_schema.index_of(&index.to_string()).unwrap()
-                            });
-                        let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        Ok((expr.as_remote_expr(), item.index))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(PhysicalPlan::EvalScalar(EvalScalar {
-                    plan_id: self.next_plan_id(),
-                    input: Box::new(input),
-                    exprs,
-                    stat_info: Some(stat_info),
-                }))
+                self.build_eval_scalar(input, eval_scalar, stat_info).await
             }
 
             RelOperator::Filter(filter) => {
@@ -862,7 +840,8 @@ impl PhysicalPlanBuilder {
                 Ok(result)
             }
             RelOperator::Window(w) => {
-                let input_schema = self.build(s_expr.child(0)?).await?.output_schema()?;
+                let input = self.build(&input).await?;
+                let input_schema = input.output_schema()?;
 
                 let mut w = w.clone();
 
@@ -946,14 +925,16 @@ impl PhysicalPlanBuilder {
                     scalar_items.push(order.order_by_item.clone())
                 }
                 let input = if !scalar_items.is_empty() {
-                    let eval_scalar = crate::planner::plans::EvalScalar {
-                        items: scalar_items,
-                    };
-                    SExpr::create_unary(eval_scalar.into(), s_expr.child(0)?.clone())
+                    self.build_eval_scalar(
+                        input,
+                        &crate::planner::plans::EvalScalar {
+                            items: scalar_items,
+                        },
+                        stat_info.clone(),
+                    )?
                 } else {
-                    s_expr.child(0)?.clone()
+                    input
                 };
-                let input = self.build(&input).await?;
 
                 let order_by_items = w
                     .order_by
@@ -1071,8 +1052,10 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::UnionAll(op) => {
-                let left_schema = self.build(s_expr.child(0)?).await?.output_schema()?;
-                let right_schema = self.build(s_expr.child(1)?).await?.output_schema()?;
+                let left_plan = self.build(s_expr.child(0)?).await?;
+                let right_plan = self.build(s_expr.child(1)?).await?;
+                let left_schema = left_plan.output_schema()?;
+                let right_schema = right_plan.output_schema()?;
 
                 let common_types = op.pairs.iter().map(|(l, r)| {
                     let left_field = left_schema.field_with_name(&l.to_string()).unwrap();
@@ -1096,10 +1079,11 @@ impl PhysicalPlanBuilder {
 
                 async fn cast_plan(
                     plan_builder: &mut PhysicalPlanBuilder,
-                    plan: SExpr,
+                    plan: PhysicalPlan,
                     plan_schema: &DataSchema,
                     indexes: &[IndexType],
                     common_types: &[DataType],
+                    stat_info: PlanStatsInfo,
                 ) -> Result<PhysicalPlan> {
                     debug_assert!(indexes.len() == common_types.len());
                     let scalar_items = indexes
@@ -1133,15 +1117,14 @@ impl PhysicalPlanBuilder {
                     let new_plan = if scalar_items.is_empty() {
                         plan
                     } else {
-                        SExpr::create_unary(
-                            crate::plans::EvalScalar {
-                                items: scalar_items,
-                            }
-                            .into(),
+                        plan_builder.build_eval_scalar(
                             plan,
-                        )
+                            &crate::plans::EvalScalar {
+                                items: scalar_items,
+                            },
+                            stat_info,
+                        )?
                     };
-                    let new_plan = plan_builder.build(&new_plan).await?;
 
                     Ok(new_plan)
                 }
@@ -1150,18 +1133,20 @@ impl PhysicalPlanBuilder {
                 let right_indexes = op.pairs.iter().map(|(_, r)| *r).collect::<Vec<_>>();
                 let left_plan = cast_plan(
                     self,
-                    s_expr.child(0)?.clone(),
+                    left_plan,
                     left_schema.as_ref(),
                     &left_indexes,
                     &common_types,
+                    stat_info.clone(),
                 )
                 .await?;
                 let right_plan = cast_plan(
                     self,
-                    s_expr.child(1)?.clone(),
+                    right_plan,
                     right_schema.as_ref(),
                     &right_indexes,
                     &common_types,
+                    stat_info.clone(),
                 )
                 .await?;
 
@@ -1259,6 +1244,33 @@ impl PhysicalPlanBuilder {
                 s_expr.plan()
             ))),
         }
+    }
+
+    fn build_eval_scalar(
+        &self,
+        input: PhysicalPlan,
+        eval_scalar: &crate::planner::plans::EvalScalar,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let input_schema = input.output_schema()?;
+        let exprs = eval_scalar
+            .items
+            .iter()
+            .map(|item| {
+                let expr = item
+                    .scalar
+                    .resolve_and_check(input_schema.as_ref())?
+                    .project_column_ref(|index| input_schema.index_of(&index.to_string()).unwrap());
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                Ok((expr.as_remote_expr(), item.index))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(PhysicalPlan::EvalScalar(EvalScalar {
+            plan_id: self.next_plan_id(),
+            input: Box::new(input),
+            exprs,
+            stat_info: Some(stat_info),
+        }))
     }
 
     fn build_virtual_columns(&self, columns: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
