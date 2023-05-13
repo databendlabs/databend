@@ -57,7 +57,7 @@ jobs:
           if [[ "${RUNNER_PROVIDER}" == "aws" ]]; then
             echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_BUCKET=databend-ci --env SCCACHE_REGION=us-east-2 --env SCCACHE_S3_KEY_PREFIX=cache/sccache/ --env SCCACHE_S3_USE_SSL=true" >> $GITHUB_OUTPUT
           else
-            echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true --env ACTIONS_CACHE_URL=${ACTIONS_CACHE_URL} --env ACTIONS_RUNTIME_TOKEN=${ACTIONS_RUNTIME_TOKEN} =" >> $GITHUB_OUTPUT
+            echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true --env ACTIONS_CACHE_URL=${ACTIONS_CACHE_URL} --env ACTIONS_RUNTIME_TOKEN=${ACTIONS_RUNTIME_TOKEN}" >> $GITHUB_OUTPUT
           fi
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "BUILD_ARGS=--strip --sdist --out dist" >> $GITHUB_OUTPUT
