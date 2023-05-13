@@ -1,0 +1,49 @@
+name: Python Release Build
+
+on:
+  push:
+    tags:
+      - "v*"
+  schedule:
+    # Release at 00:00 UTC+8
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+    inputs:
+      tags:
+        description: The tags to be released
+        required: false
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Generate version
+        run: |
+            tag=`git describe --tags --abbrev=0 | sed 's/-nightly//g' | sed 's/v//g'`
+            sed -i "s#0.1.2#$tag#g"" src/bendpy/cargo.toml
+
+      - name: Build wheels
+        uses: PyO3/maturin-action@v1
+        env:
+          RUST_BACKTRACE: 1
+        with:
+          rust-toolchain: nightly
+          target: x86_64
+          manylinux: auto
+          # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
+          rustup-components: rust-std rustfmt
+          args: --release --strip --manylinux 2014 --sdist --out dist
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          repository-url: https://pypi.org/project/databend/
+          packages-dir: dist/
