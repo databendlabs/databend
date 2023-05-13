@@ -55,7 +55,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
         PredicateScalar::And { args } => {
             assert!(args.len() >= 2);
             args.into_iter()
-                .map(|arg| normalize_predicate_scalar(arg))
+                .map(normalize_predicate_scalar)
                 .reduce(|lhs, rhs| {
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: None,
@@ -69,7 +69,7 @@ fn normalize_predicate_scalar(predicate_scalar: PredicateScalar) -> ScalarExpr {
         PredicateScalar::Or { args } => {
             assert!(args.len() >= 2);
             args.into_iter()
-                .map(|arg| normalize_predicate_scalar(arg))
+                .map(normalize_predicate_scalar)
                 .reduce(|lhs, rhs| {
                     ScalarExpr::FunctionCall(FunctionCall {
                         span: None,
