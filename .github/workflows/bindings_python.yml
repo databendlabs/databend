@@ -57,8 +57,10 @@ jobs:
           fi
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "BUILD_ARGS=--strip --sdist --out dist" >> $GITHUB_OUTPUT
+            echo "BUILD_PROFILE=debug" >> $GITHUB_OUTPUT
           else
             echo "BUILD_ARGS=--release --strip --sdist --out dist" >> $GITHUB_OUTPUT
+            echo "BUILD_PROFILE=release" >> $GITHUB_OUTPUT
           fi
 
       - name: Build wheels
