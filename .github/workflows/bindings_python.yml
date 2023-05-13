@@ -23,6 +23,11 @@ concurrency:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -64,7 +69,7 @@ jobs:
         with:
           rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
           working-directory: src/bendpy
-          target: x86_64
+          target: ${{ matrix.target }}
           manylinux: auto
           # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
           rustup-components: rust-std rustfmt
@@ -78,7 +83,7 @@ jobs:
         uses: ./.github/actions/artifact_upload
         with:
           sha: ${{ github.sha }}
-          target: x86_64-unknown-linux-gnu
+          target: ${{ matrix.target }}
           category: python
 
       - name: Publish package to PyPI
