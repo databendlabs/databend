@@ -338,7 +338,6 @@ jobs:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/check_run_ee
         id: check_ee
-        if: steps.check_ee.outputs.skip-ee-check != 'true'
       - uses: ./.github/actions/test_ee_standalone_linux
         timeout-minutes: 20
         if: steps.check_ee.outputs.skip-ee-check != 'true'
