@@ -85,7 +85,7 @@ jobs:
             echo "BUILD_ARGS=--strip --sdist --out dist" >> $GITHUB_OUTPUT
             echo "BUILD_PROFILE=debug" >> $GITHUB_ENV
           else
-            echo "BUILD_ARGS=--release --strip --sdist --out dist" >> $GITHUB_OUTPUT
+            echo "BUILD_ARGS=--release --strip --manylinux 2014 --sdist --out dist" >> $GITHUB_OUTPUT
             echo "BUILD_PROFILE=release" >> $GITHUB_ENV
           fi
 
