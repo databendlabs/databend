@@ -16,12 +16,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RUNNER_PROVIDER: aws
+  RUNNER_PROVIDER: github
 
 jobs:
   build_linux:
     name: ${{ matrix.target }}
-    runs-on: [self-hosted, X64, Linux, 8c16g]
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         target:
@@ -116,5 +116,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
-          repository-url: https://pypi.org/project/databend/
           packages-dir: src/bendpy/dist/
+          skip-existing: true
