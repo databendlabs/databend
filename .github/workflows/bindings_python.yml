@@ -55,7 +55,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             GIT_TAG=$(git describe --tags --abbrev=0)
           else
-            GIT_TAG=${{ github.event.inputs.tag }}
+            GIT_TAG=${{ inputs.tag }}
           fi
           echo "building version: $GIT_TAG"
           VERSION=${GIT_TAG/v/}
