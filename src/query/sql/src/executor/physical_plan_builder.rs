@@ -26,6 +26,8 @@ use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check;
+use common_expression::type_check::check_cast;
 use common_expression::type_check::check_function;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
@@ -35,6 +37,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
+use common_expression::RawExpr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
@@ -80,6 +83,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
+use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
 use crate::ColumnBinding;
@@ -461,6 +465,63 @@ impl PhysicalPlanBuilder {
                     _ => probe_side.output_schema()?,
                 };
 
+                assert_eq!(join.left_conditions.len(), join.right_conditions.len());
+                let mut left_join_conditions = Vec::new();
+                let mut right_join_conditions = Vec::new();
+                for (left_condition, right_condition) in join
+                    .left_conditions
+                    .iter()
+                    .zip(join.right_conditions.iter())
+                {
+                    let left_expr = left_condition
+                        .resolve_and_check(probe_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            probe_schema.index_of(&index.to_string()).unwrap()
+                        });
+                    let right_expr = right_condition
+                        .resolve_and_check(build_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            build_schema.index_of(&index.to_string()).unwrap()
+                        });
+
+                    // Unify the data types of the left and right expressions.
+                    let left_type = left_expr.data_type();
+                    let right_type = right_expr.data_type();
+                    let common_ty = common_super_type(
+                        left_type.clone(),
+                        right_type.clone(),
+                        &BUILTIN_FUNCTIONS.default_cast_rules,
+                    )
+                    .ok_or_else(|| {
+                        ErrorCode::IllegalDataType(format!(
+                            "Cannot find common type for {:?} and {:?}",
+                            left_type, right_type
+                        ))
+                    })?;
+                    let left_expr = check_cast(
+                        left_expr.span(),
+                        false,
+                        left_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    let right_expr = check_cast(
+                        right_expr.span(),
+                        false,
+                        right_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+
+                    let (left_expr, _) =
+                        ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let (right_expr, _) =
+                        ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+                    left_join_conditions.push(left_expr.as_remote_expr());
+                    right_join_conditions.push(right_expr.as_remote_expr());
+                }
+
                 let merged_schema = DataSchemaRefExt::create(
                     probe_schema
                         .fields()
@@ -469,68 +530,14 @@ impl PhysicalPlanBuilder {
                         .cloned()
                         .collect::<Vec<_>>(),
                 );
-                let mut left_join_conditions = Vec::new();
-                let mut right_join_conditions = Vec::new();
-                for (left_join_condition, right_join_condition) in join
-                    .left_conditions
-                    .iter()
-                    .zip(join.right_conditions.iter())
-                {
-                    let left_type = left_join_condition.data_type()?;
-                    let right_type = right_join_condition.data_type()?;
-                    if left_type != right_type {
-                        let common_type = common_super_type(
-                            left_type.clone(),
-                            right_type.clone(),
-                            &BUILTIN_FUNCTIONS.default_cast_rules,
-                        );
-                        if let Some(common_type) = common_type {
-                            let left = wrap_cast(left_join_condition, &common_type);
-                            let right = wrap_cast(right_join_condition, &common_type);
-                            left_join_conditions.push(left);
-                            right_join_conditions.push(right);
-                        } else {
-                            return Err(ErrorCode::IllegalDataType(format!(
-                                "Cannot find common type for {:?} and {:?}",
-                                left_type, right_type
-                            )));
-                        }
-                    } else {
-                        left_join_conditions.push(left_join_condition.clone());
-                        right_join_conditions.push(right_join_condition.clone());
-                    }
-                }
+
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     plan_id: self.next_plan_id(),
                     build: Box::new(build_side),
                     probe: Box::new(probe_side),
                     join_type: join.join_type.clone(),
-                    build_keys: right_join_conditions
-                        .iter()
-                        .map(|scalar| {
-                            let expr = scalar
-                                .resolve_and_check(build_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    build_schema.index_of(&index.to_string()).unwrap()
-                                });
-                            let (expr, _) =
-                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                            Ok(expr.as_remote_expr())
-                        })
-                        .collect::<Result<_>>()?,
-                    probe_keys: left_join_conditions
-                        .iter()
-                        .map(|scalar| {
-                            let expr = scalar
-                                .resolve_and_check(probe_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    probe_schema.index_of(&index.to_string()).unwrap()
-                                });
-                            let (expr, _) =
-                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                            Ok(expr.as_remote_expr())
-                        })
-                        .collect::<Result<_>>()?,
+                    build_keys: right_join_conditions,
+                    probe_keys: left_join_conditions,
                     non_equi_conditions: join
                         .non_equi_conditions
                         .iter()
@@ -555,28 +562,7 @@ impl PhysicalPlanBuilder {
 
             RelOperator::EvalScalar(eval_scalar) => {
                 let input = self.build(s_expr.child(0)?).await?;
-                let input_schema = input.output_schema()?;
-                let exprs = eval_scalar
-                    .items
-                    .iter()
-                    .map(|item| {
-                        let expr = item
-                            .scalar
-                            .resolve_and_check(input_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                input_schema.index_of(&index.to_string()).unwrap()
-                            });
-                        let (expr, _) =
-                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                        Ok((expr.as_remote_expr(), item.index))
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(PhysicalPlan::EvalScalar(EvalScalar {
-                    plan_id: self.next_plan_id(),
-                    input: Box::new(input),
-                    exprs,
-                    stat_info: Some(stat_info),
-                }))
+                self.build_eval_scalar(input, eval_scalar, stat_info)
             }
 
             RelOperator::Filter(filter) => {
@@ -856,7 +842,100 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Window(w) => {
                 let input = self.build(s_expr.child(0)?).await?;
-                let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
+                let input_schema = input.output_schema()?;
+
+                let mut w = w.clone();
+
+                // Unify the data type for range frame.
+                if w.frame.units.is_range() && w.order_by.len() == 1 {
+                    let order_by = &mut w.order_by[0].order_by_item.scalar;
+
+                    let mut start = match &mut w.frame.start_bound {
+                        WindowFuncFrameBound::Preceding(scalar)
+                        | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
+                        _ => None,
+                    };
+                    let mut end = match &mut w.frame.end_bound {
+                        WindowFuncFrameBound::Preceding(scalar)
+                        | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
+                        _ => None,
+                    };
+
+                    let mut common_ty = order_by
+                        .resolve_and_check(&*input_schema)?
+                        .data_type()
+                        .clone();
+                    for scalar in start.iter_mut().chain(end.iter_mut()) {
+                        let ty = scalar.as_ref().infer_data_type();
+                        common_ty = common_super_type(
+                            common_ty.clone(),
+                            ty.clone(),
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        )
+                        .ok_or_else(|| {
+                            ErrorCode::IllegalDataType(format!(
+                                "Cannot find common type for {:?} and {:?}",
+                                &common_ty, &ty
+                            ))
+                        })?;
+                    }
+
+                    *order_by = wrap_cast(order_by, &common_ty);
+                    for scalar in start.iter_mut().chain(end.iter_mut()) {
+                        let raw_expr = RawExpr::<usize>::Cast {
+                            span: w.span,
+                            is_try: false,
+                            expr: Box::new(RawExpr::Constant {
+                                span: w.span,
+                                scalar: scalar.clone(),
+                            }),
+                            dest_type: common_ty.clone(),
+                        };
+                        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+                        let (expr, _) = ConstantFolder::fold(
+                            &expr,
+                            &FunctionContext::default(),
+                            &BUILTIN_FUNCTIONS,
+                        );
+                        if let common_expression::Expr::Constant {
+                            scalar: new_scalar, ..
+                        } = expr
+                        {
+                            if new_scalar.is_positive() {
+                                **scalar = new_scalar;
+                                continue;
+                            }
+                        }
+                        return Err(ErrorCode::SemanticError(
+                            "Only positive numbers are allowed in RANGE offset".to_string(),
+                        )
+                        .set_span(w.span));
+                    }
+                }
+
+                // Generate a `EvalScalar` as the input of `Window`.
+                let mut scalar_items: Vec<ScalarItem> = Vec::new();
+                for arg in &w.arguments {
+                    scalar_items.push(arg.clone());
+                }
+                for part in &w.partition_by {
+                    scalar_items.push(part.clone());
+                }
+                for order in &w.order_by {
+                    scalar_items.push(order.order_by_item.clone())
+                }
+                let input = if !scalar_items.is_empty() {
+                    self.build_eval_scalar(
+                        input,
+                        &crate::planner::plans::EvalScalar {
+                            items: scalar_items,
+                        },
+                        stat_info.clone(),
+                    )?
+                } else {
+                    input
+                };
+
                 let order_by_items = w
                     .order_by
                     .iter()
@@ -866,6 +945,7 @@ impl PhysicalPlanBuilder {
                         order_by: v.order_by_item.index,
                     })
                     .collect::<Vec<_>>();
+                let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
 
                 let func = match &w.function {
                     WindowFuncType::Aggregate(agg) => {
@@ -972,8 +1052,10 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::UnionAll(op) => {
-                let left_schema = self.build(s_expr.child(0)?).await?.output_schema()?;
-                let right_schema = self.build(s_expr.child(1)?).await?.output_schema()?;
+                let left_plan = self.build(s_expr.child(0)?).await?;
+                let right_plan = self.build(s_expr.child(1)?).await?;
+                let left_schema = left_plan.output_schema()?;
+                let right_schema = right_plan.output_schema()?;
 
                 let common_types = op.pairs.iter().map(|(l, r)| {
                     let left_field = left_schema.field_with_name(&l.to_string()).unwrap();
@@ -997,10 +1079,11 @@ impl PhysicalPlanBuilder {
 
                 async fn cast_plan(
                     plan_builder: &mut PhysicalPlanBuilder,
-                    plan: SExpr,
+                    plan: PhysicalPlan,
                     plan_schema: &DataSchema,
                     indexes: &[IndexType],
                     common_types: &[DataType],
+                    stat_info: PlanStatsInfo,
                 ) -> Result<PhysicalPlan> {
                     debug_assert!(indexes.len() == common_types.len());
                     let scalar_items = indexes
@@ -1035,15 +1118,14 @@ impl PhysicalPlanBuilder {
                     let new_plan = if scalar_items.is_empty() {
                         plan
                     } else {
-                        SExpr::create_unary(
-                            crate::plans::EvalScalar {
-                                items: scalar_items,
-                            }
-                            .into(),
+                        plan_builder.build_eval_scalar(
                             plan,
-                        )
+                            &crate::plans::EvalScalar {
+                                items: scalar_items,
+                            },
+                            stat_info,
+                        )?
                     };
-                    let new_plan = plan_builder.build(&new_plan).await?;
 
                     Ok(new_plan)
                 }
@@ -1052,18 +1134,20 @@ impl PhysicalPlanBuilder {
                 let right_indexes = op.pairs.iter().map(|(_, r)| *r).collect::<Vec<_>>();
                 let left_plan = cast_plan(
                     self,
-                    s_expr.child(0)?.clone(),
+                    left_plan,
                     left_schema.as_ref(),
                     &left_indexes,
                     &common_types,
+                    stat_info.clone(),
                 )
                 .await?;
                 let right_plan = cast_plan(
                     self,
-                    s_expr.child(1)?.clone(),
+                    right_plan,
                     right_schema.as_ref(),
                     &right_indexes,
                     &common_types,
+                    stat_info.clone(),
                 )
                 .await?;
 
@@ -1161,6 +1245,33 @@ impl PhysicalPlanBuilder {
                 s_expr.plan()
             ))),
         }
+    }
+
+    fn build_eval_scalar(
+        &mut self,
+        input: PhysicalPlan,
+        eval_scalar: &crate::planner::plans::EvalScalar,
+        stat_info: PlanStatsInfo,
+    ) -> Result<PhysicalPlan> {
+        let input_schema = input.output_schema()?;
+        let exprs = eval_scalar
+            .items
+            .iter()
+            .map(|item| {
+                let expr = item
+                    .scalar
+                    .resolve_and_check(input_schema.as_ref())?
+                    .project_column_ref(|index| input_schema.index_of(&index.to_string()).unwrap());
+                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                Ok((expr.as_remote_expr(), item.index))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(PhysicalPlan::EvalScalar(EvalScalar {
+            plan_id: self.next_plan_id(),
+            input: Box::new(input),
+            exprs,
+            stat_info: Some(stat_info),
+        }))
     }
 
     fn build_virtual_columns(&self, columns: &ColumnSet) -> Option<Vec<VirtualColumnInfo>> {
