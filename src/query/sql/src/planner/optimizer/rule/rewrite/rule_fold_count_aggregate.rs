@@ -95,21 +95,19 @@ impl Rule for RuleFoldCountAggregate {
                             span: item.scalar.span(),
                             value: Scalar::Number(NumberScalar::UInt64(table_card)),
                         });
-                    } else {
-                        if let ScalarExpr::BoundColumnRef(col) = &agg_func.args[0] {
-                            if let Some(card) = column_stats.get(&col.column.index) {
-                                item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
-                                    span: item.scalar.span(),
-                                    value: Scalar::Number(NumberScalar::UInt64(
-                                        table_card - card.null_count,
-                                    )),
-                                });
-                            } else {
-                                return Ok(());
-                            }
+                    } else if let ScalarExpr::BoundColumnRef(col) = &agg_func.args[0] {
+                        if let Some(card) = column_stats.get(&col.column.index) {
+                            item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
+                                span: item.scalar.span(),
+                                value: Scalar::Number(NumberScalar::UInt64(
+                                    table_card - card.null_count,
+                                )),
+                            });
                         } else {
                             return Ok(());
                         }
+                    } else {
+                        return Ok(());
                     }
                 } else {
                     return Ok(());
