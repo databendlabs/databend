@@ -326,7 +326,7 @@ impl DataExchangeManager {
                     let query_id = ctx.get_id();
                     let mut statistics_receiver = statistics_receiver.lock();
 
-                    statistics_receiver.shutdown();
+                    statistics_receiver.shutdown(may_error.is_some());
                     ctx.get_exchange_manager().on_finished_query(&query_id);
                     statistics_receiver.wait_shutdown()?;
 
