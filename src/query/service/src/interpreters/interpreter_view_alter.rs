@@ -49,85 +49,63 @@ impl Interpreter for AlterViewInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // check whether view has exists
-        if !self
-            .ctx
-            .get_catalog(&self.plan.catalog)?
-            .list_tables(&self.plan.tenant, &self.plan.database)
-            .await?
-            .iter()
-            .any(|table| {
-                table.name() == self.plan.view_name.as_str()
-                    && table.get_table_info().engine() == VIEW_ENGINE
-            })
+        // drop view
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        if let Ok(tbl) = catalog
+            .get_table(&self.plan.tenant, &self.plan.database, &self.plan.view_name)
+            .await
         {
-            return Err(ErrorCode::ViewAlreadyExists(format!(
-                "{}.{} view does not exist",
+            catalog
+                .drop_table_by_id(DropTableByIdReq {
+                    if_exists: true,
+                    tb_id: tbl.get_id(),
+                })
+                .await?;
+
+            // create new view
+            let mut options = BTreeMap::new();
+            let subquery = if self.plan.column_names.is_empty() {
+                self.plan.subquery.clone()
+            } else {
+                let mut planner = Planner::new(self.ctx.clone());
+                let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
+                if plan.schema().fields().len() != self.plan.column_names.len() {
+                    return Err(ErrorCode::BadDataArrayLength(format!(
+                        "column name length mismatch, expect {}, got {}",
+                        plan.schema().fields().len(),
+                        self.plan.column_names.len(),
+                    )));
+                }
+                format!(
+                    "select * from ({}) {}({})",
+                    self.plan.subquery,
+                    self.plan.view_name,
+                    self.plan.column_names.join(", ")
+                )
+            };
+            options.insert("query".to_string(), subquery);
+
+            let plan = CreateTableReq {
+                if_not_exists: true,
+                name_ident: TableNameIdent {
+                    tenant: self.plan.tenant.clone(),
+                    db_name: self.plan.database.clone(),
+                    table_name: self.plan.view_name.clone(),
+                },
+                table_meta: TableMeta {
+                    engine: VIEW_ENGINE.to_string(),
+                    options,
+                    ..Default::default()
+                },
+            };
+            catalog.create_table(plan).await?;
+
+            Ok(PipelineBuildResult::create())
+        } else {
+            return Err(ErrorCode::UnknownView(format!(
+                "{}.{} as view Already Exists",
                 self.plan.database, self.plan.view_name
             )));
         }
-
-        self.alter_view().await
-    }
-}
-
-impl AlterViewInterpreter {
-    #[async_backtrace::framed]
-    async fn alter_view(&self) -> Result<PipelineBuildResult> {
-        // drop view
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
-        let tbl = catalog
-            .get_table(
-                self.plan.tenant.as_str(),
-                self.plan.database.as_str(),
-                self.plan.view_name.as_str(),
-            )
-            .await?;
-        catalog
-            .drop_table_by_id(DropTableByIdReq {
-                if_exists: true,
-                tb_id: tbl.get_id(),
-            })
-            .await?;
-
-        // create new view
-        let mut options = BTreeMap::new();
-        let subquery = if self.plan.column_names.is_empty() {
-            self.plan.subquery.clone()
-        } else {
-            let mut planner = Planner::new(self.ctx.clone());
-            let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;
-            if plan.schema().fields().len() != self.plan.column_names.len() {
-                return Err(ErrorCode::BadDataArrayLength(format!(
-                    "column name length mismatch, expect {}, got {}",
-                    plan.schema().fields().len(),
-                    self.plan.column_names.len(),
-                )));
-            }
-            format!(
-                "select * from ({}) {}({})",
-                self.plan.subquery,
-                self.plan.view_name,
-                self.plan.column_names.join(", ")
-            )
-        };
-        options.insert("query".to_string(), subquery);
-
-        let plan = CreateTableReq {
-            if_not_exists: true,
-            name_ident: TableNameIdent {
-                tenant: self.plan.tenant.clone(),
-                db_name: self.plan.database.clone(),
-                table_name: self.plan.view_name.clone(),
-            },
-            table_meta: TableMeta {
-                engine: VIEW_ENGINE.to_string(),
-                options,
-                ..Default::default()
-            },
-        };
-        catalog.create_table(plan).await?;
-
-        Ok(PipelineBuildResult::create())
     }
 }
