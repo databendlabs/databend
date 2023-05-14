@@ -72,3 +72,6 @@ time = "0.3.14"
 tracing = "0.1.36"
 url = { version = "2.3" }
 z3 = { version = "0.11.2", features = ["static-link-z3"], optional = true }
+
+[dev-dependencies]
+databend-query = { path = "../service" }

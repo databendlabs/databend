@@ -1,10 +1,10 @@
-// Copyright 2023 Databend Cloud
+// Copyright 2021 Datafuse Labs
 //
-// Licensed under the Elastic License, Version 2.0 (the "License");
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     https://www.elastic.co/licensing/elastic-license
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,25 +17,26 @@ use std::collections::HashMap;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::Scalar;
-use common_sql::binder::split_conjunctions;
-use common_sql::optimizer::SExpr;
-use common_sql::plans::AggIndexInfo;
-use common_sql::plans::Aggregate;
-use common_sql::plans::AggregateFunction;
-use common_sql::plans::BoundColumnRef;
-use common_sql::plans::CastExpr;
-use common_sql::plans::ConstantExpr;
-use common_sql::plans::EvalScalar;
-use common_sql::plans::FunctionCall;
-use common_sql::plans::RelOperator;
-use common_sql::plans::ScalarItem;
-use common_sql::ColumnBinding;
-use common_sql::ColumnSet;
-use common_sql::IndexType;
-use common_sql::ScalarExpr;
-use common_sql::Visibility;
 
-pub fn rewrite(s_expr: &SExpr, index_plans: &[SExpr]) -> Result<Option<SExpr>> {
+use crate::binder::split_conjunctions;
+use crate::optimizer::SExpr;
+use crate::plans::AggIndexInfo;
+use crate::plans::Aggregate;
+use crate::plans::AggregateFunction;
+use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
+use crate::plans::ConstantExpr;
+use crate::plans::EvalScalar;
+use crate::plans::FunctionCall;
+use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
+use crate::ColumnBinding;
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::ScalarExpr;
+use crate::Visibility;
+
+pub fn try_rewrite(s_expr: &SExpr, index_plans: &[SExpr]) -> Result<Option<SExpr>> {
     if index_plans.is_empty() {
         return Ok(None);
     }

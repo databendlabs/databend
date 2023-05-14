@@ -13,7 +13,6 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-aggregating-index = { path = "../ee-features/aggregating-index" }
 async-backtrace = { workspace = true }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }

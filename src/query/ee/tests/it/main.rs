@@ -13,6 +13,5 @@
 // limitations under the License.
 
 #![feature(unwrap_infallible)]
-mod aggregating_index;
 mod license;
 mod storages;

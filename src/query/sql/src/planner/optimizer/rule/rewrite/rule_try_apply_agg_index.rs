@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 
+use super::agg_index;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -157,15 +158,20 @@ impl Rule for RuleTryApplyAggIndex {
 
     fn apply(
         &self,
-        _s_expr: &SExpr,
-        _state: &mut crate::optimizer::rule::TransformResult,
+        s_expr: &SExpr,
+        state: &mut crate::optimizer::rule::TransformResult,
     ) -> Result<()> {
         let index_plans = self.get_index_plans();
         if index_plans.is_empty() {
             // No enterprise license or no index.
             return Ok(());
         }
-        // TODO(agg index)
+
+        if let Some(result) = agg_index::try_rewrite(s_expr, &index_plans)? {
+            result.applied_rule(&self.id);
+            state.add_result(result);
+        }
+
         Ok(())
     }
 }

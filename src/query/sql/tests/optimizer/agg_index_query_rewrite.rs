@@ -20,11 +20,13 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_base::base::tokio;
 use common_catalog::catalog::CatalogManager;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
+use common_sql::optimizer::agg_index;
 use common_sql::optimizer::SExpr;
 use common_sql::plans::AggIndexInfo;
 use common_sql::plans::CreateTablePlan;
@@ -33,11 +35,9 @@ use common_sql::plans::RelOperator;
 use common_sql::Binder;
 use common_sql::Metadata;
 use common_sql::NameResolutionContext;
-use common_storages_fuse::TableContext;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
 use databend_query::test_kits::TestFixture;
-use enterprise_query::aggregating_index::query_rewrite;
 use parking_lot::RwLock;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 
@@ -319,7 +319,7 @@ async fn test_query_rewrite() -> Result<()> {
     for suite in test_suites {
         let query = plan_sql(ctx.clone(), suite.query).await?;
         let index = plan_sql(ctx.clone(), suite.index).await?;
-        let result = query_rewrite::rewrite(&query, &vec![index])?;
+        let result = agg_index::try_rewrite(&query, &vec![index])?;
         assert_eq!(
             suite.is_matched,
             result.is_some(),
