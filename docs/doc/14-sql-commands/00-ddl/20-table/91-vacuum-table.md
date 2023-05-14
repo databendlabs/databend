@@ -1,7 +1,9 @@
 ---
 title: VACUUM TABLE
 ---
-(This is an enterprise feature.)
+import EEFeature from '@site/src/components/EEFeature';
+
+<EEFeature featureName='VACUUM TABLE'/>
 
 Vacuum a table orphan files in Databend.
 
