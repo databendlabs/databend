@@ -16,12 +16,12 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RUNNER_PROVIDER: github
+  RUNNER_PROVIDER: aws
 
 jobs:
   build_linux:
     name: ${{ matrix.target }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, X64, Linux, 16c32g]
     strategy:
       matrix:
         target:
