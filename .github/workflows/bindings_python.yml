@@ -81,13 +81,8 @@ jobs:
           else
             echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true" >> $GITHUB_OUTPUT
           fi
-          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "BUILD_ARGS=--strip --sdist --out dist" >> $GITHUB_OUTPUT
-            echo "BUILD_PROFILE=debug" >> $GITHUB_ENV
-          else
-            echo "BUILD_ARGS=--release --strip --sdist --out dist" >> $GITHUB_OUTPUT
-            echo "BUILD_PROFILE=release" >> $GITHUB_ENV
-          fi
+          echo "BUILD_ARGS=--release --strip --sdist --out dist" >> $GITHUB_OUTPUT
+          echo "BUILD_PROFILE=release" >> $GITHUB_ENV
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
@@ -112,7 +107,6 @@ jobs:
           path: src/bendpy/dist
 
       - name: Publish package to PyPI
-        if: github.event_name != 'pull_request'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
