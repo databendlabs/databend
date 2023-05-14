@@ -33,10 +33,10 @@ use storages_common_table_meta::meta::Statistics;
 use tracing::info;
 
 use crate::io::SegmentsIO;
-use crate::operations::merge_into::mutation_meta::mutation_log::BlockMetaIndex;
+use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
 use crate::operations::mutation::CompactPartInfo;
 use crate::operations::CompactOptions;
-use crate::statistics::reducers::merge_statistics_mut;
+use crate::statistics::reducers::deduct_statistics_mut;
 use crate::TableContext;
 
 static MAX_BLOCK_COUNT: usize = 1000_1000;
@@ -67,6 +67,7 @@ impl BlockCompactMutator {
         operator: Operator,
     ) -> Self {
         let column_ids = compact_params.base_snapshot.schema.to_leaf_column_id_set();
+        let unchanged_segment_statistics = compact_params.base_snapshot.summary.clone();
         Self {
             ctx,
             operator,
@@ -76,7 +77,7 @@ impl BlockCompactMutator {
             unchanged_blocks_map: HashMap::new(),
             compact_tasks: Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
             unchanged_segments_map: BTreeMap::new(),
-            unchanged_segment_statistics: Statistics::default(),
+            unchanged_segment_statistics,
         }
     }
 
@@ -111,14 +112,13 @@ impl BlockCompactMutator {
         for chunk in segment_locations.chunks(max_io_requests) {
             // Read the segments information in parallel.
             let segment_infos = segments_io
-                .read_segments(chunk, false)
-                .await?
-                .into_iter()
-                .collect::<Result<Vec<_>>>()?;
+                .read_segments::<Arc<SegmentInfo>>(chunk, false)
+                .await?;
 
             // Check the segment to be compacted.
             // Size of compacted segment should be in range R == [threshold, 2 * threshold)
-            for (idx, segment) in segment_infos.iter().enumerate() {
+            for (idx, segment) in segment_infos.into_iter().enumerate() {
+                let segment = segment?;
                 let segments_vec = checker.add(chunk[idx].clone(), segment.clone());
                 for segments in segments_vec {
                     if SegmentCompactChecker::check_for_compact(&segments) {
@@ -131,13 +131,8 @@ impl BlockCompactMutator {
                             segment_idx,
                         );
                     } else {
-                        let (location, unchanged) = &segments[0];
                         self.unchanged_segments_map
-                            .insert(segment_idx, location.clone());
-                        merge_statistics_mut(
-                            &mut self.unchanged_segment_statistics,
-                            &unchanged.summary,
-                        )?;
+                            .insert(segment_idx, segments[0].0.clone());
                     }
                     segment_idx += 1;
                 }
@@ -176,43 +171,15 @@ impl BlockCompactMutator {
             } else {
                 self.unchanged_segments_map
                     .insert(segment_idx, segment_locations[checked_end_at - 1].clone());
-                merge_statistics_mut(
-                    &mut self.unchanged_segment_statistics,
-                    &segments[0].1.summary,
-                )?;
             }
             segment_idx += 1;
         }
 
         // combine with the unprocessed segments (which are outside of the limit).
-        if checked_end_at < number_segments {
-            for chunk in segment_locations[checked_end_at..].chunks(max_io_requests) {
-                let segment_infos = segments_io
-                    .read_segments(chunk, false)
-                    .await?
-                    .into_iter()
-                    .collect::<Result<Vec<_>>>()?;
-
-                for (segment, location) in segment_infos.into_iter().zip(chunk.iter()) {
-                    self.unchanged_segments_map
-                        .insert(segment_idx, location.clone());
-                    merge_statistics_mut(&mut self.unchanged_segment_statistics, &segment.summary)?;
-                    segment_idx += 1;
-                }
-
-                checked_end_at += chunk.len();
-                // Status.
-                {
-                    let status = format!(
-                        "compact: read segment files:{}/{}, cost:{} sec",
-                        checked_end_at,
-                        number_segments,
-                        start.elapsed().as_secs()
-                    );
-                    self.ctx.set_status_info(&status);
-                    info!(status);
-                }
-            }
+        for segment_location in segment_locations[checked_end_at..].iter() {
+            self.unchanged_segments_map
+                .insert(segment_idx, segment_location.clone());
+            segment_idx += 1;
         }
 
         // Status.
@@ -239,6 +206,7 @@ impl BlockCompactMutator {
         let mut unchanged_blocks = BTreeMap::new();
         // The order of the compact is from old to new.
         for segment in segments.iter().rev() {
+            deduct_statistics_mut(&mut self.unchanged_segment_statistics, &segment.summary);
             for block in segment.blocks.iter() {
                 let (unchanged, need_take) = builder.add(block, self.thresholds);
                 if need_take {
@@ -275,7 +243,6 @@ impl BlockCompactMutator {
                 CompactPartInfo::create(blocks, BlockMetaIndex {
                     segment_idx,
                     block_idx,
-                    range: None,
                 })
             })
             .collect();

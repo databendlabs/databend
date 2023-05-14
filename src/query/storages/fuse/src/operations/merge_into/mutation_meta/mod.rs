@@ -13,4 +13,12 @@
 // limitations under the License.
 
 pub mod merge_into_operation_meta;
-pub mod mutation_log;
+mod mutation_log;
+
+pub use mutation_log::AppendOperationLogEntry;
+pub use mutation_log::BlockMetaIndex;
+pub use mutation_log::CommitMeta;
+pub use mutation_log::MutationLogEntry;
+pub use mutation_log::MutationLogs;
+pub use mutation_log::Replacement;
+pub use mutation_log::ReplacementLogEntry;

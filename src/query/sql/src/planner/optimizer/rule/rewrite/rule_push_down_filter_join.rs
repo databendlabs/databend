@@ -13,8 +13,6 @@
 // limitations under the License.
 
 use common_exception::Result;
-use common_expression::type_check::common_super_type;
-use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::optimizer::rule::rewrite::filter_join::convert_mark_to_semi_join;
@@ -26,7 +24,6 @@ use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::planner::binder::wrap_cast;
 use crate::plans::ComparisonOp;
 use crate::plans::Filter;
 use crate::plans::Join;
@@ -156,39 +153,16 @@ pub fn try_push_down_filter_join(
 
             JoinPredicate::Both { left, right, op } => {
                 if op == ComparisonOp::Equal {
-                    let left_type = left.data_type()?;
-                    let right_type = right.data_type()?;
-                    let join_key_type = common_super_type(
-                        left_type,
-                        right_type,
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
-                    );
-
-                    // We have to check if left_type and right_type can be coerced to
-                    // a super type. If the coercion is failed, we cannot push the
-                    // predicate into join.
-                    if let Some(join_key_type) = join_key_type {
-                        if join.join_type == JoinType::Cross {
-                            join.join_type = JoinType::Inner;
-                        }
-                        if join.join_type == JoinType::Inner {
-                            if left.data_type()? != right.data_type()? {
-                                let left = wrap_cast(left, &join_key_type);
-                                let right = wrap_cast(right, &join_key_type);
-                                join.left_conditions.push(left);
-                                join.right_conditions.push(right);
-                            } else {
-                                join.left_conditions.push(left.clone());
-                                join.right_conditions.push(right.clone());
-                            }
-                            need_push = true;
-                        }
+                    if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+                        join.join_type = JoinType::Inner;
+                        join.left_conditions.push(left.clone());
+                        join.right_conditions.push(right.clone());
+                        need_push = true;
                     }
                 } else if matches!(join.join_type, JoinType::Inner) {
                     join.non_equi_conditions.push(predicate.clone());
                     need_push = true;
-                }
-                if !need_push {
+                } else {
                     original_predicates.push(predicate);
                 }
             }

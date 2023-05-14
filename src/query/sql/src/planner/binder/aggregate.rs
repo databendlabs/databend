@@ -172,6 +172,7 @@ impl<'a> AggregateRewriter<'a> {
                 self.in_window = false;
 
                 Ok(WindowFunc {
+                    span: window.span,
                     display_name: window.display_name.clone(),
                     func,
                     partition_by,

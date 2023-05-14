@@ -151,6 +151,7 @@ fn replace_column_binding(
         }
         constant_expr @ ScalarExpr::ConstantExpr(_) => Ok(constant_expr),
         ScalarExpr::WindowFunction(expr) => Ok(ScalarExpr::WindowFunction(WindowFunc {
+            span: expr.span,
             display_name: expr.display_name,
             func: match expr.func {
                 WindowFuncType::Aggregate(arg) => WindowFuncType::Aggregate(AggregateFunction {

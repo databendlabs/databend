@@ -15,6 +15,7 @@
 use std::sync::Arc;
 use std::vec;
 
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -49,7 +50,11 @@ impl AsyncSystemTable for StagesTable {
     }
 
     #[async_backtrace::framed]
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let stages = UserApiProvider::instance().get_stages(&tenant).await?;
         let mut name: Vec<Vec<u8>> = Vec::with_capacity(stages.len());
