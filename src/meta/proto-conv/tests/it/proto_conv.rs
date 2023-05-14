@@ -205,7 +205,7 @@ fn new_index_meta() -> mt::IndexMeta {
         table_id: 7,
         created_on: Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap(),
         drop_on: None,
-        query: "".to_string(),
+        query: "SELECT a, sum(b) FROM t1 WHERE a > 3 GROUP BY b".to_string(),
     }
 }
 

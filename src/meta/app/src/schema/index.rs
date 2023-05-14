@@ -37,13 +37,6 @@ impl IndexNameIdent {
     pub fn index_name(&self) -> String {
         self.index_name.clone()
     }
-
-    pub fn index_name_ident(&self) -> IndexNameIdent {
-        IndexNameIdent {
-            tenant: self.tenant.clone(),
-            index_name: self.index_name.clone(),
-        }
-    }
 }
 
 impl Display for IndexNameIdent {
