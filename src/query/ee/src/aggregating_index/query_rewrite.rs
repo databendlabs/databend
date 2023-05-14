@@ -437,9 +437,7 @@ impl RewriteInfomartion<'_> {
     fn format_scalar(&self, scalar: &ScalarExpr) -> String {
         match scalar {
             ScalarExpr::BoundColumnRef(_) => match self.actual_column_ref(scalar) {
-                ScalarExpr::BoundColumnRef(col) => {
-                    format!("{}", col.column.index)
-                }
+                ScalarExpr::BoundColumnRef(col) => format_col_name(col.column.index),
                 s => self.format_scalar(s),
             },
             ScalarExpr::ConstantExpr(val) => format!("{}", val.value),
@@ -577,6 +575,11 @@ fn distinguish_predicates(predicates: &[ScalarExpr]) -> Predicates<'_> {
 }
 
 #[inline(always)]
+fn format_col_name(index: IndexType) -> String {
+    format!("col_{index}")
+}
+
+#[inline(always)]
 fn reverse_op(op: &str) -> String {
     match op {
         "gt" => "lt".to_string(),
@@ -636,14 +639,14 @@ fn check_predicates_range(
                 if !index_output_bound_cols.contains(col) {
                     return None;
                 }
-                let (new_index, scalar) = index_selection[&col.to_string()];
+                let (new_index, scalar) = index_selection[&format_col_name(*col)];
                 out.push((*col, new_index, scalar.data_type().ok()?))
             }
         } else if !index_output_bound_cols.contains(col) {
             // If the column is not in index predicates, it should be in index output columns.
             return None;
         } else {
-            let (new_index, scalar) = index_selection[&col.to_string()];
+            let (new_index, scalar) = index_selection[&format_col_name(*col)];
             out.push((*col, new_index, scalar.data_type().ok()?))
         }
     }
@@ -724,7 +727,7 @@ fn rewrite_query_item(
         ScalarExpr::BoundColumnRef(_) => match query_info.actual_column_ref(query_item) {
             ScalarExpr::BoundColumnRef(col) => {
                 let col =
-                    try_create_column_binding(index_selection, &col.column.index.to_string())?;
+                    try_create_column_binding(index_selection, &format_col_name(col.column.index))?;
                 Some(col.into())
             }
             s => rewrite_query_item(query_info, s, index_selection),

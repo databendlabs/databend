@@ -192,14 +192,14 @@ miniz_oxide = { opt-level = 3 }
 object = { opt-level = 3 }
 rustc-demangle = { opt-level = 3 }
 
-# [profile.test]
-# opt-level = 0
-# debug = 0
-# codegen-units = 16
-# lto = false
-# debug-assertions = true
-# overflow-checks = true
-# rpath = false
+[profile.test]
+opt-level = 0
+debug = 0
+codegen-units = 16
+lto = false
+debug-assertions = true
+overflow-checks = true
+rpath = false
 
 [patch.crates-io]
 # If there are dependencies that need patching, they can be listed below.
