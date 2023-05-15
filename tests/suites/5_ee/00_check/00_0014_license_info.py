@@ -32,8 +32,6 @@ if __name__ == "__main__":
         client1.expect(prompt)
         client1.expect("")
 
-        client1.send("unset enterprise_license;")
-        client1.expect(prompt)
         client1.send("set global enterprise_license='{}';".format(get_license()))
         client1.expect(prompt)
 
@@ -48,6 +46,3 @@ if __name__ == "__main__":
         license = mycursor.fetchall()
         license[0] = license[0][:5]
         print(license)
-
-        client1.send("unset enterprise_license;")
-        client1.expect(prompt)
