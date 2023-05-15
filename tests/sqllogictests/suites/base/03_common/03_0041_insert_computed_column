@@ -11,32 +11,32 @@ statement ok
 drop table if exists t_stored
 
 statement ok
-create table t_stored(a string null default 'a', b string null default 'b', c string null as (concat(a, '-', b)) stored)
+create table t_stored(a string null default 'a', b string null as (concat(a, '-', c)) stored, c string null default 'c')
 
 statement ok
-insert into t_stored values ('a1', 'b1'), ('a2', 'b2')
+insert into t_stored values ('a1', 'c1'), ('a2', 'c2')
 
 statement ok
 insert into t_stored (a) values ('a3'), ('a4')
 
 statement ok
-insert into t_stored (b) values ('b5'), ('b6')
+insert into t_stored (c) values ('c5'), ('c6')
 
 statement error 1006
-insert into t_stored (c) values ('c1'), ('c2')
+insert into t_stored (b) values ('b1'), ('b2')
 
 statement error 1303
 insert into t_stored values ('a1', 'b1', 'c1'), ('a2', 'b2', 'c2')
 
 query SSS
-select * from t_stored order by a, b
+select * from t_stored order by a, c
 ----
-a b5 a-b5
-a b6 a-b6
-a1 b1 a1-b1
-a2 b2 a2-b2
-a3 b a3-b
-a4 b a4-b
+a a-c5 c5
+a a-c6 c6
+a1 a1-c1 c1
+a2 a2-c2 c2
+a3 a3-c c
+a4 a4-c c
 
 statement ok
 drop table if exists t_stored2
@@ -58,32 +58,32 @@ statement ok
 drop table if exists t_virtual
 
 statement ok
-create table t_virtual(a string null default 'a', b string null default 'b', c string null as (concat(a, '-', b)) virtual)
+create table t_virtual(a string null default 'a', b string null as (concat(a, '-', c)) stored, c string null default 'c')
 
 statement ok
-insert into t_virtual values ('a1', 'b1'), ('a2', 'b2')
+insert into t_virtual values ('a1', 'c1'), ('a2', 'c2')
 
 statement ok
 insert into t_virtual (a) values ('a3'), ('a4')
 
 statement ok
-insert into t_virtual (b) values ('b5'), ('b6')
+insert into t_virtual (c) values ('c5'), ('c6')
 
 statement error 1006
-insert into t_virtual (c) values ('c1'), ('c2')
+insert into t_virtual (b) values ('b1'), ('b2')
 
 statement error 1303
 insert into t_virtual values ('a1', 'b1', 'c1'), ('a2', 'b2', 'c2')
 
 query SSS
-select * from t_virtual order by a, b
+select * from t_virtual order by a, c
 ----
-a b5 a-b5
-a b6 a-b6
-a1 b1 a1-b1
-a2 b2 a2-b2
-a3 b a3-b
-a4 b a4-b
+a a-c5 c5
+a a-c6 c6
+a1 a1-c1 c1
+a2 a2-c2 c2
+a3 a3-c c
+a4 a4-c c
 
 statement ok
 drop table if exists t_virtual2

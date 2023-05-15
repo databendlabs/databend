@@ -14,9 +14,9 @@ CREATE TABLE sample
 (
     Id     INT,
     City2  VARCHAR AS (reverse(City)) STORED,
-    Score2 INT64 AS (Score + 2) VIRTUAL
+    Score2 INT64 AS (Score + 2) VIRTUAL,
     City   VARCHAR,
-    Score  INT,
+    Score  INT
 );
 EOF
 
