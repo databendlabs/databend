@@ -71,6 +71,16 @@ pub enum ComputedExpr {
     Stored(String),
 }
 
+impl ComputedExpr {
+    #[inline]
+    pub fn expr(&self) -> &String {
+        match self {
+            ComputedExpr::Virtual(expr) => expr,
+            ComputedExpr::Stored(expr) => expr,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DataField {
     name: String,

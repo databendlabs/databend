@@ -241,21 +241,31 @@ impl Metadata {
             source_of_view,
         };
         self.tables.push(table_entry);
-        let mut idx = 0;
+        let mut index = 0;
         let mut fields = VecDeque::with_capacity(table_meta.schema().fields().len());
-        let mut virtual_computed_fields = Vec::new();
         for field in table_meta.schema().fields().iter() {
-            if let Some(ComputedExpr::Virtual(virtual_expr)) = field.computed_expr() {
-                virtual_computed_fields.push((virtual_expr.clone(), field.clone()));
+            if let Some(ComputedExpr::Virtual(_)) = field.computed_expr() {
+                fields.push_back((vec![], field.clone()));
             } else {
-                fields.push_back((vec![idx], field.clone()));
-                idx += 1;
+                fields.push_back((vec![index], field.clone()));
+                index += 1;
             }
         }
 
         // build leaf index in DFS order for primitive columns.
         let mut leaf_index = 0;
         while let Some((indices, field)) = fields.pop_front() {
+            if indices.is_empty() {
+                self.add_base_table_column(
+                    field.name().clone(),
+                    field.data_type().clone(),
+                    table_index,
+                    None,
+                    None,
+                    Some(field.computed_expr().unwrap().expr().clone()),
+                );
+                continue;
+            }
             let path_indices = if indices.len() > 1 {
                 Some(indices.clone())
             } else {
@@ -300,16 +310,6 @@ impl Metadata {
                 );
                 leaf_index += 1;
             }
-        }
-        for (virtual_computed_expr, field) in virtual_computed_fields.into_iter() {
-            self.add_base_table_column(
-                field.name().clone(),
-                field.data_type().clone(),
-                table_index,
-                None,
-                None,
-                Some(virtual_computed_expr),
-            );
         }
         table_index
     }
