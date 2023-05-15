@@ -26,6 +26,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::schema as mt;
+use common_meta_app::schema::IndexType;
 use common_meta_app::share;
 use common_proto_conv::FromToProto;
 use common_proto_conv::Incompatible;
@@ -203,6 +204,7 @@ fn new_table_meta() -> mt::TableMeta {
 fn new_index_meta() -> mt::IndexMeta {
     mt::IndexMeta {
         table_id: 7,
+        index_type: IndexType::AGGREGATING,
         created_on: Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap(),
         drop_on: None,
         query: "SELECT a, sum(b) FROM t1 WHERE a > 3 GROUP BY b".to_string(),
