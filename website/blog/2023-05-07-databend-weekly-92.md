@@ -64,7 +64,6 @@ Now, databend-metactl will be released together with Databend and no longer requ
 
 If you are interested in learning more, please check out the resources listed below.
 
-- [PR #11291 | feat: add bitmap data type](https://github.com/datafuselabs/databend/pull/11291)
 - [Docs | Back Up and Restore Databend Meta Service Cluster](https://databend.rs/doc/deploy/metasrv/metasrv-backup-restore)
 
 ## Code Corner
