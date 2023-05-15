@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2020-2021 The Databend Authors.
+# Copyright 2020-2023 The Databend Authors.
 # SPDX-License-Identifier: Apache-2.0.
 
 set -e
@@ -7,7 +7,7 @@ set -e
 export STORAGE_ALLOW_INSECURE=true
 
 echo "Starting standalone DatabendQuery and DatabendMeta"
-./scripts/ci/deploy/databend-query-standalone-native.sh
+./scripts/ci/deploy/databend-query-standalone.sh
 
 TEST_HANDLERS=${TEST_HANDLERS:-"mysql,http,clickhouse"}
 BUILD_PROFILE=${BUILD_PROFILE:-debug}
@@ -18,5 +18,5 @@ if [ $# -gt 0 ]; then
 fi
 echo "Run suites using argument: $RUN_DIR"
 
-echo "Starting databend-sqllogic tests"
-target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --skip_dir management,cluster,explain,tpch,ee --enable_sandbox --parallel 8
+echo "Starting ee databend-sqllogic tests"
+target/${BUILD_PROFILE}/databend-sqllogictests --handlers ${TEST_HANDLERS} ${RUN_DIR} --enable_sandbox --parallel 8

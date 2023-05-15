@@ -218,6 +218,35 @@ jobs:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
 
+  ee_sqllogic_standalone:
+    name: ee_sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
+    runs-on: [ self-hosted, X64, Linux, 4c8g ]
+    if: github.repository == github.event.pull_request.head.repo.full_name
+    needs: build
+    strategy:
+      matrix:
+        dirs:
+          - "ee"
+        format:
+          - "parquet"
+        handlers:
+          - "mysql,http,clickhouse"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
+        timeout-minutes: 30
+        env:
+          DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+          storage-format: ${{ matrix.format }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-ee-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
+
   sqllogic_cluster:
     name: sqllogic_cluster_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g]

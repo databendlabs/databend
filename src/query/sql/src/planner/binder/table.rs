@@ -227,9 +227,7 @@ impl Binder {
                         self.ctx.get_tenant(),
                         "aggregating_index".to_string(),
                     ) {
-                        Err(e) => {
-                            tracing::warn!("check license failed, cause: {:?}", e);
-                        }
+                        Err(_) => {}
                         Ok(_) => {
                             let indexes = self
                                 .resolve_table_indexes(
