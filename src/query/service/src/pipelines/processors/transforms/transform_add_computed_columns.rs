@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2023 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ComputedExpr;
 use common_expression::DataBlock;
@@ -63,7 +64,9 @@ where Self: Transform
                     }
                     expr
                 } else {
-                    continue;
+                    return Err(ErrorCode::Internal(
+                        "Missed field must be a computed column",
+                    ));
                 }
             } else {
                 let field = input_schema.field_with_name(f.name()).unwrap();
