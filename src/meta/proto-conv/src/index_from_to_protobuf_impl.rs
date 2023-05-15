@@ -19,6 +19,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app::schema as mt;
 use common_protos::pb;
+use num::FromPrimitive;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -68,6 +69,9 @@ impl FromToProto for mt::IndexMeta {
 
         let v = Self {
             table_id: p.table_id,
+            index_type: FromPrimitive::from_i32(p.index_type).ok_or_else(|| Incompatible {
+                reason: format!("invalid IndexType: {}", p.index_type),
+            })?,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
             drop_on: match p.drop_on {
                 Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
@@ -83,6 +87,7 @@ impl FromToProto for mt::IndexMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             table_id: self.table_id,
+            index_type: self.index_type.clone() as i32,
             created_on: self.created_on.to_pb()?,
             drop_on: match self.drop_on {
                 Some(drop_on) => Some(drop_on.to_pb()?),

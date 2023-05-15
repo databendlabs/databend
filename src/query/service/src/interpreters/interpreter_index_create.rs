@@ -21,6 +21,7 @@ use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
+use common_meta_app::schema::IndexType;
 use common_sql::plans::CreateIndexPlan;
 
 use crate::interpreters::Interpreter;
@@ -66,6 +67,7 @@ impl Interpreter for CreateIndexInterpreter {
             },
             meta: IndexMeta {
                 table_id: self.plan.table_id,
+                index_type: IndexType::AGGREGATING,
                 created_on: Utc::now(),
                 drop_on: None,
                 query: self.plan.subquery.clone(),

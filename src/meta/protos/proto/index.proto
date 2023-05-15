@@ -33,20 +33,28 @@ message IndexNameIdent {
 
 // IndexMeta is a container of all non-identity information.
 message IndexMeta {
+  enum IndexType {
+    None = 0;
+    AGGREGATING = 1;
+    JOIN = 2;
+  }
+
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
   // The table_id index belong to
   uint64 table_id = 1;
 
+  IndexType index_type = 2;
+
   // The time index created.
-  string created_on = 2;
+  string created_on = 3;
 
   // The time index dropped.
-  optional string drop_on = 3;
+  optional string drop_on = 4;
 
   // The index based query string
-  string query = 4;
+  string query = 5;
 }
 
 // Save index id list history.

@@ -67,6 +67,22 @@ impl Display for IndexId {
     }
 }
 
+#[derive(
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    num_derive::FromPrimitive,
+)]
+pub enum IndexType {
+    #[default]
+    AGGREGATING = 1,
+    JOIN = 2,
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct IndexIdListKey {
     pub tenant: String,
@@ -124,8 +140,9 @@ impl Display for IndexIdList {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct IndexMeta {
     pub table_id: MetaId,
-    pub created_on: DateTime<Utc>,
 
+    pub index_type: IndexType,
+    pub created_on: DateTime<Utc>,
     // if used in CreateIndexReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub query: String,
@@ -135,6 +152,7 @@ impl Default for IndexMeta {
     fn default() -> Self {
         IndexMeta {
             table_id: 0,
+            index_type: IndexType::default(),
             created_on: Utc::now(),
             drop_on: None,
             query: "".to_string(),
