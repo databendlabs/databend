@@ -16,6 +16,7 @@ mod account;
 mod catalog;
 mod column;
 mod database;
+mod index;
 mod role;
 mod share;
 mod stage;

@@ -25,6 +25,7 @@ common-constraint = { path = "../constraint", optional = true }
 common-exception = { path = "../../common/exception" }
 common-expression = { path = "../expression" }
 common-functions = { path = "../functions" }
+common-license = { path = "../../common/license" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-profile = { path = "../../common/profile" }

@@ -18,6 +18,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use ahash::HashMap;
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_catalog::plan::InternalColumn;
@@ -27,7 +28,11 @@ use common_expression::ComputedExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
+use common_meta_app::schema::IndexId;
+use common_meta_types::MetaId;
 use parking_lot::RwLock;
+
+use crate::optimizer::SExpr;
 
 /// Planner use [`usize`] as it's index type.
 ///
@@ -55,6 +60,7 @@ pub struct Metadata {
     columns: Vec<ColumnEntry>,
     //// Columns that are lazy materialized.
     lazy_columns: HashSet<usize>,
+    table_indexes: HashMap<MetaId, Vec<(IndexId, SExpr)>>,
 }
 
 impl Metadata {
@@ -217,6 +223,13 @@ impl Metadata {
             paths,
         }));
         column_index
+    }
+
+    pub fn add_table_indexes(&mut self, table_id: MetaId, table_indexes: Vec<(IndexId, SExpr)>) {
+        self.table_indexes
+            .entry(table_id)
+            .and_modify(|indexes| indexes.extend_from_slice(&table_indexes))
+            .or_insert(table_indexes);
     }
 
     pub fn add_table(
