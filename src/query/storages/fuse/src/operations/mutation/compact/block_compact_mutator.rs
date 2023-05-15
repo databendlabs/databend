@@ -112,14 +112,13 @@ impl BlockCompactMutator {
         for chunk in segment_locations.chunks(max_io_requests) {
             // Read the segments information in parallel.
             let segment_infos = segments_io
-                .read_segments(chunk, false)
-                .await?
-                .into_iter()
-                .collect::<Result<Vec<_>>>()?;
+                .read_segments::<Arc<SegmentInfo>>(chunk, false)
+                .await?;
 
             // Check the segment to be compacted.
             // Size of compacted segment should be in range R == [threshold, 2 * threshold)
-            for (idx, segment) in segment_infos.iter().enumerate() {
+            for (idx, segment) in segment_infos.into_iter().enumerate() {
+                let segment = segment?;
                 let segments_vec = checker.add(chunk[idx].clone(), segment.clone());
                 for segments in segments_vec {
                     if SegmentCompactChecker::check_for_compact(&segments) {

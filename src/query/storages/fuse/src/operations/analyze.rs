@@ -20,6 +20,7 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use tracing::info;
@@ -66,7 +67,9 @@ impl FuseTable {
                     stats_of_columns.push(col_stats.clone());
                 }
 
-                let segments = segments_io.read_segments(chunk, true).await?;
+                let segments = segments_io
+                    .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                    .await?;
                 for segment in segments {
                     let segment = segment?;
                     stats_of_columns.push(segment.summary.col_stats.clone());
