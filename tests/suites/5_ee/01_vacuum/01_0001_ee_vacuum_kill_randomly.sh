@@ -23,7 +23,7 @@ bash ../scripts/ci/deploy/databend-query-standalone.sh > /dev/null 2>&1
 # check if before and after vacuum table the table count matched
 old_count=`echo "select * from test_vacuum.a order by c" | $MYSQL_CLIENT_CONNECT`
 
-echo "vacuum table test_vacuum.a retain 0 hours" |  | $MYSQL_CLIENT_CONNECT
+echo "vacuum table test_vacuum.a retain 0 hours" | $MYSQL_CLIENT_CONNECT
 #echo "optimize table test_vacuum.a all" | $MYSQL_CLIENT_CONNECT
 count=`echo "select * from test_vacuum.a order by c" | $MYSQL_CLIENT_CONNECT`
 if [ $old_count -ne $count ]; then
