@@ -80,6 +80,7 @@ use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
+use crate::interpreters::fill_missing_columns;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
@@ -107,7 +108,6 @@ use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinBuild;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::processors::TransformRuntimeFilter;
 use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
@@ -1259,23 +1259,13 @@ impl PipelineBuilder {
             .get_catalog(&insert_select.catalog)?
             .get_table_by_info(&insert_select.table_info)?;
 
-        // Fill missing columns.
-        {
-            let source_schema = insert_schema;
-            if source_schema.fields().len() < table.schema().fields().len() {
-                self.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        TransformResortAddOn::try_create(
-                            self.ctx.clone(),
-                            transform_input_port,
-                            transform_output_port,
-                            source_schema.clone(),
-                            table.clone(),
-                        )
-                    },
-                )?;
-            }
-        }
+        fill_missing_columns(
+            self.ctx.clone(),
+            insert_schema,
+            table.clone(),
+            &mut self.main_pipeline,
+        )?;
+
         table.append_data(
             self.ctx.clone(),
             &mut self.main_pipeline,

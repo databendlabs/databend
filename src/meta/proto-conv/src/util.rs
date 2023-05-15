@@ -65,6 +65,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (33, "2023-04-13: Update: add `shared_by` field into TableMeta", ),
     (34, "2023-04-23: Add: metadata.proto/DataType Bitmap type", ),
     (35, "2023-05-08: Add: CopyOptions::disable_variant_check", ),
+    (36, "2023-05-12: Add: metadata.proto/ComputedExpr", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

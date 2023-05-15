@@ -45,7 +45,6 @@ pub struct CreateTablePlan {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: TableOptions,
-    pub field_default_exprs: Vec<Option<String>>,
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
@@ -181,7 +180,6 @@ pub struct AddTableColumnPlan {
     pub database: String,
     pub table: String,
     pub schema: TableSchemaRef,
-    pub field_default_exprs: Vec<Option<String>>,
     pub field_comments: Vec<String>,
 }
 
