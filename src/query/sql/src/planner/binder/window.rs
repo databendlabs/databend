@@ -16,13 +16,13 @@ use std::collections::HashMap;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_exception::Span;
 
 use super::select::SelectList;
 use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -45,39 +45,17 @@ impl Binder {
         window_info: &WindowFunctionInfo,
         child: SExpr,
     ) -> Result<SExpr> {
-        let mut scalar_items: Vec<ScalarItem> = Vec::with_capacity(
-            window_info.arguments.len()
-                + window_info.partition_by_items.len()
-                + window_info.order_by_items.len(),
-        );
-        for arg in window_info.arguments.iter() {
-            scalar_items.push(arg.clone());
-        }
-        for part in window_info.partition_by_items.iter() {
-            scalar_items.push(part.clone());
-        }
-        for order in window_info.order_by_items.iter() {
-            scalar_items.push(order.order_by_item.clone())
-        }
-
-        let mut new_expr = child;
-        if !scalar_items.is_empty() {
-            let eval_scalar = EvalScalar {
-                items: scalar_items,
-            };
-            new_expr = SExpr::create_unary(eval_scalar.into(), new_expr);
-        }
-
         let window_plan = Window {
+            span: window_info.span,
             index: window_info.index,
             function: window_info.func.clone(),
+            arguments: window_info.arguments.clone(),
             partition_by: window_info.partition_by_items.clone(),
             order_by: window_info.order_by_items.clone(),
             frame: window_info.frame.clone(),
         };
-        new_expr = SExpr::create_unary(window_plan.into(), new_expr);
 
-        Ok(new_expr)
+        Ok(SExpr::create_unary(window_plan.into(), child))
     }
 }
 
@@ -89,6 +67,7 @@ pub struct WindowInfo {
 
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct WindowFunctionInfo {
+    pub span: Span,
     pub index: IndexType,
     pub func: WindowFuncType,
     pub arguments: Vec<ScalarItem>,
@@ -367,6 +346,7 @@ impl<'a> WindowRewriter<'a> {
 
         // create window info
         let window_info = WindowFunctionInfo {
+            span: window.span,
             index,
             func: func.clone(),
             arguments: agg_args,
@@ -384,6 +364,7 @@ impl<'a> WindowRewriter<'a> {
         );
 
         let replaced_window = WindowFunc {
+            span: window.span,
             display_name: window.display_name.clone(),
             func,
             partition_by: replaced_partition_items,

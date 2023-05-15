@@ -73,7 +73,7 @@ pub async fn export_data(config: &Config) -> anyhow::Result<()> {
 
 pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     let raft_config = &config.raft_config;
-    eprintln!("import meta dir into: {}", raft_config.raft_dir);
+    eprintln!("    Into Meta Dir: '{}'", raft_config.raft_dir);
 
     let nodes = build_nodes(config.initial_cluster.clone(), raft_config.id)?;
 
@@ -200,7 +200,7 @@ fn import_from(restore: String) -> anyhow::Result<Option<LogId>> {
 /// Raw config is: `<NodeId>=<raft-api-host>:<raft-api-port>[,...]`, e.g. `1=localhost:29103` or `1=localhost:29103,0.0.0.0:19191`
 /// The second part is obsolete grpc api address and will be just ignored. Databend-meta loads Grpc address from config file when starting up.
 fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap<NodeId, Node>> {
-    eprintln!("init-cluster: id={}, {:?}", id, initial_cluster);
+    eprintln!("Initialize Cluster: id={}, {:?}", id, initial_cluster);
 
     let mut nodes = BTreeMap::new();
     for peer in initial_cluster {
@@ -257,7 +257,7 @@ async fn init_new_cluster(
     max_log_id: Option<LogId>,
     id: u64,
 ) -> anyhow::Result<()> {
-    eprintln!("init-cluster: {:?}", nodes);
+    eprintln!("Initialize Cluster with: {:?}", nodes);
 
     let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
 
@@ -351,14 +351,13 @@ fn clear() -> anyhow::Result<()> {
 fn export_from_dir(config: &Config) -> anyhow::Result<()> {
     let db = get_sled_db();
 
+    eprintln!("    From: {}", config.raft_config.raft_dir);
+
     let file: Option<File> = if !config.db.is_empty() {
-        eprintln!(
-            "export meta dir from: {} to {}",
-            config.raft_config.raft_dir, config.db
-        );
+        eprintln!("    To:   File: {}", config.db);
         Some((File::create(&config.db))?)
     } else {
-        eprintln!("export meta dir from: {}", config.raft_config.raft_dir);
+        eprintln!("    To:   <stdout>");
         None
     };
 
@@ -385,6 +384,8 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
     tree_names.extend(present_tree_names.into_iter().collect::<Vec<_>>());
 
     for tree_name in tree_names.iter() {
+        eprintln!("Exporting: sled tree: '{}'...", tree_name);
+
         let tree = db.open_tree(tree_name)?;
         for ivec_pair_res in tree.iter() {
             let kv = ivec_pair_res?;
@@ -411,14 +412,14 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
         file.as_ref().unwrap().sync_all()?
     }
 
-    eprintln!("export {} records", cnt);
+    eprintln!("Exported {} records", cnt);
 
     Ok(())
 }
 
 /// Dump metasrv data, raft-log, state machine etc in json to stdout.
 async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> {
-    eprintln!("export meta dir from remote: {}", config.grpc_api_address);
+    eprintln!("    From: online meta-service: {}", config.grpc_api_address);
 
     let grpc_api_addr = get_available_socket_addr(&config.grpc_api_address).await?;
 

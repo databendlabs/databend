@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -44,7 +45,11 @@ impl AsyncSystemTable for EnginesTable {
     }
 
     #[async_backtrace::framed]
-    async fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> Result<DataBlock> {
+    async fn get_full_data(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+    ) -> Result<DataBlock> {
         // TODO passing catalog name
         let table_engine_descriptors = ctx.get_catalog(CATALOG_DEFAULT)?.get_table_engines();
         let mut engine_name = Vec::with_capacity(table_engine_descriptors.len());

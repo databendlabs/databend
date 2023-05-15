@@ -351,8 +351,11 @@ pub struct AggregateFunction {
     pub display_name: String,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct WindowFunc {
+    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    pub span: Span,
     pub display_name: String,
     pub partition_by: Vec<ScalarExpr>,
     pub func: WindowFuncType,

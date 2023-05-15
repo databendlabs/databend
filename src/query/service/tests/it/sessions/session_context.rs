@@ -19,11 +19,12 @@ use common_exception::Result;
 use common_meta_app::principal::UserInfo;
 use common_settings::Settings;
 use databend_query::sessions::SessionContext;
+use databend_query::sessions::SessionType;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_session_context() -> Result<()> {
     let settings = Settings::create("default".to_string());
-    let session_ctx = SessionContext::try_create(settings)?;
+    let session_ctx = SessionContext::try_create(settings, SessionType::MySQL)?;
 
     // Abort status.
     {

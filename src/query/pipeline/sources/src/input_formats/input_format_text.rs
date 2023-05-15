@@ -493,7 +493,8 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             .map(|f| {
                 ColumnBuilder::with_capacity_hint(
                     &f.data_type().into(),
-                    ctx.block_compact_thresholds.min_rows_per_block,
+                    // todo(youngsofun): calculate the capacity based on the memory and schema
+                    1024,
                     false,
                 )
             })
@@ -515,11 +516,8 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             .mutable_columns
             .iter_mut()
             .map(|col| {
-                let empty_builder = ColumnBuilder::with_capacity_hint(
-                    &col.data_type(),
-                    self.ctx.block_compact_thresholds.min_rows_per_block,
-                    false,
-                );
+                let empty_builder =
+                    ColumnBuilder::with_capacity_hint(&col.data_type(), 1024, false);
                 std::mem::replace(col, empty_builder).build()
             })
             .collect();

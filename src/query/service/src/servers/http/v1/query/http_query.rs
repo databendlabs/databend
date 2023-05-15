@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::time::Duration;
 use std::time::Instant;
@@ -44,6 +45,7 @@ use crate::servers::http::v1::query::PageManager;
 use crate::servers::http::v1::query::ResponseData;
 use crate::servers::http::v1::query::Wait;
 use crate::servers::http::v1::HttpQueryManager;
+use crate::sessions::short_sql;
 use crate::sessions::QueryAffect;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -52,7 +54,7 @@ fn default_as_true() -> bool {
     true
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize)]
 pub struct HttpQueryRequest {
     pub session_id: Option<String>,
     pub session: Option<HttpSessionConf>,
@@ -62,6 +64,19 @@ pub struct HttpQueryRequest {
     #[serde(default = "default_as_true")]
     pub string_fields: bool,
     pub stage_attachment: Option<StageAttachmentConf>,
+}
+
+impl Debug for HttpQueryRequest {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HttpQueryRequest")
+            .field("session_id", &self.session_id)
+            .field("session", &self.session)
+            .field("sql", &short_sql(self.sql.clone()))
+            .field("pagination", &self.pagination)
+            .field("string_fields", &self.string_fields)
+            .field("stage_attachment", &self.stage_attachment)
+            .finish()
+    }
 }
 
 const DEFAULT_MAX_ROWS_IN_BUFFER: usize = 5 * 1000 * 1000;
@@ -274,7 +289,6 @@ impl HttpQuery {
         let block_sender_closer = block_sender.closer();
         let state_clone = state.clone();
         let ctx_clone = ctx.clone();
-        let ctx_clone2 = ctx.clone();
         let sql = request.sql.clone();
         let query_id = id.clone();
         let query_id_clone = id.clone();
@@ -319,7 +333,6 @@ impl HttpQuery {
             block_receiver,
             schema,
             format_settings,
-            ctx_clone2,
         )));
         let query = HttpQuery {
             id,
