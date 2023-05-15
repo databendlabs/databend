@@ -91,7 +91,7 @@ impl StatisticsReceiver {
                                                     .force_kill_query(cause.clone());
                                                 return Err(cause);
                                             }
-                                            _ => {},
+                                            _ => {}
                                         }
                                     },
                                 }
