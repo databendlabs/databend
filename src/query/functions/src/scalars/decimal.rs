@@ -120,7 +120,6 @@ macro_rules! binary_decimal {
         let scale_a = <$type_name>::e($scale_a);
         let scale_b = <$type_name>::e($scale_b);
 
-        let zero = <$type_name>::zero();
         let one = <$type_name>::one();
         let min_for_precision = <$type_name>::min_for_precision($size.precision);
         let max_for_precision = <$type_name>::max_for_precision($size.precision);

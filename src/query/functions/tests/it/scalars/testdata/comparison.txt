@@ -301,7 +301,7 @@ output         : true
 
 ast            : 1.1!=1.1
 raw expr       : noteq(1.1, 1.1)
-checked expr   : noteq<Float32, Float32>(to_float32<Decimal(2, 1)>(1.1_d128(2,1)), to_float32<Decimal(2, 1)>(1.1_d128(2,1)))
+checked expr   : noteq<Float64, Float64>(to_float64<Decimal(2, 1)>(1.1_d128(2,1)), to_float64<Decimal(2, 1)>(1.1_d128(2,1)))
 optimized expr : false
 output type    : Boolean
 output domain  : {FALSE}

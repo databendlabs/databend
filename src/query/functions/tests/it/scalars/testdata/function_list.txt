@@ -1324,207 +1324,206 @@ Functions overloads:
 197 div(Float64 NULL, Float32 NULL) :: Int64 NULL
 198 div(Float64, Float64) :: Int64
 199 div(Float64 NULL, Float64 NULL) :: Int64 NULL
-0 divide FACTORY
-1 divide(UInt8, UInt8) :: Float64
-2 divide(UInt8 NULL, UInt8 NULL) :: Float64 NULL
-3 divide(UInt8, UInt16) :: Float64
-4 divide(UInt8 NULL, UInt16 NULL) :: Float64 NULL
-5 divide(UInt8, UInt32) :: Float64
-6 divide(UInt8 NULL, UInt32 NULL) :: Float64 NULL
-7 divide(UInt8, UInt64) :: Float64
-8 divide(UInt8 NULL, UInt64 NULL) :: Float64 NULL
-9 divide(UInt8, Int8) :: Float64
-10 divide(UInt8 NULL, Int8 NULL) :: Float64 NULL
-11 divide(UInt8, Int16) :: Float64
-12 divide(UInt8 NULL, Int16 NULL) :: Float64 NULL
-13 divide(UInt8, Int32) :: Float64
-14 divide(UInt8 NULL, Int32 NULL) :: Float64 NULL
-15 divide(UInt8, Int64) :: Float64
-16 divide(UInt8 NULL, Int64 NULL) :: Float64 NULL
-17 divide(UInt16, UInt8) :: Float64
-18 divide(UInt16 NULL, UInt8 NULL) :: Float64 NULL
-19 divide(UInt16, UInt16) :: Float64
-20 divide(UInt16 NULL, UInt16 NULL) :: Float64 NULL
-21 divide(UInt16, UInt32) :: Float64
-22 divide(UInt16 NULL, UInt32 NULL) :: Float64 NULL
-23 divide(UInt16, UInt64) :: Float64
-24 divide(UInt16 NULL, UInt64 NULL) :: Float64 NULL
-25 divide(UInt16, Int8) :: Float64
-26 divide(UInt16 NULL, Int8 NULL) :: Float64 NULL
-27 divide(UInt16, Int16) :: Float64
-28 divide(UInt16 NULL, Int16 NULL) :: Float64 NULL
-29 divide(UInt16, Int32) :: Float64
-30 divide(UInt16 NULL, Int32 NULL) :: Float64 NULL
-31 divide(UInt16, Int64) :: Float64
-32 divide(UInt16 NULL, Int64 NULL) :: Float64 NULL
-33 divide(UInt32, UInt8) :: Float64
-34 divide(UInt32 NULL, UInt8 NULL) :: Float64 NULL
-35 divide(UInt32, UInt16) :: Float64
-36 divide(UInt32 NULL, UInt16 NULL) :: Float64 NULL
-37 divide(UInt32, UInt32) :: Float64
-38 divide(UInt32 NULL, UInt32 NULL) :: Float64 NULL
-39 divide(UInt32, UInt64) :: Float64
-40 divide(UInt32 NULL, UInt64 NULL) :: Float64 NULL
-41 divide(UInt32, Int8) :: Float64
-42 divide(UInt32 NULL, Int8 NULL) :: Float64 NULL
-43 divide(UInt32, Int16) :: Float64
-44 divide(UInt32 NULL, Int16 NULL) :: Float64 NULL
-45 divide(UInt32, Int32) :: Float64
-46 divide(UInt32 NULL, Int32 NULL) :: Float64 NULL
-47 divide(UInt32, Int64) :: Float64
-48 divide(UInt32 NULL, Int64 NULL) :: Float64 NULL
-49 divide(UInt64, UInt8) :: Float64
-50 divide(UInt64 NULL, UInt8 NULL) :: Float64 NULL
-51 divide(UInt64, UInt16) :: Float64
-52 divide(UInt64 NULL, UInt16 NULL) :: Float64 NULL
-53 divide(UInt64, UInt32) :: Float64
-54 divide(UInt64 NULL, UInt32 NULL) :: Float64 NULL
-55 divide(UInt64, UInt64) :: Float64
-56 divide(UInt64 NULL, UInt64 NULL) :: Float64 NULL
-57 divide(UInt64, Int8) :: Float64
-58 divide(UInt64 NULL, Int8 NULL) :: Float64 NULL
-59 divide(UInt64, Int16) :: Float64
-60 divide(UInt64 NULL, Int16 NULL) :: Float64 NULL
-61 divide(UInt64, Int32) :: Float64
-62 divide(UInt64 NULL, Int32 NULL) :: Float64 NULL
-63 divide(UInt64, Int64) :: Float64
-64 divide(UInt64 NULL, Int64 NULL) :: Float64 NULL
-65 divide(Int8, UInt8) :: Float64
-66 divide(Int8 NULL, UInt8 NULL) :: Float64 NULL
-67 divide(Int8, UInt16) :: Float64
-68 divide(Int8 NULL, UInt16 NULL) :: Float64 NULL
-69 divide(Int8, UInt32) :: Float64
-70 divide(Int8 NULL, UInt32 NULL) :: Float64 NULL
-71 divide(Int8, UInt64) :: Float64
-72 divide(Int8 NULL, UInt64 NULL) :: Float64 NULL
-73 divide(Int8, Int8) :: Float64
-74 divide(Int8 NULL, Int8 NULL) :: Float64 NULL
-75 divide(Int8, Int16) :: Float64
-76 divide(Int8 NULL, Int16 NULL) :: Float64 NULL
-77 divide(Int8, Int32) :: Float64
-78 divide(Int8 NULL, Int32 NULL) :: Float64 NULL
-79 divide(Int8, Int64) :: Float64
-80 divide(Int8 NULL, Int64 NULL) :: Float64 NULL
-81 divide(Int16, UInt8) :: Float64
-82 divide(Int16 NULL, UInt8 NULL) :: Float64 NULL
-83 divide(Int16, UInt16) :: Float64
-84 divide(Int16 NULL, UInt16 NULL) :: Float64 NULL
-85 divide(Int16, UInt32) :: Float64
-86 divide(Int16 NULL, UInt32 NULL) :: Float64 NULL
-87 divide(Int16, UInt64) :: Float64
-88 divide(Int16 NULL, UInt64 NULL) :: Float64 NULL
-89 divide(Int16, Int8) :: Float64
-90 divide(Int16 NULL, Int8 NULL) :: Float64 NULL
-91 divide(Int16, Int16) :: Float64
-92 divide(Int16 NULL, Int16 NULL) :: Float64 NULL
-93 divide(Int16, Int32) :: Float64
-94 divide(Int16 NULL, Int32 NULL) :: Float64 NULL
-95 divide(Int16, Int64) :: Float64
-96 divide(Int16 NULL, Int64 NULL) :: Float64 NULL
-97 divide(Int32, UInt8) :: Float64
-98 divide(Int32 NULL, UInt8 NULL) :: Float64 NULL
-99 divide(Int32, UInt16) :: Float64
-100 divide(Int32 NULL, UInt16 NULL) :: Float64 NULL
-101 divide(Int32, UInt32) :: Float64
-102 divide(Int32 NULL, UInt32 NULL) :: Float64 NULL
-103 divide(Int32, UInt64) :: Float64
-104 divide(Int32 NULL, UInt64 NULL) :: Float64 NULL
-105 divide(Int32, Int8) :: Float64
-106 divide(Int32 NULL, Int8 NULL) :: Float64 NULL
-107 divide(Int32, Int16) :: Float64
-108 divide(Int32 NULL, Int16 NULL) :: Float64 NULL
-109 divide(Int32, Int32) :: Float64
-110 divide(Int32 NULL, Int32 NULL) :: Float64 NULL
-111 divide(Int32, Int64) :: Float64
-112 divide(Int32 NULL, Int64 NULL) :: Float64 NULL
-113 divide(Int64, UInt8) :: Float64
-114 divide(Int64 NULL, UInt8 NULL) :: Float64 NULL
-115 divide(Int64, UInt16) :: Float64
-116 divide(Int64 NULL, UInt16 NULL) :: Float64 NULL
-117 divide(Int64, UInt32) :: Float64
-118 divide(Int64 NULL, UInt32 NULL) :: Float64 NULL
-119 divide(Int64, UInt64) :: Float64
-120 divide(Int64 NULL, UInt64 NULL) :: Float64 NULL
-121 divide(Int64, Int8) :: Float64
-122 divide(Int64 NULL, Int8 NULL) :: Float64 NULL
-123 divide(Int64, Int16) :: Float64
-124 divide(Int64 NULL, Int16 NULL) :: Float64 NULL
-125 divide(Int64, Int32) :: Float64
-126 divide(Int64 NULL, Int32 NULL) :: Float64 NULL
-127 divide(Int64, Int64) :: Float64
-128 divide(Int64 NULL, Int64 NULL) :: Float64 NULL
-129 divide(UInt8, Float32) :: Float64
-130 divide(UInt8 NULL, Float32 NULL) :: Float64 NULL
-131 divide(UInt8, Float64) :: Float64
-132 divide(UInt8 NULL, Float64 NULL) :: Float64 NULL
-133 divide(UInt16, Float32) :: Float64
-134 divide(UInt16 NULL, Float32 NULL) :: Float64 NULL
-135 divide(UInt16, Float64) :: Float64
-136 divide(UInt16 NULL, Float64 NULL) :: Float64 NULL
-137 divide(UInt32, Float32) :: Float64
-138 divide(UInt32 NULL, Float32 NULL) :: Float64 NULL
-139 divide(UInt32, Float64) :: Float64
-140 divide(UInt32 NULL, Float64 NULL) :: Float64 NULL
-141 divide(UInt64, Float32) :: Float64
-142 divide(UInt64 NULL, Float32 NULL) :: Float64 NULL
-143 divide(UInt64, Float64) :: Float64
-144 divide(UInt64 NULL, Float64 NULL) :: Float64 NULL
-145 divide(Int8, Float32) :: Float64
-146 divide(Int8 NULL, Float32 NULL) :: Float64 NULL
-147 divide(Int8, Float64) :: Float64
-148 divide(Int8 NULL, Float64 NULL) :: Float64 NULL
-149 divide(Int16, Float32) :: Float64
-150 divide(Int16 NULL, Float32 NULL) :: Float64 NULL
-151 divide(Int16, Float64) :: Float64
-152 divide(Int16 NULL, Float64 NULL) :: Float64 NULL
-153 divide(Int32, Float32) :: Float64
-154 divide(Int32 NULL, Float32 NULL) :: Float64 NULL
-155 divide(Int32, Float64) :: Float64
-156 divide(Int32 NULL, Float64 NULL) :: Float64 NULL
-157 divide(Int64, Float32) :: Float64
-158 divide(Int64 NULL, Float32 NULL) :: Float64 NULL
-159 divide(Int64, Float64) :: Float64
-160 divide(Int64 NULL, Float64 NULL) :: Float64 NULL
-161 divide(Float32, UInt8) :: Float64
-162 divide(Float32 NULL, UInt8 NULL) :: Float64 NULL
-163 divide(Float32, UInt16) :: Float64
-164 divide(Float32 NULL, UInt16 NULL) :: Float64 NULL
-165 divide(Float32, UInt32) :: Float64
-166 divide(Float32 NULL, UInt32 NULL) :: Float64 NULL
-167 divide(Float32, UInt64) :: Float64
-168 divide(Float32 NULL, UInt64 NULL) :: Float64 NULL
-169 divide(Float32, Int8) :: Float64
-170 divide(Float32 NULL, Int8 NULL) :: Float64 NULL
-171 divide(Float32, Int16) :: Float64
-172 divide(Float32 NULL, Int16 NULL) :: Float64 NULL
-173 divide(Float32, Int32) :: Float64
-174 divide(Float32 NULL, Int32 NULL) :: Float64 NULL
-175 divide(Float32, Int64) :: Float64
-176 divide(Float32 NULL, Int64 NULL) :: Float64 NULL
-177 divide(Float64, UInt8) :: Float64
-178 divide(Float64 NULL, UInt8 NULL) :: Float64 NULL
-179 divide(Float64, UInt16) :: Float64
-180 divide(Float64 NULL, UInt16 NULL) :: Float64 NULL
-181 divide(Float64, UInt32) :: Float64
-182 divide(Float64 NULL, UInt32 NULL) :: Float64 NULL
-183 divide(Float64, UInt64) :: Float64
-184 divide(Float64 NULL, UInt64 NULL) :: Float64 NULL
-185 divide(Float64, Int8) :: Float64
-186 divide(Float64 NULL, Int8 NULL) :: Float64 NULL
-187 divide(Float64, Int16) :: Float64
-188 divide(Float64 NULL, Int16 NULL) :: Float64 NULL
-189 divide(Float64, Int32) :: Float64
-190 divide(Float64 NULL, Int32 NULL) :: Float64 NULL
-191 divide(Float64, Int64) :: Float64
-192 divide(Float64 NULL, Int64 NULL) :: Float64 NULL
-193 divide(Float32, Float32) :: Float64
-194 divide(Float32 NULL, Float32 NULL) :: Float64 NULL
-195 divide(Float32, Float64) :: Float64
-196 divide(Float32 NULL, Float64 NULL) :: Float64 NULL
-197 divide(Float64, Float32) :: Float64
-198 divide(Float64 NULL, Float32 NULL) :: Float64 NULL
-199 divide(Float64, Float64) :: Float64
-200 divide(Float64 NULL, Float64 NULL) :: Float64 NULL
+0 divide(UInt8, UInt8) :: Float64
+1 divide(UInt8 NULL, UInt8 NULL) :: Float64 NULL
+2 divide(UInt8, UInt16) :: Float64
+3 divide(UInt8 NULL, UInt16 NULL) :: Float64 NULL
+4 divide(UInt8, UInt32) :: Float64
+5 divide(UInt8 NULL, UInt32 NULL) :: Float64 NULL
+6 divide(UInt8, UInt64) :: Float64
+7 divide(UInt8 NULL, UInt64 NULL) :: Float64 NULL
+8 divide(UInt8, Int8) :: Float64
+9 divide(UInt8 NULL, Int8 NULL) :: Float64 NULL
+10 divide(UInt8, Int16) :: Float64
+11 divide(UInt8 NULL, Int16 NULL) :: Float64 NULL
+12 divide(UInt8, Int32) :: Float64
+13 divide(UInt8 NULL, Int32 NULL) :: Float64 NULL
+14 divide(UInt8, Int64) :: Float64
+15 divide(UInt8 NULL, Int64 NULL) :: Float64 NULL
+16 divide(UInt16, UInt8) :: Float64
+17 divide(UInt16 NULL, UInt8 NULL) :: Float64 NULL
+18 divide(UInt16, UInt16) :: Float64
+19 divide(UInt16 NULL, UInt16 NULL) :: Float64 NULL
+20 divide(UInt16, UInt32) :: Float64
+21 divide(UInt16 NULL, UInt32 NULL) :: Float64 NULL
+22 divide(UInt16, UInt64) :: Float64
+23 divide(UInt16 NULL, UInt64 NULL) :: Float64 NULL
+24 divide(UInt16, Int8) :: Float64
+25 divide(UInt16 NULL, Int8 NULL) :: Float64 NULL
+26 divide(UInt16, Int16) :: Float64
+27 divide(UInt16 NULL, Int16 NULL) :: Float64 NULL
+28 divide(UInt16, Int32) :: Float64
+29 divide(UInt16 NULL, Int32 NULL) :: Float64 NULL
+30 divide(UInt16, Int64) :: Float64
+31 divide(UInt16 NULL, Int64 NULL) :: Float64 NULL
+32 divide(UInt32, UInt8) :: Float64
+33 divide(UInt32 NULL, UInt8 NULL) :: Float64 NULL
+34 divide(UInt32, UInt16) :: Float64
+35 divide(UInt32 NULL, UInt16 NULL) :: Float64 NULL
+36 divide(UInt32, UInt32) :: Float64
+37 divide(UInt32 NULL, UInt32 NULL) :: Float64 NULL
+38 divide(UInt32, UInt64) :: Float64
+39 divide(UInt32 NULL, UInt64 NULL) :: Float64 NULL
+40 divide(UInt32, Int8) :: Float64
+41 divide(UInt32 NULL, Int8 NULL) :: Float64 NULL
+42 divide(UInt32, Int16) :: Float64
+43 divide(UInt32 NULL, Int16 NULL) :: Float64 NULL
+44 divide(UInt32, Int32) :: Float64
+45 divide(UInt32 NULL, Int32 NULL) :: Float64 NULL
+46 divide(UInt32, Int64) :: Float64
+47 divide(UInt32 NULL, Int64 NULL) :: Float64 NULL
+48 divide(UInt64, UInt8) :: Float64
+49 divide(UInt64 NULL, UInt8 NULL) :: Float64 NULL
+50 divide(UInt64, UInt16) :: Float64
+51 divide(UInt64 NULL, UInt16 NULL) :: Float64 NULL
+52 divide(UInt64, UInt32) :: Float64
+53 divide(UInt64 NULL, UInt32 NULL) :: Float64 NULL
+54 divide(UInt64, UInt64) :: Float64
+55 divide(UInt64 NULL, UInt64 NULL) :: Float64 NULL
+56 divide(UInt64, Int8) :: Float64
+57 divide(UInt64 NULL, Int8 NULL) :: Float64 NULL
+58 divide(UInt64, Int16) :: Float64
+59 divide(UInt64 NULL, Int16 NULL) :: Float64 NULL
+60 divide(UInt64, Int32) :: Float64
+61 divide(UInt64 NULL, Int32 NULL) :: Float64 NULL
+62 divide(UInt64, Int64) :: Float64
+63 divide(UInt64 NULL, Int64 NULL) :: Float64 NULL
+64 divide(Int8, UInt8) :: Float64
+65 divide(Int8 NULL, UInt8 NULL) :: Float64 NULL
+66 divide(Int8, UInt16) :: Float64
+67 divide(Int8 NULL, UInt16 NULL) :: Float64 NULL
+68 divide(Int8, UInt32) :: Float64
+69 divide(Int8 NULL, UInt32 NULL) :: Float64 NULL
+70 divide(Int8, UInt64) :: Float64
+71 divide(Int8 NULL, UInt64 NULL) :: Float64 NULL
+72 divide(Int8, Int8) :: Float64
+73 divide(Int8 NULL, Int8 NULL) :: Float64 NULL
+74 divide(Int8, Int16) :: Float64
+75 divide(Int8 NULL, Int16 NULL) :: Float64 NULL
+76 divide(Int8, Int32) :: Float64
+77 divide(Int8 NULL, Int32 NULL) :: Float64 NULL
+78 divide(Int8, Int64) :: Float64
+79 divide(Int8 NULL, Int64 NULL) :: Float64 NULL
+80 divide(Int16, UInt8) :: Float64
+81 divide(Int16 NULL, UInt8 NULL) :: Float64 NULL
+82 divide(Int16, UInt16) :: Float64
+83 divide(Int16 NULL, UInt16 NULL) :: Float64 NULL
+84 divide(Int16, UInt32) :: Float64
+85 divide(Int16 NULL, UInt32 NULL) :: Float64 NULL
+86 divide(Int16, UInt64) :: Float64
+87 divide(Int16 NULL, UInt64 NULL) :: Float64 NULL
+88 divide(Int16, Int8) :: Float64
+89 divide(Int16 NULL, Int8 NULL) :: Float64 NULL
+90 divide(Int16, Int16) :: Float64
+91 divide(Int16 NULL, Int16 NULL) :: Float64 NULL
+92 divide(Int16, Int32) :: Float64
+93 divide(Int16 NULL, Int32 NULL) :: Float64 NULL
+94 divide(Int16, Int64) :: Float64
+95 divide(Int16 NULL, Int64 NULL) :: Float64 NULL
+96 divide(Int32, UInt8) :: Float64
+97 divide(Int32 NULL, UInt8 NULL) :: Float64 NULL
+98 divide(Int32, UInt16) :: Float64
+99 divide(Int32 NULL, UInt16 NULL) :: Float64 NULL
+100 divide(Int32, UInt32) :: Float64
+101 divide(Int32 NULL, UInt32 NULL) :: Float64 NULL
+102 divide(Int32, UInt64) :: Float64
+103 divide(Int32 NULL, UInt64 NULL) :: Float64 NULL
+104 divide(Int32, Int8) :: Float64
+105 divide(Int32 NULL, Int8 NULL) :: Float64 NULL
+106 divide(Int32, Int16) :: Float64
+107 divide(Int32 NULL, Int16 NULL) :: Float64 NULL
+108 divide(Int32, Int32) :: Float64
+109 divide(Int32 NULL, Int32 NULL) :: Float64 NULL
+110 divide(Int32, Int64) :: Float64
+111 divide(Int32 NULL, Int64 NULL) :: Float64 NULL
+112 divide(Int64, UInt8) :: Float64
+113 divide(Int64 NULL, UInt8 NULL) :: Float64 NULL
+114 divide(Int64, UInt16) :: Float64
+115 divide(Int64 NULL, UInt16 NULL) :: Float64 NULL
+116 divide(Int64, UInt32) :: Float64
+117 divide(Int64 NULL, UInt32 NULL) :: Float64 NULL
+118 divide(Int64, UInt64) :: Float64
+119 divide(Int64 NULL, UInt64 NULL) :: Float64 NULL
+120 divide(Int64, Int8) :: Float64
+121 divide(Int64 NULL, Int8 NULL) :: Float64 NULL
+122 divide(Int64, Int16) :: Float64
+123 divide(Int64 NULL, Int16 NULL) :: Float64 NULL
+124 divide(Int64, Int32) :: Float64
+125 divide(Int64 NULL, Int32 NULL) :: Float64 NULL
+126 divide(Int64, Int64) :: Float64
+127 divide(Int64 NULL, Int64 NULL) :: Float64 NULL
+128 divide(UInt8, Float32) :: Float64
+129 divide(UInt8 NULL, Float32 NULL) :: Float64 NULL
+130 divide(UInt8, Float64) :: Float64
+131 divide(UInt8 NULL, Float64 NULL) :: Float64 NULL
+132 divide(UInt16, Float32) :: Float64
+133 divide(UInt16 NULL, Float32 NULL) :: Float64 NULL
+134 divide(UInt16, Float64) :: Float64
+135 divide(UInt16 NULL, Float64 NULL) :: Float64 NULL
+136 divide(UInt32, Float32) :: Float64
+137 divide(UInt32 NULL, Float32 NULL) :: Float64 NULL
+138 divide(UInt32, Float64) :: Float64
+139 divide(UInt32 NULL, Float64 NULL) :: Float64 NULL
+140 divide(UInt64, Float32) :: Float64
+141 divide(UInt64 NULL, Float32 NULL) :: Float64 NULL
+142 divide(UInt64, Float64) :: Float64
+143 divide(UInt64 NULL, Float64 NULL) :: Float64 NULL
+144 divide(Int8, Float32) :: Float64
+145 divide(Int8 NULL, Float32 NULL) :: Float64 NULL
+146 divide(Int8, Float64) :: Float64
+147 divide(Int8 NULL, Float64 NULL) :: Float64 NULL
+148 divide(Int16, Float32) :: Float64
+149 divide(Int16 NULL, Float32 NULL) :: Float64 NULL
+150 divide(Int16, Float64) :: Float64
+151 divide(Int16 NULL, Float64 NULL) :: Float64 NULL
+152 divide(Int32, Float32) :: Float64
+153 divide(Int32 NULL, Float32 NULL) :: Float64 NULL
+154 divide(Int32, Float64) :: Float64
+155 divide(Int32 NULL, Float64 NULL) :: Float64 NULL
+156 divide(Int64, Float32) :: Float64
+157 divide(Int64 NULL, Float32 NULL) :: Float64 NULL
+158 divide(Int64, Float64) :: Float64
+159 divide(Int64 NULL, Float64 NULL) :: Float64 NULL
+160 divide(Float32, UInt8) :: Float64
+161 divide(Float32 NULL, UInt8 NULL) :: Float64 NULL
+162 divide(Float32, UInt16) :: Float64
+163 divide(Float32 NULL, UInt16 NULL) :: Float64 NULL
+164 divide(Float32, UInt32) :: Float64
+165 divide(Float32 NULL, UInt32 NULL) :: Float64 NULL
+166 divide(Float32, UInt64) :: Float64
+167 divide(Float32 NULL, UInt64 NULL) :: Float64 NULL
+168 divide(Float32, Int8) :: Float64
+169 divide(Float32 NULL, Int8 NULL) :: Float64 NULL
+170 divide(Float32, Int16) :: Float64
+171 divide(Float32 NULL, Int16 NULL) :: Float64 NULL
+172 divide(Float32, Int32) :: Float64
+173 divide(Float32 NULL, Int32 NULL) :: Float64 NULL
+174 divide(Float32, Int64) :: Float64
+175 divide(Float32 NULL, Int64 NULL) :: Float64 NULL
+176 divide(Float64, UInt8) :: Float64
+177 divide(Float64 NULL, UInt8 NULL) :: Float64 NULL
+178 divide(Float64, UInt16) :: Float64
+179 divide(Float64 NULL, UInt16 NULL) :: Float64 NULL
+180 divide(Float64, UInt32) :: Float64
+181 divide(Float64 NULL, UInt32 NULL) :: Float64 NULL
+182 divide(Float64, UInt64) :: Float64
+183 divide(Float64 NULL, UInt64 NULL) :: Float64 NULL
+184 divide(Float64, Int8) :: Float64
+185 divide(Float64 NULL, Int8 NULL) :: Float64 NULL
+186 divide(Float64, Int16) :: Float64
+187 divide(Float64 NULL, Int16 NULL) :: Float64 NULL
+188 divide(Float64, Int32) :: Float64
+189 divide(Float64 NULL, Int32 NULL) :: Float64 NULL
+190 divide(Float64, Int64) :: Float64
+191 divide(Float64 NULL, Int64 NULL) :: Float64 NULL
+192 divide(Float32, Float32) :: Float64
+193 divide(Float32 NULL, Float32 NULL) :: Float64 NULL
+194 divide(Float32, Float64) :: Float64
+195 divide(Float32 NULL, Float64 NULL) :: Float64 NULL
+196 divide(Float64, Float32) :: Float64
+197 divide(Float64 NULL, Float32 NULL) :: Float64 NULL
+198 divide(Float64, Float64) :: Float64
+199 divide(Float64 NULL, Float64 NULL) :: Float64 NULL
 0 eq(Variant, Variant) :: Boolean
 1 eq(Variant NULL, Variant NULL) :: Boolean NULL
 2 eq(String, String) :: Boolean
