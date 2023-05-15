@@ -804,6 +804,23 @@ impl TableSchema {
         }
     }
 
+    /// removing virtual computed fields.
+    #[must_use]
+    pub fn remove_virtual_computed(&self) -> Self {
+        let new_fields = self
+            .fields()
+            .iter()
+            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        Self {
+            fields: new_fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
+    }
+
     pub fn to_arrow(&self) -> ArrowSchema {
         let fields = self
             .fields()
