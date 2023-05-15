@@ -99,11 +99,11 @@ impl ToReadDataSourcePlan for dyn Table {
                     } else if let Some(projection) = &push_downs.projection {
                         Arc::new(projection.project_schema(&schema))
                     } else {
-                        schema.clone()
+                        schema
                     }
                 }
             },
-            _ => schema.clone(),
+            _ => schema,
         };
 
         if let Some(ref push_downs) = push_downs {

@@ -22,8 +22,7 @@ use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::parse_exprs;
-use common_storages_factory::Table;
+use common_sql::parse_computed_exprs;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -46,13 +45,13 @@ where Self: Transform
         output: Arc<OutputPort>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        table: Arc<dyn Table>,
     ) -> Result<ProcessorPtr> {
         let mut exprs = Vec::with_capacity(output_schema.fields().len());
         for f in output_schema.fields().iter() {
             let expr = if !input_schema.has_field(f.name()) {
                 if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
-                    let mut expr = parse_exprs(ctx.clone(), table.clone(), stored_expr)?;
+                    let mut expr =
+                        parse_computed_exprs(ctx.clone(), input_schema.clone(), stored_expr)?;
                     let mut expr = expr.remove(0);
                     if expr.data_type() != f.data_type() {
                         expr = Expr::Cast {

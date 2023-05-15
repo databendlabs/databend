@@ -24,8 +24,10 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::infer_table_schema;
 use common_expression::types::DataType;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
@@ -64,8 +66,7 @@ pub fn parse_exprs(
 
     let columns = metadata.read().columns_by_table_index(table_index);
     let table = metadata.read().table(table_index).clone();
-    let mut index = 0;
-    for column in columns.iter() {
+    for (index, column) in columns.iter().enumerate() {
         let column_binding = match column {
             ColumnEntry::BaseTableColumn(BaseTableColumn {
                 column_name,
@@ -73,32 +74,26 @@ pub fn parse_exprs(
                 path_indices,
                 virtual_computed_expr,
                 ..
-            }) => {
-                if virtual_computed_expr.is_some() {
-                    continue;
-                }
-                ColumnBinding {
-                    database_name: Some("default".to_string()),
-                    table_name: Some(table.name().to_string()),
-                    table_index: Some(table.index()),
-                    column_name: column_name.clone(),
-                    index,
-                    data_type: Box::new(data_type.into()),
-                    visibility: if path_indices.is_some() {
-                        Visibility::InVisible
-                    } else {
-                        Visibility::Visible
-                    },
-                    virtual_computed_expr: None,
-                }
-            }
+            }) => ColumnBinding {
+                database_name: Some("default".to_string()),
+                table_name: Some(table.name().to_string()),
+                table_index: Some(table.index()),
+                column_name: column_name.clone(),
+                index,
+                data_type: Box::new(data_type.into()),
+                visibility: if path_indices.is_some() {
+                    Visibility::InVisible
+                } else {
+                    Visibility::Visible
+                },
+                virtual_computed_expr: virtual_computed_expr.clone(),
+            },
             _ => {
                 return Err(ErrorCode::Internal("Invalid column entry"));
             }
         };
 
         bind_context.add_column_binding(column_binding);
-        index += 1;
     }
 
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -113,6 +108,64 @@ pub fn parse_exprs(
     );
 
     let sql_dialect = Dialect::MySQL;
+    let tokens = tokenize_sql(sql)?;
+    let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    let exprs = ast_exprs
+        .iter()
+        .map(|ast| {
+            let (scalar, _) =
+                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
+            let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+            Ok(expr)
+        })
+        .collect::<Result<_>>()?;
+
+    Ok(exprs)
+}
+
+pub fn parse_computed_exprs(
+    ctx: Arc<dyn TableContext>,
+    schema: DataSchemaRef,
+    sql: &str,
+) -> Result<Vec<Expr>> {
+    let settings = Settings::create("".to_string());
+    let mut bind_context = BindContext::new();
+    let mut metadata = Metadata::default();
+    let table_schema = infer_table_schema(&schema)?;
+    for (index, field) in schema.fields().iter().enumerate() {
+        bind_context.add_column_binding(ColumnBinding {
+            database_name: None,
+            table_name: None,
+            table_index: None,
+            column_name: field.name().clone(),
+            index,
+            data_type: Box::new(field.data_type().clone()),
+            visibility: Visibility::Visible,
+            virtual_computed_expr: None,
+        });
+        let table_field = table_schema.field(index);
+        metadata.add_base_table_column(
+            table_field.name().clone(),
+            table_field.data_type().clone(),
+            0,
+            None,
+            None,
+            None,
+        );
+    }
+
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let mut type_checker = TypeChecker::new(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        Arc::new(RwLock::new(metadata)),
+        &[],
+        false,
+        false,
+    );
+
+    let sql_dialect = Dialect::PostgreSQL;
     let tokens = tokenize_sql(sql)?;
     let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
     let exprs = ast_exprs

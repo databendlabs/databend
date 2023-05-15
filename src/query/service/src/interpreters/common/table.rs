@@ -76,7 +76,6 @@ pub fn fill_missing_columns(
                 transform_output_port,
                 input_schema.clone(),
                 output_schema.clone(),
-                table.clone(),
             )
         })?;
     }
