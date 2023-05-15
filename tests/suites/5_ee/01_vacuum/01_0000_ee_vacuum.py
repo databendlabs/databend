@@ -79,7 +79,6 @@ if __name__ == "__main__":
         mycursor.execute("select a from gc_test order by a;")
         datas = mycursor.fetchall()
 
-
         if old_datas != datas:
             print("vacuum lose data: %s : %s" % (old_datas, datas))
         else:

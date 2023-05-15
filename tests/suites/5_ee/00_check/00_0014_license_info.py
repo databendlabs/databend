@@ -46,4 +46,3 @@ if __name__ == "__main__":
         license = mycursor.fetchall()
         license[0] = license[0][:5]
         print(license)
-
