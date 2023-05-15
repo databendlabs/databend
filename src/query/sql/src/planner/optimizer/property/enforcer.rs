@@ -44,9 +44,9 @@ pub fn require_property(
         let required = rel_expr.compute_required_prop_child(ctx.clone(), index, required)?;
         let physical = rel_expr.derive_physical_prop_child(index)?;
         if let RelOperator::Join(_) = &s_expr.plan {
-            // If the child is join probe side and join type is broadcast join
-            // We should wrap the child with Random exchange to make it partition to all nodes
             if index == 0 && required.distribution == Distribution::Broadcast {
+                // If the child is join probe side and join type is broadcast join
+                // We should wrap the child with Random exchange to make it partition to all nodes
                 if optimized_expr
                     .child(0)?
                     .children()
@@ -63,6 +63,8 @@ pub fn require_property(
                 children.push(enforced_child);
                 continue;
             } else if index == 1 && required.distribution == Distribution::Broadcast {
+                // If the child is join build side and join type is broadcast join
+                // We should wrap the child with Broadcast exchange to make it available to all nodes.
                 let enforced_child = enforce_property(optimized_expr.child(index)?, &required)?;
                 children.push(enforced_child);
             }
