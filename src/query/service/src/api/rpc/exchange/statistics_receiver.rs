@@ -38,25 +38,14 @@ pub struct StatisticsReceiver {
 impl StatisticsReceiver {
     pub fn spawn_receiver(
         ctx: &Arc<QueryContext>,
-        statistics_exchanges: HashMap<String, Vec<FlightExchange>>,
+        statistics_exchanges: HashMap<String, FlightExchange>,
     ) -> Result<StatisticsReceiver> {
         let (shutdown_tx, _shutdown_rx) = channel(2);
         let mut exchange_handler = Vec::with_capacity(statistics_exchanges.len());
         let runtime = Runtime::with_worker_threads(2, Some(String::from("StatisticsReceiver")))?;
 
-        for (_source, mut exchanges) in statistics_exchanges.into_iter() {
-            debug_assert_eq!(exchanges.len(), 2);
-
-            let (_tx, rx) = match (exchanges.remove(0), exchanges.remove(0)) {
-                (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
-                    (tx.convert_to_sender(), rx.convert_to_receiver())
-                }
-                (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
-                    (tx.convert_to_sender(), rx.convert_to_receiver())
-                }
-                _ => unreachable!(),
-            };
-
+        for (_source, exchange) in statistics_exchanges.into_iter() {
+            let rx = exchange.convert_to_receiver();
             exchange_handler.push(runtime.spawn({
                 let ctx = ctx.clone();
                 let shutdown_rx = shutdown_tx.subscribe();

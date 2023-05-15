@@ -400,7 +400,7 @@ struct QueryCoordinator {
     info: Option<QueryInfo>,
     fragments_coordinator: HashMap<usize, Box<FragmentCoordinator>>,
 
-    statistics_exchanges: HashMap<String, Vec<FlightExchange>>,
+    statistics_exchanges: HashMap<String, FlightExchange>,
     fragment_exchanges: HashMap<(String, usize, u8), FlightExchange>,
 }
 
@@ -419,16 +419,15 @@ impl QueryCoordinator {
         target: String,
     ) -> Result<Receiver<Result<FlightData, Status>>> {
         let (tx, rx) = async_channel::bounded(8);
-        match self.statistics_exchanges.entry(target) {
-            Entry::Vacant(v) => {
-                v.insert(vec![FlightExchange::create_sender(tx)]);
-            }
-            Entry::Occupied(mut v) => {
-                v.get_mut().push(FlightExchange::create_sender(tx));
-            }
-        };
-
-        Ok(rx)
+        match self
+            .statistics_exchanges
+            .insert(target, FlightExchange::create_sender(tx))
+        {
+            None => Ok(rx),
+            Some(_) => Err(ErrorCode::Internal(
+                "statistics exchanges can only have one",
+            )),
+        }
     }
 
     pub fn add_statistics_exchanges(
@@ -436,14 +435,11 @@ impl QueryCoordinator {
         exchanges: HashMap<String, FlightExchange>,
     ) -> Result<()> {
         for (source, exchange) in exchanges.into_iter() {
-            match self.statistics_exchanges.entry(source) {
-                Entry::Vacant(v) => {
-                    v.insert(vec![exchange]);
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().push(exchange);
-                }
-            };
+            if self.statistics_exchanges.insert(source, exchange).is_some() {
+                return Err(ErrorCode::Internal(
+                    "Internal error, statistics exchange can only have one.",
+                ));
+            }
         }
 
         Ok(())
@@ -701,9 +697,9 @@ impl QueryCoordinator {
         }
 
         let ctx = query_ctx.clone();
-        let (_, request_server_exchanges) = request_server_exchanges.into_iter().next().unwrap();
+        let (_, request_server_exchange) = request_server_exchanges.into_iter().next().unwrap();
         let mut statistics_sender =
-            StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchanges);
+            StatisticsSender::spawn_sender(&query_id, ctx, request_server_exchange);
 
         Thread::named_spawn(Some(String::from("Distributed-Executor")), move || {
             statistics_sender.shutdown(executor.execute().err());

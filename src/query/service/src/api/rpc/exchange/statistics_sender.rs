@@ -44,21 +44,10 @@ impl StatisticsSender {
     pub fn spawn_sender(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        mut exchanges: Vec<FlightExchange>,
+        exchange: FlightExchange,
     ) -> StatisticsSender {
-        debug_assert_eq!(exchanges.len(), 2);
-
-        let (tx, _rx) = match (exchanges.remove(0), exchanges.remove(0)) {
-            (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
-                (tx.convert_to_sender(), rx.convert_to_receiver())
-            }
-            (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
-                (tx.convert_to_sender(), rx.convert_to_receiver())
-            }
-            _ => unreachable!(),
-        };
-
         let spawner = ctx.clone();
+        let tx = exchange.convert_to_sender();
         let shutdown_flag = Arc::new(AtomicBool::new(false));
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
