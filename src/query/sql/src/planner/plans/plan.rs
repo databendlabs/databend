@@ -361,6 +361,7 @@ impl Plan {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
             Plan::ShowCreateCatalog(plan) => plan.schema(),
+            Plan::ShowCreateDatabase(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
@@ -372,6 +373,7 @@ impl Plan {
             Plan::Insert(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
 
+            Plan::Call(_) => Arc::new(DataSchema::empty()),
             Plan::Presign(plan) => plan.schema(),
             Plan::ShowShareEndpoint(plan) => plan.schema(),
             Plan::DescShare(plan) => plan.schema(),
