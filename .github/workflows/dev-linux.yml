@@ -219,7 +219,7 @@ jobs:
           handlers: ${{ matrix.handlers }}
 
   ee_sqllogic_standalone:
-    name: ee_sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
+    name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [ self-hosted, X64, Linux, 4c8g ]
     if: github.repository == github.event.pull_request.head.repo.full_name
     needs: build
