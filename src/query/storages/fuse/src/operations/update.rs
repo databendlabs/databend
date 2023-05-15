@@ -91,10 +91,6 @@ impl FuseTable {
             return Ok(());
         }
 
-        if pipeline.is_empty() {
-            return Ok(());
-        }
-
         // TODO(zhyass): support cluster stats generator.
         pipeline.add_transform(|input, output| {
             SerializeDataTransform::try_create(
