@@ -384,7 +384,7 @@ impl Processor for ParquetDeserializeTransform {
 fn intervals_to_bitmap(interval: &[Interval], num_rows: usize) -> Bitmap {
     debug_assert!(
         interval.is_empty()
-            || interval.last().unwrap().start + interval.last().unwrap().length < num_rows
+            || interval.last().unwrap().start + interval.last().unwrap().length <= num_rows
     );
 
     let mut bitmap = MutableBitmap::with_capacity(num_rows);
