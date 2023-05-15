@@ -39,3 +39,9 @@ ALTER VIEW tmp_view(c1) AS SELECT number % 3 AS a, avg(number) FROM numbers(1000
 
 statement ok
 DROP VIEW IF EXISTS tmp_view
+
+statement ok
+drop view if exists v_t;
+
+statement error 1026
+alter view v_t as select 1;

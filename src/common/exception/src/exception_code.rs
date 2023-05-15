@@ -90,6 +90,7 @@ build_exceptions! {
     BadDataArrayLength(1018),
     UnknownTableId(1020),
     UnknownTable(1025),
+    UnknownView(1026),
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
     EmptyDataFromServer(1030),

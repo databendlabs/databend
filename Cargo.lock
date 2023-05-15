@@ -871,12 +871,14 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-meta-app",
+ "common-meta-embedded",
  "ctor",
  "databend-query",
  "pyo3",
  "pyo3-build-config",
  "tokio",
  "tokio-stream",
+ "uuid",
 ]
 
 [[package]]
