@@ -57,11 +57,8 @@ impl PySessionContext {
 
         let mut res = Self { session };
 
-        if tenant.is_some() {
-            res.sql("CREATE DATABASE IF NOT EXISTS default", py)
-                .and_then(|df| df.collect(py))?;
-        }
-
+        res.sql("CREATE DATABASE IF NOT EXISTS default", py)
+            .and_then(|df| df.collect(py))?;
         Ok(res)
     }
 
