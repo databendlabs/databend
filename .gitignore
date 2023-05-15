@@ -38,6 +38,7 @@ tls/certs/
 .databend/
 checksums.txt
 distro/
+dist/
 test/
 
 # fuzz
@@ -54,7 +55,9 @@ docker/build-tool/rust-toolchain.toml
 # python
 venv/
 *.pyc
+.venv/
 __pycache__/
+.python-version
 
 *.zip
 

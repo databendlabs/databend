@@ -26,6 +26,7 @@ mod session_type;
 pub use common_catalog::table_context::TableContext;
 pub use query_affect::QueryAffect;
 pub use query_ctx::QueryContext;
+pub use query_ctx_shared::short_sql;
 pub use query_ctx_shared::QueryContextShared;
 pub use session::Session;
 pub use session_ctx::SessionContext;

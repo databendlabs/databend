@@ -16,7 +16,7 @@ Databend Enterprise features require a [paid license](#obtain-a-license) from da
 You can find the feature's license by taking a look on the code file's header under the [Databend repository](https://github.com/datafuselabs/databend)
 :::
 
-## Types of licenses
+## Types of Licenses
 
 | Type                | Description                                                                                                                                                                                                                                                                                         |
 |---------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -26,7 +26,7 @@ You can find the feature's license by taking a look on the code file's header un
 For additional custom licensing options, [contact us](https://www.databend.com/contact-us).
 
 
-## Obtain a license
+## Obtain a License
 All Databend code is included in the same binary. No license key is required to access Apache and Elastic (Free) features. To access Elastic (Paid) features, users have two options:
 * An **Enterprise license** enables you to use Databend Enterprise features for longer periods (one year or more). To upgrade to Enterprise license, [contact sales](https://www.databend.com/contact-us)
 * A **Trial license** enables you to try out Databend for 15 days for free, [contact us](https://www.databend.com/contact-us) to get your trial license.
@@ -35,7 +35,7 @@ All Databend code is included in the same binary. No license key is required to 
 Databend Labs encourage non-commercial academic research involving Databend. For such projects, please [contact us](https://www.databend.com/contact-us) for possible long term licenses)
 :::
 
-## Set a license
+## Set a License
 
 In the following example, we assume that you are the `root` user. Then use the `SET GLOBAL SETTING` command to set the license key:
 
@@ -43,7 +43,7 @@ In the following example, we assume that you are the `root` user. Then use the `
 SET GLOBAL enterprise_license='you enterprise license key';
 ```
 
-## Verify a license
+## Verify a License
 
 To verify a license, you could use admin procedure `CALL` command to check organization name and expiry date info.
 
@@ -58,12 +58,12 @@ call admin$license_info();
 
 ## FAQs
 
-### Can I host Databend as a Service for internal use at my organization?
+### Can I Host Databend as a Service for Internal Use at My Organization?
 Yes, employees and contractors can use your internal Databend instance as a service under the Elastic license since it was created. 
 Use of Enterprise features will always require a license.
 
-### Why databend choose Elastic License 2.0 for enterprise features?
-the Elastic License 2.0 provides a good balance between open-source values and commercial interests.
+### Why Databend Choose Elastic License 2.0 for Enterprise Features?
+The Elastic License 2.0 provides a good balance between open-source values and commercial interests.
 Comparing other license such as Business Source License, Custom Community License, Elastic License 2.0 is simple, short and clear.
 There only have three limitations applied:
 1. Cannot provide software as a hosted or managed service with substantial access to features/functionality.
@@ -71,11 +71,11 @@ There only have three limitations applied:
 3. Cannot alter/remove/licensing, copyright, or trademark notices of the licensor in the software.
 
 
-### I would like to reuse some components from the Databend project in my own software, which uses the AGPL or another open source license, Is this possible?
+### I Would Like to Reuse Some Components From the Databend Project in My Own Software, Which Uses the Agpl or Another Open Source License, Is This Possible?
 The Databend team is committed to supporting the open-source community and willing to consider extracting specific internal components that are generally useful as a separate project with its own license, for example APL.
 For more details, feel free to [contact us](https://www.databend.com/contact-us).
 
-### Can you provide some examples around what qualifies as "providing the software to third parties as a hosted or managed Service" or not?
+### Can You Provide Some Examples Around What Qualifies as “Providing the Software to Third Parties as a Hosted or Managed Service” or Not?
 
 **I'm using databend for data dashboard on my analytic SaaS product**
 

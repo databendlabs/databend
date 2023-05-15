@@ -30,12 +30,12 @@ use common_expression::Expr;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
-use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
+use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
@@ -317,7 +317,10 @@ impl Processor for MutationSource {
             State::ReadData(Some(part)) => {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
                 let part = MutationPartInfo::from_part(&part)?;
-                self.index = part.index.clone();
+                self.index = BlockMetaIndex {
+                    segment_idx: part.index.segment_idx,
+                    block_idx: part.index.block_idx,
+                };
                 self.origin_stats = part.cluster_stats.clone();
                 let inner_part = part.inner_part.clone();
                 let fuse_part = FusePartInfo::from_part(&inner_part)?;

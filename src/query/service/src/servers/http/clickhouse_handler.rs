@@ -55,6 +55,7 @@ use tracing::info;
 use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterPtr;
 use crate::servers::http::v1::HttpQueryContext;
+use crate::sessions::short_sql;
 use crate::sessions::QueryContext;
 use crate::sessions::SessionType;
 use crate::sessions::TableContext;
@@ -286,14 +287,11 @@ pub async fn clickhouse_handler_post(
         sql.push(' ');
     }
     sql.push_str(body.into_string().await?.as_str());
-    let n = 100;
+    let n = 64;
     // other parts of the request already logged in middleware
-    let msg = if sql.len() > n {
-        format!(
-            "{}...(omit {} bytes)",
-            &sql[0..n].to_string(),
-            sql.len() - n
-        )
+    let len = sql.len();
+    let msg = if len > n {
+        format!("{}...(omit {} bytes)", short_sql(sql.clone()), len - n)
     } else {
         sql.to_string()
     };
