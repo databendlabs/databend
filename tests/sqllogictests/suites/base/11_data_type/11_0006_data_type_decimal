@@ -255,7 +255,7 @@ SELECT CAST(987654321.34 AS DECIMAL(76, 2)) / CAST(1.23 AS DECIMAL(6, 2)) AS res
 query I
 SELECT CAST(987654321.34 AS DECIMAL(76, 2)) / CAST(1.23 AS DECIMAL(76, 2)) AS result;
 ----
-802970992.4264584
+802970992.95934959
 
 ## negative
 
@@ -297,7 +297,7 @@ SELECT CAST(-4.56 AS DECIMAL(6, 2)) / CAST(-1.23 AS DECIMAL(6, 2)) AS result;
 query I
 SELECT CAST(-4.56 AS DECIMAL(76, 2)) / CAST(-1.23 AS DECIMAL(76, 2)) AS result;
 ----
-3.7073169691610417
+3.70731707
 
 query I
 SELECT MIN(CAST(-4.56 AS DECIMAL(6, 2)))
@@ -357,7 +357,7 @@ DECIMAL(15, 3) DECIMAL(15, 3) DECIMAL(21, 5) DECIMAL(22, 8)
 query TTTT
 select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(76,2) a , 3.1::Decimal(76,3) b);
 ----
-DECIMAL(76, 3) DECIMAL(76, 3) DECIMAL(76, 5) DOUBLE
+DECIMAL(76, 3) DECIMAL(76, 3) DECIMAL(76, 5) DECIMAL(76, 8)
 
 query TTTT
 select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(39,2) a , 3.1::Decimal(39,3) b);
