@@ -36,19 +36,30 @@ pub(crate) struct PySessionContext {
 #[pymethods]
 impl PySessionContext {
     #[new]
-    fn new() -> PyResult<Self> {
+    #[pyo3(signature = (tenant = None))]
+    fn new(tenant: Option<&str>, py: Python) -> PyResult<Self> {
         let session = RUNTIME.block_on(async {
             let session = SessionManager::instance()
                 .create_session(SessionType::Local)
                 .await
                 .unwrap();
 
+            if let Some(tenant) = tenant {
+                session.set_current_tenant(tenant.to_owned());
+            } else {
+                session.set_current_tenant(uuid::Uuid::new_v4().to_string());
+            }
+
             let user = UserInfo::new_no_auth("root", "127.0.0.1");
             session.set_authed_user(user, None).await.unwrap();
             session
         });
 
-        Ok(PySessionContext { session })
+        let mut res = Self { session };
+
+        res.sql("CREATE DATABASE IF NOT EXISTS default", py)
+            .and_then(|df| df.collect(py))?;
+        Ok(res)
     }
 
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
