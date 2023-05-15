@@ -182,8 +182,8 @@ jobs:
           handlers: ${{ matrix.handlers }}
 
   test_ee_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
-    needs: build
+    runs-on: ubuntu-latest
+    needs: build_linux
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_ee_standalone_linux

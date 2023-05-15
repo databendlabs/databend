@@ -656,6 +656,7 @@ impl<'a> JoinConditionResolver<'a> {
                 return Ok(true);
             }
         }
+
         Ok(false)
     }
 
