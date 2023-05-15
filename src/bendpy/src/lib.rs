@@ -21,6 +21,9 @@ mod schema;
 mod utils;
 
 use common_config::InnerConfig;
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageParams;
+use common_meta_embedded::MetaEmbedded;
 use databend_query::GlobalServices;
 use pyo3::prelude::*;
 use utils::RUNTIME;
@@ -31,6 +34,13 @@ fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
     RUNTIME.block_on(async {
         let mut conf: InnerConfig = InnerConfig::default();
         conf.storage.allow_insecure = true;
+        conf.storage.params = StorageParams::Fs(StorageFsConfig {
+            root: "_databend_data".to_string(),
+        });
+
+        MetaEmbedded::init_global_meta_store("_databend_meta".to_string())
+            .await
+            .unwrap();
         GlobalServices::init(conf).await.unwrap();
     });
 
