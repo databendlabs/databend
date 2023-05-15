@@ -51,7 +51,7 @@ pub fn require_property(
                     .child(0)?
                     .children()
                     .iter()
-                    .all(check_partition)
+                    .any(check_partition)
                 {
                     children.push(optimized_expr.child(index)?.clone());
                     continue;
@@ -62,6 +62,9 @@ pub fn require_property(
                     })?;
                 children.push(enforced_child);
                 continue;
+            } else if index == 1 && required.distribution == Distribution::Broadcast {
+                let enforced_child = enforce_property(optimized_expr.child(index)?, &required)?;
+                children.push(enforced_child);
             }
         }
         if let RelOperator::UnionAll(_) = &s_expr.plan {
