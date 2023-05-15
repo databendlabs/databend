@@ -37,7 +37,7 @@ authors:
 
 [Databend](https://github.com/datafuselabs/databend) is a modern cloud data warehouse, serving your massive-scale analytics needs at low cost and complexity. Open source alternative to Snowflake. Also available in the cloud: <https://app.databend.com> .
 
-> The `meta-upgrade-09` will not be available in the upcoming Databend release. If you are currently using version 0.9 or an earlier version, please utilize our upgrade tool which can be found at: [v1.1.33-nightly](https://github.com/datafuselabs/databend/releases/tag/v1.1.33-nightly).
+> The upgrade tool `meta-upgrade-09` will no longer be available in the release package. If you're using Databend 0.9 or an earlier version, you can seek help from the community.
 
 ## What's On In Databend
 
@@ -64,9 +64,9 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Bind `databend` into Python
 
-Databend now offers a Python binding that allows users to execute SQL queries using Python. This new feature eliminates the need for deploying instances.
+Databend now offers a Python binding that allows users to execute SQL queries against Databend using Python even without deploying a Databend instance.
 
-To use this functionality, simply import `SessionContext` from databend and create an instance of it:
+To use this functionality, simply import `SessionContext` from `databend` module and create an instance of it:
 
 ```python
 from databend import SessionContext
