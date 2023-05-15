@@ -2,8 +2,8 @@
 title: 'Conversion Functions'
 ---
 
-| Function                          | Description                                                                            | Example                            | Result                     |
-|-----------------------------------|----------------------------------------------------------------------------------------|------------------------------------|----------------------------|
+| Function                          | Description                                                                             | Example                            | Result                     |
+|-----------------------------------|-----------------------------------------------------------------------------------------|------------------------------------|----------------------------|
 | **CAST( expr AS data_type )**     | Converts a value from one data type to another                                          | **CAST(1 AS VARCHAR)**             | 1                          |
 | **expr::data_type**               | Alias for CAST                                                                          | **1::VARCHAR**                     | 1                          |
 | **TRY_CAST( expr AS data_type )** | Converts a value from one data type to another. Returns NULL on error.                  | **TRY_CAST(1 AS VARCHAR)**         | 1                          |
@@ -27,7 +27,7 @@ title: 'Conversion Functions'
 | **TO_STRING( expr, expr )**       | Converts a date value into a specific string format                                     | **TO_STRING('2022-12-25', 'Month/Day/Year: %m/%d/%Y')**| Month/Day/Year: 12/25/2022 |
 
 :::note
-`TO_DATETIME( expr )` and `TO_TIMESTAMP( expr )` uses the following rules to automatically determine the unit of time:
+`TO_DATETIME( expr )` and `TO_TIMESTAMP( expr )` use the following rules to automatically determine the unit of time:
 
 - If the value is less than 31536000000, it is treated as a number of seconds,
 - If the value is greater than or equal to 31536000000 and less than 31536000000000, it is treated as milliseconds.
