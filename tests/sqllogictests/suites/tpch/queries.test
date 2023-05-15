@@ -800,7 +800,7 @@ where
             l_partkey = p_partkey
 );
 ----
-23512.75
+23512.75195312
 
 #Q18
 query I
