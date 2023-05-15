@@ -2,7 +2,7 @@
 title: TO_DATE
 ---
 
-TO_DATE converts a string to a date format. 
+TO_DATE converts an expression to a date format. 
 
 The function can accept one or two arguments. If given one argument, the function extracts a date from the string. If the argument is an integer, the function interprets the integer as the number of days before (for a negative number) or after (for a positive number) the Unix epoch (midnight on January 1, 1970). If given two arguments, the function converts the first string to a date based on the pattern specified in the second string.
 

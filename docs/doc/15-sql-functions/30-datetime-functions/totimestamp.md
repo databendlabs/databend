@@ -2,7 +2,7 @@
 title: TO_TIMESTAMP
 ---
 
-TO_TIMESTAMP converts a string to a date with time (timestamp/datetime).
+TO_TIMESTAMP converts an expression to a date with time (timestamp/datetime).
 
 The function can accept one or two arguments. If given one argument, the function extracts a date from the string. If the argument is an integer, the function interprets the integer as the number of seconds, milliseconds, or microseconds before (for a negative number) or after (for a positive number) the Unix epoch (midnight on January 1, 1970):
 

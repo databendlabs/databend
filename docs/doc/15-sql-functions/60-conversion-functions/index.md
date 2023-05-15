@@ -2,6 +2,12 @@
 title: 'Conversion Functions'
 ---
 
+Below is a list of functions that allow you to convert an expression from one data type to another.
+
+:::tip
+Databend also offers a variety of functions for converting expressions into different date and time formats. Check out the **SQL Functions** > **Date & Time Functions** section to explore them.
+:::
+
 | Function                          | Description                                                                             | Example                            | Result                     |
 |-----------------------------------|-----------------------------------------------------------------------------------------|------------------------------------|----------------------------|
 | **CAST( expr AS data_type )**     | Converts a value from one data type to another                                          | **CAST(1 AS VARCHAR)**             | 1                          |
@@ -19,8 +25,4 @@ title: 'Conversion Functions'
 | **TO_UINT32( expr )**             | Converts a value to UINT32 data type                                                    | **TO_UINT32('123')**               | 123                        |
 | **TO_UINT64( expr )**             | Converts a value to UINT64 data type                                                    | **TO_UINT64('123')**               | 123                        |
 | **TO_STRING( expr )**             | Converts a value to STRING data type                                                    | **TO_STRING(10)**                  | 10                         |
-| **TO_STRING( expr, expr )**       | Converts a date value to a specific string format                                       | **TO_STRING('2022-12-25', 'Month/Day/Year: %m/%d/%Y')**| Month/Day/Year: 12/25/2022 |
-
-:::tip
-Databend offers a variety of functions for converting expressions into different date and time formats. Check out the **SQL Functions** > **Date & Time Functions** section to explore them.
-:::
+| **TO_STRING( expr, expr )**       | Converts a date value to a specific STRING format                                       | **TO_STRING('2022-12-25', 'Month/Day/Year: %m/%d/%Y')**| Month/Day/Year: 12/25/2022 |
