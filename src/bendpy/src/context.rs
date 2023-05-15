@@ -37,7 +37,7 @@ pub(crate) struct PySessionContext {
 impl PySessionContext {
     #[new]
     #[pyo3(signature = (tenant = None))]
-    fn new(tenant: Option<&str>) -> PyResult<Self> {
+    fn new(tenant: Option<&str>, py: Python) -> PyResult<Self> {
         let session = RUNTIME.block_on(async {
             let session = SessionManager::instance()
                 .create_session(SessionType::Local)
@@ -55,7 +55,14 @@ impl PySessionContext {
             session
         });
 
-        Ok(PySessionContext { session })
+        let mut res = Self { session };
+
+        if tenant.is_some() {
+            res.sql("CREATE DATABASE IF NOT EXISTS default", py)
+                .and_then(|df| df.collect(py))?;
+        }
+
+        Ok(res)
     }
 
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
