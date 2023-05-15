@@ -972,26 +972,17 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let tenant_index = &req.name_ident;
-        let mut retry = 0;
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
 
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        loop {
+            trials.next().unwrap()?;
+
             let res =
                 get_index_or_err(self, tenant_index, format!("drop_index: {}", &tenant_index))
-                    .await;
+                    .await?;
 
-            let (index_id_seq, index_id, index_meta_seq, mut index_meta) = match res {
-                Ok(x) => x,
-                Err(e) => {
-                    if let KVAppError::AppError(AppError::UnknownIndex(_)) = e {
-                        if req.if_exists {
-                            return Ok(DropIndexReply {});
-                        }
-                    }
-
-                    return Err(e);
-                }
-            };
+            let (index_id_seq, index_id, index_meta_seq, mut index_meta) = res;
 
             let index_id_key = IndexId { index_id };
 
@@ -1035,13 +1026,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(DropIndexReply {});
+                break;
             }
         }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("drop_index", TXN_MAX_RETRY_TIMES),
-        )))
+        Ok(DropIndexReply {})
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
