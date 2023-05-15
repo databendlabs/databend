@@ -7,7 +7,7 @@ description:  Decimal types are high-precision numeric values to be stored and m
 
 The Decimal type is useful for applications that require exact decimal representations, such as financial calculations or scientific computations.
 
-We can use `DECIMAL(P, S)` to indicate decimal types. 
+We can use `DECIMAL(P, S)` to indicate decimal types.
 
 - `P` is the precision, which is the total number of digits in the number, it's range is [1, 76].
 - `S` is the scale, which is the number of digits to the right of the decimal point, it's range is [0, P].
@@ -17,7 +17,7 @@ If `P` is less than 38, the physical datatype of decimal is `Decimal128`, otherw
 For a DECIMAL(P, S) data type:
 * The minimum value is `-10^P + 1` divided by `10^S`.
 * The maximum value is `10^P - 1` divided by `10^S`.
- 
+
 If you have a `DECIMAL(10, 2)` , you can store values with up to `10 digits`, with `2 digits` to the right of the decimal point. The minimum value is `-9999999.99`, and the maximum value is `9999999.99`.
 
 ## Example
@@ -49,7 +49,7 @@ DECIMAL has a set of complex rules for precision inference. Different rules will
 
 - Multiplication: `DECIMAL(a, b) * DECIMAL(x, y) -> DECIMAL(a + x, b + y)`.
 
-- Division: `DECIMAL(a, b) / DECIMAL(x, y) -> DECIMAL(a + y, b)`.
+- Division: `DECIMAL(a, b) / DECIMAL(x, y) -> DOUBLE`.
 
 ### Comparison Operations
 

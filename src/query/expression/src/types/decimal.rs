@@ -678,25 +678,21 @@ impl DecimalDataType {
         other.max_precision()
     }
 
+    // is_divide will be mapped into float64
     pub fn binary_result_type(
         a: &Self,
         b: &Self,
         is_multiply: bool,
-        is_divide: bool,
         is_plus_minus: bool,
     ) -> Result<Self> {
         let mut scale = a.scale().max(b.scale());
         let mut precision = a.max_result_precision(b);
 
         let multiply_precision = a.precision() + b.precision();
-        let divide_precision = a.precision() + b.scale();
 
         if is_multiply {
             scale = a.scale() + b.scale();
             precision = precision.min(multiply_precision);
-        } else if is_divide {
-            scale = a.scale();
-            precision = precision.min(divide_precision);
         } else if is_plus_minus {
             scale = std::cmp::max(a.scale(), b.scale());
             // for addition/subtraction, we add 1 to the width to ensure we don't overflow

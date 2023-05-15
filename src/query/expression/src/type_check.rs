@@ -30,6 +30,7 @@ use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::DataType;
 use crate::types::DecimalDataType;
 use crate::types::Number;
+use crate::types::NumberDataType;
 use crate::AutoCastRules;
 use crate::ColumnIndex;
 use crate::ConstantFolder;
@@ -494,7 +495,8 @@ pub fn can_auto_cast_to(
             let properties = n.get_decimal_properties().unwrap();
             properties.scale <= d.scale() && properties.precision <= d.precision()
         }
-        (DataType::Decimal(_), DataType::Number(n)) if n.is_float() => true,
+        // Decimal only upcast to double
+        (DataType::Decimal(_), DataType::Number(NumberDataType::Float64)) => true,
         _ => false,
     }
 }
