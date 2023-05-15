@@ -319,7 +319,7 @@ async fn test_query_rewrite() -> Result<()> {
     for suite in test_suites {
         let query = plan_sql(ctx.clone(), suite.query).await?;
         let index = plan_sql(ctx.clone(), suite.index).await?;
-        let result = agg_index::try_rewrite(&query, &vec![index])?;
+        let result = agg_index::try_rewrite(&query, &vec![(0, index)])?;
         assert_eq!(
             suite.is_matched,
             result.is_some(),

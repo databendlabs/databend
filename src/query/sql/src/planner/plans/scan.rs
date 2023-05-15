@@ -55,6 +55,7 @@ pub struct Prewhere {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AggIndexInfo {
+    pub index_id: u64,
     pub selection: Vec<ScalarItem>,
     pub predicates: Vec<ScalarExpr>,
 }

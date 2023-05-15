@@ -177,7 +177,7 @@ impl Rule for RuleTryApplyAggIndex {
 }
 
 impl RuleTryApplyAggIndex {
-    fn get_index_plans(&self) -> Vec<SExpr> {
+    fn get_index_plans(&self) -> Vec<(u64, SExpr)> {
         // TODO(agg index)
         vec![]
     }

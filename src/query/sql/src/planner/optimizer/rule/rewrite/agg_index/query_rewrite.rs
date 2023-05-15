@@ -36,7 +36,7 @@ use crate::IndexType;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-pub fn try_rewrite(s_expr: &SExpr, index_plans: &[SExpr]) -> Result<Option<SExpr>> {
+pub fn try_rewrite(s_expr: &SExpr, index_plans: &[(u64, SExpr)]) -> Result<Option<SExpr>> {
     if index_plans.is_empty() {
         return Ok(None);
     }
@@ -50,7 +50,7 @@ pub fn try_rewrite(s_expr: &SExpr, index_plans: &[SExpr]) -> Result<Option<SExpr
     let query_group_items = query_info.formatted_group_items();
 
     // Search all index plans, find the first matched index to rewrite the query.
-    for plan in index_plans.iter() {
+    for (index_id, plan) in index_plans.iter() {
         let index_info = collect_information(plan)?;
         debug_assert!(index_info.can_apply_index());
 
@@ -126,7 +126,11 @@ pub fn try_rewrite(s_expr: &SExpr, index_plans: &[SExpr]) -> Result<Option<SExpr
             (None, None) => { /* Matched */ }
         }
 
-        let result = push_down_index_scan(s_expr, new_selection, new_predicates)?;
+        let result = push_down_index_scan(s_expr, AggIndexInfo {
+            index_id: *index_id,
+            selection: new_selection,
+            predicates: new_predicates,
+        })?;
         return Ok(Some(result));
     }
 
@@ -784,22 +788,15 @@ fn rewrite_query_item(
     }
 }
 
-fn push_down_index_scan(
-    s_expr: &SExpr,
-    selection: Vec<ScalarItem>,
-    predicates: Vec<ScalarExpr>,
-) -> Result<SExpr> {
+fn push_down_index_scan(s_expr: &SExpr, agg_info: AggIndexInfo) -> Result<SExpr> {
     Ok(match s_expr.plan() {
         RelOperator::Scan(scan) => {
             let mut new_scan = scan.clone();
-            new_scan.agg_index = Some(AggIndexInfo {
-                selection,
-                predicates,
-            });
+            new_scan.agg_index = Some(agg_info);
             s_expr.replace_plan(new_scan.into())
         }
         _ => {
-            let child = push_down_index_scan(s_expr.child(0)?, selection, predicates)?;
+            let child = push_down_index_scan(s_expr.child(0)?, agg_info)?;
             s_expr.replace_children(vec![child])
         }
     })
