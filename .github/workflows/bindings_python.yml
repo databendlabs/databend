@@ -82,10 +82,10 @@ jobs:
             echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true" >> $GITHUB_OUTPUT
           fi
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            echo "BUILD_ARGS=--strip --sdist --out dist" >> $GITHUB_OUTPUT
+            echo "BUILD_ARGS=--strip --out dist" >> $GITHUB_OUTPUT
             echo "BUILD_PROFILE=debug" >> $GITHUB_ENV
           else
-            echo "BUILD_ARGS=--release --strip --sdist --out dist" >> $GITHUB_OUTPUT
+            echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
             echo "BUILD_PROFILE=release" >> $GITHUB_ENV
           fi
 
