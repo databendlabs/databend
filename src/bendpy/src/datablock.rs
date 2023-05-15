@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_expression::block_debug::table_format_blocks;
+use common_expression::block_debug::box_render;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use pyo3::prelude::*;
@@ -28,7 +28,7 @@ pub struct PyDataBlock {
 impl PyDataBlock {
     fn __repr__(&self, _py: Python) -> PyResult<String> {
         let block = self.block.slice(0..10);
-        let s: String = table_format_blocks(&self.schema, &[block]).unwrap();
+        let s: String = box_render(&self.schema, &[block]).unwrap();
         Ok(s)
     }
 
@@ -48,16 +48,16 @@ pub struct PyDataBlocks {
 }
 
 impl PyDataBlocks {
-    pub fn display_string(&self) -> String {
+    pub fn box_render(&self) -> String {
         let blocks: Vec<DataBlock> = self.blocks.iter().take(10).cloned().collect();
-        table_format_blocks(&self.schema, &blocks).unwrap()
+        box_render(&self.schema, &blocks).unwrap()
     }
 }
 
 #[pymethods]
 impl PyDataBlocks {
     fn __repr__(&self, _py: Python) -> PyResult<String> {
-        Ok(self.display_string())
+        Ok(self.box_render())
     }
 
     fn num_rows(&self) -> usize {

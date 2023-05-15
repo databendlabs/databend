@@ -200,6 +200,7 @@ impl ScalarExpr {
                     index: usize::MAX,
                     data_type: Box::new(win.func.return_type()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
                 data_type: win.func.return_type(),
                 display_name: win.display_name.clone(),
@@ -214,6 +215,7 @@ impl ScalarExpr {
                     index: usize::MAX,
                     data_type: Box::new((*agg.return_type).clone()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
                 data_type: (*agg.return_type).clone(),
                 display_name: agg.display_name.clone(),
@@ -253,5 +255,6 @@ fn new_dummy_column(data_type: DataType) -> ColumnBinding {
         index: usize::MAX,
         data_type: Box::new(data_type),
         visibility: Visibility::Visible,
+        virtual_computed_expr: None,
     }
 }

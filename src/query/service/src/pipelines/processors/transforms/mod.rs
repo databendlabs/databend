@@ -25,6 +25,7 @@ mod window;
 
 mod profile_wrapper;
 mod runtime_filter;
+mod transform_add_computed_columns;
 mod transform_add_const_columns;
 mod transform_merge_block;
 mod transform_resort_addon;
@@ -63,6 +64,7 @@ pub use hash_join::HashJoinState;
 pub use hash_join::JoinHashTable;
 pub use profile_wrapper::ProfileWrapper;
 pub use runtime_filter::RuntimeFilterState;
+pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
 pub use transform_block_compact::BlockCompactor;
 pub use transform_block_compact::TransformBlockCompact;

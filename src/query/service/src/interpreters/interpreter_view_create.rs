@@ -50,31 +50,18 @@ impl Interpreter for CreateViewInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // check whether view has exists
-        if self
-            .ctx
-            .get_catalog(&self.plan.catalog)?
-            .list_tables(&self.plan.tenant, &self.plan.database)
+        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let tenant = self.ctx.get_tenant();
+        let table_function = catalog.list_table_functions();
+        if catalog
+            .exists_table(tenant.as_str(), &self.plan.database, &self.plan.view_name)
             .await?
-            .iter()
-            .any(|table| table.name() == self.plan.view_name.as_str())
         {
             return Err(ErrorCode::ViewAlreadyExists(format!(
                 "{}.{} as view Already Exists",
                 self.plan.database, self.plan.view_name
             )));
         }
-
-        self.create_view().await
-    }
-}
-
-impl CreateViewInterpreter {
-    #[async_backtrace::framed]
-    async fn create_view(&self) -> Result<PipelineBuildResult> {
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
-        let tenant = self.ctx.get_tenant();
-        let table_function = catalog.list_table_functions();
         let mut options = BTreeMap::new();
         let mut planner = Planner::new(self.ctx.clone());
         let (plan, _) = planner.plan_sql(&self.plan.subquery.clone()).await?;

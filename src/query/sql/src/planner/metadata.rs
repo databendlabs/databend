@@ -23,6 +23,7 @@ use common_ast::ast::Literal;
 use common_catalog::plan::InternalColumn;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
+use common_expression::ComputedExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -154,6 +155,7 @@ impl Metadata {
         table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
         leaf_index: Option<IndexType>,
+        virtual_computed_expr: Option<String>,
     ) -> IndexType {
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::BaseTableColumn(BaseTableColumn {
@@ -163,6 +165,7 @@ impl Metadata {
             table_index,
             path_indices,
             leaf_index,
+            virtual_computed_expr,
         });
         self.columns.push(column_entry);
         column_index
@@ -238,14 +241,31 @@ impl Metadata {
             source_of_view,
         };
         self.tables.push(table_entry);
-        let mut fields = VecDeque::new();
-        for (i, field) in table_meta.schema().fields().iter().enumerate() {
-            fields.push_back((vec![i], field.clone()));
+        let mut index = 0;
+        let mut fields = VecDeque::with_capacity(table_meta.schema().fields().len());
+        for field in table_meta.schema().fields().iter() {
+            if let Some(ComputedExpr::Virtual(_)) = field.computed_expr() {
+                fields.push_back((vec![], field.clone()));
+            } else {
+                fields.push_back((vec![index], field.clone()));
+                index += 1;
+            }
         }
 
         // build leaf index in DFS order for primitive columns.
         let mut leaf_index = 0;
         while let Some((indices, field)) = fields.pop_front() {
+            if indices.is_empty() {
+                self.add_base_table_column(
+                    field.name().clone(),
+                    field.data_type().clone(),
+                    table_index,
+                    None,
+                    None,
+                    Some(field.computed_expr().unwrap().expr().clone()),
+                );
+                continue;
+            }
             let path_indices = if indices.len() > 1 {
                 Some(indices.clone())
             } else {
@@ -263,6 +283,7 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     path_indices,
+                    None,
                     None,
                 );
 
@@ -285,11 +306,11 @@ impl Metadata {
                     table_index,
                     path_indices,
                     Some(leaf_index),
+                    None,
                 );
                 leaf_index += 1;
             }
         }
-
         table_index
     }
 
@@ -395,6 +416,8 @@ pub struct BaseTableColumn {
     /// Leaf index is the primitive column index in Parquet, constructed in DFS order.
     /// None if the data type of column is struct.
     pub leaf_index: Option<usize>,
+    /// Virtual computed expression, generated in query.
+    pub virtual_computed_expr: Option<String>,
 }
 
 #[derive(Clone, Debug)]

@@ -333,17 +333,14 @@ jobs:
 
   test_ee_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
+    if: github.repository == github.event.pull_request.head.repo.full_name
     needs: build
     steps:
       - uses: actions/checkout@v3
-      - uses: ./.github/actions/check_run_ee
-        id: check_ee
       - uses: ./.github/actions/test_ee_standalone_linux
         timeout-minutes: 20
-        if: steps.check_ee.outputs.skip-ee-check != 'true'
         env:
           DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
-          SKIP_EE_TESTS: ${{ steps.check_ee.outputs.skip-ee-check }}
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure

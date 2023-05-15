@@ -14,10 +14,14 @@
 
 use common_constraint::prelude::*;
 use common_expression::eval_function;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberScalar;
 use common_expression::FunctionContext;
 use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
+use ordered_float::OrderedFloat;
 use z3::ast::Bool;
 use z3::ast::Dynamic;
 use z3::ast::Int;
@@ -28,6 +32,7 @@ use z3::Solver;
 
 use crate::binder::Recursion;
 use crate::plans::BoundColumnRef;
+use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::IndexType;
@@ -41,11 +46,11 @@ pub struct ConstraintSet {
 
 impl ConstraintSet {
     /// Build a `ConstraintSet` with conjunctions
-    pub fn new(constraints: &[ScalarExpr]) -> Option<Self> {
+    pub fn new(constraints: &mut [ScalarExpr]) -> Option<Self> {
         let context = Context::new(&Config::new());
 
         // Check if all constraints are supported.
-        for constraint in constraints.iter() {
+        for constraint in constraints.iter_mut() {
             as_z3_ast(&context, constraint)?;
         }
 
@@ -60,7 +65,7 @@ impl ConstraintSet {
     ///
     /// Check if the given variable is null-rejected with current constraints.
     /// For example, with a constraint `a > 1`, the variable `a` cannot be null.
-    pub fn is_null_reject(&self, variable: &IndexType) -> bool {
+    pub fn is_null_reject(&mut self, variable: &IndexType) -> bool {
         if !self
             .constraints
             .iter()
@@ -75,7 +80,7 @@ impl ConstraintSet {
 
         let z3_asts = self
             .constraints
-            .iter()
+            .iter_mut()
             .map(|c| as_z3_ast(&context, c))
             .collect::<Option<Vec<Dynamic>>>();
 
@@ -105,7 +110,7 @@ impl ConstraintSet {
 }
 
 /// Transform a logical expression into a z3 ast.
-pub fn as_z3_ast<'ctx>(ctx: &'ctx Context, scalar: &ScalarExpr) -> Option<Dynamic<'ctx>> {
+pub fn as_z3_ast<'ctx>(ctx: &'ctx Context, scalar: &mut ScalarExpr) -> Option<Dynamic<'ctx>> {
     transform_logical_expr(ctx, scalar)
 }
 
@@ -146,22 +151,25 @@ impl<'ctx> ScalarVisitor for VariableCollector<'ctx> {
 
 /// Transform a logical expression into a z3 ast.
 /// Will return a Nullable Boolean ast.
-fn transform_logical_expr<'ctx>(ctx: &'ctx Context, scalar: &ScalarExpr) -> Option<Dynamic<'ctx>> {
+fn transform_logical_expr<'ctx>(
+    ctx: &'ctx Context,
+    scalar: &mut ScalarExpr,
+) -> Option<Dynamic<'ctx>> {
     let result = match scalar {
         ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
-            let left = transform_logical_expr(ctx, &func.arguments[0])?;
-            let right = transform_logical_expr(ctx, &func.arguments[1])?;
+            let left = transform_logical_expr(ctx, &mut func.arguments[0])?;
+            let right = transform_logical_expr(ctx, &mut func.arguments[1])?;
 
             and_nullable_bool(ctx, &left, &right)
         }
         ScalarExpr::FunctionCall(func) if func.func_name == "or" => {
-            let left = transform_logical_expr(ctx, &func.arguments[0])?;
-            let right = transform_logical_expr(ctx, &func.arguments[1])?;
+            let left = transform_logical_expr(ctx, &mut func.arguments[0])?;
+            let right = transform_logical_expr(ctx, &mut func.arguments[1])?;
 
             or_nullable_bool(ctx, &left, &right)
         }
         ScalarExpr::FunctionCall(func) if func.func_name == "not" => {
-            let arg = transform_logical_expr(ctx, &func.arguments[0])?;
+            let arg = transform_logical_expr(ctx, &mut func.arguments[0])?;
             not_nullable_bool(ctx, &arg)
         }
         _ => transform_predicate_expr(ctx, scalar)?,
@@ -172,12 +180,14 @@ fn transform_logical_expr<'ctx>(ctx: &'ctx Context, scalar: &ScalarExpr) -> Opti
 
 fn transform_predicate_expr<'ctx>(
     ctx: &'ctx Context,
-    scalar: &ScalarExpr,
+    scalar: &mut ScalarExpr,
 ) -> Option<Dynamic<'ctx>> {
     tracing::info!("Transforming: {:?}", scalar);
     match scalar {
         ScalarExpr::FunctionCall(func) => {
             if let Some(op) = ComparisonOp::try_from_func_name(&func.func_name) {
+                (func.arguments[0], func.arguments[1]) =
+                    remove_trivial_type_cast(func.arguments[0].clone(), func.arguments[1].clone());
                 let left = &func.arguments[0];
                 let right = &func.arguments[1];
                 match (left, right) {
@@ -280,4 +290,194 @@ fn parse_int_literal(lit: &Scalar) -> Option<i64> {
         .and_then(|s| s.as_number())
         .and_then(|number| number.as_int64())
         .copied()
+}
+
+fn check_trivial_uint_cast(max: u64, value: &Scalar) -> (bool, u64) {
+    let value = match *value {
+        Scalar::Number(NumberScalar::UInt8(value)) => value as u64,
+        Scalar::Number(NumberScalar::UInt16(value)) => value as u64,
+        Scalar::Number(NumberScalar::UInt32(value)) => value as u64,
+        Scalar::Number(NumberScalar::UInt64(value)) => value,
+        _ => return (false, 0),
+    };
+    (value <= max, value)
+}
+
+fn check_trivial_int_cast(min: i64, max: i64, value: &Scalar) -> (bool, i64) {
+    let value = match *value {
+        Scalar::Number(NumberScalar::Int8(value)) => value as i64,
+        Scalar::Number(NumberScalar::Int16(value)) => value as i64,
+        Scalar::Number(NumberScalar::Int32(value)) => value as i64,
+        Scalar::Number(NumberScalar::Int64(value)) => value,
+        _ => return (false, 0),
+    };
+    (value >= min && value <= max, value)
+}
+
+fn check_trivial_float_cast(min: f64, max: f64, value: &Scalar) -> (bool, f64) {
+    let value = match *value {
+        Scalar::Number(NumberScalar::Float32(value)) => value.into_inner() as f64,
+        Scalar::Number(NumberScalar::Float64(value)) => value.into_inner(),
+        _ => return (false, 0.0),
+    };
+    (value >= min && value <= max, value)
+}
+
+fn remove_trivial_type_cast(left: ScalarExpr, right: ScalarExpr) -> (ScalarExpr, ScalarExpr) {
+    match (&left, &right) {
+        (
+            ScalarExpr::CastExpr(CastExpr { argument, .. }),
+            ScalarExpr::ConstantExpr(ConstantExpr { span, value }),
+        )
+        | (
+            ScalarExpr::ConstantExpr(ConstantExpr { span, value }),
+            ScalarExpr::CastExpr(CastExpr { argument, .. }),
+        ) => {
+            if let ScalarExpr::BoundColumnRef(BoundColumnRef { column, .. }) = &(**argument) {
+                match *column.data_type {
+                    DataType::Number(NumberDataType::UInt8)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::UInt8)) => {
+                        let (is_trivial, v) = check_trivial_uint_cast(u8::MAX as u64, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::UInt8(v as u8)),
+                                }),
+                            );
+                        }
+                    }
+                    DataType::Number(NumberDataType::UInt16)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::UInt16)) => {
+                        let (is_trivial, v) = check_trivial_uint_cast(u16::MAX as u64, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::UInt16(v as u16)),
+                                }),
+                            );
+                        }
+                    }
+                    DataType::Number(NumberDataType::UInt32)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::UInt32)) => {
+                        let (is_trivial, v) = check_trivial_uint_cast(u32::MAX as u64, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::UInt32(v as u32)),
+                                }),
+                            );
+                        }
+                    }
+                    DataType::Number(NumberDataType::UInt64)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::UInt64)) => {
+                        let (is_trivial, v) = check_trivial_uint_cast(u64::MAX, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::UInt64(v)),
+                                }),
+                            );
+                        }
+                    }
+                    DataType::Number(NumberDataType::Int8)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::Int8)) => {
+                        let (is_trivial, v) =
+                            check_trivial_int_cast(i8::MIN as i64, i8::MAX as i64, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::Int8(v as i8)),
+                                }),
+                            );
+                        }
+                    }
+                    DataType::Number(NumberDataType::Int16)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::Int16)) => {
+                        let (is_trivial, v) =
+                            check_trivial_int_cast(i16::MIN as i64, i16::MAX as i64, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::Int16(v as i16)),
+                                }),
+                            );
+                        }
+                    }
+                    DataType::Number(NumberDataType::Int32)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::Int32)) => {
+                        let (is_trivial, v) =
+                            check_trivial_int_cast(i32::MIN as i64, i32::MAX as i64, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::Int32(v as i32)),
+                                }),
+                            );
+                        }
+                    }
+                    DataType::Number(NumberDataType::Int64)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::Int64)) => {
+                        let (is_trivial, v) = check_trivial_int_cast(i64::MIN, i64::MAX, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::Int64(v)),
+                                }),
+                            );
+                        }
+                    }
+                    DataType::Number(NumberDataType::Float32)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::Float32)) => {
+                        let (is_trivial, v) =
+                            check_trivial_float_cast(f32::MIN as f64, f32::MAX as f64, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::Float32(OrderedFloat(
+                                        v as f32,
+                                    ))),
+                                }),
+                            );
+                        }
+                    }
+                    DataType::Number(NumberDataType::Float64)
+                    | DataType::Nullable(box DataType::Number(NumberDataType::Float64)) => {
+                        let (is_trivial, v) = check_trivial_float_cast(f64::MIN, f64::MAX, value);
+                        if is_trivial {
+                            return (
+                                (**argument).clone(),
+                                ScalarExpr::ConstantExpr(ConstantExpr {
+                                    span: *span,
+                                    value: Scalar::Number(NumberScalar::Float64(OrderedFloat(v))),
+                                }),
+                            );
+                        }
+                    }
+                    _ => (),
+                };
+                (left, right)
+            } else {
+                (left, right)
+            }
+        }
+        _ => (left, right),
+    }
 }

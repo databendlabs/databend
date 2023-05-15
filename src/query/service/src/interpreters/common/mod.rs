@@ -17,3 +17,4 @@ mod table;
 
 pub use grant::validate_grant_object_exists;
 pub use table::append2table;
+pub use table::fill_missing_columns;
