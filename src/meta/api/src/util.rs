@@ -21,7 +21,6 @@ use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::ShareHasNoGrantedDatabase;
 use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::app_error::UnknownDatabase;
-use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownShare;
 use common_meta_app::app_error::UnknownShareAccounts;
 use common_meta_app::app_error::UnknownShareEndpoint;
@@ -39,7 +38,6 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
@@ -436,25 +434,6 @@ pub async fn get_table_by_id_or_err(
     );
 
     Ok((seq, table_meta))
-}
-
-/// Return OK if an index_id or index_meta exists by checking the seq.
-///
-/// Otherwise returns UnknownIndex error
-pub fn index_has_to_exist(
-    seq: u64,
-    index_ident: &IndexNameIdent,
-    msg: impl Display,
-) -> Result<(), KVAppError> {
-    if seq == 0 {
-        debug!(seq, ?index_ident, "index does not exist");
-
-        Err(KVAppError::AppError(AppError::UnknownIndex(
-            UnknownIndex::new(&index_ident.index_name, format!("{}: {}", msg, index_ident)),
-        )))
-    } else {
-        Ok(())
-    }
 }
 
 // Return (share_endpoint_id_seq, share_endpoint_id, share_endpoint_meta_seq, share_endpoint_meta)
@@ -1189,7 +1168,7 @@ pub async fn get_share_table_info(
 pub async fn get_index_metas_by_ids(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     ids: &[u64],
-) -> Result<Vec<IndexMeta>, KVAppError> {
+) -> Result<Vec<(IndexId, IndexMeta)>, KVAppError> {
     let mut index_meta_keys = Vec::with_capacity(ids.len());
     for id in ids.iter() {
         let index_id = IndexId { index_id: *id };
@@ -1201,11 +1180,11 @@ pub async fn get_index_metas_by_ids(
 
     let mut index_metas = Vec::with_capacity(ids.len());
 
-    for (i, seq_meta_opt) in seq_index_metas.iter().enumerate() {
+    for (i, (id, seq_meta_opt)) in ids.iter().zip(seq_index_metas.iter()).enumerate() {
         if let Some(seq_meta) = seq_meta_opt {
             let index_meta: IndexMeta = deserialize_struct(&seq_meta.data)?;
-
-            index_metas.push(index_meta);
+            let index_id = IndexId { index_id: *id };
+            index_metas.push((index_id, index_meta));
         } else {
             debug!(k = display(&index_meta_keys[i]), "index_meta not found");
         }

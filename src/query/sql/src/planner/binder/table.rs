@@ -50,6 +50,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexByTableIdReq;
 use common_meta_types::MetaId;
@@ -240,15 +241,15 @@ impl Binder {
                                 .unwrap_or(vec![]);
 
                             let mut s_exprs = Vec::with_capacity(indexes.len());
-                            for index in indexes {
-                                let tokens = tokenize_sql(&index.query)?;
+                            for (index_id, index_meta) in indexes {
+                                let tokens = tokenize_sql(&index_meta.query)?;
                                 let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                                 let mut new_bind_context =
                                     BindContext::with_parent(Box::new(bind_context.clone()));
                                 if let Statement::Query(query) = &stmt {
                                     let (s_expr, _) =
                                         self.bind_query(&mut new_bind_context, query).await?;
-                                    s_exprs.push(s_expr);
+                                    s_exprs.push((index_id, s_expr));
                                 }
                             }
 
@@ -841,7 +842,7 @@ impl Binder {
         tenant: &str,
         catalog_name: &str,
         table_id: MetaId,
-    ) -> Result<Option<Vec<IndexMeta>>> {
+    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
         let catalog = self.catalogs.get_catalog(catalog_name)?;
         let index_metas = catalog
             .get_indexes_by_table_id(ListIndexByTableIdReq::new(tenant, table_id))

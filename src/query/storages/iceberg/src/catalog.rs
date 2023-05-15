@@ -39,6 +39,7 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexByTableIdReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -331,7 +332,7 @@ impl Catalog for IcebergCatalog {
     async fn get_indexes_by_table_id(
         &self,
         _req: ListIndexByTableIdReq,
-    ) -> Result<Option<Vec<IndexMeta>>> {
+    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
         unimplemented!()
     }
 

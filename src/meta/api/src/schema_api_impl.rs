@@ -38,6 +38,7 @@ use common_meta_app::app_error::UndropTableAlreadyExists;
 use common_meta_app::app_error::UndropTableHasNoHistory;
 use common_meta_app::app_error::UndropTableWithNoDropTime;
 use common_meta_app::app_error::UnknownDatabaseId;
+use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::WrongShare;
@@ -156,7 +157,6 @@ use crate::txn_op_put_with_expire;
 use crate::util::get_index_metas_by_ids;
 use crate::util::get_table_by_id_or_err;
 use crate::util::get_table_names_by_ids;
-use crate::util::index_has_to_exist;
 use crate::util::list_tables_from_share_db;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
@@ -890,7 +890,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     Err(KVAppError::AppError(AppError::IndexAlreadyExists(
                         IndexAlreadyExists::new(
                             &tenant_index.index_name,
-                            format!("create index: tenant: {}", tenant_index.tenant),
+                            format!("create index with tenant: {}", tenant_index.tenant),
                         ),
                     )))
                 };
@@ -978,13 +978,23 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let res =
-                get_index_or_err(self, tenant_index, format!("drop_index: {}", &tenant_index))
-                    .await?;
+            let res = get_index_or_err(self, tenant_index).await?;
 
-            let (index_id_seq, index_id, index_meta_seq, mut index_meta) = res;
+            let (index_id_seq, index_id, index_meta_seq, index_meta) = res;
+
+            if index_id_seq == 0 {
+                return if req.if_exists {
+                    Ok(DropIndexReply {})
+                } else {
+                    return Err(KVAppError::AppError(AppError::UnknownIndex(
+                        UnknownIndex::new(&tenant_index.index_name, "drop_index"),
+                    )));
+                };
+            }
 
             let index_id_key = IndexId { index_id };
+            // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
+            let mut index_meta = index_meta.unwrap();
 
             debug!(index_id, name_key = debug(&tenant_index), "drop_index");
 
@@ -1036,7 +1046,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     async fn get_indexes_by_table_id(
         &self,
         req: ListIndexByTableIdReq,
-    ) -> Result<Option<Vec<IndexMeta>>, KVAppError> {
+    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         // get index id list from _fd_index_id_list/<tenant>/<table_id>
@@ -1063,7 +1073,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let index_metas = get_index_metas_by_ids(self, &ids).await?;
             index_metas
                 .into_iter()
-                .filter(|meta| meta.drop_on.is_some())
+                .filter(|(_, meta)| meta.drop_on.is_some())
                 .collect::<Vec<_>>()
         };
 
@@ -3078,21 +3088,10 @@ fn set_update_expire_operation(
 pub(crate) async fn get_index_or_err(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_key: &IndexNameIdent,
-    msg: impl Display,
-) -> Result<(u64, u64, u64, IndexMeta), KVAppError> {
+) -> Result<(u64, u64, u64, Option<IndexMeta>), KVAppError> {
     let (index_id_seq, index_id) = get_u64_value(kv_api, name_key).await?;
-    index_has_to_exist(index_id_seq, name_key, &msg)?;
-
     let id_key = IndexId { index_id };
-
     let (index_meta_seq, index_meta) = get_pb_value(kv_api, &id_key).await?;
-    index_has_to_exist(index_meta_seq, name_key, msg)?;
 
-    Ok((
-        index_id_seq,
-        index_id,
-        index_meta_seq,
-        // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
-        index_meta.unwrap(),
-    ))
+    Ok((index_id_seq, index_id, index_meta_seq, index_meta))
 }
