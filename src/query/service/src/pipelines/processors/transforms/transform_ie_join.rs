@@ -124,10 +124,6 @@ impl Processor for TransformIEJoinLeft {
         }
     }
 
-    fn interrupt(&self) {
-        todo!()
-    }
-
     fn process(&mut self) -> Result<()> {
         match self.step {
             IEJoinStep::Sink => {
@@ -140,8 +136,7 @@ impl Processor for TransformIEJoinLeft {
                 self.step = IEJoinStep::Finalize;
             }
             IEJoinStep::Finalize => {
-                self.output_data_blocks
-                    .push_back(self.state.finalize(65536)?);
+                self.output_data_blocks.push_back(self.state.finalize()?);
             }
         }
         Ok(())
@@ -196,10 +191,6 @@ impl Processor for TransformIEJoinRight {
                 Ok(Event::NeedData)
             }
         }
-    }
-
-    fn interrupt(&self) {
-        todo!()
     }
 
     fn process(&mut self) -> Result<()> {

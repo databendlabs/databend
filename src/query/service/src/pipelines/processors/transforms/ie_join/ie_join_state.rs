@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::parquet::fallible_streaming_iterator::Convert;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -23,6 +24,7 @@ use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
 use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -30,6 +32,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
+use common_expression::ScalarRef;
 use common_expression::SortColumnDescription;
 use common_expression::Value;
 use common_expression::ValueRef;
@@ -46,8 +49,18 @@ pub struct IEJoinState {
     sorted_blocks: RwLock<Vec<DataBlock>>,
     // L2: sort `sorted_blocks` again, by the second join key
     l2_sorted_blocks: RwLock<Vec<DataBlock>>,
+    // True is asc
+    l1_order: bool,
+    l2_order: bool,
+    eq_off: u8,
+    // Left table result buffer
+    left_buffer: RwLock<Vec<usize>>,
+    // Right table result buffer
+    right_buffer: RwLock<Vec<usize>>,
     // permutation array
     p_array: RwLock<Vec<u64>>,
+    // Bit array
+    bit_array: RwLock<MutableBitmap>,
     // data schema of sorted blocks
     data_schema: DataSchemaRef,
     // Sort description for L1
@@ -63,15 +76,14 @@ pub struct IEJoinState {
 impl IEJoinState {
     pub fn new(ie_join: &IEJoin) -> Self {
         let mut fields = vec![];
-        let mut is_nullable = false;
+        let mut is_nullable = ie_join.conditions[0]
+            .left_expr
+            .as_expr(&BUILTIN_FUNCTIONS)
+            .data_type()
+            .is_nullable();
+        let mut l1_order = matches!(ie_join.conditions[0].operator.as_str(), "gt" | "gte");
+        let mut l2_order = !matches!(ie_join.conditions[1].operator.as_str(), "gt" | "gte");
         for (idx, condition) in ie_join.conditions.iter().enumerate() {
-            if idx == 0 {
-                is_nullable = condition
-                    .left_expr
-                    .as_expr(&BUILTIN_FUNCTIONS)
-                    .data_type()
-                    .is_nullable();
-            }
             let field = DataField::new(
                 format!("_ie_join_key_{idx}").as_str(),
                 condition
@@ -84,19 +96,27 @@ impl IEJoinState {
         }
         let pos_field = DataField::new("_pos", DataType::Number(NumberDataType::UInt64));
         fields.push(pos_field);
-        let asc = if matches!(ie_join.conditions[0].operator.as_str(), "gt" | "gte") {
-            true
+        let eq_off = if matches!(ie_join.conditions[0].operator.as_str(), "lte" | "gte")
+            && matches!(ie_join.conditions[1].operator.as_str(), "lte" | "gte")
+        {
+            0
         } else {
-            false
+            1
         };
         IEJoinState {
             sorted_blocks: Default::default(),
             l2_sorted_blocks: Default::default(),
+            l1_order,
+            l2_order,
+            eq_off,
+            left_buffer: RwLock::new(Vec::with_capacity(65535)),
+            right_buffer: RwLock::new(Vec::with_capacity(65535)),
             p_array: Default::default(),
+            bit_array: Default::default(),
             data_schema: DataSchemaRefExt::create(fields),
             sort_columns_descriptions: vec![SortColumnDescription {
-                offset: 0,
-                asc,
+                offset: 1,
+                asc: l1_order,
                 nulls_first: false,
                 is_nullable,
             }],
@@ -116,14 +136,25 @@ impl IEJoinState {
 
     pub fn sink_right(&self, block: DataBlock) -> Result<()> {
         // First, sink block to right table
+        let mut current_rows;
         {
             let mut right_table = self.right_table.write();
+            current_rows = right_table.num_rows();
             *right_table = DataBlock::concat(&vec![right_table.clone(), block.clone()])?;
         }
         // Second, generate keys block by join keys
-        // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
+        // For example, if join keys are [t1.a + t1.b, t1.c], then key blocks will contain two columns: [t1.a + t1.b, t1.c]
         // We can get the key blocks by evaluating the join keys expressions on the block
         let mut columns = vec![];
+        // First, generate idx column from current_rows to current_rows + block.num_rows()
+        let mut column_builder = ColumnBuilder::with_capacity(
+            &DataType::Number(NumberDataType::UInt64),
+            block.num_rows(),
+        );
+        for idx in current_rows..(current_rows + block.num_rows()) {
+            column_builder.push(ScalarRef::Number(NumberScalar::UInt64(idx as u64)));
+        }
+        columns.push(column_builder.build());
         for (idx, condition) in self.conditions.iter().enumerate() {
             let func_ctx = FunctionContext::default();
             let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -133,6 +164,14 @@ impl IEJoinState {
                 .convert_to_full_column(expr.data_type(), block.num_rows());
             columns.push(column);
         }
+        // Last, add a marker column to indicate the block is from right table
+        let mut marker_column = ColumnBuilder::repeat(
+            &ScalarRef::Boolean(false),
+            block.num_rows(),
+            &DataType::Boolean,
+        )
+        .build();
+        columns.push(marker_column);
         // Sort columns by the first column
         let keys_block = DataBlock::new_from_columns(columns);
         let sorted_keys_block =
@@ -147,14 +186,26 @@ impl IEJoinState {
     // Todo(xudong): move some vars to state and refine code
     pub fn sink_left(&self, block: DataBlock) -> Result<()> {
         // First, sink block to left table
+        let mut current_rows = 0;
         {
             let mut left_table = self.left_table.write();
+            current_rows = left_table.num_rows();
             *left_table = DataBlock::concat(&vec![left_table.clone(), block.clone()])?;
         }
         // Second, generate keys block by join keys
         // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
         // We can get the key blocks by evaluating the join keys expressions on the block
         let mut columns = vec![];
+        // First, generate idx column from current_rows to current_rows + block.num_rows()
+        let mut column_builder = ColumnBuilder::with_capacity(
+            &DataType::Number(NumberDataType::UInt64),
+            block.num_rows(),
+        );
+        for idx in current_rows..(current_rows + block.num_rows()) {
+            column_builder.push(ScalarRef::Number(NumberScalar::UInt64(idx as u64)));
+        }
+        columns.push(column_builder.build());
+        dbg!(&columns);
         for (idx, condition) in self.conditions.iter().enumerate() {
             let func_ctx = FunctionContext::default();
             let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -164,6 +215,14 @@ impl IEJoinState {
                 .convert_to_full_column(expr.data_type(), block.num_rows());
             columns.push(column);
         }
+        // Last, add a marker column to indicate the block is from right table
+        let mut marker_column = ColumnBuilder::repeat(
+            &ScalarRef::Boolean(true),
+            block.num_rows(),
+            &DataType::Boolean,
+        )
+        .build();
+        columns.push(marker_column);
         // Sort columns by the first column
         let keys_block = DataBlock::new_from_columns(columns);
         let sorted_keys_block =
@@ -214,11 +273,6 @@ impl IEJoinState {
             .as_expr(&BUILTIN_FUNCTIONS)
             .data_type()
             .is_nullable();
-        let asc = if matches!(self.conditions[1].operator.as_str(), "gt" | "gte") {
-            false
-        } else {
-            true
-        };
         let mut l2_sorted_blocks = self.l2_sorted_blocks.write();
         *l2_sorted_blocks = sort_merge_by_data_type(
             self.conditions[0]
@@ -228,8 +282,8 @@ impl IEJoinState {
             self.data_schema.clone(),
             sorted_blocks.len(),
             vec![SortColumnDescription {
-                offset: 1,
-                asc,
+                offset: 2,
+                asc: self.l2_order,
                 nulls_first: false,
                 is_nullable,
             }],
@@ -251,10 +305,93 @@ impl IEJoinState {
                 }
             }
         }
+        // l2_sorted_blocks.clear();
+        // Initialize bit_array
+        let mut bit_array = self.bit_array.write();
+        bit_array.extend_constant(p_array.len(), false);
+        dbg!(&sorted_blocks);
+        dbg!(&l2_sorted_blocks);
         Ok(())
     }
 
-    pub fn finalize(&self, buffer_size: usize) -> Result<DataBlock> {
-        todo!()
+    pub fn finalize(&self) -> Result<DataBlock> {
+        let len = self.p_array.read().len();
+        let l1 = &self.sorted_blocks.read()[0];
+        let mut left_buffer = self.left_buffer.write();
+        left_buffer.clear();
+        let mut right_buffer = self.right_buffer.write();
+        right_buffer.clear();
+        let l1_index_column = l1
+            .columns()
+            .first()
+            .unwrap()
+            .value
+            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), len);
+        let l1_marker_column = l1
+            .columns()
+            .last()
+            .unwrap()
+            .value
+            .convert_to_full_column(&DataType::Boolean, len);
+        for (idx, p) in self.p_array.read().iter().enumerate() {
+            let mut bit_array = self.bit_array.write();
+            bit_array.set(idx, true);
+            for j in (p + self.eq_off as u64)..len as u64 {
+                if bit_array.get(j as usize) {
+                    match (
+                        l1_marker_column.index(j as usize).unwrap(),
+                        l1_marker_column.index(*p as usize).unwrap(),
+                    ) {
+                        (ScalarRef::Boolean(false), ScalarRef::Boolean(true)) => {
+                            // right, left
+                            if let ScalarRef::Number(NumberScalar::UInt64(left)) =
+                                l1_index_column.index(*p as usize).unwrap()
+                            {
+                                left_buffer.push(left as usize);
+                            }
+                            if let ScalarRef::Number(NumberScalar::UInt64(right)) =
+                                l1_index_column.index(j as usize).unwrap()
+                            {
+                                right_buffer.push(right as usize);
+                            }
+                        }
+                        (ScalarRef::Boolean(true), ScalarRef::Boolean(false)) => {
+                            // left, right
+                            if let ScalarRef::Number(NumberScalar::UInt64(left)) =
+                                l1_index_column.index(j as usize).unwrap()
+                            {
+                                left_buffer.push(left as usize);
+                            }
+                            if let ScalarRef::Number(NumberScalar::UInt64(right)) =
+                                l1_index_column.index(*p as usize).unwrap()
+                            {
+                                right_buffer.push(right as usize);
+                            }
+                        }
+                        _ => continue,
+                    }
+                }
+            }
+        }
+        let left_table = self.left_table.read();
+        let right_table = self.right_table.read();
+        let mut indices = Vec::with_capacity(left_buffer.len());
+        for res in left_buffer.iter() {
+            indices.push((0usize, *res, 1usize));
+        }
+        let mut left_result_block =
+            DataBlock::take_blocks(&vec![&*left_table], &indices, indices.len());
+        indices.clear();
+        for res in right_buffer.iter() {
+            indices.push((0usize, *res, 1usize));
+        }
+        let right_result_block =
+            DataBlock::take_blocks(&vec![&*right_table], &indices, indices.len());
+        // Merge left_result_block and right_result_block
+        for col in right_result_block.columns() {
+            left_result_block.add_column(col.clone());
+        }
+        dbg!(&left_result_block);
+        Ok(left_result_block)
     }
 }
