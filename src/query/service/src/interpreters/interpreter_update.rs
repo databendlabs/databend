@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_sql::executor::cast_expr_to_non_null_boolean;

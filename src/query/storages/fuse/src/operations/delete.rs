@@ -127,10 +127,6 @@ impl FuseTable {
             return Ok(());
         }
 
-        if pipeline.is_empty() {
-            return Ok(());
-        }
-
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), 0, self.get_block_thresholds())?;
         pipeline.add_transform(|input, output| {

@@ -72,7 +72,7 @@ impl Interpreter for OptimizeTableInterpreter {
                     build_res.main_pipeline.set_on_finished(move |may_error| {
                         if may_error.is_none() {
                             return GlobalIORuntime::instance().block_on(async move {
-                                let ret = purge(ctx, table, None).await;
+                                let ret = purge(ctx, plan, None).await;
                                 match ret {
                                     Ok(_) => Ok(()),
                                     Err(e) => Err(e),

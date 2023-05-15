@@ -228,25 +228,6 @@ impl FuseTable {
         let total_tasks = self
             .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
             .await?;
-        if max_threads > 0 {
-            // Add source pipe.
-            pipeline.add_source(
-                |output| {
-                    MutationSource::try_create(
-                        ctx.clone(),
-                        MutationAction::Update,
-                        output,
-                        filter_expr.clone(),
-                        block_reader.clone(),
-                        remain_reader.clone(),
-                        ops.clone(),
-                        self.storage_format,
-                    )
-                },
-                max_threads,
-            )?;
-        }
-
         if total_tasks != 0 {
             let max_threads =
                 std::cmp::min(ctx.get_settings().get_max_threads()? as usize, total_tasks);
