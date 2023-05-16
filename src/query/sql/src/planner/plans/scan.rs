@@ -22,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
 
+use super::ScalarItem;
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
@@ -53,7 +54,14 @@ pub struct Prewhere {
     pub predicates: Vec<ScalarExpr>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AggIndexInfo {
+    pub index_id: u64,
+    pub selection: Vec<ScalarItem>,
+    pub predicates: Vec<ScalarExpr>,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub statistics: Option<TableStatistics>,
@@ -61,7 +69,7 @@ pub struct Statistics {
     pub col_stats: HashMap<IndexType, Option<ColumnStatistics>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Scan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
@@ -69,6 +77,7 @@ pub struct Scan {
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
+    pub agg_index: Option<AggIndexInfo>,
 
     pub statistics: Statistics,
 }
@@ -94,6 +103,7 @@ impl Scan {
                 col_stats,
             },
             prewhere,
+            agg_index: self.agg_index.clone(),
         }
     }
 
