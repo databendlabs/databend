@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_catalog::table::NavigationPoint;
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 
 #[derive(Clone, Debug)]
 pub struct RevertTablePlan {
@@ -25,10 +21,4 @@ pub struct RevertTablePlan {
     pub database: String,
     pub table: String,
     pub point: NavigationPoint,
-}
-
-impl RevertTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }

@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::principal::AuthInfo;
@@ -35,12 +32,6 @@ pub struct CreateUserPlan {
     pub if_not_exists: bool,
 }
 
-impl CreateUserPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterUserPlan {
     pub user: UserIdentity,
@@ -49,22 +40,10 @@ pub struct AlterUserPlan {
     pub user_option: Option<UserOption>,
 }
 
-impl AlterUserPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropUserPlan {
     pub if_exists: bool,
     pub user: UserIdentity,
-}
-
-impl DropUserPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -73,34 +52,16 @@ pub struct CreateRolePlan {
     pub role_name: String,
 }
 
-impl CreateRolePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropRolePlan {
     pub if_exists: bool,
     pub role_name: String,
 }
 
-impl DropRolePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantRolePlan {
     pub principal: PrincipalIdentity,
     pub role: String,
-}
-
-impl GrantRolePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -120,22 +81,10 @@ pub struct RevokeRolePlan {
     pub role: String,
 }
 
-impl RevokeRolePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetRolePlan {
     pub is_default: bool,
     pub role_name: String,
-}
-
-impl SetRolePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -159,21 +108,9 @@ pub struct GrantPrivilegePlan {
     pub on: GrantObject,
 }
 
-impl GrantPrivilegePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RevokePrivilegePlan {
     pub principal: PrincipalIdentity,
     pub priv_types: UserPrivilegeSet,
     pub on: GrantObject,
-}
-
-impl RevokePrivilegePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }

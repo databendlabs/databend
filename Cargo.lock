@@ -18,6 +18,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "aggregating-index"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2493,6 +2505,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
+ "common-license",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -3519,6 +3532,7 @@ dependencies = [
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
+ "aggregating-index",
  "aho-corasick",
  "arrow-array",
  "arrow-cast",
@@ -3946,6 +3960,7 @@ dependencies = [
 name = "enterprise-query"
 version = "0.1.0"
 dependencies = [
+ "aggregating-index",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -3955,6 +3970,7 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-license",
+ "common-meta-app",
  "common-settings",
  "common-storages-fuse",
  "dashmap",

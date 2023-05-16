@@ -1,3 +1,4 @@
+#![feature(box_patterns)]
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +14,6 @@
 // limitations under the License.
 
 // TODO(xuanwo): Add crate level documents here.
-
 #![allow(clippy::uninlined_format_args)]
 
 mod error;

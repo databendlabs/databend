@@ -33,6 +33,8 @@ mod interpreter_factory;
 mod interpreter_file_format_create;
 mod interpreter_file_format_drop;
 mod interpreter_file_format_show;
+mod interpreter_index_create;
+mod interpreter_index_drop;
 mod interpreter_insert;
 mod interpreter_kill;
 mod interpreter_metrics;

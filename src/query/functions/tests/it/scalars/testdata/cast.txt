@@ -973,7 +973,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('010.010' AS DECIMAL(5,4))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow while evaluating function `to_decimal(5, 4)('010.010')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(5, 4)('010.010')`
 
 
 
@@ -990,7 +990,7 @@ error:
   --> SQL:1:1
   |
 1 | CAST('010.010' AS DECIMAL(4,3))
-  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ decimal overflow while evaluating function `to_decimal(4, 3)('010.010')`
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ Decimal overflow while evaluating function `to_decimal(4, 3)('010.010')`
 
 
 
