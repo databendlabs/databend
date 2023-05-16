@@ -39,8 +39,8 @@ use ethnum::i256;
 use num_traits::AsPrimitive;
 
 macro_rules! op_decimal {
-    ($a: expr, $b: expr, $ctx: expr, $return_type: expr, $op: ident, $scale_a: expr, $scale_b: expr, $is_divide: expr) => {
-        match $return_type {
+    ($a: expr, $b: expr, $ctx: expr, $common_type: expr, $op: ident, $scale_a: expr, $scale_b: expr, $is_divide: expr) => {
+        match $common_type {
             DataType::Decimal(d) => match d {
                 DecimalDataType::Decimal128(size) => {
                     binary_decimal!(
@@ -139,7 +139,10 @@ macro_rules! binary_decimal {
                     } else {
                         let t = (a * scale_a).$op(b) / scale_b;
                         if t < min_for_precision || t > max_for_precision {
-                            $ctx.set_error(result.len(), "Decimal overflow");
+                            $ctx.set_error(
+                                result.len(),
+                                concat!("Decimal overflow at line : ", line!()),
+                            );
                             result.push(one);
                         } else {
                             result.push(t);
@@ -165,7 +168,10 @@ macro_rules! binary_decimal {
                     for a in buffer.iter() {
                         let t = (a * scale_a).$op(b) / scale_b;
                         if t < min_for_precision || t > max_for_precision {
-                            $ctx.set_error(result.len(), "Decimal overflow");
+                            $ctx.set_error(
+                                result.len(),
+                                concat!("Decimal overflow at line : ", line!()),
+                            );
                             result.push(one);
                         } else {
                             result.push(t);
@@ -192,7 +198,10 @@ macro_rules! binary_decimal {
                     } else {
                         let t = (a * scale_a).$op(b) / scale_b;
                         if t < min_for_precision || t > max_for_precision {
-                            $ctx.set_error(result.len(), "Decimal overflow");
+                            $ctx.set_error(
+                                result.len(),
+                                concat!("Decimal overflow at line : ", line!()),
+                            );
                             result.push(one);
                         } else {
                             result.push(t);
@@ -215,7 +224,7 @@ macro_rules! binary_decimal {
                 } else {
                     t = (a * scale_a).$op(b) / scale_b;
                     if t < min_for_precision || t > max_for_precision {
-                        $ctx.set_error(0, "Decimal overflow");
+                        $ctx.set_error(0, concat!("Decimal overflow at line : ", line!()));
                     }
                 }
                 Value::Scalar(Scalar::Decimal(DecimalScalar::$decimal_type(t, $size)))
@@ -295,6 +304,7 @@ macro_rules! register_decimal_binary_op {
             let is_multiply = $name == "multiply";
             let is_divide = $name == "divide";
             let is_plus_minus = !is_multiply && !is_divide;
+
             let return_type = DecimalDataType::binary_result_type(
                 &decimal_a,
                 &decimal_b,
@@ -304,13 +314,20 @@ macro_rules! register_decimal_binary_op {
             )
             .ok()?;
 
+            let common_type = if is_divide {
+                let d = DecimalDataType::div_common_type(&decimal_a, &decimal_b).ok()?;
+                DataType::Decimal(d)
+            } else {
+                DataType::Decimal(return_type.clone())
+            };
+
             let mut scale_a = 0;
             let mut scale_b = 0;
 
             if is_multiply {
                 scale_b = return_type.scale() as u32;
             } else if is_divide {
-                scale_a = return_type.scale() as u32;
+                scale_a = common_type.as_decimal().unwrap().scale() as u32;
             }
 
             let function = Function {
@@ -326,26 +343,37 @@ macro_rules! register_decimal_binary_op {
                             &args[0],
                             ctx,
                             args_type[0].clone(),
-                            DataType::Decimal(return_type.clone()),
+                            common_type.clone(),
                         );
 
                         let rhs = convert_to_decimal(
                             &args[1],
                             ctx,
                             args_type[1].clone(),
-                            DataType::Decimal(return_type.clone()),
+                            common_type.clone(),
                         );
 
-                        op_decimal!(
+                        let res = op_decimal!(
                             &lhs.as_ref(),
                             &rhs.as_ref(),
                             ctx,
-                            &DataType::Decimal(return_type.clone()),
+                            &common_type,
                             $op,
                             scale_a,
                             scale_b,
                             is_divide
-                        )
+                        );
+
+                        if common_type != DataType::Decimal(return_type.clone()) {
+                            convert_to_decimal(
+                                &res.as_ref(),
+                                ctx,
+                                common_type.clone(),
+                                DataType::Decimal(return_type.clone()),
+                            )
+                        } else {
+                            res
+                        }
                     }),
                 },
             };
@@ -643,7 +671,7 @@ macro_rules! m_integer_to_decimal {
                 match x {
                     Some(x) => x,
                     None => {
-                        $ctx.set_error(row, "Decimal overflow");
+                        $ctx.set_error(row, concat!("Decimal overflow at line : ", line!()));
                         <$type_name>::one()
                     }
                 }
@@ -681,7 +709,7 @@ macro_rules! m_float_to_decimal {
             .map(|(row, x)| {
                 let x = <$type_name>::from_float(x.as_() * multiplier);
                 if x > max_for_precision || x < min_for_precision {
-                    $ctx.set_error(row, "Decimal overflow");
+                    $ctx.set_error(row, concat!("Decimal overflow at line : ", line!()));
                     <$type_name>::one()
                 } else {
                     x
@@ -764,7 +792,7 @@ fn decimal_256_to_128(
                 match x.checked_mul(factor) {
                     Some(x) if x <= max && x >= min => *x.low(),
                     _ => {
-                        ctx.set_error(row, "Decimal overflow");
+                        ctx.set_error(row, concat!("Decimal overflow at line : ", line!()));
                         i128::one()
                     }
                 }
@@ -780,7 +808,7 @@ fn decimal_256_to_128(
                 match x.checked_div(factor) {
                     Some(x) if x <= max && x >= min => *x.low(),
                     _ => {
-                        ctx.set_error(row, "Decimal overflow");
+                        ctx.set_error(row, concat!("Decimal overflow at line : ", line!()));
                         i128::one()
                     }
                 }
@@ -816,7 +844,10 @@ macro_rules! m_decimal_to_decimal {
                         match x.checked_div(factor) {
                             Some(x) => x,
                             None => {
-                                $ctx.set_error(row, "Decimal overflow");
+                                $ctx.set_error(
+                                    row,
+                                    concat!("Decimal overflow at line : ", line!()),
+                                );
                                 <$dest_type_name>::one()
                             }
                         }
@@ -834,7 +865,10 @@ macro_rules! m_decimal_to_decimal {
                         match x.checked_mul(factor) {
                             Some(x) if x <= max && x >= min => x as $dest_type_name,
                             _ => {
-                                $ctx.set_error(row, "Decimal overflow");
+                                $ctx.set_error(
+                                    row,
+                                    concat!("Decimal overflow at line : ", line!()),
+                                );
                                 <$dest_type_name>::one()
                             }
                         }
