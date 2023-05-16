@@ -14,9 +14,9 @@
 
 use std::sync::Arc;
 
-use arrow_array::Array;
-use arrow_schema::ArrowError;
-use arrow_schema::Field;
+use common_arrow::arrow_array::Array;
+use common_arrow::arrow_schema::ArrowError;
+use common_arrow::arrow_schema::Field;
 
 use crate::Column;
 use crate::DataField;

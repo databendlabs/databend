@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use arrow_array::RecordBatch;
-use arrow_schema::ArrowError;
+use common_arrow::arrow_array::RecordBatch;
+use common_arrow::arrow_schema::ArrowError;
 
 use crate::Column;
 use crate::DataBlock;

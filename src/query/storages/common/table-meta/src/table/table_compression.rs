@@ -12,7 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::{native, parquet};
+use common_arrow::native;
+use common_arrow::parquet;
 use common_arrow::parquet2;
 use common_exception::ErrorCode;
 
@@ -58,13 +59,15 @@ impl From<TableCompression> for parquet2::compression::CompressionOptions {
     }
 }
 
-impl From<TableCompression> for parquet::basic::Compression{
+impl From<TableCompression> for parquet::basic::Compression {
     fn from(value: TableCompression) -> Self {
         match value {
-            TableCompression::None => parquet::basic::Compression::Uncompressed,
-            TableCompression::LZ4=> parquet::basic::Compression::LZ4,
-            TableCompression::Snappy=> parquet::basic::Compression::SNAPPY,
-            TableCompression::Zstd=> parquet::basic::Compression::ZSTD(parquet::basic::ZstdLevel::default()),
+            TableCompression::None => parquet::basic::Compression::UNCOMPRESSED,
+            TableCompression::LZ4 => parquet::basic::Compression::LZ4,
+            TableCompression::Snappy => parquet::basic::Compression::SNAPPY,
+            TableCompression::Zstd => {
+                parquet::basic::Compression::ZSTD(parquet::basic::ZstdLevel::default())
+            }
         }
     }
 }

@@ -13,26 +13,26 @@
 // limitations under the License.
 
 use std::io::Bytes;
+
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::io::parquet::write::transverse;
 use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
+use common_arrow::arrow_array::RecordBatch;
+use common_arrow::parquet::arrow::arrow_writer::ArrowWriter;
+use common_arrow::parquet::file::properties::WriterProperties;
+use common_arrow::parquet::format::FileMetaData;
 use common_arrow::parquet2::encoding::Encoding;
 use common_arrow::parquet2::metadata::ThriftFileMetaData;
 use common_arrow::parquet2::write::Version;
 use common_arrow::write_parquet_file;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::serialize::col_encoding;
-use common_expression::{DataBlock, DataSchema};
+use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::TableSchema;
 use storages_common_table_meta::table::TableCompression;
-use common_arrow::parquet::arrow::arrow_writer::ArrowWriter;
-use common_arrow::parquet::file::properties::WriterProperties;
-use common_arrow::parquet::format::FileMetaData;
-
-
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
@@ -41,12 +41,19 @@ pub fn blocks_to_parquet(
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
 ) -> Result<(u64, FileMetaData)> {
-    let data_schema:DataSchema = schema.into();
-    let props = WriterProperties::builder().set_compression(compression.into()).build();
-    let mut writer = ArrowWriter::try_new(write_buffer, batch.schema(), Some(props)).unwrap();
+    let data_schema: DataSchema = schema.into();
+    let batches: Vec<RecordBatch> = blocks
+        .iter()
+        .map(|block| block.to_record_batch(&data_schema)?)
+        .collect();
+    assert_eq!(batches.len() > 0);
+    let mut writer = ArrowWriter::try_new(write_buffer, batches[0].schema(), Some(props)).unwrap();
+    let props = WriterProperties::builder()
+        .set_compression(compression.into())
+        .build();
+    writer.write(&batch)?;
     for block in blocks {
-        let batch = block.to_record_batch(&data_schema).unwrap();
-        writer.write(&batch)?;
+        let batch = block.to_record_batch(&data_schema)?;
     }
     match writer.close() {
         Ok(meta) => Ok((write_buffer.len() as u64, meta)),
@@ -55,7 +62,6 @@ pub fn blocks_to_parquet(
             cause,
         ))),
     }
-    //
     // let arrow_schema = schema.as_ref().to_arrow();
     //
     // let row_group_write_options = WriteOptions {

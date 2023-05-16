@@ -19,10 +19,12 @@ mod parquet_write;
 pub mod schema_projection;
 
 pub use arrow;
+pub use arrow_array;
 pub use arrow_format;
+pub use arrow_schema;
 pub use native;
-pub use parquet2;
 pub use parquet;
+pub use parquet2;
 pub use parquet_read::read_columns_async;
 pub use parquet_read::read_columns_many_async;
 pub use parquet_write::write_parquet_file;

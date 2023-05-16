@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_arrow::parquet::format::FileMetaData;
 use common_arrow::parquet2::metadata::ThriftFileMetaData;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -33,8 +34,6 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::table::TableCompression;
 use uuid::Uuid;
-use common_arrow::parquet::format::FileMetaData;
-
 
 pub struct BlockWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,

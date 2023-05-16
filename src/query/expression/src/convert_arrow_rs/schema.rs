@@ -15,12 +15,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use arrow_schema::ArrowError;
-use arrow_schema::DataType as ArrowDataType;
-use arrow_schema::Field as ArrowField;
-use arrow_schema::Fields;
-use arrow_schema::Schema as ArrowSchema;
-use arrow_schema::TimeUnit;
+use common_arrow::arrow_schema::ArrowError;
+use common_arrow::arrow_schema::DataType as ArrowDataType;
+use common_arrow::arrow_schema::Field as ArrowField;
+use common_arrow::arrow_schema::Fields;
+use common_arrow::arrow_schema::Schema as ArrowSchema;
+use common_arrow::arrow_schema::TimeUnit;
 
 use crate::types::decimal::DecimalSize;
 use crate::types::DataType;

@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_arrow::parquet::format::FileMetaData;
 use common_arrow::parquet2::metadata::ThriftFileMetaData;
 use common_base::base::tokio;
 use common_cache::Cache;
@@ -53,7 +54,6 @@ use sysinfo::ProcessExt;
 use sysinfo::System;
 use sysinfo::SystemExt;
 use uuid::Uuid;
-use common_arrow::parquet::format::FileMetaData;
 
 // NOTE:
 //

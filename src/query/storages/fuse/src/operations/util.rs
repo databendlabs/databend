@@ -14,8 +14,8 @@
 
 use std::collections::HashMap;
 
-use common_arrow::parquet2::metadata::ThriftFileMetaData;
 use common_arrow::parquet::format::FileMetaData;
+use common_arrow::parquet2::metadata::ThriftFileMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
