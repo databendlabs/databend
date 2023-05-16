@@ -89,8 +89,8 @@ impl Interpreter for DeleteInterpreter {
         // Add table mutation lock.
         let table_info = tbl.get_table_info().clone();
         let catalog = self.ctx.get_catalog(catalog_name)?;
-        let _res = catalog
-            .upsert_table_mutation_lock(60, &table_info, true)
+        let res = catalog
+            .upsert_mutation_lock_rev(60, &table_info, None)
             .await?;
 
         let mut build_res = PipelineBuildResult::create();
@@ -103,12 +103,16 @@ impl Interpreter for DeleteInterpreter {
         .await?;
 
         if build_res.main_pipeline.is_empty() {
-            let _res = catalog.drop_table_mutation_lock(&table_info).await?;
+            let _res = catalog
+                .delete_mutation_lock_rev(&table_info, res.revision)
+                .await?;
         } else {
             build_res.main_pipeline.set_on_finished(move |may_error| {
                 // Drop table mutation lock.
                 GlobalIORuntime::instance().block_on(async move {
-                    let _res = catalog.drop_table_mutation_lock(&table_info).await?;
+                    let _res = catalog
+                        .delete_mutation_lock_rev(&table_info, res.revision)
+                        .await?;
                     Ok(())
                 })?;
                 match may_error {

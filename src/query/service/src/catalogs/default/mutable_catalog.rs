@@ -29,22 +29,22 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
+use common_meta_app::schema::DeleteTableMutationLockReply;
+use common_meta_app::schema::DeleteTableMutationLockReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableMutationLockReply;
-use common_meta_app::schema::DropTableMutationLockReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableMutationLockReply;
-use common_meta_app::schema::GetTableMutationLockReq;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListTableMutationLockReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -363,61 +363,61 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_mutation_lock(
-        &self,
-        table_info: &TableInfo,
-    ) -> Result<GetTableMutationLockReply> {
-        let table_id = table_info.ident.table_id;
-        let req = GetTableMutationLockReq { table_id };
+    async fn list_table_mutation_lock_revs(&self, table_info: &TableInfo) -> Result<Vec<Revision>> {
+        let req = ListTableMutationLockReq {
+            table_id: table_info.ident.table_id,
+        };
         match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.get_table_mutation_lock(req).await?),
+            DatabaseType::NormalDB => Ok(self.ctx.meta.list_table_mutation_lock_revs(req).await?),
             DatabaseType::ShareDB(share_ident) => {
                 let db = self
                     .get_database(&share_ident.tenant, &share_ident.share_name)
                     .await?;
-                db.get_table_mutation_lock(req).await
+                db.list_table_mutation_lock_revs(req).await
             }
         }
     }
 
     #[async_backtrace::framed]
-    async fn upsert_table_mutation_lock(
+    async fn upsert_mutation_lock_rev(
         &self,
         expire_secs: u64,
         table_info: &TableInfo,
-        fail_if_exists: bool,
+        revision: Option<u64>,
     ) -> Result<UpsertTableMutationLockReply> {
         let req = UpsertTableMutationLockReq {
             table_id: table_info.ident.table_id,
             expire_at: Utc::now().timestamp() as u64 + expire_secs,
-            fail_if_exists,
+            revision,
         };
         match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.upsert_table_mutation_lock(req).await?),
+            DatabaseType::NormalDB => Ok(self.ctx.meta.upsert_mutation_lock_rev(req).await?),
             DatabaseType::ShareDB(share_ident) => {
                 let db = self
                     .get_database(&share_ident.tenant, &share_ident.share_name)
                     .await?;
-                db.upsert_table_mutation_lock(req).await
+                db.upsert_mutation_lock_rev(req).await
             }
         }
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_mutation_lock(
+    async fn delete_mutation_lock_rev(
         &self,
         table_info: &TableInfo,
-    ) -> Result<DropTableMutationLockReply> {
-        let req = DropTableMutationLockReq {
+        revision: u64,
+    ) -> Result<DeleteTableMutationLockReply> {
+        let req = DeleteTableMutationLockReq {
             table_id: table_info.ident.table_id,
+            revision,
         };
         match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.drop_table_mutation_lock(req).await?),
+            DatabaseType::NormalDB => Ok(self.ctx.meta.delete_mutation_lock_rev(req).await?),
             DatabaseType::ShareDB(share_ident) => {
                 let db = self
                     .get_database(&share_ident.tenant, &share_ident.share_name)
                     .await?;
-                db.drop_table_mutation_lock(req).await
+                db.delete_mutation_lock_rev(req).await
             }
         }
     }

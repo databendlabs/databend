@@ -80,8 +80,8 @@ impl Interpreter for UpdateInterpreter {
         let table_info = tbl.get_table_info().clone();
         let catalog = self.ctx.get_catalog(catalog_name)?;
         // Todo: add mutation_lock_expire_sec in ctx.setting.
-        let _res = catalog
-            .upsert_table_mutation_lock(10, &table_info, true)
+        let res = catalog
+            .upsert_mutation_lock_rev(10, &table_info, None)
             .await?;
 
         let mut build_res = PipelineBuildResult::create();
@@ -95,10 +95,15 @@ impl Interpreter for UpdateInterpreter {
         .await?;
 
         if build_res.main_pipeline.is_empty() {
-            let _res = catalog.drop_table_mutation_lock(&table_info).await?;
+            let _res = catalog
+                .delete_mutation_lock_rev(&table_info, res.revision)
+                .await?;
         } else {
-            let mut heartbeat =
-                MutationLockHeartbeat::try_create(self.ctx.clone(), table_info.clone())?;
+            let mut heartbeat = MutationLockHeartbeat::try_create(
+                self.ctx.clone(),
+                table_info.clone(),
+                res.revision,
+            )?;
             build_res.main_pipeline.set_on_finished(move |may_error| {
                 // Drop table mutation lock.
                 GlobalIORuntime::instance().block_on(async move {

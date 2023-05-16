@@ -33,6 +33,25 @@ use rand::Rng;
 
 use crate::sessions::QueryContext;
 
+pub struct MutationLockMutex {
+    ctx: Arc<QueryContext>,
+    table_info: TableInfo,
+    revision: u64,
+}
+
+impl MutationLockMutex {
+    async fn try_acquire(self) -> Result<()> {
+        let ctx = self.ctx.clone();
+        let catalog = ctx.get_catalog(self.table_info.catalog())?;
+        let expire_secs = ctx.get_settings().get_mutation_lock_expire_secs()?;
+        let res = catalog
+            .upsert_mutation_lock_rev(expire_secs, &self.table_info, None)
+            .await?;
+
+        todo!()
+    }
+}
+
 pub struct MutationLockHeartbeat {
     shutdown_flag: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
@@ -40,7 +59,11 @@ pub struct MutationLockHeartbeat {
 }
 
 impl MutationLockHeartbeat {
-    pub fn try_create(ctx: Arc<QueryContext>, table_info: TableInfo) -> Result<Self> {
+    pub fn try_create(
+        ctx: Arc<QueryContext>,
+        table_info: TableInfo,
+        revision: u64,
+    ) -> Result<Self> {
         let shutdown_notify = Arc::new(Notify::new());
         let shutdown_flag = Arc::new(AtomicBool::new(false));
 
@@ -62,13 +85,15 @@ impl MutationLockHeartbeat {
                     let sleep = Box::pin(sleep(Duration::from_millis(mills)));
                     match select(notified, sleep).await {
                         Either::Left((_, _)) => {
-                            catalog.drop_table_mutation_lock(&table_info).await?;
+                            catalog
+                                .delete_mutation_lock_rev(&table_info, revision)
+                                .await?;
                             break;
                         }
                         Either::Right((_, new_notified)) => {
                             notified = new_notified;
                             catalog
-                                .upsert_table_mutation_lock(expire_secs, &table_info, false)
+                                .upsert_mutation_lock_rev(expire_secs, &table_info, Some(revision))
                                 .await?;
                         }
                     }

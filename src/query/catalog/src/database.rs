@@ -19,16 +19,16 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DeleteTableMutationLockReply;
+use common_meta_app::schema::DeleteTableMutationLockReq;
 use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableMutationLockReply;
-use common_meta_app::schema::DropTableMutationLockReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableMutationLockReply;
-use common_meta_app::schema::GetTableMutationLockReq;
+use common_meta_app::schema::ListTableMutationLockReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -181,34 +181,34 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_mutation_lock(
+    async fn list_table_mutation_lock_revs(
         &self,
-        _req: GetTableMutationLockReq,
-    ) -> Result<GetTableMutationLockReply> {
+        _req: ListTableMutationLockReq,
+    ) -> Result<Vec<Revision>> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement get_table_mutation_lock in {} Database",
+            "UnImplement list_table_mutation_lock_revs in {} Database",
             self.name()
         )))
     }
 
     #[async_backtrace::framed]
-    async fn upsert_table_mutation_lock(
+    async fn upsert_mutation_lock_rev(
         &self,
         _req: UpsertTableMutationLockReq,
     ) -> Result<UpsertTableMutationLockReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement upsert_table_mutation_lock in {} Database",
+            "UnImplement upsert_mutation_lock_rev in {} Database",
             self.name()
         )))
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_mutation_lock(
+    async fn delete_mutation_lock_rev(
         &self,
-        _req: DropTableMutationLockReq,
-    ) -> Result<DropTableMutationLockReply> {
+        _req: DeleteTableMutationLockReq,
+    ) -> Result<DeleteTableMutationLockReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement drop_table_mutation_lock in {} Database",
+            "UnImplement delete_mutation_lock_rev in {} Database",
             self.name()
         )))
     }

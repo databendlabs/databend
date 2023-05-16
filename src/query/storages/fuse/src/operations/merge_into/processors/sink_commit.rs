@@ -205,16 +205,17 @@ impl Processor for CommitSink {
             State::TryCommit(new_snapshot) => {
                 let table_info = self.table.get_table_info();
                 if self.get_lock {
-                    let catalog = self.ctx.get_catalog(table_info.catalog())?;
-                    let res = catalog.get_table_mutation_lock(table_info).await?;
-                    if res.locked {
-                        tracing::error!(
-                            "table '{}' is under mutation, please retry later",
-                            table_info.name
-                        );
-                        self.state = State::AbortOperation;
-                        return Ok(());
-                    }
+                    todo!();
+                    // let catalog = self.ctx.get_catalog(table_info.catalog())?;
+                    // let res = catalog.get_table_mutation_lock(table_info).await?;
+                    // if res.locked {
+                    // tracing::error!(
+                    // "table '{}' is under mutation, please retry later",
+                    // table_info.name
+                    // );
+                    // self.state = State::AbortOperation;
+                    // return Ok(());
+                    // }
                 }
 
                 match FuseTable::commit_to_meta_server(

@@ -24,18 +24,18 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DeleteTableMutationLockReply;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableMutationLockReply;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableMutationLockReply;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -482,34 +482,32 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_mutation_lock(
-        &self,
-        table_info: &TableInfo,
-    ) -> Result<GetTableMutationLockReply> {
+    async fn list_table_mutation_lock_revs(&self, table_info: &TableInfo) -> Result<Vec<Revision>> {
         self.mutable_catalog
-            .get_table_mutation_lock(table_info)
+            .list_table_mutation_lock_revs(table_info)
             .await
     }
 
     #[async_backtrace::framed]
-    async fn upsert_table_mutation_lock(
+    async fn upsert_mutation_lock_rev(
         &self,
         expire_secs: u64,
         table_info: &TableInfo,
-        fail_if_exists: bool,
+        revision: Option<u64>,
     ) -> Result<UpsertTableMutationLockReply> {
         self.mutable_catalog
-            .upsert_table_mutation_lock(expire_secs, table_info, fail_if_exists)
+            .upsert_mutation_lock_rev(expire_secs, table_info, revision)
             .await
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_mutation_lock(
+    async fn delete_mutation_lock_rev(
         &self,
         table_info: &TableInfo,
-    ) -> Result<DropTableMutationLockReply> {
+        revision: u64,
+    ) -> Result<DeleteTableMutationLockReply> {
         self.mutable_catalog
-            .drop_table_mutation_lock(table_info)
+            .delete_mutation_lock_rev(table_info, revision)
             .await
     }
 }

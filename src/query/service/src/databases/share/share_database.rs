@@ -21,16 +21,16 @@ use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
+use common_meta_app::schema::DeleteTableMutationLockReply;
+use common_meta_app::schema::DeleteTableMutationLockReq;
 use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableMutationLockReply;
-use common_meta_app::schema::DropTableMutationLockReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableMutationLockReply;
-use common_meta_app::schema::GetTableMutationLockReq;
+use common_meta_app::schema::ListTableMutationLockReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -196,16 +196,18 @@ impl Database for ShareDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_mutation_lock(
+    async fn list_table_mutation_lock_revs(
         &self,
-        req: GetTableMutationLockReq,
-    ) -> Result<GetTableMutationLockReply> {
-        let res = self.ctx.meta.get_table_mutation_lock(req).await?;
-        Ok(res)
+        _req: ListTableMutationLockReq,
+    ) -> Result<Vec<Revision>> {
+        Err(ErrorCode::PermissionDenied(
+            "Permission denied, cannot get table mutation lock revisions from a shared database"
+                .to_string(),
+        ))
     }
 
     #[async_backtrace::framed]
-    async fn upsert_table_mutation_lock(
+    async fn upsert_mutation_lock_rev(
         &self,
         _req: UpsertTableMutationLockReq,
     ) -> Result<UpsertTableMutationLockReply> {
@@ -215,10 +217,10 @@ impl Database for ShareDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_mutation_lock(
+    async fn delete_mutation_lock_rev(
         &self,
-        _req: DropTableMutationLockReq,
-    ) -> Result<DropTableMutationLockReply> {
+        _req: DeleteTableMutationLockReq,
+    ) -> Result<DeleteTableMutationLockReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot drop table mutation lock from a shared database".to_string(),
         ))

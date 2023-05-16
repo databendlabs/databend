@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::CompactTarget;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::plans::OptimizeTableAction;
 use common_sql::plans::OptimizeTablePlan;
@@ -99,15 +98,16 @@ impl OptimizeTableInterpreter {
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
-        let table_info = table.get_table_info();
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
-        let res = catalog.get_table_mutation_lock(table_info).await?;
-        if res.locked {
-            return Err(ErrorCode::TableMutationAlreadyLocked(format!(
-                "table '{}' is under mutation, please retry compaction later",
-                self.plan.table
-            )));
-        }
+
+        // let table_info = table.get_table_info();
+        // let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        // let res = catalog.get_table_mutation_lock(table_info).await?;
+        // if res.locked {
+        // return Err(ErrorCode::TableMutationAlreadyLocked(format!(
+        // "table '{}' is under mutation, please retry compaction later",
+        // self.plan.table
+        // )));
+        // }
 
         table
             .compact(

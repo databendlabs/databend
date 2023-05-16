@@ -23,18 +23,18 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::DeleteTableMutationLockReply;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropTableByIdReq;
-use common_meta_app::schema::DropTableMutationLockReply;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::GetTableMutationLockReply;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -267,34 +267,35 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_table_mutation_lock(
+    async fn list_table_mutation_lock_revs(
         &self,
         _table_info: &TableInfo,
-    ) -> Result<GetTableMutationLockReply> {
+    ) -> Result<Vec<Revision>> {
         Err(ErrorCode::Unimplemented(
-            "get_table_mutation_lock not allowed for system database",
+            "list_table_mutation_lock_revs not allowed for system database",
         ))
     }
 
     #[async_backtrace::framed]
-    async fn upsert_table_mutation_lock(
+    async fn upsert_mutation_lock_rev(
         &self,
         _expire_sec: u64,
         _table_info: &TableInfo,
-        _fail_if_exists: bool,
+        _revision: Option<u64>,
     ) -> Result<UpsertTableMutationLockReply> {
         Err(ErrorCode::Unimplemented(
-            "upsert_table_mutation_lock not allowed for system database",
+            "upsert_mutation_lock_rev not allowed for system database",
         ))
     }
 
     #[async_backtrace::framed]
-    async fn drop_table_mutation_lock(
+    async fn delete_mutation_lock_rev(
         &self,
         _table_info: &TableInfo,
-    ) -> Result<DropTableMutationLockReply> {
+        _revision: u64,
+    ) -> Result<DeleteTableMutationLockReply> {
         Err(ErrorCode::Unimplemented(
-            "drop_table_mutation_lock not allowed for system database",
+            "delete_mutation_lock_rev not allowed for system database",
         ))
     }
 }
