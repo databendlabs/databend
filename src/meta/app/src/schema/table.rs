@@ -200,6 +200,14 @@ pub struct TableStatistics {
     pub compressed_data_bytes: u64,
     /// Size of index data in bytes
     pub index_data_bytes: u64,
+
+    /// number of segments
+    /// for old version of table meta, this filed is None
+    pub number_of_segments: Option<u64>,
+
+    /// number of blocks
+    /// for old version of table meta, this filed is None
+    pub number_of_blocks: Option<u64>,
 }
 
 /// The essential state that defines what a table is.

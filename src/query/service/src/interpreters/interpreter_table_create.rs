@@ -183,6 +183,8 @@ impl CreateTableInterpreter {
                     data_bytes: snapshot.summary.uncompressed_byte_size,
                     compressed_data_bytes: snapshot.summary.compressed_byte_size,
                     index_data_bytes: snapshot.summary.index_size,
+                    number_of_segments: Some(snapshot.segments.len() as u64),
+                    number_of_blocks: Some(snapshot.summary.block_count),
                 });
             }
         }

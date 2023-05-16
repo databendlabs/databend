@@ -262,6 +262,8 @@ impl FuseTable {
             data_bytes: new_snapshot.summary.uncompressed_byte_size,
             compressed_data_bytes: new_snapshot.summary.compressed_byte_size,
             index_data_bytes: new_snapshot.summary.index_size,
+            number_of_segments: Some(new_snapshot.segments.len() as u64),
+            number_of_blocks: Some(new_snapshot.summary.block_count),
         };
 
         FuseTable::commit_to_meta_server(
@@ -398,6 +400,8 @@ impl FuseTable {
             data_bytes: stats.uncompressed_byte_size,
             compressed_data_bytes: stats.compressed_byte_size,
             index_data_bytes: stats.index_size,
+            number_of_segments: Some(snapshot.segments.len() as u64),
+            number_of_blocks: Some(stats.block_count),
         };
 
         // 3. prepare the request
