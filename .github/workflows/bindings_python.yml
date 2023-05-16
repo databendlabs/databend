@@ -4,6 +4,13 @@ on:
   pull_request:
     branches:
       - main
+    paths-ignore:
+      - "docs/**"
+      - "website/**"
+      - "**.md"
+      - "docker/**"
+      - "scripts/setup/**"
+      - ".devcontainer/**"
   workflow_call:
     inputs:
       tag:
