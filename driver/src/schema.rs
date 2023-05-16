@@ -35,17 +35,26 @@ pub enum NumberDataType {
     Float64,
 }
 
-// #[derive(Debug, Clone, PartialEq, Eq)]
-// pub struct DecimalSize {
-//     pub precision: u8,
-//     pub scale: u8,
-// }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecimalSize {
+    pub precision: u8,
+    pub scale: u8,
+}
 
-// #[derive(Debug, Clone, PartialEq, Eq)]
-// pub enum DecimalDataType {
-//     Decimal128(DecimalSize),
-//     Decimal256(DecimalSize),
-// }
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DecimalDataType {
+    Decimal128(DecimalSize),
+    Decimal256(DecimalSize),
+}
+
+impl DecimalDataType {
+    pub fn decimal_size(&self) -> &DecimalSize {
+        match self {
+            DecimalDataType::Decimal128(size) => size,
+            DecimalDataType::Decimal256(size) => size,
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub enum DataType {
@@ -55,9 +64,7 @@ pub enum DataType {
     Boolean,
     String,
     Number(NumberDataType),
-    Decimal,
-    // TODO:(everpcpc) fix Decimal internal type
-    // Decimal(DecimalDataType),
+    Decimal(DecimalDataType),
     Timestamp,
     Date,
     Nullable(Box<DataType>),
@@ -98,7 +105,10 @@ impl std::fmt::Display for DataType {
                 NumberDataType::Float32 => write!(f, "Float32"),
                 NumberDataType::Float64 => write!(f, "Float64"),
             },
-            DataType::Decimal => write!(f, "Decimal"),
+            DataType::Decimal(d) => {
+                let size = d.decimal_size();
+                write!(f, "Decimal({}, {})", size.precision, size.scale)
+            }
             DataType::Timestamp => write!(f, "Timestamp"),
             DataType::Date => write!(f, "Date"),
             DataType::Nullable(inner) => write!(f, "Nullable({})", inner),
@@ -152,7 +162,22 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
             "UInt64" => DataType::Number(NumberDataType::UInt64),
             "Float32" => DataType::Number(NumberDataType::Float32),
             "Float64" => DataType::Number(NumberDataType::Float64),
-            "Decimal" => DataType::Decimal,
+            "Decimal" => {
+                let precision = desc.args[0].name.parse::<u8>()?;
+                let scale = desc.args[1].name.parse::<u8>()?;
+
+                if precision <= 38 {
+                    DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                        precision,
+                        scale,
+                    }))
+                } else {
+                    DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+                        precision,
+                        scale,
+                    }))
+                }
+            }
             "Timestamp" => DataType::Timestamp,
             "Date" => DataType::Date,
             "Nullable" => {
@@ -247,8 +272,18 @@ impl TryFrom<&Arc<ArrowField>> for Field {
             | ArrowDataType::FixedSizeBinary(_) => DataType::String,
             ArrowDataType::Timestamp(_, _) => DataType::Timestamp,
             ArrowDataType::Date32 => DataType::Date,
-            ArrowDataType::Decimal128(_, _) => DataType::Decimal,
-            ArrowDataType::Decimal256(_, _) => DataType::Decimal,
+            ArrowDataType::Decimal128(p, s) => {
+                DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+                    precision: *p,
+                    scale: *s as u8,
+                }))
+            }
+            ArrowDataType::Decimal256(p, s) => {
+                DataType::Decimal(DecimalDataType::Decimal256(DecimalSize {
+                    precision: *p,
+                    scale: *s as u8,
+                }))
+            }
             _ => {
                 return Err(Error::Parsing(format!(
                     "Unsupported datatype for arrow field: {:?}",
@@ -354,6 +389,23 @@ mod test {
                 output: TypeDesc {
                     name: "String",
                     args: vec![],
+                },
+            },
+            TestCase {
+                desc: "decimal type",
+                input: "Decimal(42, 42)",
+                output: TypeDesc {
+                    name: "Decimal",
+                    args: vec![
+                        TypeDesc {
+                            name: "42",
+                            args: vec![],
+                        },
+                        TypeDesc {
+                            name: "42",
+                            args: vec![],
+                        },
+                    ],
                 },
             },
             TestCase {

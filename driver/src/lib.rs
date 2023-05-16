@@ -23,5 +23,5 @@ mod value;
 
 pub use conn::{new_connection, Connection};
 pub use rows::{QueryProgress, Row, RowIterator, RowProgressIterator, RowWithProgress};
-pub use schema::{DataType, Schema, SchemaRef};
+pub use schema::{DataType, DecimalSize, Schema, SchemaRef};
 pub use value::{NumberValue, Value};

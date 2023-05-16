@@ -16,7 +16,7 @@ rustls = ["databend-client/rustls"]
 # Enable native-tls for TLS support
 native-tls = ["databend-client/native-tls"]
 
-flight-sql = ["dep:arrow", "dep:arrow-array", "dep:arrow-cast", "dep:arrow-flight", "dep:arrow-schema", "dep:tonic"]
+flight-sql = ["dep:arrow-array", "dep:arrow-cast", "dep:arrow-flight", "dep:arrow-schema", "dep:tonic"]
 
 [dependencies]
 async-trait = "0.1.68"
@@ -30,7 +30,7 @@ tokio = { version = "1.27.0", features = ["macros"] }
 tokio-stream = "0.1.12"
 url = { version = "2.3.1", default-features = false }
 
-arrow = { version = "38.0.0", optional = true }
+arrow = { version = "38.0.0" }
 arrow-array = { version = "38.0.0", optional = true }
 arrow-cast = { version = "38.0.0", features = ["prettyprint"], optional = true }
 arrow-flight = { version = "38.0.0", features = ["flight-sql-experimental"], optional = true }

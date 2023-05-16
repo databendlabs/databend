@@ -12,9 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrow::datatypes::i256;
+use arrow_array::{ArrowNativeTypeOp, Decimal128Array, Decimal256Array};
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
 
-use crate::error::{ConvertError, Error, Result};
+use crate::{
+    error::{ConvertError, Error, Result},
+    schema::{DecimalDataType, DecimalSize},
+};
+use std::fmt::Write;
 
 // Thu 1970-01-01 is R.D. 719163
 const DAYS_FROM_CE: i32 = 719_163;
@@ -45,16 +51,16 @@ pub enum NumberValue {
     UInt64(u64),
     Float32(f32),
     Float64(f64),
+    Decimal128(i128, DecimalSize),
+    Decimal256(i256, DecimalSize),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Value {
     Null,
     Boolean(bool),
     String(String),
     Number(NumberValue),
-    // TODO:(everpcpc) Decimal(DecimalValue),
-    // Decimal(String),
     /// Microseconds from 1970-01-01 00:00:00 UTC
     Timestamp(i64),
     Date(i32),
@@ -82,9 +88,11 @@ impl Value {
                 NumberValue::UInt64(_) => DataType::Number(NumberDataType::UInt64),
                 NumberValue::Float32(_) => DataType::Number(NumberDataType::Float32),
                 NumberValue::Float64(_) => DataType::Number(NumberDataType::Float64),
+                NumberValue::Decimal128(_, s) => DataType::Decimal(DecimalDataType::Decimal128(*s)),
+                NumberValue::Decimal256(_, s) => DataType::Decimal(DecimalDataType::Decimal256(*s)),
             },
-            // Self::Decimal(_) => DataType::Decimal,
             Self::Timestamp(_) => DataType::Timestamp,
+
             Self::Date(_) => DataType::Date,
             // TODO:(everpcpc) fix nested type
             // Self::Array(v) => DataType::Array(Box::new(v[0].get_type())),
@@ -133,7 +141,17 @@ impl TryFrom<(&DataType, &str)> for Value {
             DataType::Number(NumberDataType::Float64) => {
                 Ok(Self::Number(NumberValue::Float64(v.parse()?)))
             }
-            // DataType::Decimal => Ok(Self::Decimal(v)),
+
+            DataType::Decimal(DecimalDataType::Decimal128(size)) => {
+                let d = parse_decimal(v, *size)?;
+                Ok(Self::Number(d))
+            }
+
+            DataType::Decimal(DecimalDataType::Decimal256(size)) => {
+                let d = parse_decimal(v, *size)?;
+                Ok(Self::Number(d))
+            }
+
             DataType::Timestamp => Ok(Self::Timestamp(
                 chrono::NaiveDateTime::parse_from_str(v, "%Y-%m-%d %H:%M:%S%.6f")?
                     .timestamp_micros(),
@@ -209,6 +227,32 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
                 Some(array) => Ok(Value::Number(NumberValue::Float64(array.value(seq)))),
                 None => Err(ConvertError::new("float64", format!("{:?}", array)).into()),
             },
+
+            ArrowDataType::Decimal128(p, s) => {
+                match array.as_any().downcast_ref::<Decimal128Array>() {
+                    Some(array) => Ok(Value::Number(NumberValue::Decimal128(
+                        array.value(seq),
+                        DecimalSize {
+                            precision: *p,
+                            scale: *s as u8,
+                        },
+                    ))),
+                    None => Err(ConvertError::new("Decimal128", format!("{:?}", array)).into()),
+                }
+            }
+
+            ArrowDataType::Decimal256(p, s) => {
+                match array.as_any().downcast_ref::<Decimal256Array>() {
+                    Some(array) => Ok(Value::Number(NumberValue::Decimal256(
+                        array.value(seq),
+                        DecimalSize {
+                            precision: *p,
+                            scale: *s as u8,
+                        },
+                    ))),
+                    None => Err(ConvertError::new("Decimal256", format!("{:?}", array)).into()),
+                }
+            }
 
             ArrowDataType::Binary => match array.as_any().downcast_ref::<BinaryArray>() {
                 Some(array) => Ok(Value::String(String::from_utf8(array.value(seq).to_vec())?)),
@@ -418,6 +462,8 @@ impl std::fmt::Display for NumberValue {
             NumberValue::UInt64(i) => write!(f, "{}", i),
             NumberValue::Float32(i) => write!(f, "{}", i),
             NumberValue::Float64(i) => write!(f, "{}", i),
+            NumberValue::Decimal128(v, s) => write!(f, "{}", display_decimal_128(*v, s.scale)),
+            NumberValue::Decimal256(v, s) => write!(f, "{}", display_decimal_256(*v, s.scale)),
         }
     }
 }
@@ -440,6 +486,119 @@ impl std::fmt::Display for Value {
                 let d = NaiveDate::from_num_days_from_ce_opt(days).unwrap_or_default();
                 write!(f, "{}", d)
             }
+        }
+    }
+}
+
+pub fn display_decimal_128(num: i128, scale: u8) -> String {
+    let mut buf = String::new();
+    if scale == 0 {
+        write!(buf, "{}", num).unwrap();
+    } else {
+        let pow_scale = 10_i128.pow(scale as u32);
+        if num >= 0 {
+            write!(
+                buf,
+                "{}.{:0>width$}",
+                num / pow_scale,
+                (num % pow_scale).abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        } else {
+            write!(
+                buf,
+                "-{}.{:0>width$}",
+                -num / pow_scale,
+                (num % pow_scale).abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        }
+    }
+    buf
+}
+
+pub fn display_decimal_256(num: i256, scale: u8) -> String {
+    let mut buf = String::new();
+    if scale == 0 {
+        write!(buf, "{}", num).unwrap();
+    } else {
+        let pow_scale = i256::from_i128(10i128).pow_wrapping(scale as u32);
+        // -1/10 = 0
+        if num >= i256::ZERO {
+            write!(
+                buf,
+                "{}.{:0>width$}",
+                num / pow_scale,
+                (num % pow_scale).wrapping_abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        } else {
+            write!(
+                buf,
+                "-{}.{:0>width$}",
+                -num / pow_scale,
+                (num % pow_scale).wrapping_abs(),
+                width = scale as usize
+            )
+            .unwrap();
+        }
+    }
+    buf
+}
+
+/// assume text is from
+/// used only for expr, so put more weight on readability
+pub fn parse_decimal(text: &str, size: DecimalSize) -> Result<NumberValue> {
+    let mut start = 0;
+    let bytes = text.as_bytes();
+    while bytes[start] == b'0' {
+        start += 1
+    }
+    let text = &text[start..];
+    let point_pos = text.find('.');
+    let e_pos = text.find(|c| c == 'e' || c == 'E');
+    let (i_part, f_part, e_part) = match (point_pos, e_pos) {
+        (Some(p1), Some(p2)) => (&text[..p1], &text[(p1 + 1)..p2], Some(&text[(p2 + 1)..])),
+        (Some(p), None) => (&text[..p], &text[(p + 1)..], None),
+        (None, Some(p)) => (&text[..p], "", Some(&text[(p + 1)..])),
+        _ => {
+            unreachable!()
+        }
+    };
+    let exp = match e_part {
+        Some(s) => s.parse::<i32>()?,
+        None => 0,
+    };
+    if i_part.len() as i32 + exp > 76 {
+        Err(ConvertError::new("decimal", format!("{:?}", text)).into())
+    } else {
+        let mut digits = Vec::with_capacity(76);
+        digits.extend_from_slice(i_part.as_bytes());
+        digits.extend_from_slice(f_part.as_bytes());
+        if digits.is_empty() {
+            digits.push(b'0')
+        }
+        let scale = f_part.len() as i32 - exp;
+        if scale < 0 {
+            // e.g 123.1e3
+            for _ in 0..(-scale) {
+                digits.push(b'0')
+            }
+        };
+
+        let precision = std::cmp::min(digits.len(), 76);
+        let digits = unsafe { std::str::from_utf8_unchecked(&digits[..precision]) };
+
+        if size.precision > 38 {
+            Ok(NumberValue::Decimal256(
+                i256::from_string(digits).unwrap(),
+                size,
+            ))
+        } else {
+            Ok(NumberValue::Decimal128(digits.parse::<i128>()?, size))
         }
     }
 }

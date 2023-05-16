@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::assert_eq;
+
 use chrono::{DateTime, NaiveDate, NaiveDateTime};
-use databend_driver::{new_connection, Connection};
+use databend_driver::{new_connection, Connection, DecimalSize, NumberValue, Value};
 
 use crate::common::DEFAULT_DSN;
 
@@ -116,6 +118,36 @@ async fn select_datetime() {
                 .naive_utc()
         );
     }
+}
+
+#[tokio::test]
+async fn select_decimal() {
+    let conn = prepare().await;
+    let row = conn
+        .query_row("select 1::Decimal(15,2), 2.0 + 3.0")
+        .await
+        .unwrap();
+    assert!(row.is_some());
+    let row = row.unwrap();
+    assert_eq!(
+        row.values().to_owned(),
+        vec![
+            Value::Number(NumberValue::Decimal128(
+                100i128,
+                DecimalSize {
+                    precision: 15,
+                    scale: 2
+                },
+            )),
+            Value::Number(NumberValue::Decimal128(
+                50i128,
+                DecimalSize {
+                    precision: 3,
+                    scale: 1
+                },
+            )),
+        ]
+    );
 }
 
 #[tokio::test]
