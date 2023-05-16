@@ -671,6 +671,7 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -704,6 +705,7 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -737,6 +739,7 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -780,6 +783,7 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -814,6 +818,7 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -848,6 +853,7 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -882,6 +888,7 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {

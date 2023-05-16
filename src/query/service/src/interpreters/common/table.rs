@@ -19,28 +19,67 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::ComputedExpr;
+use common_expression::DataField;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_pipeline_core::Pipeline;
 
+use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
-fn fill_missing_columns(
+pub fn fill_missing_columns(
     ctx: Arc<QueryContext>,
     source_schema: &DataSchemaRef,
     table: Arc<dyn Table>,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
+    let with_default_fields = table
+        .schema()
+        .fields()
+        .iter()
+        .filter(|f| f.computed_expr().is_none())
+        .map(DataField::from)
+        .collect::<Vec<_>>();
+
+    let with_computed_fields = table
+        .schema()
+        .fields()
+        .iter()
+        .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+        .map(DataField::from)
+        .collect::<Vec<_>>();
+
+    // Fill missing default columns and resort the columns.
+    let output_schema = DataSchemaRefExt::create(with_default_fields.clone());
     pipeline.add_transform(|transform_input_port, transform_output_port| {
         TransformResortAddOn::try_create(
             ctx.clone(),
             transform_input_port,
             transform_output_port,
             source_schema.clone(),
+            output_schema.clone(),
             table.clone(),
         )
     })?;
+
+    // Fill computed columns.
+    if with_default_fields.len() < with_computed_fields.len() {
+        let input_schema = DataSchemaRefExt::create(with_default_fields);
+        let output_schema = DataSchemaRefExt::create(with_computed_fields);
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformAddComputedColumns::try_create(
+                ctx.clone(),
+                transform_input_port,
+                transform_output_port,
+                input_schema.clone(),
+                output_schema.clone(),
+            )
+        })?;
+    }
+
     Ok(())
 }
 

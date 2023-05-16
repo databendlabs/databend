@@ -20,7 +20,8 @@ pid=$!
 # there is a new process introduced from background subshell, use ps -p $pid to checkout
 
 # kill query randomly
-sleep 5
+sleep_time=`expr $RANDOM % 5 + 5`
+sleep $sleep_time 
 killall databend-query > /dev/null 2>&1
 kill $pid
 

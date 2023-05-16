@@ -80,6 +80,7 @@ impl BlockReader {
         ctx: Arc<dyn TableContext>,
         query_internal_columns: bool,
     ) -> Result<Arc<BlockReader>> {
+        let schema = schema.remove_virtual_computed();
         // init projected_schema and default_vals of schema.fields
         let (projected_schema, default_vals) = match projection {
             Projection::Columns(ref indices) => {

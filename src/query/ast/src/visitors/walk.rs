@@ -384,6 +384,8 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::CreateView(stmt) => visitor.visit_create_view(stmt),
         Statement::AlterView(stmt) => visitor.visit_alter_view(stmt),
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
+        Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
+        Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::ShowUsers => visitor.visit_show_users(),
         Statement::ShowRoles => visitor.visit_show_roles(),
         Statement::CreateUser(stmt) => visitor.visit_create_user(stmt),

@@ -34,6 +34,7 @@ pub struct ScalarBinder<'a> {
     metadata: MetadataRef,
     aliases: &'a [(String, ScalarExpr)],
     allow_ambiguous: bool,
+    allow_pushdown: bool,
 }
 
 impl<'a> ScalarBinder<'a> {
@@ -51,11 +52,16 @@ impl<'a> ScalarBinder<'a> {
             metadata,
             aliases,
             allow_ambiguous: false,
+            allow_pushdown: false,
         }
     }
 
     pub fn allow_ambiguity(&mut self) {
         self.allow_ambiguous = true;
+    }
+
+    pub fn allow_pushdown(&mut self) {
+        self.allow_pushdown = true;
     }
 
     #[async_backtrace::framed]
@@ -67,6 +73,7 @@ impl<'a> ScalarBinder<'a> {
             self.metadata.clone(),
             self.aliases,
             self.allow_ambiguous,
+            self.allow_pushdown,
         );
         Ok(*type_checker.resolve(expr).await?)
     }

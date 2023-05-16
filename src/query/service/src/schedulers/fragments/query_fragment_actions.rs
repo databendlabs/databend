@@ -14,7 +14,6 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
-use std::collections::HashSet;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
@@ -208,8 +207,9 @@ impl QueryFragmentsActions {
 
     pub fn get_init_nodes_channel_packets(&self) -> Result<Vec<InitNodesChannelPacket>> {
         let nodes_info = Self::nodes_info(&self.ctx);
+        let local_id = self.ctx.get_cluster().local_id.clone();
         let connections_info = self.fragments_connections();
-        let mut statistics_connections = self.statistics_connections();
+        let statistics_connections = self.statistics_connections();
 
         let mut init_nodes_channel_packets = Vec::with_capacity(connections_info.len());
 
@@ -240,33 +240,14 @@ impl QueryFragmentsActions {
                 ));
             }
 
-            let mut statistics_connections_info = Vec::with_capacity(0);
-            if let Some(set) = statistics_connections.remove(&executor_node_info.id) {
-                statistics_connections_info = set
-                    .iter()
-                    .map(|id| ConnectionInfo::create(nodes_info[id].clone(), vec![]))
-                    .collect::<Vec<_>>();
-            }
-
             init_nodes_channel_packets.push(InitNodesChannelPacket::create(
                 self.ctx.get_id(),
                 executor_node_info.clone(),
                 connections_info,
-                statistics_connections_info,
-            ));
-        }
-
-        for (id, set) in statistics_connections.into_iter() {
-            let statistics_connections_info = set
-                .iter()
-                .map(|id| ConnectionInfo::create(nodes_info[id].clone(), vec![]))
-                .collect::<Vec<_>>();
-
-            init_nodes_channel_packets.push(InitNodesChannelPacket::create(
-                self.ctx.get_id(),
-                nodes_info[&id].clone(),
-                vec![],
-                statistics_connections_info,
+                match executor_node_info.id == local_id {
+                    true => statistics_connections.clone(),
+                    false => vec![],
+                },
             ));
         }
 
@@ -340,33 +321,17 @@ impl QueryFragmentsActions {
         target_source_fragments
     }
 
-    fn statistics_connections(&self) -> HashMap<String, HashSet<String>> {
+    fn statistics_connections(&self) -> Vec<ConnectionInfo> {
         let local_id = self.ctx.get_cluster().local_id.clone();
         let nodes_info = Self::nodes_info(&self.ctx);
-        let mut target_source_connections = HashMap::new();
+        let mut target_source_connections = Vec::with_capacity(nodes_info.len());
 
-        for (id, _node_info) in nodes_info {
+        for (id, node_info) in nodes_info {
             if local_id == id {
                 continue;
             }
 
-            match target_source_connections.entry(local_id.clone()) {
-                Entry::Vacant(v) => {
-                    v.insert(HashSet::from([id.clone()]));
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().insert(id.clone());
-                }
-            };
-
-            match target_source_connections.entry(id.clone()) {
-                Entry::Vacant(v) => {
-                    v.insert(HashSet::from([local_id.clone()]));
-                }
-                Entry::Occupied(mut v) => {
-                    v.get_mut().insert(local_id.clone());
-                }
-            };
+            target_source_connections.push(ConnectionInfo::create(node_info, vec![]));
         }
 
         target_source_connections
