@@ -52,7 +52,8 @@ pub struct Settings {
     /// Show stats after executing queries.
     /// Only works with non-interactive mode.
     pub show_stats: bool,
-
+    /// Output max rows (only works in table output format)
+    pub max_display_rows: usize,
     /// Output format is set by the flag.
     pub output_format: OutputFormat,
 
@@ -109,6 +110,7 @@ impl Settings {
             }
             "time" => self.time = cmd_value.parse()?,
             "multi_line" => self.multi_line = cmd_value.parse()?,
+            "max_display_rows" => self.max_display_rows = cmd_value.parse()?,
             _ => return Err(anyhow!("Unknown command: {}", cmd_name)),
         }
         Ok(())
@@ -155,6 +157,7 @@ impl Default for Settings {
             prompt: "{user}@{host}> ".to_string(),
             output_format: OutputFormat::Table,
             show_progress: false,
+            max_display_rows: 40,
             show_stats: false,
             time: false,
             multi_line: true,

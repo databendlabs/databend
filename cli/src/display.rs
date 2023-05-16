@@ -105,7 +105,10 @@ impl<'a> FormatDisplay<'a> {
             pb.finish_and_clear();
         }
         if !rows.is_empty() {
-            println!("{}", create_table(self.schema.clone(), &rows)?);
+            println!(
+                "{}",
+                create_table(self.schema.clone(), &rows, self.settings.max_display_rows)?
+            );
         }
         Ok(())
     }
@@ -271,7 +274,7 @@ fn display_read_progress(pb: Option<ProgressBar>, current: &QueryProgress) -> Pr
 }
 
 /// Convert a series of rows into a table
-fn create_table(schema: SchemaRef, results: &[Row]) -> Result<Table> {
+fn create_table(schema: SchemaRef, results: &[Row], max_rows: usize) -> Result<Table> {
     let mut table = Table::new();
     table.load_preset("││──├─┼┤│    ──┌┐└┘");
     if results.is_empty() {
@@ -294,7 +297,26 @@ fn create_table(schema: SchemaRef, results: &[Row]) -> Result<Table> {
     }
     table.set_header(header);
 
-    for row in results {
+    let row_count: usize = results.len();
+    let mut rows_to_render = row_count.min(max_rows);
+
+    if row_count <= max_rows + 3 {
+        // hiding rows adds 3 extra rows
+        // so hiding rows makes no sense if we are only slightly over the limit
+        // if we are 1 row over the limit hiding rows will actually increase the number of lines we display!
+        // in this case render all the rows
+        // 	rows_to_render = row_count;
+        rows_to_render = row_count;
+    }
+
+    let (top_rows, bottom_rows) = if rows_to_render == row_count {
+        (row_count, 0usize)
+    } else {
+        let top_rows = rows_to_render / 2 + (rows_to_render % 2 != 0) as usize;
+        (top_rows, rows_to_render - top_rows)
+    };
+
+    for row in results.iter().take(top_rows) {
         let mut cells = Vec::new();
         let values = row.values();
         for (idx, align) in aligns.iter().enumerate() {
@@ -302,6 +324,34 @@ fn create_table(schema: SchemaRef, results: &[Row]) -> Result<Table> {
             cells.push(cell);
         }
         table.add_row(cells);
+    }
+
+    // render the bottom rows
+    if bottom_rows != 0 {
+        // first render the divider
+        let mut cells: Vec<Cell> = Vec::new();
+        for align in aligns.iter() {
+            let cell = Cell::new("·").set_alignment(*align);
+            cells.push(cell);
+        }
+
+        for _ in 0..3 {
+            table.add_row(cells.clone());
+        }
+        for row in results.iter().skip(row_count - bottom_rows) {
+            let mut cells = Vec::new();
+            let values = row.values();
+            for (idx, align) in aligns.iter().enumerate() {
+                let cell = Cell::new(&values[idx]).set_alignment(*align);
+                cells.push(cell);
+            }
+            table.add_row(cells);
+        }
+
+        let row_count_str = format!("{} rows", row_count);
+        let show_count_str = format!("({} shown)", top_rows + bottom_rows);
+        table.add_row(vec![Cell::new(row_count_str).set_alignment(aligns[0])]);
+        table.add_row(vec![Cell::new(show_count_str).set_alignment(aligns[0])]);
     }
 
     Ok(table)
