@@ -72,7 +72,6 @@ fn create_table_plan(fixture: &TestFixture) -> CreateTablePlan {
             (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
         ]
         .into(),
-        field_default_exprs: vec![],
         field_comments: vec![],
         as_select: None,
         cluster_key: None,

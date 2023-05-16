@@ -20,19 +20,20 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
+use crate::plans::RelOperator;
 use crate::MetadataRef;
 
 pub struct RuleTryApplyAggIndex {
     id: RuleID,
     patterns: Vec<SExpr>,
-    _metadata: MetadataRef,
+    metadata: MetadataRef,
 }
 
 impl RuleTryApplyAggIndex {
     pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::TryApplyAggIndex,
-            _metadata: metadata,
+            metadata,
             patterns: vec![
                 // Expression
                 //     |
@@ -161,13 +162,20 @@ impl Rule for RuleTryApplyAggIndex {
         s_expr: &SExpr,
         state: &mut crate::optimizer::rule::TransformResult,
     ) -> Result<()> {
-        let index_plans = self.get_index_plans();
+        let table_id = Self::get_table_id(s_expr);
+        let metadata = self.metadata.read();
+        let index_plans = metadata.get_agg_indexes(table_id);
+        if index_plans.is_none() {
+            // No enterprise license or no index.
+            return Ok(());
+        }
+        let index_plans = index_plans.unwrap();
         if index_plans.is_empty() {
             // No enterprise license or no index.
             return Ok(());
         }
 
-        if let Some(result) = agg_index::try_rewrite(s_expr, &index_plans)? {
+        if let Some(result) = agg_index::try_rewrite(s_expr, index_plans)? {
             result.applied_rule(&self.id);
             state.add_result(result);
         }
@@ -177,8 +185,10 @@ impl Rule for RuleTryApplyAggIndex {
 }
 
 impl RuleTryApplyAggIndex {
-    fn get_index_plans(&self) -> Vec<(u64, SExpr)> {
-        // TODO(agg index)
-        vec![]
+    fn get_table_id(s_expr: &SExpr) -> u64 {
+        match s_expr.plan() {
+            RelOperator::Scan(scan) => scan.table_index as u64,
+            _ => Self::get_table_id(s_expr.child(0).unwrap()),
+        }
     }
 }

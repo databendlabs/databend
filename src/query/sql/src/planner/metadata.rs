@@ -28,7 +28,6 @@ use common_expression::ComputedExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_meta_app::schema::IndexId;
 use common_meta_types::MetaId;
 use parking_lot::RwLock;
 
@@ -60,7 +59,7 @@ pub struct Metadata {
     columns: Vec<ColumnEntry>,
     //// Columns that are lazy materialized.
     lazy_columns: HashSet<usize>,
-    table_indexes: HashMap<MetaId, Vec<(IndexId, SExpr)>>,
+    agg_indexes: HashMap<MetaId, Vec<(u64, SExpr)>>,
 }
 
 impl Metadata {
@@ -225,11 +224,15 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_table_indexes(&mut self, table_id: MetaId, table_indexes: Vec<(IndexId, SExpr)>) {
-        self.table_indexes
+    pub fn add_agg_indexes(&mut self, table_id: MetaId, table_indexes: Vec<(u64, SExpr)>) {
+        self.agg_indexes
             .entry(table_id)
             .and_modify(|indexes| indexes.extend_from_slice(&table_indexes))
             .or_insert(table_indexes);
+    }
+
+    pub fn get_agg_indexes(&self, table_id: MetaId) -> Option<&[(u64, SExpr)]> {
+        self.agg_indexes.get(&table_id).map(|v| v.as_slice())
     }
 
     pub fn add_table(
