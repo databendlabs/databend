@@ -25,7 +25,6 @@ use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_sql::plans::Join;
 use common_sql::plans::Scan;
-use common_sql::plans::Statistics;
 use databend_query::sql::optimizer::SExpr;
 use databend_query::sql::planner::plans::JoinType;
 use databend_query::sql::planner::Metadata;
@@ -172,15 +171,7 @@ fn test_format() {
             SExpr::create_leaf(
                 Scan {
                     table_index: tab1,
-                    columns: Default::default(),
-                    push_down_predicates: None,
-                    limit: None,
-                    order_by: None,
-                    prewhere: None,
-                    statistics: Statistics {
-                        statistics: None,
-                        col_stats: Default::default(),
-                    },
+                    ..Default::default()
                 }
                 .into(),
             ),
@@ -188,15 +179,7 @@ fn test_format() {
         SExpr::create_leaf(
             Scan {
                 table_index: tab1,
-                columns: Default::default(),
-                push_down_predicates: None,
-                limit: None,
-                order_by: None,
-                prewhere: None,
-                statistics: Statistics {
-                    statistics: None,
-                    col_stats: Default::default(),
-                },
+                ..Default::default()
             }
             .into(),
         ),

@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2022 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod factory;
-mod rewrite;
-#[allow(clippy::module_inception)]
-mod rule;
-mod rule_set;
-mod transform;
-mod transform_result;
-
-pub use factory::RuleFactory;
-pub use rewrite::agg_index;
-pub use rewrite::try_push_down_filter_join;
-pub use rule::Rule;
-pub use rule::RuleID;
-pub use rule::RulePtr;
-pub use rule_set::AppliedRules;
-pub use rule_set::RuleSet;
-pub use transform_result::TransformResult;
+mod agg_index_query_rewrite;
