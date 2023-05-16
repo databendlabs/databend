@@ -82,28 +82,28 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── Limit
     ├── limit: 3
     ├── offset: 0
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     └── Sort
         ├── sort keys: [number DESC NULLS LAST]
-        ├── estimated rows: 0.33
+        ├── estimated rows: 0.10
         └── AggregateFinal
             ├── group by: [number]
             ├── aggregate functions: []
-            ├── estimated rows: 0.33
+            ├── estimated rows: 0.10
             └── AggregatePartial
                 ├── group by: [number]
                 ├── aggregate functions: []
-                ├── estimated rows: 0.33
+                ├── estimated rows: 0.10
                 └── EvalScalar
                     ├── expressions: [t.number (#0)]
-                    ├── estimated rows: 0.33
+                    ├── estimated rows: 0.10
                     └── Filter
                         ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_5 (#5)) AS Boolean NULL), scalar_subquery_5 (#5), 0))]
-                        ├── estimated rows: 0.33
+                        ├── estimated rows: 0.10
                         └── HashJoin
                             ├── join type: SINGLE
                             ├── build keys: [number (#2)]

@@ -44,20 +44,20 @@ explain select a from (select number as a, number b, sum(number) as c, number as
 ----
 EvalScalar
 ├── expressions: [numbers.a (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── Limit
     ├── limit: 1
     ├── offset: 0
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     └── Sort
         ├── sort keys: [number ASC NULLS LAST]
-        ├── estimated rows: 0.33
+        ├── estimated rows: 0.10
         └── EvalScalar
             ├── expressions: [numbers.number (#0)]
-            ├── estimated rows: 0.33
+            ├── estimated rows: 0.10
             └── Filter
                 ├── filters: [numbers.b (#0) > 1]
-                ├── estimated rows: 0.33
+                ├── estimated rows: 0.10
                 └── AggregateFinal
                     ├── group by: [number, number, number, number]
                     ├── aggregate functions: []
@@ -83,19 +83,19 @@ explain select * from (select t1.a from (select number + 1 as a, number + 1 as b
 ----
 EvalScalar
 ├── expressions: [t1.a (#1), t1.a (#1)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── HashJoin
     ├── join type: INNER
     ├── build keys: [t1.b (#2)]
     ├── probe keys: [t2.b (#7)]
     ├── filters: []
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     ├── EvalScalar(Build)
     │   ├── expressions: [numbers.number (#0) + 1, numbers.number (#0) + 1]
-    │   ├── estimated rows: 0.33
+    │   ├── estimated rows: 0.10
     │   └── Filter
     │       ├── filters: [numbers.number (#0) + 1 = 1]
-    │       ├── estimated rows: 0.33
+    │       ├── estimated rows: 0.10
     │       └── TableScan
     │           ├── table: default.system.numbers
     │           ├── read rows: 1
@@ -121,10 +121,10 @@ explain select t1.a from (select number + 1 as a, number + 1 as b from numbers(1
 ----
 EvalScalar
 ├── expressions: [t1.a (#1)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── Filter
     ├── filters: [is_true(CAST(t1.a (#1) AS UInt64 NULL) = scalar_subquery_13 (#13))]
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     └── HashJoin
         ├── join type: SINGLE
         ├── build keys: []
@@ -147,13 +147,13 @@ EvalScalar
         │               ├── build keys: [t2.b (#5)]
         │               ├── probe keys: [t3.b (#10)]
         │               ├── filters: []
-        │               ├── estimated rows: 0.33
+        │               ├── estimated rows: 0.10
         │               ├── EvalScalar(Build)
         │               │   ├── expressions: [numbers.number (#3) + 1]
-        │               │   ├── estimated rows: 0.33
+        │               │   ├── estimated rows: 0.10
         │               │   └── Filter
         │               │       ├── filters: [numbers.number (#3) + 1 = 1]
-        │               │       ├── estimated rows: 0.33
+        │               │       ├── estimated rows: 0.10
         │               │       └── TableScan
         │               │           ├── table: default.system.numbers
         │               │           ├── read rows: 1
@@ -208,16 +208,16 @@ explain select t.number from numbers(10) t where exists(select * from numbers(10
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 3.33
+├── estimated rows: 1.00
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 3.33
+    ├── estimated rows: 1.00
     ├── Filter(Build)
     │   ├── filters: [count(*) (#2) = 1]
-    │   ├── estimated rows: 0.33
+    │   ├── estimated rows: 0.10
     │   └── AggregateFinal
     │       ├── group by: []
     │       ├── aggregate functions: [count()]
