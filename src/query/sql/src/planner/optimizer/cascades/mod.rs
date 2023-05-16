@@ -17,4 +17,5 @@ mod explore_rules;
 mod scheduler;
 mod tasks;
 
+pub use cascade::BestCostHashMap;
 pub use cascade::CascadesOptimizer;

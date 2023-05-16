@@ -14,14 +14,19 @@
 
 use std::collections::HashSet;
 
+use common_exception::ErrorCode;
+use common_exception::Result;
+
 use super::column_stat::ColumnStatSet;
+use crate::plans::Exchange;
+use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::IndexType;
 
 pub type ColumnSet = HashSet<IndexType>;
 pub type TableSet = HashSet<IndexType>;
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RequiredProperty {
     pub distribution: Distribution,
 }
@@ -66,7 +71,7 @@ pub struct PhysicalProperty {
     pub distribution: Distribution,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Distribution {
     Any,
     Random,
@@ -98,6 +103,22 @@ impl Distribution {
             //     .iter()
             //     .all(|key| other_keys.iter().any(|other_key| key == other_key)),
             _ => false,
+        }
+    }
+
+    /// Get enforcers to enforce required distribution.
+    pub fn get_enforcers(&self) -> Result<Vec<RelOperator>> {
+        match self {
+            Distribution::Random => Err(ErrorCode::Unimplemented(
+                "Random distribution is not supported yet".to_string(),
+            )),
+            Distribution::Serial => Ok(vec![RelOperator::Exchange(Exchange::Merge)]),
+            Distribution::Broadcast => Ok(vec![RelOperator::Exchange(Exchange::Broadcast)]),
+            Distribution::Hash(key) => Ok(vec![RelOperator::Exchange(Exchange::Hash(key.clone()))]),
+
+            Distribution::Any => Err(ErrorCode::Internal(
+                "Any distribution shouldn't be enforced",
+            )),
         }
     }
 }

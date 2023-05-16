@@ -26,6 +26,7 @@ use crate::optimizer::cascades::tasks::ExploreGroupTask;
 use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::group::GroupState;
+use crate::optimizer::RequiredProperty;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -50,6 +51,8 @@ pub struct OptimizeGroupTask {
     pub ctx: Arc<dyn TableContext>,
 
     pub state: OptimizeGroupState,
+
+    pub required: RequiredProperty,
     pub group_index: IndexType,
     pub last_optimized_expr_index: Option<IndexType>,
 
@@ -58,10 +61,15 @@ pub struct OptimizeGroupTask {
 }
 
 impl OptimizeGroupTask {
-    pub fn new(ctx: Arc<dyn TableContext>, group_index: IndexType) -> Self {
+    pub fn new(
+        ctx: Arc<dyn TableContext>,
+        group_index: IndexType,
+        required: RequiredProperty,
+    ) -> Self {
         Self {
             ctx,
             state: OptimizeGroupState::Init,
+            required,
             group_index,
             last_optimized_expr_index: None,
             ref_count: Rc::new(SharedCounter::new()),
@@ -72,9 +80,10 @@ impl OptimizeGroupTask {
     pub fn with_parent(
         ctx: Arc<dyn TableContext>,
         group_index: IndexType,
+        required: RequiredProperty,
         parent: &Rc<SharedCounter>,
     ) -> Self {
-        let mut task = Self::new(ctx, group_index);
+        let mut task = Self::new(ctx, group_index, required);
         parent.inc();
         task.parent = Some(parent.clone());
         task
@@ -157,6 +166,7 @@ impl OptimizeGroupTask {
                 self.ctx.clone(),
                 self.group_index,
                 m_expr.index,
+                self.required.clone(),
                 &self.ref_count,
             );
             scheduler.add_task(Task::OptimizeExpr(task));

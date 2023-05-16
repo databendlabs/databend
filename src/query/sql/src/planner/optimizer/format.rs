@@ -12,23 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use common_ast::ast::FormatTreeNode;
 use common_exception::Result;
 
 use super::cost::CostContext;
+use crate::optimizer::cascades::BestCostHashMap;
 use crate::optimizer::group::Group;
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
 use crate::plans::RelOperator;
-use crate::IndexType;
 
-pub fn display_memo(memo: &Memo, cost_map: &HashMap<IndexType, CostContext>) -> Result<String> {
+pub fn display_memo(memo: &Memo, _cost_map: &BestCostHashMap) -> Result<String> {
     Ok(memo
         .groups
         .iter()
-        .map(|grp| group_to_format_tree(grp, cost_map.get(&grp.group_index)).format_pretty())
+        .map(|grp| group_to_format_tree(grp, None).format_pretty())
         .collect::<Result<Vec<_>>>()?
         .join("\n"))
 }

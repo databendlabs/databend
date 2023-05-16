@@ -26,6 +26,7 @@ use crate::optimizer::SExpr;
 use crate::plans::Exchange;
 use crate::plans::RelOperator;
 
+#[allow(dead_code)]
 pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) -> Result<SExpr> {
     let required = RequiredProperty {
         distribution: Distribution::Any,
@@ -46,6 +47,7 @@ pub fn optimize_distributed_query(ctx: Arc<dyn TableContext>, s_expr: &SExpr) ->
 }
 
 // Traverse the SExpr tree to find top_k, if find, push down it to Exchange::Merge
+#[allow(dead_code)]
 fn push_down_topk_to_merge(s_expr: &SExpr, mut top_k: Option<TopK>) -> Result<SExpr> {
     if let RelOperator::Exchange(Exchange::Merge) = s_expr.plan {
         // A quick fix for Merge child is aggregate.

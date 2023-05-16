@@ -28,6 +28,11 @@ use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::cost::Cost;
 use crate::optimizer::cost::CostContext;
+use crate::optimizer::RelExpr;
+use crate::optimizer::RequiredProperty;
+use crate::optimizer::SExpr;
+use crate::plans::PatternPlan;
+use crate::plans::RelOp;
 use crate::IndexType;
 
 #[derive(Clone, Copy, Debug)]
@@ -54,8 +59,10 @@ pub struct OptimizeExprTask {
 
     pub state: OptimizeExprState,
 
+    pub required: RequiredProperty,
     pub group_index: IndexType,
     pub m_expr_index: IndexType,
+    pub children_props: Vec<Vec<RequiredProperty>>,
 
     pub ref_count: Rc<SharedCounter>,
     pub parent: Option<Rc<SharedCounter>>,
@@ -66,12 +73,15 @@ impl OptimizeExprTask {
         ctx: Arc<dyn TableContext>,
         group_index: IndexType,
         m_expr_index: IndexType,
+        required: RequiredProperty,
     ) -> Self {
         Self {
             ctx,
             state: OptimizeExprState::Init,
+            required,
             group_index,
             m_expr_index,
+            children_props: vec![],
             ref_count: Rc::new(SharedCounter::new()),
             parent: None,
         }
@@ -81,9 +91,10 @@ impl OptimizeExprTask {
         ctx: Arc<dyn TableContext>,
         group_index: IndexType,
         m_expr_index: IndexType,
+        required: RequiredProperty,
         parent: &Rc<SharedCounter>,
     ) -> Self {
-        let mut task = Self::new(ctx, group_index, m_expr_index);
+        let mut task = Self::new(ctx, group_index, m_expr_index, required);
         parent.inc();
         task.parent = Some(parent.clone());
         task
@@ -137,16 +148,31 @@ impl OptimizeExprTask {
             .memo
             .group(self.group_index)?
             .m_expr(self.m_expr_index)?;
+
+        let rel_expr = RelExpr::with_m_expr(m_expr, &optimizer.memo);
+
         let mut all_children_optimized = true;
-        for child in m_expr.children.iter() {
+        let mut children_props = Vec::with_capacity(m_expr.children.len());
+        for (child_index, child) in m_expr.children.iter().enumerate() {
             let group = optimizer.memo.group(*child)?;
             if !group.state.optimized() {
                 all_children_optimized = false;
-                let task =
-                    OptimizeGroupTask::with_parent(self.ctx.clone(), *child, &self.ref_count);
+                let child_required = rel_expr.compute_required_prop_child(
+                    self.ctx.clone(),
+                    child_index,
+                    &self.required,
+                )?;
+                children_props.push(child_required.clone());
+                let task = OptimizeGroupTask::with_parent(
+                    self.ctx.clone(),
+                    *child,
+                    child_required,
+                    &self.ref_count,
+                );
                 scheduler.add_task(Task::OptimizeGroup(task));
             }
         }
+        self.children_props.push(children_props);
 
         if all_children_optimized {
             Ok(OptimizeExprEvent::OptimizedChildren)
@@ -163,33 +189,86 @@ impl OptimizeExprTask {
         let m_expr = optimizer
             .memo
             .group(self.group_index)?
-            .m_expr(self.m_expr_index)?;
-        let mut cost = Cost::from(0);
-        for child in m_expr.children.iter() {
-            let cost_context = optimizer.best_cost_map.get(child).ok_or_else(|| {
-                ErrorCode::Internal(format!("Cannot find CostContext of group: {child}"))
-            })?;
+            .m_expr(self.m_expr_index)?
+            .clone();
 
-            cost = cost + cost_context.cost;
+        // Enforce properties if necessary
+        let prop = RelExpr::with_m_expr(&m_expr, &optimizer.memo).derive_physical_prop()?;
+
+        // TODO(leiysky): We only support enforcing distribution property for now, so we can disable
+        // enforcer by checking if the query is running in distributed mode. But in the future, we
+        // should use a more general way to check if the enforcer is needed.
+        if optimizer.enable_distributed_optimization && !self.required.satisfied_by(&prop) {
+            // Should add enforcers to enforce the required property
+            let enforcers = self.required.distribution.get_enforcers()?;
+            for enforcer in enforcers {
+                // Create a `SExpr` for enforcer, the child of which is the current group
+                let enforcer_expr = SExpr::create_unary(
+                    enforcer,
+                    SExpr::create(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                        vec![],
+                        Some(m_expr.group_index),
+                        None,
+                        None,
+                    ),
+                );
+
+                optimizer.insert_expression(m_expr.group_index, &enforcer_expr)?;
+            }
+
+            if let Some(parent) = &self.parent {
+                parent.dec();
+            }
+            return Ok(OptimizeExprEvent::OptimizedSelf);
         }
 
-        let op_cost = optimizer.cost_model.compute_cost(&optimizer.memo, m_expr)?;
-        cost = cost + op_cost;
+        // Cost current expr if no need to add enforcers, in which case the required
+        // property is satisfied by the current expr.
+        for children_prop in self.children_props.iter() {
+            let mut cost = Cost::from(0);
 
-        let cost_context = CostContext {
-            cost,
-            group_index: m_expr.group_index,
-            expr_index: m_expr.index,
-        };
+            for (child_group, child_prop) in m_expr.children.iter().zip(children_prop.iter()) {
+                let cost_context = optimizer
+                    .best_cost_map
+                    .get(&(*child_group, child_prop.clone()))
+                    .ok_or_else(|| {
+                        ErrorCode::Internal(format!(
+                            "Cannot find CostContext of group: {child_group}"
+                        ))
+                    })?;
 
-        match optimizer.best_cost_map.entry(m_expr.group_index) {
-            Entry::Vacant(entry) => {
-                entry.insert(cost_context);
+                cost = cost + cost_context.cost;
             }
-            Entry::Occupied(mut entry) => {
-                // Replace the cost context of the group if current context is lower
-                if cost < entry.get().cost {
+
+            let op_cost = optimizer
+                .cost_model
+                .compute_cost(&optimizer.memo, &m_expr)?;
+            cost = cost + op_cost;
+
+            let cost_context = CostContext {
+                cost,
+                group_index: m_expr.group_index,
+                expr_index: m_expr.index,
+                required_prop: self.required.clone(),
+                children_prop: children_prop.clone(),
+            };
+
+            match optimizer
+                .best_cost_map
+                .entry((m_expr.group_index, self.required.clone()))
+            {
+                Entry::Vacant(entry) => {
                     entry.insert(cost_context);
+                }
+                Entry::Occupied(mut entry) => {
+                    // Replace the cost context of the group if current context is lower
+                    if cost < entry.get().cost {
+                        entry.insert(cost_context);
+                    }
                 }
             }
         }

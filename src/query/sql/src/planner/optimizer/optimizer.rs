@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
@@ -20,11 +19,10 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use super::cost::CostContext;
 use super::format::display_memo;
 use super::Memo;
+use crate::optimizer::cascades::BestCostHashMap;
 use crate::optimizer::cascades::CascadesOptimizer;
-use crate::optimizer::distributed::optimize_distributed_query;
 use crate::optimizer::hyper_dp::DPhpy;
 use crate::optimizer::runtime_filter::try_add_runtime_filter_nodes;
 use crate::optimizer::util::contains_local_table_scan;
@@ -33,7 +31,6 @@ use crate::optimizer::SExpr;
 use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::BindContext;
-use crate::IndexType;
 use crate::MetadataRef;
 
 #[derive(Debug, Clone, Default)]
@@ -93,6 +90,7 @@ pub fn optimize(
                 {
                     let (memo, cost_map) = get_optimized_memo(
                         ctx,
+                        opt_ctx,
                         *s_expr.clone(),
                         metadata.clone(),
                         bind_context.clone(),
@@ -147,6 +145,10 @@ pub fn optimize_query(
     s_expr: SExpr,
 ) -> Result<SExpr> {
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
+    // So far, we don't have ability to execute distributed query
+    // with reading data from local tales(e.g. system tables).
+    let enable_distributed_query =
+        opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
 
     let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
     let mut result = heuristic.optimize(s_expr)?;
@@ -156,26 +158,21 @@ pub fn optimize_query(
         result = dp_res;
         if !optimized {
             // Callback to CascadesOptimizer
-            let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
+            let mut cascades =
+                CascadesOptimizer::create(ctx.clone(), metadata, enable_distributed_query)?;
             result = cascades.optimize(result)?;
         }
     } else {
-        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
+        let mut cascades =
+            CascadesOptimizer::create(ctx.clone(), metadata, enable_distributed_query)?;
         result = cascades.optimize(result)?;
     }
-    // So far, we don't have ability to execute distributed query
-    // with reading data from local tales(e.g. system tables).
-    let enable_distributed_query =
-        opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
     // Add runtime filter related nodes after cbo
     // Because cbo may change join order and we don't want to
     // break optimizer due to new added nodes by runtime filter.
     // Currently, we only support standalone.
     if !enable_distributed_query && ctx.get_settings().get_runtime_filter()? {
         result = try_add_runtime_filter_nodes(&result)?;
-    }
-    if enable_distributed_query {
-        result = optimize_distributed_query(ctx.clone(), &result)?;
     }
 
     Ok(result)
@@ -184,14 +181,19 @@ pub fn optimize_query(
 // TODO(leiysky): reuse the optimization logic with `optimize_query`
 fn get_optimized_memo(
     ctx: Arc<dyn TableContext>,
+    opt_ctx: Arc<OptimizerContext>,
     s_expr: SExpr,
     metadata: MetadataRef,
     bind_context: Box<BindContext>,
-) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
+) -> Result<(Memo, BestCostHashMap)> {
+    let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
+    let enable_distributed_query =
+        opt_ctx.config.enable_distributed_optimization && !contains_local_table_scan;
+
     let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
     let result = heuristic.optimize(s_expr)?;
 
-    let mut cascades = CascadesOptimizer::create(ctx, metadata)?;
+    let mut cascades = CascadesOptimizer::create(ctx, metadata, enable_distributed_query)?;
     cascades.optimize(result)?;
     Ok((cascades.memo, cascades.best_cost_map))
 }

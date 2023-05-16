@@ -19,6 +19,7 @@ use common_exception::Result;
 
 use crate::optimizer::MExpr;
 use crate::optimizer::Memo;
+use crate::optimizer::RequiredProperty;
 use crate::IndexType;
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -56,5 +57,10 @@ pub trait CostModel {
 pub struct CostContext {
     pub group_index: IndexType,
     pub expr_index: IndexType,
+
     pub cost: Cost,
+    /// Required physical property associated with current cost.
+    pub required_prop: RequiredProperty,
+    /// Children's required physical property associated with current cost.
+    pub children_prop: Vec<RequiredProperty>,
 }
