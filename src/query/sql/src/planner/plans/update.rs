@@ -61,6 +61,7 @@ impl UpdatePlan {
                 index: schema.num_fields(),
                 data_type: Box::new(DataType::Boolean),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             },
         });
 

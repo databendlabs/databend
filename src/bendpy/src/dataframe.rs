@@ -55,7 +55,7 @@ impl PyDataFrame {
 impl PyDataFrame {
     fn __repr__(&self, py: Python) -> PyResult<String> {
         let blocks = self.collect(py)?;
-        Ok(blocks.display_string())
+        Ok(blocks.box_render())
     }
 
     pub fn collect(&self, py: Python) -> PyResult<PyDataBlocks> {

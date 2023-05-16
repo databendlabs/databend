@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_meta_app::principal::UserInfo;
 use databend_query::sessions::QueryContext;
+use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
@@ -29,29 +30,42 @@ use crate::utils::RUNTIME;
 #[pyclass(name = "SessionContext", module = "databend", subclass)]
 #[derive(Clone)]
 pub(crate) struct PySessionContext {
-    pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) session: Arc<Session>,
 }
 
 #[pymethods]
 impl PySessionContext {
     #[new]
-    fn new() -> PyResult<Self> {
-        let ctx = RUNTIME.block_on(async {
+    #[pyo3(signature = (tenant = None))]
+    fn new(tenant: Option<&str>, py: Python) -> PyResult<Self> {
+        let session = RUNTIME.block_on(async {
             let session = SessionManager::instance()
                 .create_session(SessionType::Local)
                 .await
                 .unwrap();
 
+            if let Some(tenant) = tenant {
+                session.set_current_tenant(tenant.to_owned());
+            } else {
+                session.set_current_tenant(uuid::Uuid::new_v4().to_string());
+            }
+
             let user = UserInfo::new_no_auth("root", "127.0.0.1");
             session.set_authed_user(user, None).await.unwrap();
-            session.create_query_context().await.unwrap()
+            session
         });
 
-        Ok(PySessionContext { ctx })
+        let mut res = Self { session };
+
+        res.sql("CREATE DATABASE IF NOT EXISTS default", py)
+            .and_then(|df| df.collect(py))?;
+        Ok(res)
     }
 
     fn sql(&mut self, sql: &str, py: Python) -> PyResult<PyDataFrame> {
-        let res = wait_for_future(py, plan_sql(&self.ctx, sql));
+        let ctx = wait_for_future(py, self.session.create_query_context()).unwrap();
+        let res = wait_for_future(py, plan_sql(&ctx, sql));
+
         match res {
             Err(err) => Err(PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(format!(
                 "Error: {}",

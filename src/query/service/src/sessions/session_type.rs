@@ -14,7 +14,7 @@
 
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum SessionType {
     Clickhouse,
     MySQL,

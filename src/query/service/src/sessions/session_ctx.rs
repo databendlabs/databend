@@ -28,6 +28,7 @@ use common_settings::ChangeValue;
 use common_settings::Settings;
 use parking_lot::RwLock;
 
+use super::SessionType;
 use crate::sessions::QueryContextShared;
 
 pub struct SessionContext {
@@ -56,10 +57,11 @@ pub struct SessionContext {
     // We store `query_id -> query_result_cache_key` to session context, so that we can fetch
     // query result through previous query_id easily.
     query_ids_results: RwLock<Vec<(String, Option<String>)>>,
+    typ: SessionType,
 }
 
 impl SessionContext {
-    pub fn try_create(settings: Arc<Settings>) -> Result<Arc<Self>> {
+    pub fn try_create(settings: Arc<Settings>, typ: SessionType) -> Result<Arc<Self>> {
         Ok(Arc::new(SessionContext {
             settings,
             abort: Default::default(),
@@ -73,6 +75,7 @@ impl SessionContext {
             io_shutdown_tx: Default::default(),
             query_context_shared: Default::default(),
             query_ids_results: Default::default(),
+            typ,
         }))
     }
 
@@ -147,12 +150,13 @@ impl SessionContext {
             }
         }
 
-        if conf.query.management_mode {
+        if conf.query.management_mode || self.typ == SessionType::Local {
             let lock = self.current_tenant.read();
             if !lock.is_empty() {
                 return lock.clone();
             }
         }
+
         conf.query.tenant_id.clone()
     }
 

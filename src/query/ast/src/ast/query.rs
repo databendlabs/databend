@@ -168,6 +168,16 @@ impl SelectTarget {
             }
         }
     }
+
+    pub fn has_window(&self) -> bool {
+        match self {
+            SelectTarget::AliasedExpr { box expr, .. } => match expr {
+                Expr::FunctionCall { window, .. } => window.is_some(),
+                _ => false,
+            },
+            SelectTarget::QualifiedName { .. } => false,
+        }
+    }
 }
 
 pub type QualifiedName = Vec<Indirection>;

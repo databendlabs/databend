@@ -33,6 +33,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -171,7 +172,16 @@ impl Table for StageTable {
 
         //  Build copy pipeline.
         let settings = ctx.get_settings();
-        let schema = stage_table_info.schema.clone();
+
+        let fields = stage_table_info
+            .schema
+            .fields()
+            .iter()
+            .filter(|f| f.computed_expr().is_none())
+            .cloned()
+            .collect::<Vec<_>>();
+        let schema = TableSchemaRefExt::create(fields);
+
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();

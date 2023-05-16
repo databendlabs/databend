@@ -28,5 +28,5 @@ ordered-float = { workspace = true }
 serde = { workspace = true }
 
 [dev-dependencies]
-aho-corasick = { version = "0.7.20" }
+aho-corasick = { version = "1.0.1" }
 rand = "0.8.5"

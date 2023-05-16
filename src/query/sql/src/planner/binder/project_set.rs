@@ -65,6 +65,10 @@ impl<'a> Visitor<'a> for SrfCollector {
                 params: params.to_vec(),
                 window: over.clone(),
             });
+        } else {
+            for arg in args.iter() {
+                self.visit_expr(arg);
+            }
         }
     }
 }
@@ -156,6 +160,7 @@ impl Binder {
                 index: column_index,
                 data_type: Box::new(srf_expr.data_type().clone()),
                 visibility: Visibility::InVisible,
+                virtual_computed_expr: None,
             };
 
             let item = SrfItem {

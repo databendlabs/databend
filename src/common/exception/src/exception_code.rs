@@ -90,6 +90,7 @@ build_exceptions! {
     BadDataArrayLength(1018),
     UnknownTableId(1020),
     UnknownTable(1025),
+    UnknownView(1026),
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
     EmptyDataFromServer(1030),
@@ -267,6 +268,13 @@ build_exceptions! {
     UnknownShareEndpointId(2716),
     UnknownShareTable(2717),
     CannotShareDatabaseCreatedFromShare(2718),
+
+    // Index error codes.
+    UnsupportedIndex(2719),
+    CreateIndexWithDropTime(2720),
+    IndexAlreadyExists(2721),
+    UnknownIndex(2722),
+    DropIndexWithDropTime(2723),
 
     // Variable error codes.
     UnknownVariable(2801),
