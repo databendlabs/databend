@@ -22,7 +22,7 @@ use jwt_simple::claims::JWTClaims;
 
 use crate::license::LicenseInfo;
 
-pub trait LicenseManager {
+pub trait LicenseManager: Sync + Send {
     fn init() -> Result<()>
     where Self: Sized;
     fn instance() -> Arc<Box<dyn LicenseManager>>

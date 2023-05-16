@@ -11,6 +11,10 @@ No connection. Trying to reconnect...
 
 You can get the server logs from the `system.tracing` table(level=50 only shows the ERROR logs):
 
+:::note
+Databend uses [tokio-tracing](https://github.com/tokio-rs/tracing) to trace logs, where the default timezone is UTC and cannot be changed through the Databend timezone setting, therefore the time in the traced log will always be in UTC, and not reflect your local time.
+:::
+
 ```sql
 SELECT * FROM system.tracing WHERE level=50;
 +------+----------------+----------------------------------------------------------------------------------------------------------------------------------+-------+----------+--------+-------------------------------------+

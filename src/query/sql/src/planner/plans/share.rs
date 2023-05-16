@@ -41,12 +41,6 @@ pub struct CreateShareEndpointPlan {
     pub comment: Option<String>,
 }
 
-impl CreateShareEndpointPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 impl From<CreateShareEndpointPlan> for CreateShareEndpointReq {
     fn from(p: CreateShareEndpointPlan) -> Self {
         CreateShareEndpointReq {
@@ -98,12 +92,6 @@ pub struct DropShareEndpointPlan {
     pub endpoint: String,
 }
 
-impl DropShareEndpointPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 impl From<DropShareEndpointPlan> for DropShareEndpointReq {
     fn from(p: DropShareEndpointPlan) -> Self {
         DropShareEndpointReq {
@@ -139,13 +127,6 @@ impl From<CreateSharePlan> for CreateShareReq {
     }
 }
 
-impl CreateSharePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
-// Drop Share Plan
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropSharePlan {
     pub if_exists: bool,
@@ -165,24 +146,12 @@ impl From<DropSharePlan> for DropShareReq {
     }
 }
 
-impl DropSharePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 // Grant Share Object Plan
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct GrantShareObjectPlan {
     pub share: String,
     pub object: ShareGrantObjectName,
     pub privilege: ShareGrantObjectPrivilege,
-}
-
-impl GrantShareObjectPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 // Revoke Share Object Plan
@@ -193,12 +162,6 @@ pub struct RevokeShareObjectPlan {
     pub privilege: ShareGrantObjectPrivilege,
 }
 
-impl RevokeShareObjectPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 // Alter Share Tenants Plan
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AlterShareTenantsPlan {
@@ -206,12 +169,6 @@ pub struct AlterShareTenantsPlan {
     pub if_exists: bool,
     pub accounts: Vec<String>,
     pub is_add: bool,
-}
-
-impl AlterShareTenantsPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 // desc share
