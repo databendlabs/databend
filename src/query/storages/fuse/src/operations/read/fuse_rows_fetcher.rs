@@ -14,7 +14,7 @@
 
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet2::metadata::ColumnDescriptor;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::table::Table;

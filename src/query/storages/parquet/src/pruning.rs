@@ -24,10 +24,10 @@ use common_arrow::arrow::io::parquet::read::get_field_pages;
 use common_arrow::arrow::io::parquet::read::indexes::compute_page_row_intervals;
 use common_arrow::arrow::io::parquet::read::indexes::read_columns_indexes;
 use common_arrow::arrow::io::parquet::read::indexes::FieldPageStatistics;
-use common_arrow::parquet::indexes::Interval;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::read::read_pages_locations;
+use common_arrow::parquet2::indexes::Interval;
+use common_arrow::parquet2::metadata::FileMetaData;
+use common_arrow::parquet2::metadata::RowGroupMetaData;
+use common_arrow::parquet2::read::read_pages_locations;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
@@ -411,29 +411,29 @@ fn is_in(probe: Interval, intervals: &[Interval]) -> Vec<Interval> {
 mod tests {
     use std::io::Cursor;
 
-    use common_arrow::parquet::compression::CompressionOptions;
-    use common_arrow::parquet::encoding::hybrid_rle::encode_bool;
-    use common_arrow::parquet::encoding::Encoding;
-    use common_arrow::parquet::indexes::Interval;
-    use common_arrow::parquet::metadata::Descriptor;
-    use common_arrow::parquet::metadata::SchemaDescriptor;
-    use common_arrow::parquet::page::DataPage;
-    use common_arrow::parquet::page::DataPageHeader;
-    use common_arrow::parquet::page::DataPageHeaderV1;
-    use common_arrow::parquet::page::Page;
-    use common_arrow::parquet::read::read_metadata;
-    use common_arrow::parquet::schema::types::ParquetType;
-    use common_arrow::parquet::schema::types::PhysicalType;
-    use common_arrow::parquet::statistics::serialize_statistics;
-    use common_arrow::parquet::statistics::PrimitiveStatistics;
-    use common_arrow::parquet::statistics::Statistics;
-    use common_arrow::parquet::types::NativeType;
-    use common_arrow::parquet::write::Compressor;
-    use common_arrow::parquet::write::DynIter;
-    use common_arrow::parquet::write::DynStreamingIterator;
-    use common_arrow::parquet::write::FileWriter;
-    use common_arrow::parquet::write::Version;
-    use common_arrow::parquet::write::WriteOptions;
+    use common_arrow::parquet2::compression::CompressionOptions;
+    use common_arrow::parquet2::encoding::hybrid_rle::encode_bool;
+    use common_arrow::parquet2::encoding::Encoding;
+    use common_arrow::parquet2::indexes::Interval;
+    use common_arrow::parquet2::metadata::Descriptor;
+    use common_arrow::parquet2::metadata::SchemaDescriptor;
+    use common_arrow::parquet2::page::DataPage;
+    use common_arrow::parquet2::page::DataPageHeader;
+    use common_arrow::parquet2::page::DataPageHeaderV1;
+    use common_arrow::parquet2::page::Page;
+    use common_arrow::parquet2::read::read_metadata;
+    use common_arrow::parquet2::schema::types::ParquetType;
+    use common_arrow::parquet2::schema::types::PhysicalType;
+    use common_arrow::parquet2::statistics::serialize_statistics;
+    use common_arrow::parquet2::statistics::PrimitiveStatistics;
+    use common_arrow::parquet2::statistics::Statistics;
+    use common_arrow::parquet2::types::NativeType;
+    use common_arrow::parquet2::write::Compressor;
+    use common_arrow::parquet2::write::DynIter;
+    use common_arrow::parquet2::write::DynStreamingIterator;
+    use common_arrow::parquet2::write::FileWriter;
+    use common_arrow::parquet2::write::Version;
+    use common_arrow::parquet2::write::WriteOptions;
     use common_exception::Result;
     use common_expression::types::DataType;
     use common_expression::types::NumberDataType;
@@ -532,7 +532,7 @@ mod tests {
 
     fn unzip_option<T: NativeType>(
         array: &[Option<T>],
-    ) -> common_arrow::parquet::error::Result<(Vec<u8>, Vec<u8>)> {
+    ) -> common_arrow::parquet2::error::Result<(Vec<u8>, Vec<u8>)> {
         // leave the first 4 bytes announcing the length of the def level
         // this will be overwritten at the end, once the length is known.
         // This is unknown at this point because of the uleb128 encoding,
@@ -568,7 +568,7 @@ mod tests {
         array: &[Option<T>],
         options: &WriteOptions,
         descriptor: &Descriptor,
-    ) -> common_arrow::parquet::error::Result<Page> {
+    ) -> common_arrow::parquet2::error::Result<Page> {
         let (values, mut buffer) = unzip_option(array)?;
 
         buffer.extend_from_slice(&values);

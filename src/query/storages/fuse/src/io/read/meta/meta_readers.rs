@@ -14,7 +14,7 @@
 
 use std::io::SeekFrom;
 
-use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_arrow::parquet2::metadata::ThriftFileMetaData;
 use common_cache::DefaultHashBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -148,7 +148,7 @@ async fn bytes_reader(op: &Operator, path: &str, len_hint: Option<u64>) -> Resul
 }
 
 mod thrift_file_meta_read {
-    use common_arrow::parquet::error::Error;
+    use common_arrow::parquet2::error::Error;
     use parquet_format_safe::thrift::protocol::TCompactInputProtocol;
 
     use super::*;
@@ -187,7 +187,7 @@ mod thrift_file_meta_read {
     #[async_backtrace::framed]
     pub async fn read_thrift_file_metadata<R: AsyncRead + AsyncSeek + Send + std::marker::Unpin>(
         reader: &mut R,
-    ) -> common_arrow::parquet::error::Result<ThriftFileMetaData> {
+    ) -> common_arrow::parquet2::error::Result<ThriftFileMetaData> {
         let file_size = stream_len(reader).await?;
 
         if file_size < HEADER_SIZE + FOOTER_SIZE {

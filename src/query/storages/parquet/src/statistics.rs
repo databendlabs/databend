@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use common_arrow::arrow::array::UInt64Array;
 use common_arrow::arrow::buffer::Buffer;
 use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::RowGroupMetaData;
+use common_arrow::parquet2::metadata::RowGroupMetaData;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;

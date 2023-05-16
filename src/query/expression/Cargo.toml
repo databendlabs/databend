@@ -20,8 +20,8 @@ common-io = { path = "../../common/io" }
 # GitHub dependencies
 
 # Crates.io dependencies
-arrow-array = "37.0.0"
-arrow-schema = "37.0.0"
+arrow-array = "39.0.0"
+arrow-schema = "39.0.0"
 base64 = "0.21.0"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }

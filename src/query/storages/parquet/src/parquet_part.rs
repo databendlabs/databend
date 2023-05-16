@@ -19,8 +19,8 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::sync::Arc;
 
-use common_arrow::parquet::compression::Compression;
-use common_arrow::parquet::indexes::Interval;
+use common_arrow::parquet2::compression::Compression;
+use common_arrow::parquet2::indexes::Interval;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;

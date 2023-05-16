@@ -16,8 +16,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_arrow::parquet2::metadata::ThriftFileMetaData;
 use common_base::base::tokio;
 use common_cache::Cache;
 use common_expression::types::Int32Type;
@@ -54,6 +53,7 @@ use sysinfo::ProcessExt;
 use sysinfo::System;
 use sysinfo::SystemExt;
 use uuid::Uuid;
+use common_arrow::parquet::format::FileMetaData;
 
 // NOTE:
 //
@@ -67,11 +67,9 @@ use uuid::Uuid;
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
 async fn test_index_meta_cache_size_file_meta_data() -> common_exception::Result<()> {
-    let thrift_file_meta = setup().await?;
+    let file_meta = setup().await?;
 
     let cache_number = 300_000;
-
-    let meta: FileMetaData = FileMetaData::try_from_thrift(thrift_file_meta)?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();
@@ -86,7 +84,7 @@ async fn test_index_meta_cache_size_file_meta_data() -> common_exception::Result
 
     let cache = InMemoryCacheBuilder::new_item_cache::<FileMetaData>(cache_number as u64);
 
-    populate_cache(&cache, meta, cache_number);
+    populate_cache(&cache, file_meta, cache_number);
     show_memory_usage(scenario, base_memory_usage, cache_number);
 
     drop(cache);
@@ -97,11 +95,11 @@ async fn test_index_meta_cache_size_file_meta_data() -> common_exception::Result
 #[tokio::test(flavor = "multi_thread")]
 #[ignore]
 async fn test_index_meta_cache_size_bloom_meta() -> common_exception::Result<()> {
-    let thrift_file_meta = setup().await?;
+    let file_meta = setup().await?;
 
     let cache_number = 300_000;
 
-    let bloom_index_meta = BloomIndexMeta::try_from(thrift_file_meta)?;
+    let bloom_index_meta = BloomIndexMeta::try_from(file_meta)?;
 
     let sys = System::new_all();
     let pid = get_current_pid().unwrap();
@@ -370,7 +368,7 @@ where T: Clone {
     }
 }
 
-async fn setup() -> common_exception::Result<ThriftFileMetaData> {
+async fn setup() -> common_exception::Result<FileMetaData> {
     let fields = (0..23)
         .map(|_| TableField::new("id", TableDataType::Number(NumberDataType::Int32)))
         .collect::<Vec<_>>();
@@ -389,11 +387,11 @@ async fn setup() -> common_exception::Result<ThriftFileMetaData> {
     let loc_generator = TableMetaLocationGenerator::with_prefix("/".to_owned());
     let col_stats = gen_columns_statistics(&block, None, &schema)?;
     let block_writer = BlockWriter::new(&operator, &loc_generator);
-    let (_block_meta, thrift_file_meta) = block_writer
+    let (_block_meta, file_meta) = block_writer
         .write(FuseStorageFormat::Parquet, &schema, block, col_stats, None)
         .await?;
 
-    Ok(thrift_file_meta.unwrap())
+    Ok(file_meta.unwrap())
 }
 
 fn show_memory_usage(case: &str, base_memory_usage: u64, num_cache_items: usize) {

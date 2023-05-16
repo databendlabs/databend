@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet2::metadata::ColumnDescriptor;
 use common_catalog::plan::block_id_in_segment;
 use common_catalog::plan::compute_row_id_prefix;
 use common_catalog::plan::split_row_id;

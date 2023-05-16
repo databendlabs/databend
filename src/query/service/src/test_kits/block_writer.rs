@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_arrow::parquet2::metadata::ThriftFileMetaData;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
@@ -33,6 +33,8 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::table::TableCompression;
 use uuid::Uuid;
+use common_arrow::parquet::format::FileMetaData;
+
 
 pub struct BlockWriter<'a> {
     location_generator: &'a TableMetaLocationGenerator,
@@ -57,7 +59,7 @@ impl<'a> BlockWriter<'a> {
         block: DataBlock,
         col_stats: StatisticsOfColumns,
         cluster_stats: Option<ClusterStatistics>,
-    ) -> Result<(BlockMeta, Option<ThriftFileMetaData>)> {
+    ) -> Result<(BlockMeta, Option<FileMetaData>)> {
         let (location, block_id) = self.location_generator.gen_block_location();
 
         let data_accessor = &self.data_accessor;
@@ -98,7 +100,7 @@ impl<'a> BlockWriter<'a> {
         schema: TableSchemaRef,
         block: &DataBlock,
         block_id: Uuid,
-    ) -> Result<(u64, Option<Location>, Option<ThriftFileMetaData>)> {
+    ) -> Result<(u64, Option<Location>, Option<FileMetaData>)> {
         let location = self
             .location_generator
             .block_bloom_index_location(&block_id);

@@ -15,11 +15,11 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::statistics::BinaryStatistics;
-use common_arrow::parquet::statistics::BooleanStatistics;
-use common_arrow::parquet::statistics::PrimitiveStatistics;
-use common_arrow::parquet::statistics::Statistics;
+use common_arrow::parquet2::metadata::RowGroupMetaData;
+use common_arrow::parquet2::statistics::BinaryStatistics;
+use common_arrow::parquet2::statistics::BooleanStatistics;
+use common_arrow::parquet2::statistics::PrimitiveStatistics;
+use common_arrow::parquet2::statistics::Statistics;
 use common_expression::types::number::F32;
 use common_expression::types::number::F64;
 use common_expression::types::BooleanType;

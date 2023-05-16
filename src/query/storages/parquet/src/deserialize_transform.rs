@@ -19,7 +19,7 @@ use std::sync::Arc;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::indexes::Interval;
+use common_arrow::parquet2::indexes::Interval;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;

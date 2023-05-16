@@ -22,7 +22,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::native::read::column_iter_to_arrays;
 use common_arrow::native::read::reader::NativeReader;
 use common_arrow::native::read::ArrayIter;
-use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet2::metadata::ColumnDescriptor;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::DataSourcePlan;

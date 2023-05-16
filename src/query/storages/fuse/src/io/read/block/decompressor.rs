@@ -17,11 +17,11 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::parquet::error::Error;
-use common_arrow::parquet::page::CompressedPage;
-use common_arrow::parquet::page::Page;
-use common_arrow::parquet::read::decompress;
-use common_arrow::parquet::FallibleStreamingIterator;
+use common_arrow::parquet2::error::Error;
+use common_arrow::parquet2::page::CompressedPage;
+use common_arrow::parquet2::page::Page;
+use common_arrow::parquet2::read::decompress;
+use common_arrow::parquet2::FallibleStreamingIterator;
 use common_exception::Result;
 use streaming_decompression::Compressed;
 use streaming_decompression::Decompressed;

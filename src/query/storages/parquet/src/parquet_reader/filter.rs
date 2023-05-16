@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::parquet::indexes::Interval;
+use common_arrow::parquet2::indexes::Interval;
 
 /// A wrapper of [`Bitmap`] with a position mark. It is used to filter rows when reading a parquet file.
 ///

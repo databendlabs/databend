@@ -20,7 +20,7 @@ use common_arrow::arrow::array::Array;
 use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::native::read::batch_read::batch_read_array;
-use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet2::metadata::ColumnDescriptor;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;

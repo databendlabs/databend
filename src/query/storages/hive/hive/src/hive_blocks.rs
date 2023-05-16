@@ -14,8 +14,8 @@
 
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::RowGroupMetaData;
+use common_arrow::parquet2::metadata::FileMetaData;
+use common_arrow::parquet2::metadata::RowGroupMetaData;
 
 use crate::HiveBlockFilter;
 use crate::HivePartInfo;

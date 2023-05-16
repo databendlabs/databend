@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet2::metadata::ColumnDescriptor;
 use common_arrow::schema_projection as ap;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;

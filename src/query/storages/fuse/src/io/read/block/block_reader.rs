@@ -17,7 +17,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::arrow::io::parquet::write::to_parquet_schema;
-use common_arrow::parquet::metadata::SchemaDescriptor;
+use common_arrow::parquet2::metadata::SchemaDescriptor;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;

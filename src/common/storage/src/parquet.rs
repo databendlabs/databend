@@ -14,7 +14,7 @@
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
-use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet2::metadata::FileMetaData;
 use common_base::runtime::execute_futures_in_parallel;
 use common_exception::ErrorCode;
 use common_exception::Result;

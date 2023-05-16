@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::io::parquet::read::infer_schema;
 use common_arrow::arrow::io::parquet::read::{self as pread};
-use common_arrow::parquet::read::read_metadata;
+use common_arrow::parquet2::read::read_metadata;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;

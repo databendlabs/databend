@@ -111,8 +111,14 @@ impl From<common_arrow::arrow::error::Error> for ErrorCode {
     }
 }
 
-impl From<common_arrow::parquet::error::Error> for ErrorCode {
-    fn from(error: common_arrow::parquet::error::Error) -> Self {
+impl From<common_arrow::parquet2::error::Error> for ErrorCode {
+    fn from(error: common_arrow::parquet2::error::Error) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
+impl From<common_arrow::parquet::errors::ParquetError> for ErrorCode {
+    fn from(error: common_arrow::parquet::errors::ParquetError) -> Self {
         ErrorCode::from_std_error(error)
     }
 }

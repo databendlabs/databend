@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::native;
-use common_arrow::parquet;
+use common_arrow::{native, parquet};
+use common_arrow::parquet2;
 use common_exception::ErrorCode;
 
 use crate::meta;
@@ -47,13 +47,24 @@ impl TryFrom<&str> for TableCompression {
 }
 
 /// Convert to parquet CompressionOptions.
-impl From<TableCompression> for parquet::compression::CompressionOptions {
+impl From<TableCompression> for parquet2::compression::CompressionOptions {
     fn from(value: TableCompression) -> Self {
         match value {
-            TableCompression::None => parquet::compression::CompressionOptions::Uncompressed,
-            TableCompression::LZ4 => parquet::compression::CompressionOptions::Lz4Raw,
-            TableCompression::Snappy => parquet::compression::CompressionOptions::Snappy,
-            TableCompression::Zstd => parquet::compression::CompressionOptions::Zstd(None),
+            TableCompression::None => parquet2::compression::CompressionOptions::Uncompressed,
+            TableCompression::LZ4 => parquet2::compression::CompressionOptions::Lz4Raw,
+            TableCompression::Snappy => parquet2::compression::CompressionOptions::Snappy,
+            TableCompression::Zstd => parquet2::compression::CompressionOptions::Zstd(None),
+        }
+    }
+}
+
+impl From<TableCompression> for parquet::basic::Compression{
+    fn from(value: TableCompression) -> Self {
+        match value {
+            TableCompression::None => parquet::basic::Compression::Uncompressed,
+            TableCompression::LZ4=> parquet::basic::Compression::LZ4,
+            TableCompression::Snappy=> parquet::basic::Compression::SNAPPY,
+            TableCompression::Zstd=> parquet::basic::Compression::ZSTD(parquet::basic::ZstdLevel::default()),
         }
     }
 }

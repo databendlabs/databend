@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::read::read_metadata_async;
+use common_arrow::parquet2::metadata::FileMetaData;
+use common_arrow::parquet2::read::read_metadata_async;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use opendal::Operator;

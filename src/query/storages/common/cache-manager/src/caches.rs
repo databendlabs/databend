@@ -16,7 +16,7 @@ use std::borrow::Borrow;
 use std::hash::BuildHasher;
 use std::sync::Arc;
 
-use common_arrow::parquet::metadata::FileMetaData;
+use common_arrow::parquet2::metadata::FileMetaData;
 use common_cache::Count;
 use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
