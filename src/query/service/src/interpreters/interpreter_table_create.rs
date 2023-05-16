@@ -193,11 +193,15 @@ impl CreateTableInterpreter {
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
     fn build_request(&self, statistics: Option<TableStatistics>) -> Result<CreateTableReq> {
-        let fields = self.plan.schema.fields().clone();
-        for field in fields.iter() {
-            if field.default_expr().is_some() {
-                let _ = field_default_value(self.ctx.clone(), field)?;
-            }
+        let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
+        for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
+            let field = if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
+                let field = field.with_default_expr(Some(default_expr.clone()));
+                let _ = field_default_value(self.ctx.clone(), &field)?;
+                field
+            } else {
+                field
+            };
 
             if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
                 return Err(ErrorCode::TableWithInternalColumnName(format!(
@@ -205,6 +209,8 @@ impl CreateTableInterpreter {
                     field.name()
                 )));
             }
+
+            fields.push(field)
         }
         let schema = TableSchemaRefExt::create(fields);
 

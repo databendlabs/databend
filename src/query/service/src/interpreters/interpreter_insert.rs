@@ -79,28 +79,22 @@ use common_storages_factory::Table;
 use common_storages_fuse::io::Files;
 use common_storages_stage::StageTable;
 use common_users::UserApiProvider;
-use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 use tracing::error;
 use tracing::info;
 
 use crate::interpreters::common::append2table;
-use crate::interpreters::common::fill_missing_columns;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-
-// Pre-generate the positions of `(`, `'` and `\`
-static PATTERNS: &[&str] = &["(", "'", "\\"];
-
-static INSERT_TOKEN_FINDER: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(PATTERNS).unwrap());
 
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
@@ -279,7 +273,15 @@ impl InsertInterpreter {
             })?;
         }
 
-        fill_missing_columns(ctx.clone(), &source_schema, table.clone(), pipeline)?;
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformResortAddOn::try_create(
+                ctx.clone(),
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                table.clone(),
+            )
+        })?;
 
         table.append_data(ctx.clone(), pipeline, AppendMode::Copy, false)?;
 
@@ -566,11 +568,14 @@ impl AsyncSource for ValueSource {
             return Ok(None);
         }
 
+        // Pre-generate the positions of `(`, `'` and `\`
+        let patterns = &["(", "'", "\\"];
+        let ac = AhoCorasick::new(patterns);
         // Use the number of '(' to estimate the number of rows
         let mut estimated_rows = 0;
         let mut positions = VecDeque::new();
-        for mat in INSERT_TOKEN_FINDER.find_iter(&self.data) {
-            if mat.pattern() == 0.into() {
+        for mat in ac.find_iter(&self.data) {
+            if mat.pattern() == 0 {
                 estimated_rows += 1;
                 continue;
             }

@@ -700,7 +700,7 @@ impl Binder {
                     data_type,
                     leaf_index,
                     table_index,
-                    virtual_computed_expr,
+                    ..
                 }) => {
                     let column_binding = ColumnBinding {
                         database_name: Some(database_name.to_string()),
@@ -714,10 +714,9 @@ impl Binder {
                         } else {
                             Visibility::Visible
                         },
-                        virtual_computed_expr: virtual_computed_expr.clone(),
                     };
                     bind_context.add_column_binding(column_binding);
-                    if path_indices.is_none() && virtual_computed_expr.is_none() {
+                    if path_indices.is_none() {
                         if let Some(col_id) = *leaf_index {
                             let col_stat =
                                 statistics_provider.column_statistics(col_id as ColumnId);
@@ -801,7 +800,6 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
-                    false,
                     false,
                 );
                 let box (scalar, _) = type_checker.resolve(expr).await?;

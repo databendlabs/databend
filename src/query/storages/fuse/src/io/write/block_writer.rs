@@ -44,12 +44,11 @@ pub fn serialize_block(
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
-    let schema = Arc::new(schema.remove_virtual_computed());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
             let result =
-                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
-            let meta = util::column_parquet_metas(&result.1, &schema)?;
+                blocks_to_parquet(schema, vec![block], buf, write_settings.table_compression)?;
+            let meta = util::column_parquet_metas(&result.1, schema)?;
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {
@@ -69,7 +68,7 @@ pub fn serialize_block(
             writer.write(&batch)?;
             writer.finish()?;
 
-            let leaf_column_ids = &schema.to_leaf_column_ids();
+            let leaf_column_ids = schema.to_leaf_column_ids();
             let mut metas = HashMap::with_capacity(writer.metas.len());
             for (idx, meta) in writer.metas.iter().enumerate() {
                 // use column id as key instead of index
