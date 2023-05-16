@@ -781,7 +781,23 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 catalog,
                 database,
                 table,
-            } => self.visit_table_ref(catalog, database, table),
+                columns,
+            } => {
+                self.visit_table_ref(catalog, database, table);
+                if let Some(columns) = columns {
+                    let mut columns_children = Vec::with_capacity(columns.len());
+                    for column in columns.iter() {
+                        self.visit_identifier(column);
+                        columns_children.push(self.children.pop().unwrap());
+                    }
+                    let columns_name = "Columns".to_string();
+                    let columns_format_ctx =
+                        AstFormatContext::with_children(columns_name, columns_children.len());
+                    let columns_node =
+                        FormatTreeNode::with_children(columns_format_ctx, columns_children);
+                    self.children.push(columns_node);
+                }
+            }
             CopyUnit::StageLocation(v) => {
                 let location_format_ctx =
                     AstFormatContext::new(format!("Location @{}{}", v.name, v.path));
@@ -1475,6 +1491,28 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let child = self.children.pop().unwrap();
 
         let name = "DropView".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_create_index(&mut self, stmt: &'ast CreateIndexStmt) {
+        self.visit_index_ref(&stmt.index_name);
+        let index_child = self.children.pop().unwrap();
+        self.visit_query(&stmt.query);
+        let query_child = self.children.pop().unwrap();
+
+        let name = "CreateIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 2);
+        let node = FormatTreeNode::with_children(format_ctx, vec![index_child, query_child]);
+        self.children.push(node);
+    }
+
+    fn visit_drop_index(&mut self, stmt: &'ast DropIndexStmt) {
+        self.visit_index_ref(&stmt.index);
+        let child = self.children.pop().unwrap();
+
+        let name = "DropIndex".to_string();
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
         self.children.push(node);

@@ -139,8 +139,9 @@ impl FuseTable {
 
                             let keep_last_snapshot = true;
                             let snapshot_files = self.list_snapshot_files().await?;
-                            if let Err(e) =
-                                tbl.do_purge(&ctx, snapshot_files, keep_last_snapshot).await
+                            if let Err(e) = tbl
+                                .do_purge(&ctx, snapshot_files, keep_last_snapshot, None)
+                                .await
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
                                 warn!(
@@ -664,7 +665,7 @@ impl FuseTable {
 
             let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
             let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments(concurrently_appended_segment_locations, true)
+                .read_segments::<Arc<SegmentInfo>>(concurrently_appended_segment_locations, true)
                 .await?;
 
             let mut new_statistics = base_summary.clone();

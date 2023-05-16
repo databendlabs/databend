@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-
 use crate::plans::ScalarExpr;
 use crate::MetadataRef;
 
@@ -29,10 +24,4 @@ pub struct ReclusterTablePlan {
     pub is_final: bool,
     pub metadata: MetadataRef,
     pub push_downs: Option<ScalarExpr>,
-}
-
-impl ReclusterTablePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }

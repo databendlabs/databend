@@ -13,14 +13,11 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::ops::Range;
 use std::sync::Arc;
 
 use common_exception::ErrorCode;
-use common_exception::Result;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
 use common_expression::DataBlock;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::FormatVersion;
@@ -51,13 +48,15 @@ pub struct ReplacementLogEntry {
 pub enum Replacement {
     Replaced(Arc<BlockMeta>),
     Deleted, // replace something with nothing
+    DoNothing,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 pub struct BlockMetaIndex {
     pub segment_idx: usize,
     pub block_idx: usize,
-    pub range: Option<Range<usize>>,
+    // range is unused for now.
+    // pub range: Option<Range<usize>>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -81,12 +80,6 @@ impl AppendOperationLogEntry {
     }
 }
 
-impl MutationLogs {
-    pub fn push_append(&mut self, log_entry: AppendOperationLogEntry) {
-        self.entries.push(MutationLogEntry::Append(log_entry))
-    }
-}
-
 #[typetag::serde(name = "mutation_logs_meta")]
 impl BlockMetaInfo for MutationLogs {
     fn as_any(&self) -> &dyn Any {
@@ -106,13 +99,29 @@ impl BlockMetaInfo for MutationLogs {
 }
 
 impl MutationLogs {
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&MutationLogs> {
-        match info.as_any().downcast_ref::<MutationLogs>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MutationLogs.",
-            )),
-        }
+    pub fn push_append(&mut self, log_entry: AppendOperationLogEntry) {
+        self.entries.push(MutationLogEntry::Append(log_entry))
+    }
+}
+
+impl From<MutationLogs> for DataBlock {
+    fn from(value: MutationLogs) -> Self {
+        let block_meta = Box::new(value);
+        DataBlock::empty_with_meta(block_meta)
+    }
+}
+
+impl TryFrom<DataBlock> for MutationLogs {
+    type Error = ErrorCode;
+    fn try_from(value: DataBlock) -> std::result::Result<Self, Self::Error> {
+        let block_meta = value.get_owned_meta().ok_or_else(|| {
+            ErrorCode::Internal(
+                "converting data block meta to MutationLogs failed, no data block meta found",
+            )
+        })?;
+        MutationLogs::downcast_from(block_meta).ok_or_else(|| {
+            ErrorCode::Internal("downcast block meta to MutationLogs failed, type mismatch")
+        })
     }
 }
 
@@ -135,15 +144,6 @@ impl CommitMeta {
             abort_operation,
         }
     }
-
-    pub fn from_meta(info: &BlockMetaInfoPtr) -> Result<&CommitMeta> {
-        match info.as_any().downcast_ref::<CommitMeta>() {
-            Some(part_ref) => Ok(part_ref),
-            None => Err(ErrorCode::Internal(
-                "Cannot downcast from BlockMetaInfo to MutationSinkMeta.",
-            )),
-        }
-    }
 }
 
 #[typetag::serde(name = "commit_meta")]
@@ -161,26 +161,5 @@ impl BlockMetaInfo for CommitMeta {
 
     fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
         Box::new(self.clone())
-    }
-}
-
-impl From<MutationLogs> for DataBlock {
-    fn from(value: MutationLogs) -> Self {
-        let block_meta = Box::new(value);
-        DataBlock::empty_with_meta(block_meta)
-    }
-}
-
-impl TryFrom<DataBlock> for MutationLogs {
-    type Error = ErrorCode;
-    fn try_from(value: DataBlock) -> std::result::Result<Self, Self::Error> {
-        let block_meta = value.get_owned_meta().ok_or_else(|| {
-            ErrorCode::Internal(
-                "converting data block meta to MutationLogs failed, no data block meta found",
-            )
-        })?;
-        MutationLogs::downcast_from(block_meta).ok_or_else(|| {
-            ErrorCode::Internal("downcast block meta to MutationLogs failed, type mismatch")
-        })
     }
 }

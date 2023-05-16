@@ -17,16 +17,25 @@ use std::sync::Arc;
 use common_base::base::GlobalInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_settings::Settings;
 use jwt_simple::claims::JWTClaims;
 
 use crate::license::LicenseInfo;
 
-pub trait LicenseManager {
+pub trait LicenseManager: Sync + Send {
     fn init() -> Result<()>
     where Self: Sized;
     fn instance() -> Arc<Box<dyn LicenseManager>>
     where Self: Sized;
-    fn is_active(&self) -> bool;
+
+    /// Check whether enterprise feature is available given context
+    /// This function returns `LicenseKeyInvalid` error if enterprise license key is not valid or expired.
+    fn check_enterprise_enabled(
+        &self,
+        settings: &Arc<Settings>,
+        tenant: String,
+        feature: String,
+    ) -> Result<()>;
 
     /// Encodes a raw license string as a JWT using the constant public key.
     ///
@@ -45,15 +54,8 @@ pub trait LicenseManager {
     /// # Errors
     ///
     /// This function may return `LicenseKeyParseError` error if the encoding or decoding of the JWT fails.
-    ///
-    /// # Examples
-    ///
     /// ```
-    /// let raw_license = "my_license";
-    /// let claim = make_license(raw_license).unwrap();
-    /// ```
-    fn make_license(raw: &str) -> Result<JWTClaims<LicenseInfo>>
-    where Self: Sized;
+    fn parse_license(&self, raw: &str) -> Result<JWTClaims<LicenseInfo>>;
 }
 
 pub struct LicenseManagerWrapper {
@@ -78,11 +80,18 @@ impl LicenseManager for OssLicenseManager {
         GlobalInstance::get()
     }
 
-    fn is_active(&self) -> bool {
-        false
+    fn check_enterprise_enabled(
+        &self,
+        _settings: &Arc<Settings>,
+        _tenant: String,
+        _feature: String,
+    ) -> Result<()> {
+        Err(ErrorCode::LicenseKeyInvalid(
+            "Need Commercial License".to_string(),
+        ))
     }
 
-    fn make_license(_raw: &str) -> Result<JWTClaims<LicenseInfo>> {
+    fn parse_license(&self, _raw: &str) -> Result<JWTClaims<LicenseInfo>> {
         Err(ErrorCode::LicenceDenied(
             "Need Commercial License".to_string(),
         ))

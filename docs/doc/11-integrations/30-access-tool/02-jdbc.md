@@ -9,7 +9,7 @@ Databend provides a JDBC driver that enables connection to Databend from a clien
 
 **Related video:**
 
-<iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/3cFmGvtU-ws" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+<iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/3cFmGvtU-ws" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe>
 
 The following shows how to add the Databend JDBC driver to a client application and connect to Databend via the driver, using DBeaver as an example. For more information about the driver, refer to https://github.com/databendcloud/databend-jdbc
 

@@ -111,14 +111,6 @@ jobs:
       - uses: ./.github/actions/test_metactl
         timeout-minutes: 10
 
-  test_meta-upgrade-09:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
-    needs: build
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/test_meta-upgrade-09
-        timeout-minutes: 10
-
   test_meta-data-compat-openraft-07:
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
@@ -225,6 +217,35 @@ jobs:
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
+
+  ee_sqllogic_standalone:
+    name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
+    runs-on: [ self-hosted, X64, Linux, 4c8g ]
+    if: github.repository == github.event.pull_request.head.repo.full_name
+    needs: build
+    strategy:
+      matrix:
+        dirs:
+          - "ee"
+        format:
+          - "parquet"
+        handlers:
+          - "mysql,http,clickhouse"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
+        timeout-minutes: 30
+        env:
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+          storage-format: ${{ matrix.format }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-ee-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
 
   sqllogic_cluster:
     name: sqllogic_cluster_${{ matrix.dirs }}
@@ -338,3 +359,19 @@ jobs:
         timeout-minutes: 10
         with:
           target: x86_64-unknown-linux-gnu
+
+  test_ee_standalone:
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    if: github.repository == github.event.pull_request.head.repo.full_name
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_ee_standalone_linux
+        timeout-minutes: 20
+        env:
+          DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-stateful-standalone-linux

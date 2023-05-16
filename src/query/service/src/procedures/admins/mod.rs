@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod admin;
+mod license_info;
 pub mod tenant_quota;
 
 pub use admin::AdminProcedure;

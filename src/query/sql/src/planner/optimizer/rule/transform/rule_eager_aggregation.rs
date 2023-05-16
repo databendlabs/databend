@@ -19,6 +19,7 @@ use common_expression::types::number::NumberDataType;
 use common_expression::types::DataType;
 use common_functions::aggregates::AggregateFunctionFactory;
 
+use crate::binder::wrap_cast;
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::ColumnSet;
@@ -29,7 +30,6 @@ use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::Join;
@@ -1281,6 +1281,7 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
             index: args_index,
             data_type: agg.return_type.clone(),
             visibility: Visibility::Visible,
+            virtual_computed_expr: None,
         },
     });
     if agg.args.is_empty() {
@@ -1288,18 +1289,6 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
         agg.args.push(agg_func);
     } else {
         agg.args[0] = agg_func;
-    }
-}
-
-fn cast_expr_if_needed(expr: ScalarExpr, target_data_type: DataType) -> ScalarExpr {
-    match expr.data_type() {
-        Ok(data_type) if data_type != target_data_type => ScalarExpr::CastExpr(CastExpr {
-            span: None,
-            is_try: false,
-            argument: Box::new(expr),
-            target_type: Box::new(target_data_type),
-        }),
-        _ => expr,
     }
 }
 
@@ -1355,10 +1344,11 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
                     index: left_index,
                     data_type: Box::new(DataType::Number(NumberDataType::Float64)),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
             }),
-            cast_expr_if_needed(
-                ScalarExpr::BoundColumnRef(BoundColumnRef {
+            wrap_cast(
+                &ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: None,
                     column: ColumnBinding {
                         database_name: None,
@@ -1370,9 +1360,10 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
                             NumberDataType::UInt64,
                         )))),
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     },
                 }),
-                DataType::Number(NumberDataType::UInt64),
+                &DataType::Number(NumberDataType::UInt64),
             ),
         ],
     })
@@ -1507,7 +1498,7 @@ fn update_aggregate_and_eval(
                         column_binding.data_type = Box::new(DataType::Nullable(Box::new(
                             DataType::Number(NumberDataType::UInt64),
                         )));
-                        eval_scalar_item.scalar = cast_expr_if_needed(eval_scalar_item.scalar.clone(), DataType::Number(NumberDataType::UInt64));
+                        eval_scalar_item.scalar = wrap_cast(&eval_scalar_item.scalar, &DataType::Number(NumberDataType::UInt64));
                     }
                     success = true;
                 }
@@ -1551,8 +1542,8 @@ fn create_eager_count_multiply_scalar_item(
             params: vec![],
             arguments: vec![
                 new_scalar,
-                cast_expr_if_needed(
-                    ScalarExpr::BoundColumnRef(BoundColumnRef {
+                wrap_cast(
+                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
                         span: None,
                         column: ColumnBinding {
                             database_name: None,
@@ -1564,9 +1555,10 @@ fn create_eager_count_multiply_scalar_item(
                                 NumberDataType::UInt64,
                             )))),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
-                    DataType::Number(NumberDataType::UInt64),
+                    &DataType::Number(NumberDataType::UInt64),
                 ),
             ],
         }),

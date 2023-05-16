@@ -12,19 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct KillPlan {
     pub id: String,
     pub kill_connection: bool,
-}
-
-impl KillPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }

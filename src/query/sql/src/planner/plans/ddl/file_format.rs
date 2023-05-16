@@ -13,11 +13,9 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::sync::Arc;
 
 use common_expression::types::DataType;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_meta_app::principal::FileFormatParams;
@@ -29,23 +27,11 @@ pub struct CreateFileFormatPlan {
     pub file_format_params: FileFormatParams,
 }
 
-impl CreateFileFormatPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 /// Drop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropFileFormatPlan {
     pub if_exists: bool,
     pub name: String,
-}
-
-impl DropFileFormatPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 // Show

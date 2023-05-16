@@ -141,6 +141,7 @@ fn replace_column_binding(
                     index: *index_pairs.get(&index).unwrap(),
                     data_type: column.column.data_type,
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 };
                 return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: column.span,
@@ -151,6 +152,7 @@ fn replace_column_binding(
         }
         constant_expr @ ScalarExpr::ConstantExpr(_) => Ok(constant_expr),
         ScalarExpr::WindowFunction(expr) => Ok(ScalarExpr::WindowFunction(WindowFunc {
+            span: expr.span,
             display_name: expr.display_name,
             func: match expr.func {
                 WindowFuncType::Aggregate(arg) => WindowFuncType::Aggregate(AggregateFunction {

@@ -374,5 +374,5 @@ fn decimal_parse_error(msg: &str) -> ErrorCode {
 }
 
 fn decimal_overflow_error() -> ErrorCode {
-    ErrorCode::Overflow("decimal overflow")
+    ErrorCode::Overflow("Decimal overflow")
 }

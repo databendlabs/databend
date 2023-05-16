@@ -576,7 +576,7 @@ CreateTable(
                             precision: 38,
                             scale: 0,
                         },
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -629,15 +629,17 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: Some(
-                            Literal {
-                                span: Some(
-                                    59..60,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        59..60,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
                         comment: None,
                     },
@@ -650,7 +652,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -703,15 +705,17 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: Some(
-                            Literal {
-                                span: Some(
-                                    50..51,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        50..51,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
                         comment: None,
                     },
@@ -724,7 +728,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -844,7 +848,7 @@ CreateTable(
                                 String,
                             ],
                         },
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -862,7 +866,254 @@ CreateTable(
                                 String,
                             ],
                         },
-                        default_expr: None,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a STRING NOT NULL, b STRING NOT NULL, c STRING NOT NULL AS (concat(a, ' ', b)) STORED)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    27..28,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Some(
+                29..30,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                32..33,
+                            ),
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                42..43,
+                            ),
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                52..53,
+                            ),
+                        },
+                        data_type: String,
+                        expr: Some(
+                            Stored(
+                                FunctionCall {
+                                    span: Some(
+                                        65..82,
+                                    ),
+                                    distinct: false,
+                                    name: Identifier {
+                                        name: "concat",
+                                        quote: None,
+                                        span: Some(
+                                            65..71,
+                                        ),
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                72..73,
+                                            ),
+                                            database: None,
+                                            table: None,
+                                            column: Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    72..73,
+                                                ),
+                                            },
+                                        },
+                                        Literal {
+                                            span: Some(
+                                                75..78,
+                                            ),
+                                            lit: String(
+                                                " ",
+                                            ),
+                                        },
+                                        ColumnRef {
+                                            span: Some(
+                                                80..81,
+                                            ),
+                                            database: None,
+                                            table: None,
+                                            column: Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Some(
+                                                    80..81,
+                                                ),
+                                            },
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                },
+                            ),
+                        ),
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a int, b int, c int as (a + b) virtual );
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL AS ((a + b)) VIRTUAL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    27..28,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Some(
+                29..30,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                32..33,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                39..40,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                46..47,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: Some(
+                            Virtual(
+                                BinaryOp {
+                                    span: Some(
+                                        58..59,
+                                    ),
+                                    op: Plus,
+                                    left: ColumnRef {
+                                        span: Some(
+                                            56..57,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Some(
+                                                56..57,
+                                            ),
+                                        },
+                                    },
+                                    right: ColumnRef {
+                                        span: Some(
+                                            60..61,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                60..61,
+                                            ),
+                                        },
+                                    },
+                                },
+                            ),
+                        ),
                         comment: None,
                     },
                 ],
@@ -1013,7 +1264,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -1083,7 +1334,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -1444,7 +1695,7 @@ CreateTable(
                         data_type: Nullable(
                             Timestamp,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -1456,7 +1707,7 @@ CreateTable(
                             ),
                         },
                         data_type: Timestamp,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2126,7 +2377,7 @@ CreateTable(
                         data_type: Nullable(
                             Int32,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2140,7 +2391,7 @@ CreateTable(
                         data_type: Nullable(
                             Int64,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2154,7 +2405,7 @@ CreateTable(
                         data_type: Nullable(
                             String,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2199,7 +2450,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2211,7 +2462,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int64,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2223,7 +2474,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2268,7 +2519,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2313,15 +2564,17 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: Some(
-                            Literal {
-                                span: Some(
-                                    30..31,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        30..31,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
                         comment: None,
                     },
@@ -6787,15 +7040,17 @@ AlterTable(
                     ),
                 },
                 data_type: Float32,
-                default_expr: Some(
-                    Literal {
-                        span: Some(
-                            41..44,
-                        ),
-                        lit: UInt64(
-                            101,
-                        ),
-                    },
+                expr: Some(
+                    Default(
+                        Literal {
+                            span: Some(
+                                41..44,
+                            ),
+                            lit: UInt64(
+                                101,
+                            ),
+                        },
+                    ),
                 ),
                 comment: Some(
                     "hello",
@@ -7069,7 +7324,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: Some(
                             "col comment",
                         ),
@@ -7716,6 +7971,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7778,6 +8034,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7844,6 +8101,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7910,6 +8168,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -7963,6 +8222,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8011,6 +8271,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8061,6 +8322,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8110,6 +8372,7 @@ Copy(
                     56..63,
                 ),
             },
+            columns: None,
         },
         dst: UriLocation(
             UriLocation {
@@ -8171,6 +8434,7 @@ Copy(
                     41..48,
                 ),
             },
+            columns: None,
         },
         dst: StageLocation(
             StageLocation {
@@ -8245,6 +8509,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8300,6 +8565,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8355,6 +8621,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8410,6 +8677,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,
@@ -8472,6 +8740,7 @@ Copy(
                     10..17,
                 ),
             },
+            columns: None,
         },
         files: None,
         pattern: None,

@@ -99,16 +99,17 @@ impl SessionManager {
     }
 
     pub fn load_config_changes(&self, settings: &Arc<Settings>) -> Result<()> {
-        if let Some(parquet_fast_read_bytes) =
-            GlobalConfig::instance().query.parquet_fast_read_bytes
-        {
+        let query_config = &GlobalConfig::instance().query;
+        if let Some(parquet_fast_read_bytes) = query_config.parquet_fast_read_bytes {
             settings.set_parquet_fast_read_bytes(parquet_fast_read_bytes)?;
         }
 
-        if let Some(max_storage_io_requests) =
-            GlobalConfig::instance().query.max_storage_io_requests
-        {
+        if let Some(max_storage_io_requests) = query_config.max_storage_io_requests {
             settings.set_max_storage_io_requests(max_storage_io_requests)?;
+        }
+
+        if let Some(enterprise_license_key) = query_config.databend_enterprise_license.clone() {
+            settings.set_enterprise_license(enterprise_license_key)?;
         }
         Ok(())
     }
@@ -124,7 +125,7 @@ impl SessionManager {
             _ => None,
         };
 
-        let session_ctx = SessionContext::try_create(settings)?;
+        let session_ctx = SessionContext::try_create(settings, typ.clone())?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();

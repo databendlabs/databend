@@ -689,6 +689,35 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    let create_index = map(
+        rule! {
+            CREATE ~ AGGREGATING ~ INDEX ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #ident
+            ~ AS ~ #query
+        },
+        |(_, _, _, opt_if_not_exists, index_name, _, query)| {
+            Statement::CreateIndex(CreateIndexStmt {
+                index_type: TableIndexType::Aggregating,
+                if_not_exists: opt_if_not_exists.is_some(),
+                index_name,
+                query: Box::new(query),
+            })
+        },
+    );
+
+    let drop_index = map(
+        rule! {
+            DROP ~ AGGREGATING ~ INDEX ~ ( IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, index)| {
+            Statement::DropIndex(DropIndexStmt {
+                if_exists: opt_if_exists.is_some(),
+                index,
+            })
+        },
+    );
+
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
@@ -1199,6 +1228,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
         ),
         rule!(
+            #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
+            | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
+        ),
+        rule!(
             #show_users : "`SHOW USERS`"
             | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
             | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
@@ -1385,18 +1418,34 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     enum ColumnConstraint {
         Nullable(bool),
         DefaultExpr(Box<Expr>),
+        VirtualExpr(Box<Expr>),
+        StoredExpr(Box<Expr>),
     }
 
     let nullable = alt((
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
         value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
     ));
-    let default_expr = map(
-        rule! {
-            DEFAULT ~ ^#subexpr(NOT_PREC)
-        },
-        |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
-    );
+    let expr = alt((
+        map(
+            rule! {
+                DEFAULT ~ ^#subexpr(NOT_PREC)
+            },
+            |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
+        ),
+        map(
+            rule! {
+                AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
+            },
+            |(_, _, virtual_expr, _, _)| ColumnConstraint::VirtualExpr(Box::new(virtual_expr)),
+        ),
+        map(
+            rule! {
+                AS ~ "(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
+            },
+            |(_, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
+        ),
+    ));
 
     let comment = map(
         rule! {
@@ -1409,26 +1458,32 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         rule! {
             #ident
             ~ #type_name
-            ~ ( #nullable | #default_expr )*
+            ~ ( #nullable | #expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`"
+            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`"
         },
         |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
-                default_expr: None,
+                expr: None,
                 comment,
             };
             for constraint in constraints {
                 match constraint {
-                    ColumnConstraint::DefaultExpr(default_expr) => {
-                        def.default_expr = Some(default_expr)
-                    }
                     ColumnConstraint::Nullable(nullable) => {
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
                         }
+                    }
+                    ColumnConstraint::DefaultExpr(default_expr) => {
+                        def.expr = Some(ColumnExpr::Default(default_expr))
+                    }
+                    ColumnConstraint::VirtualExpr(virtual_expr) => {
+                        def.expr = Some(ColumnExpr::Virtual(virtual_expr))
+                    }
+                    ColumnConstraint::StoredExpr(stored_expr) => {
+                        def.expr = Some(ColumnExpr::Stored(stored_expr))
                     }
                 }
             }
@@ -1769,11 +1824,15 @@ pub fn copy_unit(i: Input) -> IResult<CopyUnit> {
     // Parse input like `mytable`
     let table = |i| {
         map(
-            period_separated_idents_1_to_3,
-            |(catalog, database, table)| CopyUnit::Table {
+            rule! {
+            #period_separated_idents_1_to_3
+            ~ ( "(" ~ #comma_separated_list1(ident) ~ ")" )?
+            },
+            |((catalog, database, table), opt_columns)| CopyUnit::Table {
                 catalog,
                 database,
                 table,
+                columns: opt_columns.map(|(_, columns, _)| columns),
             },
         )(i)
     };

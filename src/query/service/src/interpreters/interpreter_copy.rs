@@ -29,6 +29,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
@@ -42,6 +43,7 @@ use tracing::error;
 use tracing::info;
 
 use crate::interpreters::common::append2table;
+use crate::interpreters::common::fill_missing_columns;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
@@ -171,6 +173,7 @@ impl CopyInterpreter {
         query: &Plan,
         stage_info: StageInfo,
         need_copy_file_infos: Vec<StageFileInfo>,
+        schema: &TableSchemaRef,
         force: bool,
     ) -> Result<PipelineBuildResult> {
         let start = Instant::now();
@@ -180,8 +183,9 @@ impl CopyInterpreter {
             .get_table(catalog_name, database_name, table_name)
             .await?;
 
-        let dst_schema = Arc::new(to_table.schema().into());
-        if source_schema != dst_schema {
+        let required_source_schema: Arc<DataSchema> = Arc::new(schema.into());
+
+        if source_schema != required_source_schema {
             let func_ctx = ctx.get_function_context()?;
             build_res.main_pipeline.add_transform(
                 |transform_input_port, transform_output_port| {
@@ -189,12 +193,19 @@ impl CopyInterpreter {
                         transform_input_port,
                         transform_output_port,
                         source_schema.clone(),
-                        dst_schema.clone(),
+                        required_source_schema.clone(),
                         func_ctx.clone(),
                     )
                 },
             )?;
         }
+
+        fill_missing_columns(
+            ctx.clone(),
+            &required_source_schema,
+            to_table.clone(),
+            &mut build_res.main_pipeline,
+        )?;
 
         // Build append data pipeline.
         to_table.append_data(
@@ -378,6 +389,14 @@ impl CopyInterpreter {
                 },
             )?;
         }
+
+        let source_schema: Arc<DataSchema> = Arc::new(stage_table_info.schema.clone().into());
+        fill_missing_columns(
+            ctx.clone(),
+            &source_schema,
+            to_table.clone(),
+            &mut build_res.main_pipeline,
+        )?;
 
         // Build append data pipeline.
         to_table.append_data(
@@ -583,6 +602,7 @@ impl Interpreter for CopyInterpreter {
                 stage_info,
                 from,
                 need_copy_file_infos,
+                schema,
                 force,
                 ..
             } => {
@@ -593,6 +613,7 @@ impl Interpreter for CopyInterpreter {
                     from,
                     *stage_info.clone(),
                     need_copy_file_infos.clone(),
+                    schema,
                     *force,
                 )
                 .await

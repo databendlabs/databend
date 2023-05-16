@@ -62,7 +62,6 @@ pub enum CopyPlan {
         database_name: String,
         table_name: String,
         table_id: MetaId,
-        schema: TableSchemaRef,
         validation_mode: ValidationMode,
         from: Box<DataSourcePlan>,
         force: bool,

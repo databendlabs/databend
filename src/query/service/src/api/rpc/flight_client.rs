@@ -78,8 +78,16 @@ impl FlightClient {
         GlobalIORuntime::instance().spawn({
             async move {
                 while let Some(message) = streaming.next().await {
-                    if tx.send(message.map_err(ErrorCode::from)).await.is_err() {
-                        break;
+                    match message {
+                        Ok(message) => {
+                            if tx.send(Ok(message)).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(status) => {
+                            let _ = tx.send(Err(ErrorCode::from(status))).await;
+                            break;
+                        }
                     }
                 }
 
@@ -112,8 +120,16 @@ impl FlightClient {
         GlobalIORuntime::instance().spawn({
             async move {
                 while let Some(message) = streaming.next().await {
-                    if tx.send(message.map_err(ErrorCode::from)).await.is_err() {
-                        break;
+                    match message {
+                        Ok(message) => {
+                            if tx.send(Ok(message)).await.is_err() {
+                                break;
+                            }
+                        }
+                        Err(status) => {
+                            let _ = tx.send(Err(ErrorCode::from(status))).await;
+                            break;
+                        }
                     }
                 }
 

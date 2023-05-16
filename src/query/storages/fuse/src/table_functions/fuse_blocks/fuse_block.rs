@@ -33,6 +33,7 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use common_expression::Value;
 use futures_util::TryStreamExt;
+use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::MetaReaders;
@@ -118,7 +119,7 @@ impl<'a> FuseBlock<'a> {
             self.table.schema(),
         );
         let segments = segments_io
-            .read_segments(&snapshot.segments[..len], true)
+            .read_segments::<Arc<SegmentInfo>>(&snapshot.segments[..len], true)
             .await?;
         for segment in segments {
             let segment = segment?;

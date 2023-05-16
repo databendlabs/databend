@@ -13,10 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::sync::Arc;
 
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 use common_meta_app::principal::StageInfo;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -26,23 +23,11 @@ pub struct CreateStagePlan {
     pub stage_info: StageInfo,
 }
 
-impl CreateStagePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 /// Drop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropStagePlan {
     pub if_exists: bool,
     pub name: String,
-}
-
-impl DropStagePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 /// Remove.
@@ -51,10 +36,4 @@ pub struct RemoveStagePlan {
     pub stage: StageInfo,
     pub path: String,
     pub pattern: String,
-}
-
-impl RemoveStagePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }

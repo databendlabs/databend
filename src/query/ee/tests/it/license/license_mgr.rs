@@ -12,20 +12,71 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_base::base::tokio;
+use common_catalog::table_context::TableContext;
+use common_license::license::LicenseInfo;
 use common_license::license_manager::LicenseManager;
-use enterprise_query::license::license_mgr::RealLicenseManager;
+use databend_query::test_kits::TestFixture;
+use enterprise_query::license::RealLicenseManager;
+use jwt_simple::algorithms::ES256KeyPair;
+use jwt_simple::claims::Claims;
+use jwt_simple::prelude::Duration;
+use jwt_simple::prelude::ECDSAP256KeyPairLike;
+use jwt_simple::prelude::UnixTimeStamp;
 
-#[test]
-fn test_make_license() -> common_exception::Result<()> {
-    assert_eq!(
-        RealLicenseManager::make_license("not valid")
-            .err()
-            .unwrap()
-            .code(),
-        common_exception::ErrorCode::LicenseKeyParseError("").code()
+fn build_custom_claims(license_type: String, org: String) -> LicenseInfo {
+    LicenseInfo {
+        r#type: Some(license_type),
+        org: Some(org),
+        tenants: None,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_parse_license() -> common_exception::Result<()> {
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+
+    let key_pair = ES256KeyPair::generate();
+    let license_mgr = RealLicenseManager::new(key_pair.public_key().to_pem().unwrap());
+    let claims = Claims::with_custom_claims(
+        build_custom_claims("trial".to_string(), "databend".to_string()),
+        Duration::from_hours(2),
     );
-    let valid_key = "eyJhbGciOiAiRVMyNTYiLCAidHlwIjogIkpXVCJ9.eyJ0eXBlIjogInRyaWFsIiwgIm9yZyI6ICJ0ZXN0IiwgInRlbmFudHMiOiBudWxsLCAiaXNzIjogImRhdGFiZW5kIiwgImlhdCI6IDE2ODE4OTk1NjIsICJuYmYiOiAxNjgxODk5NTYyLCAiZXhwIjogMTY4MzE5NTU2MX0.EfnbkZgNGuCUM0yZ7wg1ARgkiY3g32OHkoWZYoEADNEBPd4Dp8Dhq-W5qzTTSEthiMiiRym0DswGpzYPFSwQww";
+    let token = key_pair.sign(claims)?;
 
-    assert!(RealLicenseManager::make_license(valid_key).is_err());
+    let parsed = license_mgr.parse_license(token.as_str());
+    assert!(parsed.is_ok());
+
+    let settings = ctx.get_settings();
+    settings.set_enterprise_license(token)?;
+    assert!(
+        license_mgr
+            .check_enterprise_enabled(&settings, ctx.get_tenant(), "test".to_string())
+            .is_ok()
+    );
+    // test cache hit
+    assert!(
+        license_mgr
+            .check_enterprise_enabled(&settings, ctx.get_tenant(), "test".to_string())
+            .is_ok()
+    );
+
+    // test expired token
+    let mut claims = Claims::with_custom_claims(
+        build_custom_claims("trial".to_string(), "expired".to_string()),
+        Duration::from_hours(0),
+    );
+    claims.expires_at = Some(UnixTimeStamp::new(1, 1));
+    let token = key_pair.sign(claims)?;
+    let parsed = license_mgr.parse_license(token.as_str());
+    assert!(parsed.is_err());
+    settings.set_enterprise_license(token)?;
+    assert!(
+        license_mgr
+            .check_enterprise_enabled(&settings, ctx.get_tenant(), "test".to_string())
+            .is_err()
+    );
+
     Ok(())
 }

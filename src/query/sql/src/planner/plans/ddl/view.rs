@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateViewPlan {
     pub if_not_exists: bool,
@@ -26,12 +21,6 @@ pub struct CreateViewPlan {
     pub view_name: String,
     pub column_names: Vec<String>,
     pub subquery: String,
-}
-
-impl CreateViewPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -44,12 +33,6 @@ pub struct AlterViewPlan {
     pub subquery: String,
 }
 
-impl AlterViewPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropViewPlan {
     pub if_exists: bool,
@@ -57,10 +40,4 @@ pub struct DropViewPlan {
     pub catalog: String,
     pub database: String,
     pub view_name: String,
-}
-
-impl DropViewPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }

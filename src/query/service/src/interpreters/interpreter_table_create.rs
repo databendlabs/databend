@@ -82,20 +82,21 @@ impl Interpreter for CreateTableInterpreter {
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let engine = self.plan.engine;
         let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
-        let tables = catalog
-            .list_tables(&self.plan.tenant, &self.plan.database)
-            .await?;
-        if quota.max_tables_per_database != 0
-            && tables.len() >= quota.max_tables_per_database as usize
-        {
-            return Err(ErrorCode::TenantQuotaExceeded(format!(
-                "Max tables per database quota exceeded: {}",
-                quota.max_tables_per_database
-            )));
-        };
-        let name_not_duplicate = tables
-            .iter()
-            .all(|table| table.name() != self.plan.table.as_str());
+        if quota.max_tables_per_database > 0 {
+            // Note:
+            // max_tables_per_database is a config quota. Default is 0.
+            // If a database has lot of tables, list_tables will be slow.
+            // So We check get it when max_tables_per_database != 0
+            let tables = catalog
+                .list_tables(&self.plan.tenant, &self.plan.database)
+                .await?;
+            if tables.len() >= quota.max_tables_per_database as usize {
+                return Err(ErrorCode::TenantQuotaExceeded(format!(
+                    "Max tables per database quota exceeded: {}",
+                    quota.max_tables_per_database
+                )));
+            }
+        }
 
         let engine_desc: Option<StorageDescription> = catalog
             .get_table_engines()
@@ -105,22 +106,12 @@ impl Interpreter for CreateTableInterpreter {
             })
             .cloned();
 
-        match engine_desc {
-            Some(engine) => {
-                if self.plan.cluster_key.is_some() && !engine.support_cluster_key {
-                    return Err(ErrorCode::UnsupportedEngineParams(format!(
-                        "Unsupported cluster key for engine: {}",
-                        engine.engine_name
-                    )));
-                }
-            }
-            None => {
-                if name_not_duplicate {
-                    return Err(ErrorCode::UnknownTableEngine(format!(
-                        "Unknown table engine {}",
-                        engine
-                    )));
-                }
+        if let Some(engine) = engine_desc {
+            if self.plan.cluster_key.is_some() && !engine.support_cluster_key {
+                return Err(ErrorCode::UnsupportedEngineParams(format!(
+                    "Unsupported cluster key for engine: {}",
+                    engine.engine_name
+                )));
             }
         }
 
@@ -202,15 +193,11 @@ impl CreateTableInterpreter {
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
     fn build_request(&self, statistics: Option<TableStatistics>) -> Result<CreateTableReq> {
-        let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
-        for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
-            let field = if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
-                let field = field.with_default_expr(Some(default_expr.clone()));
-                let _ = field_default_value(self.ctx.clone(), &field)?;
-                field
-            } else {
-                field
-            };
+        let fields = self.plan.schema.fields().clone();
+        for field in fields.iter() {
+            if field.default_expr().is_some() {
+                let _ = field_default_value(self.ctx.clone(), field)?;
+            }
 
             if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
                 return Err(ErrorCode::TableWithInternalColumnName(format!(
@@ -218,8 +205,6 @@ impl CreateTableInterpreter {
                     field.name()
                 )));
             }
-
-            fields.push(field)
         }
         let schema = TableSchemaRefExt::create(fields);
 
