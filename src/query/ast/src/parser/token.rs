@@ -285,6 +285,8 @@ pub enum TokenKind {
     ALL,
     #[token("ADD", ignore(ascii_case))]
     ADD,
+    #[token("AGGREGATING", ignore(ascii_case))]
+    AGGREGATING,
     #[token("ANY", ignore(ascii_case))]
     ANY,
     #[token("ARGS", ignore(ascii_case))]
@@ -545,6 +547,8 @@ pub enum TokenKind {
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
+    #[token("INDEX", ignore(ascii_case))]
+    INDEX,
     #[token("INNER", ignore(ascii_case))]
     INNER,
     #[token("INSERT", ignore(ascii_case))]
@@ -799,6 +803,8 @@ pub enum TokenKind {
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
     STATUS,
+    #[token("STORED", ignore(ascii_case))]
+    STORED,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]
@@ -895,6 +901,8 @@ pub enum TokenKind {
     VARIANT,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
+    #[token("VIRTUAL", ignore(ascii_case))]
+    VIRTUAL,
     #[token("WEEK", ignore(ascii_case))]
     WEEK,
     #[token("WHEN", ignore(ascii_case))]

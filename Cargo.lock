@@ -18,6 +18,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "aggregating-index"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -39,15 +51,6 @@ dependencies = [
  "getrandom 0.2.8",
  "once_cell",
  "version_check",
-]
-
-[[package]]
-name = "aho-corasick"
-version = "0.7.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc936419f96fa211c1b9166887b38e5e40b19958e5b895be7c1f93adec7071ac"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
@@ -2019,7 +2022,7 @@ dependencies = [
 name = "common-io"
 version = "0.1.0"
 dependencies = [
- "aho-corasick 0.7.20",
+ "aho-corasick",
  "bincode 2.0.0-rc.2",
  "bytes",
  "chrono",
@@ -2502,6 +2505,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
+ "common-license",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -3528,7 +3532,8 @@ dependencies = [
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
- "aho-corasick 0.7.20",
+ "aggregating-index",
+ "aho-corasick",
  "arrow-array",
  "arrow-cast",
  "arrow-flight",
@@ -3955,6 +3960,7 @@ dependencies = [
 name = "enterprise-query"
 version = "0.1.0"
 dependencies = [
+ "aggregating-index",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -3964,6 +3970,7 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-license",
+ "common-meta-app",
  "common-settings",
  "common-storages-fuse",
  "dashmap",
@@ -8485,7 +8492,7 @@ version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af83e617f331cc6ae2da5443c602dfa5af81e517212d9d611a5b3ba1777b5370"
 dependencies = [
- "aho-corasick 1.0.1",
+ "aho-corasick",
  "memchr",
  "regex-syntax 0.7.1",
 ]

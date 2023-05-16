@@ -109,6 +109,7 @@ impl<'a> Binder {
             self.metadata.clone(),
             &[],
             false,
+            false,
         );
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
@@ -247,6 +248,10 @@ impl<'a> Binder {
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,
             Statement::AlterView(stmt) => self.bind_alter_view(stmt).await?,
             Statement::DropView(stmt) => self.bind_drop_view(stmt).await?,
+
+            // Indexes
+            Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
+            Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
 
             // Users
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
@@ -516,6 +521,7 @@ impl<'a> Binder {
             index,
             data_type: Box::new(data_type),
             visibility: Visibility::Visible,
+            virtual_computed_expr: None,
         }
     }
 
@@ -537,5 +543,10 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let object_name = normalize_identifier(object, &self.name_resolution_ctx).name;
         (catalog_name, database_name, object_name)
+    }
+
+    /// Normalize <identifier>
+    pub fn normalize_object_identifier(&self, ident: &Identifier) -> String {
+        normalize_identifier(ident, &self.name_resolution_ctx).name
     }
 }
