@@ -424,8 +424,51 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::Join(join) => {
-                let build_side = self.build(s_expr.child(1)?).await?;
-                let probe_side = self.build(s_expr.child(0)?).await?;
+                let mut probe_side = self.build(s_expr.child(0)?).await?;
+                let mut build_side = self.build(s_expr.child(1)?).await?;
+
+                // Unify the data types of the left and right exchange keys.
+                if let (
+                    PhysicalPlan::Exchange(PhysicalExchange {
+                        keys: probe_keys, ..
+                    }),
+                    PhysicalPlan::Exchange(PhysicalExchange {
+                        keys: build_keys, ..
+                    }),
+                ) = (&mut probe_side, &mut build_side)
+                {
+                    for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
+                        let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
+                        let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
+                        let common_ty = common_super_type(
+                            probe_expr.data_type().clone(),
+                            build_expr.data_type().clone(),
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        )
+                        .ok_or_else(|| {
+                            ErrorCode::IllegalDataType(format!(
+                                "Cannot find common type for probe key {:?} and build key {:?}",
+                                &probe_expr, &build_expr
+                            ))
+                        })?;
+                        *probe_key = check_cast(
+                            probe_expr.span(),
+                            false,
+                            probe_expr,
+                            &common_ty,
+                            &BUILTIN_FUNCTIONS,
+                        )?
+                        .as_remote_expr();
+                        *build_key = check_cast(
+                            build_expr.span(),
+                            false,
+                            build_expr,
+                            &common_ty,
+                            &BUILTIN_FUNCTIONS,
+                        )?
+                        .as_remote_expr();
+                    }
+                }
 
                 let build_schema = match join.join_type {
                     JoinType::Left | JoinType::Full => {
