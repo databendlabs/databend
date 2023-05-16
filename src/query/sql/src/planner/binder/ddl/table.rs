@@ -931,7 +931,7 @@ impl Binder {
                         target_type: Box::new(DataType::from(&schema_data_type)),
                         argument: Box::new(expr),
                     })
-                    .as_expr()?;
+                        .as_expr()?;
 
                     // Added columns are not allowed to use expressions,
                     // as the default values will be generated at at each query.
