@@ -13,26 +13,33 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::FunctionContext;
 
 use super::agg_index;
 use crate::optimizer::rule::Rule;
+use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::BindContext;
+use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct RuleTryApplyAggIndex {
     id: RuleID,
-    patterns: Vec<SExpr>,
     metadata: MetadataRef,
+    func_ctx: FunctionContext,
+
+    patterns: Vec<SExpr>,
 }
 
 impl RuleTryApplyAggIndex {
-    pub fn new(metadata: MetadataRef) -> Self {
+    pub fn new(func_ctx: FunctionContext, metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::TryApplyAggIndex,
+            func_ctx,
             metadata,
             patterns: vec![
                 // Expression
@@ -92,14 +99,20 @@ impl RuleTryApplyAggIndex {
                         .into(),
                         SExpr::create_unary(
                             PatternPlan {
-                                plan_type: RelOp::EvalScalar,
+                                plan_type: RelOp::Aggregate,
                             }
                             .into(),
-                            SExpr::create_leaf(
+                            SExpr::create_unary(
                                 PatternPlan {
-                                    plan_type: RelOp::Scan,
+                                    plan_type: RelOp::EvalScalar,
                                 }
                                 .into(),
+                                SExpr::create_leaf(
+                                    PatternPlan {
+                                        plan_type: RelOp::Scan,
+                                    }
+                                    .into(),
+                                ),
                             ),
                         ),
                     ),
@@ -125,19 +138,25 @@ impl RuleTryApplyAggIndex {
                         .into(),
                         SExpr::create_unary(
                             PatternPlan {
-                                plan_type: RelOp::EvalScalar,
+                                plan_type: RelOp::Aggregate,
                             }
                             .into(),
                             SExpr::create_unary(
                                 PatternPlan {
-                                    plan_type: RelOp::Filter,
+                                    plan_type: RelOp::EvalScalar,
                                 }
                                 .into(),
-                                SExpr::create_leaf(
+                                SExpr::create_unary(
                                     PatternPlan {
-                                        plan_type: RelOp::Scan,
+                                        plan_type: RelOp::Filter,
                                     }
                                     .into(),
+                                    SExpr::create_leaf(
+                                        PatternPlan {
+                                            plan_type: RelOp::Scan,
+                                        }
+                                        .into(),
+                                    ),
                                 ),
                             ),
                         ),
@@ -175,8 +194,15 @@ impl Rule for RuleTryApplyAggIndex {
             return Ok(());
         }
 
-        if let Some(result) = agg_index::try_rewrite(s_expr, index_plans)? {
-            result.applied_rule(&self.id);
+        // The bind context is useless here.
+        let optimzier = HeuristicOptimizer::new(
+            self.func_ctx.clone(),
+            Box::new(BindContext::new()),
+            self.metadata.clone(),
+        );
+
+        if let Some(mut result) = agg_index::try_rewrite(&optimzier, s_expr, index_plans)? {
+            result.set_applied_rule(&self.id);
             state.add_result(result);
         }
 
@@ -185,9 +211,9 @@ impl Rule for RuleTryApplyAggIndex {
 }
 
 impl RuleTryApplyAggIndex {
-    fn get_table_id(s_expr: &SExpr) -> u64 {
+    fn get_table_id(s_expr: &SExpr) -> IndexType {
         match s_expr.plan() {
-            RelOperator::Scan(scan) => scan.table_index as u64,
+            RelOperator::Scan(scan) => scan.table_index,
             _ => Self::get_table_id(s_expr.child(0).unwrap()),
         }
     }

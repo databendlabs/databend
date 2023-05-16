@@ -148,7 +148,8 @@ pub fn optimize_query(
 ) -> Result<SExpr> {
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
-    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
+    let heuristic =
+        HeuristicOptimizer::new(ctx.get_function_context()?, bind_context, metadata.clone());
     let mut result = heuristic.optimize(s_expr)?;
     if ctx.get_settings().get_enable_dphyp()? {
         let (dp_res, optimized) =
@@ -188,7 +189,8 @@ fn get_optimized_memo(
     metadata: MetadataRef,
     bind_context: Box<BindContext>,
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
-    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
+    let heuristic =
+        HeuristicOptimizer::new(ctx.get_function_context()?, bind_context, metadata.clone());
     let result = heuristic.optimize(s_expr)?;
 
     let mut cascades = CascadesOptimizer::create(ctx, metadata)?;

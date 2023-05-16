@@ -27,7 +27,6 @@ use common_expression::types::DataType;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_meta_types::MetaId;
 use parking_lot::RwLock;
 
 use crate::optimizer::SExpr;
@@ -58,7 +57,7 @@ pub struct Metadata {
     columns: Vec<ColumnEntry>,
     //// Columns that are lazy materialized.
     lazy_columns: HashSet<usize>,
-    agg_indexes: HashMap<MetaId, Vec<(u64, SExpr)>>,
+    agg_indexes: HashMap<IndexType, Vec<(u64, SExpr)>>,
 }
 
 impl Metadata {
@@ -221,14 +220,14 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_agg_indexes(&mut self, table_id: MetaId, table_indexes: Vec<(u64, SExpr)>) {
+    pub fn add_agg_indexes(&mut self, table_id: IndexType, table_indexes: Vec<(u64, SExpr)>) {
         self.agg_indexes
             .entry(table_id)
             .and_modify(|indexes| indexes.extend_from_slice(&table_indexes))
             .or_insert(table_indexes);
     }
 
-    pub fn get_agg_indexes(&self, table_id: MetaId) -> Option<&[(u64, SExpr)]> {
+    pub fn get_agg_indexes(&self, table_id: IndexType) -> Option<&[(u64, SExpr)]> {
         self.agg_indexes.get(&table_id).map(|v| v.as_slice())
     }
 
@@ -240,6 +239,15 @@ impl Metadata {
         table_alias_name: Option<String>,
         source_of_view: bool,
     ) -> IndexType {
+        // Do not bind again if there is already the table.
+        if let Some(index) = self
+            .tables
+            .iter()
+            .position(|t| t.table.get_id() == table_meta.get_id())
+        {
+            return index;
+        }
+
         let table_name = table_meta.name().to_string();
 
         let table_index = self.tables.len();

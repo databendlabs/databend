@@ -19,10 +19,11 @@ use common_expression::types::DataType;
 use common_expression::Scalar;
 
 use crate::binder::split_conjunctions;
+use crate::optimizer::HeuristicOptimizer;
+use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
-use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
@@ -36,7 +37,11 @@ use crate::IndexType;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-pub fn try_rewrite(s_expr: &SExpr, index_plans: &[(u64, SExpr)]) -> Result<Option<SExpr>> {
+pub fn try_rewrite(
+    optimizer: &HeuristicOptimizer,
+    s_expr: &SExpr,
+    index_plans: &[(u64, SExpr)],
+) -> Result<Option<SExpr>> {
     if index_plans.is_empty() {
         return Ok(None);
     }
@@ -51,7 +56,9 @@ pub fn try_rewrite(s_expr: &SExpr, index_plans: &[(u64, SExpr)]) -> Result<Optio
 
     // Search all index plans, find the first matched index to rewrite the query.
     for (index_id, plan) in index_plans.iter() {
-        let index_info = collect_information(plan)?;
+        let plan = optimizer.optimize_expression(plan, &[RuleID::FoldConstant])?;
+
+        let index_info = collect_information(&plan)?;
         debug_assert!(index_info.can_apply_index());
 
         // 1. Check if group items are the same.
@@ -66,7 +73,8 @@ pub fn try_rewrite(s_expr: &SExpr, index_plans: &[(u64, SExpr)]) -> Result<Optio
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
         for item in query_info.selection.items.iter() {
-            if let Some(rewritten) = rewrite_query_item(&query_info, &item.scalar, &index_selection)
+            if let Some(rewritten) =
+                rewrite_by_selection(&query_info, &item.scalar, &index_selection)
             {
                 new_selection.push(ScalarItem {
                     index: item.index,
@@ -140,7 +148,7 @@ pub fn try_rewrite(s_expr: &SExpr, index_plans: &[(u64, SExpr)]) -> Result<Optio
 /// [`Range`] is to represent the value range of a column according to the predicates.
 ///
 /// Notes that only conjunctions will be parsed, and disjunctions will be ignored.
-#[derive(Default, PartialEq)]
+#[derive(Default, PartialEq, Debug)]
 struct Range<'a> {
     min: Option<&'a Scalar>,
     min_close: bool,
@@ -735,7 +743,7 @@ fn rewrite_query_item(
                     try_create_column_binding(index_selection, &format_col_name(col.column.index))?;
                 Some(col.into())
             }
-            s => rewrite_query_item(query_info, s, index_selection),
+            s => rewrite_by_selection(query_info, s, index_selection),
         },
         ScalarExpr::ConstantExpr(_) => Some(query_item.clone()),
         ScalarExpr::CastExpr(cast) => {
@@ -766,24 +774,7 @@ fn rewrite_query_item(
                 .into(),
             )
         }
-        ScalarExpr::AggregateFunction(agg) => {
-            let mut new_args = Vec::with_capacity(agg.args.len());
-            for arg in agg.args.iter() {
-                let new_arg = rewrite_by_selection(query_info, arg, index_selection)?;
-                new_args.push(new_arg);
-            }
-            Some(
-                AggregateFunction {
-                    func_name: agg.func_name.clone(),
-                    distinct: agg.distinct,
-                    params: agg.params.clone(),
-                    return_type: agg.return_type.clone(),
-                    args: new_args,
-                    display_name: agg.display_name.clone(),
-                }
-                .into(),
-            )
-        }
+        ScalarExpr::AggregateFunction(_) => None, /* Aggregate function must appear in index selection. */
         _ => unreachable!(), // Window function and subquery will not appear in index.
     }
 }

@@ -27,13 +27,16 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRefExt;
 use common_sql::optimizer::agg_index;
+use common_sql::optimizer::HeuristicOptimizer;
 use common_sql::optimizer::SExpr;
 use common_sql::plans::AggIndexInfo;
 use common_sql::plans::CreateTablePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::RelOperator;
+use common_sql::BindContext;
 use common_sql::Binder;
 use common_sql::Metadata;
+use common_sql::MetadataRef;
 use common_sql::NameResolutionContext;
 use databend_query::interpreters::CreateTableInterpreter;
 use databend_query::interpreters::Interpreter;
@@ -88,6 +91,7 @@ fn create_table_plan(fixture: &TestFixture) -> CreateTablePlan {
 /// ```
 fn get_test_suites() -> Vec<TestSuite> {
     vec![
+        //  query: eval-scan, index: eval-scan
         TestSuite {
             query: "select to_string(c + 1) from t",
             index: "select c + 1 from t",
@@ -95,7 +99,13 @@ fn get_test_suites() -> Vec<TestSuite> {
             rewritten_selection: vec!["to_string(index_col_0 (#0))"],
             rewritten_predicates: vec![],
         },
-        //  query: eval-scan, index: eval-scan
+        TestSuite {
+            query: "select c + 1 from t",
+            index: "select c + 1 from t",
+            is_matched: true,
+            rewritten_selection: vec!["index_col_0 (#0)"],
+            rewritten_predicates: vec![],
+        },
         TestSuite {
             query: "select a from t",
             index: "select a from t",
@@ -242,6 +252,13 @@ fn get_test_suites() -> Vec<TestSuite> {
         },
         // query: eval-agg-eval-scan, index: eval-agg-eval-scan
         TestSuite {
+            query: "select sum(a) from t group by b",
+            index: "select b, sum(a) from t group by b",
+            is_matched: true,
+            rewritten_selection: vec!["index_col_1 (#1)"],
+            rewritten_predicates: vec![],
+        },
+        TestSuite {
             query: "select sum(a) from t group by c",
             index: "select b, sum(a) from t group by b",
             is_matched: false,
@@ -314,12 +331,14 @@ async fn test_query_rewrite() -> Result<()> {
     let create_table_plan = create_table_plan(&fixture);
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(ctx.clone()).await?;
+    let func_ctx = ctx.get_function_context()?;
 
     let test_suites = get_test_suites();
     for suite in test_suites {
-        let query = plan_sql(ctx.clone(), suite.query).await?;
-        let index = plan_sql(ctx.clone(), suite.index).await?;
-        let result = agg_index::try_rewrite(&query, &vec![(0, index)])?;
+        let (query, bind_context, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
+        let (index, _, _) = plan_sql(ctx.clone(), suite.index, false).await?;
+        let optimzier = HeuristicOptimizer::new(func_ctx.clone(), bind_context, metadata);
+        let result = agg_index::try_rewrite(&optimzier, &query, &vec![(0, index)])?;
         assert_eq!(
             suite.is_matched,
             result.is_some(),
@@ -351,7 +370,11 @@ async fn test_query_rewrite() -> Result<()> {
     Ok(())
 }
 
-async fn plan_sql(ctx: Arc<dyn TableContext>, sql: &str) -> Result<SExpr> {
+async fn plan_sql(
+    ctx: Arc<dyn TableContext>,
+    sql: &str,
+    optimize: bool,
+) -> Result<(SExpr, Box<BindContext>, MetadataRef)> {
     let settings = ctx.get_settings();
     let metadata = Arc::new(RwLock::new(Metadata::default()));
     let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
@@ -364,8 +387,25 @@ async fn plan_sql(ctx: Arc<dyn TableContext>, sql: &str) -> Result<SExpr> {
     let tokens = tokenize_sql(sql)?;
     let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
     let plan = binder.bind(&stmt).await?;
-    if let Plan::Query { s_expr, .. } = plan {
-        return Ok(*s_expr);
+    if let Plan::Query {
+        s_expr,
+        metadata,
+        bind_context,
+        ..
+    } = plan
+    {
+        let s_expr = if optimize {
+            let optimizer = HeuristicOptimizer::new(
+                ctx.get_function_context()?,
+                bind_context.clone(),
+                metadata.clone(),
+            );
+            optimizer.optimize(*s_expr)?
+        } else {
+            *s_expr
+        };
+
+        return Ok((s_expr, bind_context, metadata));
     }
     unreachable!()
 }
