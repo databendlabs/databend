@@ -10,7 +10,7 @@ The function can accept one or two arguments. If given one argument, the functio
 - If the integer is greater than or equal to 31,536,000,000 and less than 31,536,000,000,000, it is treated as milliseconds.
 - If the integer is greater than or equal to 31,536,000,000,000, it is treated as microseconds.
 
-If given two arguments, the function converts the first string to a timestamp based on the pattern specified in the second string. When you specify the date pattern, format your date and time with specifiers. For supported specifiers, refer to https://docs.rs/chrono/latest/chrono/format/strftime/index.html:
+If given two arguments, the function converts the first string to a timestamp based on the pattern specified in the second string. To format the date and time according to your desired representation, make use of specifiers and refer to the supported specifiers available at https://docs.rs/chrono/latest/chrono/format/strftime/index.html.
 
 - The output timestamp reflects your Databend timezone.
 - The timezone information must be included in the string you want to convert, otherwise NULL will be returned.
