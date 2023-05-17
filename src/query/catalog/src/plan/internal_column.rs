@@ -45,7 +45,7 @@ pub fn compute_row_id_prefix(seg_id: u64, block_id: u64) -> u64 {
     let seg_id = (seg_id + 1) & ((1 << NUM_SEGMENT_ID_BITS) - 1);
     let seg_id = (!seg_id).wrapping_add(1);
     let block_id = block_id & ((1 << NUM_BLOCK_ID_BITS) - 1);
-    (seg_id << NUM_BLOCK_ID_BITS) | block_id
+    ((seg_id << NUM_BLOCK_ID_BITS) | block_id) & ((1 << NUM_ROW_ID_PREFIX_BITS) - 1)
 }
 
 #[inline(always)]
