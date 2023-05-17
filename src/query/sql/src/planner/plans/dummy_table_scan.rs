@@ -59,6 +59,15 @@ impl Operator for DummyTableScan {
         })
     }
 
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        _children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: crate::optimizer::Distribution::Serial,
+        })
+    }
+
     fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
         Ok(StatInfo {
             cardinality: 1.0,

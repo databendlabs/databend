@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
@@ -86,6 +87,16 @@ impl Operator for UnionAll {
         Ok(PhysicalProperty {
             distribution: left_child.distribution,
         })
+    }
+
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty> {
+        children_prop
+            .get(0)
+            .cloned()
+            .ok_or_else(|| ErrorCode::Internal("UnionAll should have 1 child"))
     }
 
     fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {

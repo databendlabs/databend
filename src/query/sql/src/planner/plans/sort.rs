@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::Distribution;
@@ -47,6 +48,16 @@ impl Operator for Sort {
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         rel_expr.derive_physical_prop_child(0)
+    }
+
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty> {
+        children_prop
+            .get(0)
+            .cloned()
+            .ok_or_else(|| ErrorCode::Internal("Sort should have 1 child"))
     }
 
     fn compute_required_prop_child(

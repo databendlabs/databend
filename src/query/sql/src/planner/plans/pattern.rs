@@ -57,6 +57,15 @@ impl Operator for PatternPlan {
         ))
     }
 
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        _children_prop: &[PhysicalProperty],
+    ) -> common_exception::Result<PhysicalProperty> {
+        Err(ErrorCode::Internal(
+            "Cannot derive physical property for pattern plan",
+        ))
+    }
+
     fn derive_cardinality(&self, _rel_expr: &RelExpr) -> common_exception::Result<StatInfo> {
         Err(ErrorCode::Internal(
             "Cannot derive cardinality for pattern plan",

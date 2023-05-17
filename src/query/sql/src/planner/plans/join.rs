@@ -18,6 +18,7 @@ use std::fmt::Formatter;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::ColumnSet;
@@ -337,6 +338,35 @@ impl Operator for Join {
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         let probe_prop = rel_expr.derive_physical_prop_child(0)?;
         let build_prop = rel_expr.derive_physical_prop_child(1)?;
+
+        match (&probe_prop.distribution, &build_prop.distribution) {
+            // If the distribution of probe side is Random, we will pass through
+            // the distribution of build side.
+            (Distribution::Random, _) => Ok(PhysicalProperty {
+                distribution: build_prop.distribution.clone(),
+            }),
+            // If both sides are broadcast, which means broadcast join is enabled, to make sure the current join is broadcast, should return Random.
+            // Then required proper is broadcast, and the join will be broadcast.
+            (Distribution::Broadcast, Distribution::Broadcast) => Ok(PhysicalProperty {
+                distribution: Distribution::Random,
+            }),
+            // Otherwise pass through probe side.
+            _ => Ok(PhysicalProperty {
+                distribution: probe_prop.distribution.clone(),
+            }),
+        }
+    }
+
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty> {
+        let probe_prop = children_prop.get(0).ok_or_else(|| {
+            ErrorCode::Internal("Join operator should have 2 children".to_string())
+        })?;
+        let build_prop = children_prop.get(1).ok_or_else(|| {
+            ErrorCode::Internal("Join operator should have 2 children".to_string())
+        })?;
 
         match (&probe_prop.distribution, &build_prop.distribution) {
             // If the distribution of probe side is Random, we will pass through

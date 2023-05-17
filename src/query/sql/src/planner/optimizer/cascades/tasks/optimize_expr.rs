@@ -28,9 +28,11 @@ use crate::optimizer::cascades::tasks::SharedCounter;
 use crate::optimizer::cascades::CascadesOptimizer;
 use crate::optimizer::cost::Cost;
 use crate::optimizer::cost::CostContext;
+use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RequiredProperty;
 use crate::optimizer::SExpr;
+use crate::plans::Operator;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::IndexType;
@@ -172,7 +174,9 @@ impl OptimizeExprTask {
                 scheduler.add_task(Task::OptimizeGroup(task));
             }
         }
-        self.children_props.push(children_props);
+        if children_props.len() == m_expr.children.len() {
+            self.children_props.push(children_props);
+        }
 
         if all_children_optimized {
             Ok(OptimizeExprEvent::OptimizedChildren)
@@ -186,49 +190,57 @@ impl OptimizeExprTask {
         optimizer: &mut CascadesOptimizer,
         _scheduler: &mut Scheduler,
     ) -> Result<OptimizeExprEvent> {
-        let m_expr = optimizer
-            .memo
-            .group(self.group_index)?
-            .m_expr(self.m_expr_index)?
-            .clone();
-
-        // Enforce properties if necessary
-        let prop = RelExpr::with_m_expr(&m_expr, &optimizer.memo).derive_physical_prop()?;
-
-        // TODO(leiysky): We only support enforcing distribution property for now, so we can disable
-        // enforcer by checking if the query is running in distributed mode. But in the future, we
-        // should use a more general way to check if the enforcer is needed.
-        if optimizer.enable_distributed_optimization && !self.required.satisfied_by(&prop) {
-            // Should add enforcers to enforce the required property
-            let enforcers = self.required.distribution.get_enforcers()?;
-            for enforcer in enforcers {
-                // Create a `SExpr` for enforcer, the child of which is the current group
-                let enforcer_expr = SExpr::create_unary(
-                    enforcer,
-                    SExpr::create(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                        vec![],
-                        Some(m_expr.group_index),
-                        None,
-                        None,
-                    ),
-                );
-
-                optimizer.insert_expression(m_expr.group_index, &enforcer_expr)?;
-            }
-
-            if let Some(parent) = &self.parent {
-                parent.dec();
-            }
-            return Ok(OptimizeExprEvent::OptimizedSelf);
-        }
-
-        // Cost current expr if no need to add enforcers, in which case the required
-        // property is satisfied by the current expr.
         for children_prop in self.children_props.iter() {
+            let m_expr = optimizer
+                .memo
+                .group(self.group_index)?
+                .m_expr(self.m_expr_index)?
+                .clone();
+
+            // Enforce properties if necessary
+            let children_physical_props = children_prop
+                .iter()
+                .map(|prop| PhysicalProperty {
+                    distribution: prop.distribution.clone(),
+                })
+                .collect::<Vec<_>>();
+            let prop = m_expr
+                .plan
+                .derive_physical_prop_with_children_prop(&children_physical_props)?;
+
+            // TODO(leiysky): We only support enforcing distribution property for now, so we can disable
+            // enforcer by checking if the query is running in distributed mode. But in the future, we
+            // should use a more general way to check if the enforcer is needed.
+            if optimizer.enable_distributed_optimization && !self.required.satisfied_by(&prop) {
+                // Should add enforcers to enforce the required property
+                let enforcers = self.required.distribution.get_enforcers()?;
+                for enforcer in enforcers {
+                    // Create a `SExpr` for enforcer, the child of which is the current group
+                    let enforcer_expr = SExpr::create_unary(
+                        enforcer,
+                        SExpr::create(
+                            PatternPlan {
+                                plan_type: RelOp::Pattern,
+                            }
+                            .into(),
+                            vec![],
+                            Some(m_expr.group_index),
+                            None,
+                            None,
+                        ),
+                    );
+
+                    optimizer.insert_expression(m_expr.group_index, &enforcer_expr)?;
+                }
+
+                if let Some(parent) = &self.parent {
+                    parent.dec();
+                }
+                return Ok(OptimizeExprEvent::OptimizedSelf);
+            }
+
+            // Cost current expr if no need to add enforcers, in which case the required
+            // property is satisfied by the current expr.
             let mut cost = Cost::from(0);
 
             for (child_group, child_prop) in m_expr.children.iter().zip(children_prop.iter()) {

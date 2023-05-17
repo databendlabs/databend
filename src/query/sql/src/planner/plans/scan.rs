@@ -151,6 +151,15 @@ impl Operator for Scan {
         })
     }
 
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        _children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Random,
+        })
+    }
+
     fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
         let used_columns = self.used_columns();
 

@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
@@ -58,6 +59,16 @@ impl Operator for ProjectSet {
             child_prop.output_columns.insert(srf.index);
         }
         Ok(child_prop)
+    }
+
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        children_prop: &[PhysicalProperty],
+    ) -> common_exception::Result<PhysicalProperty> {
+        children_prop
+            .get(0)
+            .cloned()
+            .ok_or_else(|| ErrorCode::Internal("ProjectSet should have 1 child"))
     }
 
     fn derive_physical_prop(

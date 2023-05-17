@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 
+use crate::optimizer::Distribution;
 use crate::optimizer::PhysicalProperty;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
@@ -84,7 +85,18 @@ impl Operator for RuntimeFilterSource {
     }
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
-        todo!()
+        Ok(PhysicalProperty {
+            distribution: Distribution::Serial,
+        })
+    }
+
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        _children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: Distribution::Serial,
+        })
     }
 
     fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {

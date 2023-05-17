@@ -49,6 +49,11 @@ pub trait Operator {
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty>;
 
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty>;
+
     fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo>;
 
     fn compute_required_prop_child(
@@ -137,6 +142,56 @@ impl Operator for RelOperator {
             RelOperator::RuntimeFilterSource(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::ProjectSet(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Window(rel_op) => rel_op.derive_relational_prop(rel_expr),
+        }
+    }
+
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty> {
+        match self {
+            RelOperator::Scan(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::Join(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::EvalScalar(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::Filter(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::Aggregate(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::Sort(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::Limit(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::Exchange(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::UnionAll(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::DummyTableScan(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::RuntimeFilterSource(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::Window(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::ProjectSet(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
+            RelOperator::Pattern(rel_op) => {
+                rel_op.derive_physical_prop_with_children_prop(children_prop)
+            }
         }
     }
 

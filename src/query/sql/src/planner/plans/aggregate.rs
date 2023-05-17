@@ -90,6 +90,16 @@ impl Operator for Aggregate {
         rel_expr.derive_physical_prop_child(0)
     }
 
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty> {
+        children_prop
+            .get(0)
+            .cloned()
+            .ok_or_else(|| ErrorCode::Internal("Aggregate should have 1 child".to_string()))
+    }
+
     fn compute_required_prop_child(
         &self,
         ctx: Arc<dyn TableContext>,

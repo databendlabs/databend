@@ -55,6 +55,20 @@ impl Operator for Exchange {
         })
     }
 
+    fn derive_physical_prop_with_children_prop(
+        &self,
+        _children_prop: &[PhysicalProperty],
+    ) -> Result<PhysicalProperty> {
+        Ok(PhysicalProperty {
+            distribution: match self {
+                Exchange::Random => Distribution::Random,
+                Exchange::Hash(hash_keys) => Distribution::Hash(hash_keys.clone()),
+                Exchange::Broadcast => Distribution::Broadcast,
+                Exchange::Merge => Distribution::Serial,
+            },
+        })
+    }
+
     fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
         rel_expr.derive_cardinality_child(0)
     }
