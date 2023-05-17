@@ -338,7 +338,11 @@ async fn test_query_rewrite() -> Result<()> {
         let (query, bind_context, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
         let (index, _, _) = plan_sql(ctx.clone(), suite.index, false).await?;
         let optimzier = HeuristicOptimizer::new(func_ctx.clone(), bind_context, metadata);
-        let result = agg_index::try_rewrite(&optimzier, &query, &vec![(0, index)])?;
+        let result = agg_index::try_rewrite(&optimzier, &query, &vec![(
+            0,
+            suite.index.to_string(),
+            index,
+        )])?;
         assert_eq!(
             suite.is_matched,
             result.is_some(),
@@ -420,7 +424,7 @@ fn find_push_down_index_info(s_expr: &SExpr) -> Result<&Option<AggIndexInfo>> {
 fn format_selection(info: &AggIndexInfo) -> Vec<String> {
     info.selection
         .iter()
-        .map(|item| common_sql::format_scalar(&item.scalar))
+        .map(common_sql::format_scalar)
         .collect()
 }
 
