@@ -180,15 +180,6 @@ impl TableSnapshot {
     pub fn encoding() -> Encoding {
         Encoding::default()
     }
-
-    pub fn build_segment_id_map(&self) -> HashMap<Location, usize> {
-        let segment_count = self.segments.len();
-        let mut segment_id_map = HashMap::new();
-        for (i, segment_loc) in self.segments.iter().enumerate() {
-            segment_id_map.insert(segment_loc.clone(), segment_count - i - 1);
-        }
-        segment_id_map
-    }
 }
 
 impl From<v2::TableSnapshot> for TableSnapshot {
