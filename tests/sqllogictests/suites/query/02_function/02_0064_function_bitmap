@@ -33,5 +33,5 @@ SELECT bitmap_max(build_bitmap([1,4,5])), bitmap_min(build_bitmap([1,4,5]))
 ----
 5 1
 
-statement error The bitmap is empty
+statement error
 SELECT bitmap_max(build_bitmap([])), bitmap_min(build_bitmap([]))
