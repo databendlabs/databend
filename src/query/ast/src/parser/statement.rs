@@ -1418,34 +1418,18 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     enum ColumnConstraint {
         Nullable(bool),
         DefaultExpr(Box<Expr>),
-        VirtualExpr(Box<Expr>),
-        StoredExpr(Box<Expr>),
     }
 
     let nullable = alt((
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
         value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
     ));
-    let expr = alt((
-        map(
-            rule! {
-                DEFAULT ~ ^#subexpr(NOT_PREC)
-            },
-            |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
-        ),
-        map(
-            rule! {
-                AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
-            },
-            |(_, _, virtual_expr, _, _)| ColumnConstraint::VirtualExpr(Box::new(virtual_expr)),
-        ),
-        map(
-            rule! {
-                AS ~ "(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
-            },
-            |(_, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
-        ),
-    ));
+    let default_expr = map(
+        rule! {
+            DEFAULT ~ ^#subexpr(NOT_PREC)
+        },
+        |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
+    );
 
     let comment = map(
         rule! {
@@ -1458,32 +1442,26 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         rule! {
             #ident
             ~ #type_name
-            ~ ( #nullable | #expr )*
+            ~ ( #nullable | #default_expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`"
+            : "`<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`"
         },
         |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
-                expr: None,
+                default_expr: None,
                 comment,
             };
             for constraint in constraints {
                 match constraint {
+                    ColumnConstraint::DefaultExpr(default_expr) => {
+                        def.default_expr = Some(default_expr)
+                    }
                     ColumnConstraint::Nullable(nullable) => {
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
                         }
-                    }
-                    ColumnConstraint::DefaultExpr(default_expr) => {
-                        def.expr = Some(ColumnExpr::Default(default_expr))
-                    }
-                    ColumnConstraint::VirtualExpr(virtual_expr) => {
-                        def.expr = Some(ColumnExpr::Virtual(virtual_expr))
-                    }
-                    ColumnConstraint::StoredExpr(stored_expr) => {
-                        def.expr = Some(ColumnExpr::Stored(stored_expr))
                     }
                 }
             }

@@ -47,7 +47,6 @@ impl Binder {
             self.metadata.clone(),
             &[],
             false,
-            false,
         );
         let variable = variable.name.clone();
 

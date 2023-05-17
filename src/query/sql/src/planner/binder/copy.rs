@@ -296,7 +296,7 @@ impl<'a> Binder {
 
         let schema = match columns {
             Some(cols) => self.schema_project(&table.schema(), cols)?,
-            None => self.schema_project(&table.schema(), &[])?,
+            None => table.schema(),
         };
 
         if matches!(stage_info.file_format_params, FileFormatParams::Parquet(_)) {
@@ -647,8 +647,8 @@ impl<'a> Binder {
         };
 
         let schema = match columns {
-            Some(cols) => self.schema_project(&dst_table.schema(), cols)?,
-            None => self.schema_project(&dst_table.schema(), &[])?,
+            Some(cols) => Some(self.schema_project(&dst_table.schema(), cols)?),
+            None => None,
         };
 
         Ok(Plan::Copy(Box::new(CopyPlan::IntoTableWithTransform {
