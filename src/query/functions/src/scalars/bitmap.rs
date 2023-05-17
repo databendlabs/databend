@@ -14,9 +14,11 @@
 
 use common_expression::types::bitmap::BitmapType;
 use common_expression::types::ArrayType;
+use common_expression::types::BooleanType;
 use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
 use common_expression::vectorize_with_builder_1_arg;
+use common_expression::vectorize_with_builder_2_arg;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
 use itertools::join;
@@ -115,6 +117,106 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
 
             builder.commit_row();
+        }),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<BitmapType, UInt64Type, BooleanType, _, _>(
+        "bitmap_contains",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<BitmapType, UInt64Type, BooleanType>(
+            |b, item, builder, ctx| match RoaringTreemap::deserialize_from(b) {
+                Ok(rb) => {
+                    builder.push(rb.contains(item));
+                }
+                Err(e) => {
+                    builder.push(false);
+                    ctx.set_error(builder.len(), e.to_string());
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BooleanType, _, _>(
+        "bitmap_has_all",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
+            |b, items, builder, ctx| {
+                let rb = match RoaringTreemap::deserialize_from(b) {
+                    Ok(rb) => rb,
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(false);
+                        return;
+                    }
+                };
+                let rb2 = match RoaringTreemap::deserialize_from(items) {
+                    Ok(rb) => rb,
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(false);
+                        return;
+                    }
+                };
+                builder.push(rb.is_superset(&rb2));
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BooleanType, _, _>(
+        "bitmap_has_any",
+        |_, _| FunctionDomain::Full,
+        vectorize_with_builder_2_arg::<BitmapType, BitmapType, BooleanType>(
+            |b, items, builder, ctx| {
+                let rb = match RoaringTreemap::deserialize_from(b) {
+                    Ok(rb) => rb,
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(false);
+                        return;
+                    }
+                };
+                let rb2 = match RoaringTreemap::deserialize_from(items) {
+                    Ok(rb) => rb,
+                    Err(e) => {
+                        ctx.set_error(builder.len(), e.to_string());
+                        builder.push(false);
+                        return;
+                    }
+                };
+                builder.push(rb.intersection_len(&rb2) != 0);
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<BitmapType, UInt64Type, _, _>(
+        "bitmap_max",
+        |_| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
+            match RoaringTreemap::deserialize_from(b) {
+                Ok(rb) => match rb.max() {
+                    Some(val) => builder.push(val),
+                    None => ctx.set_error(builder.len(), "The bitmap is empty"),
+                },
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                }
+            }
+        }),
+    );
+
+    registry.register_passthrough_nullable_1_arg::<BitmapType, UInt64Type, _, _>(
+        "bitmap_min",
+        |_| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
+            match RoaringTreemap::deserialize_from(b) {
+                Ok(rb) => match rb.min() {
+                    Some(val) => builder.push(val),
+                    None => ctx.set_error(builder.len(), "The bitmap is empty"),
+                },
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                }
+            }
         }),
     );
 }
