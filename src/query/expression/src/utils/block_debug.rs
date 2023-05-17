@@ -184,11 +184,7 @@ fn create_box_table(schema: &DataSchemaRef, results: &[DataBlock]) -> Table {
 
     let row_count_str = format!("{} rows", row_count);
     let show_count_str = format!("({} shown)", top_rows + bottom_rows);
-    table.add_row(vec![
-        Cell::new(row_count_str).set_alignment(CellAlignment::Center),
-    ]);
-    table.add_row(vec![
-        Cell::new(show_count_str).set_alignment(CellAlignment::Center),
-    ]);
+    table.add_row(vec![Cell::new(row_count_str).set_alignment(aligns[0])]);
+    table.add_row(vec![Cell::new(show_count_str).set_alignment(aligns[0])]);
     table
 }
