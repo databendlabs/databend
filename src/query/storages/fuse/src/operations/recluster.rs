@@ -37,6 +37,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use crate::operations::FuseTableSink;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
+use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::FuseTable;
 use crate::TableMutator;
@@ -65,8 +66,9 @@ impl FuseTable {
 
         let schema = self.table_info.schema();
         let segment_locations = snapshot.segments.clone();
+        let segment_locations = create_segment_location_vector(segment_locations, None);
         let pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
-        let block_metas = pruner.pruning(segment_locations, None, None).await?;
+        let block_metas = pruner.pruning(segment_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
