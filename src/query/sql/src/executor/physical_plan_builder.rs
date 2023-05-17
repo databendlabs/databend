@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::plan::AggIndexInfo;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
@@ -1484,6 +1485,44 @@ impl PhysicalPlanBuilder {
 
         let virtual_columns = self.build_virtual_columns(&scan.columns);
 
+        let agg_index = scan
+            .agg_index
+            .as_ref()
+            .map(|agg| -> Result<_> {
+                let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "and".to_string(),
+                        params: vec![],
+                        arguments: vec![lhs, rhs],
+                    })
+                });
+                let filter = predicate
+                    .map(|pred| -> Result<_> {
+                        Ok(cast_expr_to_non_null_boolean(
+                            pred.as_expr()?.project_column_ref(|col| col.index),
+                        )?
+                        .as_remote_expr())
+                    })
+                    .transpose()?;
+                let selection = agg
+                    .selection
+                    .iter()
+                    .map(|sel| {
+                        Ok(sel
+                            .as_expr()?
+                            .project_column_ref(|col| col.index)
+                            .as_remote_expr())
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(AggIndexInfo {
+                    index_id: agg.index_id,
+                    filter,
+                    selection,
+                })
+            })
+            .transpose()?;
+
         Ok(PushDownInfo {
             projection: Some(projection),
             output_columns,
@@ -1494,6 +1533,7 @@ impl PhysicalPlanBuilder {
             order_by: order_by.unwrap_or_default(),
             virtual_columns,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
+            agg_index,
         })
     }
 

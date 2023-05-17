@@ -30,7 +30,6 @@ use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
-use crate::plans::ScalarItem;
 use crate::ColumnBinding;
 use crate::ColumnSet;
 use crate::IndexType;
@@ -40,7 +39,7 @@ use crate::Visibility;
 pub fn try_rewrite(
     optimizer: &HeuristicOptimizer,
     s_expr: &SExpr,
-    index_plans: &[(u64, SExpr)],
+    index_plans: &[(u64, String, SExpr)],
 ) -> Result<Option<SExpr>> {
     if index_plans.is_empty() {
         return Ok(None);
@@ -55,7 +54,7 @@ pub fn try_rewrite(
     let query_group_items = query_info.formatted_group_items();
 
     // Search all index plans, find the first matched index to rewrite the query.
-    for (index_id, plan) in index_plans.iter() {
+    for (index_id, _, plan) in index_plans.iter() {
         let plan = optimizer.optimize_expression(plan, &[RuleID::FoldConstant])?;
 
         let index_info = collect_information(&plan)?;
@@ -76,10 +75,7 @@ pub fn try_rewrite(
             if let Some(rewritten) =
                 rewrite_by_selection(&query_info, &item.scalar, &index_selection)
             {
-                new_selection.push(ScalarItem {
-                    index: item.index,
-                    scalar: rewritten,
-                });
+                new_selection.push(rewritten);
             } else {
                 flag = false;
                 break;

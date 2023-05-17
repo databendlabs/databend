@@ -255,7 +255,7 @@ impl Binder {
                             if let Statement::Query(query) = &stmt {
                                 let (s_expr, _) =
                                     self.bind_query(&mut new_bind_context, query).await?;
-                                s_exprs.push((index_id.index_id, s_expr));
+                                s_exprs.push((index_id.index_id, index_meta.query.clone(), s_expr));
                             }
                         }
                         agg_indexes.extend(s_exprs);
