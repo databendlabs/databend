@@ -25,19 +25,41 @@ statement ok
 use `rust-lang`
 
 statement ok
-DROP DATABASE if exists `rust-lang`
+drop database `rust-lang`
 
 statement ok
-create database Rust-lang
+DROP DATABASE if exists Rustlang
 
 statement ok
-use rust-lang
-
-statement error 1003
-use `rust-lang`
+DROP DATABASE if exists `Rustlang`
 
 statement ok
-use `Rust-lang`
+create database Rustlang;
 
 statement ok
-drop database rust-lang
+create database `Rustlang`;
+
+statement ok
+create table Rustlang.t_low(id int);
+
+statement ok
+create table `Rustlang`.t_up(id int);
+
+statement ok
+use Rustlang;
+
+query T
+show tables;
+----
+t_low
+
+statement ok
+use `Rustlang`;
+
+query T
+show tables;
+----
+t_up
+
+statement ok
+drop database Rustlang
