@@ -236,7 +236,7 @@ pub fn find_eq_db_table(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Sca
             } else if function.signature.name == "and_filters" {
                 // only support this:
                 // 1. where xx and xx and xx
-                // 2. filter: Column `table`
+                // 2. filter: Column `table`, Column `database`
                 for arg in args {
                     find_eq_db_table(arg, visitor)
                 }

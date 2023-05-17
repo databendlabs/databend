@@ -25,11 +25,14 @@ use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
+use common_expression::Expr;
 use common_expression::FromOptData;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -94,7 +97,7 @@ where TablesTable<T>: HistoryAware
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
@@ -109,7 +112,31 @@ where TablesTable<T>: HistoryAware
 
         let mut database_tables = vec![];
         for (ctl_name, ctl) in ctls.into_iter() {
-            let dbs = ctl.list_databases(tenant.as_str()).await?;
+            let mut dbs = Vec::new();
+            if let Some(push_downs) = &push_downs {
+                let mut db_name = Vec::new();
+                if let Some(filter) = &push_downs.filter {
+                    let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                    find_eq_db_database(&expr, &mut |col_name, scalar| {
+                        if col_name == "database" {
+                            if let Scalar::String(s) = scalar {
+                                if let Ok(database) = String::from_utf8(s.clone()) {
+                                    db_name.push(database);
+                                }
+                            }
+                        }
+                    });
+                    for db in db_name {
+                        if let Ok(database) = ctl.get_database(tenant.as_str(), db.as_str()).await {
+                            dbs.push(database);
+                        }
+                    }
+                }
+            }
+
+            if dbs.is_empty() {
+                dbs = ctl.list_databases(tenant.as_str()).await?;
+            }
             let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
             for db in dbs {
@@ -281,5 +308,30 @@ where TablesTable<T>: HistoryAware
         };
 
         AsyncOneBlockSystemTable::create(TablesTable::<T> { table_info })
+    }
+}
+
+pub fn find_eq_db_database(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
+    match expr {
+        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
+        Expr::Cast { expr, .. } => find_eq_db_database(expr, visitor),
+        Expr::FunctionCall { function, args, .. } => {
+            if function.signature.name == "eq" {
+                match args.as_slice() {
+                    [Expr::ColumnRef { id, .. }, Expr::Constant { scalar, .. }]
+                    | [Expr::Constant { scalar, .. }, Expr::ColumnRef { id, .. }] => {
+                        visitor(id, scalar);
+                    }
+                    _ => {}
+                }
+            } else if function.signature.name == "and_filters" {
+                // only support this:
+                // 1. where xx and xx and xx
+                // 2. filter: Column `database`
+                for arg in args {
+                    find_eq_db_database(arg, visitor)
+                }
+            }
+        }
     }
 }
