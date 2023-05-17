@@ -323,7 +323,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while create table)",

@@ -282,7 +282,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         let db = self
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;
