@@ -167,7 +167,7 @@ pub trait Catalog: DynClone + Send + Sync {
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply>;
 
-    async fn list_table_mutation_lock_revs(&self, table_info: &TableInfo) -> Result<Vec<Revision>>;
+    async fn list_table_mutation_lock_revs(&self, prefix: &str) -> Result<Vec<Revision>>;
 
     async fn upsert_mutation_lock_rev(
         &self,

@@ -27,10 +27,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::ListTableMutationLockReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -192,17 +190,6 @@ impl Database for ShareDatabase {
     async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot truncate table from a shared database".to_string(),
-        ))
-    }
-
-    #[async_backtrace::framed]
-    async fn list_table_mutation_lock_revs(
-        &self,
-        _req: ListTableMutationLockReq,
-    ) -> Result<Vec<Revision>> {
-        Err(ErrorCode::PermissionDenied(
-            "Permission denied, cannot get table mutation lock revisions from a shared database"
-                .to_string(),
         ))
     }
 

@@ -2299,13 +2299,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         &self,
         req: ListTableMutationLockReq,
     ) -> Result<Vec<Revision>, KVAppError> {
-        let reply = self
-            .prefix_list_kv(&format!(
-                "{}/{}",
-                TableMutationLockKey2::PREFIX,
-                req.table_id
-            ))
-            .await?;
+        let reply = self.prefix_list_kv(&req.prefix).await?;
 
         let mut res = vec![];
         for (k, _) in reply.into_iter() {
@@ -2358,6 +2352,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 get_pb_value(self, &lock_key).await?;
 
             if lock_key_seq > 0 && req.revision.is_none() {
+                // lock key has been created by other process.
                 continue;
             }
 
@@ -2386,7 +2381,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(UpsertTableMutationLockReply { revision });
+                return Ok(UpsertTableMutationLockReply {
+                    revision,
+                    prefix: format!("{}/{}", TableMutationLockKey2::PREFIX, table_id),
+                });
             }
         }
 

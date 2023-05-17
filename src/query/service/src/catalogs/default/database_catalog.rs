@@ -482,9 +482,9 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_mutation_lock_revs(&self, table_info: &TableInfo) -> Result<Vec<Revision>> {
+    async fn list_table_mutation_lock_revs(&self, prefix: &str) -> Result<Vec<Revision>> {
         self.mutable_catalog
-            .list_table_mutation_lock_revs(table_info)
+            .list_table_mutation_lock_revs(prefix)
             .await
     }
 

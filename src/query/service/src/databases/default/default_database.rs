@@ -26,11 +26,9 @@ use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::ListTableMutationLockReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -186,15 +184,6 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
         let res = self.ctx.meta.truncate_table(req).await?;
-        Ok(res)
-    }
-
-    #[async_backtrace::framed]
-    async fn list_table_mutation_lock_revs(
-        &self,
-        req: ListTableMutationLockReq,
-    ) -> Result<Vec<Revision>> {
-        let res = self.ctx.meta.list_table_mutation_lock_revs(req).await?;
         Ok(res)
     }
 

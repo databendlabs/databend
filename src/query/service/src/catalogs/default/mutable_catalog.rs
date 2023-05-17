@@ -363,19 +363,12 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_mutation_lock_revs(&self, table_info: &TableInfo) -> Result<Vec<Revision>> {
+    async fn list_table_mutation_lock_revs(&self, prefix: &str) -> Result<Vec<Revision>> {
         let req = ListTableMutationLockReq {
-            table_id: table_info.ident.table_id,
+            prefix: prefix.to_string(),
         };
-        match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.list_table_mutation_lock_revs(req).await?),
-            DatabaseType::ShareDB(share_ident) => {
-                let db = self
-                    .get_database(&share_ident.tenant, &share_ident.share_name)
-                    .await?;
-                db.list_table_mutation_lock_revs(req).await
-            }
-        }
+        let res = self.ctx.meta.list_table_mutation_lock_revs(req).await?;
+        Ok(res)
     }
 
     #[async_backtrace::framed]

@@ -267,10 +267,7 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_mutation_lock_revs(
-        &self,
-        _table_info: &TableInfo,
-    ) -> Result<Vec<Revision>> {
+    async fn list_table_mutation_lock_revs(&self, _prefix: &str) -> Result<Vec<Revision>> {
         Err(ErrorCode::Unimplemented(
             "list_table_mutation_lock_revs not allowed for system database",
         ))

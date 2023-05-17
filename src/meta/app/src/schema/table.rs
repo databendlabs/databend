@@ -753,7 +753,7 @@ pub struct TableMutationLock {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListTableMutationLockReq {
-    pub table_id: u64,
+    pub prefix: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -766,6 +766,7 @@ pub struct UpsertTableMutationLockReq {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableMutationLockReply {
     pub revision: u64,
+    pub prefix: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

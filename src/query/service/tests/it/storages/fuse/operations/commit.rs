@@ -728,10 +728,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn list_table_mutation_lock_revs(
-        &self,
-        _table_info: &TableInfo,
-    ) -> Result<Vec<Revision>> {
+    async fn list_table_mutation_lock_revs(&self, _prefix: &str) -> Result<Vec<Revision>> {
         todo!()
     }
 
