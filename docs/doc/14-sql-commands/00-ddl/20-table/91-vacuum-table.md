@@ -7,7 +7,7 @@ import EEFeature from '@site/src/components/EEFeature';
 
 The VACUUM TABLE command helps to optimize the system performance by freeing up storage space through the permanent removal of historical data files from a table. This includes:
 
-- Snapshots, as well as their relevant segments and blocks. 
+- Snapshots associated with the table, as well as their relevant segments and blocks.
 
 - Orphan files. Orphan files in Databend refer to snapshots, segments, and blocks that are no longer associated with the table. Orphan files might be generated from various operations and errors, such as during data backups and restores, and can take up valuable disk space and degrade the system performance over time.
 
@@ -35,8 +35,14 @@ VACUUM TABLE <table_name> [RETAIN n HOURS] [DRY RUN]
 
 ### VACUUM TABLE vs. OPTIMIZE TABLE
 
-Databend provides two commands for removing historical data files from a table: VACUUM TABLE and [OPTIMIZE TABLE](60-optimize-table.md) (with the PURGE option). While both commands permanently remove data files, only VACUUM TABLE can remove orphan files and free up additional storage space.
+Databend provides two commands for removing historical data files from a table: VACUUM TABLE and [OPTIMIZE TABLE](60-optimize-table.md) (with the PURGE option). Although both commands are capable of permanently deleting data files, they differ in how they handle orphan files: OPTIMIZE TABLE is able to remove orphan snapshots, as well as the corresponding segments and blocks. However, there is a possibility of orphan segments and blocks existing without any associated snapshots. In such a scenario, only VACUUM TABLE can help clean them up.
 
-Both VACUUM TABLE and OPTIMIZE TABLE allow you to specify a period to determine which historical data files to remove. However, OPTIMIZE TABLE  requires you to obtain the snapshot ID or timestamp from a query beforehand, whereas VACUUM TABLE allows you to specify the number of hours to retain the data files directly.
+|                                                  	| VACUUM TABLE 	| OPTIMIZE TABLE 	|
+|--------------------------------------------------	|--------------	|----------------	|
+| Associated snapshots (incl. segments and blocks) 	| Yes          	| Yes            	|
+| Orphan snapshots (incl. segments and blocks)     	| Yes          	| Yes            	|
+| Orphan segments and blocks only                  	| Yes          	| No             	|
+
+Both VACUUM TABLE and OPTIMIZE TABLE allow you to specify a period to determine which historical data files to remove. However, OPTIMIZE TABLE requires you to obtain the snapshot ID or timestamp from a query beforehand, whereas VACUUM TABLE allows you to specify the number of hours to retain the data files directly.
 
 In addition, VACUUM TABLE offers the DRY RUN option, which allows you to preview the data files to be removed before applying the command. This provides a safe removal experience and helps you avoid unintended data loss.
