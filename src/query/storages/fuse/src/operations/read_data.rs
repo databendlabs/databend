@@ -37,7 +37,7 @@ impl FuseTable {
         query_internal_columns: bool,
         ctx: Arc<dyn TableContext>,
     ) -> Result<Arc<BlockReader>> {
-        let table_schema = Arc::new(self.table_info.schema().as_ref().remove_virtual_computed());
+        let table_schema = self.table_info.schema();
         BlockReader::create(
             self.operator.clone(),
             table_schema,
