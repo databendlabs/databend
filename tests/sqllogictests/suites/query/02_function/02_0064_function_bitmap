@@ -24,7 +24,7 @@ SELECT bitmap_has_all(build_bitmap([1,4,5]), build_bitmap([1])), bitmap_has_all(
 1 0
 
 query BB
-SELECT bitmap_has_any(build_bitmap([1,4,5]), build_bitmap([1,2])), bitmap_has_all(build_bitmap([1,4,5]), build_bitmap([2,3]))
+SELECT bitmap_has_any(build_bitmap([1,4,5]), build_bitmap([1,2])), bitmap_has_any(build_bitmap([1,4,5]), build_bitmap([2,3]))
 ----
 1 0
 
