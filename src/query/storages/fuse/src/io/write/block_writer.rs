@@ -136,6 +136,7 @@ impl BlockBuilder {
             data_block,
             &mut buffer,
         )?;
+        buffer.len();
 
         let block_meta = BlockMeta {
             row_count,

@@ -123,6 +123,12 @@ impl From<common_arrow::parquet::errors::ParquetError> for ErrorCode {
     }
 }
 
+impl From<common_arrow::arrow_schema::ArrowError> for ErrorCode {
+    fn from(error: common_arrow::arrow_schema::ArrowError) -> Self {
+        ErrorCode::from_std_error(error)
+    }
+}
+
 impl From<bincode::error::EncodeError> for ErrorCode {
     fn from(error: bincode::error::EncodeError) -> Self {
         ErrorCode::from_std_error(error)

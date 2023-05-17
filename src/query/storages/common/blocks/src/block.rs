@@ -41,27 +41,31 @@ pub fn blocks_to_parquet(
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
 ) -> Result<(u64, FileMetaData)> {
+    println!("before buffer len: {}", write_buffer.len());
+    let start_pos = write_buffer.len() as u64;
     let data_schema: DataSchema = schema.into();
     let batches: Vec<RecordBatch> = blocks
-        .iter()
-        .map(|block| block.to_record_batch(&data_schema)?)
+        .into_iter()
+        .map(|block| block.to_record_batch(&data_schema).unwrap())
         .collect();
-    assert_eq!(batches.len() > 0);
-    let mut writer = ArrowWriter::try_new(write_buffer, batches[0].schema(), Some(props)).unwrap();
+    assert!(batches.len() > 0);
     let props = WriterProperties::builder()
         .set_compression(compression.into())
         .build();
-    writer.write(&batch)?;
-    for block in blocks {
-        let batch = block.to_record_batch(&data_schema)?;
-    }
+    let mut writer = ArrowWriter::try_new(&mut *write_buffer, batches[0].schema(), Some(props)).unwrap();
+
+    batches.iter().try_for_each(|batch| writer.write(batch))?;
+
     match writer.close() {
-        Ok(meta) => Ok((write_buffer.len() as u64, meta)),
+        Ok(meta) => Ok((write_buffer.len() as u64 - start_pos, meta)),
         Err(cause) => Err(ErrorCode::Internal(format!(
             "write_parquet_file: {:?}",
             cause,
         ))),
     }
+    // let metadata = writer.close()?;
+    // let end_pos = writer.into_inner()?.len() as u64;
+    // Ok((end_pos-start_pos, metadata))
     // let arrow_schema = schema.as_ref().to_arrow();
     //
     // let row_group_write_options = WriteOptions {
