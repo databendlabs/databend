@@ -1073,7 +1073,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let index_metas = get_index_metas_by_ids(self, &ids).await?;
             index_metas
                 .into_iter()
-                .filter(|(_, meta)| meta.drop_on.is_some())
+                .filter(|(_, meta)| meta.drop_on.is_none())
                 .collect::<Vec<_>>()
         };
 
