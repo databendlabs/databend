@@ -214,7 +214,7 @@ fn table_scan_to_format_tree(
     if let Some(agg_index) = agg_index {
         let metadata = metadata.read();
         let (_, agg_index_sql, _) = metadata
-            .get_agg_indexes(plan.table_index)
+            .get_agg_indexes(&table_name)
             .unwrap()
             .iter()
             .find(|(index, _, _)| *index == agg_index.index_id)

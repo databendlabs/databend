@@ -114,7 +114,21 @@ fn get_test_suites() -> Vec<TestSuite> {
             rewritten_predicates: vec![],
         },
         TestSuite {
+            query: "select a as z from t",
+            index: "select a from t",
+            is_matched: true,
+            rewritten_selection: vec!["index_col_0 (#0)"],
+            rewritten_predicates: vec![],
+        },
+        TestSuite {
             query: "select a + 1, to_string(a) from t",
+            index: "select a from t",
+            is_matched: true,
+            rewritten_selection: vec!["plus(index_col_0 (#0), 1)", "to_string(index_col_0 (#0))"],
+            rewritten_predicates: vec![],
+        },
+        TestSuite {
+            query: "select a + 1 as z, to_string(a) from t",
             index: "select a from t",
             is_matched: true,
             rewritten_selection: vec!["plus(index_col_0 (#0), 1)", "to_string(index_col_0 (#0))"],
@@ -337,8 +351,10 @@ async fn test_query_rewrite() -> Result<()> {
     for suite in test_suites {
         let (query, bind_context, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
         let (index, _, _) = plan_sql(ctx.clone(), suite.index, false).await?;
-        let optimzier = HeuristicOptimizer::new(func_ctx.clone(), bind_context, metadata);
-        let result = agg_index::try_rewrite(&optimzier, &query, &vec![(
+        let optimzier = HeuristicOptimizer::new(func_ctx.clone(), bind_context, metadata.clone());
+        let meta = metadata.read();
+        let base_columns = meta.columns_by_table_index(0);
+        let result = agg_index::try_rewrite(&optimzier, &base_columns, &query, &vec![(
             0,
             suite.index.to_string(),
             index,

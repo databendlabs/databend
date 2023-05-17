@@ -309,6 +309,8 @@ impl Binder {
                         }
                     }
                     _ => {
+                        let table_name = table_meta.name();
+                        let full_table_name = format!("{catalog}.{database}.{table_name}");
                         let table_index = self.metadata.write().add_table(
                             catalog,
                             database.clone(),
@@ -321,7 +323,7 @@ impl Binder {
                             // Should use bound table id.
                             self.metadata
                                 .write()
-                                .add_agg_indexes(table_index, agg_indexes);
+                                .add_agg_indexes(full_table_name, agg_indexes);
                         }
 
                         let (s_expr, mut bind_context) = self

@@ -31,6 +31,7 @@ use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
@@ -38,6 +39,7 @@ use crate::Visibility;
 
 pub fn try_rewrite(
     optimizer: &HeuristicOptimizer,
+    base_columns: &[ColumnEntry],
     s_expr: &SExpr,
     index_plans: &[(u64, String, SExpr)],
 ) -> Result<Option<SExpr>> {
@@ -50,12 +52,18 @@ pub fn try_rewrite(
         return Ok(None);
     }
 
+    let col_index_map = base_columns
+        .iter()
+        .map(|col| (col.name(), col.index()))
+        .collect::<HashMap<_, _>>();
+
     let query_predicates = query_info.predicates.map(distinguish_predicates);
     let query_group_items = query_info.formatted_group_items();
 
     // Search all index plans, find the first matched index to rewrite the query.
     for (index_id, _, plan) in index_plans.iter() {
         let plan = optimizer.optimize_expression(plan, &[RuleID::FoldConstant])?;
+        let plan = rewrite_index_plan(&col_index_map, &plan);
 
         let index_info = collect_information(&plan)?;
         debug_assert!(index_info.can_apply_index());
@@ -139,6 +147,58 @@ pub fn try_rewrite(
     }
 
     Ok(None)
+}
+
+/// Rewrite base column index in the original index plan by `columns`.
+fn rewrite_index_plan(columns: &HashMap<String, IndexType>, s_expr: &SExpr) -> SExpr {
+    match s_expr.plan() {
+        RelOperator::EvalScalar(eval) => {
+            let mut new_expr = eval.clone();
+            for item in new_expr.items.iter_mut() {
+                rewrite_scalar_index(columns, &mut item.scalar);
+            }
+            SExpr::create_unary(
+                new_expr.into(),
+                rewrite_index_plan(columns, s_expr.child(0).unwrap()),
+            )
+        }
+        RelOperator::Filter(filter) => {
+            let mut new_expr = filter.clone();
+            for pred in new_expr.predicates.iter_mut() {
+                rewrite_scalar_index(columns, pred);
+            }
+            SExpr::create_unary(
+                new_expr.into(),
+                rewrite_index_plan(columns, s_expr.child(0).unwrap()),
+            )
+        }
+        RelOperator::Scan(_) => s_expr.clone(), // Terminate the recursion.
+        _ => s_expr.replace_children(vec![rewrite_index_plan(columns, s_expr.child(0).unwrap())]),
+    }
+}
+
+fn rewrite_scalar_index(columns: &HashMap<String, IndexType>, scalar: &mut ScalarExpr) {
+    match scalar {
+        ScalarExpr::BoundColumnRef(col) => {
+            if let Some(index) = columns.get(&col.column.column_name) {
+                col.column.index = *index;
+            }
+        }
+        ScalarExpr::AggregateFunction(agg) => {
+            agg.args
+                .iter_mut()
+                .for_each(|arg| rewrite_scalar_index(columns, arg));
+        }
+        ScalarExpr::FunctionCall(func) => {
+            func.arguments
+                .iter_mut()
+                .for_each(|arg| rewrite_scalar_index(columns, arg));
+        }
+        ScalarExpr::CastExpr(cast) => {
+            rewrite_scalar_index(columns, &mut cast.argument);
+        }
+        _ => { /*  do nothing */ }
+    }
 }
 
 /// [`Range`] is to represent the value range of a column according to the predicates.

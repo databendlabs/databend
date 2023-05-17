@@ -181,9 +181,9 @@ impl Rule for RuleTryApplyAggIndex {
         s_expr: &SExpr,
         state: &mut crate::optimizer::rule::TransformResult,
     ) -> Result<()> {
-        let table_id = Self::get_table_id(s_expr);
+        let (table_inedx, table_name) = self.get_table(s_expr);
         let metadata = self.metadata.read();
-        let index_plans = metadata.get_agg_indexes(table_id);
+        let index_plans = metadata.get_agg_indexes(&table_name);
         if index_plans.is_none() {
             // No enterprise license or no index.
             return Ok(());
@@ -195,13 +195,17 @@ impl Rule for RuleTryApplyAggIndex {
         }
 
         // The bind context is useless here.
-        let optimzier = HeuristicOptimizer::new(
+        let optimizer = HeuristicOptimizer::new(
             self.func_ctx.clone(),
             Box::new(BindContext::new()),
             self.metadata.clone(),
         );
 
-        if let Some(mut result) = agg_index::try_rewrite(&optimzier, s_expr, index_plans)? {
+        let base_columns = metadata.columns_by_table_index(table_inedx);
+
+        if let Some(mut result) =
+            agg_index::try_rewrite(&optimizer, &base_columns, s_expr, index_plans)?
+        {
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }
@@ -211,10 +215,17 @@ impl Rule for RuleTryApplyAggIndex {
 }
 
 impl RuleTryApplyAggIndex {
-    fn get_table_id(s_expr: &SExpr) -> IndexType {
+    fn get_table(&self, s_expr: &SExpr) -> (IndexType, String) {
         match s_expr.plan() {
-            RelOperator::Scan(scan) => scan.table_index,
-            _ => Self::get_table_id(s_expr.child(0).unwrap()),
+            RelOperator::Scan(scan) => {
+                let metadata = self.metadata.read();
+                let table = metadata.table(scan.table_index);
+                (
+                    scan.table_index,
+                    format!("{}.{}.{}", table.catalog(), table.database(), table.name()),
+                )
+            }
+            _ => self.get_table(s_expr.child(0).unwrap()),
         }
     }
 }

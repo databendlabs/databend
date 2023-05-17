@@ -57,7 +57,7 @@ pub struct Metadata {
     columns: Vec<ColumnEntry>,
     //// Columns that are lazy materialized.
     lazy_columns: HashSet<usize>,
-    agg_indexes: HashMap<IndexType, Vec<(u64, String, SExpr)>>,
+    agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
 }
 
 impl Metadata {
@@ -220,15 +220,15 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_agg_indexes(&mut self, table_id: IndexType, agg_indexes: Vec<(u64, String, SExpr)>) {
+    pub fn add_agg_indexes(&mut self, table: String, agg_indexes: Vec<(u64, String, SExpr)>) {
         self.agg_indexes
-            .entry(table_id)
+            .entry(table)
             .and_modify(|indexes| indexes.extend_from_slice(&agg_indexes))
             .or_insert(agg_indexes);
     }
 
-    pub fn get_agg_indexes(&self, table_id: IndexType) -> Option<&[(u64, String, SExpr)]> {
-        self.agg_indexes.get(&table_id).map(|v| v.as_slice())
+    pub fn get_agg_indexes(&self, table: &str) -> Option<&[(u64, String, SExpr)]> {
+        self.agg_indexes.get(table).map(|v| v.as_slice())
     }
 
     pub fn add_table(
@@ -239,15 +239,6 @@ impl Metadata {
         table_alias_name: Option<String>,
         source_of_view: bool,
     ) -> IndexType {
-        // Do not bind again if there is already the table.
-        if let Some(index) = self
-            .tables
-            .iter()
-            .position(|t| t.table.get_id() == table_meta.get_id())
-        {
-            return index;
-        }
-
         let table_name = table_meta.name().to_string();
 
         let table_index = self.tables.len();
