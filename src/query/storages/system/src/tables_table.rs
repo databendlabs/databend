@@ -25,7 +25,6 @@ use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
-use common_expression::Expr;
 use common_expression::FromOptData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -39,6 +38,7 @@ use common_meta_app::schema::TableMeta;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_filter;
 
 pub struct TablesTable<const WITH_HISTORY: bool> {
     table_info: TableInfo,
@@ -117,7 +117,7 @@ where TablesTable<T>: HistoryAware
                 let mut db_name = Vec::new();
                 if let Some(filter) = &push_downs.filter {
                     let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                    find_eq_db_database(&expr, &mut |col_name, scalar| {
+                    find_eq_filter(&expr, &mut |col_name, scalar| {
                         if col_name == "database" {
                             if let Scalar::String(s) = scalar {
                                 if let Ok(database) = String::from_utf8(s.clone()) {
@@ -308,30 +308,5 @@ where TablesTable<T>: HistoryAware
         };
 
         AsyncOneBlockSystemTable::create(TablesTable::<T> { table_info })
-    }
-}
-
-pub fn find_eq_db_database(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
-    match expr {
-        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
-        Expr::Cast { expr, .. } => find_eq_db_database(expr, visitor),
-        Expr::FunctionCall { function, args, .. } => {
-            if function.signature.name == "eq" {
-                match args.as_slice() {
-                    [Expr::ColumnRef { id, .. }, Expr::Constant { scalar, .. }]
-                    | [Expr::Constant { scalar, .. }, Expr::ColumnRef { id, .. }] => {
-                        visitor(id, scalar);
-                    }
-                    _ => {}
-                }
-            } else if function.signature.name == "and_filters" {
-                // only support this:
-                // 1. where xx and xx and xx
-                // 2. filter: Column `database`
-                for arg in args {
-                    find_eq_db_database(arg, visitor)
-                }
-            }
-        }
     }
 }
