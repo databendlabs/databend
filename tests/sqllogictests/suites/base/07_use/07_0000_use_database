@@ -27,3 +27,17 @@ use `rust-lang`
 statement ok
 DROP DATABASE if exists `rust-lang`
 
+statement ok
+create database Rust-lang
+
+statement ok
+use rust-lang
+
+statement error 1003
+use `rust-lang`
+
+statement ok
+use `Rust-lang`
+
+statement ok
+drop database rust-lang

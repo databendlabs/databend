@@ -415,7 +415,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         if database_name.is_empty() {
             return Ok(());
         }
-        let init_query = format!("USE `{}`;", database_name);
+        let init_query = format!("USE {};", database_name);
 
         let do_query = self.do_query(&init_query).await;
         match do_query {
