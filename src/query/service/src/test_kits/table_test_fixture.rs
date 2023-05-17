@@ -156,7 +156,7 @@ impl TestFixture {
         infer_table_schema(&Self::default_schema()).unwrap()
     }
 
-    pub fn default_crate_table_plan(&self) -> CreateTablePlan {
+    pub fn default_create_table_plan(&self) -> CreateTablePlan {
         CreateTablePlan {
             if_not_exists: false,
             tenant: self.default_tenant(),
@@ -172,7 +172,6 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_default_exprs: vec![],
             field_comments: vec![],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
@@ -196,7 +195,6 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_default_exprs: vec![],
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
@@ -204,7 +202,7 @@ impl TestFixture {
     }
 
     pub async fn create_default_table(&self) -> Result<()> {
-        let create_table_plan = self.default_crate_table_plan();
+        let create_table_plan = self.default_create_table_plan();
         let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
         interpreter.execute(self.ctx.clone()).await?;
         Ok(())

@@ -97,6 +97,7 @@ impl RulePushDownFilterScan {
                             index: base_column.column_index,
                             data_type: column.column.data_type.clone(),
                             visibility: column.column.visibility.clone(),
+                            virtual_computed_expr: None,
                         };
                         let bound_column_ref = BoundColumnRef {
                             span: column.span,
@@ -151,6 +152,7 @@ impl RulePushDownFilterScan {
                     .collect::<Result<Vec<WindowOrderBy>>>()?;
 
                 Ok(ScalarExpr::WindowFunction(WindowFunc {
+                    span: window.span,
                     display_name: window.display_name.clone(),
                     func,
                     partition_by,

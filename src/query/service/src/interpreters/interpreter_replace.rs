@@ -25,12 +25,12 @@ use common_sql::plans::Plan;
 use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
 
+use crate::interpreters::common::fill_missing_columns;
 use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -66,17 +66,13 @@ impl Interpreter for ReplaceInterpreter {
             .connect_input_source(self.ctx.clone(), &self.plan.source, self.plan.schema())
             .await?;
 
-        pipeline
-            .main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformResortAddOn::try_create(
-                    self.ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    self.plan.schema(),
-                    table.clone(),
-                )
-            })?;
+        let source_schema = self.plan.schema().clone();
+        fill_missing_columns(
+            self.ctx.clone(),
+            &source_schema,
+            table.clone(),
+            &mut pipeline.main_pipeline,
+        )?;
 
         let on_conflict_fields = plan.on_conflict_fields.clone();
         table

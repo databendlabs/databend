@@ -678,6 +678,21 @@ impl DecimalDataType {
         other.max_precision()
     }
 
+    // For div ops, we unify types to a super type
+    pub fn div_common_type(a: &Self, b: &Self) -> Result<Self> {
+        let l: u8 = (a.leading_digits() + b.scale()).max(b.leading_digits());
+        let scale = a.scale().max((a.scale() + 6).min(12));
+
+        let mut precision = l + scale;
+
+        // if the args both are Decimal128, we need to clamp the precision to 38
+        if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
+            precision = precision.min(MAX_DECIMAL128_PRECISION);
+        }
+        precision = precision.min(MAX_DECIMAL256_PRECISION);
+        Self::from_size(DecimalSize { precision, scale })
+    }
+
     pub fn binary_result_type(
         a: &Self,
         b: &Self,
@@ -689,14 +704,16 @@ impl DecimalDataType {
         let mut precision = a.max_result_precision(b);
 
         let multiply_precision = a.precision() + b.precision();
-        let divide_precision = a.precision() + b.scale();
 
         if is_multiply {
             scale = a.scale() + b.scale();
             precision = precision.min(multiply_precision);
         } else if is_divide {
-            scale = a.scale();
-            precision = precision.min(divide_precision);
+            // from snowflake: https://docs.snowflake.com/sql-reference/operators-arithmetic
+            let l = a.leading_digits() + b.scale();
+            scale = a.scale().max((a.scale() + 6).min(12));
+            // P = L + S
+            precision = l + scale;
         } else if is_plus_minus {
             scale = std::cmp::max(a.scale(), b.scale());
             // for addition/subtraction, we add 1 to the width to ensure we don't overflow
@@ -709,6 +726,7 @@ impl DecimalDataType {
             precision = precision.min(MAX_DECIMAL128_PRECISION);
         }
 
+        precision = precision.min(MAX_DECIMAL256_PRECISION);
         Self::from_size(DecimalSize { precision, scale })
     }
 }

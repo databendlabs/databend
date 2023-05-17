@@ -172,6 +172,7 @@ impl<'a> AggregateRewriter<'a> {
                 self.in_window = false;
 
                 Ok(WindowFunc {
+                    span: window.span,
                     display_name: window.display_name.clone(),
                     func,
                     partition_by,
@@ -215,6 +216,7 @@ impl<'a> AggregateRewriter<'a> {
                     index,
                     data_type: Box::new(arg.data_type()?),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 };
                 replaced_args.push(
                     BoundColumnRef {

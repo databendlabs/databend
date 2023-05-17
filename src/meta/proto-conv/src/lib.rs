@@ -65,6 +65,7 @@ mod database_from_to_protobuf_impl;
 mod datetime_from_to_protobuf_impl;
 mod file_format_from_to_protobuf_impl;
 mod from_to_protobuf;
+mod index_from_to_protobuf_impl;
 mod schema_from_to_protobuf_impl;
 mod share_from_to_protobuf_impl;
 mod stage_from_to_protobuf_impl;

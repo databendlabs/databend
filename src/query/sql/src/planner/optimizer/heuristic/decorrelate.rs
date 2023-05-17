@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_exception::ErrorCode;
@@ -45,7 +44,6 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
-use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::BaseTableColumn;
@@ -321,6 +319,7 @@ impl SubqueryRewriter {
                         index: output_column.index,
                         data_type: output_column.data_type,
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     },
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
@@ -394,14 +393,7 @@ impl SubqueryRewriter {
                 Scan {
                     table_index,
                     columns: self.derived_columns.values().cloned().collect(),
-                    push_down_predicates: None,
-                    limit: None,
-                    order_by: None,
-                    statistics: Statistics {
-                        statistics: None,
-                        col_stats: HashMap::new(),
-                    },
-                    prewhere: None,
+                    ..Default::default()
                 }
                 .into(),
             );
@@ -453,6 +445,7 @@ impl SubqueryRewriter {
                         index: *derived_column,
                         data_type: Box::from(column_entry.data_type()),
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     };
                     items.push(ScalarItem {
                         scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -577,6 +570,7 @@ impl SubqueryRewriter {
                             index: *derived_column,
                             data_type: Box::from(data_type.clone()),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         }
                     };
                     group_items.push(ScalarItem {
@@ -694,6 +688,7 @@ impl SubqueryRewriter {
                             index: *index,
                             data_type: Box::new(column_entry.data_type()),
                             visibility: column_binding.visibility,
+                            virtual_computed_expr: None,
                         },
                     }));
                 }
@@ -762,6 +757,7 @@ impl SubqueryRewriter {
                     index: *correlated_column,
                     data_type: Box::from(column_entry.data_type()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
@@ -776,6 +772,7 @@ impl SubqueryRewriter {
                     index: *derive_column,
                     data_type: Box::from(column_entry.data_type()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
             });
             left_conditions.push(left_column);

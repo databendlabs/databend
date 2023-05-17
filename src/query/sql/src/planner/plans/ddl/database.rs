@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::DatabaseMeta;
@@ -58,12 +55,6 @@ impl From<&CreateDatabasePlan> for CreateDatabaseReq {
     }
 }
 
-impl CreateDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 /// Drop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropDatabasePlan {
@@ -71,12 +62,6 @@ pub struct DropDatabasePlan {
     pub tenant: String,
     pub catalog: String,
     pub database: String,
-}
-
-impl DropDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 impl From<DropDatabasePlan> for DropDatabaseReq {
@@ -118,24 +103,12 @@ pub struct RenameDatabaseEntity {
     pub new_database: String,
 }
 
-impl RenameDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 /// Undrop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropDatabasePlan {
     pub tenant: String,
     pub catalog: String,
     pub database: String,
-}
-
-impl UndropDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 impl From<UndropDatabasePlan> for UndropDatabaseReq {
@@ -153,12 +126,6 @@ impl From<UndropDatabasePlan> for UndropDatabaseReq {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UseDatabasePlan {
     pub database: String,
-}
-
-impl UseDatabasePlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 /// Show.

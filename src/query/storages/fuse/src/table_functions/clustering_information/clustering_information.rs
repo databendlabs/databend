@@ -35,6 +35,7 @@ use jsonb::Value as JsonbValue;
 use serde_json::json;
 use serde_json::Value as JsonValue;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::SegmentsIO;
 use crate::sessions::TableContext;
@@ -96,7 +97,7 @@ impl<'a> ClusteringInformation<'a> {
                 self.table.schema(),
             );
             let segments = segments_io
-                .read_segments(segment_locations, true)
+                .read_segments::<Arc<SegmentInfo>>(segment_locations, true)
                 .await?
                 .into_iter()
                 .collect::<Result<Vec<_>>>()?;

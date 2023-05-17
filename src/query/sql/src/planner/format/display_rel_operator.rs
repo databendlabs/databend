@@ -82,7 +82,7 @@ impl Display for FormatContext {
     }
 }
 
-pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
+pub fn format_scalar(scalar: &ScalarExpr) -> String {
     match scalar {
         ScalarExpr::BoundColumnRef(column_ref) => {
             if let Some(table_name) = &column_ref.column.table_name {
@@ -106,7 +106,7 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
                 &func.func_name,
                 func.arguments
                     .iter()
-                    .map(|arg| { format_scalar(_metadata, arg) })
+                    .map(|arg| { format_scalar(arg) })
                     .collect::<Vec<String>>()
                     .join(", ")
             )
@@ -114,7 +114,7 @@ pub fn format_scalar(_metadata: &MetadataRef, scalar: &ScalarExpr) -> String {
         ScalarExpr::CastExpr(cast) => {
             format!(
                 "CAST({} AS {})",
-                format_scalar(_metadata, &cast.argument),
+                format_scalar(&cast.argument),
                 cast.target_type
             )
         }
@@ -222,12 +222,7 @@ fn scan_to_format_tree(
                     "filters: [{}]",
                     op.push_down_predicates.as_ref().map_or_else(
                         || "".to_string(),
-                        |predicates| {
-                            predicates
-                                .iter()
-                                .map(|pred| format_scalar(&metadata, pred))
-                                .join(", ")
-                        },
+                        |predicates| { predicates.iter().map(format_scalar).join(", ") },
                     ),
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
@@ -280,12 +275,7 @@ fn logical_get_to_format_tree(
                     "filters: [{}]",
                     op.push_down_predicates.as_ref().map_or_else(
                         || "".to_string(),
-                        |predicates| {
-                            predicates
-                                .iter()
-                                .map(|pred| format_scalar(&metadata, pred))
-                                .join(", ")
-                        },
+                        |predicates| { predicates.iter().map(format_scalar).join(", ") },
                     ),
                 ))),
                 FormatTreeNode::new(FormatContext::Text(format!(
@@ -337,7 +327,7 @@ pub fn logical_join_to_format_tree(
     let non_equi_conditions = op
         .non_equi_conditions
         .iter()
-        .map(|scalar| format_scalar(&metadata, scalar))
+        .map(format_scalar)
         .collect::<Vec<String>>();
 
     let equi_conditions = if !preds.is_empty() {
@@ -349,7 +339,7 @@ pub fn logical_join_to_format_tree(
                 arguments: vec![prev, next.clone()],
             })
         });
-        format_scalar(&metadata, &pred)
+        format_scalar(&pred)
     } else {
         "".to_string()
     };
@@ -385,19 +375,19 @@ fn join_to_format_tree(
     let build_keys = op
         .right_conditions
         .iter()
-        .map(|scalar| format_scalar(&metadata, scalar))
+        .map(format_scalar)
         .collect::<Vec<String>>()
         .join(", ");
     let probe_keys = op
         .left_conditions
         .iter()
-        .map(|scalar| format_scalar(&metadata, scalar))
+        .map(format_scalar)
         .collect::<Vec<String>>()
         .join(", ");
     let join_filters = op
         .non_equi_conditions
         .iter()
-        .map(|scalar| format_scalar(&metadata, scalar))
+        .map(format_scalar)
         .collect::<Vec<String>>()
         .join(", ");
 
@@ -429,13 +419,13 @@ fn aggregate_to_format_tree(
     let group_items = op
         .group_items
         .iter()
-        .map(|item| format_scalar(&metadata, &item.scalar))
+        .map(|item| format_scalar(&item.scalar))
         .collect::<Vec<String>>()
         .join(", ");
     let agg_funcs = op
         .aggregate_functions
         .iter()
-        .map(|item| format_scalar(&metadata, &item.scalar))
+        .map(|item| format_scalar(&item.scalar))
         .collect::<Vec<String>>()
         .join(", ");
     FormatTreeNode::with_children(
@@ -468,14 +458,14 @@ fn window_to_format_tree(
     let partition_by_items = op
         .partition_by
         .iter()
-        .map(|item| format_scalar(&metadata, &item.scalar))
+        .map(|item| format_scalar(&item.scalar))
         .collect::<Vec<String>>()
         .join(", ");
 
     let order_by_items = op
         .order_by
         .iter()
-        .map(|item| format_scalar(&metadata, &item.order_by_item.scalar))
+        .map(|item| format_scalar(&item.order_by_item.scalar))
         .collect::<Vec<_>>()
         .join(", ");
 
@@ -516,7 +506,7 @@ fn filter_to_format_tree(
     let scalars = op
         .predicates
         .iter()
-        .map(|scalar| format_scalar(&metadata, scalar))
+        .map(format_scalar)
         .collect::<Vec<String>>()
         .join(", ");
     FormatTreeNode::with_children(
@@ -544,7 +534,7 @@ fn eval_scalar_to_format_tree(
         .items
         .iter()
         .sorted_by(|a, b| a.index.cmp(&b.index))
-        .map(|item| format_scalar(&metadata, &item.scalar))
+        .map(|item| format_scalar(&item.scalar))
         .collect::<Vec<String>>()
         .join(", ");
     FormatTreeNode::with_children(
@@ -629,14 +619,14 @@ fn exchange_to_format_tree(
     match op {
         Exchange::Hash(keys) => FormatTreeNode::with_children(
             FormatContext::RelOp {
-                metadata: metadata.clone(),
+                metadata,
                 rel_operator: Box::new(op.clone().into()),
             },
             vec![
                 vec![FormatTreeNode::new(FormatContext::Text(format!(
                     "Exchange(Hash): keys: [{}]",
                     keys.iter()
-                        .map(|scalar| format_scalar(&metadata, scalar))
+                        .map(format_scalar)
                         .collect::<Vec<String>>()
                         .join(", ")
                 )))],

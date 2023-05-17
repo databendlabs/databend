@@ -15,7 +15,12 @@
 use common_exception::Result;
 use common_expression::serialize::read_decimal;
 use common_expression::serialize::read_decimal_with_size;
+use common_expression::type_check::common_super_type;
 use common_expression::types::decimal::DecimalSize;
+use common_expression::types::DataType;
+use common_expression::types::DecimalDataType;
+use common_expression::types::NumberDataType;
+use pretty_assertions::assert_eq;
 
 #[test]
 fn test_decimal_text_exact() -> Result<()> {
@@ -116,4 +121,26 @@ fn test_decimal_with_size_text() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[test]
+fn test_decimal_common_type() {
+    let cases = vec![
+        ((3, 3), DataType::Number(NumberDataType::UInt8), (6, 3)),
+        ((3, 2), DataType::Number(NumberDataType::UInt8), (5, 2)),
+        ((6, 3), DataType::Number(NumberDataType::UInt8), (6, 3)),
+    ];
+
+    for (a, b, c) in cases {
+        let l = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+            precision: a.0,
+            scale: a.1,
+        }));
+        let expected = DataType::Decimal(DecimalDataType::Decimal128(DecimalSize {
+            precision: c.0,
+            scale: c.1,
+        }));
+        let r = common_super_type(l, b, &[]);
+        assert_eq!(r, Some(expected));
+    }
 }

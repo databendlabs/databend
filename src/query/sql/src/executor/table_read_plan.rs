@@ -88,22 +88,22 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let source_info = self.get_data_source_info();
 
-        let schema = &source_info.schema();
+        let schema = Arc::new(source_info.schema().as_ref().remove_virtual_computed());
         let description = statistics.get_description(&source_info.desc());
         let mut output_schema = match (self.benefit_column_prune(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
-                Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
+                Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(&schema)),
                 _ => {
                     if let Some(output_columns) = &push_downs.output_columns {
-                        Arc::new(output_columns.project_schema(schema))
+                        Arc::new(output_columns.project_schema(&schema))
                     } else if let Some(projection) = &push_downs.projection {
-                        Arc::new(projection.project_schema(schema))
+                        Arc::new(projection.project_schema(&schema))
                     } else {
-                        schema.clone()
+                        schema
                     }
                 }
             },
-            _ => schema.clone(),
+            _ => schema,
         };
 
         if let Some(ref push_downs) = push_downs {

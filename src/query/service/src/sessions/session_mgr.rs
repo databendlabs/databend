@@ -125,7 +125,7 @@ impl SessionManager {
             _ => None,
         };
 
-        let session_ctx = SessionContext::try_create(settings)?;
+        let session_ctx = SessionContext::try_create(settings, typ.clone())?;
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();

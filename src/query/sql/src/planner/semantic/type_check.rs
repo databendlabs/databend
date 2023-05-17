@@ -34,6 +34,7 @@ use common_ast::ast::WindowFrameUnits;
 use common_ast::ast::WindowSpec;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
+use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -90,6 +91,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::MetadataRef;
+use crate::TypeCheck;
 use crate::Visibility;
 
 /// A helper for type checking.
@@ -119,6 +121,7 @@ pub struct TypeChecker<'a> {
     in_window_function: bool,
 
     allow_ambiguous: bool,
+    allow_pushdown: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -129,6 +132,7 @@ impl<'a> TypeChecker<'a> {
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
         allow_ambiguous: bool,
+        allow_pushdown: bool,
     ) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
         Self {
@@ -141,6 +145,7 @@ impl<'a> TypeChecker<'a> {
             in_aggregate_function: false,
             in_window_function: false,
             allow_ambiguous,
+            allow_pushdown,
         }
     }
 
@@ -192,15 +197,21 @@ impl<'a> TypeChecker<'a> {
                 )?;
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
-                        let data_type = *column.data_type.clone();
-                        (
-                            BoundColumnRef {
-                                span: *span,
-                                column,
-                            }
-                            .into(),
-                            data_type,
-                        )
+                        if let Some(virtual_computed_expr) = column.virtual_computed_expr {
+                            let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
+                            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
+                            return self.resolve(&expr).await;
+                        } else {
+                            let data_type = *column.data_type.clone();
+                            (
+                                BoundColumnRef {
+                                    span: *span,
+                                    column,
+                                }
+                                .into(),
+                                data_type,
+                            )
+                        }
                     }
                     NameResolutionResult::InternalColumn(column) => {
                         // add internal column binding into `BindContext`
@@ -464,7 +475,7 @@ impl<'a> TypeChecker<'a> {
             Expr::Cast {
                 expr, target_type, ..
             } => {
-                let box (scalar, _) = self.resolve(expr).await?;
+                let box (scalar, data_type) = self.resolve(expr).await?;
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: false,
@@ -473,15 +484,21 @@ impl<'a> TypeChecker<'a> {
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
+                // if the source type is nullable, cast target type should also be nullable.
+                let target_type = if data_type.is_nullable() {
+                    checked_expr.data_type().wrap_nullable()
+                } else {
+                    checked_expr.data_type().clone()
+                };
                 Box::new((
                     CastExpr {
                         span: expr.span(),
                         is_try: false,
                         argument: Box::new(scalar),
-                        target_type: Box::new(checked_expr.data_type().clone()),
+                        target_type: Box::new(target_type.clone()),
                     }
                     .into(),
-                    checked_expr.data_type().clone(),
+                    target_type,
                 ))
             }
 
@@ -924,6 +941,7 @@ impl<'a> TypeChecker<'a> {
             .await?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
+            span,
             display_name,
             func,
             partition_by: partitions,
@@ -1007,113 +1025,30 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_range_offset(
-        &mut self,
-        bound: &WindowFrameBound,
-    ) -> Result<Option<(ScalarExpr, DataType)>> {
+    async fn resolve_range_offset(&mut self, bound: &WindowFrameBound) -> Result<Option<Scalar>> {
         match bound {
             WindowFrameBound::Following(Some(box expr))
             | WindowFrameBound::Preceding(Some(box expr)) => {
-                let box (value, mut data_type) = self.resolve(expr).await?;
-                if matches!(
-                    data_type,
-                    DataType::Number(_)
-                        | DataType::Decimal(_)
-                        | DataType::Date
-                        | DataType::Timestamp
-                ) {
-                    // Make sure RANEG offset is number type.
-                    if data_type.is_decimal() {
-                        data_type = DataType::Number(NumberDataType::Float64)
-                    } else if data_type.is_date_or_date_time() {
-                        data_type = DataType::Number(NumberDataType::Int64)
-                    }
-                    return Ok(Some((value, data_type)));
+                let box (expr, _) = self.resolve(expr).await?;
+                let (expr, _) =
+                    ConstantFolder::fold(&expr.type_check()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                if let common_expression::Expr::Constant { scalar, .. } = expr {
+                    Ok(Some(scalar))
+                } else {
+                    Err(ErrorCode::SemanticError(
+                        "Only constant is allowed in RANGE offset".to_string(),
+                    )
+                    .set_span(expr.span()))
                 }
-                Err(ErrorCode::SemanticError(
-                    "Only numbers are allowed in RANGE offset".to_string(),
-                )
-                .set_span(expr.span()))
             }
             _ => Ok(None),
         }
     }
 
     #[async_backtrace::framed]
-    async fn resolve_window_range_frame(
-        &mut self,
-        span: Span,
-        order_by: &mut WindowOrderBy,
-        frame: WindowFrame,
-    ) -> Result<WindowFuncFrame> {
-        let order_by_type = order_by.expr.data_type()?;
-        let is_nullable = order_by_type.is_nullable();
-        let mut common_type = order_by_type.remove_nullable();
+    async fn resolve_window_range_frame(&mut self, frame: WindowFrame) -> Result<WindowFuncFrame> {
         let start_offset = self.resolve_range_offset(&frame.start_bound).await?;
         let end_offset = self.resolve_range_offset(&frame.end_bound).await?;
-        if let Some((_, data_type)) = &start_offset {
-            common_type = type_check::common_super_type(
-                common_type.clone(),
-                data_type.clone(),
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            )
-            .ok_or_else(|| {
-                ErrorCode::SemanticError("Cannot unify ORDER BY and RANGE offset types".to_string())
-            })?;
-        }
-        if let Some((_, data_type)) = &end_offset {
-            common_type = type_check::common_super_type(
-                common_type.clone(),
-                data_type.clone(),
-                &BUILTIN_FUNCTIONS.default_cast_rules,
-            )
-            .ok_or_else(|| {
-                ErrorCode::SemanticError("Cannot unify ORDER BY and RANGE offset types".to_string())
-            })?;
-        }
-
-        // Unify ORDER BY and RANGE offsets types.
-        let start_offset = start_offset
-            .map(|(mut expr, _)| {
-                expr = wrap_cast(&expr, &common_type);
-                let expr = expr.as_expr()?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let common_expression::Expr::Constant { scalar, .. } = expr {
-                    debug_assert!(matches!(scalar, Scalar::Number(_)));
-                    if scalar.is_positive() {
-                        return Ok(scalar);
-                    }
-                }
-                Err(ErrorCode::SemanticError(
-                    "Only positive numbers are allowed in RANGE offset".to_string(),
-                )
-                .set_span(span))
-            })
-            .transpose()?;
-        let end_offset = end_offset
-            .map(|(mut expr, _)| {
-                expr = wrap_cast(&expr, &common_type);
-                let expr = expr.as_expr()?.project_column_ref(|col| col.index);
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let common_expression::Expr::Constant { scalar, .. } = expr {
-                    debug_assert!(matches!(scalar, Scalar::Number(_)));
-                    if scalar.is_positive() {
-                        return Ok(scalar);
-                    }
-                }
-                Err(ErrorCode::SemanticError(
-                    "Only positive numbers are allowed in RANGE offset".to_string(),
-                )
-                .set_span(span))
-            })
-            .transpose()?;
-
-        if is_nullable {
-            common_type = common_type.wrap_nullable();
-        }
-        if order_by_type != common_type {
-            order_by.expr = wrap_cast(&order_by.expr, &common_type);
-        }
 
         let units = match frame.units {
             WindowFrameUnits::Rows => WindowFuncFrameUnits::Rows,
@@ -1160,8 +1095,7 @@ impl<'a> TypeChecker<'a> {
                         order_by.len()
                     )).set_span(span));
                 }
-                self.resolve_window_range_frame(span, &mut order_by[0], frame)
-                    .await
+                self.resolve_window_range_frame(frame).await
             } else {
                 self.resolve_window_rows_frame(frame)
             }
@@ -1912,6 +1846,9 @@ impl<'a> TypeChecker<'a> {
             }
             // Try convert get function of Variant data type into a virtual column
             ("get", args) => {
+                if !self.allow_pushdown {
+                    return None;
+                }
                 let mut paths = VecDeque::new();
                 let mut get_args = args.to_vec();
                 loop {
@@ -2309,27 +2246,29 @@ impl<'a> TypeChecker<'a> {
             if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
                 table_data_type = data_type;
             }
-            match table_data_type.remove_nullable() {
-                TableDataType::Tuple { .. } => {
-                    let box (inner_scalar, _inner_data_type) = self
-                        .resolve_tuple_map_access_pushdown(
-                            expr.span(),
-                            column.clone(),
-                            &mut table_data_type,
-                            &mut paths,
-                        )
-                        .await?;
-                    scalar = inner_scalar;
-                }
-                TableDataType::Variant => {
-                    if let Some(result) = self
-                        .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
-                        .await
-                    {
-                        return result;
+            if self.allow_pushdown {
+                match table_data_type.remove_nullable() {
+                    TableDataType::Tuple { .. } => {
+                        let box (inner_scalar, _inner_data_type) = self
+                            .resolve_tuple_map_access_pushdown(
+                                expr.span(),
+                                column.clone(),
+                                &mut table_data_type,
+                                &mut paths,
+                            )
+                            .await?;
+                        scalar = inner_scalar;
                     }
+                    TableDataType::Variant => {
+                        if let Some(result) = self
+                            .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
+                            .await
+                        {
+                            return result;
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
 
@@ -2588,6 +2527,7 @@ impl<'a> TypeChecker<'a> {
             index,
             data_type: Box::new(data_type.clone()),
             visibility: Visibility::InVisible,
+            virtual_computed_expr: None,
         };
         let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,

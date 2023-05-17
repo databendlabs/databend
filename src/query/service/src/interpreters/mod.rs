@@ -33,6 +33,8 @@ mod interpreter_factory;
 mod interpreter_file_format_create;
 mod interpreter_file_format_drop;
 mod interpreter_file_format_show;
+mod interpreter_index_create;
+mod interpreter_index_drop;
 mod interpreter_insert;
 mod interpreter_kill;
 mod interpreter_metrics;
@@ -95,6 +97,7 @@ mod interpreter_view_drop;
 
 pub use access::ManagementModeAccess;
 pub use common::append2table;
+pub use common::fill_missing_columns;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;

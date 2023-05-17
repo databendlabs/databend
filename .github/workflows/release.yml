@@ -532,6 +532,13 @@ jobs:
     with:
       tag: ${{ needs.create_release.outputs.version }}
 
+  bindings_python:
+    needs: create_release
+    uses: ./.github/workflows/bindings_python.yml
+    secrets: inherit
+    with:
+      tag: ${{ needs.create_release.outputs.version }}
+
   notify:
     runs-on: ubuntu-latest
     if: always()
