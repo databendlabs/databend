@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use arrow::datatypes::i256;
-use arrow_array::{ArrowNativeTypeOp, Decimal128Array, Decimal256Array};
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
 
 use crate::{
@@ -29,9 +28,10 @@ const NULL_VALUE: &str = "NULL";
 #[cfg(feature = "flight-sql")]
 use {
     arrow_array::{
-        Array as ArrowArray, BinaryArray, BooleanArray, Date32Array, Float32Array, Float64Array,
-        Int16Array, Int32Array, Int64Array, Int8Array, LargeBinaryArray, LargeStringArray,
-        StringArray, TimestampMicrosecondArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
+        Array as ArrowArray, ArrowNativeTypeOp, BinaryArray, BooleanArray, Date32Array,
+        Decimal128Array, Decimal256Array, Float32Array, Float64Array, Int16Array, Int32Array,
+        Int64Array, Int8Array, LargeBinaryArray, LargeStringArray, StringArray,
+        TimestampMicrosecondArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
     },
     arrow_schema::{DataType as ArrowDataType, Field as ArrowField, TimeUnit},
     std::sync::Arc,
@@ -111,6 +111,7 @@ impl TryFrom<(&DataType, &str)> for Value {
             DataType::Null => Ok(Self::Null),
             DataType::Boolean => Ok(Self::Boolean(v == "1")),
             DataType::String => Ok(Self::String(v.to_string())),
+
             DataType::Number(NumberDataType::Int8) => {
                 Ok(Self::Number(NumberValue::Int8(v.parse()?)))
             }
@@ -146,7 +147,6 @@ impl TryFrom<(&DataType, &str)> for Value {
                 let d = parse_decimal(v, *size)?;
                 Ok(Self::Number(d))
             }
-
             DataType::Decimal(DecimalDataType::Decimal256(size)) => {
                 let d = parse_decimal(v, *size)?;
                 Ok(Self::Number(d))
@@ -159,6 +159,7 @@ impl TryFrom<(&DataType, &str)> for Value {
             DataType::Date => Ok(Self::Date(
                 chrono::NaiveDate::parse_from_str(v, "%Y-%m-%d")?.num_days_from_ce() - DAYS_FROM_CE,
             )),
+
             DataType::Nullable(inner) => {
                 if v == NULL_VALUE {
                     Ok(Self::Null)
@@ -166,6 +167,7 @@ impl TryFrom<(&DataType, &str)> for Value {
                     Self::try_from((inner.as_ref(), v))
                 }
             }
+
             // TODO:(everpcpc) handle complex types
             _ => Ok(Self::String(v.to_string())),
         }
@@ -240,7 +242,6 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
                     None => Err(ConvertError::new("Decimal128", format!("{:?}", array)).into()),
                 }
             }
-
             ArrowDataType::Decimal256(p, s) => {
                 match array.as_any().downcast_ref::<Decimal256Array>() {
                     Some(array) => Ok(Value::Number(NumberValue::Decimal256(
@@ -272,6 +273,7 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
                 Some(array) => Ok(Value::String(array.value(seq).to_string())),
                 None => Err(ConvertError::new("large string", format!("{:?}", array)).into()),
             },
+
             // we only support timestamp in microsecond in databend
             ArrowDataType::Timestamp(unit, tz) => {
                 match array.as_any().downcast_ref::<TimestampMicrosecondArray>() {
@@ -311,8 +313,6 @@ impl TryFrom<(&ArrowField, &Arc<dyn ArrowArray>, usize)> for Value {
             //     Ok(Value::String(format!("{:?}", v)))
             // }
             // Struct(Vec<Field>),
-            // Decimal128(u8, i8),
-            // Decimal256(u8, i8),
             // Map(Box<Field>, bool),
             // RunEndEncoded(Box<Field>, Box<Field>),
             _ => Err(ConvertError::new("unsupported data type", format!("{:?}", array)).into()),
