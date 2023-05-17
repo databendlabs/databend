@@ -420,7 +420,16 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         let do_query = self.do_query(&init_query).await;
         match do_query {
             Ok((_, _)) => Ok(()),
-            Err(error_code) => Err(error_code),
+            Err(error_code) => {
+                if error_code.code() == ErrorCode::SyntaxException("").code()
+                    || error_code.code() == ErrorCode::UNKNOWN_DATABASE
+                {
+                    let init_query = format!("USE `{}`;", database_name);
+                    self.do_query(&init_query).await?;
+                    return Ok(());
+                }
+                Err(error_code)
+            }
         }
     }
 }
