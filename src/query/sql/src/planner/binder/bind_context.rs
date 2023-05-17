@@ -86,8 +86,6 @@ pub struct ColumnBinding {
     pub data_type: Box<DataType>,
 
     pub visibility: Visibility,
-
-    pub virtual_computed_expr: Option<String>,
 }
 
 impl PartialEq for ColumnBinding {
@@ -474,7 +472,6 @@ impl BindContext {
                 index: column_binding.index,
                 data_type: Box::new(column_binding.internal_column.data_type()),
                 visibility: Visibility::Visible,
-                virtual_computed_expr: None,
             });
 
             e.insert((table_index, column_binding.index));
