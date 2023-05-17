@@ -12,8 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::cmp::min;
+use std::cmp::Ordering;
+use std::sync::atomic;
+use std::sync::atomic::AtomicU64;
+use std::sync::Arc;
+
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::parquet::fallible_streaming_iterator::Convert;
+use common_ast::ast::BinaryOperator::Or;
+use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberColumnBuilder;
@@ -37,7 +45,7 @@ use common_expression::SortColumnDescription;
 use common_expression::Value;
 use common_expression::ValueRef;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_transforms::processors::transforms::sort_merge_by_data_type;
+use common_pipeline_transforms::processors::transforms::sort_merge;
 use common_pipeline_transforms::processors::transforms::Compactor;
 use common_sql::executor::IEJoin;
 use common_sql::executor::IEJoinCondition;
@@ -45,6 +53,8 @@ use common_sql::plans::JoinType;
 use parking_lot::RwLock;
 
 pub struct IEJoinState {
+    left_sorted_blocks: RwLock<Vec<DataBlock>>,
+    right_sorted_blocks: RwLock<Vec<DataBlock>>,
     // L1: sort by the first join key
     sorted_blocks: RwLock<Vec<DataBlock>>,
     // L2: sort `sorted_blocks` again, by the second join key
@@ -70,7 +80,12 @@ pub struct IEJoinState {
     join_type: JoinType,
     conditions: Vec<IEJoinCondition>,
     other_conditions: Vec<RemoteExpr>,
-    right_finished: RwLock<bool>,
+    merge_finished: RwLock<bool>,
+    finished_notify: Arc<Notify>,
+    left_sinker_count: AtomicU64,
+    right_sinker_count: AtomicU64,
+    op1: String,
+    op2: String,
 }
 
 impl IEJoinState {
@@ -81,8 +96,12 @@ impl IEJoinState {
             .as_expr(&BUILTIN_FUNCTIONS)
             .data_type()
             .is_nullable();
-        let mut l1_order = matches!(ie_join.conditions[0].operator.as_str(), "gt" | "gte");
-        let mut l2_order = !matches!(ie_join.conditions[1].operator.as_str(), "gt" | "gte");
+        let mut l1_order = !matches!(ie_join.conditions[0].operator.as_str(), "gt" | "gte");
+        let mut l2_order = matches!(ie_join.conditions[1].operator.as_str(), "gt" | "gte");
+        fields.push(DataField::new(
+            "_tuple_id",
+            DataType::Number(NumberDataType::UInt64),
+        ));
         for (idx, condition) in ie_join.conditions.iter().enumerate() {
             let field = DataField::new(
                 format!("_ie_join_key_{idx}").as_str(),
@@ -104,6 +123,8 @@ impl IEJoinState {
             1
         };
         IEJoinState {
+            left_sorted_blocks: Default::default(),
+            right_sorted_blocks: Default::default(),
             sorted_blocks: Default::default(),
             l2_sorted_blocks: Default::default(),
             l1_order,
@@ -114,24 +135,71 @@ impl IEJoinState {
             p_array: Default::default(),
             bit_array: Default::default(),
             data_schema: DataSchemaRefExt::create(fields),
-            sort_columns_descriptions: vec![SortColumnDescription {
-                offset: 1,
-                asc: l1_order,
-                nulls_first: false,
-                is_nullable,
-            }],
+            sort_columns_descriptions: vec![
+                SortColumnDescription {
+                    offset: 1,
+                    asc: l1_order,
+                    nulls_first: false,
+                    is_nullable,
+                },
+                SortColumnDescription {
+                    offset: 2,
+                    asc: l2_order,
+                    nulls_first: false,
+                    is_nullable,
+                },
+            ],
             left_table: RwLock::new(DataBlock::empty()),
             right_table: RwLock::new(DataBlock::empty()),
             join_type: ie_join.join_type.clone(),
             conditions: ie_join.conditions.clone(),
             other_conditions: ie_join.other_conditions.clone(),
-            right_finished: RwLock::new(false),
+            merge_finished: RwLock::new(false),
+            finished_notify: Arc::new(Default::default()),
+            left_sinker_count: Default::default(),
+            right_sinker_count: Default::default(),
+            op1: ie_join.conditions[0].operator.to_string(),
+            op2: ie_join.conditions[1].operator.to_string(),
         }
     }
 
-    pub fn set_right_finished(&self) {
-        let mut right_finished = self.right_finished.write();
-        *right_finished = true;
+    pub fn left_attach(&self) {
+        self.left_sinker_count
+            .fetch_add(1, atomic::Ordering::SeqCst);
+    }
+
+    pub fn left_detach(&self) -> Result<DataBlock> {
+        self.left_sinker_count
+            .fetch_sub(1, atomic::Ordering::SeqCst);
+        if self.left_sinker_count.load(atomic::Ordering::Relaxed) == 0
+            && self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0
+        {
+            let res = self.merge_sort();
+            dbg!(&res.as_ref().unwrap());
+            // Set merge finished
+            let mut merge_finished = self.merge_finished.write();
+            *merge_finished = true;
+            self.finished_notify.notify_waiters();
+            return res;
+        }
+        Ok(DataBlock::empty())
+    }
+
+    pub fn right_attach(&self) {
+        self.right_sinker_count
+            .fetch_add(1, atomic::Ordering::SeqCst);
+    }
+
+    pub fn right_detach(&self) {
+        self.right_sinker_count
+            .fetch_sub(1, atomic::Ordering::SeqCst);
+    }
+
+    pub(crate) async fn wait_merge_finish(&self) -> Result<()> {
+        if !*self.merge_finished.read() {
+            self.finished_notify.notified().await;
+        }
+        Ok(())
     }
 
     pub fn sink_right(&self, block: DataBlock) -> Result<()> {
@@ -140,7 +208,11 @@ impl IEJoinState {
         {
             let mut right_table = self.right_table.write();
             current_rows = right_table.num_rows();
-            *right_table = DataBlock::concat(&vec![right_table.clone(), block.clone()])?;
+            if right_table.is_empty() {
+                *right_table = block.clone();
+            } else {
+                *right_table = DataBlock::concat(&vec![right_table.clone(), block.clone()])?;
+            }
         }
         // Second, generate keys block by join keys
         // For example, if join keys are [t1.a + t1.b, t1.c], then key blocks will contain two columns: [t1.a + t1.b, t1.c]
@@ -177,7 +249,7 @@ impl IEJoinState {
         let sorted_keys_block =
             DataBlock::sort(&keys_block, &self.sort_columns_descriptions, None)?;
         {
-            let mut sorted_blocks = self.sorted_blocks.write();
+            let mut sorted_blocks = self.right_sorted_blocks.write();
             sorted_blocks.push(sorted_keys_block);
         }
         Ok(())
@@ -190,7 +262,11 @@ impl IEJoinState {
         {
             let mut left_table = self.left_table.write();
             current_rows = left_table.num_rows();
-            *left_table = DataBlock::concat(&vec![left_table.clone(), block.clone()])?;
+            if left_table.is_empty() {
+                *left_table = block.clone();
+            } else {
+                *left_table = DataBlock::concat(&vec![left_table.clone(), block.clone()])?;
+            }
         }
         // Second, generate keys block by join keys
         // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
@@ -205,7 +281,6 @@ impl IEJoinState {
             column_builder.push(ScalarRef::Number(NumberScalar::UInt64(idx as u64)));
         }
         columns.push(column_builder.build());
-        dbg!(&columns);
         for (idx, condition) in self.conditions.iter().enumerate() {
             let func_ctx = FunctionContext::default();
             let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
@@ -228,31 +303,31 @@ impl IEJoinState {
         let sorted_keys_block =
             DataBlock::sort(&keys_block, &self.sort_columns_descriptions, None)?;
         {
-            let mut sorted_blocks = self.sorted_blocks.write();
+            let mut sorted_blocks = self.left_sorted_blocks.write();
             sorted_blocks.push(sorted_keys_block);
         }
         Ok(())
     }
 
-    pub fn merge_sort(&self) -> Result<()> {
+    pub fn merge_sort(&self) -> Result<DataBlock> {
         // Merge sort `sorted_blocks`
         let mut sorted_blocks = self.sorted_blocks.write();
+        let left_sorted_blocks = self.left_sorted_blocks.read();
+        let right_sorted_blocks = self.right_sorted_blocks.read();
+        *sorted_blocks = left_sorted_blocks.clone();
+        sorted_blocks.extend(right_sorted_blocks.clone());
         // Create `SortMergeCompactor` then compact
         let data_schema = DataSchemaRefExt::create(
-            self.data_schema.fields().as_slice()[0..self.conditions.len()].to_vec(),
+            self.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
         );
-        *sorted_blocks = sort_merge_by_data_type(
-            self.conditions[0]
-                .left_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .data_type(),
+        *sorted_blocks = sort_merge(
             data_schema,
             sorted_blocks.len(),
             self.sort_columns_descriptions.clone(),
             &sorted_blocks,
         )?;
         // Add a column at the end of `sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
-        let mut count: usize = 1;
+        let mut count: usize = 0;
         for block in sorted_blocks.iter_mut() {
             // Generate column with value [1..block.size()]
             let mut column_builder =
@@ -266,6 +341,27 @@ impl IEJoinState {
             });
             count += block.num_rows();
         }
+        // Merge `sorted_blocks` to one block
+        let mut merged_blocks = DataBlock::concat(&sorted_blocks)?;
+        // extract the second column
+        let l1 = &merged_blocks.columns()[1].value.convert_to_full_column(
+            self.conditions[0]
+                .left_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .data_type(),
+            merged_blocks.num_rows(),
+        );
+        let l1_index_column = merged_blocks
+            .columns()
+            .first()
+            .unwrap()
+            .value
+            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), merged_blocks.num_rows());
+        dbg!(&l1_index_column);
+        let l1_marker_column = merged_blocks.columns()[3]
+            .value
+            .convert_to_full_column(&DataType::Boolean, merged_blocks.num_rows());
+        dbg!(&l1_marker_column);
         // Sort `sorted_blocks` by the second join key
         // todo(xudong): leverage multi threads and sort partial then merge
         let is_nullable = self.conditions[0]
@@ -273,103 +369,132 @@ impl IEJoinState {
             .as_expr(&BUILTIN_FUNCTIONS)
             .data_type()
             .is_nullable();
-        let mut l2_sorted_blocks = self.l2_sorted_blocks.write();
-        *l2_sorted_blocks = sort_merge_by_data_type(
-            self.conditions[0]
-                .right_expr
-                .as_expr(&BUILTIN_FUNCTIONS)
-                .data_type(),
-            self.data_schema.clone(),
-            sorted_blocks.len(),
-            vec![SortColumnDescription {
+        let desc = vec![
+            SortColumnDescription {
                 offset: 2,
                 asc: self.l2_order,
                 nulls_first: false,
                 is_nullable,
-            }],
-            &sorted_blocks,
-        )?;
+            },
+            SortColumnDescription {
+                offset: 1,
+                asc: self.l1_order,
+                nulls_first: false,
+                is_nullable,
+            },
+        ];
+        let mut l2_sorted_blocks = self.l2_sorted_blocks.write();
+        for block in sorted_blocks.iter() {
+            l2_sorted_blocks.push(DataBlock::sort(block, &desc, None)?);
+        }
+        dbg!(&l2_sorted_blocks);
+        dbg!(&merged_blocks);
+        merged_blocks = DataBlock::concat(&sort_merge(
+            self.data_schema.clone(),
+            l2_sorted_blocks.len(),
+            desc,
+            &l2_sorted_blocks,
+        )?)?;
+        dbg!(&merged_blocks);
         // The pos col of l2 sorted blocks is permutation array
         let mut p_array = self.p_array.write();
-        for block in l2_sorted_blocks.iter() {
-            let column = &block
-                .columns()
-                .last()
-                .unwrap()
-                .value
-                .try_downcast::<UInt64Type>()
-                .unwrap();
-            if let ValueRef::Column(col) = column.as_ref() {
-                for val in UInt64Type::iter_column(&col) {
-                    p_array.push(val)
-                }
-            }
-        }
-        // l2_sorted_blocks.clear();
-        // Initialize bit_array
-        let mut bit_array = self.bit_array.write();
-        bit_array.extend_constant(p_array.len(), false);
-        dbg!(&sorted_blocks);
-        dbg!(&l2_sorted_blocks);
-        Ok(())
-    }
-
-    pub fn finalize(&self) -> Result<DataBlock> {
-        let len = self.p_array.read().len();
-        let l1 = &self.sorted_blocks.read()[0];
-        let mut left_buffer = self.left_buffer.write();
-        left_buffer.clear();
-        let mut right_buffer = self.right_buffer.write();
-        right_buffer.clear();
-        let l1_index_column = l1
-            .columns()
-            .first()
-            .unwrap()
-            .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), len);
-        let l1_marker_column = l1
+        let column = &merged_blocks
             .columns()
             .last()
             .unwrap()
             .value
-            .convert_to_full_column(&DataType::Boolean, len);
+            .try_downcast::<UInt64Type>()
+            .unwrap();
+        if let ValueRef::Column(col) = column.as_ref() {
+            for val in UInt64Type::iter_column(&col) {
+                p_array.push(val)
+            }
+        }
+        let l2 = &merged_blocks.columns()[2].value.convert_to_full_column(
+            self.conditions[0]
+                .right_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .data_type(),
+            merged_blocks.num_rows(),
+        );
+        // l2_sorted_blocks.clear();
+        // Initialize bit_array
+        let mut bit_array = self.bit_array.write();
+        bit_array.extend_constant(p_array.len(), false);
+        dbg!(&p_array);
+        drop(sorted_blocks);
+        drop(p_array);
+        drop(bit_array);
+        self.finalize(l1, l2, l1_index_column, l1_marker_column)
+    }
+
+    pub fn finalize(&self, l1: &Column, l2: &Column, l1_index_column: Column, l1_marker_column: Column) -> Result<DataBlock> {
+        dbg!(l1);
+        dbg!(l2);
+        let len = self.p_array.read().len();
+        let mut left_buffer = self.left_buffer.write();
+        left_buffer.clear();
+        let mut right_buffer = self.right_buffer.write();
+        right_buffer.clear();
+        let mut off1: usize = 0;
+        let mut off2 = 0;
+        let mut bit_array = self.bit_array.write();
         for (idx, p) in self.p_array.read().iter().enumerate() {
-            let mut bit_array = self.bit_array.write();
-            bit_array.set(idx, true);
-            for j in (p + self.eq_off as u64)..len as u64 {
-                if bit_array.get(j as usize) {
-                    match (
-                        l1_marker_column.index(j as usize).unwrap(),
-                        l1_marker_column.index(*p as usize).unwrap(),
-                    ) {
+            while off2 < len {
+                let order = l2.index(idx).unwrap().cmp(&l2.index(off2).unwrap());
+                if !order_match(&self.op2, order) {
+                    break;
+                }
+                let p2 = self.p_array.read()[off2];
+                // bit_array.set(p2 as usize, true);
+                match (l1_marker_column.index(*p as usize).unwrap(), l1_marker_column.index(p2 as usize).unwrap()) {
+                    (ScalarRef::Boolean(false), ScalarRef::Boolean(false)) |
+                    (ScalarRef::Boolean(true), ScalarRef::Boolean(true))=> {},
+                    _ => bit_array.set(p2 as usize, true),
+                }
+
+                off2 += 1;
+            }
+            dbg!(&bit_array, idx, off2);
+            off1 = probe_l1(l1, *p as usize, &self.op1, off1);
+            if off1 >= len {
+                continue;
+            }
+            let mut j = off1;
+            loop {
+                if bit_array.get(j) && j < len {
+                    match (l1_marker_column.index(j as usize).unwrap(), l1_marker_column.index(*p as usize).unwrap()) {
                         (ScalarRef::Boolean(false), ScalarRef::Boolean(true)) => {
                             // right, left
-                            if let ScalarRef::Number(NumberScalar::UInt64(left)) =
-                                l1_index_column.index(*p as usize).unwrap()
-                            {
-                                left_buffer.push(left as usize);
-                            }
                             if let ScalarRef::Number(NumberScalar::UInt64(right)) =
                                 l1_index_column.index(j as usize).unwrap()
                             {
                                 right_buffer.push(right as usize);
                             }
+                            if let ScalarRef::Number(NumberScalar::UInt64(left)) =
+                                l1_index_column.index(*p as usize).unwrap()
+                            {
+                                left_buffer.push(left as usize);
+                            }
                         }
-                        (ScalarRef::Boolean(true), ScalarRef::Boolean(false)) => {
+                        (ScalarRef::Boolean(true), ScalarRef::Boolean(false))=> {
                             // left, right
-                            if let ScalarRef::Number(NumberScalar::UInt64(left)) =
-                                l1_index_column.index(j as usize).unwrap()
-                            {
-                                left_buffer.push(left as usize);
-                            }
                             if let ScalarRef::Number(NumberScalar::UInt64(right)) =
                                 l1_index_column.index(*p as usize).unwrap()
                             {
                                 right_buffer.push(right as usize);
                             }
-                        }
-                        _ => continue,
+                            if let ScalarRef::Number(NumberScalar::UInt64(left)) =
+                                l1_index_column.index(j as usize).unwrap()
+                            {
+                                left_buffer.push(left as usize);
+                            }
+                        },
+                        _ => {},
                     }
+                    j += 1;
+                } else {
+                    break;
                 }
             }
         }
@@ -391,7 +516,58 @@ impl IEJoinState {
         for col in right_result_block.columns() {
             left_result_block.add_column(col.clone());
         }
-        dbg!(&left_result_block);
         Ok(left_result_block)
     }
+}
+
+fn order_match(op: &str, order: Ordering) -> bool {
+    match op {
+        "gt" => order == Ordering::Greater,
+        "gte" => order == Ordering::Equal || order == Ordering::Greater,
+        "lt" => order == Ordering::Less,
+        "lte" => order == Ordering::Less || order == Ordering::Equal,
+        _ => unreachable!(),
+    }
+}
+
+fn probe_l1(l1: &Column, pos: usize, op1: &str, off1: usize) -> usize {
+    let mut step = 1;
+    let n = l1.len();
+    let mut hi = pos;
+    let mut lo = pos;
+    if matches!(op1, "gte" | "lte") {
+        if off1 < n && order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
+            lo = off1;
+            hi = off1;
+        }
+        lo -= min(step, lo);
+        step *= 2;
+        while lo > 0 && order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(lo).unwrap())) {
+            hi = lo;
+            lo -= min(step, lo);
+            step *= 2;
+        }
+    } else {
+        if off1 < n && !order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
+            lo = off1;
+            hi = off1;
+        }
+        hi += min(step, n - hi);
+        step *= 2;
+        while hi < n && !order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(hi).unwrap())) {
+            lo = hi;
+            hi += min(step, n - hi);
+            step *= 2;
+        }
+    }
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        if order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(mid).unwrap())) {
+            hi = mid;
+        } else {
+            lo = mid + 1;
+        }
+    }
+
+    lo
 }

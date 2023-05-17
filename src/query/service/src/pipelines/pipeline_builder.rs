@@ -243,7 +243,10 @@ impl PipelineBuilder {
         );
         let mut right_res = right_side_builder.finalize(&ie_join.right)?;
         right_res.main_pipeline.add_sink(|input| {
-            let transform = TransformIEJoinRight::create(input, state.clone());
+            let transform = Sinker::<TransformIEJoinRight>::create(
+                input.clone(),
+                TransformIEJoinRight::create(input.clone(), state.clone()),
+            );
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,

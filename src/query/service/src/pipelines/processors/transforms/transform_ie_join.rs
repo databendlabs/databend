@@ -22,6 +22,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
+use common_pipeline_sinks::Sink;
 
 use crate::pipelines::processors::transforms::IEJoinState;
 
@@ -29,10 +30,9 @@ enum IEJoinStep {
     // Parallel sink left/right table to IEJoinState
     // During this step, we can sort input data by the first join key
     Sink,
-    // Merge operation if sorted input data block's size is larger than 1
-    Merge,
     // Execute ie join algorithm
     Finalize,
+    Finished,
 }
 
 // The transform will execute the following operations:
@@ -62,6 +62,7 @@ impl TransformIEJoinLeft {
         output_port: Arc<OutputPort>,
         ie_join_state: Arc<IEJoinState>,
     ) -> Box<dyn Processor> {
+        ie_join_state.left_attach();
         Box::new(TransformIEJoinLeft {
             input_port,
             output_port,
@@ -90,8 +91,14 @@ impl Processor for TransformIEJoinLeft {
                     return Ok(Event::Sync);
                 }
                 if self.input_port.is_finished() {
-                    self.step = IEJoinStep::Merge;
-                    return Ok(Event::Sync);
+                    let data = self.state.left_detach()?;
+                    if !data.is_empty() {
+                        self.output_data_blocks.push_back(data);
+                    } else {
+                        return Ok(Event::Finished);
+                    }
+                    self.step = IEJoinStep::Finalize;
+                    return Ok(Event::Async);
                 }
                 match self.input_port.has_data() {
                     true => {
@@ -104,23 +111,19 @@ impl Processor for TransformIEJoinLeft {
                     }
                 }
             }
-            IEJoinStep::Merge => {
-                return Ok(Event::Sync);
-            }
-            IEJoinStep::Finalize => {
-                if self.output_port.is_finished() {
-                    self.input_port.finish();
-                    return Ok(Event::Finished);
-                }
-
+            IEJoinStep::Finished => {
+                dbg!("finish");
                 if !self.output_data_blocks.is_empty() {
                     let data = self.output_data_blocks.pop_front().unwrap();
                     self.output_port.push_data(Ok(data));
                     return Ok(Event::NeedConsume);
+                } else {
+                    self.input_port.finish();
+                    self.output_port.finish();
+                    return Ok(Event::Finished);
                 }
-
-                return Ok(Event::Sync);
             }
+            _ => unreachable!(),
         }
     }
 
@@ -131,13 +134,15 @@ impl Processor for TransformIEJoinLeft {
                     self.state.sink_left(data_block)?;
                 }
             }
-            IEJoinStep::Merge => {
-                self.state.merge_sort()?;
-                self.step = IEJoinStep::Finalize;
-            }
-            IEJoinStep::Finalize => {
-                self.output_data_blocks.push_back(self.state.finalize()?);
-            }
+            _ => unreachable!(),
+        }
+        Ok(())
+    }
+
+    async fn async_process(&mut self) -> Result<()> {
+        if let IEJoinStep::Finalize = self.step {
+            self.state.wait_merge_finish().await?;
+            self.step = IEJoinStep::Finished;
         }
         Ok(())
     }
@@ -151,52 +156,26 @@ pub struct TransformIEJoinRight {
 }
 
 impl TransformIEJoinRight {
-    pub fn create(
-        input_port: Arc<InputPort>,
-        ie_join_state: Arc<IEJoinState>,
-    ) -> Box<dyn Processor> {
-        Box::new(TransformIEJoinRight {
+    pub fn create(input_port: Arc<InputPort>, ie_join_state: Arc<IEJoinState>) -> Self {
+        ie_join_state.right_attach();
+        TransformIEJoinRight {
             input_port,
             input_data: None,
             state: ie_join_state,
             step: IEJoinStep::Sink,
-        })
+        }
     }
 }
 
-#[async_trait::async_trait]
-impl Processor for TransformIEJoinRight {
-    fn name(&self) -> String {
-        "TransformIEJoinRight".to_string()
-    }
+impl Sink for TransformIEJoinRight {
+    const NAME: &'static str = "TransformIEJoinRight";
 
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.input_data.is_some() {
-            return Ok(Event::Sync);
-        }
-        if self.input_port.is_finished() {
-            self.state.set_right_finished();
-        }
-        match self.input_port.has_data() {
-            true => {
-                self.input_data = Some(self.input_port.pull_data().unwrap()?);
-                Ok(Event::Sync)
-            }
-            false => {
-                self.input_port.set_need_data();
-                Ok(Event::NeedData)
-            }
-        }
-    }
-
-    fn process(&mut self) -> Result<()> {
-        if let Some(data_block) = self.input_data.take() {
-            self.state.sink_right(data_block)?;
-        }
+    fn on_finish(&mut self) -> Result<()> {
+        self.state.right_detach();
         Ok(())
+    }
+
+    fn consume(&mut self, data_block: DataBlock) -> Result<()> {
+        self.state.sink_right(data_block)
     }
 }
