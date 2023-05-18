@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::{collections::BTreeMap, fmt};
 
 use http::StatusCode;
+use percent_encoding::percent_decode_str;
 use reqwest::header::HeaderMap;
 use reqwest::multipart::{Form, Part};
 use reqwest::{Body, Client as HttpClient};
@@ -97,7 +98,9 @@ impl APIClient {
             client.host = host.to_string();
         }
         client.user = u.username().to_string();
-        client.password = u.password().map(|s| s.to_string());
+        client.password = u
+            .password()
+            .map(|s| percent_decode_str(s).decode_utf8_lossy().to_string());
         let database = match u.path().trim_start_matches('/') {
             "" => None,
             s => Some(s.to_string()),
@@ -482,6 +485,22 @@ mod test {
         assert_eq!(client.max_rows_per_page, Some(10000));
         assert_eq!(client.tenant, None);
         assert_eq!(client.warehouse, Some("wh".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_encoded_password() -> Result<()> {
+        let dsn = "databend://username:3a%40SC(nYE1k%3D%7B%7BR@localhost";
+        let client = APIClient::from_dsn(dsn)?;
+        assert_eq!(client.password, Some("3a@SC(nYE1k={{R".to_string()));
+        Ok(())
+    }
+
+    #[test]
+    fn parse_special_chars_password() -> Result<()> {
+        let dsn = "databend://username:3a@SC(nYE1k={{R@localhost:8000";
+        let client = APIClient::from_dsn(dsn)?;
+        assert_eq!(client.password, Some("3a@SC(nYE1k={{R".to_string()));
         Ok(())
     }
 

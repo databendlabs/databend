@@ -1,6 +1,6 @@
 [package]
 name = "databend-client"
-version = "0.1.15"
+version = "0.1.16"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Client for Rust"
@@ -19,6 +19,7 @@ native-tls = ["reqwest/native-tls"]
 [dependencies]
 bytes = "1.4.0"
 http = "0.2.9"
+percent-encoding = "2.2.0"
 reqwest = { version = "0.11.16", default-features = false, features = ["json", "multipart", "stream"] }
 serde = { version = "1.0.160", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.96", default-features = false, features = ["std"] }
