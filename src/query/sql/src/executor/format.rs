@@ -641,11 +641,64 @@ fn row_fetch_to_format_tree(
 }
 
 fn ie_join_to_format_tree(
-    _plan: &IEJoin,
-    _metadata: &MetadataRef,
-    _prof_span_set: &ProfSpanSetRef,
+    plan: &IEJoin,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::with_children("IEJoin".to_string(), vec![]))
+    let ie_join_conditions = plan
+        .conditions
+        .iter()
+        .map(|condition| {
+            let left = condition
+                .left_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .sql_display();
+            let right = condition
+                .right_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .sql_display();
+            format!("{left} {:?} {right}", condition.operator)
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let other_conditions = plan
+        .other_conditions
+        .iter()
+        .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut left_child = to_format_tree(&plan.left, metadata, prof_span_set)?;
+    let mut right_child = to_format_tree(&plan.right, metadata, prof_span_set)?;
+
+    left_child.payload = format!("{}(Left)", left_child.payload);
+    right_child.payload = format!("{}(Right)", right_child.payload);
+
+    let mut children = vec![
+        FormatTreeNode::new(format!("join type: {}", plan.join_type)),
+        FormatTreeNode::new(format!("ie_join conditions: [{ie_join_conditions}]")),
+        FormatTreeNode::new(format!("other conditions: [{other_conditions}]")),
+    ];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(left_child);
+    children.push(right_child);
+
+    Ok(FormatTreeNode::with_children(
+        "IEJoin".to_string(),
+        children,
+    ))
 }
 
 fn hash_join_to_format_tree(

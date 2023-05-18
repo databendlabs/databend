@@ -1685,7 +1685,8 @@ fn resolve_ie_scalar(
         ScalarExpr::FunctionCall(func) => {
             let mut left = None;
             let mut right = None;
-            for arg in func.arguments.iter() {
+            let mut opposite = false;
+            for (idx, arg) in func.arguments.iter().enumerate() {
                 let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
                 match join_predicate {
                     JoinPredicate::Left(_) => {
@@ -1697,6 +1698,9 @@ fn resolve_ie_scalar(
                         );
                     }
                     JoinPredicate::Right(_) => {
+                        if idx == 0 {
+                            opposite = true;
+                        }
                         right = Some(
                             arg.resolve_and_check(right_schema.as_ref())?
                                 .project_column_ref(|index| {
@@ -1707,10 +1711,21 @@ fn resolve_ie_scalar(
                     JoinPredicate::Both { .. } | JoinPredicate::Other(_) => unreachable!(),
                 }
             }
+            let op = if opposite {
+                match func.func_name.as_str() {
+                    "gt" => "lt",
+                    "lt" => "gt",
+                    "gte" => "lte",
+                    "lte" => "gte",
+                    _ => unreachable!(),
+                }
+            } else {
+                func.func_name.as_str()
+            };
             Ok(IEJoinCondition {
                 left_expr: left.unwrap().as_remote_expr(),
                 right_expr: right.unwrap().as_remote_expr(),
-                operator: func.func_name.to_string(),
+                operator: op.to_string(),
             })
         }
         _ => unreachable!(),

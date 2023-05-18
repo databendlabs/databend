@@ -100,7 +100,7 @@ impl IEJoinState {
         let mut l2_order = matches!(ie_join.conditions[1].operator.as_str(), "gt" | "gte");
         fields.push(DataField::new(
             "_tuple_id",
-            DataType::Number(NumberDataType::UInt64),
+            DataType::Number(NumberDataType::Int64),
         ));
         for (idx, condition) in ie_join.conditions.iter().enumerate() {
             let field = DataField::new(
@@ -148,6 +148,12 @@ impl IEJoinState {
                     nulls_first: false,
                     is_nullable,
                 },
+                SortColumnDescription {
+                    offset: 0,
+                    asc: false,
+                    nulls_first: false,
+                    is_nullable,
+                },
             ],
             left_table: RwLock::new(DataBlock::empty()),
             right_table: RwLock::new(DataBlock::empty()),
@@ -175,7 +181,6 @@ impl IEJoinState {
             && self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0
         {
             let res = self.merge_sort();
-            dbg!(&res.as_ref().unwrap());
             // Set merge finished
             let mut merge_finished = self.merge_finished.write();
             *merge_finished = true;
@@ -220,11 +225,13 @@ impl IEJoinState {
         let mut columns = vec![];
         // First, generate idx column from current_rows to current_rows + block.num_rows()
         let mut column_builder = ColumnBuilder::with_capacity(
-            &DataType::Number(NumberDataType::UInt64),
+            &DataType::Number(NumberDataType::Int64),
             block.num_rows(),
         );
         for idx in current_rows..(current_rows + block.num_rows()) {
-            column_builder.push(ScalarRef::Number(NumberScalar::UInt64(idx as u64)));
+            column_builder.push(ScalarRef::Number(NumberScalar::Int64(
+                (-(idx as i32 + 1)) as i64,
+            )));
         }
         columns.push(column_builder.build());
         for (idx, condition) in self.conditions.iter().enumerate() {
@@ -236,14 +243,7 @@ impl IEJoinState {
                 .convert_to_full_column(expr.data_type(), block.num_rows());
             columns.push(column);
         }
-        // Last, add a marker column to indicate the block is from right table
-        let mut marker_column = ColumnBuilder::repeat(
-            &ScalarRef::Boolean(false),
-            block.num_rows(),
-            &DataType::Boolean,
-        )
-        .build();
-        columns.push(marker_column);
+
         // Sort columns by the first column
         let keys_block = DataBlock::new_from_columns(columns);
         let sorted_keys_block =
@@ -274,11 +274,11 @@ impl IEJoinState {
         let mut columns = vec![];
         // First, generate idx column from current_rows to current_rows + block.num_rows()
         let mut column_builder = ColumnBuilder::with_capacity(
-            &DataType::Number(NumberDataType::UInt64),
+            &DataType::Number(NumberDataType::Int64),
             block.num_rows(),
         );
         for idx in current_rows..(current_rows + block.num_rows()) {
-            column_builder.push(ScalarRef::Number(NumberScalar::UInt64(idx as u64)));
+            column_builder.push(ScalarRef::Number(NumberScalar::Int64((idx + 1) as i64)));
         }
         columns.push(column_builder.build());
         for (idx, condition) in self.conditions.iter().enumerate() {
@@ -290,14 +290,6 @@ impl IEJoinState {
                 .convert_to_full_column(expr.data_type(), block.num_rows());
             columns.push(column);
         }
-        // Last, add a marker column to indicate the block is from right table
-        let mut marker_column = ColumnBuilder::repeat(
-            &ScalarRef::Boolean(true),
-            block.num_rows(),
-            &DataType::Boolean,
-        )
-        .build();
-        columns.push(marker_column);
         // Sort columns by the first column
         let keys_block = DataBlock::new_from_columns(columns);
         let sorted_keys_block =
@@ -356,12 +348,11 @@ impl IEJoinState {
             .first()
             .unwrap()
             .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), merged_blocks.num_rows());
-        dbg!(&l1_index_column);
-        let l1_marker_column = merged_blocks.columns()[3]
-            .value
-            .convert_to_full_column(&DataType::Boolean, merged_blocks.num_rows());
-        dbg!(&l1_marker_column);
+            .convert_to_full_column(
+                &DataType::Number(NumberDataType::UInt64),
+                merged_blocks.num_rows(),
+            );
+
         // Sort `sorted_blocks` by the second join key
         // todo(xudong): leverage multi threads and sort partial then merge
         let is_nullable = self.conditions[0]
@@ -382,20 +373,23 @@ impl IEJoinState {
                 nulls_first: false,
                 is_nullable,
             },
+            SortColumnDescription {
+                offset: 0,
+                asc: false,
+                nulls_first: false,
+                is_nullable,
+            },
         ];
         let mut l2_sorted_blocks = self.l2_sorted_blocks.write();
         for block in sorted_blocks.iter() {
             l2_sorted_blocks.push(DataBlock::sort(block, &desc, None)?);
         }
-        dbg!(&l2_sorted_blocks);
-        dbg!(&merged_blocks);
         merged_blocks = DataBlock::concat(&sort_merge(
             self.data_schema.clone(),
             l2_sorted_blocks.len(),
             desc,
             &l2_sorted_blocks,
         )?)?;
-        dbg!(&merged_blocks);
         // The pos col of l2 sorted blocks is permutation array
         let mut p_array = self.p_array.write();
         let column = &merged_blocks
@@ -421,16 +415,13 @@ impl IEJoinState {
         // Initialize bit_array
         let mut bit_array = self.bit_array.write();
         bit_array.extend_constant(p_array.len(), false);
-        dbg!(&p_array);
         drop(sorted_blocks);
         drop(p_array);
         drop(bit_array);
-        self.finalize(l1, l2, l1_index_column, l1_marker_column)
+        self.finalize(l1, l2, l1_index_column)
     }
 
-    pub fn finalize(&self, l1: &Column, l2: &Column, l1_index_column: Column, l1_marker_column: Column) -> Result<DataBlock> {
-        dbg!(l1);
-        dbg!(l2);
+    pub fn finalize(&self, l1: &Column, l2: &Column, l1_index_column: Column) -> Result<DataBlock> {
         let len = self.p_array.read().len();
         let mut left_buffer = self.left_buffer.write();
         left_buffer.clear();
@@ -440,22 +431,28 @@ impl IEJoinState {
         let mut off2 = 0;
         let mut bit_array = self.bit_array.write();
         for (idx, p) in self.p_array.read().iter().enumerate() {
+            if let ScalarRef::Number(NumberScalar::Int64(val)) =
+                l1_index_column.index(*p as usize).unwrap()
+            {
+                if val < 0 {
+                    continue;
+                }
+            }
             while off2 < len {
                 let order = l2.index(idx).unwrap().cmp(&l2.index(off2).unwrap());
                 if !order_match(&self.op2, order) {
                     break;
                 }
                 let p2 = self.p_array.read()[off2];
-                // bit_array.set(p2 as usize, true);
-                match (l1_marker_column.index(*p as usize).unwrap(), l1_marker_column.index(p2 as usize).unwrap()) {
-                    (ScalarRef::Boolean(false), ScalarRef::Boolean(false)) |
-                    (ScalarRef::Boolean(true), ScalarRef::Boolean(true))=> {},
-                    _ => bit_array.set(p2 as usize, true),
+                if let ScalarRef::Number(NumberScalar::Int64(val)) =
+                    l1_index_column.index(p2 as usize).unwrap()
+                {
+                    if val < 0 {
+                        bit_array.set(p2 as usize, true);
+                    }
                 }
-
                 off2 += 1;
             }
-            dbg!(&bit_array, idx, off2);
             off1 = probe_l1(l1, *p as usize, &self.op1, off1);
             if off1 >= len {
                 continue;
@@ -463,35 +460,18 @@ impl IEJoinState {
             let mut j = off1;
             loop {
                 if bit_array.get(j) && j < len {
-                    match (l1_marker_column.index(j as usize).unwrap(), l1_marker_column.index(*p as usize).unwrap()) {
-                        (ScalarRef::Boolean(false), ScalarRef::Boolean(true)) => {
-                            // right, left
-                            if let ScalarRef::Number(NumberScalar::UInt64(right)) =
-                                l1_index_column.index(j as usize).unwrap()
-                            {
-                                right_buffer.push(right as usize);
-                            }
-                            if let ScalarRef::Number(NumberScalar::UInt64(left)) =
-                                l1_index_column.index(*p as usize).unwrap()
-                            {
-                                left_buffer.push(left as usize);
-                            }
-                        }
-                        (ScalarRef::Boolean(true), ScalarRef::Boolean(false))=> {
-                            // left, right
-                            if let ScalarRef::Number(NumberScalar::UInt64(right)) =
-                                l1_index_column.index(*p as usize).unwrap()
-                            {
-                                right_buffer.push(right as usize);
-                            }
-                            if let ScalarRef::Number(NumberScalar::UInt64(left)) =
-                                l1_index_column.index(j as usize).unwrap()
-                            {
-                                left_buffer.push(left as usize);
-                            }
-                        },
-                        _ => {},
+                    // right, left
+                    if let ScalarRef::Number(NumberScalar::Int64(right)) =
+                        l1_index_column.index(j as usize).unwrap()
+                    {
+                        right_buffer.push((-right - 1) as usize);
                     }
+                    if let ScalarRef::Number(NumberScalar::Int64(left)) =
+                        l1_index_column.index(*p as usize).unwrap()
+                    {
+                        left_buffer.push((left - 1) as usize);
+                    }
+
                     j += 1;
                 } else {
                     break;
