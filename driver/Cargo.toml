@@ -24,6 +24,7 @@ chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
 databend-client = { version = "0.1.16", path = "../core" }
 dyn-clone = "1.0.11"
 http = "0.2.9"
+percent-encoding = "2.2.0"
 serde = { version = "1.0.160", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0.96", default-features = false, features = ["std"] }
 tokio = { version = "1.27.0", features = ["macros"] }

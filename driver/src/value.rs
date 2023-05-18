@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrow::datatypes::i256;
+use arrow::datatypes::{i256, ArrowNativeTypeOp};
 use chrono::{Datelike, NaiveDate, NaiveDateTime};
 
 use crate::{
@@ -28,10 +28,10 @@ const NULL_VALUE: &str = "NULL";
 #[cfg(feature = "flight-sql")]
 use {
     arrow_array::{
-        Array as ArrowArray, ArrowNativeTypeOp, BinaryArray, BooleanArray, Date32Array,
-        Decimal128Array, Decimal256Array, Float32Array, Float64Array, Int16Array, Int32Array,
-        Int64Array, Int8Array, LargeBinaryArray, LargeStringArray, StringArray,
-        TimestampMicrosecondArray, UInt16Array, UInt32Array, UInt64Array, UInt8Array,
+        Array as ArrowArray, BinaryArray, BooleanArray, Date32Array, Decimal128Array,
+        Decimal256Array, Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array,
+        LargeBinaryArray, LargeStringArray, StringArray, TimestampMicrosecondArray, UInt16Array,
+        UInt32Array, UInt64Array, UInt8Array,
     },
     arrow_schema::{DataType as ArrowDataType, Field as ArrowField, TimeUnit},
     std::sync::Arc,

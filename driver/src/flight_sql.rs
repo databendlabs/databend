@@ -23,6 +23,7 @@ use arrow_flight::utils::flight_data_to_arrow_batch;
 use arrow_flight::{sql::client::FlightSqlServiceClient, FlightData};
 use arrow_schema::SchemaRef as ArrowSchemaRef;
 use async_trait::async_trait;
+use percent_encoding::percent_decode_str;
 use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
@@ -247,7 +248,9 @@ impl Args {
             None => format!("{}://{}:{}", scheme, host, port),
         };
         args.user = u.username().to_string();
-        args.password = u.password().unwrap_or_default().to_string();
+        args.password = percent_decode_str(u.password().unwrap_or_default())
+            .decode_utf8_lossy()
+            .to_string();
         Ok(args)
     }
 }
