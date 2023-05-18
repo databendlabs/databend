@@ -141,12 +141,20 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
 
         let mut blocks = Vec::with_capacity(needed_pages.len());
 
+        let mut offset = 0;
         for page in needed_pages {
+            // Comments in the std lib:
+            // Note that all preceding elements, as well as the returned element, will be
+            // consumed from the iterator. That means that the preceding elements will be
+            // discarded, and also that calling `nth(0)` multiple times on the same iterator
+            // will return different elements.
+            let pos = *page - offset;
             let mut arrays = Vec::with_capacity(array_iters.len());
             for (index, array_iter) in array_iters.iter_mut() {
-                let array = array_iter.nth(*page as usize).unwrap()?;
+                let array = array_iter.nth(pos as usize).unwrap()?;
                 arrays.push((*index, array));
             }
+            offset = *page + 1;
             let block = self.reader.build_block(arrays, None)?;
             blocks.push(block);
         }
