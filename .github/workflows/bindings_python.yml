@@ -111,9 +111,10 @@ jobs:
 
       - name: Run tests
         working-directory: src/bendpy
+        uses: PyO3/maturin-action@v1
         run: |
-          python -m pip install -e .[test]
-          pytest test/*
+          pip install -e .[test]
+          pytest -v tests/*
 
       - name: Upload artifact
         if: github.event_name == 'pull_request'
