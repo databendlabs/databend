@@ -45,9 +45,9 @@ jobs:
         run: |
           python -m pip install -e .[test]
       - name: Run pytests
-        working-directory: "bindings/python"
+        working-directory: "src/bendpy"
         run: |
-          pytest -v tests/*
+          python -m pytest -v tests/*
   build_linux:
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
