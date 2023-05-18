@@ -1610,6 +1610,7 @@ impl PhysicalPlanBuilder {
         if !join.left_conditions.is_empty()
             || join.non_equi_conditions.len() < 2
             || join.join_type != JoinType::Inner
+            || self.ctx.get_cluster().is_empty()
         {
             // Use hash join if exists equi conditions
             return Ok(None);
