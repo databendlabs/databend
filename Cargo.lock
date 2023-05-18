@@ -882,6 +882,7 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-expression",
+ "common-license",
  "common-meta-app",
  "common-meta-embedded",
  "ctor",

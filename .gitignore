@@ -32,6 +32,8 @@ _local_fs/
 stateless_test_data/
 **/_logs*/
 _data/
+_databend_data/
+_databend_meta/
 _cache/
 _tmp/
 tls/certs/
