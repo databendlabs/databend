@@ -28,6 +28,7 @@ use storages_common_index::RangeIndex;
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
 use crate::operations::fuse_source::build_fuse_source_pipeline;
+use crate::pruning::SegmentLocation;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -79,11 +80,16 @@ impl FuseTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let snapshot_loc = plan.statistics.snapshot.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
         for part in &plan.parts.partitions {
             if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
-                lazy_init_segments.push(lazy_part_info.segment_location.clone());
+                lazy_init_segments.push(SegmentLocation {
+                    segment_idx: lazy_part_info.segment_index,
+                    location: lazy_part_info.segment_location.clone(),
+                    snapshot_loc: snapshot_loc.clone(),
+                });
             }
         }
 
@@ -93,7 +99,6 @@ impl FuseTable {
             let push_downs = plan.push_downs.clone();
             let query_ctx = ctx.clone();
             let dal = self.operator.clone();
-            let plan = plan.clone();
 
             // TODO: need refactor
             pipeline.set_on_init(move || {
@@ -102,19 +107,9 @@ impl FuseTable {
                 let ctx = query_ctx.clone();
                 let dal = dal.clone();
                 let push_downs = push_downs.clone();
-                let lazy_init_segments = lazy_init_segments.clone();
+                // let lazy_init_segments = lazy_init_segments.clone();
 
                 let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    // if query from distribute query node, need to init segment id at first
-                    let segment_id_map = if plan.query_internal_columns {
-                        table
-                            .read_table_snapshot()
-                            .await?
-                            .map(|s| s.build_segment_id_map())
-                    } else {
-                        None
-                    };
-
                     let (_statistics, partitions) = table
                         .prune_snapshot_blocks(
                             ctx,
@@ -123,7 +118,6 @@ impl FuseTable {
                             table_info,
                             lazy_init_segments,
                             0,
-                            segment_id_map,
                         )
                         .await?;
 

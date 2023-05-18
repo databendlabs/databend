@@ -45,17 +45,16 @@ impl BlockPruner {
     #[async_backtrace::framed]
     pub async fn pruning(
         &self,
-        segment_idx: usize,
         segment_location: SegmentLocation,
         segment_info: &CompactSegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
-            self.block_pruning(bloom_pruner, segment_idx, segment_location, segment_info)
+            self.block_pruning(bloom_pruner, segment_location, segment_info)
                 .await
         } else {
             // if no available filter pruners, just prune the blocks by
             // using zone map index, and do not spawn async tasks
-            self.block_pruning_sync(segment_idx, segment_location, segment_info)
+            self.block_pruning_sync(segment_location, segment_info)
         }
     }
 
@@ -64,7 +63,6 @@ impl BlockPruner {
     async fn block_pruning(
         &self,
         bloom_pruner: &Arc<dyn BloomPruner + Send + Sync>,
-        segment_idx: usize,
         segment_location: SegmentLocation,
         segment_info: &CompactSegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
@@ -200,13 +198,12 @@ impl BlockPruner {
 
                 result.push((
                     BlockMetaIndex {
-                        segment_idx,
+                        segment_idx: segment_location.segment_idx,
                         block_idx,
                         range,
                         page_size: block.page_size() as usize,
                         block_id: block_id_in_segment(block_num, block_idx),
                         block_location: block_location.clone(),
-                        segment_id: segment_location.segment_id,
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
                     },
@@ -225,7 +222,6 @@ impl BlockPruner {
 
     fn block_pruning_sync(
         &self,
-        segment_idx: usize,
         segment_location: SegmentLocation,
         segment_info: &CompactSegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
@@ -280,13 +276,12 @@ impl BlockPruner {
                 if keep {
                     result.push((
                         BlockMetaIndex {
-                            segment_idx,
+                            segment_idx: segment_location.segment_idx,
                             block_idx,
                             range,
                             page_size: block_meta.page_size() as usize,
                             block_id: block_id_in_segment(block_num, block_idx),
                             block_location: block_meta.as_ref().location.0.clone(),
-                            segment_id: segment_location.segment_id,
                             segment_location: segment_location.location.0.clone(),
                             snapshot_location: segment_location.snapshot_loc.clone(),
                         },

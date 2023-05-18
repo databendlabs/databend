@@ -162,22 +162,21 @@ where F: RowsFetcher + Send + Sync + 'static
             .read_table_snapshot()
             .await?
             .ok_or_else(|| ErrorCode::Internal("No snapshot found"))?;
-        let segment_id_map = snapshot.build_segment_id_map();
         let compact_segment_reader =
             MetaReaders::segment_info_reader(self.table.operator.clone(), table_schema.clone());
         let mut segments: Vec<(u64, Arc<SegmentInfo>)> =
             Vec::with_capacity(snapshot.segments.len());
-        for ((location, ver), seg_id) in segment_id_map.into_iter() {
+        for (idx, (location, ver)) in snapshot.segments.iter().enumerate() {
             let compact_segment_info = compact_segment_reader
                 .read(&LoadParams {
-                    location,
+                    ver: *ver,
+                    location: location.clone(),
                     len_hint: None,
-                    ver,
                     put_cache: false,
                 })
                 .await?;
             segments.push((
-                seg_id as u64,
+                idx as u64,
                 Arc::new(compact_segment_info.as_ref().try_into()?),
             ));
         }

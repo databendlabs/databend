@@ -49,6 +49,7 @@ use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
+use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::FuseTable;
 
@@ -305,7 +306,9 @@ impl FuseTable {
             self.table_info.schema(),
             &push_down,
         )?;
-        let block_metas = pruner.pruning(segment_locations, None, None).await?;
+
+        let segment_locations = create_segment_location_vector(segment_locations, None);
+        let block_metas = pruner.pruning(segment_locations).await?;
 
         let range_block_metas = block_metas
             .clone()
