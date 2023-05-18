@@ -21,6 +21,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
 
+use super::FunctionCall;
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
@@ -68,6 +69,7 @@ pub struct Scan {
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
+    pub similarity: Option<Box<FunctionCall>>,
 
     pub statistics: Statistics,
 }
@@ -93,6 +95,7 @@ impl Scan {
                 col_stats,
             },
             prewhere,
+            similarity: self.similarity.clone(),
         }
     }
 

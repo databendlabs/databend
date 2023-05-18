@@ -15,6 +15,7 @@
 use std::fmt::Debug;
 
 use common_expression::types::DataType;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
@@ -66,6 +67,18 @@ pub struct PrewhereInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct VectorSimilarityInfo {
+    pub metric: VectorSimilarityMetric,
+    pub target: Scalar,
+    pub column: FieldIndex,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum VectorSimilarityMetric {
+    Cosine,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
@@ -91,6 +104,8 @@ pub struct PushDownInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
     /// If lazy materialization is enabled in this query.
     pub lazy_materialization: bool,
+    /// Optional vector similarity info
+    pub similarity: Option<VectorSimilarityInfo>,
 }
 
 /// TopK is a wrapper for topk push down items.

@@ -230,6 +230,13 @@ impl SExpr {
 
         add_internal_column_index_into_child(expr, column_index, table_index)
     }
+    pub fn walk_down(&self, lvl: usize) -> &Self {
+        let mut cur = self;
+        for _ in 0..lvl {
+            cur = &cur.children[0];
+        }
+        cur
+    }
 }
 
 fn find_subquery(rel_op: &RelOperator) -> bool {

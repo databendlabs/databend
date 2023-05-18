@@ -13,12 +13,17 @@
 // limitations under the License.
 
 use common_exception::ErrorCode;
+use common_expression::Scalar;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::EvalScalar;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
+use crate::plans::Scan;
+use crate::plans::Sort;
+use crate::ScalarExpr;
 
 pub struct RuleUseVectorIndex {
     id: RuleID,
@@ -29,24 +34,24 @@ impl RuleUseVectorIndex {
     pub fn new() -> Self {
         Self {
             id: RuleID::UseVectorIndex,
-            // Limit
-            //   \
-            //   Sort(cosine_distance)
+            //   Sort
             //     \
             //     EvalScalar
+            //       \
+            //        Scan
             patterns: vec![SExpr::create_unary(
                 PatternPlan {
-                    plan_type: RelOp::Limit,
+                    plan_type: RelOp::Sort,
                 }
                 .into(),
                 SExpr::create_unary(
                     PatternPlan {
-                        plan_type: RelOp::Sort,
+                        plan_type: RelOp::EvalScalar,
                     }
                     .into(),
                     SExpr::create_leaf(
                         PatternPlan {
-                            plan_type: RelOp::EvalScalar,
+                            plan_type: RelOp::Scan,
                         }
                         .into(),
                     ),
@@ -66,26 +71,30 @@ impl Rule for RuleUseVectorIndex {
         s_expr: &crate::optimizer::SExpr,
         state: &mut crate::optimizer::rule::TransformResult,
     ) -> common_exception::Result<()> {
-        let sort_expr = s_expr.children.get(0).unwrap();
-        let sort_operator = s_expr.plan.as_sort().unwrap();
-        let eval_scalar_operator = sort_expr
-            .children
-            .get(0)
-            .unwrap()
-            .plan
-            .as_eval_scalar()
-            .unwrap();
-        if sort_operator.items.len() != 1 || sort_operator.items[0].asc != true {
+        let sort = s_expr.plan().as_sort().unwrap();
+        let eval_scalar = s_expr.walk_down(1).plan().as_eval_scalar().unwrap();
+
+        if sort.limit.is_none() || sort.items.len() != 1 || !sort.items[0].asc {
             state.add_result(s_expr.clone());
             return Ok(());
         }
-        let sort_by = eval_scalar_operator
+
+        let sort_by_idx = eval_scalar
             .items
-            .get(sort_operator.items[0].index)
+            .iter()
+            .position(|item| item.index == sort.items[0].index)
             .unwrap();
-        match &sort_by.scalar {
-            crate::ScalarExpr::FunctionCall(func) if func.func_name == "cosine_distance" => {
-                
+        let sort_by_item = &eval_scalar.items[sort_by_idx];
+        match &sort_by_item.scalar {
+            ScalarExpr::FunctionCall(func) if func.func_name == "cosine_distance" => {
+                let mut result = s_expr.clone();
+                let mut new_scan = s_expr.walk_down(2).clone();
+                new_scan.plan.as_scan_mut().unwrap().order_by = Some(sort.items.clone());
+                new_scan.plan.as_scan_mut().unwrap().limit = Some(sort.limit.unwrap());
+                new_scan.plan.as_scan_mut().unwrap().similarity = Some(Box::new(func.clone()));
+                result.walk_down(1).replace_children(vec![new_scan]);
+                result.set_applied_rule(&self.id);
+                state.add_result(result);
             }
             _ => state.add_result(s_expr.clone()),
         }

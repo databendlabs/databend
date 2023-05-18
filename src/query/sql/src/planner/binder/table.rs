@@ -719,6 +719,7 @@ impl Binder {
                         col_stats,
                     },
                     prewhere: None,
+                    similarity: None,
                 }
                 .into(),
             ),

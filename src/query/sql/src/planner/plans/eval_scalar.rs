@@ -36,8 +36,8 @@ pub struct EvalScalar {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ScalarItem {
-    pub scalar: ScalarExpr,
     pub index: IndexType,
+    pub scalar: ScalarExpr,
 }
 
 impl EvalScalar {
