@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::assert_eq;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::io::Write;
 use std::sync::Arc;
 
+use common_catalog::plan::compute_row_id_prefix;
+use common_catalog::plan::split_prefix;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
@@ -170,5 +173,17 @@ fn test_partition_reshuffle() {
 
         let e2_parts = shuffle.get(&executors_2[1]).unwrap();
         writeln!(file, "{:?}", e2_parts.len()).unwrap();
+    }
+}
+
+#[test]
+fn test_split() {
+    for seg in 1..1024 * 10 {
+        for block in 1..1024 * 10 {
+            let prefix = compute_row_id_prefix(seg, block);
+            let (seg_id, block_id) = split_prefix(prefix);
+            assert_eq!(seg_id, seg);
+            assert_eq!(block_id, block);
+        }
     }
 }

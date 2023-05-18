@@ -64,9 +64,7 @@ pub fn split_prefix(id: u64) -> (u64, u64) {
     let block_id = id & ((1 << NUM_BLOCK_ID_BITS) - 1);
 
     let seg_id = id >> NUM_BLOCK_ID_BITS;
-    let seg_id = (seg_id + 1) & ((1 << NUM_SEGMENT_ID_BITS) - 1);
-    let seg_id = (!seg_id).wrapping_add(1);
-
+    let seg_id = (!seg_id) & ((1 << NUM_SEGMENT_ID_BITS) - 1);
     (seg_id, block_id)
 }
 
