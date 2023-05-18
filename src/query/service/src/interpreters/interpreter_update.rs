@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_mutation_lock::MutationLockHeartbeat;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
 use crate::interpreters::Interpreter;
@@ -44,11 +43,6 @@ impl Interpreter for UpdateInterpreter {
     /// Get the name of current interpreter
     fn name(&self) -> &str {
         "UpdateInterpreter"
-    }
-
-    /// Get the schema of UpdatePlan
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
     }
 
     #[tracing::instrument(level = "debug", name = "update_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]

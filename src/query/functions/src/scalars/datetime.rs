@@ -121,7 +121,8 @@ fn int64_domain_to_timestamp_domain<T: AsPrimitive<i64>>(
 }
 
 fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
-    registry.register_aliases("to_timestamp", &["to_datetime"]);
+    registry.register_aliases("to_date", &["str_to_date"]);
+    registry.register_aliases("to_timestamp", &["to_datetime", "str_to_timestamp"]);
     registry.register_aliases("try_to_timestamp", &["try_to_datetime"]);
 
     registry.register_passthrough_nullable_1_arg::<StringType, TimestampType, _, _>(
@@ -151,7 +152,7 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     }
 
     registry.register_combine_nullable_2_arg::<StringType, StringType, TimestampType, _, _>(
-        "str_to_timestamp",
+        "to_timestamp",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<TimestampType>>(
             |timestamp, format, output, ctx| {
@@ -179,22 +180,25 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
     );
 
     registry.register_combine_nullable_2_arg::<StringType, StringType, DateType, _, _>(
-        "str_to_date",
+        "to_date",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, StringType, NullableType<DateType>>(
-            |date, format, output, _| {
+            |date, format, output, ctx| {
                 if format.is_empty() {
                     output.push_null();
                 } else {
                     match (std::str::from_utf8(date), std::str::from_utf8(format)) {
-                        (Ok(date), Ok(format)) => {
-                            if let Ok(res) = NaiveDate::parse_from_str(date, format) {
+                        (Ok(date), Ok(format)) => match NaiveDate::parse_from_str(date, format) {
+                            Ok(res) => {
                                 output.push(res.num_days_from_ce() - EPOCH_DAYS_FROM_CE);
-                            } else {
+                            }
+                            Err(e) => {
+                                ctx.set_error(output.len(), e.to_string());
                                 output.push_null();
                             }
-                        }
-                        _ => {
+                        },
+                        (Err(e), _) | (_, Err(e)) => {
+                            ctx.set_error(output.len(), e.to_string());
                             output.push_null();
                         }
                     }
@@ -380,8 +384,9 @@ fn register_number_to_date(registry: &mut FunctionRegistry) {
 }
 
 fn register_to_string(registry: &mut FunctionRegistry) {
+    registry.register_aliases("to_string", &["date_format"]);
     registry.register_combine_nullable_2_arg::<TimestampType, StringType, StringType, _, _>(
-        "date_format",
+        "to_string",
         |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<TimestampType, StringType, NullableType<StringType>>(
             |date, format, output, ctx| {
@@ -389,11 +394,15 @@ fn register_to_string(registry: &mut FunctionRegistry) {
                     output.push_null();
                 } else {
                     let ts = date.to_timestamp(ctx.func_ctx.tz.tz);
-                    if let Ok(format) = std::str::from_utf8(format) {
-                        let res = ts.format(format).to_string();
-                        output.push(res.as_bytes());
-                    } else {
-                        output.push_null();
+                    match std::str::from_utf8(format) {
+                        Ok(format) => {
+                            let res = ts.format(format).to_string();
+                            output.push(res.as_bytes());
+                        }
+                        Err(e) => {
+                            ctx.set_error(output.len(), e.to_string());
+                            output.push_null();
+                        }
                     }
                 }
             },

@@ -127,7 +127,9 @@ impl Settings {
         if val > 0 {
             self.try_set_u64("max_storage_io_requests", val)
         } else {
-            Err(ErrorCode::BadArguments("Value must be greater than 0"))
+            Err(ErrorCode::BadArguments(
+                "max_storage_io_requests must be greater than 0",
+            ))
         }
     }
 

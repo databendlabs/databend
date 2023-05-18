@@ -29,7 +29,7 @@ runs:
       if: startsWith(inputs.target, 'aarch64-')
       shell: bash
       run: |
-        echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+        echo "JEMALLOC_SYS_WITH_LG_PAGE=16" >> $GITHUB_ENV
 
     - name: Set Build Flags
       shell: bash

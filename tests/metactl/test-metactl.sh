@@ -65,7 +65,7 @@ else
 fi
 
 echo " === check if there is a header record in it"
-if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V0","upgrading":null}}}]' $grpc_exported; then
+if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V001","upgrading":null}}}]' $grpc_exported; then
     echo " === Header record found, good!"
 else
     echo " === No Header record found!!!"

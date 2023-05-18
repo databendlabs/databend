@@ -23,6 +23,8 @@ use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateIndexReply;
+use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
@@ -33,12 +35,17 @@ use common_meta_app::schema::DeleteTableMutationLockReply;
 use common_meta_app::schema::DeleteTableMutationLockReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropIndexReply;
+use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::IndexId;
+use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListIndexByTableIdReq;
 use common_meta_app::schema::ListTableMutationLockReply;
 use common_meta_app::schema::ListTableMutationLockReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -208,6 +215,24 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn drop_database(&self, req: DropDatabaseReq) -> Result<DropDatabaseReply> {
         Ok(self.ctx.meta.drop_database(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
+        Ok(self.ctx.meta.create_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
+        Ok(self.ctx.meta.drop_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_indexes_by_table_id(
+        &self,
+        req: ListIndexByTableIdReq,
+    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+        Ok(self.ctx.meta.get_indexes_by_table_id(req).await?)
     }
 
     #[async_backtrace::framed]

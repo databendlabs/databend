@@ -210,7 +210,7 @@ impl CreateTableInterpreter {
                 )));
             }
 
-            fields.push(field)
+            fields.push(field);
         }
         let schema = TableSchemaRefExt::create(fields);
 

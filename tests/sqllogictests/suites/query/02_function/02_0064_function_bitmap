@@ -12,3 +12,26 @@ query II
 SELECT build_bitmap([1,4,5])::String, bitmap_count(build_bitmap([1,2,5])), bitmap_count(build_bitmap([1, 66, 69, 70]))
 ----
 1,4,5 3 4
+
+query BB
+SELECT bitmap_contains(build_bitmap([1,4,5]), 1), bitmap_contains(build_bitmap([1,4,5]), 2)
+----
+1 0
+
+query BB
+SELECT bitmap_has_all(build_bitmap([1,4,5]), build_bitmap([1])), bitmap_has_all(build_bitmap([1,4,5]), build_bitmap([1,2]))
+----
+1 0
+
+query BB
+SELECT bitmap_has_any(build_bitmap([1,4,5]), build_bitmap([1,2])), bitmap_has_any(build_bitmap([1,4,5]), build_bitmap([2,3]))
+----
+1 0
+
+query II
+SELECT bitmap_max(build_bitmap([1,4,5])), bitmap_min(build_bitmap([1,4,5]))
+----
+5 1
+
+statement error
+SELECT bitmap_max(build_bitmap([])), bitmap_min(build_bitmap([]))

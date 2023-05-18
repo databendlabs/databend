@@ -17,3 +17,4 @@
 pub(crate) const ID_GEN_TABLE: &str = "table_id";
 pub(crate) const ID_GEN_DATABASE: &str = "database_id";
 pub(crate) const ID_GEN_MUTATION_LOCK: &str = "mutation_lock_id";
+pub(crate) const ID_GEN_INDEX: &str = "index_id";

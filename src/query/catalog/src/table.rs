@@ -110,6 +110,10 @@ pub trait Table: Sync + Send {
         false
     }
 
+    fn support_index(&self) -> bool {
+        false
+    }
+
     /// Whether the table engine supports virtual columns optimization.
     fn support_virtual_columns(&self) -> bool {
         false

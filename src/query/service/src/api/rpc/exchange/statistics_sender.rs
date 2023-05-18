@@ -15,9 +15,11 @@
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_channel::Sender;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::base::tokio::time::sleep;
 use common_base::runtime::TrySpawn;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -42,21 +44,10 @@ impl StatisticsSender {
     pub fn spawn_sender(
         query_id: &str,
         ctx: Arc<QueryContext>,
-        mut exchanges: Vec<FlightExchange>,
+        exchange: FlightExchange,
     ) -> StatisticsSender {
-        debug_assert_eq!(exchanges.len(), 2);
-
-        let (tx, rx) = match (exchanges.remove(0), exchanges.remove(0)) {
-            (tx @ FlightExchange::Sender { .. }, rx @ FlightExchange::Receiver { .. }) => {
-                (tx.convert_to_sender(), rx.convert_to_receiver())
-            }
-            (rx @ FlightExchange::Receiver { .. }, tx @ FlightExchange::Sender { .. }) => {
-                (tx.convert_to_sender(), rx.convert_to_receiver())
-            }
-            _ => unreachable!(),
-        };
-
         let spawner = ctx.clone();
+        let tx = exchange.convert_to_sender();
         let shutdown_flag = Arc::new(AtomicBool::new(false));
         let (shutdown_flag_sender, shutdown_flag_receiver) = async_channel::bounded(1);
 
@@ -65,15 +56,12 @@ impl StatisticsSender {
             let shutdown_flag = shutdown_flag.clone();
 
             async move {
-                let mut recv = Box::pin(rx.recv());
+                let mut sleep_future = Box::pin(sleep(Duration::from_millis(100)));
                 let mut notified = Box::pin(shutdown_flag_receiver.recv());
 
                 while !shutdown_flag.load(Ordering::Relaxed) {
-                    match futures::future::select(recv, notified).await {
-                        Either::Right((Ok(None), _))
-                        | Either::Right((Err(_), _))
-                        | Either::Left((Ok(None), _))
-                        | Either::Left((Err(_), _)) => {
+                    match futures::future::select(sleep_future, notified).await {
+                        Either::Right((Ok(None), _)) | Either::Right((Err(_), _)) => {
                             break;
                         }
                         Either::Right((Ok(Some(error_code)), _recv)) => {
@@ -87,13 +75,11 @@ impl StatisticsSender {
 
                             return;
                         }
-                        Either::Left((Ok(Some(command)), right)) => {
+                        Either::Left((_, right)) => {
                             notified = right;
-                            recv = Box::pin(rx.recv());
+                            sleep_future = Box::pin(sleep(Duration::from_millis(100)));
 
-                            if let Err(_cause) =
-                                StatisticsSender::on_command(&ctx, command, &tx).await
-                            {
+                            if let Err(_cause) = Self::send_statistics(&ctx, &tx).await {
                                 ctx.get_exchange_manager().shutdown_query(&query_id);
                                 return;
                             }
@@ -101,10 +87,8 @@ impl StatisticsSender {
                     }
                 }
 
-                if let Ok(Some(command)) = rx.recv().await {
-                    if let Err(error) = Self::on_command(&ctx, command, &tx).await {
-                        tracing::warn!("Statistics send has error, cause: {:?}.", error);
-                    }
+                if let Err(error) = Self::send_statistics(&ctx, &tx).await {
+                    tracing::warn!("Statistics send has error, cause: {:?}.", error);
                 }
             }
         });
@@ -139,29 +123,18 @@ impl StatisticsSender {
     }
 
     #[async_backtrace::framed]
-    async fn on_command(
-        ctx: &Arc<QueryContext>,
-        command: DataPacket,
-        flight_sender: &FlightSender,
-    ) -> Result<()> {
-        match command {
-            DataPacket::ErrorCode(_) => unreachable!(),
-            DataPacket::Dictionary(_) => unreachable!(),
-            DataPacket::FragmentData(_) => unreachable!(),
-            DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
-            DataPacket::FetchProgressAndPrecommit => {
-                flight_sender
-                    .send(DataPacket::ProgressAndPrecommit {
-                        progress: Self::fetch_progress(ctx).await?,
-                        precommit: Self::fetch_precommit(ctx).await?,
-                    })
-                    .await
-            }
-        }
+    async fn send_statistics(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
+        let progress = Self::fetch_progress(ctx)?;
+        let precommit = Self::fetch_precommit(ctx)?;
+        let data_packet = DataPacket::ProgressAndPrecommit {
+            progress,
+            precommit,
+        };
+
+        flight_sender.send(data_packet).await
     }
 
-    #[async_backtrace::framed]
-    async fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {
+    fn fetch_progress(ctx: &Arc<QueryContext>) -> Result<Vec<ProgressInfo>> {
         let mut progress_info = vec![];
 
         let scan_progress = ctx.get_scan_progress();
@@ -188,8 +161,7 @@ impl StatisticsSender {
         Ok(progress_info)
     }
 
-    #[async_backtrace::framed]
-    async fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitBlock>> {
+    fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitBlock>> {
         Ok(ctx
             .consume_precommit_blocks()
             .into_iter()

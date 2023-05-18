@@ -40,6 +40,7 @@ pub use optimizer::OptimizerConfig;
 pub use optimizer::OptimizerContext;
 pub use pattern_extractor::PatternExtractor;
 pub use property::*;
+pub use rule::agg_index;
 pub use rule::try_push_down_filter_join;
 pub use rule::RuleFactory;
 pub use rule::RuleID;

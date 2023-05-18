@@ -18,7 +18,6 @@ use common_base::runtime::GlobalIORuntime;
 use common_catalog::table_mutation_lock::MutationLockHeartbeat;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
@@ -46,11 +45,6 @@ impl Interpreter for DeleteInterpreter {
     /// Get the name of current interpreter
     fn name(&self) -> &str {
         "DeleteInterpreter"
-    }
-
-    /// Get the schema of DeletePlan
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
     }
 
     #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
