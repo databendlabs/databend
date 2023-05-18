@@ -4,6 +4,7 @@ array_contains -> contains
 array_get -> get
 array_length -> length
 array_slice -> slice
+bitmap_and_not -> bitmap_not
 bitmap_cardinality -> bitmap_count
 ceiling -> ceil
 character_length -> char_length
@@ -690,6 +691,8 @@ Functions overloads:
 125 bit_xor(Int64 NULL, Int32 NULL) :: Int64 NULL
 126 bit_xor(Int64, Int64) :: Int64
 127 bit_xor(Int64 NULL, Int64 NULL) :: Int64 NULL
+0 bitmap_and(Bitmap, Bitmap) :: Bitmap
+1 bitmap_and(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
 0 bitmap_contains(Bitmap, UInt64) :: Boolean
 1 bitmap_contains(Bitmap NULL, UInt64 NULL) :: Boolean NULL
 0 bitmap_count(Bitmap) :: UInt64
@@ -702,6 +705,12 @@ Functions overloads:
 1 bitmap_max(Bitmap NULL) :: UInt64 NULL
 0 bitmap_min(Bitmap) :: UInt64
 1 bitmap_min(Bitmap NULL) :: UInt64 NULL
+0 bitmap_not(Bitmap, Bitmap) :: Bitmap
+1 bitmap_not(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
+0 bitmap_or(Bitmap, Bitmap) :: Bitmap
+1 bitmap_or(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
+0 bitmap_xor(Bitmap, Bitmap) :: Bitmap
+1 bitmap_xor(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
 0 blake3(String) :: String
 1 blake3(String NULL) :: String NULL
 0 build_bitmap(Array(UInt64)) :: Bitmap
