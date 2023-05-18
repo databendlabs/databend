@@ -26,6 +26,7 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::NUM_BLOCK_ID_BITS;
 use goldenfile::Mint;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -178,8 +179,8 @@ fn test_partition_reshuffle() {
 
 #[test]
 fn test_split() {
-    for seg in 1..1024 * 10 {
-        for block in 1..1024 * 10 {
+    for seg in 0..1024 * 10 {
+        for block in 0..(1 >> NUM_BLOCK_ID_BITS - 1) {
             let prefix = compute_row_id_prefix(seg, block);
             let (seg_id, block_id) = split_prefix(prefix);
             assert_eq!(seg_id, seg);
