@@ -204,13 +204,9 @@ impl PipelineBuilder {
     }
 
     fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
-        let state = self.build_ie_join_state(ie_join)?;
+        let state = Arc::new(IEJoinState::new(self.ctx.clone(), ie_join));
         self.expand_right_side_pipeline(ie_join, state.clone())?;
         self.build_left_side(ie_join, state)
-    }
-
-    fn build_ie_join_state(&mut self, ie_join: &IEJoin) -> Result<Arc<IEJoinState>> {
-        Ok(Arc::new(IEJoinState::new(ie_join)))
     }
 
     fn build_left_side(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {

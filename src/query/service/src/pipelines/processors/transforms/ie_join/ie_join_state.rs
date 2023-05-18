@@ -22,6 +22,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_arrow::parquet::fallible_streaming_iterator::Convert;
 use common_ast::ast::BinaryOperator::Or;
 use common_base::base::tokio::sync::Notify;
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberColumnBuilder;
@@ -52,17 +53,27 @@ use common_sql::executor::IEJoinCondition;
 use common_sql::plans::JoinType;
 use parking_lot::RwLock;
 
+use crate::sessions::QueryContext;
+
+struct IEConditionState {
+    // Todo(xudong): need to find common type for l1
+    l1_data_type: DataType,
+    // Todo(xudong): need to find common type for l2
+    l2_data_type: DataType,
+    // Sort description for L1
+    l1_sort_descriptions: Vec<SortColumnDescription>,
+    // Sort description for L2
+    l2_sort_descriptions: Vec<SortColumnDescription>,
+}
+
 pub struct IEJoinState {
-    left_sorted_blocks: RwLock<Vec<DataBlock>>,
+    ctx: Arc<QueryContext>,
+    ie_condition_state: IEConditionState,
     right_sorted_blocks: RwLock<Vec<DataBlock>>,
     // L1: sort by the first join key
-    sorted_blocks: RwLock<Vec<DataBlock>>,
-    // L2: sort `sorted_blocks` again, by the second join key
+    l1_sorted_blocks: RwLock<Vec<DataBlock>>,
+    // L2: sort `l1_sorted_blocks` again, by the second join key
     l2_sorted_blocks: RwLock<Vec<DataBlock>>,
-    // True is asc
-    l1_order: bool,
-    l2_order: bool,
-    eq_off: u8,
     // Left table result buffer
     left_buffer: RwLock<Vec<usize>>,
     // Right table result buffer
@@ -73,88 +84,103 @@ pub struct IEJoinState {
     bit_array: RwLock<MutableBitmap>,
     // data schema of sorted blocks
     data_schema: DataSchemaRef,
-    // Sort description for L1
-    sort_columns_descriptions: Vec<SortColumnDescription>,
+    // The origin data for left/right table
     left_table: RwLock<DataBlock>,
     right_table: RwLock<DataBlock>,
+    // IEJoin related
     join_type: JoinType,
     conditions: Vec<IEJoinCondition>,
     other_conditions: Vec<RemoteExpr>,
+    // Pipeline event related
     merge_finished: RwLock<bool>,
     finished_notify: Arc<Notify>,
     left_sinker_count: AtomicU64,
     right_sinker_count: AtomicU64,
-    op1: String,
-    op2: String,
 }
 
 impl IEJoinState {
-    pub fn new(ie_join: &IEJoin) -> Self {
-        let mut fields = vec![];
-        let mut is_nullable = ie_join.conditions[0]
-            .left_expr
-            .as_expr(&BUILTIN_FUNCTIONS)
-            .data_type()
-            .is_nullable();
-        let mut l1_order = !matches!(ie_join.conditions[0].operator.as_str(), "gt" | "gte");
-        let mut l2_order = matches!(ie_join.conditions[1].operator.as_str(), "gt" | "gte");
+    pub fn new(ctx: Arc<QueryContext>, ie_join: &IEJoin) -> Self {
+        let mut fields = Vec::with_capacity(4);
         fields.push(DataField::new(
             "_tuple_id",
             DataType::Number(NumberDataType::Int64),
         ));
-        for (idx, condition) in ie_join.conditions.iter().enumerate() {
-            let field = DataField::new(
-                format!("_ie_join_key_{idx}").as_str(),
-                condition
-                    .left_expr
-                    .as_expr(&BUILTIN_FUNCTIONS)
-                    .data_type()
-                    .clone(),
-            );
-            fields.push(field);
-        }
+        let l1_data_type = ie_join.conditions[0]
+            .left_expr
+            .as_expr(&BUILTIN_FUNCTIONS)
+            .data_type()
+            .clone();
+        let l2_data_type = ie_join.conditions[1]
+            .left_expr
+            .as_expr(&BUILTIN_FUNCTIONS)
+            .data_type()
+            .clone();
+        fields.push(DataField::new("_ie_join_key_1", l1_data_type.clone()));
+        fields.push(DataField::new("_ie_join_key_2", l2_data_type.clone()));
         let pos_field = DataField::new("_pos", DataType::Number(NumberDataType::UInt64));
         fields.push(pos_field);
-        let eq_off = if matches!(ie_join.conditions[0].operator.as_str(), "lte" | "gte")
-            && matches!(ie_join.conditions[1].operator.as_str(), "lte" | "gte")
-        {
-            0
-        } else {
-            1
-        };
+
+        let mut l1_order = !matches!(ie_join.conditions[0].operator.as_str(), "gt" | "gte");
+        let mut l2_order = matches!(ie_join.conditions[1].operator.as_str(), "gt" | "gte");
+        let l1_sort_descriptions = vec![
+            SortColumnDescription {
+                offset: 1,
+                asc: l1_order,
+                nulls_first: false,
+                is_nullable: l1_data_type.is_nullable(),
+            },
+            SortColumnDescription {
+                offset: 2,
+                asc: l2_order,
+                nulls_first: false,
+                is_nullable: l2_data_type.is_nullable(),
+            },
+            // `_tuple_id` column
+            SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+                is_nullable: false,
+            },
+        ];
+        let l2_sort_descriptions = vec![
+            SortColumnDescription {
+                offset: 2,
+                asc: l2_order,
+                nulls_first: false,
+                is_nullable: l2_data_type.is_nullable(),
+            },
+            SortColumnDescription {
+                offset: 1,
+                asc: l1_order,
+                nulls_first: false,
+                is_nullable: l1_data_type.is_nullable(),
+            },
+            // `_tuple_id` column
+            SortColumnDescription {
+                offset: 0,
+                asc: true,
+                nulls_first: false,
+                is_nullable: false,
+            },
+        ];
+
         IEJoinState {
-            left_sorted_blocks: Default::default(),
+            ctx,
+            ie_condition_state: IEConditionState {
+                l1_data_type,
+                l2_data_type,
+                l1_sort_descriptions,
+                l2_sort_descriptions,
+            },
             right_sorted_blocks: Default::default(),
-            sorted_blocks: Default::default(),
+            l1_sorted_blocks: Default::default(),
             l2_sorted_blocks: Default::default(),
-            l1_order,
-            l2_order,
-            eq_off,
             left_buffer: RwLock::new(Vec::with_capacity(65535)),
             right_buffer: RwLock::new(Vec::with_capacity(65535)),
             p_array: Default::default(),
             bit_array: Default::default(),
             data_schema: DataSchemaRefExt::create(fields),
-            sort_columns_descriptions: vec![
-                SortColumnDescription {
-                    offset: 1,
-                    asc: l1_order,
-                    nulls_first: false,
-                    is_nullable,
-                },
-                SortColumnDescription {
-                    offset: 2,
-                    asc: l2_order,
-                    nulls_first: false,
-                    is_nullable,
-                },
-                SortColumnDescription {
-                    offset: 0,
-                    asc: false,
-                    nulls_first: false,
-                    is_nullable,
-                },
-            ],
             left_table: RwLock::new(DataBlock::empty()),
             right_table: RwLock::new(DataBlock::empty()),
             join_type: ie_join.join_type.clone(),
@@ -164,8 +190,6 @@ impl IEJoinState {
             finished_notify: Arc::new(Default::default()),
             left_sinker_count: Default::default(),
             right_sinker_count: Default::default(),
-            op1: ie_join.conditions[0].operator.to_string(),
-            op2: ie_join.conditions[1].operator.to_string(),
         }
     }
 
@@ -208,7 +232,7 @@ impl IEJoinState {
     }
 
     pub fn sink_right(&self, block: DataBlock) -> Result<()> {
-        // First, sink block to right table
+        // Sink block to right table
         let mut current_rows;
         {
             let mut right_table = self.right_table.write();
@@ -219,22 +243,21 @@ impl IEJoinState {
                 *right_table = DataBlock::concat(&vec![right_table.clone(), block.clone()])?;
             }
         }
-        // Second, generate keys block by join keys
-        // For example, if join keys are [t1.a + t1.b, t1.c], then key blocks will contain two columns: [t1.a + t1.b, t1.c]
-        // We can get the key blocks by evaluating the join keys expressions on the block
-        let mut columns = vec![];
+        // Generate keys block by join keys
+        let mut columns = Vec::with_capacity(3);
+
         // First, generate idx column from current_rows to current_rows + block.num_rows()
         let mut column_builder = ColumnBuilder::with_capacity(
             &DataType::Number(NumberDataType::Int64),
             block.num_rows(),
         );
         for idx in current_rows..(current_rows + block.num_rows()) {
-            column_builder.push(ScalarRef::Number(NumberScalar::Int64(
-                (-(idx as i32 + 1)) as i64,
-            )));
+            column_builder.push(ScalarRef::Number(NumberScalar::Int64(-(idx as i64 + 1))));
         }
         columns.push(column_builder.build());
-        for (idx, condition) in self.conditions.iter().enumerate() {
+
+        // Second, generate join keys column
+        for condition in self.conditions.iter() {
             let func_ctx = FunctionContext::default();
             let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
             let expr = condition.right_expr.as_expr(&BUILTIN_FUNCTIONS);
@@ -244,20 +267,22 @@ impl IEJoinState {
             columns.push(column);
         }
 
-        // Sort columns by the first column
+        // Sort columns by the second column
         let keys_block = DataBlock::new_from_columns(columns);
-        let sorted_keys_block =
-            DataBlock::sort(&keys_block, &self.sort_columns_descriptions, None)?;
+        let sorted_keys_block = DataBlock::sort(
+            &keys_block,
+            &self.ie_condition_state.l1_sort_descriptions,
+            None,
+        )?;
         {
-            let mut sorted_blocks = self.right_sorted_blocks.write();
-            sorted_blocks.push(sorted_keys_block);
+            let mut l1_sorted_blocks = self.right_sorted_blocks.write();
+            l1_sorted_blocks.push(sorted_keys_block);
         }
         Ok(())
     }
 
-    // Todo(xudong): move some vars to state and refine code
     pub fn sink_left(&self, block: DataBlock) -> Result<()> {
-        // First, sink block to left table
+        // Sink block to left table
         let mut current_rows = 0;
         {
             let mut left_table = self.left_table.write();
@@ -268,11 +293,12 @@ impl IEJoinState {
                 *left_table = DataBlock::concat(&vec![left_table.clone(), block.clone()])?;
             }
         }
-        // Second, generate keys block by join keys
+        // Generate keys block by join keys
         // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
         // We can get the key blocks by evaluating the join keys expressions on the block
-        let mut columns = vec![];
-        // First, generate idx column from current_rows to current_rows + block.num_rows()
+        let mut columns = Vec::with_capacity(3);
+
+        // Generate idx column from current_rows to current_rows + block.num_rows()
         let mut column_builder = ColumnBuilder::with_capacity(
             &DataType::Number(NumberDataType::Int64),
             block.num_rows(),
@@ -281,7 +307,9 @@ impl IEJoinState {
             column_builder.push(ScalarRef::Number(NumberScalar::Int64((idx + 1) as i64)));
         }
         columns.push(column_builder.build());
-        for (idx, condition) in self.conditions.iter().enumerate() {
+
+        // Append join keys columns
+        for condition in self.conditions.iter() {
             let func_ctx = FunctionContext::default();
             let evaluator = Evaluator::new(&block, &func_ctx, &BUILTIN_FUNCTIONS);
             let expr = condition.left_expr.as_expr(&BUILTIN_FUNCTIONS);
@@ -290,37 +318,41 @@ impl IEJoinState {
                 .convert_to_full_column(expr.data_type(), block.num_rows());
             columns.push(column);
         }
-        // Sort columns by the first column
+
+        // Sort columns by the second column
         let keys_block = DataBlock::new_from_columns(columns);
-        let sorted_keys_block =
-            DataBlock::sort(&keys_block, &self.sort_columns_descriptions, None)?;
+        let sorted_keys_block = DataBlock::sort(
+            &keys_block,
+            &self.ie_condition_state.l1_sort_descriptions,
+            None,
+        )?;
         {
-            let mut sorted_blocks = self.left_sorted_blocks.write();
-            sorted_blocks.push(sorted_keys_block);
+            let mut l1_sorted_blocks = self.l1_sorted_blocks.write();
+            l1_sorted_blocks.push(sorted_keys_block);
         }
         Ok(())
     }
 
     pub fn merge_sort(&self) -> Result<DataBlock> {
-        // Merge sort `sorted_blocks`
-        let mut sorted_blocks = self.sorted_blocks.write();
-        let left_sorted_blocks = self.left_sorted_blocks.read();
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        // Merge sort `l1_sorted_blocks`
+        let mut l1_sorted_blocks = self.l1_sorted_blocks.write();
         let right_sorted_blocks = self.right_sorted_blocks.read();
-        *sorted_blocks = left_sorted_blocks.clone();
-        sorted_blocks.extend(right_sorted_blocks.clone());
+        l1_sorted_blocks.extend(right_sorted_blocks.clone());
         // Create `SortMergeCompactor` then compact
         let data_schema = DataSchemaRefExt::create(
             self.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
         );
-        *sorted_blocks = sort_merge(
+        *l1_sorted_blocks = sort_merge(
             data_schema,
-            sorted_blocks.len(),
-            self.sort_columns_descriptions.clone(),
-            &sorted_blocks,
+            block_size,
+            self.ie_condition_state.l1_sort_descriptions.clone(),
+            &l1_sorted_blocks,
         )?;
-        // Add a column at the end of `sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
+
+        // Add a column at the end of `l1_sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
         let mut count: usize = 0;
-        for block in sorted_blocks.iter_mut() {
+        for block in l1_sorted_blocks.iter_mut() {
             // Generate column with value [1..block.size()]
             let mut column_builder =
                 NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, block.num_rows());
@@ -333,8 +365,8 @@ impl IEJoinState {
             });
             count += block.num_rows();
         }
-        // Merge `sorted_blocks` to one block
-        let mut merged_blocks = DataBlock::concat(&sorted_blocks)?;
+        // Merge `l1_sorted_blocks` to one block
+        let mut merged_blocks = DataBlock::concat(&l1_sorted_blocks)?;
         // extract the second column
         let l1 = &merged_blocks.columns()[1].value.convert_to_full_column(
             self.conditions[0]
@@ -353,41 +385,18 @@ impl IEJoinState {
                 merged_blocks.num_rows(),
             );
 
-        // Sort `sorted_blocks` by the second join key
-        // todo(xudong): leverage multi threads and sort partial then merge
-        let is_nullable = self.conditions[0]
-            .right_expr
-            .as_expr(&BUILTIN_FUNCTIONS)
-            .data_type()
-            .is_nullable();
-        let desc = vec![
-            SortColumnDescription {
-                offset: 2,
-                asc: self.l2_order,
-                nulls_first: false,
-                is_nullable,
-            },
-            SortColumnDescription {
-                offset: 1,
-                asc: self.l1_order,
-                nulls_first: false,
-                is_nullable,
-            },
-            SortColumnDescription {
-                offset: 0,
-                asc: false,
-                nulls_first: false,
-                is_nullable,
-            },
-        ];
         let mut l2_sorted_blocks = self.l2_sorted_blocks.write();
-        for block in sorted_blocks.iter() {
-            l2_sorted_blocks.push(DataBlock::sort(block, &desc, None)?);
+        for block in l1_sorted_blocks.iter() {
+            l2_sorted_blocks.push(DataBlock::sort(
+                block,
+                &self.ie_condition_state.l2_sort_descriptions,
+                None,
+            )?);
         }
         merged_blocks = DataBlock::concat(&sort_merge(
             self.data_schema.clone(),
-            l2_sorted_blocks.len(),
-            desc,
+            block_size,
+            self.ie_condition_state.l2_sort_descriptions.clone(),
             &l2_sorted_blocks,
         )?)?;
         // The pos col of l2 sorted blocks is permutation array
@@ -415,7 +424,7 @@ impl IEJoinState {
         // Initialize bit_array
         let mut bit_array = self.bit_array.write();
         bit_array.extend_constant(p_array.len(), false);
-        drop(sorted_blocks);
+        drop(l1_sorted_blocks);
         drop(p_array);
         drop(bit_array);
         self.finalize(l1, l2, l1_index_column)
@@ -440,7 +449,7 @@ impl IEJoinState {
             }
             while off2 < len {
                 let order = l2.index(idx).unwrap().cmp(&l2.index(off2).unwrap());
-                if !order_match(&self.op2, order) {
+                if !order_match(&self.conditions[1].operator, order) {
                     break;
                 }
                 let p2 = self.p_array.read()[off2];
@@ -453,7 +462,7 @@ impl IEJoinState {
                 }
                 off2 += 1;
             }
-            off1 = probe_l1(l1, *p as usize, &self.op1, off1);
+            off1 = probe_l1(l1, *p as usize, &self.conditions[0].operator, off1);
             if off1 >= len {
                 continue;
             }
@@ -510,6 +519,7 @@ fn order_match(op: &str, order: Ordering) -> bool {
     }
 }
 
+// Exponential search
 fn probe_l1(l1: &Column, pos: usize, op1: &str, off1: usize) -> usize {
     let mut step = 1;
     let n = l1.len();
@@ -548,6 +558,5 @@ fn probe_l1(l1: &Column, pos: usize, op1: &str, off1: usize) -> usize {
             lo = mid + 1;
         }
     }
-
     lo
 }
