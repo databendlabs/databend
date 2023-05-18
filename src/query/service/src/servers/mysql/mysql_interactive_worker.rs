@@ -43,7 +43,6 @@ use rand::RngCore;
 use tracing::error;
 use tracing::info;
 use tracing::Instrument;
-use tracing::log::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
@@ -421,15 +420,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
         let do_query = self.do_query(&init_query).await;
         match do_query {
             Ok((_, _)) => Ok(()),
-            Err(error_code) => {
-                if error_code.code() == ErrorCode::UNKNOWN_DATABASE {
-                    warn!("Unknown Database '`{}`, try to trim quota.'", database_name);
-                    let init_query = format!("USE {};", database_name);
-                    self.do_query(&init_query).await?;
-                    return Ok(());
-                }
-                Err(error_code)
-            }
+            Err(error_code) => Err(error_code),
         }
     }
 }
