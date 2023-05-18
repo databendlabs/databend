@@ -10,10 +10,12 @@ The function can accept one or two arguments. If given one argument, the functio
 - If the integer is greater than or equal to 31,536,000,000 and less than 31,536,000,000,000, it is treated as milliseconds.
 - If the integer is greater than or equal to 31,536,000,000,000, it is treated as microseconds.
 
-If given two arguments, the function converts the first string to a timestamp based on the pattern specified in the second string. To format the date and time according to your desired representation, make use of specifiers and refer to the supported specifiers available at https://docs.rs/chrono/latest/chrono/format/strftime/index.html.
+If given two arguments, the function converts the first string to a timestamp based on the format specified in the second string. To customize the format of date and time in Databend, you can utilize specifiers. These specifiers allow you to define the desired format for date and time values. For a comprehensive list of supported specifiers, see [Formatting Date and Time](../../13-sql-reference/10-data-types/20-data-type-time-date-types.md#formatting-date-and-time).
 
 - The output timestamp reflects your Databend timezone.
 - The timezone information must be included in the string you want to convert, otherwise NULL will be returned.
+
+See also: [TO_DATE](todate.md)
 
 ## Syntax
 
