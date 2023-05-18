@@ -109,6 +109,13 @@ jobs:
           docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
           before-script-linux: ../../scripts/setup/dev_setup.sh -yb
 
+      - name: Run tests
+        working-directory: src/bendpy
+        uses: PyO3/maturin-action@v1
+        run: |
+          pip install -e .[test]
+          pytest -v tests/*
+
       - name: Upload artifact
         if: github.event_name == 'pull_request'
         uses: ./.github/actions/artifact_upload
