@@ -42,8 +42,8 @@ pub const NUM_ROW_ID_PREFIX_BITS: usize = NUM_BLOCK_ID_BITS + NUM_SEGMENT_ID_BIT
 
 #[inline(always)]
 pub fn compute_row_id_prefix(seg_id: u64, block_id: u64) -> u64 {
-    // `seg_id` is the offset of the segment list in the snapshot meta.
-    // The bigger the `seg_id`, the newer the segment.
+    // `seg_id` is the offset in the segment list in the snapshot meta.
+    // The bigger the `seg_id`, the older the segment.
     // So, to make the row id monotonic increasing, we need to reverse the `seg_id`.
     let seg_id = (!seg_id) & ((1 << NUM_SEGMENT_ID_BITS) - 1);
     let block_id = block_id & ((1 << NUM_BLOCK_ID_BITS) - 1);
