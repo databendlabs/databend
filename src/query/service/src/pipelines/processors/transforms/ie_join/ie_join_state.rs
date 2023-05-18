@@ -19,8 +19,6 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_arrow::parquet::fallible_streaming_iterator::Convert;
-use common_ast::ast::BinaryOperator::Or;
 use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -30,7 +28,6 @@ use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
 use common_expression::types::UInt64Type;
 use common_expression::types::ValueType;
-use common_expression::with_number_mapped_type;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
@@ -40,17 +37,14 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
 use common_expression::ScalarRef;
 use common_expression::SortColumnDescription;
 use common_expression::Value;
 use common_expression::ValueRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_transforms::processors::transforms::sort_merge;
-use common_pipeline_transforms::processors::transforms::Compactor;
 use common_sql::executor::IEJoin;
 use common_sql::executor::IEJoinCondition;
-use common_sql::plans::JoinType;
 use parking_lot::RwLock;
 
 use crate::sessions::QueryContext;
@@ -64,6 +58,10 @@ struct IEConditionState {
     l1_sort_descriptions: Vec<SortColumnDescription>,
     // Sort description for L2
     l2_sort_descriptions: Vec<SortColumnDescription>,
+    // true is asc
+    l1_order: bool,
+    // L2 order
+    l2_order: bool,
 }
 
 pub struct IEJoinState {
@@ -88,14 +86,19 @@ pub struct IEJoinState {
     left_table: RwLock<DataBlock>,
     right_table: RwLock<DataBlock>,
     // IEJoin related
-    join_type: JoinType,
+    // Currently only support inner join
+    // join_type: JoinType,
     conditions: Vec<IEJoinCondition>,
-    other_conditions: Vec<RemoteExpr>,
+    // Todo: support other_conditions
+    // other_conditions: Vec<RemoteExpr>,
     // Pipeline event related
     merge_finished: RwLock<bool>,
     finished_notify: Arc<Notify>,
     left_sinker_count: AtomicU64,
     right_sinker_count: AtomicU64,
+    // Task that need to be executed, pair.0 is left table block, pair.1 is right table block
+    tasks: RwLock<Vec<(usize, usize)>>,
+    finished_tasks: AtomicU64,
 }
 
 impl IEJoinState {
@@ -120,8 +123,8 @@ impl IEJoinState {
         let pos_field = DataField::new("_pos", DataType::Number(NumberDataType::UInt64));
         fields.push(pos_field);
 
-        let mut l1_order = !matches!(ie_join.conditions[0].operator.as_str(), "gt" | "gte");
-        let mut l2_order = matches!(ie_join.conditions[1].operator.as_str(), "gt" | "gte");
+        let l1_order = !matches!(ie_join.conditions[0].operator.as_str(), "gt" | "gte");
+        let l2_order = matches!(ie_join.conditions[1].operator.as_str(), "gt" | "gte");
         let l1_sort_descriptions = vec![
             SortColumnDescription {
                 offset: 1,
@@ -172,6 +175,8 @@ impl IEJoinState {
                 l2_data_type,
                 l1_sort_descriptions,
                 l2_sort_descriptions,
+                l1_order,
+                l2_order,
             },
             right_sorted_blocks: Default::default(),
             l1_sorted_blocks: Default::default(),
@@ -183,13 +188,13 @@ impl IEJoinState {
             data_schema: DataSchemaRefExt::create(fields),
             left_table: RwLock::new(DataBlock::empty()),
             right_table: RwLock::new(DataBlock::empty()),
-            join_type: ie_join.join_type.clone(),
             conditions: ie_join.conditions.clone(),
-            other_conditions: ie_join.other_conditions.clone(),
             merge_finished: RwLock::new(false),
             finished_notify: Arc::new(Default::default()),
-            left_sinker_count: Default::default(),
-            right_sinker_count: Default::default(),
+            left_sinker_count: AtomicU64::new(0),
+            right_sinker_count: AtomicU64::new(0),
+            tasks: RwLock::new(vec![]),
+            finished_tasks: AtomicU64::new(0),
         }
     }
 
@@ -198,25 +203,34 @@ impl IEJoinState {
             .fetch_add(1, atomic::Ordering::SeqCst);
     }
 
-    pub fn left_detach(&self) -> Result<DataBlock> {
+    pub fn left_detach(&self) -> Result<()> {
         self.left_sinker_count
             .fetch_sub(1, atomic::Ordering::SeqCst);
         if self.left_sinker_count.load(atomic::Ordering::Relaxed) == 0
             && self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0
         {
-            let res = self.merge_sort();
+            // Left and right both finish sink
+            // Merge sort left/right and partition them
+            self.merge_sort()?;
             // Set merge finished
             let mut merge_finished = self.merge_finished.write();
             *merge_finished = true;
             self.finished_notify.notify_waiters();
-            return res;
         }
-        Ok(DataBlock::empty())
+        Ok(())
     }
 
     pub fn right_attach(&self) {
         self.right_sinker_count
             .fetch_add(1, atomic::Ordering::SeqCst);
+    }
+
+    pub fn task_id(&self) -> Option<usize> {
+        let task_id = self.finished_tasks.fetch_add(1, atomic::Ordering::SeqCst);
+        if task_id >= self.tasks.read().len() as u64 {
+            return None;
+        }
+        Some(task_id as usize)
     }
 
     pub fn right_detach(&self) {
@@ -233,7 +247,7 @@ impl IEJoinState {
 
     pub fn sink_right(&self, block: DataBlock) -> Result<()> {
         // Sink block to right table
-        let mut current_rows;
+        let current_rows;
         {
             let mut right_table = self.right_table.write();
             current_rows = right_table.num_rows();
@@ -283,7 +297,7 @@ impl IEJoinState {
 
     pub fn sink_left(&self, block: DataBlock) -> Result<()> {
         // Sink block to left table
-        let mut current_rows = 0;
+        let current_rows;
         {
             let mut left_table = self.left_table.write();
             current_rows = left_table.num_rows();
@@ -333,17 +347,60 @@ impl IEJoinState {
         Ok(())
     }
 
-    pub fn merge_sort(&self) -> Result<DataBlock> {
+    pub fn merge_sort(&self) -> Result<()> {
+        dbg!("merge_sort");
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         // Merge sort `l1_sorted_blocks`
         let mut l1_sorted_blocks = self.l1_sorted_blocks.write();
-        let right_sorted_blocks = self.right_sorted_blocks.read();
-        l1_sorted_blocks.extend(right_sorted_blocks.clone());
-        // Create `SortMergeCompactor` then compact
+        let mut right_sorted_blocks = self.right_sorted_blocks.write();
+
         let data_schema = DataSchemaRefExt::create(
             self.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
         );
+        // Sort merge `l1_sorted_blocks` and `right_sorted_blocks`
         *l1_sorted_blocks = sort_merge(
+            data_schema.clone(),
+            block_size,
+            self.ie_condition_state.l1_sort_descriptions.clone(),
+            &l1_sorted_blocks,
+        )?;
+        *right_sorted_blocks = sort_merge(
+            data_schema,
+            block_size,
+            self.ie_condition_state.l1_sort_descriptions.clone(),
+            &right_sorted_blocks,
+        )?;
+
+        // Add tasks
+        let mut tasks = self.tasks.write();
+        for (left_idx, left_block) in l1_sorted_blocks.iter().enumerate() {
+            for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
+                // First check two blocks whether have intersection
+                if self.intersection(left_block, right_block) {
+                    tasks.push((left_idx, right_idx));
+                }
+            }
+        }
+        dbg!(&tasks);
+        Ok(())
+    }
+
+    pub fn ie_join(&self, task_id: usize) -> Result<DataBlock> {
+        dbg!("ie_join");
+        dbg!(task_id);
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let tasks = self.tasks.read();
+        let (left_idx, right_idx) = tasks[task_id];
+        let l1_sorted_blocks = self.l1_sorted_blocks.read();
+        let right_sorted_blocks = self.right_sorted_blocks.read();
+        let mut l1_sorted_blocks = vec![l1_sorted_blocks[left_idx].clone()];
+        l1_sorted_blocks.push(right_sorted_blocks[right_idx].clone());
+
+        let data_schema = DataSchemaRefExt::create(
+            self.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
+        );
+
+        l1_sorted_blocks = sort_merge(
             data_schema,
             block_size,
             self.ie_condition_state.l1_sort_descriptions.clone(),
@@ -399,20 +456,27 @@ impl IEJoinState {
             self.ie_condition_state.l2_sort_descriptions.clone(),
             &l2_sorted_blocks,
         )?)?;
+
         // The pos col of l2 sorted blocks is permutation array
-        let mut p_array = self.p_array.write();
-        let column = &merged_blocks
-            .columns()
-            .last()
-            .unwrap()
-            .value
-            .try_downcast::<UInt64Type>()
-            .unwrap();
-        if let ValueRef::Column(col) = column.as_ref() {
-            for val in UInt64Type::iter_column(&col) {
-                p_array.push(val)
+        {
+            let mut p_array = self.p_array.write();
+            let column = &merged_blocks
+                .columns()
+                .last()
+                .unwrap()
+                .value
+                .try_downcast::<UInt64Type>()
+                .unwrap();
+            if let ValueRef::Column(col) = column.as_ref() {
+                for val in UInt64Type::iter_column(&col) {
+                    p_array.push(val)
+                }
             }
+            // Initialize bit_array
+            let mut bit_array = self.bit_array.write();
+            bit_array.extend_constant(p_array.len(), false);
         }
+
         let l2 = &merged_blocks.columns()[2].value.convert_to_full_column(
             self.conditions[0]
                 .right_expr
@@ -420,13 +484,9 @@ impl IEJoinState {
                 .data_type(),
             merged_blocks.num_rows(),
         );
-        // l2_sorted_blocks.clear();
-        // Initialize bit_array
-        let mut bit_array = self.bit_array.write();
-        bit_array.extend_constant(p_array.len(), false);
-        drop(l1_sorted_blocks);
-        drop(p_array);
-        drop(bit_array);
+
+        l2_sorted_blocks.clear();
+
         self.finalize(l1, l2, l1_index_column)
     }
 
@@ -506,6 +566,69 @@ impl IEJoinState {
             left_result_block.add_column(col.clone());
         }
         Ok(left_result_block)
+    }
+
+    fn intersection(&self, left_block: &DataBlock, right_block: &DataBlock) -> bool {
+        let left_len = left_block.num_rows();
+        let right_len = right_block.num_rows();
+        let left_l1_column = left_block.columns()[1]
+            .value
+            .convert_to_full_column(&self.ie_condition_state.l1_data_type, left_len);
+        let left_l2_column = left_block.columns()[2]
+            .value
+            .convert_to_full_column(&self.ie_condition_state.l2_data_type, left_len);
+        let right_l1_column = right_block.columns()[1]
+            .value
+            .convert_to_full_column(&self.ie_condition_state.l1_data_type, right_len);
+        let right_l2_column = right_block.columns()[2]
+            .value
+            .convert_to_full_column(&self.ie_condition_state.l2_data_type, right_len);
+        // If `left_l1_column` and `right_l1_column` have intersection && `left_l2_column` and `right_l2_column` have intersection, return true
+        let (left_l1_min, left_l1_max, right_l1_min, right_l1_max) =
+            match self.ie_condition_state.l1_order {
+                true => {
+                    // l1 is asc
+                    (
+                        left_l1_column.index(0).unwrap(),
+                        left_l1_column.index(left_len - 1).unwrap(),
+                        right_l1_column.index(0).unwrap(),
+                        right_l1_column.index(right_len - 1).unwrap(),
+                    )
+                }
+                false => {
+                    // l1 is desc
+                    (
+                        left_l1_column.index(left_len - 1).unwrap(),
+                        left_l1_column.index(0).unwrap(),
+                        right_l1_column.index(right_len - 1).unwrap(),
+                        right_l1_column.index(0).unwrap(),
+                    )
+                }
+            };
+        let (left_l2_min, left_l2_max, right_l2_min, right_l2_max) =
+            match self.ie_condition_state.l2_order {
+                true => {
+                    // l2 is asc
+                    (
+                        left_l2_column.index(0).unwrap(),
+                        left_l2_column.index(left_len - 1).unwrap(),
+                        right_l2_column.index(0).unwrap(),
+                        right_l2_column.index(right_len - 1).unwrap(),
+                    )
+                }
+                false => {
+                    // l2 is desc
+                    (
+                        left_l2_column.index(left_len - 1).unwrap(),
+                        left_l2_column.index(0).unwrap(),
+                        right_l2_column.index(right_len - 1).unwrap(),
+                        right_l2_column.index(0).unwrap(),
+                    )
+                }
+            };
+        let l1_intersection = !(left_l1_min > right_l1_max || right_l1_min > left_l1_max);
+        let l2_intersection = !(left_l2_min > right_l2_max || right_l2_min > left_l2_max);
+        l1_intersection && l2_intersection
     }
 }
 

@@ -241,7 +241,7 @@ impl PipelineBuilder {
         right_res.main_pipeline.add_sink(|input| {
             let transform = Sinker::<TransformIEJoinRight>::create(
                 input.clone(),
-                TransformIEJoinRight::create(input.clone(), state.clone()),
+                TransformIEJoinRight::create(state.clone()),
             );
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(

@@ -27,12 +27,10 @@ use common_pipeline_sinks::Sink;
 use crate::pipelines::processors::transforms::IEJoinState;
 
 enum IEJoinStep {
-    // Parallel sink left/right table to IEJoinState
-    // During this step, we can sort input data by the first join key
     Sink,
-    // Execute ie join algorithm
-    Finalize,
-    Finished,
+    Merging,
+    // Execute ie_join algo,
+    Execute,
 }
 
 pub struct TransformIEJoinLeft {
@@ -42,6 +40,7 @@ pub struct TransformIEJoinLeft {
     output_data_blocks: VecDeque<DataBlock>,
     state: Arc<IEJoinState>,
     step: IEJoinStep,
+    execute_finished: bool,
 }
 
 impl TransformIEJoinLeft {
@@ -50,6 +49,7 @@ impl TransformIEJoinLeft {
         output_port: Arc<OutputPort>,
         ie_join_state: Arc<IEJoinState>,
     ) -> Box<dyn Processor> {
+        dbg!("TransformIEJoinLeft create");
         ie_join_state.left_attach();
         Box::new(TransformIEJoinLeft {
             input_port,
@@ -58,6 +58,7 @@ impl TransformIEJoinLeft {
             output_data_blocks: Default::default(),
             state: ie_join_state,
             step: IEJoinStep::Sink,
+            execute_finished: false,
         })
     }
 }
@@ -79,13 +80,8 @@ impl Processor for TransformIEJoinLeft {
                     return Ok(Event::Sync);
                 }
                 if self.input_port.is_finished() {
-                    let data = self.state.left_detach()?;
-                    if !data.is_empty() {
-                        self.output_data_blocks.push_back(data);
-                    } else {
-                        return Ok(Event::Finished);
-                    }
-                    self.step = IEJoinStep::Finalize;
+                    self.state.left_detach()?;
+                    self.step = IEJoinStep::Merging;
                     return Ok(Event::Async);
                 }
                 match self.input_port.has_data() {
@@ -99,16 +95,20 @@ impl Processor for TransformIEJoinLeft {
                     }
                 }
             }
-            IEJoinStep::Finished => {
-                if !self.output_data_blocks.is_empty() {
+            IEJoinStep::Execute => {
+                return if !self.output_data_blocks.is_empty() {
                     let data = self.output_data_blocks.pop_front().unwrap();
                     self.output_port.push_data(Ok(data));
-                    return Ok(Event::NeedConsume);
+                    Ok(Event::NeedConsume)
                 } else {
-                    self.input_port.finish();
-                    self.output_port.finish();
-                    return Ok(Event::Finished);
-                }
+                    if !self.execute_finished {
+                        Ok(Event::Sync)
+                    } else {
+                        dbg!("finish");
+                        self.output_port.finish();
+                        Ok(Event::Finished)
+                    }
+                };
             }
             _ => unreachable!(),
         }
@@ -121,35 +121,39 @@ impl Processor for TransformIEJoinLeft {
                     self.state.sink_left(data_block)?;
                 }
             }
+            IEJoinStep::Execute => {
+                let task_id = self.state.task_id();
+                if let Some(task_id) = task_id {
+                    self.output_data_blocks
+                        .push_back(self.state.ie_join(task_id)?);
+                } else {
+                    self.execute_finished = true;
+                }
+            }
             _ => unreachable!(),
         }
         Ok(())
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if let IEJoinStep::Finalize = self.step {
+        if let IEJoinStep::Merging = self.step {
+            dbg!("async");
             self.state.wait_merge_finish().await?;
-            self.step = IEJoinStep::Finished;
+            self.step = IEJoinStep::Execute;
         }
         Ok(())
     }
 }
 
 pub struct TransformIEJoinRight {
-    input_port: Arc<InputPort>,
-    input_data: Option<DataBlock>,
     state: Arc<IEJoinState>,
-    step: IEJoinStep,
 }
 
 impl TransformIEJoinRight {
-    pub fn create(input_port: Arc<InputPort>, ie_join_state: Arc<IEJoinState>) -> Self {
+    pub fn create(ie_join_state: Arc<IEJoinState>) -> Self {
         ie_join_state.right_attach();
         TransformIEJoinRight {
-            input_port,
-            input_data: None,
             state: ie_join_state,
-            step: IEJoinStep::Sink,
         }
     }
 }
