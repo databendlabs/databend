@@ -70,16 +70,6 @@ pub struct IEJoinState {
     right_sorted_blocks: RwLock<Vec<DataBlock>>,
     // L1: sort by the first join key
     l1_sorted_blocks: RwLock<Vec<DataBlock>>,
-    // L2: sort `l1_sorted_blocks` again, by the second join key
-    l2_sorted_blocks: RwLock<Vec<DataBlock>>,
-    // Left table result buffer
-    left_buffer: RwLock<Vec<usize>>,
-    // Right table result buffer
-    right_buffer: RwLock<Vec<usize>>,
-    // permutation array
-    p_array: RwLock<Vec<u64>>,
-    // Bit array
-    bit_array: RwLock<MutableBitmap>,
     // data schema of sorted blocks
     data_schema: DataSchemaRef,
     // The origin data for left/right table
@@ -180,11 +170,6 @@ impl IEJoinState {
             },
             right_sorted_blocks: Default::default(),
             l1_sorted_blocks: Default::default(),
-            l2_sorted_blocks: Default::default(),
-            left_buffer: RwLock::new(Vec::with_capacity(65535)),
-            right_buffer: RwLock::new(Vec::with_capacity(65535)),
-            p_array: Default::default(),
-            bit_array: Default::default(),
             data_schema: DataSchemaRefExt::create(fields),
             left_table: RwLock::new(DataBlock::empty()),
             right_table: RwLock::new(DataBlock::empty()),
@@ -377,7 +362,7 @@ impl IEJoinState {
             for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
                 // First check two blocks whether have intersection
                 if self.intersection(left_block, right_block) {
-                    tasks.push((left_idx, right_idx));
+                tasks.push((left_idx, right_idx));
                 }
             }
         }
@@ -393,8 +378,10 @@ impl IEJoinState {
         let (left_idx, right_idx) = tasks[task_id];
         let l1_sorted_blocks = self.l1_sorted_blocks.read();
         let right_sorted_blocks = self.right_sorted_blocks.read();
+        dbg!(&l1_sorted_blocks[left_idx]);
         let mut l1_sorted_blocks = vec![l1_sorted_blocks[left_idx].clone()];
         l1_sorted_blocks.push(right_sorted_blocks[right_idx].clone());
+        dbg!(&right_sorted_blocks[right_idx]);
 
         let data_schema = DataSchemaRefExt::create(
             self.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
@@ -442,7 +429,7 @@ impl IEJoinState {
                 merged_blocks.num_rows(),
             );
 
-        let mut l2_sorted_blocks = self.l2_sorted_blocks.write();
+        let mut l2_sorted_blocks = Vec::with_capacity(l1_sorted_blocks.len());
         for block in l1_sorted_blocks.iter() {
             l2_sorted_blocks.push(DataBlock::sort(
                 block,
@@ -458,24 +445,22 @@ impl IEJoinState {
         )?)?;
 
         // The pos col of l2 sorted blocks is permutation array
-        {
-            let mut p_array = self.p_array.write();
-            let column = &merged_blocks
-                .columns()
-                .last()
-                .unwrap()
-                .value
-                .try_downcast::<UInt64Type>()
-                .unwrap();
-            if let ValueRef::Column(col) = column.as_ref() {
-                for val in UInt64Type::iter_column(&col) {
-                    p_array.push(val)
-                }
+        let mut p_array = Vec::with_capacity(merged_blocks.num_rows());
+        let column = &merged_blocks
+            .columns()
+            .last()
+            .unwrap()
+            .value
+            .try_downcast::<UInt64Type>()
+            .unwrap();
+        if let ValueRef::Column(col) = column.as_ref() {
+            for val in UInt64Type::iter_column(&col) {
+                p_array.push(val)
             }
-            // Initialize bit_array
-            let mut bit_array = self.bit_array.write();
-            bit_array.extend_constant(p_array.len(), false);
         }
+        // Initialize bit_array
+        let mut bit_array = MutableBitmap::with_capacity(p_array.len());
+        bit_array.extend_constant(p_array.len(), false);
 
         let l2 = &merged_blocks.columns()[2].value.convert_to_full_column(
             self.conditions[0]
@@ -485,21 +470,25 @@ impl IEJoinState {
             merged_blocks.num_rows(),
         );
 
-        l2_sorted_blocks.clear();
+        drop(l2_sorted_blocks);
 
-        self.finalize(l1, l2, l1_index_column)
+        self.finalize(l1, l2, l1_index_column, &p_array, bit_array)
     }
 
-    pub fn finalize(&self, l1: &Column, l2: &Column, l1_index_column: Column) -> Result<DataBlock> {
-        let len = self.p_array.read().len();
-        let mut left_buffer = self.left_buffer.write();
-        left_buffer.clear();
-        let mut right_buffer = self.right_buffer.write();
-        right_buffer.clear();
+    pub fn finalize(
+        &self,
+        l1: &Column,
+        l2: &Column,
+        l1_index_column: Column,
+        p_array: &[u64],
+        mut bit_array: MutableBitmap,
+    ) -> Result<DataBlock> {
+        let len = p_array.len();
+        let mut left_buffer = vec![];
+        let mut right_buffer = vec![];
         let mut off1: usize = 0;
         let mut off2 = 0;
-        let mut bit_array = self.bit_array.write();
-        for (idx, p) in self.p_array.read().iter().enumerate() {
+        for (idx, p) in p_array.iter().enumerate() {
             if let ScalarRef::Number(NumberScalar::Int64(val)) =
                 l1_index_column.index(*p as usize).unwrap()
             {
@@ -512,7 +501,7 @@ impl IEJoinState {
                 if !order_match(&self.conditions[1].operator, order) {
                     break;
                 }
-                let p2 = self.p_array.read()[off2];
+                let p2 = p_array[off2];
                 if let ScalarRef::Number(NumberScalar::Int64(val)) =
                     l1_index_column.index(p2 as usize).unwrap()
                 {
@@ -626,8 +615,28 @@ impl IEJoinState {
                     )
                 }
             };
-        let l1_intersection = !(left_l1_min > right_l1_max || right_l1_min > left_l1_max);
-        let l2_intersection = !(left_l2_min > right_l2_max || right_l2_min > left_l2_max);
+        let l1_intersection = match self.ie_condition_state.l1_order {
+            true => {
+                // if l1_order is asc, then op1 is < / <=
+                !(left_l1_min > right_l1_max)
+            }
+            false => {
+                // If l1_order is desc, then op is > / >=
+                !(right_l1_min > left_l1_max)
+            }
+        };
+
+        let l2_intersection = match self.ie_condition_state.l2_order {
+            true => {
+                // if l2_order is asc, then op2 is > / >=
+                !(right_l2_min > left_l2_max)
+            }
+            false => {
+                // If l2_order is desc, then op is < / <=
+                !(left_l2_min > right_l2_max)
+            }
+        };
+
         l1_intersection && l2_intersection
     }
 }

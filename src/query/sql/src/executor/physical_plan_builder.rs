@@ -434,11 +434,9 @@ impl PhysicalPlanBuilder {
             }
             RelOperator::Join(join) => {
                 // First, consider if join can be IEJoin
-                if join.join_type == JoinType::Inner {
-                    let ie_join = self.try_ie_join(join, s_expr).await?;
-                    if let Some(ie_join) = ie_join {
-                        return Ok(ie_join);
-                    }
+                let ie_join = self.try_ie_join(join, s_expr).await?;
+                if let Some(ie_join) = ie_join {
+                    return Ok(ie_join);
                 }
                 // build hash join
                 let build_side = self.build(s_expr.child(1)?).await?;
@@ -1629,7 +1627,7 @@ impl PhysicalPlanBuilder {
                 other_conditions.push(condition);
             }
         }
-        if ie_conditions.len() != 2 {
+        if ie_conditions.len() != 2 || !other_conditions.is_empty() {
             return Ok(None);
         }
         // Construct IEJoin
