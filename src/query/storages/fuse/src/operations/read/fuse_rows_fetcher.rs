@@ -169,7 +169,7 @@ where F: RowsFetcher + Send + Sync + 'static
         for (idx, (location, ver)) in snapshot.segments.iter().enumerate() {
             let compact_segment_info = compact_segment_reader
                 .read(&LoadParams {
-                    ver: ver.clone(),
+                    ver: *ver,
                     location: location.clone(),
                     len_hint: None,
                     put_cache: false,
