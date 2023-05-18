@@ -212,7 +212,6 @@ impl FuseTable {
         partitions_total: usize,
         pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
-        let schema = Arc::new(schema.remove_virtual_computed());
         let arrow_schema = schema.to_arrow();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
 

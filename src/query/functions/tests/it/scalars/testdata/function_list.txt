@@ -690,8 +690,18 @@ Functions overloads:
 125 bit_xor(Int64 NULL, Int32 NULL) :: Int64 NULL
 126 bit_xor(Int64, Int64) :: Int64
 127 bit_xor(Int64 NULL, Int64 NULL) :: Int64 NULL
+0 bitmap_contains(Bitmap, UInt64) :: Boolean
+1 bitmap_contains(Bitmap NULL, UInt64 NULL) :: Boolean NULL
 0 bitmap_count(Bitmap) :: UInt64
 1 bitmap_count(Bitmap NULL) :: UInt64 NULL
+0 bitmap_has_all(Bitmap, Bitmap) :: Boolean
+1 bitmap_has_all(Bitmap NULL, Bitmap NULL) :: Boolean NULL
+0 bitmap_has_any(Bitmap, Bitmap) :: Boolean
+1 bitmap_has_any(Bitmap NULL, Bitmap NULL) :: Boolean NULL
+0 bitmap_max(Bitmap) :: UInt64
+1 bitmap_max(Bitmap NULL) :: UInt64 NULL
+0 bitmap_min(Bitmap) :: UInt64
+1 bitmap_min(Bitmap NULL) :: UInt64 NULL
 0 blake3(String) :: String
 1 blake3(String NULL) :: String NULL
 0 build_bitmap(Array(UInt64)) :: Bitmap

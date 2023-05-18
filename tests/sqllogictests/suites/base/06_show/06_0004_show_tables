@@ -77,3 +77,21 @@ SHOW TABLES FROM showtables WHERE name = 't2' AND 1 = 1
 
 statement ok
 DROP DATABASE showtable
+
+statement ok
+drop database if exists `rust-lang`
+
+statement ok
+create database `rust-lang`
+
+statement ok
+create table `rust-lang`.t(id int);
+
+statement ok
+use `rust-lang`
+
+statement ok
+show tables
+
+statement ok
+drop database `rust-lang`

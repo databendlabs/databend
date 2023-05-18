@@ -91,13 +91,11 @@ fn test_format() {
         tab1,
         None,
         None,
-        None,
     );
     let col2 = metadata.add_base_table_column(
         "col2".to_string(),
         TableDataType::Boolean,
         tab1,
-        None,
         None,
         None,
     );
@@ -120,7 +118,6 @@ fn test_format() {
                                 index: col1,
                                 data_type: Box::new(DataType::Boolean),
                                 visibility: Visibility::Visible,
-                                virtual_computed_expr: None,
                             },
                         }
                         .into(),
@@ -144,7 +141,6 @@ fn test_format() {
                         index: col2,
                         data_type: Box::new(DataType::Boolean),
                         visibility: Visibility::Visible,
-                        virtual_computed_expr: None,
                     },
                 }
                 .into(),

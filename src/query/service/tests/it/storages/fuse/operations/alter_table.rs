@@ -178,6 +178,7 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
         schema,
+        field_default_exprs: vec![],
         field_comments: vec![],
     };
     let interpreter = AddTableColumnInterpreter::try_create(ctx.clone(), add_table_column_plan)?;

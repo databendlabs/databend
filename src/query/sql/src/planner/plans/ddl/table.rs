@@ -22,6 +22,7 @@ use common_expression::types::NumberDataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
@@ -44,9 +45,16 @@ pub struct CreateTablePlan {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: TableOptions,
+    pub field_default_exprs: Vec<Option<String>>,
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
+}
+
+impl CreateTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![])
+    }
 }
 
 /// Desc.
@@ -95,14 +103,7 @@ pub struct VacuumTablePlan {
 
 impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if self.option.dry_run.is_some() {
-            Arc::new(DataSchema::new(vec![DataField::new(
-                "Files",
-                DataType::String,
-            )]))
-        } else {
-            Arc::new(DataSchema::empty())
-        }
+        Arc::new(DataSchema::empty())
     }
 }
 
@@ -121,6 +122,12 @@ pub struct OptimizeTablePlan {
     pub action: OptimizeTableAction,
 }
 
+impl OptimizeTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum OptimizeTableAction {
     All,
@@ -136,6 +143,12 @@ pub struct AnalyzeTablePlan {
     pub table: String,
 }
 
+impl AnalyzeTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 /// Rename.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RenameTablePlan {
@@ -148,6 +161,12 @@ pub struct RenameTablePlan {
     pub new_table: String,
 }
 
+impl RenameTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 // Table add column
 #[derive(Clone, Debug, PartialEq)]
 pub struct AddTableColumnPlan {
@@ -155,7 +174,14 @@ pub struct AddTableColumnPlan {
     pub database: String,
     pub table: String,
     pub schema: TableSchemaRef,
+    pub field_default_exprs: Vec<Option<String>>,
     pub field_comments: Vec<String>,
+}
+
+impl AddTableColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }
 
 // Table drop column
@@ -165,6 +191,12 @@ pub struct DropTableColumnPlan {
     pub database: String,
     pub table: String,
     pub column: String,
+}
+
+impl DropTableColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }
 
 /// Show.
@@ -196,6 +228,12 @@ pub struct TruncateTablePlan {
     pub purge: bool,
 }
 
+impl TruncateTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 /// Undrop.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UndropTablePlan {
@@ -203,6 +241,12 @@ pub struct UndropTablePlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
+}
+
+impl UndropTablePlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }
 
 /// The table name
@@ -245,10 +289,22 @@ pub struct AlterTableClusterKeyPlan {
     pub cluster_keys: Vec<String>,
 }
 
+impl AlterTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropTableClusterKeyPlan {
     pub tenant: String,
     pub catalog: String,
     pub database: String,
     pub table: String,
+}
+
+impl DropTableClusterKeyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
 }
