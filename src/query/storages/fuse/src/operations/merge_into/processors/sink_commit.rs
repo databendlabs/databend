@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
+use common_catalog::table_mutation_lock::MutationLockHeartbeat;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -51,6 +52,7 @@ enum State {
     None,
     ReadMeta(BlockMetaInfoPtr),
     TryCommit(TableSnapshot),
+    TryLock(TableSnapshot),
     RefreshTable,
     DetectConflict(Arc<TableSnapshot>),
     MergeSegments(Vec<Location>),
@@ -73,9 +75,10 @@ pub struct CommitSink {
     // summarised statistics of all the merged segments.
     merged_statistics: Statistics,
     abort_operation: AbortOperation,
-    // heartbeat: Option<MutationLockHeartbeat>,
+    heartbeat: MutationLockHeartbeat,
+
     retries: u64,
-    get_lock: bool,
+    need_lock: bool,
 
     input: Arc<InputPort>,
 }
@@ -97,8 +100,9 @@ impl CommitSink {
             merged_segments: vec![],
             merged_statistics: Statistics::default(),
             abort_operation: AbortOperation::default(),
+            heartbeat: MutationLockHeartbeat::default(),
             retries: 0,
-            get_lock: false,
+            need_lock: false,
             input,
         })))
     }
@@ -123,6 +127,7 @@ impl Processor for CommitSink {
             &self.state,
             State::MergeSegments(_)
                 | State::TryCommit(_)
+                | State::TryLock(_)
                 | State::RefreshTable
                 | State::AbortOperation
         ) {
@@ -163,12 +168,17 @@ impl Processor for CommitSink {
                 self.merged_segments = meta.segments.clone();
                 self.merged_statistics = meta.summary.clone();
                 self.abort_operation = meta.abort_operation.clone();
-                self.get_lock = meta.get_lock;
+                self.need_lock = meta.need_lock;
 
                 let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
                 new_snapshot.segments = self.merged_segments.clone();
                 new_snapshot.summary = self.merged_statistics.clone();
-                self.state = State::TryCommit(new_snapshot);
+
+                if self.need_lock {
+                    self.state = State::TryLock(new_snapshot);
+                } else {
+                    self.state = State::TryCommit(new_snapshot);
+                }
             }
             State::DetectConflict(latest_snapshot) => {
                 // Check if there is only insertion during the operation.
@@ -202,25 +212,27 @@ impl Processor for CommitSink {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::TryCommit(new_snapshot) => {
+            State::TryLock(new_snapshot) => {
                 let table_info = self.table.get_table_info();
-                if self.get_lock {
-                    todo!();
-                    // let catalog = self.ctx.get_catalog(table_info.catalog())?;
-                    // let res = catalog.get_table_mutation_lock(table_info).await?;
-                    // if res.locked {
-                    // tracing::error!(
-                    // "table '{}' is under mutation, please retry later",
-                    // table_info.name
-                    // );
-                    // self.state = State::AbortOperation;
-                    // return Ok(());
-                    // }
+                match MutationLockHeartbeat::try_create(self.ctx.clone(), table_info.clone()).await
+                {
+                    Ok(heartbeat) => {
+                        self.heartbeat = heartbeat;
+                        self.state = State::TryCommit(new_snapshot);
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "commit mutation failed cause get lock failed, error: {:?}",
+                            e
+                        );
+                        self.state = State::AbortOperation;
+                    }
                 }
-
+            }
+            State::TryCommit(new_snapshot) => {
                 match FuseTable::commit_to_meta_server(
                     self.ctx.as_ref(),
-                    table_info,
+                    self.table.get_table_info(),
                     &self.location_gen,
                     new_snapshot,
                     None,
@@ -229,20 +241,23 @@ impl Processor for CommitSink {
                 )
                 .await
                 {
-                    Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
-                        if self.retries < MAX_RETRIES {
-                            self.state = State::RefreshTable;
-                        } else {
+                    Err(e) => {
+                        if e.code() != ErrorCode::TABLE_VERSION_MISMATCHED
+                            || self.retries >= MAX_RETRIES
+                        {
                             tracing::error!(
-                                "commit mutation failed after {} retries",
-                                self.retries
+                                "commit mutation failed after {} retries, error: {:?}",
+                                self.retries,
+                                e,
                             );
                             self.state = State::AbortOperation;
+                        } else {
+                            self.state = State::RefreshTable;
                         }
                     }
-                    Err(e) => return Err(e),
                     Ok(_) => {
                         metrics_inc_commit_mutation_success();
+                        self.heartbeat.shutdown().await?;
                         self.state = State::Finish;
                     }
                 };
@@ -283,6 +298,7 @@ impl Processor for CommitSink {
                 self.state = State::TryCommit(new_snapshot);
             }
             State::AbortOperation => {
+                self.heartbeat.shutdown().await?;
                 let op = self.abort_operation.clone();
                 op.abort(self.ctx.clone(), self.dal.clone()).await?;
                 return Err(ErrorCode::StorageOther(

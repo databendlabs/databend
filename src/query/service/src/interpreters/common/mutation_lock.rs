@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
+use common_storages_fuse::TableContext;
 use common_users::UserApiProvider;
 use futures::future::select;
 use futures::future::Either;
@@ -35,9 +36,8 @@ use futures_util::StreamExt;
 use rand::thread_rng;
 use rand::Rng;
 
-use crate::table_context::TableContext;
+use crate::sessions::QueryContext;
 
-#[derive(Default)]
 pub struct MutationLockHeartbeat {
     shutdown_flag: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
@@ -46,7 +46,7 @@ pub struct MutationLockHeartbeat {
 
 impl MutationLockHeartbeat {
     pub async fn try_create(
-        ctx: Arc<dyn TableContext>,
+        ctx: Arc<QueryContext>,
         table_info: TableInfo,
     ) -> Result<MutationLockHeartbeat> {
         let revision = Self::acquire_lock(ctx.clone(), table_info.clone()).await?;
@@ -95,7 +95,7 @@ impl MutationLockHeartbeat {
         })
     }
 
-    async fn acquire_lock(ctx: Arc<dyn TableContext>, table_info: TableInfo) -> Result<u64> {
+    async fn acquire_lock(ctx: Arc<QueryContext>, table_info: TableInfo) -> Result<u64> {
         let catalog = ctx.get_catalog(table_info.catalog())?;
         let expire_secs = ctx.get_settings().get_mutation_lock_expire_secs()?;
         let res = catalog
@@ -145,9 +145,9 @@ impl MutationLockHeartbeat {
                     catalog
                         .delete_mutation_lock_rev(&table_info, revision)
                         .await?;
-                    Err(ErrorCode::TableMutationAlreadyLocked(
-                        "table is locked by other session, please try later".to_string(),
-                    ))
+                    Err(ErrorCode::TableMutationAlreadyLocked(format!(
+                        "table is locked by other session, please try later"
+                    )))
                 }
             }?;
         }
