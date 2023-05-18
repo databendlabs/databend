@@ -154,7 +154,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
             let block_meta = &blocks[block as usize];
             let page_size = block_meta.page_size();
             let part_info = FuseTable::projection_part(
-                &block_meta,
+                block_meta,
                 &None,
                 &column_nodes,
                 None,

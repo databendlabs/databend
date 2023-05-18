@@ -139,7 +139,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
             let blocks = compact_segment_info.block_metas()?;
             let block_meta = &blocks[block as usize];
             let part_info = FuseTable::projection_part(
-                &block_meta,
+                block_meta,
                 &None,
                 &column_nodes,
                 None,
