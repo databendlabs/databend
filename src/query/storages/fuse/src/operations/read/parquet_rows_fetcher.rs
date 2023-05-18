@@ -143,6 +143,7 @@ impl<const BLOCKING_IO: bool> ParquetRowsFetcher<BLOCKING_IO> {
                 &None,
                 &column_nodes,
                 None,
+                None,
                 &self.projection,
             );
 

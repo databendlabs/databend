@@ -153,6 +153,25 @@ impl BlockReader {
             results.insert(index, readers);
         }
 
+        if let Some(ref virtual_columns_meta) = part.virtual_columns_meta {
+            let virtual_loc = part.location.replace(".parquet", "_virtual.parquet");
+
+            for (_, virtual_column_meta) in virtual_columns_meta.iter() {
+                let metas = vec![virtual_column_meta.meta.clone()];
+
+                let readers = Self::sync_read_native_column(
+                    self.operator.clone(),
+                    &virtual_loc,
+                    metas,
+                    part.range(),
+                )?;
+                let virtual_index = virtual_column_meta.index + self.project_column_nodes.len();
+
+                println!("virtual_index={:?}", virtual_index);
+                results.insert(virtual_index, readers);
+            }
+        }
+
         Ok(results)
     }
 
@@ -225,6 +244,20 @@ impl BlockReader {
                     });
                 }
             }
+        }
+        Ok(DataBlock::new(entries, rows))
+    }
+
+    pub fn build_virtual_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
+        let mut rows = 0;
+        let mut entries = Vec::with_capacity(chunks.len());
+        for (_, array) in chunks.iter() {
+            let data_type = DataType::Nullable(Box::new(DataType::Variant));
+            entries.push(BlockEntry {
+                data_type: data_type.clone(),
+                value: Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
+            });
+            rows = array.len();
         }
         Ok(DataBlock::new(entries, rows))
     }

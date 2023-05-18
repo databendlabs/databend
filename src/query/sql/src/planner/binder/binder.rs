@@ -257,6 +257,11 @@ impl<'a> Binder {
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
             Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
 
+            // Virtual Columns
+            Statement::CreateVirtualColumns(stmt) => self.bind_create_virtual_columns(stmt).await?,
+            Statement::DropVirtualColumns(stmt) => self.bind_drop_virtual_columns(stmt).await?,
+            Statement::GenerateVirtualColumns(stmt) => self.bind_generate_virtual_columns(stmt).await?,
+
             // Users
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
             Statement::DropUser { if_exists, user } => Plan::DropUser(Box::new(DropUserPlan {

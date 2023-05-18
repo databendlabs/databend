@@ -457,7 +457,14 @@ pub trait Visitor<'ast>: Sized {
     fn visit_drop_view(&mut self, _stmt: &'ast DropViewStmt) {}
 
     fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
+
     fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
+
+    fn visit_create_virtual_columns(&mut self, _stmt: &'ast CreateVirtualColumnsStmt) {}
+
+    fn visit_drop_virtual_columns(&mut self, _stmt: &'ast DropVirtualColumnsStmt) {}
+
+    fn visit_generate_virtual_columns(&mut self, _stmt: &'ast GenerateVirtualColumnsStmt) {}
 
     fn visit_show_users(&mut self) {}
 

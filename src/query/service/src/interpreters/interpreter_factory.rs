@@ -205,7 +205,6 @@ impl InterpreterFactory {
                 ctx,
                 *exists_table.clone(),
             )?)),
-
             // Views
             Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(
                 ctx,
@@ -231,6 +230,19 @@ impl InterpreterFactory {
                 *index.clone(),
             )?)),
 
+            // Virtual columns
+            Plan::CreateVirtualColumns(create_virtual_columns) => Ok(Arc::new(
+                CreateVirtualColumnsInterpreter::try_create(ctx, *create_virtual_columns.clone())?,
+            )),
+            Plan::DropVirtualColumns(drop_virtual_columns) => Ok(Arc::new(
+                DropVirtualColumnsInterpreter::try_create(ctx, *drop_virtual_columns.clone())?,
+            )),
+            Plan::GenerateVirtualColumns(generate_virtual_columns) => {
+                Ok(Arc::new(GenerateVirtualColumnsInterpreter::try_create(
+                    ctx,
+                    *generate_virtual_columns.clone(),
+                )?))
+            }
             // Users
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
                 ctx,

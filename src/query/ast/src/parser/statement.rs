@@ -720,6 +720,47 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let create_virtual_columns = map(
+        rule! {
+            CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+            Statement::CreateVirtualColumns(CreateVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+                virtual_columns,
+            })
+        },
+    );
+
+    let drop_virtual_columns = map(
+        rule! {
+            CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+            Statement::DropVirtualColumns(DropVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+                virtual_columns,
+            })
+        },
+    );
+
+    let generate_virtual_columns = map(
+        rule! {
+            GENERATE ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, table))| {
+            Statement::GenerateVirtualColumns(GenerateVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
@@ -1270,6 +1311,11 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
+        ),
+        rule!(
+            #create_virtual_columns: "`CREATE VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
+            | #drop_virtual_columns: "`DROP VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
+            | #generate_virtual_columns: "`GENERATE VIRTUAL COLUMNS FOR [<database>.]<table>`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"

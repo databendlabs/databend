@@ -29,6 +29,8 @@ use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::CreateVirtualColumnReply;
+use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
@@ -41,6 +43,8 @@ use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropVirtualColumnReply;
+use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -49,6 +53,7 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
+use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -66,6 +71,7 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MetaId;
 use tracing::info;
@@ -229,6 +235,32 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         Ok(self.ctx.meta.list_indexes(req).await?)
+    }
+
+    // Virtual column
+
+    #[async_backtrace::framed]
+    async fn create_virtual_column(
+        &self,
+        req: CreateVirtualColumnReq,
+    ) -> Result<CreateVirtualColumnReply> {
+        Ok(self.ctx.meta.create_virtual_column(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_virtual_column(
+        &self,
+        req: DropVirtualColumnReq,
+    ) -> Result<DropVirtualColumnReply> {
+        Ok(self.ctx.meta.drop_virtual_column(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn list_virtual_columns(
+        &self,
+        req: ListVirtualColumnsReq,
+    ) -> Result<Vec<VirtualColumnMeta>> {
+        Ok(self.ctx.meta.list_virtual_columns(req).await?)
     }
 
     #[async_backtrace::framed]

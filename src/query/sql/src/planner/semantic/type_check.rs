@@ -2546,7 +2546,6 @@ impl<'a> TypeChecker<'a> {
         }
 
         let mut name = String::new();
-        name.push('_');
         name.push_str(&column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
         while let Some((_, path)) = paths.pop_front() {
@@ -2557,9 +2556,9 @@ impl<'a> TypeChecker<'a> {
                     Scalar::Number(NumberScalar::UInt64(idx))
                 }
                 Literal::String(field) => {
-                    name.push('\'');
+                    name.push('"');
                     name.push_str(field.as_ref());
-                    name.push('\'');
+                    name.push('"');
                     Scalar::String(field.into_bytes())
                 }
                 _ => unreachable!(),

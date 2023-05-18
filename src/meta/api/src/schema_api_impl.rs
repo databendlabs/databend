@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -41,6 +42,7 @@ use common_meta_app::app_error::UnknownDatabaseId;
 use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
+use common_meta_app::app_error::VirtualColumnNotExist;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
 use common_meta_app::schema::CountTablesKey;
@@ -54,6 +56,8 @@ use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::CreateVirtualColumnReply;
+use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
@@ -71,6 +75,8 @@ use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropVirtualColumnReply;
+use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::EmptyProto;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
@@ -85,6 +91,7 @@ use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
+use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -111,6 +118,8 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::VirtualColumnMeta;
+use common_meta_app::schema::VirtualColumnNameIdent;
 use common_meta_app::share::ShareGrantObject;
 use common_meta_app::share::ShareId;
 use common_meta_app::share::ShareNameIdent;
@@ -1069,6 +1078,190 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         };
 
         Ok(index_metas)
+    }
+
+    // virtual column
+
+    async fn create_virtual_column(
+        &self,
+        req: CreateVirtualColumnReq,
+    ) -> Result<CreateVirtualColumnReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+
+            let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
+                get_pb_value(self, &req.name_ident).await?;
+
+            // If virtual columns already exist, merge them together
+            let virtual_column_meta = if let Some(old_virtual_column) = old_virtual_column_opt {
+                let mut virtual_columns = req.virtual_columns.clone();
+                virtual_columns.extend(old_virtual_column.virtual_columns.clone());
+
+                let virtual_columns_set: HashSet<String> =
+                    HashSet::from_iter(virtual_columns.into_iter());
+                let virtual_columns = Vec::from_iter(virtual_columns_set.into_iter());
+
+                VirtualColumnMeta {
+                    table_id: req.name_ident.table_id,
+                    virtual_columns,
+                    created_on: old_virtual_column.created_on,
+                    updated_on: Some(Utc::now()),
+                    drop_on: old_virtual_column.drop_on,
+                }
+            } else {
+                VirtualColumnMeta {
+                    table_id: req.name_ident.table_id,
+                    virtual_columns: req.virtual_columns.clone(),
+                    created_on: Utc::now(),
+                    updated_on: None,
+                    drop_on: None,
+                }
+            };
+
+            // Create virtual column by inserting these record:
+            // (tenant, table_id) -> virtual_column_meta
+            {
+                let condition = vec![];
+                let if_then = vec![
+                    txn_op_put(&req.name_ident, serialize_struct(&virtual_column_meta)?), /* (tenant, table_id) -> virtual_column_meta */
+                ];
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    req.name_ident = debug(&virtual_column_meta),
+                    succ = display(succ),
+                    "create_virtual_column"
+                );
+
+                if succ {
+                    return Ok(CreateVirtualColumnReply {});
+                }
+            }
+        }
+
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("create_virtual_column", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+
+    async fn drop_virtual_column(
+        &self,
+        req: DropVirtualColumnReq,
+    ) -> Result<DropVirtualColumnReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+
+            let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
+                get_pb_value(self, &req.name_ident).await?;
+
+            // If virtual columns already exist, merge them together
+            let virtual_column_meta = if let Some(old_virtual_column) = old_virtual_column_opt {
+                let mut virtual_columns_set: HashSet<String> =
+                    HashSet::from_iter(old_virtual_column.virtual_columns.to_vec());
+                for remove_virtual_column in &req.virtual_columns {
+                    virtual_columns_set.remove(remove_virtual_column);
+                }
+                let virtual_columns = Vec::from_iter(virtual_columns_set.into_iter());
+
+                VirtualColumnMeta {
+                    table_id: req.name_ident.table_id,
+                    virtual_columns,
+                    created_on: old_virtual_column.created_on,
+                    updated_on: old_virtual_column.updated_on,
+                    drop_on: Some(Utc::now()),
+                }
+            } else {
+                return Err(KVAppError::AppError(AppError::VirtualColumnNotExist(
+                    VirtualColumnNotExist::new(
+                        req.name_ident.table_id,
+                        format!(
+                            "drop virtual column with tenant: {} table_id: {}",
+                            req.name_ident.tenant, req.name_ident.table_id
+                        ),
+                    ),
+                )));
+            };
+
+            // Create virtual column by inserting these record:
+            // (tenant, table_id) -> virtual_column_meta
+            {
+                let condition = vec![];
+                let if_then = vec![
+                    txn_op_put(&req.name_ident, serialize_struct(&virtual_column_meta)?), /* (tenant, table_id) -> virtual_column_meta */
+                ];
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    req.name_ident = debug(&virtual_column_meta),
+                    succ = display(succ),
+                    "drop_virtual_column"
+                );
+
+                if succ {
+                    return Ok(DropVirtualColumnReply {});
+                }
+            }
+        }
+
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("drop_virtual_column", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+
+    async fn list_virtual_columns(
+        &self,
+        req: ListVirtualColumnsReq,
+    ) -> Result<Vec<VirtualColumnMeta>, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        if let Some(table_id) = req.table_id {
+            let name_ident = VirtualColumnNameIdent {
+                tenant: req.tenant.clone(),
+                table_id,
+            };
+            let (_, virtual_column_opt): (_, Option<VirtualColumnMeta>) =
+                get_pb_value(self, &name_ident).await?;
+
+            if let Some(virtual_column) = virtual_column_opt {
+                return Ok(vec![virtual_column]);
+            } else {
+                return Ok(vec![]);
+            }
+        }
+
+        // Get virtual columns list by `prefix_list` "<prefix>/<tenant>"
+        let prefix_key = kvapi::KeyBuilder::new_prefixed(VirtualColumnNameIdent::PREFIX)
+            .push_str(&req.tenant)
+            .done();
+
+        let list = self.prefix_list_kv(&prefix_key).await?;
+        let mut virtual_column_list = Vec::with_capacity(list.len());
+        for (_, seq) in list.iter() {
+            let virtual_column_meta: VirtualColumnMeta = deserialize_struct(&seq.data)?;
+            virtual_column_list.push(virtual_column_meta);
+        }
+
+        Ok(virtual_column_list)
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]

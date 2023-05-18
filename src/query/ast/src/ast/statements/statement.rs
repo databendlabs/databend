@@ -125,9 +125,14 @@ pub enum Statement {
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
 
-    // indexes
+    // Indexes
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
+
+    // VirtualColumns
+    CreateVirtualColumns(CreateVirtualColumnsStmt),
+    DropVirtualColumns(DropVirtualColumnsStmt),
+    GenerateVirtualColumns(GenerateVirtualColumnsStmt),
 
     // User
     ShowUsers,
@@ -383,6 +388,9 @@ impl Display for Statement {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateVirtualColumns(stmt) => write!(f, "{stmt}")?,
+            Statement::DropVirtualColumns(stmt) => write!(f, "{stmt}")?,
+            Statement::GenerateVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,

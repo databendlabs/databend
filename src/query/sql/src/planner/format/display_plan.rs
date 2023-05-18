@@ -81,6 +81,17 @@ impl Plan {
             Plan::CreateIndex(index) => Ok(format!("{:?}", index)),
             Plan::DropIndex(index) => Ok(format!("{:?}", index)),
 
+            // Virtual Columns
+            Plan::CreateVirtualColumns(create_virtual_columns) => {
+                Ok(format!("{:?}", create_virtual_columns))
+            }
+            Plan::DropVirtualColumns(drop_virtual_columns) => {
+                Ok(format!("{:?}", drop_virtual_columns))
+            }
+            Plan::GenerateVirtualColumns(generate_virtual_columns) => {
+                Ok(format!("{:?}", generate_virtual_columns))
+            }
+
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),
             Plan::Replace(replace) => Ok(format!("{:?}", replace)),

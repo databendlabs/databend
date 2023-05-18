@@ -18,6 +18,7 @@ mod catalog;
 mod database;
 mod index;
 mod table;
+mod virtual_column;
 
 pub use catalog::CatalogMeta;
 pub use catalog::CatalogNameIdent;
@@ -89,6 +90,13 @@ pub use table::UpsertTableCopiedFileReply;
 pub use table::UpsertTableCopiedFileReq;
 pub use table::UpsertTableOptionReply;
 pub use table::UpsertTableOptionReq;
+pub use virtual_column::CreateVirtualColumnReply;
+pub use virtual_column::CreateVirtualColumnReq;
+pub use virtual_column::DropVirtualColumnReply;
+pub use virtual_column::DropVirtualColumnReq;
+pub use virtual_column::ListVirtualColumnsReq;
+pub use virtual_column::VirtualColumnMeta;
+pub use virtual_column::VirtualColumnNameIdent;
 
 const PREFIX_DB_ID_LIST: &str = "__fd_db_id_list";
 const PREFIX_DATABASE: &str = "__fd_database";
@@ -106,3 +114,4 @@ const PREFIX_INDEX: &str = "__fd_index";
 const PREFIX_INDEX_ID_TO_NAME: &str = "__fd_index_id_to_name";
 const PREFIX_INDEX_BY_ID: &str = "__fd_index_by_id";
 const PREFIX_TABLE_LOCK: &str = "__fd_table_lock";
+const PREFIX_VIRTUAL_COLUMN: &str = "__fd_virtual_column";

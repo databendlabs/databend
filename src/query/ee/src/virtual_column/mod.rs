@@ -12,7 +12,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod handler;
-pub mod vacuum;
-pub mod virtual_columns;
-pub use handler::RealVacuumHandler;
+mod virtual_column_handler;
+pub use virtual_column_handler::RealVirtualColumnsHandler;

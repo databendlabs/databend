@@ -97,6 +97,9 @@ mod interpreter_user_udf_drop;
 mod interpreter_view_alter;
 mod interpreter_view_create;
 mod interpreter_view_drop;
+mod interpreter_virtual_columns_create;
+mod interpreter_virtual_columns_drop;
+mod interpreter_virtual_columns_generate;
 
 pub use access::ManagementModeAccess;
 pub use common::append2table;
@@ -172,3 +175,6 @@ pub use interpreter_user_udf_drop::DropUserUDFInterpreter;
 pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;
+pub use interpreter_virtual_columns_create::CreateVirtualColumnsInterpreter;
+pub use interpreter_virtual_columns_drop::DropVirtualColumnsInterpreter;
+pub use interpreter_virtual_columns_generate::GenerateVirtualColumnsInterpreter;

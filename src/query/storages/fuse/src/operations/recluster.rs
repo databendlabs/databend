@@ -121,6 +121,7 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &block_metas,
+            None,
             partitions_total,
             PruningStatistics::default(),
         )?;

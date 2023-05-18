@@ -24,6 +24,8 @@ use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::CreateVirtualColumnReply;
+use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
@@ -32,6 +34,8 @@ use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropVirtualColumnReply;
+use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -42,6 +46,7 @@ use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
+use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -60,6 +65,7 @@ use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::MetaId;
@@ -110,6 +116,23 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: ListIndexesReq,
     ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
+
+    // virtual column
+
+    async fn create_virtual_column(
+        &self,
+        req: CreateVirtualColumnReq,
+    ) -> Result<CreateVirtualColumnReply, KVAppError>;
+
+    async fn drop_virtual_column(
+        &self,
+        req: DropVirtualColumnReq,
+    ) -> Result<DropVirtualColumnReply, KVAppError>;
+
+    async fn list_virtual_columns(
+        &self,
+        req: ListVirtualColumnsReq,
+    ) -> Result<Vec<VirtualColumnMeta>, KVAppError>;
 
     // table
 

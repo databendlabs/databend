@@ -15,10 +15,13 @@ test = false
 # Workspace dependencies
 aggregating-index = { path = "../ee-features/aggregating-index" }
 async-backtrace = { workspace = true }
+common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
+common-expression = { path = "../expression" }
+common-io = { path = "../../common/io" }
 common-license = { path = "../../common/license" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
@@ -35,6 +38,9 @@ storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
+virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
+jsonb = { workspace = true }
+opendal = { workspace = true }
 
 async-trait = "0.1.57"
 chrono = { workspace = true }
