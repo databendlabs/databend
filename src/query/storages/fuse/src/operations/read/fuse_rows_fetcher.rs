@@ -23,7 +23,6 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
-
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -31,11 +30,8 @@ use common_pipeline_core::Pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncTransform;
 use common_pipeline_transforms::processors::transforms::AsyncTransformer;
 
-
-
 use super::native_rows_fetcher::NativeRowsFetcher;
 use super::parquet_rows_fetcher::ParquetRowsFetcher;
-
 use crate::io::ReadSettings;
 use crate::FuseStorageFormat;
 use crate::FuseTable;

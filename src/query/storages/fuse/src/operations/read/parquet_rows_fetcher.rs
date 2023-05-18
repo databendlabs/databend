@@ -16,8 +16,6 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
-
-
 use common_catalog::plan::split_prefix;
 use common_catalog::plan::split_row_id;
 use common_catalog::plan::PartInfoPtr;
@@ -28,8 +26,6 @@ use common_expression::DataBlock;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
 use storages_common_cache::LoadParams;
-
-
 use storages_common_table_meta::meta::TableSnapshot;
 
 use super::fuse_rows_fetcher::RowsFetcher;
