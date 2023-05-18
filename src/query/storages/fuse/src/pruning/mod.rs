@@ -15,6 +15,7 @@
 mod block_pruner;
 mod bloom_pruner;
 mod fuse_pruner;
+mod new_segment_pruner;
 mod pruner_location;
 mod pruning_statistics;
 mod segment_pruner;
