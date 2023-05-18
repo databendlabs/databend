@@ -180,7 +180,7 @@ fn test_partition_reshuffle() {
 #[test]
 fn test_split() {
     for seg in 0..1024 * 10 {
-        for block in 0..(1 >> NUM_BLOCK_ID_BITS - 1) {
+        for block in 0..(1 << NUM_BLOCK_ID_BITS) - 1 {
             let prefix = compute_row_id_prefix(seg, block);
             let (seg_id, block_id) = split_prefix(prefix);
             assert_eq!(seg_id, seg);
