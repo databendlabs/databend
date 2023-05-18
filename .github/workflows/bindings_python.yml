@@ -35,11 +35,9 @@ jobs:
       - uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-      - name: Setup Build Tool
-        uses: ./.github/actions/setup_build_tool
-        with:
-          target: ${{ inputs.target }}
-          bypass_env_vars: RUSTFLAGS,RUST_LOG
+      - name: Rust setup
+        run: |
+          bash ./scripts/setup/dev_setup.sh -yb
       - name: Build with maturin
         working-directory: "src/bendpy"
         run: |
