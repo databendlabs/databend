@@ -42,7 +42,7 @@ Both VACUUM TABLE and OPTIMIZE TABLE allow you to specify a period to determine 
 VACUUM TABLE provides enhanced control over your historical data files both before and after their removal:
 
 - VACUUM TABLE includes the DRY RUN option, which allows you to preview the data files to be removed before applying the command. This provides a safe removal experience and helps you avoid unintended data loss. 
-- VACUUM TABLE comes with a fail-safe service that provides a 7-day window for potential data recovery. This means that if you remove data files, there is a possibility to recover them within 7 days. If you need this service, please contact Databend for assistance.
+- VACUUM TABLE comes with a fail-safe service that provides a 7-day window for potential data recovery. This means that if you remove data files, there is a possibility to recover them within 7 days. If you need this service, please contact [Databend Team](https://www.databend.com/contact-us/) for assistance.
 
 |                                                  	| VACUUM TABLE 	| OPTIMIZE TABLE 	|
 |--------------------------------------------------	|--------------	|----------------	|
