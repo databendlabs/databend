@@ -26,6 +26,28 @@ env:
   RUNNER_PROVIDER: github
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Setup Build Tool
+        uses: ./.github/actions/setup_build_tool
+        with:
+          target: ${{ inputs.target }}
+          bypass_env_vars: RUSTFLAGS,RUST_LOG
+      - name: Build with maturin
+        working-directory: "bindings/python"
+        run: |
+          python -m pip install -e .[test]
+      - name: Run pytests
+        working-directory: "bindings/python"
+        run: |
+          pytest -v tests/*
   build_linux:
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
@@ -109,12 +131,11 @@ jobs:
           docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
           before-script-linux: ../../scripts/setup/dev_setup.sh -yb
 
-      - name: Run tests
-        working-directory: src/bendpy
-        uses: PyO3/maturin-action@v1
-        run: |
-          pip install -e .[test]
-          pytest -v tests/*
+      # - name: Run tests
+      #   working-directory: src/bendpy
+      #   run: |
+      #     pip install -e .[test]
+      #     pytest -v tests/*
 
       - name: Upload artifact
         if: github.event_name == 'pull_request'
