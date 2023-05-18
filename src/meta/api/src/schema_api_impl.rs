@@ -67,13 +67,13 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListTableMutationLockReply;
 use common_meta_app::schema::ListTableMutationLockReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
@@ -84,7 +84,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableMutationLock;
-use common_meta_app::schema::TableMutationLockKey2;
+use common_meta_app::schema::TableMutationLockKey;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -2298,21 +2298,22 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     async fn list_table_mutation_lock_revs(
         &self,
         req: ListTableMutationLockReq,
-    ) -> Result<Vec<Revision>, KVAppError> {
-        let reply = self.prefix_list_kv(&req.prefix).await?;
+    ) -> Result<ListTableMutationLockReply, KVAppError> {
+        let prefix = format!("{}/{}", TableMutationLockKey::PREFIX, req.table_id);
+        let reply = self.prefix_list_kv(&prefix).await?;
 
-        let mut res = vec![];
+        let mut revisions = vec![];
         for (k, _) in reply.into_iter() {
-            let lock_key = TableMutationLockKey2::from_str_key(&k).map_err(|e| {
+            let lock_key = TableMutationLockKey::from_str_key(&k).map_err(|e| {
                 let inv = InvalidReply::new("list_table_mutation_lock_revs", &e);
                 let meta_net_err = MetaNetworkError::InvalidReply(inv);
                 MetaError::NetworkError(meta_net_err)
             })?;
 
-            res.push(lock_key.revision);
+            revisions.push(lock_key.revision);
         }
-        res.sort();
-        Ok(res)
+        revisions.sort();
+        Ok(ListTableMutationLockReply { revisions, prefix })
     }
 
     async fn upsert_mutation_lock_rev(
@@ -2343,10 +2344,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let revision = if let Some(rev) = req.revision {
                 rev
             } else {
-                fetch_id(self, IdGenerator::mutation_lock_id(table_id)).await?
+                fetch_id(self, IdGenerator::mutation_lock_id()).await?
             };
 
-            let lock_key = TableMutationLockKey2 { table_id, revision };
+            let lock_key = TableMutationLockKey { table_id, revision };
 
             let (lock_key_seq, _): (_, Option<TableMutationLock>) =
                 get_pb_value(self, &lock_key).await?;
@@ -2381,10 +2382,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(UpsertTableMutationLockReply {
-                    revision,
-                    prefix: format!("{}/{}", TableMutationLockKey2::PREFIX, table_id),
-                });
+                return Ok(UpsertTableMutationLockReply { revision });
             }
         }
 
@@ -2419,7 +2417,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 "delete_mutation_lock_rev"
             );
 
-            let lock_key = TableMutationLockKey2 { table_id, revision };
+            let lock_key = TableMutationLockKey { table_id, revision };
             let (lock_key_seq, _): (_, Option<TableMutationLock>) =
                 get_pb_value(self, &lock_key).await?;
             if lock_key_seq == 0 {

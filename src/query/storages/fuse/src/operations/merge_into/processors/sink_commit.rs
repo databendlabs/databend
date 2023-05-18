@@ -73,7 +73,7 @@ pub struct CommitSink {
     // summarised statistics of all the merged segments.
     merged_statistics: Statistics,
     abort_operation: AbortOperation,
-
+    // heartbeat: Option<MutationLockHeartbeat>,
     retries: u64,
     get_lock: bool,
 

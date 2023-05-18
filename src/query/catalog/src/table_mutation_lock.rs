@@ -28,7 +28,6 @@ use common_exception::Result;
 use common_meta_app::schema::TableInfo;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
-use common_storages_fuse::TableContext;
 use common_users::UserApiProvider;
 use futures::future::select;
 use futures::future::Either;
@@ -36,79 +35,7 @@ use futures_util::StreamExt;
 use rand::thread_rng;
 use rand::Rng;
 
-use crate::sessions::QueryContext;
-
-pub struct MutationLockMutex {
-    ctx: Arc<QueryContext>,
-    table_info: TableInfo,
-    revision: u64,
-}
-
-impl MutationLockMutex {
-    pub async fn try_lock(&mut self) -> Result<()> {
-        let ctx = self.ctx.clone();
-        let catalog = ctx.get_catalog(self.table_info.catalog())?;
-        let expire_secs = ctx.get_settings().get_mutation_lock_expire_secs()?;
-        let res = catalog
-            .upsert_mutation_lock_rev(expire_secs, &self.table_info, None)
-            .await?;
-        self.revision = res.revision;
-
-        let duration = Duration::from_secs(expire_secs);
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        loop {
-            let revisions = catalog.list_table_mutation_lock_revs(&res.prefix).await?;
-            let position =
-                revisions
-                    .iter()
-                    .position(|x| *x == self.revision)
-                    .ok_or(ErrorCode::Internal(
-                        "Cannot get mutation lock revision".to_string(),
-                    ))?;
-
-            if position == 0 {
-                // The lock is acquired by current session.
-                return Ok(());
-            }
-
-            let key = format!("{}/{}", res.prefix.clone(), revisions[position - 1]);
-            let req = WatchRequest {
-                key,
-                key_end: None,
-                filter_type: FilterType::Delete.into(),
-            };
-            let mut watch_stream = meta_api.watch(req).await?;
-            match timeout(duration, async move {
-                while let Some(Ok(resp)) = watch_stream.next().await {
-                    if let Some(event) = resp.event {
-                        if event.current.is_none() {
-                            break;
-                        }
-                    }
-                }
-            })
-            .await
-            {
-                Ok(_) => Ok(()),
-                Err(_) => {
-                    self.unlock().await?;
-                    Err(ErrorCode::TableMutationAlreadyLocked(format!(
-                        "table is locked by other session, please try again"
-                    )))
-                }
-            }?;
-        }
-    }
-
-    pub async fn unlock(&self) -> Result<()> {
-        let ctx = self.ctx.clone();
-        let catalog = ctx.get_catalog(self.table_info.catalog())?;
-        catalog
-            .delete_mutation_lock_rev(&self.table_info, self.revision)
-            .await?;
-        Ok(())
-    }
-}
+use crate::table_context::TableContext;
 
 pub struct MutationLockHeartbeat {
     shutdown_flag: Arc<AtomicBool>,
@@ -117,11 +44,12 @@ pub struct MutationLockHeartbeat {
 }
 
 impl MutationLockHeartbeat {
-    pub fn try_create(
-        ctx: Arc<QueryContext>,
+    pub async fn try_create(
+        ctx: Arc<dyn TableContext>,
         table_info: TableInfo,
-        revision: u64,
-    ) -> Result<Self> {
+    ) -> Result<MutationLockHeartbeat> {
+        let revision = Self::acquire_lock(ctx.clone(), table_info.clone()).await?;
+
         let shutdown_notify = Arc::new(Notify::new());
         let shutdown_flag = Arc::new(AtomicBool::new(false));
 
@@ -164,6 +92,65 @@ impl MutationLockHeartbeat {
             shutdown_notify,
             shutdown_handler: Some(shutdown_handler),
         })
+    }
+
+    async fn acquire_lock(ctx: Arc<dyn TableContext>, table_info: TableInfo) -> Result<u64> {
+        let catalog = ctx.get_catalog(table_info.catalog())?;
+        let expire_secs = ctx.get_settings().get_mutation_lock_expire_secs()?;
+        let res = catalog
+            .upsert_mutation_lock_rev(expire_secs, &table_info, None)
+            .await?;
+        let revision = res.revision;
+
+        let table_id = table_info.ident.table_id;
+        let duration = Duration::from_secs(expire_secs);
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        loop {
+            let reply = catalog.list_table_mutation_lock_revs(table_id).await?;
+            let position =
+                reply
+                    .revisions
+                    .iter()
+                    .position(|x| *x == revision)
+                    .ok_or(ErrorCode::Internal(
+                        "Cannot get mutation lock revision".to_string(),
+                    ))?;
+
+            if position == 0 {
+                // The lock is acquired by current session.
+                break;
+            }
+
+            let key = format!("{}/{}", reply.prefix, reply.revisions[position - 1]);
+            let req = WatchRequest {
+                key,
+                key_end: None,
+                filter_type: FilterType::Delete.into(),
+            };
+            let mut watch_stream = meta_api.watch(req).await?;
+            match timeout(duration, async move {
+                while let Some(Ok(resp)) = watch_stream.next().await {
+                    if let Some(event) = resp.event {
+                        if event.current.is_none() {
+                            break;
+                        }
+                    }
+                }
+            })
+            .await
+            {
+                Ok(_) => Ok(()),
+                Err(_) => {
+                    catalog
+                        .delete_mutation_lock_rev(&table_info, revision)
+                        .await?;
+                    Err(ErrorCode::TableMutationAlreadyLocked(
+                        "table is locked by other session, please try later".to_string(),
+                    ))
+                }
+            }?;
+        }
+        Ok(revision)
     }
 
     #[async_backtrace::framed]

@@ -15,11 +15,11 @@
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::table_mutation_lock::MutationLockHeartbeat;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-use crate::interpreters::common::MutationLockHeartbeat;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -57,7 +57,19 @@ impl Interpreter for UpdateInterpreter {
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();
+
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        // Add table mutation lock.
+        let table_info = tbl.get_table_info().clone();
+        let mut heartbeat =
+            MutationLockHeartbeat::try_create(self.ctx.clone(), table_info.clone()).await?;
+
+        // refresh table.
+        let tbl = self
+            .ctx
+            .get_catalog(catalog_name)?
+            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .await?;
 
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
             let filter = cast_expr_to_non_null_boolean(
@@ -76,14 +88,6 @@ impl Interpreter for UpdateInterpreter {
             .plan
             .generate_update_list(tbl.schema().into(), col_indices.clone())?;
 
-        // Add table mutation lock.
-        let table_info = tbl.get_table_info().clone();
-        let catalog = self.ctx.get_catalog(catalog_name)?;
-        // Todo: add mutation_lock_expire_sec in ctx.setting.
-        let res = catalog
-            .upsert_mutation_lock_rev(10, &table_info, None)
-            .await?;
-
         let mut build_res = PipelineBuildResult::create();
         tbl.update(
             self.ctx.clone(),
@@ -95,21 +99,11 @@ impl Interpreter for UpdateInterpreter {
         .await?;
 
         if build_res.main_pipeline.is_empty() {
-            let _res = catalog
-                .delete_mutation_lock_rev(&table_info, res.revision)
-                .await?;
+            heartbeat.shutdown().await?;
         } else {
-            let mut heartbeat = MutationLockHeartbeat::try_create(
-                self.ctx.clone(),
-                table_info.clone(),
-                res.revision,
-            )?;
             build_res.main_pipeline.set_on_finished(move |may_error| {
                 // Drop table mutation lock.
-                GlobalIORuntime::instance().block_on(async move {
-                    heartbeat.shutdown().await?;
-                    Ok(())
-                })?;
+                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
                 match may_error {
                     None => Ok(()),
                     Some(error_code) => Err(error_code.clone()),

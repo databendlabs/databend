@@ -32,13 +32,13 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListTableMutationLockReply;
 use common_meta_app::schema::ListTableMutationLockReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
@@ -154,7 +154,7 @@ pub trait SchemaApi: Send + Sync {
     async fn list_table_mutation_lock_revs(
         &self,
         req: ListTableMutationLockReq,
-    ) -> Result<Vec<Revision>, KVAppError>;
+    ) -> Result<ListTableMutationLockReply, KVAppError>;
 
     async fn upsert_mutation_lock_rev(
         &self,

@@ -19,12 +19,15 @@ common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../pipeline/core" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
+common-users = { path = "../users" }
 
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
 chrono = { workspace = true }
 dashmap = "5.4"
 dyn-clone = "1.0.9"
+futures = "0.3.24"
+futures-util = "0.3.24"
 parking_lot = "0.12"
 rand = "0.8.5"
 serde = { workspace = true }

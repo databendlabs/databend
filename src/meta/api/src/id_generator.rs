@@ -60,9 +60,9 @@ impl IdGenerator {
         }
     }
 
-    pub fn mutation_lock_id(table_id: u64) -> Self {
+    pub fn mutation_lock_id() -> Self {
         Self {
-            resource: format!("{}_{}", ID_GEN_MUTATION_LOCK, table_id),
+            resource: ID_GEN_MUTATION_LOCK.to_string(),
         }
     }
 }

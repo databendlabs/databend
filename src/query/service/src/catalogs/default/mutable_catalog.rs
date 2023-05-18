@@ -39,12 +39,12 @@ use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListTableMutationLockReply;
 use common_meta_app::schema::ListTableMutationLockReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -363,10 +363,11 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_mutation_lock_revs(&self, prefix: &str) -> Result<Vec<Revision>> {
-        let req = ListTableMutationLockReq {
-            prefix: prefix.to_string(),
-        };
+    async fn list_table_mutation_lock_revs(
+        &self,
+        table_id: u64,
+    ) -> Result<ListTableMutationLockReply> {
+        let req = ListTableMutationLockReq { table_id };
         let res = self.ctx.meta.list_table_mutation_lock_revs(req).await?;
         Ok(res)
     }
