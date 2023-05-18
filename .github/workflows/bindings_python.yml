@@ -41,7 +41,7 @@ jobs:
           target: ${{ inputs.target }}
           bypass_env_vars: RUSTFLAGS,RUST_LOG
       - name: Build with maturin
-        working-directory: "bindings/python"
+        working-directory: "src/bendpy"
         run: |
           python -m pip install -e .[test]
       - name: Run pytests
