@@ -60,6 +60,16 @@ pub fn split_row_id(id: u64) -> (u64, u64) {
     (prefix, idx)
 }
 
+pub fn split_prefix(id: u64) -> (u64, u64) {
+    let block_id = id & ((1 << NUM_BLOCK_ID_BITS) - 1);
+
+    let seg_id = id >> NUM_BLOCK_ID_BITS;
+    let seg_id = (seg_id + 1) & ((1 << NUM_SEGMENT_ID_BITS) - 1);
+    let seg_id = (!seg_id).wrapping_add(1);
+
+    (seg_id, block_id)
+}
+
 #[inline(always)]
 pub fn block_id_in_segment(block_num: usize, block_idx: usize) -> usize {
     block_num - block_idx - 1
