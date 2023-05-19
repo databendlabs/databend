@@ -3,7 +3,7 @@ title: TO_DATE
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription includesEETip description="V1.1.39"/>
+<FunctionDescription description="Introduced version: v1.1.39"/>
 
 TO_DATE converts an expression to a date format. 
 
@@ -21,13 +21,9 @@ TO_DATE(<expr, expr>)
 
 Returns a date in the format "YYYY-MM-DD".
 
-
 The function can accept one or two arguments. If given one argument, the function extracts a date from the string. If the argument is an integer, the function interprets the integer as the number of days before (for a negative number) or after (for a positive number) the Unix epoch (midnight on January 1, 1970). 
 
 If given two arguments, the function converts the first string to a date based on the format specified in the second string. To customize the format of date and time in Databend, you can utilize specifiers. These specifiers allow you to define the desired format for date and time values. For a comprehensive list of supported specifiers, see [Formatting Date and Time](../../13-sql-reference/10-data-types/20-data-type-time-date-types.md#formatting-date-and-time).
-
-See also: [TO_TIMESTAMP](totimestamp.md)
-
 
 ## Examples
 
@@ -91,3 +87,5 @@ SELECT TO_DATE('Month/Day/Year: 12/25/2022','Month/Day/Year: %m/%d/%Y');
 ---
 2022-12-25
 ```
+## See also
+- [TO_TIMESTAMP](totimestamp.md)
