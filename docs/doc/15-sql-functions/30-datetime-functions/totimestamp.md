@@ -1,14 +1,13 @@
 ---
 title: TO_TIMESTAMP
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced version: v1.1.39"/>
 
 TO_TIMESTAMP converts an expression to a date with time (timestamp/datetime).
 
-|name        | TO_TIMESTAMP(<expr[,expr]>)      |
-|------------|-----------------------------|
-| introduced | V1.1.39                     |
-| expr       | expr is string              |
-| return     | timestamp                   |
+
 
 ## Syntax
 
@@ -34,8 +33,6 @@ If given two arguments, the function converts the first string to a timestamp ba
 
 - The output timestamp reflects your Databend timezone.
 - The timezone information must be included in the string you want to convert, otherwise NULL will be returned.
-
-See also: [TO_DATE](todate.md)
 
 ## Examples
 
@@ -106,3 +103,5 @@ SELECT TO_TIMESTAMP('2022年2月4日、8時58分59秒、タイムゾーン：+09
 ---
 2022-02-03 18:58:59.000000
 ```
+## See also
+- [TO_DATE](todate.md)
