@@ -4,18 +4,11 @@ title: TO_TIMESTAMP
 
 TO_TIMESTAMP converts an expression to a date with time (timestamp/datetime).
 
-The function can accept one or two arguments. If given one argument, the function extracts a date from the string. If the argument is an integer, the function interprets the integer as the number of seconds, milliseconds, or microseconds before (for a negative number) or after (for a positive number) the Unix epoch (midnight on January 1, 1970):
-
-- If the integer is less than 31,536,000,000, it is treated as seconds.
-- If the integer is greater than or equal to 31,536,000,000 and less than 31,536,000,000,000, it is treated as milliseconds.
-- If the integer is greater than or equal to 31,536,000,000,000, it is treated as microseconds.
-
-If given two arguments, the function converts the first string to a timestamp based on the format specified in the second string. To customize the format of date and time in Databend, you can utilize specifiers. These specifiers allow you to define the desired format for date and time values. For a comprehensive list of supported specifiers, see [Formatting Date and Time](../../13-sql-reference/10-data-types/20-data-type-time-date-types.md#formatting-date-and-time).
-
-- The output timestamp reflects your Databend timezone.
-- The timezone information must be included in the string you want to convert, otherwise NULL will be returned.
-
-See also: [TO_DATE](todate.md)
+|name        | TO_TIMESTAMP(<expr[,expr]>)      |
+|------------|-----------------------------|
+| introduced | V1.1.39                     |
+| expr       | expr is string              |
+| return     | timestamp                   |
 
 ## Syntax
 
@@ -31,6 +24,19 @@ TO_TIMESTAMP(<expr, expr>)
 ## Return Type
 
 Returns a timestamp in the format "YYYY-MM-DD hh:mm:ss.ffffff". If the given string matches this format but does not have the time part, it is automatically extended to this pattern. The padding value is 0.
+
+The function can accept one or two arguments. If given one argument, the function extracts a date from the string. If the argument is an integer, the function interprets the integer as the number of seconds, milliseconds, or microseconds before (for a negative number) or after (for a positive number) the Unix epoch (midnight on January 1, 1970):
+
+- If the integer is less than 31,536,000,000, it is treated as seconds.
+- If the integer is greater than or equal to 31,536,000,000 and less than 31,536,000,000,000, it is treated as milliseconds.
+- If the integer is greater than or equal to 31,536,000,000,000, it is treated as microseconds.
+
+If given two arguments, the function converts the first string to a timestamp based on the format specified in the second string. To customize the format of date and time in Databend, you can utilize specifiers. These specifiers allow you to define the desired format for date and time values. For a comprehensive list of supported specifiers, see [Formatting Date and Time](../../13-sql-reference/10-data-types/20-data-type-time-date-types.md#formatting-date-and-time).
+
+- The output timestamp reflects your Databend timezone.
+- The timezone information must be included in the string you want to convert, otherwise NULL will be returned.
+
+See also: [TO_DATE](todate.md)
 
 ## Examples
 
