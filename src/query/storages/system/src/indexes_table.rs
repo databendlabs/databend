@@ -63,14 +63,14 @@ impl AsyncSystemTable for IndexesTable {
             let mut types = Vec::with_capacity(indexes.len());
             let mut tables = Vec::with_capacity(indexes.len());
             let mut defs = Vec::with_capacity(indexes.len());
-            let mut create_ons = Vec::with_capacity(indexes.len());
+            let mut created_on = Vec::with_capacity(indexes.len());
 
             for (_, index) in indexes {
                 names.push(index.ident.index_name.as_bytes().to_vec());
                 types.push(index.index_type.to_string().as_bytes().to_vec());
                 tables.push(index.table_desc.as_bytes().to_vec());
                 defs.push(index.query.as_bytes().to_vec());
-                create_ons.push(
+                created_on.push(
                     index
                         .created_on
                         .format("%Y-%m-%d %H:%M:%S.%3f %z")
@@ -85,7 +85,7 @@ impl AsyncSystemTable for IndexesTable {
                 StringType::from_data(types),
                 StringType::from_data(tables),
                 StringType::from_data(defs),
-                StringType::from_data(create_ons),
+                StringType::from_data(created_on),
             ]))
         } else {
             Ok(DataBlock::empty_with_schema(Arc::new(
@@ -102,7 +102,7 @@ impl IndexesTable {
             TableField::new("type", TableDataType::String),
             TableField::new("table", TableDataType::String),
             TableField::new("definition", TableDataType::String),
-            TableField::new("create_on", TableDataType::String),
+            TableField::new("created_on", TableDataType::String),
         ]);
 
         let table_info = TableInfo {
