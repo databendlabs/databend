@@ -209,6 +209,7 @@ impl FusePruner {
             let push_down = push_down.as_ref().unwrap();
             let limit = push_down.limit.unwrap();
             let sort = push_down.order_by.clone();
+            let similarity = push_down.similarity.clone();
             let topn_pruner = TopNPrunner::create(schema, sort, limit);
             return Ok(topn_pruner.prune(metas.clone()).unwrap_or(metas));
         }
