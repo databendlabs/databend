@@ -203,7 +203,12 @@ fn new_table_meta() -> mt::TableMeta {
 
 fn new_index_meta() -> mt::IndexMeta {
     mt::IndexMeta {
+        ident: mt::IndexNameIdent {
+            tenant: "test_tenant".to_string(),
+            index_name: "idx".to_string(),
+        },
         table_id: 7,
+        table_desc: "default.t1".to_string(),
         index_type: IndexType::AGGREGATING,
         created_on: Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap(),
         drop_on: None,

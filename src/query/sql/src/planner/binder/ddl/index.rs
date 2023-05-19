@@ -43,7 +43,6 @@ impl Binder {
         // check if query support index
         Self::check_index_support(query)?;
 
-        let tenant = self.ctx.get_tenant();
         let index_name = self.normalize_object_identifier(index_name);
         let subquery = format!("{}", query);
 
@@ -67,14 +66,15 @@ impl Binder {
         }
 
         let table_id = table.get_id();
+        let table_desc = table.get_table_info().desc.clone();
 
         let plan = CreateIndexPlan {
-            tenant,
             if_not_exists: *if_not_exists,
             index_type: *index_type,
             index_name,
             subquery,
             table_id,
+            table_desc,
         };
         Ok(Plan::CreateIndex(Box::new(plan)))
     }
@@ -86,14 +86,8 @@ impl Binder {
     ) -> Result<Plan> {
         let DropIndexStmt { if_exists, index } = stmt;
 
-        let tenant = self.ctx.get_tenant();
-
-        self.ctx.get_current_catalog();
-
         let plan = DropIndexPlan {
             if_exists: *if_exists,
-            tenant,
-            catalog: self.ctx.get_current_catalog(),
             index: index.to_string(),
         };
         Ok(Plan::DropIndex(Box::new(plan)))

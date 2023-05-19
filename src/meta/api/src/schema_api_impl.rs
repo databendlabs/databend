@@ -75,7 +75,6 @@ use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexIdList;
 use common_meta_app::schema::IndexIdListKey;
-use common_meta_app::schema::IndexIdToName;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::ListDatabaseReq;
@@ -868,7 +867,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        let tenant_index = &req.name_ident;
+        let tenant_index = &req.meta.ident;
 
         if req.meta.drop_on.is_some() {
             return Err(KVAppError::AppError(AppError::CreateIndexWithDropTime(
@@ -916,11 +915,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             // (tenant, index_name) -> index_id
             // (index_id) -> index_meta
             // append index_id into __fd_index_id_list/<tenant>
-            // (index_id) -> (tenant,index_name)
 
             let index_id = fetch_id(self, IdGenerator::index_id()).await?;
             let id_key = IndexId { index_id };
-            let id_to_name_key = IndexIdToName { index_id };
 
             debug!(index_id, index_key = debug(&tenant_index), "new index id");
 
@@ -930,14 +927,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
                 let condition = vec![
                     txn_cond_seq(tenant_index, Eq, 0),
-                    txn_cond_seq(&id_to_name_key, Eq, 0),
                     txn_cond_seq(&index_id_list_key, Eq, index_id_list_seq),
                 ];
                 let if_then = vec![
                     txn_op_put(tenant_index, serialize_u64(index_id)?), /* (tenant, index_name) -> index_id */
                     txn_op_put(&id_key, serialize_struct(&req.meta)?),  // (index_id) -> index_meta
                     txn_op_put(&index_id_list_key, serialize_struct(&index_id_list)?), /* _fd_index_id_list/<tenant> -> index_id_list */
-                    txn_op_put(&id_to_name_key, serialize_struct(tenant_index)?), /* __fd_index_id_to_name/<index_id> -> (tenant,index_name) */
                 ];
 
                 let txn_req = TxnRequest {
@@ -1056,10 +1051,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         let (_, index_id_list): (_, Option<IndexIdList>) =
             get_pb_value(self, &index_id_list_key).await?;
 
-        debug!(
-            ident = display(&index_id_list_key),
-            "get_indexes_by_table_id"
-        );
+        debug!(ident = display(&index_id_list_key), "list_indexes");
 
         if index_id_list.is_none() {
             return Ok(None);

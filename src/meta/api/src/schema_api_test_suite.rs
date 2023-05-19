@@ -3709,7 +3709,7 @@ impl SchemaApiTestSuite {
         {
             info!("--- prepare db and table");
             // prepare db1
-            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
+            let res = self.create_database(mt, tenant, db_name, "eng1").await?;
             assert_eq!(1, res.db_id);
 
             let res = mt.create_table(req).await?;
@@ -3717,22 +3717,7 @@ impl SchemaApiTestSuite {
         }
 
         let index_name_1 = "idx1";
-        let index_meta_1 = IndexMeta {
-            table_id,
-            index_type: IndexType::AGGREGATING,
-            created_on,
-            drop_on: None,
-            query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
-        };
-
         let index_name_2 = "idx2";
-        let index_meta_2 = IndexMeta {
-            table_id,
-            index_type: IndexType::AGGREGATING,
-            created_on,
-            drop_on: None,
-            query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
-        };
 
         let name_ident_1 = IndexNameIdent {
             tenant: tenant.to_string(),
@@ -3742,6 +3727,26 @@ impl SchemaApiTestSuite {
         let name_ident_2 = IndexNameIdent {
             tenant: tenant.to_string(),
             index_name: index_name_2.to_string(),
+        };
+
+        let index_meta_1 = IndexMeta {
+            ident: name_ident_1.clone(),
+            table_id,
+            table_desc: format!("{db_name}.{table_name}"),
+            index_type: IndexType::AGGREGATING,
+            created_on,
+            drop_on: None,
+            query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
+        };
+
+        let index_meta_2 = IndexMeta {
+            ident: name_ident_2.clone(),
+            table_id,
+            table_desc: format!("{db_name}.{table_name}"),
+            index_type: IndexType::AGGREGATING,
+            created_on,
+            drop_on: None,
+            query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
         };
 
         {
@@ -3759,7 +3764,6 @@ impl SchemaApiTestSuite {
             info!("--- create index");
             let req = CreateIndexReq {
                 if_not_exists: false,
-                name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
 
@@ -3768,7 +3772,6 @@ impl SchemaApiTestSuite {
 
             let req = CreateIndexReq {
                 if_not_exists: false,
-                name_ident: name_ident_2.clone(),
                 meta: index_meta_2.clone(),
             };
 
@@ -3779,7 +3782,6 @@ impl SchemaApiTestSuite {
             info!("--- create index again with if_not_exists = false");
             let req = CreateIndexReq {
                 if_not_exists: false,
-                name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
 
@@ -3794,7 +3796,6 @@ impl SchemaApiTestSuite {
             info!("--- create index again with if_not_exists = true");
             let req = CreateIndexReq {
                 if_not_exists: true,
-                name_ident: name_ident_1.clone(),
                 meta: index_meta_1.clone(),
             };
 
