@@ -42,7 +42,7 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
-use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -221,11 +221,8 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_indexes_by_table_id(
-        &self,
-        req: ListIndexByTableIdReq,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
-        Ok(self.ctx.meta.get_indexes_by_table_id(req).await?)
+    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+        Ok(self.ctx.meta.list_indexes(req).await?)
     }
 
     #[async_backtrace::framed]

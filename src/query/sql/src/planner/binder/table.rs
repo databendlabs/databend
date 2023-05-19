@@ -52,7 +52,7 @@ use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
@@ -838,7 +838,7 @@ impl Binder {
     ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
         let catalog = self.catalogs.get_catalog(catalog_name)?;
         let index_metas = catalog
-            .get_indexes_by_table_id(ListIndexByTableIdReq::new(tenant, table_id))
+            .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
             .await?;
 
         Ok(index_metas)

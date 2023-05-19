@@ -47,7 +47,7 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::IndexType;
 use common_meta_app::schema::ListDatabaseReq;
-use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
@@ -3746,12 +3746,12 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list index with no create before");
-            let req = ListIndexByTableIdReq {
+            let req = ListIndexesReq {
                 tenant: tenant.to_string(),
-                table_id,
+                table_id: Some(table_id),
             };
 
-            let res = mt.get_indexes_by_table_id(req).await?;
+            let res = mt.list_indexes(req).await?;
             assert!(res.is_none())
         }
 
@@ -3804,13 +3804,21 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list index");
-            let req = ListIndexByTableIdReq {
+            let req = ListIndexesReq {
                 tenant: tenant.to_string(),
-                table_id,
+                table_id: None,
             };
 
-            let res = mt.get_indexes_by_table_id(req).await?;
+            let res = mt.list_indexes(req).await?;
             assert_eq!(2, res.unwrap().len());
+
+            let req = ListIndexesReq {
+                tenant: tenant.to_string(),
+                table_id: Some(u64::MAX),
+            };
+
+            let res = mt.list_indexes(req).await?;
+            assert_eq!(0, res.unwrap().len());
         }
 
         {
@@ -3826,12 +3834,12 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list index after drop one");
-            let req = ListIndexByTableIdReq {
+            let req = ListIndexesReq {
                 tenant: tenant.to_string(),
-                table_id,
+                table_id: Some(table_id),
             };
 
-            let res = mt.get_indexes_by_table_id(req).await?;
+            let res = mt.list_indexes(req).await?;
             assert_eq!(1, res.unwrap().len());
         }
 
@@ -3845,12 +3853,12 @@ impl SchemaApiTestSuite {
             let res = mt.drop_index(req).await;
             assert!(res.is_ok());
 
-            let req = ListIndexByTableIdReq {
+            let req = ListIndexesReq {
                 tenant: tenant.to_string(),
-                table_id,
+                table_id: Some(table_id),
             };
 
-            let res = mt.get_indexes_by_table_id(req).await?;
+            let res = mt.list_indexes(req).await?;
             assert_eq!(0, res.unwrap().len())
         }
 

@@ -86,7 +86,6 @@ pub enum IndexType {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct IndexIdListKey {
     pub tenant: String,
-    pub table_id: MetaId,
 }
 
 impl Display for IndexIdListKey {
@@ -202,14 +201,14 @@ impl Display for DropIndexReq {
 pub struct DropIndexReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ListIndexByTableIdReq {
+pub struct ListIndexesReq {
     pub tenant: String,
-    pub table_id: MetaId,
+    pub table_id: Option<MetaId>,
 }
 
-impl ListIndexByTableIdReq {
-    pub fn new(tenant: impl Into<String>, table_id: u64) -> ListIndexByTableIdReq {
-        ListIndexByTableIdReq {
+impl ListIndexesReq {
+    pub fn new(tenant: impl Into<String>, table_id: Option<MetaId>) -> ListIndexesReq {
+        ListIndexesReq {
             tenant: tenant.into(),
             table_id,
         }
@@ -290,14 +289,13 @@ mod kvapi_key_impl {
         }
     }
 
-    /// "<prefix>/<tenant>/<table_id> -> index_id_list"
+    /// "<prefix>/<tenant> -> index_id_list"
     impl kvapi::Key for IndexIdListKey {
         const PREFIX: &'static str = PREFIX_INDEX_ID_LIST;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_str(&self.tenant)
-                .push_u64(self.table_id)
                 .done()
         }
 
@@ -305,10 +303,9 @@ mod kvapi_key_impl {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
             let tenant = p.next_str()?;
-            let table_id = p.next_u64()?;
             p.done()?;
 
-            Ok(IndexIdListKey { tenant, table_id })
+            Ok(IndexIdListKey { tenant })
         }
     }
 }

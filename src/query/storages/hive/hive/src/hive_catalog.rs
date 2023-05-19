@@ -44,7 +44,7 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -427,9 +427,9 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_indexes_by_table_id(
+    async fn list_indexes(
         &self,
-        _req: ListIndexByTableIdReq,
+        _req: ListIndexesReq,
     ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
         unimplemented!()
     }

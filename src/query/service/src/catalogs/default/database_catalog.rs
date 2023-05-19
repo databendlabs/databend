@@ -36,7 +36,7 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -481,11 +481,8 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_indexes_by_table_id(
-        &self,
-        req: ListIndexByTableIdReq,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
-        self.mutable_catalog.get_indexes_by_table_id(req).await
+    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+        self.mutable_catalog.list_indexes(req).await
     }
 
     fn get_table_function(
