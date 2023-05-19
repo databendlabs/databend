@@ -5,6 +5,13 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="introduced in v1.1.39"/>
 
+|func        | TO_DATE(<expr,expr)         |
+|------------|-----------------------------|
+| introduced | v1.1.39                     |
+| expr       | expr is string              |
+| return     | date                        |
+
+
 TO_DATE converts an expression to a date format. 
 
 The function can accept one or two arguments. If given one argument, the function extracts a date from the string. If the argument is an integer, the function interprets the integer as the number of days before (for a negative number) or after (for a positive number) the Unix epoch (midnight on January 1, 1970). 
