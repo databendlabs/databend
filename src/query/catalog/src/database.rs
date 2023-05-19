@@ -19,8 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DeleteTableMutationLockReply;
-use common_meta_app::schema::DeleteTableMutationLockReq;
+use common_meta_app::schema::DeleteTableLockRevReply;
+use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -34,8 +34,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableMutationLockReply;
-use common_meta_app::schema::UpsertTableMutationLockReq;
+use common_meta_app::schema::UpsertTableLockRevReply;
+use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use dyn_clone::DynClone;
@@ -179,23 +179,23 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn upsert_mutation_lock_rev(
+    async fn upsert_table_lock_rev(
         &self,
-        _req: UpsertTableMutationLockReq,
-    ) -> Result<UpsertTableMutationLockReply> {
+        _req: UpsertTableLockRevReq,
+    ) -> Result<UpsertTableLockRevReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement upsert_mutation_lock_rev in {} Database",
+            "UnImplement upsert_table_lock_rev in {} Database",
             self.name()
         )))
     }
 
     #[async_backtrace::framed]
-    async fn delete_mutation_lock_rev(
+    async fn delete_table_lock_rev(
         &self,
-        _req: DeleteTableMutationLockReq,
-    ) -> Result<DeleteTableMutationLockReply> {
+        _req: DeleteTableLockRevReq,
+    ) -> Result<DeleteTableLockRevReply> {
         Err(ErrorCode::Unimplemented(format!(
-            "UnImplement delete_mutation_lock_rev in {} Database",
+            "UnImplement delete_table_lock_rev in {} Database",
             self.name()
         )))
     }

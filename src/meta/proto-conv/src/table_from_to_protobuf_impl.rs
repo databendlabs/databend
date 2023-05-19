@@ -86,20 +86,20 @@ impl FromToProto for mt::TableCopiedFileLock {
     }
 }
 
-impl FromToProto for mt::TableMutationLock {
-    type PB = pb::TableMutationLock;
+impl FromToProto for mt::TableLock {
+    type PB = pb::TableLock;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
-    fn from_pb(p: pb::TableMutationLock) -> Result<Self, Incompatible> {
+    fn from_pb(p: pb::TableLock) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {};
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableMutationLock, Incompatible> {
-        let p = pb::TableMutationLock {
+    fn to_pb(&self) -> Result<pb::TableLock, Incompatible> {
+        let p = pb::TableLock {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
         };

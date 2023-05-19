@@ -19,8 +19,8 @@ use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DeleteTableMutationLockReply;
-use common_meta_app::schema::DeleteTableMutationLockReq;
+use common_meta_app::schema::DeleteTableLockRevReply;
+use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -36,8 +36,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableMutationLockReply;
-use common_meta_app::schema::UpsertTableMutationLockReq;
+use common_meta_app::schema::UpsertTableLockRevReply;
+use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 
@@ -188,20 +188,20 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn upsert_mutation_lock_rev(
+    async fn upsert_table_lock_rev(
         &self,
-        req: UpsertTableMutationLockReq,
-    ) -> Result<UpsertTableMutationLockReply> {
-        let res = self.ctx.meta.upsert_mutation_lock_rev(req).await?;
+        req: UpsertTableLockRevReq,
+    ) -> Result<UpsertTableLockRevReply> {
+        let res = self.ctx.meta.upsert_table_lock_rev(req).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn delete_mutation_lock_rev(
+    async fn delete_table_lock_rev(
         &self,
-        req: DeleteTableMutationLockReq,
-    ) -> Result<DeleteTableMutationLockReply> {
-        let res = self.ctx.meta.delete_mutation_lock_rev(req).await?;
+        req: DeleteTableLockRevReq,
+    ) -> Result<DeleteTableLockRevReply> {
+        let res = self.ctx.meta.delete_table_lock_rev(req).await?;
         Ok(res)
     }
 }

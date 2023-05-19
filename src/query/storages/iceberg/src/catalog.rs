@@ -31,7 +31,7 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DeleteTableMutationLockReply;
+use common_meta_app::schema::DeleteTableLockRevReply;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -43,7 +43,7 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexByTableIdReq;
-use common_meta_app::schema::ListTableMutationLockReply;
+use common_meta_app::schema::ListTableLockRevReply;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -59,7 +59,7 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableMutationLockReply;
+use common_meta_app::schema::UpsertTableLockRevReply;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
@@ -320,29 +320,26 @@ impl Catalog for IcebergCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_mutation_lock_revs(
-        &self,
-        _table_id: u64,
-    ) -> Result<ListTableMutationLockReply> {
+    async fn list_table_lock_revs(&self, _table_id: u64) -> Result<ListTableLockRevReply> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn upsert_mutation_lock_rev(
+    async fn upsert_table_lock_rev(
         &self,
         _expire_sec: u64,
         _table_info: &TableInfo,
         _revision: Option<u64>,
-    ) -> Result<UpsertTableMutationLockReply> {
+    ) -> Result<UpsertTableLockRevReply> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn delete_mutation_lock_rev(
+    async fn delete_table_lock_rev(
         &self,
         _table_info: &TableInfo,
         _revision: u64,
-    ) -> Result<DeleteTableMutationLockReply> {
+    ) -> Result<DeleteTableLockRevReply> {
         unimplemented!()
     }
 

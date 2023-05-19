@@ -15,7 +15,7 @@
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::table_mutation_lock::MutationLockHeartbeat;
+use common_catalog::table_mutation_lock::TableLockHeartbeat;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -55,10 +55,10 @@ impl Interpreter for DeleteInterpreter {
         let tbl_name = self.plan.table_name.as_str();
 
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        // Add table mutation lock.
+        // Add table lock heartbeat.
         let table_info = tbl.get_table_info().clone();
         let mut heartbeat =
-            MutationLockHeartbeat::try_create(self.ctx.clone(), table_info.clone()).await?;
+            TableLockHeartbeat::try_create(self.ctx.clone(), table_info.clone()).await?;
 
         // refresh table.
         let tbl = self
@@ -106,7 +106,7 @@ impl Interpreter for DeleteInterpreter {
             heartbeat.shutdown().await?;
         } else {
             build_res.main_pipeline.set_on_finished(move |may_error| {
-                // Drop table mutation lock.
+                // shutdown table lock hearbeat.
                 GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
                 match may_error {
                     None => Ok(()),

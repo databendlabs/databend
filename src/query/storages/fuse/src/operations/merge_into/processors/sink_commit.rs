@@ -18,7 +18,7 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
-use common_catalog::table_mutation_lock::MutationLockHeartbeat;
+use common_catalog::table_mutation_lock::TableLockHeartbeat;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -75,7 +75,7 @@ pub struct CommitSink {
     // summarised statistics of all the merged segments.
     merged_statistics: Statistics,
     abort_operation: AbortOperation,
-    heartbeat: MutationLockHeartbeat,
+    heartbeat: TableLockHeartbeat,
 
     retries: u64,
     need_lock: bool,
@@ -100,7 +100,7 @@ impl CommitSink {
             merged_segments: vec![],
             merged_statistics: Statistics::default(),
             abort_operation: AbortOperation::default(),
-            heartbeat: MutationLockHeartbeat::default(),
+            heartbeat: TableLockHeartbeat::default(),
             retries: 0,
             need_lock: false,
             input,
@@ -214,8 +214,7 @@ impl Processor for CommitSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::TryLock(new_snapshot) => {
                 let table_info = self.table.get_table_info();
-                match MutationLockHeartbeat::try_create(self.ctx.clone(), table_info.clone()).await
-                {
+                match TableLockHeartbeat::try_create(self.ctx.clone(), table_info.clone()).await {
                     Ok(heartbeat) => {
                         self.heartbeat = heartbeat;
                         self.state = State::TryCommit(new_snapshot);

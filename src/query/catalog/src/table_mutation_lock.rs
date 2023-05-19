@@ -38,23 +38,23 @@ use rand::Rng;
 use crate::table_context::TableContext;
 
 #[derive(Default)]
-pub struct MutationLockHeartbeat {
+pub struct TableLockHeartbeat {
     shutdown_flag: Arc<AtomicBool>,
     shutdown_notify: Arc<Notify>,
     shutdown_handler: Option<JoinHandle<Result<()>>>,
 }
 
-impl MutationLockHeartbeat {
+impl TableLockHeartbeat {
     pub async fn try_create(
         ctx: Arc<dyn TableContext>,
         table_info: TableInfo,
-    ) -> Result<MutationLockHeartbeat> {
+    ) -> Result<TableLockHeartbeat> {
         let revision = Self::acquire_lock(ctx.clone(), table_info.clone()).await?;
 
         let shutdown_notify = Arc::new(Notify::new());
         let shutdown_flag = Arc::new(AtomicBool::new(false));
 
-        let expire_secs = ctx.get_settings().get_mutation_lock_expire_secs()?;
+        let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
         let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
 
         let shutdown_handler: JoinHandle<Result<()>> = GlobalIORuntime::instance().spawn({
@@ -72,15 +72,13 @@ impl MutationLockHeartbeat {
                     let sleep = Box::pin(sleep(Duration::from_millis(mills)));
                     match select(notified, sleep).await {
                         Either::Left((_, _)) => {
-                            catalog
-                                .delete_mutation_lock_rev(&table_info, revision)
-                                .await?;
+                            catalog.delete_table_lock_rev(&table_info, revision).await?;
                             break;
                         }
                         Either::Right((_, new_notified)) => {
                             notified = new_notified;
                             catalog
-                                .upsert_mutation_lock_rev(expire_secs, &table_info, Some(revision))
+                                .upsert_table_lock_rev(expire_secs, &table_info, Some(revision))
                                 .await?;
                         }
                     }
@@ -88,7 +86,7 @@ impl MutationLockHeartbeat {
                 Ok(())
             }
         });
-        Ok(MutationLockHeartbeat {
+        Ok(TableLockHeartbeat {
             shutdown_flag,
             shutdown_notify,
             shutdown_handler: Some(shutdown_handler),
@@ -97,9 +95,9 @@ impl MutationLockHeartbeat {
 
     async fn acquire_lock(ctx: Arc<dyn TableContext>, table_info: TableInfo) -> Result<u64> {
         let catalog = ctx.get_catalog(table_info.catalog())?;
-        let expire_secs = ctx.get_settings().get_mutation_lock_expire_secs()?;
+        let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
         let res = catalog
-            .upsert_mutation_lock_rev(expire_secs, &table_info, None)
+            .upsert_table_lock_rev(expire_secs, &table_info, None)
             .await?;
         let revision = res.revision;
 
@@ -107,15 +105,10 @@ impl MutationLockHeartbeat {
         let duration = Duration::from_secs(expire_secs);
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         loop {
-            let reply = catalog.list_table_mutation_lock_revs(table_id).await?;
-            let position =
-                reply
-                    .revisions
-                    .iter()
-                    .position(|x| *x == revision)
-                    .ok_or(ErrorCode::Internal(
-                        "Cannot get mutation lock revision".to_string(),
-                    ))?;
+            let reply = catalog.list_table_lock_revs(table_id).await?;
+            let position = reply.revisions.iter().position(|x| *x == revision).ok_or(
+                ErrorCode::TableLockExpired("the acquired table lock has expired".to_string()),
+            )?;
 
             if position == 0 {
                 // The lock is acquired by current session.
@@ -142,11 +135,9 @@ impl MutationLockHeartbeat {
             {
                 Ok(_) => Ok(()),
                 Err(_) => {
-                    catalog
-                        .delete_mutation_lock_rev(&table_info, revision)
-                        .await?;
-                    Err(ErrorCode::TableMutationAlreadyLocked(
-                        "table is locked by other session, please try later".to_string(),
+                    catalog.delete_table_lock_rev(&table_info, revision).await?;
+                    Err(ErrorCode::TableAlreadyLocked(
+                        "table is locked by other session, please retry later".to_string(),
                     ))
                 }
             }?;
@@ -161,7 +152,7 @@ impl MutationLockHeartbeat {
             self.shutdown_notify.notify_waiters();
             if let Err(shutdown_failure) = shutdown_handler.await {
                 return Err(ErrorCode::TokioError(format!(
-                    "Cannot shutdown mutation lock heartbeat, cause {:?}",
+                    "Cannot shutdown table lock heartbeat, cause {:?}",
                     shutdown_failure
                 )));
             }

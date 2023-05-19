@@ -741,45 +741,45 @@ pub struct TableCopiedFileLockKey {
 pub struct TableCopiedFileLock {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct TableMutationLockKey {
+pub struct TableLockKey {
     pub table_id: u64,
     pub revision: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct TableMutationLock {}
+pub struct TableLock {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ListTableMutationLockReq {
+pub struct ListTableLockRevReq {
     pub table_id: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ListTableMutationLockReply {
+pub struct ListTableLockRevReply {
     pub revisions: Vec<u64>,
     pub prefix: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableMutationLockReq {
+pub struct UpsertTableLockRevReq {
     pub table_id: u64,
     pub expire_at: u64,
     pub revision: Option<u64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableMutationLockReply {
+pub struct UpsertTableLockRevReply {
     pub revision: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DeleteTableMutationLockReq {
+pub struct DeleteTableLockRevReq {
     pub table_id: u64,
     pub revision: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DeleteTableMutationLockReply {}
+pub struct DeleteTableLockRevReply {}
 
 mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;
@@ -791,7 +791,7 @@ mod kvapi_key_impl {
     use crate::schema::TableId;
     use crate::schema::TableIdListKey;
     use crate::schema::TableIdToName;
-    use crate::schema::TableMutationLockKey;
+    use crate::schema::TableLockKey;
     use crate::schema::PREFIX_TABLE;
     use crate::schema::PREFIX_TABLE_BY_ID;
     use crate::schema::PREFIX_TABLE_COPIED_FILES;
@@ -799,7 +799,7 @@ mod kvapi_key_impl {
     use crate::schema::PREFIX_TABLE_COUNT;
     use crate::schema::PREFIX_TABLE_ID_LIST;
     use crate::schema::PREFIX_TABLE_ID_TO_NAME;
-    use crate::schema::PREFIX_TABLE_MUTATION_LOCK;
+    use crate::schema::PREFIX_TABLE_LOCK;
 
     /// "__fd_table/<db_id>/<tb_name>"
     impl kvapi::Key for DBIdTableName {
@@ -949,9 +949,9 @@ mod kvapi_key_impl {
         }
     }
 
-    /// __fd_table_mutation_lock/table_id/revision -> ""
-    impl kvapi::Key for TableMutationLockKey {
-        const PREFIX: &'static str = PREFIX_TABLE_MUTATION_LOCK;
+    /// __fd_table_lock/table_id/revision -> ""
+    impl kvapi::Key for TableLockKey {
+        const PREFIX: &'static str = PREFIX_TABLE_LOCK;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
@@ -967,7 +967,7 @@ mod kvapi_key_impl {
             let revision = p.next_u64()?;
             p.done()?;
 
-            Ok(TableMutationLockKey { table_id, revision })
+            Ok(TableLockKey { table_id, revision })
         }
     }
 }

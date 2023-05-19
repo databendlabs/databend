@@ -23,8 +23,8 @@ use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DeleteTableMutationLockReply;
-use common_meta_app::schema::DeleteTableMutationLockReq;
+use common_meta_app::schema::DeleteTableLockRevReply;
+use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -39,8 +39,8 @@ use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexByTableIdReq;
-use common_meta_app::schema::ListTableMutationLockReply;
-use common_meta_app::schema::ListTableMutationLockReq;
+use common_meta_app::schema::ListTableLockRevReply;
+use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -58,8 +58,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableMutationLockReply;
-use common_meta_app::schema::UpsertTableMutationLockReq;
+use common_meta_app::schema::UpsertTableLockRevReply;
+use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::GCDroppedDataReply;
@@ -169,20 +169,20 @@ pub trait SchemaApi: Send + Sync {
 
     async fn count_tables(&self, req: CountTablesReq) -> Result<CountTablesReply, KVAppError>;
 
-    async fn list_table_mutation_lock_revs(
+    async fn list_table_lock_revs(
         &self,
-        req: ListTableMutationLockReq,
-    ) -> Result<ListTableMutationLockReply, KVAppError>;
+        req: ListTableLockRevReq,
+    ) -> Result<ListTableLockRevReply, KVAppError>;
 
-    async fn upsert_mutation_lock_rev(
+    async fn upsert_table_lock_rev(
         &self,
-        req: UpsertTableMutationLockReq,
-    ) -> Result<UpsertTableMutationLockReply, KVAppError>;
+        req: UpsertTableLockRevReq,
+    ) -> Result<UpsertTableLockRevReply, KVAppError>;
 
-    async fn delete_mutation_lock_rev(
+    async fn delete_table_lock_rev(
         &self,
-        req: DeleteTableMutationLockReq,
-    ) -> Result<DeleteTableMutationLockReply, KVAppError>;
+        req: DeleteTableLockRevReq,
+    ) -> Result<DeleteTableLockRevReply, KVAppError>;
 
     fn name(&self) -> String;
 }

@@ -578,7 +578,7 @@ impl FuseTable {
             // abort_operation
             // .abort(ctx.clone(), self.operator.clone())
             // .await?;
-            // return Err(ErrorCode::TableMutationAlreadyLocked(format!(
+            // return Err(ErrorCode::TableAlreadyLocked(format!(
             // "table '{}' is under mutation, please retry later",
             // table_info.name
             // )));

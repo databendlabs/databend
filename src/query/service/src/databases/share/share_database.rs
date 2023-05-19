@@ -21,8 +21,8 @@ use common_exception::Result;
 use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DeleteTableMutationLockReply;
-use common_meta_app::schema::DeleteTableMutationLockReq;
+use common_meta_app::schema::DeleteTableLockRevReply;
+use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -36,8 +36,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableMutationLockReply;
-use common_meta_app::schema::UpsertTableMutationLockReq;
+use common_meta_app::schema::UpsertTableLockRevReply;
+use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_sharing::ShareEndpointManager;
@@ -194,22 +194,22 @@ impl Database for ShareDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn upsert_mutation_lock_rev(
+    async fn upsert_table_lock_rev(
         &self,
-        _req: UpsertTableMutationLockReq,
-    ) -> Result<UpsertTableMutationLockReply> {
+        _req: UpsertTableLockRevReq,
+    ) -> Result<UpsertTableLockRevReply> {
         Err(ErrorCode::PermissionDenied(
-            "Permission denied, cannot add table mutation lock from a shared database".to_string(),
+            "Permission denied, cannot add table lock from a shared database".to_string(),
         ))
     }
 
     #[async_backtrace::framed]
-    async fn delete_mutation_lock_rev(
+    async fn delete_table_lock_rev(
         &self,
-        _req: DeleteTableMutationLockReq,
-    ) -> Result<DeleteTableMutationLockReply> {
+        _req: DeleteTableLockRevReq,
+    ) -> Result<DeleteTableLockRevReply> {
         Err(ErrorCode::PermissionDenied(
-            "Permission denied, cannot drop table mutation lock from a shared database".to_string(),
+            "Permission denied, cannot drop table lock from a shared database".to_string(),
         ))
     }
 }

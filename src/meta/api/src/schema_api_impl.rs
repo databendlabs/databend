@@ -62,8 +62,8 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
-use common_meta_app::schema::DeleteTableMutationLockReply;
-use common_meta_app::schema::DeleteTableMutationLockReq;
+use common_meta_app::schema::DeleteTableLockRevReply;
+use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -82,8 +82,8 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexByTableIdReq;
-use common_meta_app::schema::ListTableMutationLockReply;
-use common_meta_app::schema::ListTableMutationLockReq;
+use common_meta_app::schema::ListTableLockRevReply;
+use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -97,9 +97,9 @@ use common_meta_app::schema::TableIdListKey;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableLock;
+use common_meta_app::schema::TableLockKey;
 use common_meta_app::schema::TableMeta;
-use common_meta_app::schema::TableMutationLock;
-use common_meta_app::schema::TableMutationLockKey;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -110,8 +110,8 @@ use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_app::schema::UpsertTableMutationLockReply;
-use common_meta_app::schema::UpsertTableMutationLockReq;
+use common_meta_app::schema::UpsertTableLockRevReply;
+use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::share::ShareGrantObject;
@@ -2527,17 +2527,17 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         Ok(CountTablesReply { count })
     }
 
-    async fn list_table_mutation_lock_revs(
+    async fn list_table_lock_revs(
         &self,
-        req: ListTableMutationLockReq,
-    ) -> Result<ListTableMutationLockReply, KVAppError> {
-        let prefix = format!("{}/{}", TableMutationLockKey::PREFIX, req.table_id);
+        req: ListTableLockRevReq,
+    ) -> Result<ListTableLockRevReply, KVAppError> {
+        let prefix = format!("{}/{}", TableLockKey::PREFIX, req.table_id);
         let reply = self.prefix_list_kv(&prefix).await?;
 
         let mut revisions = vec![];
         for (k, _) in reply.into_iter() {
-            let lock_key = TableMutationLockKey::from_str_key(&k).map_err(|e| {
-                let inv = InvalidReply::new("list_table_mutation_lock_revs", &e);
+            let lock_key = TableLockKey::from_str_key(&k).map_err(|e| {
+                let inv = InvalidReply::new("list_table_lock_revs", &e);
                 let meta_net_err = MetaNetworkError::InvalidReply(inv);
                 MetaError::NetworkError(meta_net_err)
             })?;
@@ -2545,13 +2545,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             revisions.push(lock_key.revision);
         }
         revisions.sort();
-        Ok(ListTableMutationLockReply { revisions, prefix })
+        Ok(ListTableLockRevReply { revisions, prefix })
     }
 
-    async fn upsert_mutation_lock_rev(
+    async fn upsert_table_lock_rev(
         &self,
-        req: UpsertTableMutationLockReq,
-    ) -> Result<UpsertTableMutationLockReply, KVAppError> {
+        req: UpsertTableLockRevReq,
+    ) -> Result<UpsertTableLockRevReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let mut retry = 0;
@@ -2563,33 +2563,32 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
             if tb_meta_seq == 0 {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, "upsert_mutation_lock_rev"),
+                    UnknownTableId::new(table_id, "upsert_table_lock_rev"),
                 )));
             }
 
             debug!(
                 ident = display(&tbid),
                 table_meta = debug(&tb_meta),
-                "upsert_mutation_lock_rev"
+                "upsert_table_lock_rev"
             );
 
             let revision = if let Some(rev) = req.revision {
                 rev
             } else {
-                fetch_id(self, IdGenerator::mutation_lock_id()).await?
+                fetch_id(self, IdGenerator::table_lock_id()).await?
             };
 
-            let lock_key = TableMutationLockKey { table_id, revision };
+            let lock_key = TableLockKey { table_id, revision };
 
-            let (lock_key_seq, _): (_, Option<TableMutationLock>) =
-                get_pb_value(self, &lock_key).await?;
+            let (lock_key_seq, _): (_, Option<TableLock>) = get_pb_value(self, &lock_key).await?;
 
             if lock_key_seq > 0 && req.revision.is_none() {
                 // lock key has been created by other process.
                 continue;
             }
 
-            let lock = TableMutationLock {};
+            let lock = TableLock {};
 
             let condition = vec![txn_cond_seq(&lock_key, Eq, lock_key_seq)];
 
@@ -2610,23 +2609,23 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             debug!(
                 ident = display(&tbid),
                 succ = display(succ),
-                "upsert_mutation_lock_rev"
+                "upsert_table_lock_rev"
             );
 
             if succ {
-                return Ok(UpsertTableMutationLockReply { revision });
+                return Ok(UpsertTableLockRevReply { revision });
             }
         }
 
         Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("upsert_mutation_lock_rev", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("upsert_table_lock_rev", TXN_MAX_RETRY_TIMES),
         )))
     }
 
-    async fn delete_mutation_lock_rev(
+    async fn delete_table_lock_rev(
         &self,
-        req: DeleteTableMutationLockReq,
-    ) -> Result<DeleteTableMutationLockReply, KVAppError> {
+        req: DeleteTableLockRevReq,
+    ) -> Result<DeleteTableLockRevReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let mut retry = 0;
@@ -2639,21 +2638,20 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
             if tb_meta_seq == 0 {
                 return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, "delete_mutation_lock_rev"),
+                    UnknownTableId::new(table_id, "delete_table_lock_rev"),
                 )));
             }
 
             debug!(
                 ident = display(&tbid),
                 table_meta = debug(&tb_meta),
-                "delete_mutation_lock_rev"
+                "delete_table_lock_rev"
             );
 
-            let lock_key = TableMutationLockKey { table_id, revision };
-            let (lock_key_seq, _): (_, Option<TableMutationLock>) =
-                get_pb_value(self, &lock_key).await?;
+            let lock_key = TableLockKey { table_id, revision };
+            let (lock_key_seq, _): (_, Option<TableLock>) = get_pb_value(self, &lock_key).await?;
             if lock_key_seq == 0 {
-                return Ok(DeleteTableMutationLockReply {});
+                return Ok(DeleteTableLockRevReply {});
             }
 
             let condition = vec![txn_cond_seq(&lock_key, Eq, lock_key_seq)];
@@ -2670,16 +2668,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             debug!(
                 ident = display(&tbid),
                 succ = display(succ),
-                "delete_mutation_lock_rev"
+                "delete_table_lock_rev"
             );
 
             if succ {
-                return Ok(DeleteTableMutationLockReply {});
+                return Ok(DeleteTableLockRevReply {});
             }
         }
 
         Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("delete_mutation_lock_rev", TXN_MAX_RETRY_TIMES),
+            TxnRetryMaxTimes::new("delete_table_lock_rev", TXN_MAX_RETRY_TIMES),
         )))
     }
 

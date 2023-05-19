@@ -31,8 +31,8 @@ use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
-use common_meta_app::schema::DeleteTableMutationLockReply;
-use common_meta_app::schema::DeleteTableMutationLockReq;
+use common_meta_app::schema::DeleteTableLockRevReply;
+use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -46,8 +46,8 @@ use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexByTableIdReq;
-use common_meta_app::schema::ListTableMutationLockReply;
-use common_meta_app::schema::ListTableMutationLockReq;
+use common_meta_app::schema::ListTableLockRevReply;
+use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -63,8 +63,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableMutationLockReply;
-use common_meta_app::schema::UpsertTableMutationLockReq;
+use common_meta_app::schema::UpsertTableLockRevReply;
+use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_store::MetaStoreProvider;
@@ -388,55 +388,52 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_mutation_lock_revs(
-        &self,
-        table_id: u64,
-    ) -> Result<ListTableMutationLockReply> {
-        let req = ListTableMutationLockReq { table_id };
-        let res = self.ctx.meta.list_table_mutation_lock_revs(req).await?;
+    async fn list_table_lock_revs(&self, table_id: u64) -> Result<ListTableLockRevReply> {
+        let req = ListTableLockRevReq { table_id };
+        let res = self.ctx.meta.list_table_lock_revs(req).await?;
         Ok(res)
     }
 
     #[async_backtrace::framed]
-    async fn upsert_mutation_lock_rev(
+    async fn upsert_table_lock_rev(
         &self,
         expire_secs: u64,
         table_info: &TableInfo,
         revision: Option<u64>,
-    ) -> Result<UpsertTableMutationLockReply> {
-        let req = UpsertTableMutationLockReq {
+    ) -> Result<UpsertTableLockRevReply> {
+        let req = UpsertTableLockRevReq {
             table_id: table_info.ident.table_id,
             expire_at: Utc::now().timestamp() as u64 + expire_secs,
             revision,
         };
         match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.upsert_mutation_lock_rev(req).await?),
+            DatabaseType::NormalDB => Ok(self.ctx.meta.upsert_table_lock_rev(req).await?),
             DatabaseType::ShareDB(share_ident) => {
                 let db = self
                     .get_database(&share_ident.tenant, &share_ident.share_name)
                     .await?;
-                db.upsert_mutation_lock_rev(req).await
+                db.upsert_table_lock_rev(req).await
             }
         }
     }
 
     #[async_backtrace::framed]
-    async fn delete_mutation_lock_rev(
+    async fn delete_table_lock_rev(
         &self,
         table_info: &TableInfo,
         revision: u64,
-    ) -> Result<DeleteTableMutationLockReply> {
-        let req = DeleteTableMutationLockReq {
+    ) -> Result<DeleteTableLockRevReply> {
+        let req = DeleteTableLockRevReq {
             table_id: table_info.ident.table_id,
             revision,
         };
         match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.delete_mutation_lock_rev(req).await?),
+            DatabaseType::NormalDB => Ok(self.ctx.meta.delete_table_lock_rev(req).await?),
             DatabaseType::ShareDB(share_ident) => {
                 let db = self
                     .get_database(&share_ident.tenant, &share_ident.share_name)
                     .await?;
-                db.delete_mutation_lock_rev(req).await
+                db.delete_table_lock_rev(req).await
             }
         }
     }

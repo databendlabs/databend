@@ -37,7 +37,7 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
-use common_meta_app::schema::DeleteTableMutationLockReq;
+use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
@@ -49,7 +49,7 @@ use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::IndexType;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexByTableIdReq;
-use common_meta_app::schema::ListTableMutationLockReq;
+use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
@@ -69,7 +69,7 @@ use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_app::schema::UpsertTableMutationLockReq;
+use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::CreateShareReq;
@@ -269,7 +269,7 @@ impl SchemaApiTestSuite {
             .update_table_with_copied_files(&b.build().await)
             .await?;
         suite.index_create_list_drop(&b.build().await).await?;
-        suite.table_mutation_locks(&b.build().await).await?;
+        suite.test_table_lock(&b.build().await).await?;
         Ok(())
     }
 
@@ -3884,7 +3884,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn table_mutation_locks<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn test_table_lock<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let table_name = "tb1";
@@ -3933,52 +3933,49 @@ impl SchemaApiTestSuite {
         }
 
         {
-            info!("--- upsert mutation lock revision 1");
-            let req1 = UpsertTableMutationLockReq {
+            info!("--- upsert table lock revision 1");
+            let req1 = UpsertTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 1) as u64,
                 revision: None,
             };
 
-            let res1 = mt.upsert_mutation_lock_rev(req1).await?;
+            let res1 = mt.upsert_table_lock_rev(req1).await?;
 
-            info!("--- upsert mutation lock revision 2");
-            let req2 = UpsertTableMutationLockReq {
+            info!("--- upsert table lock revision 2");
+            let req2 = UpsertTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 2) as u64,
                 revision: None,
             };
-            let res2 = mt.upsert_mutation_lock_rev(req2).await?;
+            let res2 = mt.upsert_table_lock_rev(req2).await?;
             assert!(res2.revision > res1.revision);
 
-            info!("--- list mutation lock revisiosn");
-            let req3 = ListTableMutationLockReq { table_id };
-            let res3 = mt.list_table_mutation_lock_revs(req3).await?;
-            assert_eq!(
-                res3.prefix,
-                format!("__fd_table_mutation_lock/{}", table_id)
-            );
+            info!("--- list table lock revisiosn");
+            let req3 = ListTableLockRevReq { table_id };
+            let res3 = mt.list_table_lock_revs(req3).await?;
+            assert_eq!(res3.prefix, format!("__fd_table_lock/{}", table_id));
             assert_eq!(res3.revisions.len(), 2);
             assert_eq!(res3.revisions[0], res1.revision);
             assert_eq!(res3.revisions[1], res2.revision);
 
-            info!("--- mutation lock revision 1 retired");
+            info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(1));
-            let req4 = ListTableMutationLockReq { table_id };
-            let res4 = mt.list_table_mutation_lock_revs(req4).await?;
+            let req4 = ListTableLockRevReq { table_id };
+            let res4 = mt.list_table_lock_revs(req4).await?;
             assert_eq!(res4.revisions.len(), 1);
             assert_eq!(res4.revisions[0], res2.revision);
 
-            info!("--- drop mutation lock revision 2");
-            let req5 = DeleteTableMutationLockReq {
+            info!("--- delete table lock revision 2");
+            let req5 = DeleteTableLockRevReq {
                 table_id,
                 revision: res2.revision,
             };
-            mt.delete_mutation_lock_rev(req5).await?;
+            mt.delete_table_lock_rev(req5).await?;
 
-            info!("--- check mutation lock is empty");
-            let req6 = ListTableMutationLockReq { table_id };
-            let res6 = mt.list_table_mutation_lock_revs(req6).await?;
+            info!("--- check table locks is empty");
+            let req6 = ListTableLockRevReq { table_id };
+            let res6 = mt.list_table_lock_revs(req6).await?;
             assert_eq!(res6.revisions.len(), 0);
         }
 

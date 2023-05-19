@@ -69,18 +69,13 @@ impl Interpreter for OptimizeTableInterpreter {
                 if build_res.main_pipeline.is_empty() {
                     purge(ctx, plan, None).await?;
                 } else {
-                    build_res.main_pipeline.set_on_finished(move |may_error| {
-                        if may_error.is_none() {
-                            return GlobalIORuntime::instance().block_on(async move {
-                                let ret = purge(ctx, plan, None).await;
-                                match ret {
-                                    Ok(_) => Ok(()),
-                                    Err(e) => Err(e),
-                                }
-                            });
-                        }
-                        Err(may_error.as_ref().unwrap().clone())
-                    });
+                    build_res
+                        .main_pipeline
+                        .set_on_finished(move |may_error| match may_error {
+                            None => GlobalIORuntime::instance()
+                                .block_on(async move { purge(ctx, plan, None).await }),
+                            Some(error_code) => Err(error_code.clone()),
+                        });
                 }
                 Ok(build_res)
             }
@@ -100,14 +95,14 @@ impl OptimizeTableInterpreter {
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
 
-        // check if the table is under mutation
+        // check if the table is locked.
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
         let reply = catalog
-            .list_table_mutation_lock_revs(table.get_table_info().ident.table_id)
+            .list_table_lock_revs(table.get_table_info().ident.table_id)
             .await?;
         if !reply.revisions.is_empty() {
-            return Err(ErrorCode::TableMutationAlreadyLocked(format!(
-                "table '{}' is under mutation, please retry compaction later",
+            return Err(ErrorCode::TableAlreadyLocked(format!(
+                "table '{}' is locked, please retry compaction later",
                 self.plan.table
             )));
         }
@@ -128,7 +123,7 @@ async fn purge(
     ctx: Arc<QueryContext>,
     plan: OptimizeTablePlan,
     instant: Option<NavigationPoint>,
-) -> Result<Option<Vec<String>>> {
+) -> Result<()> {
     // currently, context caches the table, we have to "refresh"
     // the table by using the catalog API directly
     let table = ctx
@@ -137,5 +132,7 @@ async fn purge(
         .await?;
 
     let keep_latest = true;
-    table.purge(ctx, instant, keep_latest, None).await
+    let res = table.purge(ctx, instant, keep_latest, None).await?;
+    assert!(res.is_none());
+    Ok(())
 }

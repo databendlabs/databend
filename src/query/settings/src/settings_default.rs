@@ -304,7 +304,7 @@ impl DefaultSettings {
                     // license key should not be reported
                     display_in_show_settings: false,
                 }),
-                ("mutation_lock_expire_secs", DefaultSettingValue {
+                ("table_lock_expire_secs", DefaultSettingValue {
                     value: UserSettingValue::UInt64(5),
                     desc: "Sets the seconds that the table mutation lock will expire in.",
                     possible_values: None,
