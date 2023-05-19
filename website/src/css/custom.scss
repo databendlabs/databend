@@ -370,7 +370,7 @@
       opacity: 1;
     }
   }
-  .DOCITEM-PAGE-EE-TIPS-BEFORE-DOM {
+  .DOCITEM-PAGE-EE-TIPS-BEFORE-DOM, .DOCITEM-PAGE-FUNCTION-DESCRIPTION-DOM {
       margin-bottom: 0!important;
       border-bottom: unset!important;
     
@@ -380,6 +380,9 @@
   border-bottom: 1px solid var(--color-border);
   padding-bottom: 12px;
   margin-bottom: calc(var(--ifm-h1-vertical-rhythm-bottom) * var(--ifm-leading));
+}
+.DOCITEM-PAGE-FUNCTION-DESCRIPTION-DOM {
+  padding-bottom: 0!important;
 }
 .alert--success {
   --ifm-alert-background-color: var(--ifm-color-success-contrast-background);
