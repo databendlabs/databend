@@ -27,7 +27,7 @@ use super::rewrite::RulePushDownLimitAggregate;
 use super::rewrite::RulePushDownLimitExpression;
 use super::rewrite::RulePushDownPrewhere;
 use super::rewrite::RuleTryApplyAggIndex;
-use super::rewrite::RuleUseVectorIndex;
+use super::rewrite::RuleTryApplyVectorIndex;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
 use super::transform::RuleRightAssociateJoin;
@@ -96,7 +96,7 @@ impl RuleFactory {
             RuleID::RightExchangeJoin => Ok(Box::new(RuleRightExchangeJoin::new())),
             RuleID::ExchangeJoin => Ok(Box::new(RuleExchangeJoin::new())),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
-            RuleID::UseVectorIndex => Ok(Box::new(RuleUseVectorIndex::new())),
+            RuleID::UseVectorIndex => Ok(Box::new(RuleTryApplyVectorIndex::new())),
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
         }
     }

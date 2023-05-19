@@ -19,12 +19,12 @@ use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::ScalarExpr;
 
-pub struct RuleUseVectorIndex {
+pub struct RuleTryApplyVectorIndex {
     id: RuleID,
     patterns: Vec<SExpr>,
 }
 
-impl RuleUseVectorIndex {
+impl RuleTryApplyVectorIndex {
     pub fn new() -> Self {
         Self {
             id: RuleID::UseVectorIndex,
@@ -55,7 +55,7 @@ impl RuleUseVectorIndex {
     }
 }
 
-impl Rule for RuleUseVectorIndex {
+impl Rule for RuleTryApplyVectorIndex {
     fn id(&self) -> crate::optimizer::RuleID {
         self.id
     }
