@@ -49,6 +49,7 @@ impl TransformIEJoinLeft {
         output_port: Arc<OutputPort>,
         ie_join_state: Arc<IEJoinState>,
     ) -> Box<dyn Processor> {
+        dbg!(1);
         ie_join_state.left_attach();
         Box::new(TransformIEJoinLeft {
             input_port,
@@ -79,6 +80,7 @@ impl Processor for TransformIEJoinLeft {
                     return Ok(Event::Sync);
                 }
                 if self.input_port.is_finished() {
+                    dbg!("input port finished");
                     self.state.left_detach()?;
                     self.step = IEJoinStep::Merging;
                     return Ok(Event::Async);

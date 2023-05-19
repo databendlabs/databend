@@ -191,16 +191,19 @@ impl IEJoinState {
     pub fn left_detach(&self) -> Result<()> {
         self.left_sinker_count
             .fetch_sub(1, atomic::Ordering::SeqCst);
-        if self.left_sinker_count.load(atomic::Ordering::Relaxed) == 0
-            && self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0
-        {
-            // Left and right both finish sink
-            // Merge sort left/right and partition them
-            self.merge_sort()?;
-            // Set merge finished
-            let mut merge_finished = self.merge_finished.write();
-            *merge_finished = true;
-            self.finished_notify.notify_waiters();
+        if self.left_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
+            loop {
+                if self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
+                    // Left and right both finish sink
+                    // Merge sort left/right and partition them
+                    self.merge_sort()?;
+                    // Set merge finished
+                    let mut merge_finished = self.merge_finished.write();
+                    *merge_finished = true;
+                    self.finished_notify.notify_waiters();
+                    break;
+                }
+            }
         }
         Ok(())
     }
@@ -333,6 +336,7 @@ impl IEJoinState {
     }
 
     pub fn merge_sort(&self) -> Result<()> {
+        dbg!("merge_sort");
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         // Merge sort `l1_sorted_blocks`
         let mut l1_sorted_blocks = self.l1_sorted_blocks.write();
@@ -361,7 +365,7 @@ impl IEJoinState {
             for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
                 // First check two blocks whether have intersection
                 // if self.intersection(left_block, right_block) {
-                tasks.push((left_idx, right_idx));
+                    tasks.push((left_idx, right_idx));
                 // }
             }
         }
@@ -369,6 +373,7 @@ impl IEJoinState {
     }
 
     pub fn ie_join(&self, task_id: usize) -> Result<DataBlock> {
+        dbg!(task_id);
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];

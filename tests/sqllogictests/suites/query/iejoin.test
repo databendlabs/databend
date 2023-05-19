@@ -27,3 +27,12 @@ on s1.time > s2.time AND s1.cost < s2.cost ORDER BY 1, 2;
 ----
 s1	s3
 s4	s3
+
+statement ok
+drop table east;
+
+statement ok
+drop table west;
+
+statement ok
+set max_block_size = 65536;
