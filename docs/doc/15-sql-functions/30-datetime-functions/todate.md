@@ -3,7 +3,7 @@ title: TO_DATE
 ---
 import FunctionDescription from '@site/src/components/FunctionDescription';
 
-<FunctionDescription description="Introduced version: v1.1.39"/>
+<FunctionDescription description="Introduced: v1.1.39"/>
 
 TO_DATE converts an expression to a date format. 
 
