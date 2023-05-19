@@ -18,7 +18,6 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
-use common_catalog::table_mutation_lock::TableLockHeartbeat;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
@@ -28,6 +27,8 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
+use table_lock::TableLockHandlerWrapper;
+use table_lock::TableLockHeartbeat;
 
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -78,7 +79,6 @@ pub struct CommitSink {
     heartbeat: TableLockHeartbeat,
 
     retries: u64,
-    need_lock: bool,
 
     input: Arc<InputPort>,
 }
@@ -102,7 +102,6 @@ impl CommitSink {
             abort_operation: AbortOperation::default(),
             heartbeat: TableLockHeartbeat::default(),
             retries: 0,
-            need_lock: false,
             input,
         })))
     }
@@ -168,13 +167,12 @@ impl Processor for CommitSink {
                 self.merged_segments = meta.segments.clone();
                 self.merged_statistics = meta.summary.clone();
                 self.abort_operation = meta.abort_operation.clone();
-                self.need_lock = meta.need_lock;
 
                 let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
                 new_snapshot.segments = self.merged_segments.clone();
                 new_snapshot.summary = self.merged_statistics.clone();
 
-                if self.need_lock {
+                if meta.need_lock {
                     self.state = State::TryLock(new_snapshot);
                 } else {
                     self.state = State::TryCommit(new_snapshot);
@@ -214,7 +212,8 @@ impl Processor for CommitSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::TryLock(new_snapshot) => {
                 let table_info = self.table.get_table_info();
-                match TableLockHeartbeat::try_create(self.ctx.clone(), table_info.clone()).await {
+                let handler = TableLockHandlerWrapper::instance(true);
+                match handler.try_lock(self.ctx.clone(), table_info.clone()).await {
                     Ok(heartbeat) => {
                         self.heartbeat = heartbeat;
                         self.state = State::TryCommit(new_snapshot);

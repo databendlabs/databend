@@ -12,15 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
+mod table_lock_handler;
+mod table_lock_heartbeat;
 
-pub mod catalog;
-pub mod catalog_kind;
-pub mod cluster_info;
-pub mod database;
-pub mod plan;
-pub mod table;
-pub mod table_args;
-pub mod table_context;
-pub mod table_function;
-pub mod table_mutator;
+pub use table_lock_handler::TableLockHandler;
+pub use table_lock_handler::TableLockHandlerWrapper;
+pub use table_lock_heartbeat::TableLockHeartbeat;

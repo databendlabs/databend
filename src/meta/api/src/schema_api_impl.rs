@@ -2544,6 +2544,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             revisions.push(lock_key.revision);
         }
+        // sort ascending.
         revisions.sort();
         Ok(ListTableLockRevReply { revisions, prefix })
     }
@@ -2576,6 +2577,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let revision = if let Some(rev) = req.revision {
                 rev
             } else {
+                // generate a new revision.
                 fetch_id(self, IdGenerator::table_lock_id()).await?
             };
 

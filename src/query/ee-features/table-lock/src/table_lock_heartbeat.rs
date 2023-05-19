@@ -20,22 +20,16 @@ use std::time::Duration;
 use common_base::base::tokio::sync::Notify;
 use common_base::base::tokio::task::JoinHandle;
 use common_base::base::tokio::time::sleep;
-use common_base::base::tokio::time::timeout;
 use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
-use common_meta_types::protobuf::watch_request::FilterType;
-use common_meta_types::protobuf::WatchRequest;
-use common_users::UserApiProvider;
 use futures::future::select;
 use futures::future::Either;
-use futures_util::StreamExt;
 use rand::thread_rng;
 use rand::Rng;
-
-use crate::table_context::TableContext;
 
 #[derive(Default)]
 pub struct TableLockHeartbeat {
@@ -45,21 +39,18 @@ pub struct TableLockHeartbeat {
 }
 
 impl TableLockHeartbeat {
-    pub async fn try_create(
+    pub async fn start(
+        &mut self,
         ctx: Arc<dyn TableContext>,
         table_info: TableInfo,
-    ) -> Result<TableLockHeartbeat> {
-        let revision = Self::acquire_lock(ctx.clone(), table_info.clone()).await?;
-
-        let shutdown_notify = Arc::new(Notify::new());
-        let shutdown_flag = Arc::new(AtomicBool::new(false));
-
+        revision: u64,
+    ) -> Result<()> {
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
         let sleep_range = (expire_secs * 1000 / 3)..=((expire_secs * 1000 / 3) * 2);
 
-        let shutdown_handler: JoinHandle<Result<()>> = GlobalIORuntime::instance().spawn({
-            let shutdown_flag = shutdown_flag.clone();
-            let shutdown_notify = shutdown_notify.clone();
+        self.shutdown_handler = Some(GlobalIORuntime::instance().spawn({
+            let shutdown_flag = self.shutdown_flag.clone();
+            let shutdown_notify = self.shutdown_notify.clone();
 
             async move {
                 let catalog = ctx.get_catalog(table_info.catalog())?;
@@ -85,64 +76,8 @@ impl TableLockHeartbeat {
                 }
                 Ok(())
             }
-        });
-        Ok(TableLockHeartbeat {
-            shutdown_flag,
-            shutdown_notify,
-            shutdown_handler: Some(shutdown_handler),
-        })
-    }
-
-    async fn acquire_lock(ctx: Arc<dyn TableContext>, table_info: TableInfo) -> Result<u64> {
-        let catalog = ctx.get_catalog(table_info.catalog())?;
-        let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
-        let res = catalog
-            .upsert_table_lock_rev(expire_secs, &table_info, None)
-            .await?;
-        let revision = res.revision;
-
-        let table_id = table_info.ident.table_id;
-        let duration = Duration::from_secs(expire_secs);
-        let meta_api = UserApiProvider::instance().get_meta_store_client();
-        loop {
-            let reply = catalog.list_table_lock_revs(table_id).await?;
-            let position = reply.revisions.iter().position(|x| *x == revision).ok_or(
-                ErrorCode::TableLockExpired("the acquired table lock has expired".to_string()),
-            )?;
-
-            if position == 0 {
-                // The lock is acquired by current session.
-                break;
-            }
-
-            let key = format!("{}/{}", reply.prefix, reply.revisions[position - 1]);
-            let req = WatchRequest {
-                key,
-                key_end: None,
-                filter_type: FilterType::Delete.into(),
-            };
-            let mut watch_stream = meta_api.watch(req).await?;
-            match timeout(duration, async move {
-                while let Some(Ok(resp)) = watch_stream.next().await {
-                    if let Some(event) = resp.event {
-                        if event.current.is_none() {
-                            break;
-                        }
-                    }
-                }
-            })
-            .await
-            {
-                Ok(_) => Ok(()),
-                Err(_) => {
-                    catalog.delete_table_lock_rev(&table_info, revision).await?;
-                    Err(ErrorCode::TableAlreadyLocked(
-                        "table is locked by other session, please retry later".to_string(),
-                    ))
-                }
-            }?;
-        }
-        Ok(revision)
+        }));
+        Ok(())
     }
 
     #[async_backtrace::framed]

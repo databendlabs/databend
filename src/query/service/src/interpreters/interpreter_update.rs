@@ -15,9 +15,10 @@
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::table_mutation_lock::TableLockHeartbeat;
 use common_exception::Result;
+use common_license::license_manager::get_license_manager;
 use common_sql::executor::cast_expr_to_non_null_boolean;
+use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -53,10 +54,21 @@ impl Interpreter for UpdateInterpreter {
         let tbl_name = self.plan.table.as_str();
 
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        // Add table lock heartbeat.
         let table_info = tbl.get_table_info().clone();
-        let mut heartbeat =
-            TableLockHeartbeat::try_create(self.ctx.clone(), table_info.clone()).await?;
+
+        // Add table lock heartbeat.
+        let enterprise_enabled = get_license_manager()
+            .manager
+            .check_enterprise_enabled(
+                &self.ctx.get_settings(),
+                self.ctx.get_tenant(),
+                "table_lock".to_string(),
+            )
+            .is_ok();
+        let handler = TableLockHandlerWrapper::instance(enterprise_enabled);
+        let mut heartbeat = handler
+            .try_lock(self.ctx.clone(), table_info.clone())
+            .await?;
 
         // refresh table.
         let tbl = self
