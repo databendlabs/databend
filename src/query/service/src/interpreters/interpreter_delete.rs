@@ -118,7 +118,7 @@ impl Interpreter for DeleteInterpreter {
             heartbeat.shutdown().await?;
         } else {
             build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock hearbeat.
+                // shutdown table lock heartbeat.
                 GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
                 match may_error {
                     None => Ok(()),
