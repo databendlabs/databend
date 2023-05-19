@@ -1,6 +1,9 @@
 ---
 title: TO_DATE
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="introduced in v1.1.39"/>
 
 TO_DATE converts an expression to a date format. 
 
@@ -19,7 +22,6 @@ TO_DATE(<expr>)
 -- Convert a string to a date using the given pattern
 TO_DATE(<expr, expr>)
 ```
-*TO_DATE(<expr, expr>) was introduced in v1.1.39.*
 
 ## Return Type
 
