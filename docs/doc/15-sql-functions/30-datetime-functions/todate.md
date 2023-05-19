@@ -1,13 +1,11 @@
 ---
 title: TO_DATE
 ---
-TO_DATE converts an expression to a date format. 
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-|name        | TO_DATE(<expr[,expr]>)      |
-|------------|-----------------------------|
-| introduced | V1.1.39                     |
-| expr       | expr is string              |
-| return     | date                        |
+<FunctionDescription includesEETip description="V1.1.39"/>
+
+TO_DATE converts an expression to a date format. 
 
 ## Syntax
 
