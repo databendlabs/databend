@@ -2,6 +2,7 @@
 import React, { FC, ReactElement, useEffect } from 'react';
 import styles from './styles.module.scss';
 import clsx from 'clsx';
+import Tag from '@site/src/components/BaseComponents/Tag';
 interface IProps {
   description: string;
   includesEETip?: boolean;
@@ -15,7 +16,9 @@ const FunctionDescription: FC<IProps> = ({ description, includesEETip }): ReactE
     }
   }, [])
   return (
-    <div className={clsx(styles.description, includesEETip && styles.descriptionIncludesEE)}>{description}</div>
+    <div className={clsx(styles.description, includesEETip && styles.descriptionIncludesEE)}>
+      <Tag>{description}</Tag>
+    </div>
   );
 };
 FunctionDescription.defaultProps = {
