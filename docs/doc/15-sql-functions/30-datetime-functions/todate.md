@@ -5,20 +5,13 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="introduced in v1.1.39"/>
 
-|func        | TO_DATE(<expr,expr>)         |
-|------------|-----------------------------|
-| introduced | v1.1.39                     |
-| expr       | expr is string              |
-| return     | date                        |
-
-
 TO_DATE converts an expression to a date format. 
 
-The function can accept one or two arguments. If given one argument, the function extracts a date from the string. If the argument is an integer, the function interprets the integer as the number of days before (for a negative number) or after (for a positive number) the Unix epoch (midnight on January 1, 1970). 
-
-If given two arguments, the function converts the first string to a date based on the format specified in the second string. To customize the format of date and time in Databend, you can utilize specifiers. These specifiers allow you to define the desired format for date and time values. For a comprehensive list of supported specifiers, see [Formatting Date and Time](../../13-sql-reference/10-data-types/20-data-type-time-date-types.md#formatting-date-and-time).
-
-See also: [TO_TIMESTAMP](totimestamp.md)
+|name        | TO_DATE(<expr[,expr]>)      |
+|------------|-----------------------------|
+| introduced | V1.1.39                     |
+| expr       | expr is string              |
+| return     | date                        |
 
 ## Syntax
 
@@ -33,6 +26,14 @@ TO_DATE(<expr, expr>)
 ## Return Type
 
 Returns a date in the format "YYYY-MM-DD".
+
+
+The function can accept one or two arguments. If given one argument, the function extracts a date from the string. If the argument is an integer, the function interprets the integer as the number of days before (for a negative number) or after (for a positive number) the Unix epoch (midnight on January 1, 1970). 
+
+If given two arguments, the function converts the first string to a date based on the format specified in the second string. To customize the format of date and time in Databend, you can utilize specifiers. These specifiers allow you to define the desired format for date and time values. For a comprehensive list of supported specifiers, see [Formatting Date and Time](../../13-sql-reference/10-data-types/20-data-type-time-date-types.md#formatting-date-and-time).
+
+See also: [TO_TIMESTAMP](totimestamp.md)
+
 
 ## Examples
 
