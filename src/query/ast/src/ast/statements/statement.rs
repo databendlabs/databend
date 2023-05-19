@@ -120,7 +120,7 @@ pub enum Statement {
     // Columns
     ShowColumns(ShowColumnsStmt),
     // Indexes
-    CreateIndex(CreateVectorIndexStmt),
+    CreateVectorIndex(CreateVectorIndexStmt),
 
     // Views
     CreateView(CreateViewStmt),
@@ -519,7 +519,7 @@ impl Display for Statement {
             Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
             Statement::ShowObjectGrantPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::ShowGrantsOfShare(stmt) => write!(f, "{stmt}")?,
-            Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateVectorIndex(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

@@ -65,7 +65,8 @@ impl FuseTable {
                 put_cache: true,
             };
             let segment_info = segment_reader.read(&params).await?;
-            for block_meta in &segment_info.blocks {
+            let block_metas = segment_info.block_metas()?;
+            for block_meta in &block_metas {
                 let block_reader =
                     self.create_block_reader(projection.clone(), false, ctx.clone())?;
                 let block = block_reader

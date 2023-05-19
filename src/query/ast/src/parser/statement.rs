@@ -274,7 +274,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
-    let create_index = map(
+    let create_vector_index = map(
         // example: CREATE INDEX ON items USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);
         rule! {
             CREATE ~ INDEX~ ON ~ #period_separated_idents_1_to_3
@@ -297,7 +297,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             paras,
             _,
         )| {
-            Statement::CreateIndex(CreateVectorIndexStmt {
+            Statement::CreateVectorIndex(CreateVectorIndexStmt {
                 catalog,
                 database,
                 table,
@@ -1333,9 +1333,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         | #create_catalog: "`CREATE CATALOG [IF NOT EXISTS] <catalog> TYPE=<catalog_type> CONNECTION=<catalog_options>`"
         | #drop_catalog: "`DROP CATALOG [IF EXISTS] <catalog>`"
         ),
-        // index
+        // vector index
         rule!(
-            #create_index: "`CREATE INDEX ON <table_name> USING index_type ( <column_name>,metric_type) WITH(paras)`"
+            #create_vector_index: "`CREATE INDEX ON <table_name> USING index_type ( <column_name>,metric_type) WITH(paras)`"
         ),
     ));
 

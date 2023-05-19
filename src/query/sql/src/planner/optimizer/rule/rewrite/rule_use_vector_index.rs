@@ -12,17 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
-use common_expression::Scalar;
-
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
-use crate::plans::EvalScalar;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
-use crate::plans::Scan;
-use crate::plans::Sort;
 use crate::ScalarExpr;
 
 pub struct RuleUseVectorIndex {

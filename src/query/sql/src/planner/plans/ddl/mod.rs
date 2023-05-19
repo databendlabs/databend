@@ -20,6 +20,7 @@ mod index;
 mod stage;
 mod table;
 mod udf;
+mod vector_index;
 mod view;
 
 pub use account::*;
@@ -30,4 +31,5 @@ pub use index::*;
 pub use stage::*;
 pub use table::*;
 pub use udf::*;
+pub use vector_index::*;
 pub use view::*;

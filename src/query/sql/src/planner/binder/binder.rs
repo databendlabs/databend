@@ -244,7 +244,7 @@ impl<'a> Binder {
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
             // index
-            Statement::CreateIndex(stmt) => self.bind_create_index(stmt).await?,
+            Statement::CreateVectorIndex(stmt) => self.bind_create_vector_index(stmt).await?,
 
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,

@@ -86,8 +86,8 @@ use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CastExpr;
-use crate::plans::CreateIndexPlan;
 use crate::plans::CreateTablePlan;
+use crate::plans::CreateVectorIndexPlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
@@ -903,7 +903,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_create_index(
+    pub(in crate::planner::binder) async fn bind_create_vector_index(
         &mut self,
         stmt: &CreateVectorIndexStmt,
     ) -> Result<Plan> {
@@ -955,7 +955,7 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
         let column = normalize_identifier(&stmt.column, &self.name_resolution_ctx).name;
-        Ok(Plan::CreateIndex(Box::new(CreateIndexPlan {
+        Ok(Plan::CreateVectorIndex(Box::new(CreateVectorIndexPlan {
             catalog,
             database,
             table,

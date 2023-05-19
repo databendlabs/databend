@@ -77,7 +77,6 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner;
 use crate::plans::AggregateMode;
-use crate::plans::ConstantExpr;
 use crate::plans::BoundColumnRef;
 use crate::plans::Exchange;
 use crate::plans::FunctionCall;

@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_sql::plans::CreateIndexPlan;
+use common_sql::plans::CreateVectorIndexPlan;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
 
@@ -24,19 +24,19 @@ use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
-pub struct CreateIndexInterpreter {
+pub struct CreateVectorIndexInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateIndexPlan,
+    plan: CreateVectorIndexPlan,
 }
 
-impl CreateIndexInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateIndexPlan) -> Result<Self> {
-        Ok(CreateIndexInterpreter { ctx, plan })
+impl CreateVectorIndexInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateVectorIndexPlan) -> Result<Self> {
+        Ok(CreateVectorIndexInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateIndexInterpreter {
+impl Interpreter for CreateVectorIndexInterpreter {
     fn name(&self) -> &str {
         "CreateIndexInterpreter"
     }

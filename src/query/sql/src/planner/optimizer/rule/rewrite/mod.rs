@@ -37,8 +37,8 @@ mod rule_push_down_limit_union;
 mod rule_push_down_prewhere;
 mod rule_push_down_sort_scan;
 mod rule_split_aggregate;
-mod rule_use_vector_index;
 mod rule_try_apply_agg_index;
+mod rule_use_vector_index;
 
 pub use rule_eliminate_eval_scalar::RuleEliminateEvalScalar;
 pub use rule_eliminate_filter::RuleEliminateFilter;
@@ -64,5 +64,5 @@ pub use rule_push_down_limit_union::RulePushDownLimitUnion;
 pub use rule_push_down_prewhere::RulePushDownPrewhere;
 pub use rule_push_down_sort_scan::RulePushDownSortScan;
 pub use rule_split_aggregate::RuleSplitAggregate;
-pub use rule_use_vector_index::RuleUseVectorIndex;
 pub use rule_try_apply_agg_index::RuleTryApplyAggIndex;
+pub use rule_use_vector_index::RuleUseVectorIndex;

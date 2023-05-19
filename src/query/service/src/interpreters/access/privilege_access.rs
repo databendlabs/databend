@@ -291,7 +291,7 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             // index
-            Plan::CreateIndex(plan) => {
+            Plan::CreateVectorIndex(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(

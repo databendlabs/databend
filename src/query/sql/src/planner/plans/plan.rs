@@ -24,6 +24,7 @@ use common_expression::DataSchemaRefExt;
 
 use super::CreateIndexPlan;
 use super::CreateShareEndpointPlan;
+use super::CreateVectorIndexPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::VacuumTablePlan;
@@ -165,8 +166,8 @@ pub enum Plan {
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
 
-    // index
-    CreateIndex(Box<CreateIndexPlan>),
+    // vector index
+    CreateVectorIndex(Box<CreateVectorIndexPlan>),
 
     // Insert
     Insert(Box<Insert>),
@@ -342,7 +343,7 @@ impl Display for Plan {
             Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
             Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
             Plan::RevertTable(..) => write!(f, "RevertTable"),
-            Plan::CreateIndex(_) => write!(f, "CreateIndex"),
+            Plan::CreateVectorIndex(_) => write!(f, "CreateVectorIndex"),
         }
     }
 }
@@ -383,7 +384,6 @@ impl Plan {
             Plan::DescShare(plan) => plan.schema(),
             Plan::ShowShares(plan) => plan.schema(),
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
-            Plan::RevertTable(plan) => plan.schema(),
             Plan::CreateIndex(_) => Arc::new(DataSchema::empty()),
 
             other => {

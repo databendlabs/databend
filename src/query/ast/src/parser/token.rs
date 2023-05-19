@@ -549,8 +549,6 @@ pub enum TokenKind {
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
-    #[token("INDEX", ignore(ascii_case))]
-    INDEX,
     #[token("INNER", ignore(ascii_case))]
     INNER,
     #[token("INSERT", ignore(ascii_case))]
