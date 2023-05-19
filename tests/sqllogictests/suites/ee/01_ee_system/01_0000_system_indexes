@@ -55,20 +55,20 @@ statement ok
 SHOW INDEXES
 
 query TTTT
-SELECT name, type, table, definition FROM system.indexes
+SELECT name, type, substr(table, -20), definition FROM system.indexes
 ----
-idx1 AGGREGATING 'test_tenant'.'test_index_db'.'t1' SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
-idx2 AGGREGATING 'test_tenant'.'test_index_db'.'t1' SELECT b FROM t1 WHERE (a < 10)
-idx3 AGGREGATING 'test_tenant'.'test_index_db'.'t2' SELECT * FROM t2
+idx1 AGGREGATING 'test_index_db'.'t1' SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+idx2 AGGREGATING 'test_index_db'.'t1' SELECT b FROM t1 WHERE (a < 10)
+idx3 AGGREGATING 'test_index_db'.'t2' SELECT * FROM t2
 
 statement ok
 DROP AGGREGATING INDEX idx2
 
 query TTTT
-SELECT name, type, table, definition FROM system.indexes
+SELECT name, type, substr(table, -20), definition FROM system.indexes
 ----
-idx1 AGGREGATING 'test_tenant'.'test_index_db'.'t1' SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
-idx3 AGGREGATING 'test_tenant'.'test_index_db'.'t2' SELECT * FROM t2
+idx1 AGGREGATING 'test_index_db'.'t1' SELECT SUM(a), b FROM t1 WHERE (b > 3) GROUP BY b
+idx3 AGGREGATING 'test_index_db'.'t2' SELECT * FROM t2
 
 statement ok
 DROP AGGREGATING INDEX idx1
