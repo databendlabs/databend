@@ -51,6 +51,9 @@ CREATE AGGREGATING INDEX idx2 AS SELECT b FROM t1 WHERE a < 10
 statement ok
 CREATE AGGREGATING INDEX idx3 AS SELECT * FROM t2
 
+statement ok
+SHOW INDEXES
+
 query TTTT
 SELECT name, type, table, definition FROM system.indexes
 ----
