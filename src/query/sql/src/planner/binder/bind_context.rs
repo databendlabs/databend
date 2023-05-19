@@ -168,6 +168,10 @@ pub struct BindContext {
     pub srfs: DashMap<String, ScalarExpr>,
 
     pub expr_context: ExprContext,
+
+    /// If true, the query is planning for aggregate index.
+    /// It's used to avoid infinite loop.
+    pub planning_agg_index: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -189,6 +193,7 @@ impl BindContext {
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
+            planning_agg_index: false,
         }
     }
 
@@ -204,6 +209,7 @@ impl BindContext {
             view_info: None,
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
+            planning_agg_index: false,
         }
     }
 

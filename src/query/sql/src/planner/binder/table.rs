@@ -220,7 +220,8 @@ impl Binder {
                     }
                 };
 
-                if table_meta.support_index() {
+                // Avoid death loop
+                if !bind_context.planning_agg_index && table_meta.support_index() {
                     let license_manager = get_license_manager();
                     match license_manager.manager.check_enterprise_enabled(
                         &self.ctx.get_settings(),
@@ -244,6 +245,7 @@ impl Binder {
                                 let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                                 let mut new_bind_context =
                                     BindContext::with_parent(Box::new(bind_context.clone()));
+                                new_bind_context.planning_agg_index = true;
                                 if let Statement::Query(query) = &stmt {
                                     let (s_expr, _) =
                                         self.bind_query(&mut new_bind_context, query).await?;
@@ -641,6 +643,7 @@ impl Binder {
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),
+            planning_agg_index: false,
         };
         let (s_expr, mut new_bind_context) = self
             .bind_query(&mut new_bind_context, &cte_info.query)

@@ -46,7 +46,9 @@ impl Binder {
         let index_name = self.normalize_object_identifier(index_name);
         let subquery = format!("{}", query);
 
+        bind_context.planning_agg_index = true;
         self.bind_query(bind_context, query).await?;
+        bind_context.planning_agg_index = false;
 
         let tables = self.metadata.read().tables().to_vec();
 
