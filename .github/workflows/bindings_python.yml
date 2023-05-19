@@ -24,28 +24,6 @@ concurrency:
 
 env:
   RUNNER_PROVIDER: github
-
-jobs:
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-      - name: Rust setup
-        run: |
-          bash ./scripts/setup/dev_setup.sh -yb
-      - name: Build with maturin
-        working-directory: "src/bendpy"
-        run: |
-          python -m pip install -e .[test]
-      - name: Run pytests
-        working-directory: "src/bendpy"
-        run: |
-          python -m pytest -v tests/*
   build_linux:
     name: ${{ matrix.target }}
     runs-on: ubuntu-latest
@@ -129,11 +107,12 @@ jobs:
           docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
           before-script-linux: ../../scripts/setup/dev_setup.sh -yb
 
-      # - name: Run tests
-      #   working-directory: src/bendpy
-      #   run: |
-      #     pip install -e .[test]
-      #     pytest -v tests/*
+      - name: Run tests
+        working-directory: src/bendpy
+        run: |
+          pip install dist/*.whl
+          pip install pytest pyarrow pandas
+          pytest -v tests/*
 
       - name: Upload artifact
         if: github.event_name == 'pull_request'
