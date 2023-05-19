@@ -1,6 +1,9 @@
 ---
 title: TO_TIMESTAMP
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced: v1.1.39"/>
 
 TO_TIMESTAMP converts an expression to a date with time (timestamp/datetime).
 

@@ -46,6 +46,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DeleteTableLockRevReply;
 use common_meta_app::schema::DropDatabaseReply;
@@ -673,7 +674,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
+    async fn create_table(&self, _req: CreateTableReq) -> Result<CreateTableReply> {
         todo!()
     }
 
