@@ -13,8 +13,10 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::FunctionContext;
 
 use super::rewrite::RuleEliminateEvalScalar;
+use super::rewrite::RuleFoldConstant;
 use super::rewrite::RuleFoldCountAggregate;
 use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
@@ -24,6 +26,7 @@ use super::rewrite::RulePushDownFilterJoin;
 use super::rewrite::RulePushDownLimitAggregate;
 use super::rewrite::RulePushDownLimitExpression;
 use super::rewrite::RulePushDownPrewhere;
+use super::rewrite::RuleTryApplyAggIndex;
 use super::rewrite::RuleUseVectorIndex;
 use super::transform::RuleCommuteJoin;
 use super::transform::RuleLeftAssociateJoin;
@@ -52,8 +55,13 @@ use crate::MetadataRef;
 pub struct RuleFactory;
 
 impl RuleFactory {
-    pub fn create_rule(id: RuleID, metadata: MetadataRef) -> Result<RulePtr> {
+    pub fn create_rule(
+        id: RuleID,
+        metadata: MetadataRef,
+        func_ctx: FunctionContext,
+    ) -> Result<RulePtr> {
         match id {
+            RuleID::FoldConstant => Ok(Box::new(RuleFoldConstant::new(func_ctx))),
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => {
@@ -89,6 +97,7 @@ impl RuleFactory {
             RuleID::ExchangeJoin => Ok(Box::new(RuleExchangeJoin::new())),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
             RuleID::UseVectorIndex => Ok(Box::new(RuleUseVectorIndex::new())),
+            RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
         }
     }
 }

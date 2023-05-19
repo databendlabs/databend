@@ -8,6 +8,12 @@ set -e
 SCRIPT_PATH="$(cd "$(dirname "$0")" >/dev/null 2>&1 && pwd)"
 cd "$SCRIPT_PATH/../.." || exit
 
+# NOTE: never use sudo under macos
+PRE_COMMAND=()
+if [[ "$(whoami)" != 'root' ]] && [[ ${PACKAGE_MANAGER} != "brew" ]]; then
+	PRE_COMMAND=(sudo)
+fi
+
 function add_to_profile {
 	eval "$1"
 	FOUND=$(grep -c "$1" "${HOME}/.profile" || true)
@@ -30,10 +36,6 @@ function update_path_and_profile {
 function install_pkg {
 	package=$1
 	PACKAGE_MANAGER=$2
-	PRE_COMMAND=()
-	if [ "$(whoami)" != 'root' ]; then
-		PRE_COMMAND=(sudo)
-	fi
 	if which "$package" &>/dev/null; then
 		echo "$package is already installed"
 	else
@@ -43,7 +45,7 @@ function install_pkg {
 			"${PRE_COMMAND[@]}" apt-get install --no-install-recommends -yq "${package}"
 			;;
 		yum)
-			"${PRE_COMMAND[@]}" yum install -yq "${package}"
+			"${PRE_COMMAND[@]}" yum install -y -q "${package}"
 			;;
 		pacman)
 			"${PRE_COMMAND[@]}" pacman --quiet --noconfirm -Syu "$package"
@@ -106,14 +108,20 @@ function install_python3 {
 		install_pkg python3-all-dev "$PACKAGE_MANAGER"
 		install_pkg python3-setuptools "$PACKAGE_MANAGER"
 		install_pkg python3-pip "$PACKAGE_MANAGER"
+		install_pkg libcairo2-dev "$PACKAGE_MANAGER"
 		;;
 	apk)
 		install_pkg python3-dev "$PACKAGE_MANAGER"
 		install_pkg py3-pip "$PACKAGE_MANAGER"
 		install_pkg libffi-dev "$PACKAGE_MANAGER"
 		;;
-	brew | pacman | yum | dnf)
+	brew | pacman)
 		install_pkg python3 "$PACKAGE_MANAGER"
+		install_pkg cairo "$PACKAGE_MANAGER"
+		;;
+	yum | dnf)
+		install_pkg python3-devel "$PACKAGE_MANAGER"
+		install_pkg cairo-devel "$PACKAGE_MANAGER"
 		;;
 	*)
 		echo "Unable to install python3 with package manager: $PACKAGE_MANAGER"
@@ -183,8 +191,8 @@ function install_sccache {
 		SCCACHE_RELEASE="https://github.com/mozilla/sccache/releases/"
 		curl -fLo sccache.tar.gz "${SCCACHE_RELEASE}/download/${download_version}/${download_target}.tar.gz"
 		tar -xzf sccache.tar.gz
-		sudo cp "${download_target}/sccache" /usr/local/bin/
-		sudo chmod +x /usr/local/bin/sccache
+		"${PRE_COMMAND[@]}" cp "${download_target}/sccache" /usr/local/bin/
+		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/sccache
 		rm -rf "${download_target}"
 		rm sccache.tar.gz
 		;;
@@ -211,9 +219,9 @@ function install_protobuf {
 		PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 		curl -LO $PB_REL/download/v3.15.8/protoc-3.15.8-linux-${arch}.zip
 		unzip protoc-3.15.8-linux-${arch}.zip -d protoc-3.15.8
-		sudo cp protoc-3.15.8/bin/protoc /usr/local/bin/
-		sudo rm -rf protoc-3.15.8*
-		sudo chmod +x /usr/local/bin/protoc
+		"${PRE_COMMAND[@]}" cp protoc-3.15.8/bin/protoc /usr/local/bin/
+		"${PRE_COMMAND[@]}" rm -rf protoc-3.15.8*
+		"${PRE_COMMAND[@]}" chmod +x /usr/local/bin/protoc
 		;;
 	esac
 
@@ -341,6 +349,8 @@ function install_rustup {
 		PATH="${HOME}/.cargo/bin:${PATH}"
 		source $HOME/.cargo/env
 	fi
+
+	rustup show
 }
 
 function install_cargo_binary {
@@ -532,12 +542,6 @@ else
 	exit 1
 fi
 
-# NOTE: never use sudo under macos
-PRE_COMMAND=()
-if [[ "$(whoami)" != 'root' ]] && [[ ${PACKAGE_MANAGER} != "brew" ]]; then
-	PRE_COMMAND=(sudo)
-fi
-
 if [[ "$AUTO_APPROVE" == "false" ]]; then
 	welcome_message
 	printf "Proceed with installing necessary dependencies? (y/N) > "
@@ -560,6 +564,7 @@ install_pkg curl "$PACKAGE_MANAGER"
 if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_rustup "$RUST_TOOLCHAIN"
 
+	install_pkg unzip "$PACKAGE_MANAGER"
 	install_build_essentials "$PACKAGE_MANAGER"
 	install_pkg_config "$PACKAGE_MANAGER"
 	install_openssl "$PACKAGE_MANAGER"

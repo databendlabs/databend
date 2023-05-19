@@ -21,6 +21,8 @@ runs:
       with:
         sha: ${{ github.sha }}
         target: ${{ inputs.target }}
+        artifacts: sqllogictests,meta,query
+
     - name: Run sqllogic Tests with Cluster mode
       shell: bash
       env:

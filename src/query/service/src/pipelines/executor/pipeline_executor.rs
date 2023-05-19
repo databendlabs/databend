@@ -185,7 +185,6 @@ impl PipelineExecutor {
             drop(guard);
             catch_unwind(move || on_finished_callback(error))??;
         }
-
         Ok(())
     }
 
@@ -282,7 +281,6 @@ impl PipelineExecutor {
 
             let sync_queue = std::mem::take(&mut init_schedule_queue.sync_queue);
             self.global_tasks_queue.init_sync_tasks(sync_queue);
-
             Ok(())
         }
     }
@@ -400,10 +398,11 @@ impl Drop for PipelineExecutor {
         let mut guard = self.on_finished_callback.lock();
         if let Some(on_finished_callback) = guard.take() {
             drop(guard);
-            let cause = Some(ErrorCode::Internal(
-                "Pipeline illegal state: not successfully shutdown.",
-            ));
-            if let Err(cause) = catch_unwind(move || on_finished_callback(&cause)).flatten() {
+            let cause = match self.finished_error.lock().as_ref() {
+                Some(cause) => cause.clone(),
+                None => ErrorCode::Internal("Pipeline illegal state: not successfully shutdown."),
+            };
+            if let Err(cause) = catch_unwind(move || on_finished_callback(&Some(cause))).flatten() {
                 warn!("Pipeline executor shutdown failure, {:?}", cause);
             }
         }

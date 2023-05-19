@@ -252,7 +252,7 @@ impl FuseTable {
     pub async fn read_table_snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
         if let Some(loc) = self.snapshot_loc().await? {
             let reader = MetaReaders::table_snapshot_reader(self.get_operator());
-            let ver = self.snapshot_format_version().await?;
+            let ver = self.snapshot_format_version(Some(loc.clone())).await?;
             let params = LoadParams {
                 location: loc,
                 len_hint: None,
@@ -266,8 +266,13 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    pub async fn snapshot_format_version(&self) -> Result<u64> {
-        match self.snapshot_loc().await? {
+    pub async fn snapshot_format_version(&self, location_opt: Option<String>) -> Result<u64> {
+        let location_opt = if location_opt.is_some() {
+            location_opt
+        } else {
+            self.snapshot_loc().await?
+        };
+        match location_opt {
             Some(loc) => Ok(TableMetaLocationGenerator::snapshot_version(loc.as_str())),
             None => {
                 // No snapshot location here, indicates that there are no data of this table yet
@@ -391,7 +396,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version().await?;
+        let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_snapshot_id = prev.as_ref().map(|v| (v.snapshot_id, prev_version));
         let prev_statistics_location = prev
@@ -442,7 +447,7 @@ impl Table for FuseTable {
         let schema = self.schema().as_ref().clone();
 
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version().await?;
+        let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()
@@ -552,12 +557,21 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
         keep_last_snapshot: bool,
-    ) -> Result<()> {
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<String>>> {
         match self.navigate_for_purge(&ctx, instant).await {
-            Ok((table, files)) => table.do_purge(&ctx, files, keep_last_snapshot).await,
+            Ok((table, files)) => {
+                table
+                    .do_purge(&ctx, files, keep_last_snapshot, dry_run_limit)
+                    .await
+            }
             Err(e) if e.code() == ErrorCode::TABLE_HISTORICAL_DATA_NOT_FOUND => {
                 warn!("navigate failed: {:?}", e);
-                Ok(())
+                if dry_run_limit.is_some() {
+                    Ok(Some(vec![]))
+                } else {
+                    Ok(None)
+                }
             }
             Err(e) => Err(e),
         }
@@ -695,6 +709,10 @@ impl Table for FuseTable {
         matches!(self.storage_format, FuseStorageFormat::Native)
     }
 
+    fn support_index(&self) -> bool {
+        true
+    }
+
     fn support_virtual_columns(&self) -> bool {
         matches!(self.storage_format, FuseStorageFormat::Native)
     }
@@ -735,14 +753,18 @@ struct FuseTableColumnStatisticsProvider {
 impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics> {
         let col_stats = &self.column_stats.get(&column_id);
-        col_stats.map(|s| ColumnStatistics {
-            min: s.min.clone(),
-            max: s.max.clone(),
-            null_count: s.null_count,
-            number_of_distinct_values: self
+        col_stats.map(|s| {
+            let mut ndv = self
                 .column_distinct_values
                 .as_ref()
-                .map_or(self.row_count, |map| map.get(&column_id).map_or(0, |v| *v)),
+                .map_or(self.row_count, |map| map.get(&column_id).map_or(0, |v| *v));
+            ndv = self.adjust_ndv_by_min_max(ndv, s.min.clone(), s.max.clone());
+            ColumnStatistics {
+                min: s.min.clone(),
+                max: s.max.clone(),
+                null_count: s.null_count,
+                number_of_distinct_values: ndv,
+            }
         })
     }
 }

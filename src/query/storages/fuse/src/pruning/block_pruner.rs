@@ -26,7 +26,7 @@ use common_expression::BLOCK_NAME_COL_NAME;
 use futures_util::future;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 
 use super::SegmentLocation;
 use crate::metrics::*;
@@ -45,17 +45,16 @@ impl BlockPruner {
     #[async_backtrace::framed]
     pub async fn pruning(
         &self,
-        segment_idx: usize,
         segment_location: SegmentLocation,
-        segment_info: &SegmentInfo,
+        segment_info: &CompactSegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if let Some(bloom_pruner) = &self.pruning_ctx.bloom_pruner {
-            self.block_pruning(bloom_pruner, segment_idx, segment_location, segment_info)
+            self.block_pruning(bloom_pruner, segment_location, segment_info)
                 .await
         } else {
             // if no available filter pruners, just prune the blocks by
             // using zone map index, and do not spawn async tasks
-            self.block_pruning_sync(segment_idx, segment_location, segment_info)
+            self.block_pruning_sync(segment_location, segment_info)
         }
     }
 
@@ -64,9 +63,8 @@ impl BlockPruner {
     async fn block_pruning(
         &self,
         bloom_pruner: &Arc<dyn BloomPruner + Send + Sync>,
-        segment_idx: usize,
         segment_location: SegmentLocation,
-        segment_info: &SegmentInfo,
+        segment_info: &CompactSegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let pruning_runtime = &self.pruning_ctx.pruning_runtime;
@@ -75,10 +73,11 @@ impl BlockPruner {
         let range_pruner = self.pruning_ctx.range_pruner.clone();
         let page_pruner = self.pruning_ctx.page_pruner.clone();
 
+        let segment_block_metas = segment_info.block_metas()?;
+
         let blocks = if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner
         {
-            segment_info
-                .blocks
+            segment_block_metas
                 .iter()
                 .enumerate()
                 .filter(|(_, block)| {
@@ -86,7 +85,7 @@ impl BlockPruner {
                 })
                 .collect::<Vec<_>>()
         } else {
-            segment_info.blocks.iter().enumerate().collect::<Vec<_>>()
+            segment_block_metas.iter().enumerate().collect()
         };
 
         let mut blocks = blocks.into_iter();
@@ -189,23 +188,22 @@ impl BlockPruner {
             .map_err(|e| ErrorCode::StorageOther(format!("block pruning failure, {}", e)))?;
 
         let mut result = Vec::with_capacity(joint.len());
-        let block_num = segment_info.blocks.len();
+        let block_num = segment_info.summary.block_count as usize;
         for item in joint {
             let (block_idx, keep, range, block_location) = item;
             if keep {
-                let block = segment_info.blocks[block_idx].clone();
+                let block = segment_block_metas[block_idx].clone();
 
                 debug_assert_eq!(block_location, block.location.0);
 
                 result.push((
                     BlockMetaIndex {
-                        segment_idx,
+                        segment_idx: segment_location.segment_idx,
                         block_idx,
                         range,
                         page_size: block.page_size() as usize,
                         block_id: block_id_in_segment(block_num, block_idx),
                         block_location: block_location.clone(),
-                        segment_id: segment_location.segment_id,
                         segment_location: segment_location.location.0.clone(),
                         snapshot_location: segment_location.snapshot_loc.clone(),
                     },
@@ -224,9 +222,8 @@ impl BlockPruner {
 
     fn block_pruning_sync(
         &self,
-        segment_idx: usize,
         segment_location: SegmentLocation,
-        segment_info: &SegmentInfo,
+        segment_info: &CompactSegmentInfo,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let pruning_stats = self.pruning_ctx.pruning_stats.clone();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
@@ -235,10 +232,10 @@ impl BlockPruner {
 
         let start = Instant::now();
 
+        let segment_block_metas = segment_info.block_metas()?;
         let blocks = if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner
         {
-            segment_info
-                .blocks
+            segment_block_metas
                 .iter()
                 .enumerate()
                 .filter(|(_, block)| {
@@ -246,10 +243,10 @@ impl BlockPruner {
                 })
                 .collect::<Vec<_>>()
         } else {
-            segment_info.blocks.iter().enumerate().collect::<Vec<_>>()
+            segment_block_metas.iter().enumerate().collect::<Vec<_>>()
         };
         let mut result = Vec::with_capacity(blocks.len());
-        let block_num = segment_info.blocks.len();
+        let block_num = segment_info.summary.block_count as usize;
         for (block_idx, block_meta) in blocks {
             // Perf.
             {
@@ -279,13 +276,12 @@ impl BlockPruner {
                 if keep {
                     result.push((
                         BlockMetaIndex {
-                            segment_idx,
+                            segment_idx: segment_location.segment_idx,
                             block_idx,
                             range,
                             page_size: block_meta.page_size() as usize,
                             block_id: block_id_in_segment(block_num, block_idx),
                             block_location: block_meta.as_ref().location.0.clone(),
-                            segment_id: segment_location.segment_id,
                             segment_location: segment_location.location.0.clone(),
                             snapshot_location: segment_location.snapshot_loc.clone(),
                         },

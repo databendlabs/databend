@@ -90,6 +90,7 @@ build_exceptions! {
     BadDataArrayLength(1018),
     UnknownTableId(1020),
     UnknownTable(1025),
+    UnknownView(1026),
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
     EmptyDataFromServer(1030),
@@ -138,6 +139,7 @@ build_exceptions! {
     // create table or alter table add column with internal column name
     TableWithInternalColumnName(1110),
     EmptyShareEndpointConfig(1111),
+    LicenceDenied(1112),
 
     // Data Related Errors
 
@@ -159,6 +161,18 @@ build_exceptions! {
     ///
     /// For example: try to with 3 columns into a table with 4 columns.
     TableSchemaMismatch(1303),
+
+    // License related errors starts here
+
+    /// LicenseKeyParseError is used when license key cannot be pared by the jwt public key
+    ///
+    /// For example: license key is not valid
+    LicenseKeyParseError(1401),
+
+    /// LicenseKeyInvalid is used when license key verification error occurs
+    ///
+    /// For example: license key is expired
+    LicenseKeyInvalid(1402)
 }
 
 // Meta service errors [2001, 3000].
@@ -254,6 +268,13 @@ build_exceptions! {
     UnknownShareEndpointId(2716),
     UnknownShareTable(2717),
     CannotShareDatabaseCreatedFromShare(2718),
+
+    // Index error codes.
+    UnsupportedIndex(2719),
+    CreateIndexWithDropTime(2720),
+    IndexAlreadyExists(2721),
+    UnknownIndex(2722),
+    DropIndexWithDropTime(2723),
 
     // Variable error codes.
     UnknownVariable(2801),

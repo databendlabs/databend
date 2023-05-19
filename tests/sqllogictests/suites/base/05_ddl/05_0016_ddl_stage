@@ -23,7 +23,7 @@ onlyif mysql
 query TTTTTITT
 desc stage test_stage_internal
 ----
-test_stage_internal Internal StageParams { storage: Fs(StorageFsConfig { root: "_data" }) } CopyOptions { on_error: AbortNum(1), size_limit: 0, max_files: 0, split_size: 0, purge: false, single: false, max_file_size: 0 } Csv(CsvFileFormatParams { compression: Auto, headers: 0, field_delimiter: ",", record_delimiter: "\n", nan_display: "NaN", escape: "\\", quote: "\"" }) 0 'root'@'127.0.0.1' (empty)
+test_stage_internal Internal StageParams { storage: Fs(StorageFsConfig { root: "_data" }) } CopyOptions { on_error: AbortNum(1), size_limit: 0, max_files: 0, split_size: 0, purge: false, single: false, max_file_size: 0, disable_variant_check: false } Csv(CsvFileFormatParams { compression: Auto, headers: 0, field_delimiter: ",", record_delimiter: "\n", nan_display: "NaN", escape: "\\", quote: "\"" }) 0 'root'@'127.0.0.1' (empty)
 
 query TTTTT
 SHOW STAGES

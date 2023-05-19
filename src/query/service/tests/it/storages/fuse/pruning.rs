@@ -31,6 +31,7 @@ use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_sql::parse_to_remote_string_expr;
 use common_sql::plans::CreateTablePlan;
+use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::pruning::FusePruner;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::CreateTableInterpreter;
@@ -40,6 +41,7 @@ use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::MetaReaders;
 use databend_query::storages::fuse::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 use databend_query::storages::fuse::FUSE_OPT_KEY_ROW_PER_BLOCK;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
@@ -47,8 +49,6 @@ use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 async fn apply_block_pruning(
     table_snapshot: Arc<TableSnapshot>,
@@ -59,8 +59,9 @@ async fn apply_block_pruning(
 ) -> Result<Vec<Arc<BlockMeta>>> {
     let ctx: Arc<dyn TableContext> = ctx;
     let segment_locs = table_snapshot.segments.clone();
+    let segment_locs = create_segment_location_vector(segment_locs, None);
     FusePruner::create(&ctx, op, schema, push_down)?
-        .pruning(segment_locs, None, None)
+        .pruning(segment_locs)
         .await
         .map(|v| v.into_iter().map(|(_, v)| v).collect())
 }

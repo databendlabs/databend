@@ -30,10 +30,12 @@ use common_meta_raft_store::config::RaftConfig;
 use common_meta_raft_store::key_spaces::RaftStoreEntry;
 use common_meta_raft_store::key_spaces::RaftStoreEntryCompat;
 use common_meta_raft_store::log::RaftLog;
+use common_meta_raft_store::log::TREE_RAFT_LOG;
 use common_meta_raft_store::ondisk::DataVersion;
 use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_raft_store::ondisk::TREE_HEADER;
 use common_meta_raft_store::state::RaftState;
+use common_meta_raft_store::state::TREE_RAFT_STATE;
 use common_meta_raft_store::state_machine::StateMachine;
 use common_meta_sled_store::get_sled_db;
 use common_meta_sled_store::init_sled_db;
@@ -71,7 +73,7 @@ pub async fn export_data(config: &Config) -> anyhow::Result<()> {
 
 pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     let raft_config = &config.raft_config;
-    eprintln!("import meta dir into: {}", raft_config.raft_dir);
+    eprintln!("    Into Meta Dir: '{}'", raft_config.raft_dir);
 
     let nodes = build_nodes(config.initial_cluster.clone(), raft_config.id)?;
 
@@ -122,11 +124,12 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
             DataVersion::V0
         };
 
-        if version != DATA_VERSION {
+        if !DATA_VERSION.is_compatible(version) {
             return Err(anyhow!(
-                "invalid data version: {:?}, This program can only import {:?}",
+                "invalid data version: {:?}, This program version is {:?}; The latest compatible program version is: {:?}",
                 version,
-                DATA_VERSION
+                DATA_VERSION,
+                version.max_compatible_working_version(),
             ));
         }
 
@@ -198,7 +201,7 @@ fn import_from(restore: String) -> anyhow::Result<Option<LogId>> {
 /// Raw config is: `<NodeId>=<raft-api-host>:<raft-api-port>[,...]`, e.g. `1=localhost:29103` or `1=localhost:29103,0.0.0.0:19191`
 /// The second part is obsolete grpc api address and will be just ignored. Databend-meta loads Grpc address from config file when starting up.
 fn build_nodes(initial_cluster: Vec<String>, id: u64) -> anyhow::Result<BTreeMap<NodeId, Node>> {
-    eprintln!("init-cluster: id={}, {:?}", id, initial_cluster);
+    eprintln!("Initialize Cluster: id={}, {:?}", id, initial_cluster);
 
     let mut nodes = BTreeMap::new();
     for peer in initial_cluster {
@@ -255,7 +258,7 @@ async fn init_new_cluster(
     max_log_id: Option<LogId>,
     id: u64,
 ) -> anyhow::Result<()> {
-    eprintln!("init-cluster: {:?}", nodes);
+    eprintln!("Initialize Cluster with: {:?}", nodes);
 
     let node_ids = nodes.keys().copied().collect::<BTreeSet<_>>();
 
@@ -349,19 +352,18 @@ fn clear() -> anyhow::Result<()> {
 fn export_from_dir(config: &Config) -> anyhow::Result<()> {
     let db = get_sled_db();
 
+    eprintln!("    From: {}", config.raft_config.raft_dir);
+
     let file: Option<File> = if !config.db.is_empty() {
-        eprintln!(
-            "export meta dir from: {} to {}",
-            config.raft_config.raft_dir, config.db
-        );
+        eprintln!("    To:   File: {}", config.db);
         Some((File::create(&config.db))?)
     } else {
-        eprintln!("export meta dir from: {}", config.raft_config.raft_dir);
+        eprintln!("    To:   <stdout>");
         None
     };
 
     let mut cnt = 0;
-    let mut tree_names = {
+    let mut present_tree_names = {
         let mut tree_names = BTreeSet::new();
         for n in db.tree_names() {
             let name = String::from_utf8(n.to_vec())?;
@@ -370,18 +372,21 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
         tree_names
     };
 
-    let tree_names = if tree_names.contains(TREE_HEADER) {
-        // Always export data header first.
-        tree_names.remove(TREE_HEADER);
-        let mut tree_names = tree_names.into_iter().collect::<Vec<_>>();
-        tree_names.insert(0, TREE_HEADER.to_string());
-        tree_names
-    } else {
-        eprintln!("tree {} not found", TREE_HEADER);
-        tree_names.into_iter().collect::<Vec<_>>()
-    };
+    // Export in header, raft_state, log and other order.
+    let mut tree_names = vec![];
+
+    for name in [TREE_HEADER, TREE_RAFT_STATE, TREE_RAFT_LOG] {
+        if present_tree_names.remove(name) {
+            tree_names.push(name.to_string());
+        } else {
+            eprintln!("tree {} not found", name);
+        }
+    }
+    tree_names.extend(present_tree_names.into_iter().collect::<Vec<_>>());
 
     for tree_name in tree_names.iter() {
+        eprintln!("Exporting: sled tree: '{}'...", tree_name);
+
         let tree = db.open_tree(tree_name)?;
         for ivec_pair_res in tree.iter() {
             let kv = ivec_pair_res?;
@@ -408,14 +413,14 @@ fn export_from_dir(config: &Config) -> anyhow::Result<()> {
         file.as_ref().unwrap().sync_all()?
     }
 
-    eprintln!("export {} records", cnt);
+    eprintln!("Exported {} records", cnt);
 
     Ok(())
 }
 
 /// Dump metasrv data, raft-log, state machine etc in json to stdout.
 async fn export_from_running_node(config: &Config) -> Result<(), anyhow::Error> {
-    eprintln!("export meta dir from remote: {}", config.grpc_api_address);
+    eprintln!("    From: online meta-service: {}", config.grpc_api_address);
 
     let grpc_api_addr = get_available_socket_addr(&config.grpc_api_address).await?;
 

@@ -20,6 +20,8 @@ use common_expression::DataSchemaRef;
 use tracing::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
+use super::interpreter_index_create::CreateIndexInterpreter;
+use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -191,6 +193,10 @@ impl InterpreterFactory {
             Plan::OptimizeTable(optimize_table) => Ok(Arc::new(
                 OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())?,
             )),
+            Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
+                ctx,
+                *vacuum_table.clone(),
+            )?)),
             Plan::AnalyzeTable(analyze_table) => Ok(Arc::new(AnalyzeTableInterpreter::try_create(
                 ctx,
                 *analyze_table.clone(),
@@ -218,6 +224,17 @@ impl InterpreterFactory {
             Plan::DropView(drop_view) => Ok(Arc::new(DropViewInterpreter::try_create(
                 ctx,
                 *drop_view.clone(),
+            )?)),
+
+            // Indexes
+            Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+
+            Plan::DropIndex(index) => Ok(Arc::new(DropIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
             )?)),
 
             // Users

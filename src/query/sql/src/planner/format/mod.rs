@@ -14,3 +14,5 @@
 
 mod display_plan;
 mod display_rel_operator;
+
+pub use display_rel_operator::format_scalar;

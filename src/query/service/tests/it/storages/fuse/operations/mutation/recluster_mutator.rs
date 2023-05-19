@@ -25,11 +25,14 @@ use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::pruning::FusePruner;
+use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::sessions::TableContext;
 use databend_query::storages::fuse::io::SegmentWriter;
 use databend_query::storages::fuse::io::TableMetaLocationGenerator;
 use databend_query::storages::fuse::operations::ReclusterMutator;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use storages_common_table_meta::meta;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
@@ -38,8 +41,6 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
-
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_recluster_mutator_block_select() -> Result<()> {
@@ -65,7 +66,11 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             0,
             meta::Compression::Lz4Raw,
         ));
-        let segment = SegmentInfo::new(vec![test_block_meta], Statistics::default());
+
+        let statistics =
+            reduce_block_metas(&[test_block_meta.as_ref()], BlockThresholds::default())?;
+
+        let segment = SegmentInfo::new(vec![test_block_meta], statistics);
         Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
     };
 
@@ -119,8 +124,9 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let schema = TableSchemaRef::new(TableSchema::empty());
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = base_snapshot.segments.clone();
+    let segment_locations = create_segment_location_vector(segment_locations, None);
     let block_metas = FusePruner::create(&ctx, data_accessor.clone(), schema, &None)?
-        .pruning(segment_locations, None, None)
+        .pruning(segment_locations)
         .await?;
     let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
     block_metas.iter().for_each(|(idx, b)| {

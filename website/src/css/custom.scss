@@ -370,8 +370,17 @@
       opacity: 1;
     }
   }
+  .DOCITEM-PAGE-EE-TIPS-BEFORE-DOM {
+      margin-bottom: 0!important;
+      border-bottom: unset!important;
+    
+  }
 }
-
+.DOCITEM-PAGE-EE-TIPS {
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 12px;
+  margin-bottom: calc(var(--ifm-h1-vertical-rhythm-bottom) * var(--ifm-leading));
+}
 .alert--success {
   --ifm-alert-background-color: var(--ifm-color-success-contrast-background);
   --ifm-alert-background-color-highlight:var(--color-bg-1)!important;
@@ -486,6 +495,9 @@ ul li{
 }
 .navbar-sidebar{
     height: 100vh;
+}
+.navbar-sidebar__items {
+  padding-bottom: 4rem;
 }
 
 .docs-wrapper.docs-doc-page .footer{

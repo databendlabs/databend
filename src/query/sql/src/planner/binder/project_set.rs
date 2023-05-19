@@ -65,6 +65,10 @@ impl<'a> Visitor<'a> for SrfCollector {
                 params: params.to_vec(),
                 window: over.clone(),
             });
+        } else {
+            for arg in args.iter() {
+                self.visit_expr(arg);
+            }
         }
     }
 }
@@ -134,7 +138,7 @@ impl Binder {
                 _ => unreachable!(),
             };
 
-            let srf_expr = srf_scalar.as_expr_with_col_index()?;
+            let srf_expr = srf_scalar.as_expr()?;
             let return_types = srf_expr.data_type().as_tuple().unwrap();
 
             if return_types.len() > 1 {

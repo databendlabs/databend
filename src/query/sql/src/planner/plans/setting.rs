@@ -12,11 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VarValue {
     pub is_global: bool,
@@ -29,19 +24,7 @@ pub struct SettingPlan {
     pub vars: Vec<VarValue>,
 }
 
-impl SettingPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UnSettingPlan {
     pub vars: Vec<String>,
-}
-
-impl UnSettingPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }

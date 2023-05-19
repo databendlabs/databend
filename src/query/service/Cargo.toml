@@ -12,11 +12,14 @@ doctest = false
 test = false
 
 [features]
-default = ["simd"]
+default = ["simd", "z3-prove"]
 simd = ["common-arrow/simd"]
 
+z3-prove = ["common-sql/z3-prove"]
+disable_initial_exec_tls = ["common-base/disable_initial_exec_tls"]
+
 tokio-console = ["common-tracing/console", "common-base/tracing"]
-memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling", "tempfile"]
+memory-profiling = ["common-base/memory-profiling", "common-http/memory-profiling"]
 storage-hdfs = ["opendal/services-hdfs", "common-storage/storage-hdfs"]
 hive = [
     "storage-hdfs",
@@ -62,6 +65,7 @@ common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
+common-license = { path = "../../common/license" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-metrics = { path = "../../common/metrics" }
@@ -91,10 +95,12 @@ common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
 storages-common-cache = { path = "../storages/common/cache" }
 
+aggregating-index = { path = "../ee-features/aggregating-index" }
 storages-common-blocks = { path = "../storages/common/blocks" }
 storages-common-cache-manager = { path = "../storages/common/cache-manager" }
 storages-common-index = { path = "../storages/common/index" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
+vacuum-handler = { path = "../ee-features/vacuum-handler" }
 
 # GitHub dependencies
 
@@ -116,13 +122,15 @@ chrono = { workspace = true }
 chrono-tz = { workspace = true }
 ctor = "0.1.26"
 dashmap = "5.4"
-ethnum = { version = "1.3" }
+ethnum = { workspace = true }
 futures = "0.3.24"
 futures-util = "0.3.24"
 h2 = "0.3.17"
 headers = "0.3.8"
 http = "0.2.8"
+humantime = "2.1.0"
 itertools = "0.10.5"
+jwt-simple = "0.11.0"
 lz4 = "1.24.0"
 match-template = "0.0.1"
 metrics = "0.20.1"
@@ -137,7 +145,7 @@ pin-project-lite = "0.2.9"
 poem = { version = "1", features = ["rustls", "multipart", "compression"] }
 prost = { version = "0.11", default-features = false }
 rand = "0.8.5"
-regex = "1.6.0"
+regex = "1.8.1"
 reqwest = { workspace = true }
 scopeguard = "1.1.0"
 serde = { workspace = true }
@@ -145,7 +153,7 @@ serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"
 socket2 = "0.4.7"
 strength_reduce = "0.2.4"
-tempfile = { version = "3.4.0", optional = true }
+tempfile = "3.4.0"
 time = "0.3.14"
 tokio-stream = { version = "0.1.10", features = ["net"] }
 tonic = { workspace = true }
@@ -153,6 +161,7 @@ tracing = "0.1.36"
 typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }
+walkdir = "2.3.2"
 
 [dev-dependencies]
 arrow-cast = { version = "37.0.0", features = ["prettyprint"] }

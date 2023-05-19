@@ -50,46 +50,35 @@ impl SegmentPruner {
     #[async_backtrace::framed]
     pub async fn pruning(
         &self,
-        segment_locs: Vec<SegmentLocation>,
+        mut segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         if segment_locs.is_empty() {
             return Ok(vec![]);
         }
 
         // Build pruning tasks.
-        let segments = if let Some(internal_column_pruner) =
-            &self.pruning_ctx.internal_column_pruner
-        {
-            segment_locs
+        if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner {
+            segment_locs = segment_locs
                 .into_iter()
-                .enumerate()
-                .filter(|(_, segment)| {
+                .filter(|segment| {
                     internal_column_pruner.should_keep(SEGMENT_NAME_COL_NAME, &segment.location.0)
                 })
-                .collect::<Vec<_>>()
-        } else {
-            segment_locs.into_iter().enumerate().collect::<Vec<_>>()
-        };
+                .collect::<Vec<_>>();
+        }
 
-        let mut segments = segments.into_iter();
+        let mut segments = segment_locs.into_iter();
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let pruning_tasks = std::iter::from_fn(|| {
             // pruning tasks are executed concurrently, check if limit exceeded before proceeding
             if limit_pruner.exceeded() {
                 None
             } else {
-                segments.next().map(|(segment_idx, segment_location)| {
+                segments.next().map(|segment_location| {
                     let pruning_ctx = self.pruning_ctx.clone();
                     let table_schema = self.table_schema.clone();
                     move |permit| async move {
-                        Self::segment_pruning(
-                            pruning_ctx,
-                            permit,
-                            table_schema,
-                            segment_idx,
-                            segment_location,
-                        )
-                        .await
+                        Self::segment_pruning(pruning_ctx, permit, table_schema, segment_location)
+                            .await
                     }
                 })
             }
@@ -121,7 +110,6 @@ impl SegmentPruner {
         pruning_ctx: Arc<PruningContext>,
         permit: OwnedSemaphorePermit,
         table_schema: TableSchemaRef,
-        segment_idx: usize,
         segment_location: SegmentLocation,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         let dal = pruning_ctx.dal.clone();
@@ -143,7 +131,7 @@ impl SegmentPruner {
         // Note that it is required to explicitly release this permit before pruning blocks, to avoid deadlock.
         drop(permit);
 
-        let total_bytes = segment_info.total_bytes();
+        let total_bytes = segment_info.summary.uncompressed_byte_size;
         // Perf.
         {
             metrics_inc_segments_range_pruning_before(1);
@@ -166,7 +154,7 @@ impl SegmentPruner {
             // Block pruner.
             let block_pruner = BlockPruner::create(pruning_ctx)?;
             block_pruner
-                .pruning(segment_idx, segment_location, &segment_info)
+                .pruning(segment_location, &segment_info)
                 .await?
         } else {
             vec![]

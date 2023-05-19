@@ -137,7 +137,7 @@ pub struct FunctionRegistry {
 
     /// Default cast rules for all functions.
     pub default_cast_rules: Vec<(DataType, DataType)>,
-    /// Cast rules for specific functions, excluding the default cast rules.
+    /// Cast rules for specific functions, in addition to default cast rules.
     pub additional_cast_rules: HashMap<String, Vec<(DataType, DataType)>>,
     /// The auto rules that should use TRY_CAST instead of CAST.
     pub auto_try_cast_rules: Vec<(DataType, DataType)>,
@@ -505,7 +505,13 @@ impl<'a> EvalContext<'a> {
         }
     }
 
-    pub fn render_error(&self, span: Span, args: &[Value<AnyType>], func_name: &str) -> Result<()> {
+    pub fn render_error(
+        &self,
+        span: Span,
+        params: &[usize],
+        args: &[Value<AnyType>],
+        func_name: &str,
+    ) -> Result<()> {
         match &self.errors {
             Some((valids, error)) => {
                 let first_error_row = valids
@@ -524,10 +530,16 @@ impl<'a> EvalContext<'a> {
                     })
                     .join(", ");
 
-                Err(ErrorCode::Internal(format!(
-                    "{error} while evaluating function `{func_name}({args})`"
-                ))
-                .set_span(span))
+                let err_msg = if params.is_empty() {
+                    format!("{error} while evaluating function `{func_name}({args})`")
+                } else {
+                    format!(
+                        "{error} while evaluating function `{func_name}({params})({args})`",
+                        params = params.iter().join(", ")
+                    )
+                };
+
+                Err(ErrorCode::Internal(err_msg).set_span(span))
             }
             None => Ok(()),
         }

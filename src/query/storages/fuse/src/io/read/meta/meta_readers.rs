@@ -15,6 +15,7 @@
 use std::io::SeekFrom;
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_cache::DefaultHashBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
@@ -28,8 +29,9 @@ use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
 use storages_common_cache_manager::CacheManager;
+use storages_common_cache_manager::CompactSegmentInfoMeter;
 use storages_common_index::BloomIndexMeta;
-use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 use storages_common_table_meta::meta::SegmentInfoVersion;
 use storages_common_table_meta::meta::SnapshotVersion;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -43,14 +45,18 @@ pub type TableSnapshotStatisticsReader =
     InMemoryItemCacheReader<TableSnapshotStatistics, LoaderWrapper<Operator>>;
 pub type BloomIndexMetaReader = InMemoryItemCacheReader<BloomIndexMeta, LoaderWrapper<Operator>>;
 pub type TableSnapshotReader = InMemoryItemCacheReader<TableSnapshot, LoaderWrapper<Operator>>;
-pub type SegmentInfoReader =
-    InMemoryItemCacheReader<SegmentInfo, LoaderWrapper<(Operator, TableSchemaRef)>>;
+pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
+    CompactSegmentInfo,
+    LoaderWrapper<(Operator, TableSchemaRef)>,
+    DefaultHashBuilder,
+    CompactSegmentInfoMeter,
+>;
 
 pub struct MetaReaders;
 
 impl MetaReaders {
-    pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> SegmentInfoReader {
-        SegmentInfoReader::new(
+    pub fn segment_info_reader(dal: Operator, schema: TableSchemaRef) -> CompactSegmentInfoReader {
+        CompactSegmentInfoReader::new(
             CacheManager::instance().get_table_segment_cache(),
             LoaderWrapper((dal, schema)),
         )
@@ -103,9 +109,9 @@ impl Loader<TableSnapshotStatistics> for LoaderWrapper<Operator> {
 }
 
 #[async_trait::async_trait]
-impl Loader<SegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
+impl Loader<CompactSegmentInfo> for LoaderWrapper<(Operator, TableSchemaRef)> {
     #[async_backtrace::framed]
-    async fn load(&self, params: &LoadParams) -> Result<SegmentInfo> {
+    async fn load(&self, params: &LoadParams) -> Result<CompactSegmentInfo> {
         let version = SegmentInfoVersion::try_from(params.ver)?;
         let LoaderWrapper((operator, schema)) = &self;
         let reader = bytes_reader(operator, params.location.as_str(), params.len_hint).await?;

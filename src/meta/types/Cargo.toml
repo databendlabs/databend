@@ -29,11 +29,11 @@ tonic = { workspace = true }
 [build-dependencies]
 common-building = { path = "../../common/building" }
 prost-build = "0.11.1"
-tonic-build = "0.8.0"
+tonic-build = { workspace = true }
 
 [dev-dependencies]
 anyhow = { workspace = true }
-regex = "1.6.0"
+regex = "1.8.1"
 
 [package.metadata.cargo-machete]
 ignored = ["num-derive", "prost"]

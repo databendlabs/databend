@@ -14,7 +14,6 @@
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::sync::atomic::AtomicBool;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -45,13 +44,21 @@ use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateIndexReply;
+use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropIndexReply;
+use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::IndexId;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListIndexByTableIdReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -83,6 +90,9 @@ use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
+use databend_query::test_kits::block_writer::BlockWriter;
+use databend_query::test_kits::table_test_fixture::execute_query;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
@@ -90,10 +100,7 @@ use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use walkdir::WalkDir;
 
-use crate::storages::fuse::block_writer::BlockWriter;
 use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
-use crate::storages::fuse::table_test_fixture::execute_query;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -465,7 +472,11 @@ impl TableContext for CtxDelegation {
         "default".to_owned()
     }
 
-    fn get_aborting(&self) -> Arc<AtomicBool> {
+    fn check_aborting(&self) -> Result<()> {
+        todo!()
+    }
+
+    fn get_error(&self) -> Option<ErrorCode> {
         todo!()
     }
 
@@ -506,6 +517,10 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
+        todo!()
+    }
+
+    fn get_shard_settings(&self) -> Arc<Settings> {
         todo!()
     }
 
@@ -656,7 +671,7 @@ impl Catalog for FakedCatalog {
         todo!()
     }
 
-    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
+    async fn create_table(&self, _req: CreateTableReq) -> Result<CreateTableReply> {
         todo!()
     }
 
@@ -712,6 +727,24 @@ impl Catalog for FakedCatalog {
         _req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
         todo!()
+    }
+
+    #[async_backtrace::framed]
+    async fn create_index(&self, _req: CreateIndexReq) -> Result<CreateIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_indexes_by_table_id(
+        &self,
+        _req: ListIndexByTableIdReq,
+    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+        unimplemented!()
     }
 
     fn as_any(&self) -> &dyn Any {

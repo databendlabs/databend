@@ -90,6 +90,7 @@ pub(crate) fn test_fs_stage_info() -> mt::principal::StageInfo {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
 
@@ -129,6 +130,7 @@ pub(crate) fn test_s3_stage_info() -> mt::principal::StageInfo {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -165,6 +167,7 @@ pub(crate) fn test_s3_stage_info_v16() -> mt::principal::StageInfo {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -201,6 +204,7 @@ pub(crate) fn test_s3_stage_info_v14() -> mt::principal::StageInfo {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -233,6 +237,7 @@ pub(crate) fn test_gcs_stage_info() -> mt::principal::StageInfo {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -267,6 +272,7 @@ pub(crate) fn test_oss_stage_info() -> mt::principal::StageInfo {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -298,6 +304,7 @@ pub(crate) fn test_webhdfs_stage_info() -> mt::principal::StageInfo {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -717,6 +724,7 @@ pub(crate) fn test_internal_stage_info_v17() -> mt::principal::StageInfo {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()
@@ -745,6 +753,7 @@ pub(crate) fn test_stage_info_v18() -> mt::principal::StageInfo {
             purge: true,
             single: false,
             max_file_size: 0,
+            disable_variant_check: false,
         },
         comment: "test".to_string(),
         ..Default::default()

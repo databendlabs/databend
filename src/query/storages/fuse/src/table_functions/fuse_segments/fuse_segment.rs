@@ -27,6 +27,7 @@ use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
 use futures_util::TryStreamExt;
 use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::MetaReaders;
 use crate::io::SegmentsIO;
@@ -55,7 +56,7 @@ impl<'a> FuseSegment<'a> {
         let maybe_snapshot = tbl.read_table_snapshot().await?;
         if let Some(snapshot) = maybe_snapshot {
             // prepare the stream of snapshot
-            let snapshot_version = tbl.snapshot_format_version().await?;
+            let snapshot_version = tbl.snapshot_format_version(None).await?;
             let snapshot_location = tbl
                 .meta_location_generator
                 .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot_version)?;
@@ -94,9 +95,11 @@ impl<'a> FuseSegment<'a> {
             self.table.operator.clone(),
             self.table.schema(),
         );
-        let segments = segments_io.read_segments(segment_locations, true).await?;
-        for (idx, segment) in segments.iter().enumerate() {
-            let segment = segment.clone()?;
+        let segments = segments_io
+            .read_segments::<Arc<SegmentInfo>>(segment_locations, true)
+            .await?;
+        for (idx, segment) in segments.into_iter().enumerate() {
+            let segment = segment?;
             format_versions.push(segment_locations[idx].1);
             block_count.push(segment.summary.block_count);
             row_count.push(segment.summary.row_count);

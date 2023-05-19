@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -35,13 +34,12 @@ use storages_common_pruner::RangePrunerCreator;
 use storages_common_pruner::TopNPrunner;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::Location;
 use tracing::warn;
 
-use super::create_segment_location_vector;
 use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
+use crate::pruning::SegmentLocation;
 use crate::pruning::SegmentPruner;
 
 pub struct PruningContext {
@@ -176,13 +174,8 @@ impl FusePruner {
     #[async_backtrace::framed]
     pub async fn pruning(
         &self,
-        segment_locs: Vec<Location>,
-        snapshot_loc: Option<String>,
-        segment_id_map: Option<HashMap<Location, usize>>,
+        segment_locs: Vec<SegmentLocation>,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let segment_locs =
-            create_segment_location_vector(segment_locs, snapshot_loc, segment_id_map);
-
         // Segment pruner.
         let segment_pruner =
             SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;

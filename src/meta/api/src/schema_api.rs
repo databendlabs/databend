@@ -18,18 +18,25 @@ use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateIndexReply;
+use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropIndexReply;
+use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::IndexId;
+use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListIndexByTableIdReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -47,8 +54,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::GCDroppedDataReply;
@@ -91,6 +96,17 @@ pub trait SchemaApi: Send + Sync {
         req: ListDatabaseReq,
     ) -> Result<Vec<Arc<DatabaseInfo>>, KVAppError>;
 
+    // index
+
+    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply, KVAppError>;
+
+    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError>;
+
+    async fn get_indexes_by_table_id(
+        &self,
+        req: ListIndexByTableIdReq,
+    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>, KVAppError>;
+
     // table
 
     async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply, KVAppError>;
@@ -125,11 +141,6 @@ pub trait SchemaApi: Send + Sync {
         &self,
         req: GetTableCopiedFileReq,
     ) -> Result<GetTableCopiedFileReply, KVAppError>;
-
-    async fn upsert_table_copied_file_info(
-        &self,
-        req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply, KVAppError>;
 
     async fn truncate_table(&self, req: TruncateTableReq)
     -> Result<TruncateTableReply, KVAppError>;

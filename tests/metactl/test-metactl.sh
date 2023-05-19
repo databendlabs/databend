@@ -7,8 +7,10 @@ BUILD_PROFILE="${BUILD_PROFILE:-debug}"
 
 meta_dir="$SCRIPT_PATH/_meta_dir"
 meta_json="$SCRIPT_PATH/meta.txt"
+want_exported="$SCRIPT_PATH/want_exported"
+
 exported="$SCRIPT_PATH/exported"
-grpc_exported="$SCRIPT_PATH/exported"
+grpc_exported="$SCRIPT_PATH/grpc_exported"
 
 chmod +x ./target/${BUILD_PROFILE}/databend-metactl
 
@@ -30,12 +32,12 @@ echo " === "
 echo " === export from $meta_dir"
 ./target/${BUILD_PROFILE}/databend-metactl --export --raft-dir "$meta_dir" >$exported
 
-echo " === check backup date $meta_json and exported $exported"
-diff $meta_json $exported
+echo " === check backup date: $want_exported and exported: $exported"
+diff $want_exported $exported
 
 
 echo " === "
-echo " === 3. Test export from running metasrv to file $exported"
+echo " === 3. Test export from running metasrv to file $grpc_exported"
 echo " === "
 
 
@@ -50,9 +52,9 @@ sleep 10
 echo " === export data from a running databend-meta to $grpc_exported"
 ./target/${BUILD_PROFILE}/databend-metactl --export --grpc-api-address "localhost:9191" >$grpc_exported
 
-echo " === exported file data start..."
+echo " === grpc_exported file data start..."
 cat $grpc_exported
-echo " === exported file data end"
+echo " === grpc_exported file data end"
 
 echo " === check if there is a node record in it"
 if grep -Fxq '["raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":0}}}]' $grpc_exported; then
@@ -63,7 +65,7 @@ else
 fi
 
 echo " === check if there is a header record in it"
-if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V0","upgrading":null}}}]' $grpc_exported; then
+if grep -Fxq '["header",{"DataHeader":{"key":"header","value":{"version":"V001","upgrading":null}}}]' $grpc_exported; then
     echo " === Header record found, good!"
 else
     echo " === No Header record found!!!"
@@ -95,7 +97,7 @@ echo " === exported file data start..."
 cat $exported
 echo " === exported file data end"
 
-echo " === check backup date $grpc_exported and exported $exported"
+echo " === check backup data $grpc_exported and exported $exported"
 diff $grpc_exported $exported
 
 

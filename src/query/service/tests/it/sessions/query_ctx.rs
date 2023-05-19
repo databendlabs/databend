@@ -33,17 +33,20 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
         .mount(&mock_server)
         .await;
 
-    let mut conf = crate::tests::ConfigBuilder::create().config();
+    let mut conf = databend_query::test_kits::ConfigBuilder::create().config();
 
     conf.storage.params = StorageParams::S3(StorageS3Config {
         region: "us-east-2".to_string(),
         endpoint_url: mock_server.uri(),
         bucket: "bucket".to_string(),
+        access_key_id: "access_key_id".to_string(),
+        secret_access_key: "secret_access_key".to_string(),
         disable_credential_loader: true,
         ..Default::default()
     });
 
-    let (_guard, qctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, qctx) =
+        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
 
     let _ = qctx.get_data_operator()?;
 
@@ -52,13 +55,14 @@ async fn test_get_storage_accessor_s3() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_get_storage_accessor_fs() -> Result<()> {
-    let mut conf = crate::tests::ConfigBuilder::create().config();
+    let mut conf = databend_query::test_kits::ConfigBuilder::create().config();
 
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         root: "/tmp".to_string(),
     });
 
-    let (_guard, qctx) = crate::tests::create_query_context_with_config(conf, None).await?;
+    let (_guard, qctx) =
+        databend_query::test_kits::create_query_context_with_config(conf, None).await?;
 
     let _ = qctx.get_data_operator()?;
 

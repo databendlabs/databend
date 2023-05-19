@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use std::net::Ipv4Addr;
@@ -47,6 +48,7 @@ use common_meta_types::ConnectionError;
 use common_meta_types::Endpoint;
 use common_meta_types::ForwardRPCError;
 use common_meta_types::ForwardToLeader;
+use common_meta_types::GrpcConfig;
 use common_meta_types::InvalidReply;
 use common_meta_types::LogEntry;
 use common_meta_types::LogId;
@@ -97,24 +99,39 @@ use crate::Opened;
 pub struct MetaNodeStatus {
     pub id: NodeId,
 
+    /// The raft service endpoint for internal communication
     pub endpoint: String,
 
+    /// The size in bytes of the on disk data.
     pub db_size: u64,
 
+    /// Server state, one of "Follower", "Learner", "Candidate", "Leader".
     pub state: String,
 
+    /// Is this node a leader.
     pub is_leader: bool,
 
+    /// Current term.
     pub current_term: u64,
 
+    /// Last received log index
     pub last_log_index: u64,
 
+    /// Last log id that has been committed and applied to state machine.
     pub last_applied: LogId,
 
+    /// The last known leader node.
     pub leader: Option<Node>,
 
+    /// The replication state of all nodes.
+    ///
+    /// Only leader node has non-None data for this field, i.e., `is_leader` is true.
+    pub replication: Option<BTreeMap<NodeId, Option<LogId>>>,
+
+    /// Nodes that can vote in election can grant replication.
     pub voters: Vec<Node>,
 
+    /// Also known as `learner`s.
     pub non_voters: Vec<Node>,
 
     /// The last `seq` used by GenericKV sub tree.
@@ -287,7 +304,9 @@ impl MetaNode {
         let mut rx = mn.running_rx.clone();
 
         let meta_srv_impl = RaftServiceImpl::create(mn.clone());
-        let meta_srv = RaftServiceServer::new(meta_srv_impl);
+        let meta_srv = RaftServiceServer::new(meta_srv_impl)
+            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
         let ipv4_addr = host.parse::<Ipv4Addr>();
         let addr = match ipv4_addr {
@@ -898,6 +917,7 @@ impl MetaNode {
                 None => LogId::new(CommittedLeaderId::new(0, 0), 0),
             },
             leader,
+            replication: metrics.replication,
             voters,
             non_voters: learners,
             last_seq,
@@ -1127,7 +1147,7 @@ impl MetaNode {
             .await
             .map_err(|e| MetaNetworkError::GetNodeAddrError(e.to_string()))?;
 
-        let mut client = RaftServiceClient::connect(format!("http://{}", endpoint))
+        let client = RaftServiceClient::connect(format!("http://{}", endpoint))
             .await
             .map_err(|e| {
                 MetaNetworkError::ConnectionError(ConnectionError::new(
@@ -1135,6 +1155,10 @@ impl MetaNode {
                     format!("address: {}", endpoint),
                 ))
             })?;
+
+        let mut client = client
+            .max_decoding_message_size(GrpcConfig::MAX_DECODING_SIZE)
+            .max_encoding_message_size(GrpcConfig::MAX_ENCODING_SIZE);
 
         let resp = client.forward(req).await.map_err(|e| {
             MetaNetworkError::from(e)

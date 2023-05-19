@@ -114,6 +114,7 @@ pub enum Statement {
     RenameTable(RenameTableStmt),
     TruncateTable(TruncateTableStmt),
     OptimizeTable(OptimizeTableStmt),
+    VacuumTable(VacuumTableStmt),
     AnalyzeTable(AnalyzeTableStmt),
     ExistsTable(ExistsTableStmt),
     // Columns
@@ -125,6 +126,10 @@ pub enum Statement {
     CreateView(CreateViewStmt),
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
+
+    // indexes
+    CreateIndex(CreateIndexStmt),
+    DropIndex(DropIndexStmt),
 
     // User
     ShowUsers,
@@ -366,11 +371,14 @@ impl Display for Statement {
             Statement::RenameTable(stmt) => write!(f, "{stmt}")?,
             Statement::TruncateTable(stmt) => write!(f, "{stmt}")?,
             Statement::OptimizeTable(stmt) => write!(f, "{stmt}")?,
+            Statement::VacuumTable(stmt) => write!(f, "{stmt}")?,
             Statement::AnalyzeTable(stmt) => write!(f, "{stmt}")?,
             Statement::ExistsTable(stmt) => write!(f, "{stmt}")?,
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,

@@ -290,6 +290,7 @@ pub trait Decimal:
     fn data_type() -> DataType;
     const MIN: Self;
     const MAX: Self;
+    const MAX_VALUE: Self;
 
     fn to_column_from_buffer(value: Buffer<Self>, size: DecimalSize) -> DecimalColumn;
 
@@ -314,6 +315,7 @@ pub trait Decimal:
 }
 
 impl Decimal for i128 {
+    const MAX_VALUE: i128 = 170141183460469231731687303715884105727_i128;
     fn zero() -> Self {
         0_i128
     }
@@ -351,7 +353,7 @@ impl Decimal for i128 {
     }
 
     fn max_of_max_precision() -> Self {
-        Self::max_for_precision(MAX_DECIMAL128_PRECISION)
+        Self::MAX_VALUE
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -459,6 +461,9 @@ impl Decimal for i128 {
 }
 
 impl Decimal for i256 {
+    const MAX_VALUE: i256 = ethnum::int!(
+        "57896044618658097711785492504343953926634992332820282019728792003956564819967"
+    );
     fn zero() -> Self {
         i256::ZERO
     }
@@ -496,7 +501,7 @@ impl Decimal for i256 {
     }
 
     fn max_of_max_precision() -> Self {
-        Self::max_for_precision(MAX_DECIMAL256_PRECISION)
+        Self::MAX_VALUE
     }
 
     fn min_for_precision(to_precision: u8) -> Self {
@@ -673,6 +678,21 @@ impl DecimalDataType {
         other.max_precision()
     }
 
+    // For div ops, we unify types to a super type
+    pub fn div_common_type(a: &Self, b: &Self) -> Result<Self> {
+        let l: u8 = (a.leading_digits() + b.scale()).max(b.leading_digits());
+        let scale = a.scale().max((a.scale() + 6).min(12));
+
+        let mut precision = l + scale;
+
+        // if the args both are Decimal128, we need to clamp the precision to 38
+        if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
+            precision = precision.min(MAX_DECIMAL128_PRECISION);
+        }
+        precision = precision.min(MAX_DECIMAL256_PRECISION);
+        Self::from_size(DecimalSize { precision, scale })
+    }
+
     pub fn binary_result_type(
         a: &Self,
         b: &Self,
@@ -684,27 +704,29 @@ impl DecimalDataType {
         let mut precision = a.max_result_precision(b);
 
         let multiply_precision = a.precision() + b.precision();
-        let divide_precision = a.precision() + b.scale();
 
         if is_multiply {
             scale = a.scale() + b.scale();
             precision = precision.min(multiply_precision);
         } else if is_divide {
-            scale = a.scale();
-            precision = precision.min(divide_precision);
+            // from snowflake: https://docs.snowflake.com/sql-reference/operators-arithmetic
+            let l = a.leading_digits() + b.scale();
+            scale = a.scale().max((a.scale() + 6).min(12));
+            // P = L + S
+            precision = l + scale;
         } else if is_plus_minus {
             scale = std::cmp::max(a.scale(), b.scale());
             // for addition/subtraction, we add 1 to the width to ensure we don't overflow
             let plus_min_precision = a.leading_digits().max(b.leading_digits()) + scale + 1;
             precision = precision.min(plus_min_precision);
         }
-        Self::from_size(DecimalSize { precision, scale })
-    }
 
-    // Decimal X Number or Number X Decimal
-    pub fn binary_upgrade_to_max_precision(&self) -> Result<DecimalDataType> {
-        let scale = self.scale();
-        let precision = self.max_precision();
+        // if the args both are Decimal128, we need to clamp the precision to 38
+        if a.precision() <= MAX_DECIMAL128_PRECISION && b.precision() <= MAX_DECIMAL128_PRECISION {
+            precision = precision.min(MAX_DECIMAL128_PRECISION);
+        }
+
+        precision = precision.min(MAX_DECIMAL256_PRECISION);
         Self::from_size(DecimalSize { precision, scale })
     }
 }

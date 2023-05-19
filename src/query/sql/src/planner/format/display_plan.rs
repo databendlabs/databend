@@ -68,6 +68,7 @@ impl Plan {
             Plan::ReclusterTable(recluster_table) => Ok(format!("{:?}", recluster_table)),
             Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
             Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
+            Plan::VacuumTable(vacuum_table) => Ok(format!("{:?}", vacuum_table)),
             Plan::AnalyzeTable(analyze_table) => Ok(format!("{:?}", analyze_table)),
             Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 
@@ -78,6 +79,10 @@ impl Plan {
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),
             Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
             Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
+
+            // Indexes
+            Plan::CreateIndex(index) => Ok(format!("{:?}", index)),
+            Plan::DropIndex(index) => Ok(format!("{:?}", index)),
 
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),

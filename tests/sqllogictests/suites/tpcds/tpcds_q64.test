@@ -1,0 +1,12 @@
+statement ok
+set sandbox_tenant = 'test_tenant';
+
+statement ok
+use tpcds;
+
+# Q64
+statement ok
+set enable_dphyp=1;
+
+statement ok
+set enable_dphyp=0;

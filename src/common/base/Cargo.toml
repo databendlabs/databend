@@ -13,6 +13,7 @@ test = false
 [features]
 tracing = ["tokio/tracing"]
 jemalloc = []
+disable_initial_exec_tls = ["tikv-jemalloc-sys/disable_initial_exec_tls"]
 memory-profiling = [
     "tikv-jemalloc-sys/stats",
     "tikv-jemalloc-sys/profiling",
@@ -43,7 +44,7 @@ pprof = { version = "0.11.1", features = [
     "protobuf-codec",
     "protobuf",
 ] }
-semver = "1.0.10"
+semver = { workspace = true }
 serde = { workspace = true }
 state = "0.5"
 tikv-jemalloc-ctl = { workspace = true }

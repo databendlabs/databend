@@ -32,12 +32,15 @@ _local_fs/
 stateless_test_data/
 **/_logs*/
 _data/
+_databend_data/
+_databend_meta/
 _cache/
 _tmp/
 tls/certs/
 .databend/
 checksums.txt
 distro/
+dist/
 test/
 
 # fuzz
@@ -54,7 +57,9 @@ docker/build-tool/rust-toolchain.toml
 # python
 venv/
 *.pyc
+.venv/
 __pycache__/
+.python-version
 
 *.zip
 

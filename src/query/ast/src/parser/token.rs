@@ -285,6 +285,8 @@ pub enum TokenKind {
     ALL,
     #[token("ADD", ignore(ascii_case))]
     ADD,
+    #[token("AGGREGATING", ignore(ascii_case))]
+    AGGREGATING,
     #[token("ANY", ignore(ascii_case))]
     ANY,
     #[token("ARGS", ignore(ascii_case))]
@@ -417,6 +419,8 @@ pub enum TokenKind {
     DESC,
     #[token("DESCRIBE", ignore(ascii_case))]
     DESCRIBE,
+    #[token("DISABLE_VARIANT_CHECK", ignore(ascii_case))]
+    DISABLE_VARIANT_CHECK,
     #[token("DISTINCT", ignore(ascii_case))]
     DISTINCT,
     #[token("DIV", ignore(ascii_case))]
@@ -433,6 +437,8 @@ pub enum TokenKind {
     DOWNLOAD,
     #[token("DROP", ignore(ascii_case))]
     DROP,
+    #[token("DRY", ignore(ascii_case))]
+    DRY,
     #[token("EXCEPT", ignore(ascii_case))]
     EXCEPT,
     #[token("EXCLUDE", ignore(ascii_case))]
@@ -529,6 +535,8 @@ pub enum TokenKind {
     HIVE,
     #[token("HOUR", ignore(ascii_case))]
     HOUR,
+    #[token("HOURS", ignore(ascii_case))]
+    HOURS,
     #[token("ICEBERG", ignore(ascii_case))]
     ICEBERG,
     #[token("INDEX", ignore(ascii_case))]
@@ -541,6 +549,8 @@ pub enum TokenKind {
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
+    #[token("INDEX", ignore(ascii_case))]
+    INDEX,
     #[token("INNER", ignore(ascii_case))]
     INNER,
     #[token("INSERT", ignore(ascii_case))]
@@ -719,10 +729,14 @@ pub enum TokenKind {
     PRIVILEGES,
     #[token("REMOVE", ignore(ascii_case))]
     REMOVE,
+    #[token("RETAIN", ignore(ascii_case))]
+    RETAIN,
     #[token("REVOKE", ignore(ascii_case))]
     REVOKE,
     #[token("RECURSIVE", ignore(ascii_case))]
     RECURSIVE,
+    #[token("RUN", ignore(ascii_case))]
+    RUN,
     #[token("GRANTS", ignore(ascii_case))]
     GRANTS,
     #[token("RIGHT", ignore(ascii_case))]
@@ -877,6 +891,8 @@ pub enum TokenKind {
     USERS,
     #[token("USING", ignore(ascii_case))]
     USING,
+    #[token("VACUUM", ignore(ascii_case))]
+    VACUUM,
     #[token("VALUES", ignore(ascii_case))]
     VALUES,
     #[token("VALIDATION_MODE", ignore(ascii_case))]

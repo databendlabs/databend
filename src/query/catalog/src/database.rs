@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropTableByIdReq;
@@ -32,8 +33,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableCopiedFileReply;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use dyn_clone::DynClone;
@@ -107,7 +106,7 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
+    async fn create_table(&self, _req: CreateTableReq) -> Result<CreateTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement create_table in {} Database",
             self.name()
@@ -164,17 +163,6 @@ pub trait Database: DynClone + Sync + Send {
     ) -> Result<GetTableCopiedFileReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement get_table_copied_file_info in {} Database",
-            self.name()
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn upsert_table_copied_file_info(
-        &self,
-        _req: UpsertTableCopiedFileReq,
-    ) -> Result<UpsertTableCopiedFileReply> {
-        Err(ErrorCode::Unimplemented(format!(
-            "UnImplement upsert_table_copied_file_info in {} Database",
             self.name()
         )))
     }

@@ -46,7 +46,7 @@ pub enum ScalarExpr {
 
 impl ScalarExpr {
     pub fn data_type(&self) -> Result<DataType> {
-        Ok(self.as_expr_with_col_index()?.data_type().clone())
+        Ok(self.as_expr()?.data_type().clone())
     }
 
     pub fn used_columns(&self) -> ColumnSet {
@@ -351,8 +351,11 @@ pub struct AggregateFunction {
     pub display_name: String,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Debug, Educe)]
+#[educe(PartialEq, Eq, Hash)]
 pub struct WindowFunc {
+    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
+    pub span: Span,
     pub display_name: String,
     pub partition_by: Vec<ScalarExpr>,
     pub func: WindowFuncType,

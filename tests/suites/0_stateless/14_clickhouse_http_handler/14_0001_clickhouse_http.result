@@ -7,7 +7,7 @@ OK.
 databases_in_default
 String
 db2
-tables_in_db2
+Tables_in_db2
 String
 t2
 Table	Create Table

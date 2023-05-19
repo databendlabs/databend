@@ -50,6 +50,52 @@ message TxnDeleteRequest {
   string key = 1;
   // if or not return the prev value
   bool prev_value = 2;
+
+  // Delete only if the `seq` matches the specified value.
+  // Such a condition skips changed record and does not result in a transaction failure.
+  //
+  // A key use case for this feature is to support `truncate-table`: the
+  // deletion of only non-modified files from a snapshot view of copied
+  // files.
+  // 
+  // A table contains associated `copied-files`. Suppose Process 1 updates
+  // the table by modifying `f-3`, removing `f-4`, and adding `f-7`. In this
+  // case, Process 2 can delete only the non-modified files:
+  // 
+  // ```
+  // Process 1                       Process 2
+  // // Add copied files             // Attempt to delete copied files
+  // -------------------------------------------------------------
+  // // 1. Initial
+  // Table-A(seq:1):
+  //     f-2(seq:2)
+  //     f-3(seq:3)
+  //     f-4(seq:4)
+  //                                 // 2. Acquire a snapshot view
+  //                                 Table-A(seq:1):
+  //                                     f-2(seq:2)
+  //                                     f-3(seq:3)
+  //                                     f-4(seq:4)
+  // 
+  // // 3. Modify table and files
+  // Table-A(seq:7):
+  //     f-2(seq:2)
+  //     f-3(seq:5) // updated
+  //                // removed f-4
+  //     f-7(seq:6) // added
+  // 
+  //                                 // 4. Sequence of table changed from 1 to 7
+  //                                 //    Fetch table again
+  //                                 Table-A(seq:7):
+  // 
+  // 
+  //                                 // 5. Remove only unmodified file
+  //                                 Table-A(seq:8):
+  //                                                 // f-2 is the only file deleted
+  //                                     f-3(seq:5)  // sequence number updated
+  //                                     f-7(seq:6)  // sequence number updated
+  // ```
+  optional uint64 match_seq = 3;
 }
 
 message TxnDeleteResponse {

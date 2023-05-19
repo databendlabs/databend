@@ -139,8 +139,9 @@ impl FuseTable {
 
                             let keep_last_snapshot = true;
                             let snapshot_files = self.list_snapshot_files().await?;
-                            if let Err(e) =
-                                tbl.do_purge(&ctx, snapshot_files, keep_last_snapshot).await
+                            if let Err(e) = tbl
+                                .do_purge(&ctx, snapshot_files, keep_last_snapshot, None)
+                                .await
                             {
                                 // Errors of GC, if any, are ignored, since GC task can be picked up
                                 warn!(
@@ -212,7 +213,7 @@ impl FuseTable {
         overwrite: bool,
     ) -> Result<()> {
         let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version().await?;
+        let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
         let prev_statistics_location = prev
             .as_ref()
@@ -664,7 +665,7 @@ impl FuseTable {
 
             let fuse_segment_io = SegmentsIO::create(ctx, operator, schema);
             let concurrent_appended_segment_infos = fuse_segment_io
-                .read_segments(concurrently_appended_segment_locations, true)
+                .read_segments::<Arc<SegmentInfo>>(concurrently_appended_segment_locations, true)
                 .await?;
 
             let mut new_statistics = base_summary.clone();
@@ -728,11 +729,23 @@ mod utils {
                 let block_location = &block.location.0;
                 // if deletion operation failed (after DAL retried)
                 // we just left them there, and let the "major GC" collect them
+                info!(
+                    "aborting operation, delete block location: {:?}",
+                    block_location,
+                );
                 let _ = operator.delete(block_location).await;
                 if let Some(index) = &block.bloom_filter_index_location {
+                    info!(
+                        "aborting operation, delete bloom index location: {:?}",
+                        index.0
+                    );
                     let _ = operator.delete(&index.0).await;
                 }
             }
+            info!(
+                "aborting operation, delete segment location: {:?}",
+                entry.segment_location
+            );
             let _ = operator.delete(&entry.segment_location).await;
         }
         Ok(())

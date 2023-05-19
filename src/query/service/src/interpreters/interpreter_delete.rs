@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
@@ -46,11 +45,6 @@ impl Interpreter for DeleteInterpreter {
         "DeleteInterpreter"
     }
 
-    /// Get the schema of DeletePlan
-    fn schema(&self) -> DataSchemaRef {
-        self.plan.schema()
-    }
-
     #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
@@ -60,8 +54,12 @@ impl Interpreter for DeleteInterpreter {
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
 
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
-            let filter =
-                cast_expr_to_non_null_boolean(scalar.as_expr_with_col_name()?)?.as_remote_expr();
+            let filter = cast_expr_to_non_null_boolean(
+                scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone()),
+            )?
+            .as_remote_expr();
 
             let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {

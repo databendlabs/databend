@@ -27,6 +27,8 @@ use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
 use databend_query::sql::Planner;
+use databend_query::test_kits::create_query_context_with_session;
+use databend_query::test_kits::TestGlobalServices;
 use poem::get;
 use poem::http::header;
 use poem::http::Method;
@@ -37,9 +39,6 @@ use poem::Request;
 use poem::Route;
 use pretty_assertions::assert_eq;
 use tokio_stream::StreamExt;
-
-use crate::tests::create_query_context_with_session;
-use crate::tests::TestGlobalServices;
 
 async fn get_status(ep: &Route) -> InstanceStatus {
     let response = ep
@@ -75,7 +74,9 @@ async fn run_query(query_ctx: &Arc<QueryContext>) -> Result<Arc<dyn Interpreter>
 #[tokio::test(flavor = "multi_thread")]
 async fn test_status() -> Result<()> {
     // init global services
-    let guard = TestGlobalServices::setup(crate::tests::ConfigBuilder::create().build()).await?;
+    let guard =
+        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
+            .await?;
     let ep = Route::new().at("/v1/status", get(instance_status_handler));
 
     let status = get_status(&ep).await;

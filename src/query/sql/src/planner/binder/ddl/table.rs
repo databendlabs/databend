@@ -44,6 +44,7 @@ use common_ast::ast::TableReference;
 use common_ast::ast::TruncateTableStmt;
 use common_ast::ast::UndropTableStmt;
 use common_ast::ast::UriLocation;
+use common_ast::ast::VacuumTableStmt;
 use common_ast::parser::parse_sql;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
@@ -102,6 +103,8 @@ use crate::plans::RewriteKind;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
+use crate::plans::VacuumTableOption;
+use crate::plans::VacuumTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
 use crate::Planner;
@@ -149,7 +152,7 @@ impl Binder {
                 .with_column("data_compressed_size")
                 .with_column("index_size");
         } else {
-            select_builder.with_column(format!("name AS Tables_in_{database}"));
+            select_builder.with_column(format!("name AS `Tables_in_{database}`"));
             if *with_history {
                 select_builder.with_column("dropped_on AS drop_time");
             };
@@ -817,6 +820,47 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_vacuum_table(
+        &mut self,
+        _bind_context: &mut BindContext,
+        stmt: &VacuumTableStmt,
+    ) -> Result<Plan> {
+        let VacuumTableStmt {
+            catalog,
+            database,
+            table,
+            option,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let option = {
+            let retain_hours = match option.retain_hours {
+                Some(Expr::Literal {
+                    lit: Literal::UInt64(uint),
+                    ..
+                }) => Some(uint as usize),
+                Some(_) => {
+                    return Err(ErrorCode::IllegalDataType("Unsupported hour type"));
+                }
+                _ => None,
+            };
+
+            VacuumTableOption {
+                retain_hours,
+                dry_run: option.dry_run,
+            }
+        };
+        Ok(Plan::VacuumTable(Box::new(VacuumTablePlan {
+            catalog,
+            database,
+            table,
+            option,
+        })))
+    }
+
+    #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_analyze_table(
         &mut self,
         stmt: &AnalyzeTableStmt,
@@ -952,7 +996,7 @@ impl Binder {
                         target_type: Box::new(DataType::from(&schema_data_type)),
                         argument: Box::new(expr),
                     })
-                    .as_expr_with_col_index()?;
+                    .as_expr()?;
 
                     // Added columns are not allowed to use expressions,
                     // as the default values will be generated at at each query.
@@ -1086,7 +1130,7 @@ impl Binder {
         let mut cluster_keys = Vec::with_capacity(cluster_by.len());
         for cluster_by in cluster_by.iter() {
             let (cluster_key, _) = scalar_binder.bind(cluster_by).await?;
-            let expr = cluster_key.as_expr_with_col_index()?;
+            let expr = cluster_key.as_expr()?;
             if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
                 return Err(ErrorCode::InvalidClusterKeys(format!(
                     "Cluster by expression `{:#}` is not deterministic",

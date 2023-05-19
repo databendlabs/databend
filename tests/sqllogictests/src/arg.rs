@@ -41,6 +41,14 @@ pub struct SqlLogicTestArgs {
     )]
     pub skipped_dir: Option<String>,
 
+    // Set specific file to skip
+    #[arg(
+        short = 'x',
+        long = "skip_file",
+        help = "Skip sqllogictests in specific test file, the arg is optional"
+    )]
+    pub skipped_file: Option<String>,
+
     // Set handler to run tests
     #[arg(
         short = 'l',
@@ -106,7 +114,7 @@ pub struct SqlLogicTestArgs {
     )]
     pub bench: bool,
 
-    // Set specific the database to connnect
+    // Set specific the database to connect
     #[arg(
         long = "database",
         default_value = "default",

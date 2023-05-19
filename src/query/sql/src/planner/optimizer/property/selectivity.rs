@@ -14,16 +14,13 @@
 
 use std::cmp::max;
 use std::cmp::Ordering;
+use std::collections::HashSet;
 
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
-use common_expression::ConstantFolder;
-use common_expression::Expr;
-use common_expression::FunctionContext;
 use common_expression::Scalar;
-use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::property::datum::F64;
@@ -34,27 +31,30 @@ use crate::optimizer::DEFAULT_HISTOGRAM_BUCKETS;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::ScalarExpr;
+use crate::IndexType;
 
 /// A default selectivity factor for a predicate
 /// that we cannot estimate the selectivity for it.
 /// This factor comes from the paper
 /// "Access Path Selection in a Relational Database Management System"
-pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 3f64;
+pub const DEFAULT_SELECTIVITY: f64 = 1f64 / 10f64;
 pub const MAX_SELECTIVITY: f64 = 1f64;
 
 pub struct SelectivityEstimator<'a> {
-    input_stat: &'a mut Statistics,
+    pub input_stat: &'a mut Statistics,
+    pub updated_column_indexes: HashSet<IndexType>,
 }
 
 impl<'a> SelectivityEstimator<'a> {
-    pub fn new(input_stat: &'a mut Statistics) -> Self {
-        Self { input_stat }
+    pub fn new(input_stat: &'a mut Statistics, updated_column_indexes: HashSet<IndexType>) -> Self {
+        Self {
+            input_stat,
+            updated_column_indexes,
+        }
     }
 
     /// Compute the selectivity of a predicate.
     pub fn compute_selectivity(&mut self, predicate: &ScalarExpr, update: bool) -> Result<f64> {
-        // Try to do constant fold first
-        let predicate = &try_constant_fold(predicate)?;
         Ok(match predicate {
             ScalarExpr::BoundColumnRef(_) => {
                 // If a column ref is on top of a predicate, e.g.
@@ -71,8 +71,8 @@ impl<'a> SelectivityEstimator<'a> {
             }
 
             ScalarExpr::FunctionCall(func) if func.func_name == "and" => {
-                let left_selectivity = self.compute_selectivity(&func.arguments[0], true)?;
-                let right_selectivity = self.compute_selectivity(&func.arguments[1], true)?;
+                let left_selectivity = self.compute_selectivity(&func.arguments[0], update)?;
+                let right_selectivity = self.compute_selectivity(&func.arguments[1], update)?;
                 left_selectivity * right_selectivity
             }
 
@@ -111,8 +111,6 @@ impl<'a> SelectivityEstimator<'a> {
         right: &ScalarExpr,
         update: bool,
     ) -> Result<f64> {
-        // Try to constant fold right right expr
-        let right = try_constant_fold(right)?;
         if let (ScalarExpr::BoundColumnRef(column_ref), ScalarExpr::ConstantExpr(constant)) =
             (left, &right)
         {
@@ -137,24 +135,31 @@ impl<'a> SelectivityEstimator<'a> {
                     // For equal predicate, we just use cardinality of a single
                     // value to estimate the selectivity. This assumes that
                     // the column is in a uniform distribution.
-                    let sel = evaluate_equal(column_stat, constant);
+                    let selectivity = evaluate_equal(column_stat, constant);
                     if update {
-                        update_statistic(column_stat, const_datum.clone(), const_datum, sel)?;
+                        update_statistic(
+                            column_stat,
+                            const_datum.clone(),
+                            const_datum,
+                            selectivity,
+                        )?;
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
-                    Ok(sel)
+                    Ok(selectivity)
                 }
                 ComparisonOp::NotEqual => {
                     // For not equal predicate, we treat it as opposite of equal predicate.
-                    let sel = 1.0 - evaluate_equal(column_stat, constant);
+                    let selectivity = 1.0 - evaluate_equal(column_stat, constant);
                     if update {
                         update_statistic(
                             column_stat,
                             column_stat.min.clone(),
                             column_stat.max.clone(),
-                            sel,
+                            selectivity,
                         )?;
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
-                    Ok(sel)
+                    Ok(selectivity)
                 }
                 ComparisonOp::GT => {
                     let col_hist = if let Some(hist) = column_stat.histogram.as_ref() {
@@ -183,6 +188,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = 1.0 - num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -211,6 +217,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -238,6 +245,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = 1.0 - num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -265,6 +273,7 @@ impl<'a> SelectivityEstimator<'a> {
                     let selectivity = num_greater / col_hist.num_values();
                     if update {
                         update_statistic(column_stat, new_min, new_max, selectivity)?;
+                        self.updated_column_indexes.insert(column_ref.column.index);
                     }
                     Ok(selectivity)
                 }
@@ -272,6 +281,26 @@ impl<'a> SelectivityEstimator<'a> {
         }
 
         Ok(DEFAULT_SELECTIVITY)
+    }
+
+    // Update other columns' statistic according to selectivity.
+    pub fn update_other_statistic_by_selectivity(&mut self, selectivity: f64) {
+        for (index, column_stat) in self.input_stat.column_stats.iter_mut() {
+            if !self.updated_column_indexes.contains(index) {
+                let new_ndv = (column_stat.ndv * selectivity).ceil();
+                column_stat.ndv = new_ndv;
+                if let Some(histogram) = &mut column_stat.histogram {
+                    let new_ndv = new_ndv as u64;
+                    if new_ndv <= 2 {
+                        column_stat.histogram = None;
+                        return;
+                    }
+                    for bucket in histogram.buckets.iter_mut() {
+                        bucket.update(selectivity);
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -335,25 +364,13 @@ fn compare_equal(datum: &Option<Datum>, column_stat: &ColumnStat) -> f64 {
     }
 }
 
-fn try_constant_fold(scalar_expr: &ScalarExpr) -> Result<ScalarExpr> {
-    let expr = scalar_expr.as_expr_with_col_index()?;
-    let (expr, _) = ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-    if let Expr::Constant { scalar, span, .. } = expr {
-        return Ok(ScalarExpr::ConstantExpr(ConstantExpr {
-            span,
-            value: scalar,
-        }));
-    }
-    Ok(scalar_expr.clone())
-}
-
 fn update_statistic(
     column_stat: &mut ColumnStat,
     mut new_min: Datum,
     mut new_max: Datum,
     selectivity: f64,
 ) -> Result<()> {
-    let new_ndv = column_stat.ndv * selectivity;
+    let new_ndv = (column_stat.ndv * selectivity).ceil();
     column_stat.ndv = new_ndv;
     if matches!(new_min, Datum::Int(_) | Datum::UInt(_) | Datum::Float(_)) {
         new_min = Datum::Float(F64::from(new_min.to_double()?));
@@ -363,7 +380,7 @@ fn update_statistic(
     column_stat.max = new_max.clone();
     if let Some(histogram) = &column_stat.histogram {
         let num_values = histogram.num_values();
-        let new_num_values = (num_values * selectivity) as u64;
+        let new_num_values = (num_values * selectivity).ceil() as u64;
         let new_ndv = new_ndv as u64;
         if new_ndv <= 2 {
             column_stat.histogram = None;

@@ -47,13 +47,33 @@ import TabItem from '@theme/TabItem';
 
 Databend makes it easy to load data from various sources, stage, Amazon S3, local and remote files, and so on.
 
-* [Loading Data from Databend Stages](../12-load-data/00-stage.md)
-* [Loading Data from Amazon S3](../12-load-data/01-s3.md)
-* [Loading Data from Local File System](../12-load-data/02-local.md)
-* [Loading Data from Remote Files](../12-load-data/04-http.md)
-* [Querying Data in Staged Files](../12-load-data/05-querying-stage.md)
-* [Transforming Data During a Load](../12-load-data/06-data-load-transform.md)
-* [Unloading Data from Databend](../12-unload-data/index.md)
+<Tabs>
+<TabItem value="Stage" label="Stage" default>
+
+* [Understanding Stages](../12-load-data/00-stage/00-whystage.md)
+* [Managing Stages](../12-load-data/00-stage/01-manage-stages.md)
+* [Querying Data in Staged Files](../12-load-data/00-stage/05-querying-stage.md)
+
+</TabItem>
+
+<TabItem value="Load" label="Load">
+
+* [Loading from Stage](../12-load-data/01-load/00-stage.md)
+* [Loading from Bucket](../12-load-data/01-load/01-s3.md)
+* [Loading from Local File](../12-load-data/01-load/02-local.md)
+* [Loading from Remote File](../12-load-data/01-load/04-http.md)
+* [Transforming Data During Load](../12-load-data/01-load/06-data-load-transform.md)
+
+</TabItem>
+
+<TabItem value="Unload" label="Unload">
+
+* [Unloading Data](../12-load-data/09-unload.md)
+
+</TabItem>
+
+</Tabs>
+
 
 ## Data & User Management
 
@@ -149,7 +169,7 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 * [Golang](../03-develop/00-golang.md)
 * [Python](../03-develop/01-python.md)
 * [Node.js](../03-develop/02-nodejs.md)
-* [Java](../03-develop/03-java.md)
+* [Java](../03-develop/03-jdbc.md)
 * [Rust](../03-develop/04-rust.md)
 
 </TabItem>

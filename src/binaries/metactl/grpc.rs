@@ -38,8 +38,10 @@ pub async fn export_meta(addr: &str, save: String) -> anyhow::Result<()> {
     let mut stream = exported.into_inner();
 
     let file: Option<File> = if !save.is_empty() {
+        eprintln!("    To:   File: {}", save);
         Some(File::create(&save)?)
     } else {
+        eprintln!("    To:   <stdout>");
         None
     };
 

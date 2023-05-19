@@ -18,6 +18,7 @@ use common_base::runtime::execute_futures_in_parallel;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use opendal::Operator;
+use tracing::info;
 
 // File related operations.
 pub struct Files {
@@ -68,6 +69,7 @@ impl Files {
 
     #[async_backtrace::framed]
     async fn delete_files(op: Operator, locations: Vec<String>) -> Result<()> {
+        info!("deleting files: {:?}", &locations);
         op.remove(locations).await?;
         Ok(())
     }

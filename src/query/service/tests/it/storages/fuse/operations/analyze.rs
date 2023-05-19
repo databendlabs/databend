@@ -19,11 +19,11 @@ use common_exception::Result;
 use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
+use databend_query::test_kits::table_test_fixture::analyze_table;
+use databend_query::test_kits::table_test_fixture::check_data_dir;
+use databend_query::test_kits::table_test_fixture::execute_command;
+use databend_query::test_kits::table_test_fixture::TestFixture;
 
-use crate::storages::fuse::table_test_fixture::analyze_table;
-use crate::storages::fuse::table_test_fixture::check_data_dir;
-use crate::storages::fuse::table_test_fixture::execute_command;
-use crate::storages::fuse::table_test_fixture::TestFixture;
 use crate::storages::fuse::utils::do_insertions;
 
 #[tokio::test(flavor = "multi_thread")]
@@ -42,7 +42,7 @@ async fn test_fuse_snapshot_analyze() -> Result<()> {
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, true)
+        .do_purge(&table_ctx, snapshot_files, true, None)
         .await?;
     check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await
 }
@@ -113,7 +113,7 @@ async fn test_fuse_snapshot_analyze_purge() -> Result<()> {
     let snapshot_files = fuse_table.list_snapshot_files().await?;
     let table_ctx: Arc<dyn TableContext> = ctx.clone();
     fuse_table
-        .do_purge(&table_ctx, snapshot_files, true)
+        .do_purge(&table_ctx, snapshot_files, true, None)
         .await?;
     check_data_dir(&fixture, case_name, 1, 1, 1, 1, 1, Some(()), Some(())).await
 }

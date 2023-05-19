@@ -23,7 +23,8 @@ use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
+use common_sql::plans::Plan;
+use common_sql::PlanExtras;
 use common_sql::Planner;
 use futures::StreamExt;
 use futures_util::FutureExt;
@@ -210,24 +211,21 @@ impl Executor {
 
 impl ExecuteState {
     #[async_backtrace::framed]
-    pub(crate) async fn get_schema(sql: &str, ctx: Arc<QueryContext>) -> Result<DataSchemaRef> {
+    pub(crate) async fn plan_sql(sql: &str, ctx: Arc<QueryContext>) -> Result<(Plan, PlanExtras)> {
         let mut planner = Planner::new(ctx.clone());
-        let (plan, _) = planner.plan_sql(sql).await?;
-        Ok(InterpreterFactory::get_schema(ctx, &plan))
+        planner.plan_sql(sql).await
     }
 
     #[async_backtrace::framed]
     pub(crate) async fn try_start_query(
         executor: Arc<RwLock<Executor>>,
-        sql: &str,
+        plan: Plan,
+        extras: PlanExtras,
         session: Arc<Session>,
         ctx: Arc<QueryContext>,
         block_sender: SizedChannelSender<DataBlock>,
     ) -> Result<()> {
-        let mut planner = Planner::new(ctx.clone());
-        let (plan, extras) = planner.plan_sql(sql).await?;
         ctx.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
-
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let running_state = ExecuteRunning {
             session,

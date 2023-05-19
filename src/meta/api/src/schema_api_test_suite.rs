@@ -26,6 +26,7 @@ use common_expression::TableSchema;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
@@ -37,11 +38,16 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::IndexNameIdent;
+use common_meta_app::schema::IndexType;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListIndexByTableIdReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
@@ -257,8 +263,9 @@ impl SchemaApiTestSuite {
         suite.truncate_table(&b.build().await).await?;
         suite.get_tables_from_share(&b.build().await).await?;
         suite
-            .upsert_table_copied_file_info(&b.build().await)
+            .update_table_with_copied_files(&b.build().await)
             .await?;
+        suite.index_create_list_drop(&b.build().await).await?;
         Ok(())
     }
 
@@ -1954,7 +1961,6 @@ impl SchemaApiTestSuite {
                 });
 
                 let upsert_source_table = UpsertTableCopiedFileReq {
-                    table_id,
                     file_info,
                     expire_at: None,
                     fail_if_duplicated: true,
@@ -1993,7 +1999,6 @@ impl SchemaApiTestSuite {
                 });
 
                 let upsert_source_table = UpsertTableCopiedFileReq {
-                    table_id,
                     file_info,
                     expire_at: None,
                     fail_if_duplicated: true,
@@ -2032,7 +2037,6 @@ impl SchemaApiTestSuite {
                 });
 
                 let upsert_source_table = UpsertTableCopiedFileReq {
-                    table_id,
                     file_info,
                     expire_at: None,
                     fail_if_duplicated: true,
@@ -2388,6 +2392,7 @@ impl SchemaApiTestSuite {
         Ok(())
     }
 
+    /// Return table id and table meta
     #[tracing::instrument(level = "debug", skip_all)]
     async fn create_out_of_retention_time_table<
         MT: SchemaApi + kvapi::AsKVApi<Error = MetaError>,
@@ -2398,7 +2403,7 @@ impl SchemaApiTestSuite {
         dbid_tbname: DBIdTableName,
         drop_on: Option<DateTime<Utc>>,
         delete: bool,
-    ) -> anyhow::Result<u64> {
+    ) -> anyhow::Result<(u64, TableMeta)> {
         let created_on = Utc::now();
         let schema = || {
             Arc::new(TableSchema::new(vec![TableField::new(
@@ -2439,7 +2444,7 @@ impl SchemaApiTestSuite {
         if delete {
             delete_test_data(mt.as_kv_api(), &dbid_tbname).await?;
         }
-        Ok(table_id)
+        Ok((table_id, drop_data))
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
@@ -2472,7 +2477,9 @@ impl SchemaApiTestSuite {
         info!("create database res: {:?}", res);
 
         assert_eq!(1, res.db_id, "first database id is 1");
-        let drop_on = Some(Utc::now() - Duration::days(1));
+        let one_day_before = Some(Utc::now() - Duration::days(1));
+        let two_day_before = Some(Utc::now() - Duration::days(2));
+
         self.create_out_of_retention_time_table(
             mt,
             tbl_name_ident.clone(),
@@ -2480,11 +2487,11 @@ impl SchemaApiTestSuite {
                 db_id: res.db_id,
                 table_name: tb1_name.to_string(),
             },
-            drop_on,
+            one_day_before,
             true,
         )
         .await?;
-        let table_id = self
+        let (table_id, table_meta) = self
             .create_out_of_retention_time_table(
                 mt,
                 tbl_name_ident.clone(),
@@ -2492,7 +2499,7 @@ impl SchemaApiTestSuite {
                     db_id: res.db_id,
                     table_name: tb1_name.to_string(),
                 },
-                Some(Utc::now() - Duration::days(2)),
+                two_day_before,
                 false,
             )
             .await?;
@@ -2508,13 +2515,19 @@ impl SchemaApiTestSuite {
             file_info.insert("file".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
             };
 
-            let _ = mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta.clone(),
+                copied_files: Some(req),
+            };
+
+            let _ = mt.update_table_meta(req).await?;
 
             let key = TableCopiedFileNameIdent {
                 table_id,
@@ -3187,6 +3200,7 @@ impl SchemaApiTestSuite {
             created_on,
             ..TableMeta::default()
         };
+        let created_on = Utc::now();
 
         info!("--- prepare db and table");
         {
@@ -3203,7 +3217,6 @@ impl SchemaApiTestSuite {
             };
 
             let _ = mt.create_database(plan).await?;
-            let created_on = Utc::now();
 
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -3229,13 +3242,19 @@ impl SchemaApiTestSuite {
             file_info.insert("file".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
             };
 
-            let _ = mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            let _ = mt.update_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -3259,13 +3278,19 @@ impl SchemaApiTestSuite {
             file_info.insert("file2".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() - 86400) as u64),
                 fail_if_duplicated: true,
             };
 
-            let _ = mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            let _ = mt.update_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -3281,97 +3306,43 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn truncate_table<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant = "tenant1";
-        let db_name = "db1";
-        let tbl_name = "tb2";
+        let mut util = Util::new(mt, "tenant1", "db1", "tb2");
         let table_id;
-
-        let schema = || {
-            Arc::new(TableSchema::new(vec![TableField::new(
-                "number",
-                TableDataType::Number(NumberDataType::UInt64),
-            )]))
-        };
-
-        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
-
-        let table_meta = |created_on| TableMeta {
-            schema: schema(),
-            engine: "JSON".to_string(),
-            options: options(),
-            created_on,
-            ..TableMeta::default()
-        };
 
         info!("--- prepare db and table");
         {
-            let plan = CreateDatabaseReq {
-                if_not_exists: false,
-                name_ident: DatabaseNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                },
-                meta: DatabaseMeta {
-                    engine: "".to_string(),
-                    ..DatabaseMeta::default()
-                },
-            };
-
-            let _ = mt.create_database(plan).await?;
-            let created_on = Utc::now();
-
-            let req = CreateTableReq {
-                if_not_exists: false,
-                name_ident: TableNameIdent {
-                    tenant: tenant.to_string(),
-                    db_name: db_name.to_string(),
-                    table_name: tbl_name.to_string(),
-                },
-                table_meta: table_meta(created_on),
-            };
-            let resp = mt.create_table(req.clone()).await?;
-            table_id = resp.table_id;
+            util.create_db().await?;
+            let (tid, _table_meta) = util.create_table().await?;
+            table_id = tid;
         }
 
-        info!("--- create and get stage file info");
+        let n = 7;
+        info!("--- create copied file infos");
+        let file_infos = util.update_copied_files(n).await?;
+
+        info!("--- get copied file infos");
         {
-            let stage_info = TableCopiedFileInfo {
-                etag: Some("etag".to_owned()),
-                content_length: 1024,
-                last_modified: Some(Utc::now()),
-            };
-            let mut file_info = BTreeMap::new();
-            file_info.insert("file".to_string(), stage_info.clone());
-
-            let req = UpsertTableCopiedFileReq {
-                table_id,
-                file_info: file_info.clone(),
-                expire_at: Some((Utc::now().timestamp() + 86400) as u64),
-                fail_if_duplicated: true,
-            };
-
-            let _ = mt.upsert_table_copied_file_info(req).await?;
-
             let req = GetTableCopiedFileReq {
                 table_id,
-                files: vec!["file".to_string()],
+                files: file_infos.keys().cloned().collect(),
             };
 
             let resp = mt.get_table_copied_file_info(req).await?;
-            assert_eq!(resp.file_info.len(), 1);
-            let resp_stage_info = resp.file_info.get(&"file".to_string());
-            assert_eq!(resp_stage_info.unwrap(), &stage_info);
+            assert_eq!(file_infos, resp.file_info);
         }
 
         info!("--- truncate table and get stage file info again");
         {
-            let req = TruncateTableReq { table_id };
+            let req = TruncateTableReq {
+                table_id,
+                batch_size: Some(2),
+            };
 
             let _ = mt.truncate_table(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
-                files: vec!["file2".to_string()],
+                files: file_infos.keys().cloned().collect(),
             };
 
             let resp = mt.get_table_copied_file_info(req).await?;
@@ -3690,6 +3661,219 @@ impl SchemaApiTestSuite {
                 assert_eq!(Some(&"t1".to_string()), res[0].2.options.get("name"));
                 assert_eq!(Some(&"t2".to_string()), res[1].2.options.get("name"));
             }
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn index_create_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let table_name = "tb1";
+        let table_id;
+        let index_id;
+
+        let db_table_name_ident = TableNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: table_name.to_string(),
+        };
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![
+                TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
+            ]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            updated_on: created_on,
+            created_on,
+            ..TableMeta::default()
+        };
+
+        let created_on = Utc::now();
+
+        let req = CreateTableReq {
+            if_not_exists: false,
+            name_ident: db_table_name_ident.clone(),
+            table_meta: table_meta(created_on),
+        };
+
+        {
+            info!("--- prepare db and table");
+            // prepare db1
+            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
+            assert_eq!(1, res.db_id);
+
+            let res = mt.create_table(req).await?;
+            table_id = res.table_id;
+        }
+
+        let index_name_1 = "idx1";
+        let index_meta_1 = IndexMeta {
+            table_id,
+            index_type: IndexType::AGGREGATING,
+            created_on,
+            drop_on: None,
+            query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
+        };
+
+        let index_name_2 = "idx2";
+        let index_meta_2 = IndexMeta {
+            table_id,
+            index_type: IndexType::AGGREGATING,
+            created_on,
+            drop_on: None,
+            query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
+        };
+
+        let name_ident_1 = IndexNameIdent {
+            tenant: tenant.to_string(),
+            index_name: index_name_1.to_string(),
+        };
+
+        let name_ident_2 = IndexNameIdent {
+            tenant: tenant.to_string(),
+            index_name: index_name_2.to_string(),
+        };
+
+        {
+            info!("--- list index with no create before");
+            let req = ListIndexByTableIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.get_indexes_by_table_id(req).await?;
+            assert!(res.is_none())
+        }
+
+        {
+            info!("--- create index");
+            let req = CreateIndexReq {
+                if_not_exists: false,
+                name_ident: name_ident_1.clone(),
+                meta: index_meta_1.clone(),
+            };
+
+            let res = mt.create_index(req).await?;
+            index_id = res.index_id;
+
+            let req = CreateIndexReq {
+                if_not_exists: false,
+                name_ident: name_ident_2.clone(),
+                meta: index_meta_2.clone(),
+            };
+
+            mt.create_index(req).await?;
+        }
+
+        {
+            info!("--- create index again with if_not_exists = false");
+            let req = CreateIndexReq {
+                if_not_exists: false,
+                name_ident: name_ident_1.clone(),
+                meta: index_meta_1.clone(),
+            };
+
+            let res = mt.create_index(req).await;
+            let status = res.err().unwrap();
+            let err_code = ErrorCode::from(status);
+
+            assert_eq!(ErrorCode::IndexAlreadyExists("").code(), err_code.code());
+        }
+
+        {
+            info!("--- create index again with if_not_exists = true");
+            let req = CreateIndexReq {
+                if_not_exists: true,
+                name_ident: name_ident_1.clone(),
+                meta: index_meta_1.clone(),
+            };
+
+            let res = mt.create_index(req).await?;
+            assert_eq!(index_id, res.index_id);
+        }
+
+        {
+            info!("--- list index");
+            let req = ListIndexByTableIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.get_indexes_by_table_id(req).await?;
+            assert_eq!(2, res.unwrap().len());
+        }
+
+        {
+            info!("--- drop index");
+            let req = DropIndexReq {
+                if_exists: false,
+                name_ident: name_ident_1.clone(),
+            };
+
+            let res = mt.drop_index(req).await;
+            assert!(res.is_ok())
+        }
+
+        {
+            info!("--- list index after drop one");
+            let req = ListIndexByTableIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.get_indexes_by_table_id(req).await?;
+            assert_eq!(1, res.unwrap().len());
+        }
+
+        {
+            info!("--- list index after drop all");
+            let req = DropIndexReq {
+                if_exists: false,
+                name_ident: name_ident_2.clone(),
+            };
+
+            let res = mt.drop_index(req).await;
+            assert!(res.is_ok());
+
+            let req = ListIndexByTableIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.get_indexes_by_table_id(req).await?;
+            assert_eq!(0, res.unwrap().len())
+        }
+
+        {
+            info!("--- drop index with if exists = false");
+            let req = DropIndexReq {
+                if_exists: false,
+                name_ident: name_ident_1.clone(),
+            };
+
+            let res = mt.drop_index(req).await;
+            assert!(res.is_err())
+        }
+
+        {
+            info!("--- drop index with if exists = true");
+            let req = DropIndexReq {
+                if_exists: true,
+                name_ident: name_ident_1.clone(),
+            };
+
+            let res = mt.drop_index(req).await;
+            assert!(res.is_ok())
         }
 
         Ok(())
@@ -4147,7 +4331,7 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn upsert_table_copied_file_info<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+    async fn update_table_with_copied_files<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
         let db_name = "db1";
         let tbl_name = "tb2";
@@ -4170,6 +4354,8 @@ impl SchemaApiTestSuite {
             ..TableMeta::default()
         };
 
+        let created_on = Utc::now();
+
         info!("--- prepare db and table");
         {
             let plan = CreateDatabaseReq {
@@ -4185,7 +4371,6 @@ impl SchemaApiTestSuite {
             };
 
             let _ = mt.create_database(plan).await?;
-            let created_on = Utc::now();
 
             let req = CreateTableReq {
                 if_not_exists: false,
@@ -4211,13 +4396,19 @@ impl SchemaApiTestSuite {
             file_info.insert("file".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
             };
 
-            let _ = mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            let _ = mt.update_table_meta(req).await?;
 
             let req = GetTableCopiedFileReq {
                 table_id,
@@ -4250,13 +4441,19 @@ impl SchemaApiTestSuite {
             file_info.insert("file_not_exist".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: true,
             };
 
-            let result = mt.upsert_table_copied_file_info(req).await;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            let result = mt.update_table_meta(req).await;
             let err = result.unwrap_err();
             let err = ErrorCode::from(err);
             assert_eq!(ErrorCode::DuplicatedUpsertFiles("").code(), err.code());
@@ -4286,13 +4483,20 @@ impl SchemaApiTestSuite {
             file_info.insert("file_not_exist".to_string(), stage_info.clone());
 
             let req = UpsertTableCopiedFileReq {
-                table_id,
                 file_info: file_info.clone(),
                 expire_at: Some((Utc::now().timestamp() + 86400) as u64),
                 fail_if_duplicated: false,
             };
 
-            mt.upsert_table_copied_file_info(req).await?;
+            let req = UpdateTableMetaReq {
+                table_id,
+                seq: MatchSeq::Any,
+                new_table_meta: table_meta(created_on),
+                copied_files: Some(req),
+            };
+
+            mt.update_table_meta(req).await?;
+
             let req = GetTableCopiedFileReq {
                 table_id,
                 files: vec!["file".to_string(), "file_not_exist".to_string()],
@@ -4305,5 +4509,139 @@ impl SchemaApiTestSuite {
         }
 
         Ok(())
+    }
+}
+
+struct Util<'a, MT>
+// where MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi
+where MT: SchemaApi
+{
+    tenant: String,
+    db_name: String,
+    table_name: String,
+    created_on: DateTime<Utc>,
+    table_id: u64,
+    mt: &'a MT,
+}
+
+impl<'a, MT> Util<'a, MT>
+// where MT: kvapi::AsKVApi<Error = MetaError> + SchemaApi
+where MT: SchemaApi
+{
+    fn new(
+        mt: &'a MT,
+        tenant: impl ToString,
+        db_name: impl ToString,
+        tbl_name: impl ToString,
+    ) -> Self {
+        Self {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: tbl_name.to_string(),
+            created_on: Utc::now(),
+            table_id: 0,
+            mt,
+        }
+    }
+
+    fn tenant(&self) -> String {
+        self.tenant.clone()
+    }
+    fn db_name(&self) -> String {
+        self.db_name.clone()
+    }
+
+    fn tbl_name(&self) -> String {
+        self.table_name.clone()
+    }
+
+    fn schema(&self) -> Arc<TableSchema> {
+        Arc::new(TableSchema::new(vec![TableField::new(
+            "number",
+            TableDataType::Number(NumberDataType::UInt64),
+        )]))
+    }
+
+    fn options(&self) -> BTreeMap<String, String> {
+        maplit::btreemap! {"opt‐1".into() => "val-1".into()}
+    }
+
+    fn table_meta(&self) -> TableMeta {
+        TableMeta {
+            schema: self.schema(),
+            engine: "JSON".to_string(),
+            options: self.options(),
+            created_on: self.created_on,
+            ..TableMeta::default()
+        }
+    }
+
+    async fn create_db(&self) -> anyhow::Result<()> {
+        let plan = CreateDatabaseReq {
+            if_not_exists: false,
+            name_ident: DatabaseNameIdent {
+                tenant: self.tenant(),
+                db_name: self.db_name(),
+            },
+            meta: DatabaseMeta {
+                engine: "".to_string(),
+                ..DatabaseMeta::default()
+            },
+        };
+
+        self.mt.create_database(plan).await?;
+        Ok(())
+    }
+
+    async fn create_table(&mut self) -> anyhow::Result<(u64, TableMeta)> {
+        let table_meta = self.table_meta();
+        let req = CreateTableReq {
+            if_not_exists: false,
+            name_ident: TableNameIdent {
+                tenant: self.tenant(),
+                db_name: self.db_name(),
+                table_name: self.tbl_name(),
+            },
+            table_meta: table_meta.clone(),
+        };
+        let resp = self.mt.create_table(req.clone()).await?;
+        let table_id = resp.table_id;
+
+        self.table_id = table_id;
+
+        Ok((table_id, table_meta))
+    }
+
+    async fn update_copied_files(
+        &self,
+        n: usize,
+    ) -> anyhow::Result<BTreeMap<String, TableCopiedFileInfo>> {
+        let mut file_infos = BTreeMap::new();
+
+        for i in 0..n {
+            let stage_info = TableCopiedFileInfo {
+                etag: Some(format!("etag{}", i)),
+                content_length: 1024,
+                last_modified: Some(Utc::now()),
+            };
+            file_infos.insert(format!("file{}", i), stage_info);
+        }
+
+        let req = UpsertTableCopiedFileReq {
+            file_info: file_infos.clone(),
+            expire_at: Some((Utc::now().timestamp() + 86400) as u64),
+            fail_if_duplicated: true,
+        };
+
+        let req = UpdateTableMetaReq {
+            table_id: self.table_id,
+            seq: MatchSeq::Any,
+            new_table_meta: self.table_meta(),
+            copied_files: Some(req),
+        };
+
+        self.mt.update_table_meta(req).await?;
+
+        Ok(file_infos)
     }
 }

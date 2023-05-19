@@ -47,8 +47,13 @@ use common_expression::ConstantFolder;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::IndexId;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
@@ -214,6 +219,44 @@ impl Binder {
                         .set_span(*span));
                     }
                 };
+
+                if table_meta.support_index() {
+                    let license_manager = get_license_manager();
+                    match license_manager.manager.check_enterprise_enabled(
+                        &self.ctx.get_settings(),
+                        self.ctx.get_tenant(),
+                        "aggregating_index".to_string(),
+                    ) {
+                        Err(_) => {}
+                        Ok(_) => {
+                            let indexes = self
+                                .resolve_table_indexes(
+                                    tenant.as_str(),
+                                    catalog.as_str(),
+                                    table_meta.get_id(),
+                                )
+                                .await?
+                                .unwrap_or(vec![]);
+
+                            let mut s_exprs = Vec::with_capacity(indexes.len());
+                            for (index_id, index_meta) in indexes {
+                                let tokens = tokenize_sql(&index_meta.query)?;
+                                let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                                let mut new_bind_context =
+                                    BindContext::with_parent(Box::new(bind_context.clone()));
+                                if let Statement::Query(query) = &stmt {
+                                    let (s_expr, _) =
+                                        self.bind_query(&mut new_bind_context, query).await?;
+                                    s_exprs.push((index_id.index_id, s_expr));
+                                }
+                            }
+
+                            self.metadata
+                                .write()
+                                .add_agg_indexes(table_meta.get_id(), s_exprs);
+                        }
+                    }
+                }
 
                 match table_meta.engine() {
                     "VIEW" => {
@@ -711,15 +754,11 @@ impl Binder {
                             }
                         })
                         .collect(),
-                    push_down_predicates: None,
-                    limit: None,
-                    order_by: None,
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,
                     },
-                    prewhere: None,
-                    similarity: None,
+                    ..Default::default()
                 }
                 .into(),
             ),
@@ -764,7 +803,7 @@ impl Binder {
                     false,
                 );
                 let box (scalar, _) = type_checker.resolve(expr).await?;
-                let scalar_expr = scalar.as_expr_with_col_name()?;
+                let scalar_expr = scalar.as_expr()?;
 
                 let (new_expr, _) = ConstantFolder::fold(
                     &scalar_expr,
@@ -788,6 +827,21 @@ impl Binder {
                 }
             }
         }
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn resolve_table_indexes(
+        &self,
+        tenant: &str,
+        catalog_name: &str,
+        table_id: MetaId,
+    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let index_metas = catalog
+            .get_indexes_by_table_id(ListIndexByTableIdReq::new(tenant, table_id))
+            .await?;
+
+        Ok(index_metas)
     }
 }
 

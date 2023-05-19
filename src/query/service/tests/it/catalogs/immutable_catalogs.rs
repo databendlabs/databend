@@ -26,7 +26,7 @@ use crate::tests::create_catalog;
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_immutable_catalogs_database() -> Result<()> {
     let tenant = "test";
-    let conf = crate::tests::ConfigBuilder::create().config();
+    let conf = databend_query::test_kits::ConfigBuilder::create().config();
     let catalog = ImmutableCatalog::try_create_with_config(&conf).await?;
 
     // get system database
