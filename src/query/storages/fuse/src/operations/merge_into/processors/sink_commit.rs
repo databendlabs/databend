@@ -212,7 +212,7 @@ impl Processor for CommitSink {
         match std::mem::replace(&mut self.state, State::None) {
             State::TryLock(new_snapshot) => {
                 let table_info = self.table.get_table_info();
-                let handler = TableLockHandlerWrapper::instance(true);
+                let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
                 match handler.try_lock(self.ctx.clone(), table_info.clone()).await {
                     Ok(heartbeat) => {
                         self.heartbeat = heartbeat;

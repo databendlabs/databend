@@ -17,7 +17,6 @@ use std::time::Instant;
 
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_license::license_manager::get_license_manager;
 use metrics::gauge;
 use opendal::Operator;
 use storages_common_table_meta::meta::Location;
@@ -137,15 +136,7 @@ impl TableMutator for SegmentCompactMutator {
         // summary of snapshot is unchanged for compact segments.
         let statistics = self.compact_params.base_snapshot.summary.clone();
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-        let enterprise_enabled = get_license_manager()
-            .manager
-            .check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                self.ctx.get_tenant(),
-                "table_lock".to_string(),
-            )
-            .is_ok();
-        let handler = TableLockHandlerWrapper::instance(enterprise_enabled);
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
         let mut heartbeat = handler
             .try_lock(self.ctx.clone(), fuse_table.table_info.clone())
             .await?;

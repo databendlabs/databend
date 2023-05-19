@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
 use common_exception::Result;
-use common_license::license_manager::get_license_manager;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use table_lock::TableLockHandlerWrapper;
 
@@ -57,15 +56,7 @@ impl Interpreter for UpdateInterpreter {
         let table_info = tbl.get_table_info().clone();
 
         // Add table lock heartbeat.
-        let enterprise_enabled = get_license_manager()
-            .manager
-            .check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                self.ctx.get_tenant(),
-                "table_lock".to_string(),
-            )
-            .is_ok();
-        let handler = TableLockHandlerWrapper::instance(enterprise_enabled);
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
         let mut heartbeat = handler
             .try_lock(self.ctx.clone(), table_info.clone())
             .await?;

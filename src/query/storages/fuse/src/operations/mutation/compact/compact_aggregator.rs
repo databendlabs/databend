@@ -23,7 +23,6 @@ use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::TableSchemaRefExt;
-use common_license::license_manager::get_license_manager;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransform;
 use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
@@ -167,19 +166,11 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         let merged_segments = std::mem::take(&mut self.merged_segments)
             .into_values()
             .collect();
-        let enterprise_enabled = get_license_manager()
-            .manager
-            .check_enterprise_enabled(
-                &self.ctx.get_settings(),
-                self.ctx.get_tenant(),
-                "table_lock".to_string(),
-            )
-            .is_ok();
         let meta = CommitMeta::new(
             merged_segments,
             std::mem::take(&mut self.merged_statistics),
             std::mem::take(&mut self.abort_operation),
-            enterprise_enabled,
+            true,
         );
         Ok(Some(DataBlock::empty_with_meta(Box::new(meta))))
     }
