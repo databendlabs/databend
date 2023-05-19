@@ -27,15 +27,15 @@ explain select * from v where a > b
 ----
 EvalScalar
 ├── expressions: [v.a (#0), v.b (#1)]
-├── estimated rows: 1.33
+├── estimated rows: 0.40
 └── UnionAll
-    ├── estimated rows: 1.33
+    ├── estimated rows: 0.40
     ├── EvalScalar
     │   ├── expressions: [t1.a (#0), t1.b (#1)]
-    │   ├── estimated rows: 0.67
+    │   ├── estimated rows: 0.20
     │   └── Filter
     │       ├── filters: [t1.a (#0) > t1.b (#1)]
-    │       ├── estimated rows: 0.67
+    │       ├── estimated rows: 0.20
     │       └── TableScan
     │           ├── table: default.default.t1
     │           ├── read rows: 0
@@ -47,10 +47,10 @@ EvalScalar
     │           └── estimated rows: 2.00
     └── EvalScalar
         ├── expressions: [t2.a (#2), t2.b (#3)]
-        ├── estimated rows: 0.67
+        ├── estimated rows: 0.20
         └── Filter
             ├── filters: [t2.a (#2) > t2.b (#3)]
-            ├── estimated rows: 0.67
+            ├── estimated rows: 0.20
             └── TableScan
                 ├── table: default.default.t2
                 ├── read rows: 0
@@ -66,15 +66,15 @@ explain select * from v where a > 1
 ----
 EvalScalar
 ├── expressions: [v.a (#0), v.b (#1)]
-├── estimated rows: 1.33
+├── estimated rows: 0.40
 └── UnionAll
-    ├── estimated rows: 1.33
+    ├── estimated rows: 0.40
     ├── EvalScalar
     │   ├── expressions: [t1.a (#0), t1.b (#1)]
-    │   ├── estimated rows: 0.67
+    │   ├── estimated rows: 0.20
     │   └── Filter
     │       ├── filters: [t1.a (#0) > 1]
-    │       ├── estimated rows: 0.67
+    │       ├── estimated rows: 0.20
     │       └── TableScan
     │           ├── table: default.default.t1
     │           ├── read rows: 2
@@ -86,10 +86,10 @@ EvalScalar
     │           └── estimated rows: 2.00
     └── EvalScalar
         ├── expressions: [t2.a (#2), t2.b (#3)]
-        ├── estimated rows: 0.67
+        ├── estimated rows: 0.20
         └── Filter
             ├── filters: [t2.a (#2) > 1]
-            ├── estimated rows: 0.67
+            ├── estimated rows: 0.20
             └── TableScan
                 ├── table: default.default.t2
                 ├── read rows: 2

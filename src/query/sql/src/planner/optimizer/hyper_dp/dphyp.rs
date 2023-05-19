@@ -54,10 +54,11 @@ pub struct DPhpy {
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
     filters: HashSet<Filter>,
+    is_in_subquery: bool,
 }
 
 impl DPhpy {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef, is_in_subquery: bool) -> Self {
         Self {
             ctx,
             metadata,
@@ -68,6 +69,7 @@ impl DPhpy {
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
             filters: HashSet::new(),
+            is_in_subquery,
         }
     }
 
@@ -86,8 +88,12 @@ impl DPhpy {
         }
 
         if is_subquery {
+            if self.is_in_subquery {
+                // There is a subquery in a subquery, do not support this for now.
+                return Ok(false);
+            }
             // If it's a subquery, start a new dphyp
-            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
+            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone(), true);
             let (res, optimized) = dphyp.optimize(s_expr.clone())?;
             if optimized {
                 let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
@@ -148,14 +154,14 @@ impl DPhpy {
                     let metadata = self.metadata.clone();
                     let left_expr = s_expr.children()[0].clone();
                     let left_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(ctx, metadata);
+                        let mut dphyp = DPhpy::new(ctx, metadata, true);
                         (dphyp.optimize(left_expr), dphyp.table_index_map)
                     });
                     let ctx = self.ctx.clone();
                     let metadata = self.metadata.clone();
                     let right_expr = s_expr.children()[1].clone();
                     let right_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(ctx, metadata);
+                        let mut dphyp = DPhpy::new(ctx, metadata, true);
                         (dphyp.optimize(right_expr), dphyp.table_index_map)
                     });
                     let left_res = left_res.join()?;
