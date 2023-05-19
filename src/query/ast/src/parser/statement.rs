@@ -297,7 +297,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             paras,
             _,
         )| {
-            Statement::CreateIndex(CreateIndexStmt {
+            Statement::CreateIndex(CreateVectorIndexStmt {
                 catalog,
                 database,
                 table,

@@ -19,7 +19,7 @@ use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::PrincipalIdentity;
 use common_meta_app::principal::UserIdentity;
 
-use super::index::CreateIndexStmt;
+use super::vector_index::CreateVectorIndexStmt;
 use super::*;
 use crate::ast::write_comma_separated_list;
 use crate::ast::Expr;
@@ -119,7 +119,7 @@ pub enum Statement {
     // Columns
     ShowColumns(ShowColumnsStmt),
     // Indexes
-    CreateIndex(CreateIndexStmt),
+    CreateIndex(CreateVectorIndexStmt),
 
     // Views
     CreateView(CreateViewStmt),

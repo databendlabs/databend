@@ -7,7 +7,7 @@ use crate::ast::Identifier;
 use crate::parser::token::TokenKind;
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct CreateIndexStmt {
+pub struct CreateVectorIndexStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
     pub table: Identifier,
@@ -18,11 +18,11 @@ pub struct CreateIndexStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum IndexType {
+pub enum VectorIndexType {
     IVFFLAT,
 }
 
-impl Display for CreateIndexStmt {
+impl Display for CreateVectorIndexStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let index_type = match self.index_type {
             TokenKind::IVFFLAT => "IVFFLAT",

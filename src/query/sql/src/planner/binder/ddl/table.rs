@@ -22,9 +22,9 @@ use common_ast::ast::AnalyzeTableStmt;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnDefinition;
 use common_ast::ast::CompactTarget;
-use common_ast::ast::CreateIndexStmt;
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
+use common_ast::ast::CreateVectorIndexStmt;
 use common_ast::ast::DescribeTableStmt;
 use common_ast::ast::DropTableStmt;
 use common_ast::ast::Engine;
@@ -861,7 +861,7 @@ impl Binder {
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_create_index(
         &mut self,
-        stmt: &CreateIndexStmt,
+        stmt: &CreateVectorIndexStmt,
     ) -> Result<Plan> {
         let mut nlists = None;
         let paras = &stmt.paras;
