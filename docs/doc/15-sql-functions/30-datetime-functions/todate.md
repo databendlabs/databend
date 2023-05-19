@@ -19,6 +19,7 @@ TO_DATE(<expr>)
 -- Convert a string to a date using the given pattern
 TO_DATE(<expr, expr>)
 ```
+*TO_DATE(<expr, expr>) was introduced in v1.1.39.*
 
 ## Return Type
 

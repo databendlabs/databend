@@ -5,6 +5,8 @@ import EEFeature from '@site/src/components/EEFeature';
 
 <EEFeature featureName='VACUUM TABLE'/>
 
+*This feature was introduced in v1.1.39.*
+
 The VACUUM TABLE command helps to optimize the system performance by freeing up storage space through the permanent removal of historical data files from a table. This includes:
 
 - Snapshots associated with the table, as well as their relevant segments and blocks.

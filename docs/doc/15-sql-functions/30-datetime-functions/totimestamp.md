@@ -26,6 +26,7 @@ TO_TIMESTAMP(<expr>)
 -- Convert a string to a timestamp using the given pattern
 TO_TIMESTAMP(<expr, expr>)
 ```
+*TO_TIMESTAMP(<expr, expr>) was introduced in v1.1.39.*
 
 ## Return Type
 
