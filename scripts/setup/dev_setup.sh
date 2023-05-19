@@ -300,6 +300,18 @@ function install_blas {
 	apt-get)
 		install_pkg libopenblas-dev "$PACKAGE_MANAGER"
 		;;
+	pacman)
+		install_pkg openblas "$PACKAGE_MANAGER"
+		;;
+	apk)
+		install_pkg openblas "$PACKAGE_MANAGER"
+		;;	
+	yum)
+		install_pkg openblas "$PACKAGE_MANAGER"
+		;;
+	dnf)
+		install_pkg openblas "$PACKAGE_MANAGER"
+		;;			
 	brew)
 		install_pkg openblas "$PACKAGE_MANAGER"
 		;;
