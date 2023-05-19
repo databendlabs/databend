@@ -424,8 +424,8 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::Join(join) => {
-                let mut probe_side = self.build(s_expr.child(0)?).await?;
-                let mut build_side = self.build(s_expr.child(1)?).await?;
+                let mut probe_side = Box::new(self.build(s_expr.child(0)?).await?);
+                let mut build_side = Box::new(self.build(s_expr.child(1)?).await?);
 
                 // Unify the data types of the left and right exchange keys.
                 if let (
@@ -435,7 +435,7 @@ impl PhysicalPlanBuilder {
                     PhysicalPlan::Exchange(PhysicalExchange {
                         keys: build_keys, ..
                     }),
-                ) = (&mut probe_side, &mut build_side)
+                ) = (probe_side.as_mut(), build_side.as_mut())
                 {
                     for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
                         let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
@@ -576,8 +576,8 @@ impl PhysicalPlanBuilder {
 
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     plan_id: self.next_plan_id(),
-                    build: Box::new(build_side),
-                    probe: Box::new(probe_side),
+                    build: build_side,
+                    probe: probe_side,
                     join_type: join.join_type.clone(),
                     build_keys: right_join_conditions,
                     probe_keys: left_join_conditions,
