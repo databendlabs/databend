@@ -291,6 +291,26 @@ function install_jdk {
 	esac
 }
 
+function install_blas {
+	PACKAGE_MANAGER=$1
+
+	echo "==> installing openblas..."
+
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+		install_pkg libopenblas-dev "$PACKAGE_MANAGER"
+		;;
+	brew)
+		install_pkg openblas "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install blas with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
+}
+
+
 function install_pkg_config {
 	PACKAGE_MANAGER=$1
 
@@ -571,6 +591,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_protobuf "$PACKAGE_MANAGER"
 	install_thrift "$PACKAGE_MANAGER"
 	install_jdk "$PACKAGE_MANAGER"
+	install_blas "$PACKAGE_MANAGER"
 
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"
