@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use nom::combinator::map;
 
 use crate::ast::DataMaskArg;
@@ -42,14 +40,14 @@ fn data_mask_arg_list(i: Input) -> IResult<Vec<DataMaskArg>> {
     map(rule! { #data_mask_more_arg* }, |args| args)(i)
 }
 
-fn data_mask_args(i: Input) -> IResult<HashMap<String, TypeName>> {
+fn data_mask_args(i: Input) -> IResult<Vec<DataMaskArg>> {
     map(
-        rule! { AS ~ "(" ~ #data_mask_arg ~ #data_mask_arg_list ")" },
-        |(_, _, arg_0, more_args)| {
-            let mut args = HashMap::new();
-            args.insert(arg_0.arg_name, arg_0.arg_type);
+        rule! { AS ~ "(" ~ #data_mask_arg ~ #data_mask_arg_list ~ ")" },
+        |(_, _, arg_0, more_args, _)| {
+            let mut args = vec![];
+            args.push(arg_0);
             for arg in more_args {
-                args.insert(arg.arg_name, arg.arg_type);
+                args.push(arg);
             }
             args
         },
@@ -61,7 +59,7 @@ fn data_mask_body(i: Input) -> IResult<Expr> {
 }
 
 fn data_mask_return_type(i: Input) -> IResult<TypeName> {
-    map(rule! { #type_name }, |type_name| type_name)(i)
+    map(rule! { RETURN ~ #type_name }, |(_, type_name)| type_name)(i)
 }
 
 pub fn data_mask_policy(i: Input) -> IResult<DataMaskPolicy> {

@@ -21,21 +21,35 @@ use crate::plans::Plan;
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_create_or_replace_data_mask_policy(
+    pub(in crate::planner::binder) async fn bind_create_data_mask_policy(
         &mut self,
         stmt: &CreateDatamaskPolicyStmt,
     ) -> Result<Plan> {
         let CreateDatamaskPolicyStmt {
-            create,
+            if_not_exists,
             name,
             policy,
         } = stmt;
 
         let plan = CreateDatamaskPolicyPlan {
-            create: *create,
+            if_not_exists: *if_not_exists,
             name: name.to_string(),
             policy: policy.clone(),
         };
         Ok(Plan::CreateDatamaskPolicy(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_drop_data_mask_policy(
+        &mut self,
+        stmt: &DropDatamaskPolicyStmt,
+    ) -> Result<Plan> {
+        let DropDatamaskPolicyStmt { if_exists, name } = stmt;
+
+        let plan = DropDatamaskPolicyPlan {
+            if_exists: *if_exists,
+            name: name.to_string(),
+        };
+        Ok(Plan::DropDatamaskPolicy(Box::new(plan)))
     }
 }

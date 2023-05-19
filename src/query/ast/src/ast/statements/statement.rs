@@ -214,6 +214,7 @@ pub enum Statement {
 
     // data mask
     CreateDatamaskPolicy(CreateDatamaskPolicyStmt),
+    DropDatamaskPolicy(DropDatamaskPolicyStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -514,6 +515,7 @@ impl Display for Statement {
             Statement::ShowObjectGrantPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::ShowGrantsOfShare(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

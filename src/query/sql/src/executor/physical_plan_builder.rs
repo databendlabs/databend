@@ -565,6 +565,7 @@ impl PhysicalPlanBuilder {
                         Ok((expr.as_remote_expr(), item.index))
                     })
                     .collect::<Result<Vec<_>>>()?;
+                println!("RelOperator::EvalScalar: {:?}", eval_scalar);
                 Ok(PhysicalPlan::EvalScalar(EvalScalar {
                     plan_id: self.next_plan_id(),
                     input: Box::new(input),

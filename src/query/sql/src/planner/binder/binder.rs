@@ -475,7 +475,7 @@ impl<'a> Binder {
                 self.bind_show_grants_of_share(stmt).await?
             }
             Statement::CreateDatamaskPolicy(stmt) => {
-                self.bind_create_or_replace_data_mask_policy(stmt).await?
+                self.bind_create_data_mask_policy(stmt).await?
             }
         };
         Ok(plan)

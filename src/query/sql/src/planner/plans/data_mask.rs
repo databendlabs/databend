@@ -18,15 +18,26 @@ use common_ast::ast::DataMaskPolicy;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 
-// Create Or replace data mask policy.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDatamaskPolicyPlan {
-    pub create: bool,
+    pub if_not_exists: bool,
     pub name: String,
     pub policy: DataMaskPolicy,
 }
 
 impl CreateDatamaskPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DropDatamaskPolicyPlan {
+    pub if_exists: bool,
+    pub name: String,
+}
+
+impl DropDatamaskPolicyPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

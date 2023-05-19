@@ -15,6 +15,7 @@
 //! Schema types
 
 mod catalog;
+mod data_mask;
 mod database;
 mod table;
 
@@ -25,6 +26,13 @@ pub use catalog::CatalogType;
 pub use catalog::CreateCatalogReq;
 pub use catalog::DropCatalogReq;
 pub use catalog::IcebergCatalogOption;
+pub use data_mask::CreateDatamaskReply;
+pub use data_mask::CreateDatamaskReq;
+pub use data_mask::DatamaskPolicy;
+pub use data_mask::DropDatamaskReply;
+pub use data_mask::DropDatamaskReq;
+pub use data_mask::GetDatamaskReply;
+pub use data_mask::GetDatamaskReq;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;

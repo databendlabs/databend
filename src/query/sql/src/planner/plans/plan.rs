@@ -230,6 +230,7 @@ pub enum Plan {
 
     // Data mask
     CreateDatamaskPolicy(Box<CreateDatamaskPolicyPlan>),
+    DropDatamaskPolicy(Box<DropDatamaskPolicyPlan>),
 }
 
 #[derive(Clone, Debug)]

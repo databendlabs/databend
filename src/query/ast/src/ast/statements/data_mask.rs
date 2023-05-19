@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 // Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -18,6 +17,7 @@ use std::fmt::Formatter;
 use crate::ast::Expr;
 use crate::ast::TypeName;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct DataMaskArg {
     pub arg_name: String,
     pub arg_type: TypeName,
@@ -25,21 +25,56 @@ pub struct DataMaskArg {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct DataMaskPolicy {
-    pub args: HashMap<String, TypeName>,
+    pub args: Vec<DataMaskArg>,
     pub return_type: TypeName,
     pub body: Expr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct CreateDatamaskPolicyStmt {
-    pub create: bool,
+    pub if_not_exists: bool,
     pub name: String,
     pub policy: DataMaskPolicy,
 }
 
 impl Display for CreateDatamaskPolicyStmt {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        // write!(f, "DROP SHARE ENDPOINT {}", self.endpoint)?;
+        write!(f, "CREATE MASKING POLICY ")?;
+        if self.if_not_exists {
+            write!(f, "IF NOT EXISTS ")?;
+        }
+        write!(f, "{} AS (", self.name)?;
+        let mut flag = false;
+        for arg in &self.policy.args {
+            if flag {
+                write!(f, ",")?;
+            }
+            flag = true;
+            write!(f, "{} {}", arg.arg_name, arg.arg_type)?;
+        }
+        write!(
+            f,
+            ") RETURN {} -> {}",
+            self.policy.return_type, self.policy.body
+        )?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropDatamaskPolicyStmt {
+    pub if_exists: bool,
+    pub name: String,
+}
+
+impl Display for DropDatamaskPolicyStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "DROP MASKING POLICY ")?;
+        if self.if_exists {
+            write!(f, "IF EXISTS ")?;
+        }
+        write!(f, "{}", self.name)?;
 
         Ok(())
     }

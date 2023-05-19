@@ -15,28 +15,28 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_sql::plans::CreateDatamaskPolicyPlan;
+use common_sql::plans::DropDatamaskPolicyPlan;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct CreateDataMaskInterpreter {
+pub struct DropDataMaskInterpreter {
     ctx: Arc<QueryContext>,
     plan: CreateDatamaskPolicyPlan,
 }
 
-impl CreateDataMaskInterpreter {
+impl DropDataMaskInterpreter {
     pub fn try_create(ctx: Arc<QueryContext>, plan: CreateDatamaskPolicyPlan) -> Result<Self> {
-        Ok(CreateDataMaskInterpreter { ctx, plan })
+        Ok(DropDataMaskInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for CreateDataMaskInterpreter {
+impl Interpreter for DropDataMaskInterpreter {
     fn name(&self) -> &str {
-        "CreateDataMaskInterpreter"
+        "DropDataMaskInterpreter"
     }
 
     #[async_backtrace::framed]

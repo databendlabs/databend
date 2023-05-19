@@ -17,6 +17,8 @@
 extern crate common_meta_types;
 
 pub mod compat_errors;
+mod data_mask_api;
+mod data_mask_api_impl;
 mod id;
 mod id_generator;
 pub mod kv_app_error;

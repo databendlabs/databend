@@ -1145,17 +1145,29 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
 
     // data mark policy
-    let data_mask_policy = map(
+    let create_data_mask_policy = map(
         rule! {
-            CREATE ~ MASKING ~ POLICY ~ #ident ~ #data_mask_policy
+            CREATE ~ MASKING ~ POLICY ~ ( IF ~ NOT ~ EXISTS )? ~ #ident ~ #data_mask_policy
         },
-        |(_, _, _, name, policy)| {
+        |(_, _, _, opt_if_not_exists, name, policy)| {
             let stmt = CreateDatamaskPolicyStmt {
-                create: true,
+                if_not_exists: opt_if_not_exists.is_some(),
                 name: name.to_string(),
                 policy,
             };
             Statement::CreateDatamaskPolicy(stmt)
+        },
+    );
+    let drop_data_mask_policy = map(
+        rule! {
+            DROP ~ MASKING ~ POLICY ~ ( IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, name)| {
+            let stmt = DropDatamaskPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropDatamaskPolicy(stmt)
         },
     );
 
@@ -1262,11 +1274,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
         ),
-        // share
-        rule!(
-            #data_mask_policy: "`[CREATE|REPLACE] MASKING POLICY mask_name as (val1 val_type1 [, val type]) -> return type case`"
-        ),
         // data mask
+        rule!(
+            #create_data_mask_policy: "`CREATE MASKING POLICY [IF NOT EXISTS] mask_name as (val1 val_type1 [, val type]) return type -> case`"
+            | #drop_data_mask_policy: "`DROP MASKING POLICY [IF EXISTS] mask_name`"
+        ),
+        // share
         rule!(
             #create_share_endpoint: "`CREATE SHARE ENDPOINT [IF NOT EXISTS] <endpoint_name> URL=endpoint_location tenant=tenant_name ARGS=(arg=..) [ COMMENT = '<string_literal>' ]`"
             | #show_share_endpoints: "`SHOW SHARE ENDPOINT`"
