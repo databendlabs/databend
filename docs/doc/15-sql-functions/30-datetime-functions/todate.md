@@ -5,7 +5,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="introduced in v1.1.39"/>
 
-|func        | TO_DATE(<expr,expr)         |
+|func        | TO_DATE(<expr,expr>)         |
 |------------|-----------------------------|
 | introduced | v1.1.39                     |
 | expr       | expr is string              |
