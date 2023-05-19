@@ -153,6 +153,15 @@ mod t {
             assert_eq!(g1, g2);
         }
 
+        {
+            let g1 = IdGenerator::mutation_lock_id();
+            let k = g1.to_string_key();
+            assert_eq!("__fd_id_gen/mutation_lock_id", k);
+
+            let g2 = IdGenerator::from_str_key(&k)?;
+            assert_eq!(g1, g2);
+        }
+
         Ok(())
     }
 
