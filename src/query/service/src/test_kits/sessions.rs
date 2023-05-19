@@ -14,6 +14,8 @@
 
 use common_config::InnerConfig;
 use common_exception::Result;
+use common_license::license_manager::LicenseManager;
+use common_license::license_manager::OssLicenseManager;
 use common_tracing::set_panic_hook;
 use tracing::info;
 
@@ -40,6 +42,7 @@ impl TestGlobalServices {
         common_base::base::GlobalInstance::init_testing(&thread_name);
 
         GlobalServices::init_with(config.clone()).await?;
+        OssLicenseManager::init()?;
 
         // Cluster register.
         {

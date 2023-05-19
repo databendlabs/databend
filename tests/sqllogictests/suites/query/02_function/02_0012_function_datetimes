@@ -894,12 +894,17 @@ statement ok
 drop table t
 
 query T
-select date_format('2022-02-02', '精彩的%Y年，美丽的%mmonth,激动の%dd');
+select to_string('2022-02-02', '精彩的%Y年，美丽的%mmonth,激动の%dd');
 ----
 精彩的2022年，美丽的02month,激动の02d
 
 query T
 select str_to_date('精彩的2022年，美丽的02month,激动の02d', '精彩的%Y年，美丽的%mmonth,激动の%dd');
+----
+2022-02-02
+
+query T
+select to_date('精彩的2022年，美丽的02month,激动の02d', '精彩的%Y年，美丽的%mmonth,激动の%dd');
 ----
 2022-02-02
 
@@ -925,6 +930,6 @@ select str_to_timestamp('2022年02月04日，8时58分59秒,时区：+0000', '%Y
 2022-02-04 08:58:59.000000
 
 query T
-select str_to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
+select to_timestamp('2022年02月04日，8时58分59秒,时区：+0800', '%Y年%m月%d日，%H时%M分%S秒,时区：%z');
 ----
 2022-02-04 00:58:59.000000

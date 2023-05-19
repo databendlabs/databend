@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::table::ColumnStatistics;
@@ -21,6 +22,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
 
+use super::ScalarItem;
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
@@ -52,7 +54,14 @@ pub struct Prewhere {
     pub predicates: Vec<ScalarExpr>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AggIndexInfo {
+    pub index_id: u64,
+    pub selection: Vec<ScalarItem>,
+    pub predicates: Vec<ScalarExpr>,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Statistics {
     // statistics will be ignored in comparison and hashing
     pub statistics: Option<TableStatistics>,
@@ -60,7 +69,7 @@ pub struct Statistics {
     pub col_stats: HashMap<IndexType, Option<ColumnStatistics>>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Scan {
     pub table_index: IndexType,
     pub columns: ColumnSet,
@@ -68,6 +77,7 @@ pub struct Scan {
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
+    pub agg_index: Option<AggIndexInfo>,
 
     pub statistics: Statistics,
 }
@@ -93,6 +103,7 @@ impl Scan {
                 col_stats,
             },
             prewhere,
+            agg_index: self.agg_index.clone(),
         }
     }
 
@@ -202,16 +213,20 @@ impl Operator for Scan {
             (Some(precise_cardinality), Some(ref prewhere)) => {
                 let mut statistics = OpStatistics {
                     precise_cardinality: Some(precise_cardinality),
-                    column_stats: column_stats.clone(),
+                    column_stats,
                 };
 
                 // Derive cardinality
-                let mut sb = SelectivityEstimator::new(&mut statistics);
+                let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction
                     selectivity *= sb.compute_selectivity(pred, true)?;
                 }
+                // Update other columns's statistic according to selectivity.
+                sb.update_other_statistic_by_selectivity(selectivity);
+
+                column_stats = sb.input_stat.column_stats.clone();
                 (precise_cardinality as f64) * selectivity
             }
             (Some(precise_cardinality), None) => precise_cardinality as f64,

@@ -88,12 +88,19 @@ pub(crate) mod compat_with_07 {
         }
     }
 
+    impl SledSerde for LogMetaValueCompat {
+        fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+        where Self: Sized {
+            let s = serde_json::from_slice(v.as_ref())?;
+            Ok(s)
+        }
+    }
+
     impl SledSerde for LogMetaValue {
         fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
         where Self: Sized {
-            let s: LogMetaValueCompat = serde_json::from_slice(v.as_ref())?;
-            let LogMetaValueCompat::LogId(log_id) = s;
-            Ok(LogMetaValue::LogId(log_id.upgrade()))
+            let s = serde_json::from_slice(v.as_ref())?;
+            Ok(s)
         }
     }
 }

@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_meta_app::schema::CatalogMeta;
 use common_meta_app::schema::CatalogNameIdent;
@@ -55,23 +52,11 @@ impl From<&CreateCatalogPlan> for CreateCatalogReq {
     }
 }
 
-impl CreateCatalogPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropCatalogPlan {
     pub if_exists: bool,
     pub tenant: String,
     pub catalog: String,
-}
-
-impl DropCatalogPlan {
-    pub fn schema(&self) -> DataSchemaRef {
-        Arc::new(DataSchema::empty())
-    }
 }
 
 impl From<DropCatalogPlan> for DropCatalogReq {

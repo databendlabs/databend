@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_exception::ErrorCode;
@@ -45,7 +44,6 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
-use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::BaseTableColumn;
@@ -394,14 +392,7 @@ impl SubqueryRewriter {
                 Scan {
                     table_index,
                     columns: self.derived_columns.values().cloned().collect(),
-                    push_down_predicates: None,
-                    limit: None,
-                    order_by: None,
-                    statistics: Statistics {
-                        statistics: None,
-                        col_stats: HashMap::new(),
-                    },
-                    prewhere: None,
+                    ..Default::default()
                 }
                 .into(),
             );

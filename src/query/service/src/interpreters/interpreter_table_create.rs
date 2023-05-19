@@ -129,7 +129,10 @@ impl CreateTableInterpreter {
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
 
         // TODO: maybe the table creation and insertion should be a transaction, but it may require create_table support 2pc.
-        catalog.create_table(self.build_request(None)?).await?;
+        let reply = catalog.create_table(self.build_request(None)?).await?;
+        if !reply.new_table {
+            return Ok(PipelineBuildResult::create());
+        }
         let table = catalog
             .get_table(tenant.as_str(), &self.plan.database, &self.plan.table)
             .await?;
@@ -210,7 +213,7 @@ impl CreateTableInterpreter {
                 )));
             }
 
-            fields.push(field)
+            fields.push(field);
         }
         let schema = TableSchemaRefExt::create(fields);
 

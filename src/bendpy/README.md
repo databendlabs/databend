@@ -10,6 +10,8 @@ pip install databend
 
 ## Usage
 
+### Basic:
+
 ```python
 from databend import SessionContext
 
@@ -22,7 +24,15 @@ df.to_py_arrow()
 
 # convert to pandas
 df.to_pandas()
+
 ```
+
+### Tenant separation:
+
+```python
+ctx = SessionContext(tenant = "a")
+```
+
 
 ## Development
 
@@ -50,6 +60,18 @@ Build bindings:
 maturin develop
 ```
 
+Run tests:
+
+```shell
+maturin develop -E test
+```
+
+Build API docs:
+
+```shell
+maturin develop -E docs
+pdoc opendal
+```
 
 ## More
 

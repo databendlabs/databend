@@ -39,13 +39,13 @@ use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::Location;
 use tracing::debug;
 use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
 use crate::pruning::FusePruner;
+use crate::pruning::SegmentLocation;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -64,17 +64,22 @@ impl FuseTable {
             .unwrap_or_default();
         match snapshot {
             Some(snapshot) => {
+                let snapshot_loc = self
+                    .meta_location_generator
+                    .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
+
                 let settings = ctx.get_settings();
                 if (settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty())
                     || is_lazy
                 {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
-                    for segment_location in &snapshot.segments {
-                        segments.push(FuseLazyPartInfo::create(segment_location.clone()))
+                    for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+                        segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))
                     }
 
                     return Ok((
                         PartStatistics::new_estimated(
+                            Some(snapshot_loc),
                             snapshot.summary.row_count as usize,
                             snapshot.summary.compressed_byte_size as usize,
                             snapshot.segments.len(),
@@ -84,9 +89,17 @@ impl FuseTable {
                     ));
                 }
 
+                let snapshot_loc = Some(snapshot_loc);
                 let table_info = self.table_info.clone();
-                let segments_location = snapshot.segments.clone();
                 let summary = snapshot.summary.block_count as usize;
+                let mut segments_location = Vec::with_capacity(snapshot.segments.len());
+                for (idx, segment_location) in snapshot.segments.iter().enumerate() {
+                    segments_location.push(SegmentLocation {
+                        segment_idx: idx,
+                        location: segment_location.clone(),
+                        snapshot_loc: snapshot_loc.clone(),
+                    });
+                }
 
                 self.prune_snapshot_blocks(
                     ctx.clone(),
@@ -95,7 +108,6 @@ impl FuseTable {
                     table_info,
                     segments_location,
                     summary,
-                    None,
                 )
                 .await
             }
@@ -112,9 +124,8 @@ impl FuseTable {
         dal: Operator,
         push_downs: Option<PushDownInfo>,
         table_info: TableInfo,
-        segments_location: Vec<Location>,
+        segments_location: Vec<SegmentLocation>,
         summary: usize,
-        segment_id_map: Option<HashMap<Location, usize>>,
     ) -> Result<(PartStatistics, Partitions)> {
         let start = Instant::now();
         info!(
@@ -162,10 +173,8 @@ impl FuseTable {
                 cluster_keys,
             )?
         };
-        let snapshot_loc = self.snapshot_loc().await?;
-        let block_metas = pruner
-            .pruning(segments_location, snapshot_loc, segment_id_map)
-            .await?;
+
+        let block_metas = pruner.pruning(segments_location).await?;
         let pruning_stats = pruner.pruning_stats();
 
         info!(

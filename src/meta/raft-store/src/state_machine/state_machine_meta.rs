@@ -110,18 +110,19 @@ pub(crate) mod compat_with_07 {
         }
     }
 
+    impl SledSerde for StateMachineMetaValueCompat {
+        fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+        where Self: Sized {
+            let s = serde_json::from_slice(v.as_ref())?;
+            Ok(s)
+        }
+    }
+
     impl SledSerde for StateMachineMetaValue {
         fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
         where Self: Sized {
-            let s: StateMachineMetaValueCompat = serde_json::from_slice(v.as_ref())?;
-
-            let v = match s {
-                StateMachineMetaValueCompat::LogId(lid) => Self::LogId(lid.upgrade()),
-                StateMachineMetaValueCompat::Bool(b) => Self::Bool(b),
-                StateMachineMetaValueCompat::Membership(m) => Self::Membership(m.upgrade()),
-            };
-
-            Ok(v)
+            let s: StateMachineMetaValue = serde_json::from_slice(v.as_ref())?;
+            Ok(s)
         }
     }
 }

@@ -117,7 +117,7 @@ error:
   --> SQL:1:6
   |
 1 | drop a
-  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, `ROLE`, or 5 more ...
+  |      ^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `AGGREGATING`, `USER`, or 6 more ...
 
 
 ---------- Input ----------
@@ -171,7 +171,7 @@ error:
   --> SQL:1:6
   |
 1 | drop usar if exists 'test-j'@'localhost';
-  |      ^^^^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `USER`, `ROLE`, or 5 more ...
+  |      ^^^^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `AGGREGATING`, `USER`, or 6 more ...
 
 
 ---------- Input ----------

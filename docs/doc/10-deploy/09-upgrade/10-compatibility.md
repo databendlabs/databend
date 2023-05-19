@@ -1,11 +1,15 @@
 ---
-title: Query-Meta Compatibility
-sidebar_label: Query-Meta Compatibility
+title: Compatibility
+sidebar_label: Compatibility
 description:
-  Investigate and manage the compatibility between databend-query and databend-meta
+  Investigate and manage the compatibility
 ---
 
-This guideline will introduce how to investigate and manage the compatibility between databend-query and databend-meta.
+This guideline will introduce how to investigate and manage the compatibility:
+- between databend-query and databend-meta.
+- between different versions of databend-meta.
+
+# Compatibility between databend-query and databend-meta
 
 ## Find out the versions
 
@@ -55,10 +59,10 @@ Then databend-query will stop working.
 
 Compatibility will be checked when a connection is established between meta-client(databend-query) and databend-meta, in a `handshake` RPC.
 
-The client `C`(databend-query) and the server `S`(databend-meta) maintains two semantic-version:
+The client `C`(databend-query) and the server `S`(databend-meta) maintains two semantic-versions:
 
-- `C` maintains the its own semver(`C.ver`) and the minimal compatible `S` semver(`C.min_srv_ver`).
-- `S` maintains the its own semver(`S.ver`) and the minimal compatible `S` semver(`S.min_cli_ver`).
+- `C` maintains its own semver(`C.ver`) and the minimal compatible `S` semver(`C.min_srv_ver`).
+- `S` maintains its own semver(`S.ver`) and the minimal compatible `S` semver(`S.min_cli_ver`).
 
 When handshaking:
 
@@ -102,3 +106,60 @@ The following is an illustration of current query-meta compatibility:
 <img src="/img/deploy/compatibility.excalidraw.png"/>
 
 
+# Compatibility of Databend-Meta On-Disk Data
+
+The on-disk data of Databend-meta evolves over time while maintaining backward compatibility.
+
+## Identifying the Versions
+
+Upon startup, Databend-meta will display the on-disk data version:
+
+For example, running `databend-meta --single` produces:
+
+```
+Databend Metasrv
+
+Version: v1.1.33-nightly-...
+Working DataVersion: V0
+
+On Disk Data:
+    Dir: ./.databend/meta
+    Version: version=V0, upgrading=None
+```
+
+- `Working DataVersion` denotes the version Databend-meta operates on.
+- `On Disk Data -- DataVersion` denotes the version of the on-disk data.
+
+The Working DataVersion must be greater than or equal to the on-disk DataVersion; otherwise, it will panic.
+
+The on-disk DataVersion must be compatible with the current Databend-meta version.
+If not, the system will prompt the user to downgrade Databend-meta and quit with a panic.
+
+## Automatic upgrade
+
+When `databend-meta` starting up, the on-disk is upgraded if it is compatible with the working DataVersion.
+The upgrade progress will be printed to `stderr` and to log file at INFO level, e.g.:
+
+```text
+Upgrade on-disk data
+    From: V0(2023-04-21: compatible with openraft v07 and v08, using openraft::compat)
+    To:   V001(2023-05-15: Get rid of compat, use only openraft v08 data types)
+Begin upgrading: version: V0, upgrading: V001
+Write header: version: V0, upgrading: V001
+Upgraded 167 records
+Finished upgrading: version: V001, upgrading: None
+Write header: version: V001, upgrading: None
+```
+
+If `databend-meta` crashes before upgrading finishes,
+it will clear partially upgraded data and resume the upgrade when it starts up again.
+
+## Backup data
+
+- The exported backup data **can only be imported** with the same version of `databend-metactl`.
+
+- The first line of the backup is the version, e.g.:
+  `["header",{"DataHeader":{"key":"header","value":{"version":"V100","upgrading":null}}}]`
+  
+- **NO automatic upgrade** will be done when importing.
+  Automatic upgrade will only be done when `databend-meta` is brought up.

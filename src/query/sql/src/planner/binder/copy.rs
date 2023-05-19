@@ -242,11 +242,6 @@ impl<'a> Binder {
                 let (catalog_name, database_name, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
                 let (select_list, location, alias) = check_transform_query(query)?;
-                if matches!(location, FileLocation::Uri(_)) {
-                    return Err(ErrorCode::SyntaxException(
-                        "copy into table from uri with transform not supported yet",
-                    ));
-                }
                 let (mut stage_info, path) =
                     parse_file_location(&self.ctx, location, BTreeMap::new()).await?;
                 self.apply_stage_options(stmt, &mut stage_info).await?;
