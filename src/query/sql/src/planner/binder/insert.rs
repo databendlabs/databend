@@ -18,7 +18,6 @@ use common_ast::ast::Identifier;
 use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
@@ -39,32 +38,14 @@ impl Binder {
         schema: &Arc<TableSchema>,
         columns: &[Identifier],
     ) -> Result<Arc<TableSchema>> {
-        let fields = if columns.is_empty() {
-            schema
-                .fields()
-                .iter()
-                .filter(|f| f.computed_expr().is_none())
-                .cloned()
-                .collect::<Vec<_>>()
-        } else {
-            columns
-                .iter()
-                .map(|ident| {
-                    let field = schema.field_with_name(
-                        &normalize_identifier(ident, &self.name_resolution_ctx).name,
-                    )?;
-                    if field.computed_expr().is_some() {
-                        Err(ErrorCode::BadArguments(format!(
-                            "The value specified for computed column '{}' is not allowed",
-                            field.name()
-                        )))
-                    } else {
-                        Ok(field.clone())
-                    }
-                })
-                .collect::<Result<Vec<_>>>()?
-        };
-
+        let fields = columns
+            .iter()
+            .map(|ident| {
+                schema
+                    .field_with_name(&normalize_identifier(ident, &self.name_resolution_ctx).name)
+                    .map(|v| v.clone())
+            })
+            .collect::<Result<Vec<_>>>()?;
         Ok(TableSchemaRefExt::create(fields))
     }
 
@@ -91,7 +72,11 @@ impl Binder {
             .await?;
         let table_id = table.get_id();
 
-        let schema = self.schema_project(&table.schema(), columns)?;
+        let schema = if columns.is_empty() {
+            table.schema()
+        } else {
+            self.schema_project(&table.schema(), columns)?
+        };
 
         let input_source: Result<InsertInputSource> = match source.clone() {
             InsertSource::Streaming {

@@ -32,16 +32,6 @@ message DataSchema {
   uint32 next_column_id = 3;
 }
 
-message ComputedExpr {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  oneof computed_expr {
-    string virtual  = 1;
-    string stored   = 2;
-  }
-}
-
 // One field, AKA column
 message DataField {
   uint64 ver = 100;
@@ -58,6 +48,4 @@ message DataField {
   DataType data_type = 3;
 
   uint32 column_id = 4;
-
-  optional ComputedExpr computed_expr = 5;
 }

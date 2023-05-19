@@ -97,7 +97,6 @@ mod interpreter_view_drop;
 
 pub use access::ManagementModeAccess;
 pub use common::append2table;
-pub use common::fill_missing_columns;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;

@@ -60,6 +60,18 @@ Build bindings:
 maturin develop
 ```
 
+Run tests:
+
+```shell
+maturin develop -E test
+```
+
+Build API docs:
+
+```shell
+maturin develop -E docs
+pdoc opendal
+```
 
 ## More
 

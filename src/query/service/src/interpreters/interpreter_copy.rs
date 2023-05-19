@@ -43,12 +43,12 @@ use tracing::error;
 use tracing::info;
 
 use crate::interpreters::common::append2table;
-use crate::interpreters::common::fill_missing_columns;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformLimit;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -173,7 +173,7 @@ impl CopyInterpreter {
         query: &Plan,
         stage_info: StageInfo,
         need_copy_file_infos: Vec<StageFileInfo>,
-        schema: &TableSchemaRef,
+        schema: &Option<TableSchemaRef>,
         force: bool,
     ) -> Result<PipelineBuildResult> {
         let start = Instant::now();
@@ -183,7 +183,12 @@ impl CopyInterpreter {
             .get_table(catalog_name, database_name, table_name)
             .await?;
 
-        let required_source_schema: Arc<DataSchema> = Arc::new(schema.into());
+        let dst_schema: DataSchemaRef = Arc::new(to_table.schema().into());
+        let required_source_schema = if let Some(schema) = schema {
+            Arc::new(schema.into())
+        } else {
+            dst_schema.clone()
+        };
 
         if source_schema != required_source_schema {
             let func_ctx = ctx.get_function_context()?;
@@ -193,19 +198,25 @@ impl CopyInterpreter {
                         transform_input_port,
                         transform_output_port,
                         source_schema.clone(),
-                        required_source_schema.clone(),
+                        dst_schema.clone(),
                         func_ctx.clone(),
                     )
                 },
             )?;
         }
-
-        fill_missing_columns(
-            ctx.clone(),
-            &required_source_schema,
-            to_table.clone(),
-            &mut build_res.main_pipeline,
-        )?;
+        if required_source_schema != dst_schema {
+            build_res.main_pipeline.add_transform(
+                |transform_input_port, transform_output_port| {
+                    TransformResortAddOn::try_create(
+                        ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        required_source_schema.clone(),
+                        to_table.clone(),
+                    )
+                },
+            )?;
+        }
 
         // Build append data pipeline.
         to_table.append_data(
@@ -390,13 +401,19 @@ impl CopyInterpreter {
             )?;
         }
 
-        let source_schema: Arc<DataSchema> = Arc::new(stage_table_info.schema.clone().into());
-        fill_missing_columns(
-            ctx.clone(),
-            &source_schema,
-            to_table.clone(),
-            &mut build_res.main_pipeline,
-        )?;
+        if stage_table_info.schema != to_table.schema() {
+            build_res.main_pipeline.add_transform(
+                |transform_input_port, transform_output_port| {
+                    TransformResortAddOn::try_create(
+                        ctx.clone(),
+                        transform_input_port,
+                        transform_output_port,
+                        Arc::new(stage_table_info.schema.clone().into()),
+                        to_table.clone(),
+                    )
+                },
+            )?;
+        }
 
         // Build append data pipeline.
         to_table.append_data(

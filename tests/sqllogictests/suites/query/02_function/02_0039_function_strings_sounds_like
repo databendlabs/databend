@@ -9,7 +9,7 @@ SELECT 'A' SOUNDS LIKE 'A'
 1
 
 query B
-SELECT 'A' SOUNDS LIKE 'A'
+SELECT 'A' SOUNDS LIKE 'a'
 ----
 1
 

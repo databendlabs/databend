@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::Scalar;
@@ -45,11 +46,17 @@ where Self: Transform
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         input_schema: DataSchemaRef,
-        output_schema: DataSchemaRef,
         table: Arc<dyn Table>,
     ) -> Result<ProcessorPtr> {
-        let mut exprs = Vec::with_capacity(output_schema.fields().len());
-        for f in output_schema.fields().iter() {
+        let fields = table
+            .schema()
+            .fields()
+            .iter()
+            .map(DataField::from)
+            .collect::<Vec<_>>();
+
+        let mut exprs = Vec::with_capacity(fields.len());
+        for f in fields.iter() {
             let expr = if !input_schema.has_field(f.name()) {
                 if let Some(default_expr) = f.default_expr() {
                     let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;

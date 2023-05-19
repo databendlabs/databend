@@ -41,7 +41,6 @@ pub struct BlockMetaIndex {
     pub page_size: usize,
     pub block_id: usize,
     pub block_location: String,
-    pub segment_id: usize,
     pub segment_location: String,
     pub snapshot_location: Option<String>,
 }
