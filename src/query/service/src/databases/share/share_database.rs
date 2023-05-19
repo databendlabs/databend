@@ -19,6 +19,7 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropTableByIdReq;
@@ -129,7 +130,7 @@ impl Database for ShareDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn create_table(&self, _req: CreateTableReq) -> Result<()> {
+    async fn create_table(&self, _req: CreateTableReq) -> Result<CreateTableReply> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot create table from a shared database".to_string(),
         ))

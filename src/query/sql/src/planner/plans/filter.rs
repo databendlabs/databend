@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -98,12 +99,14 @@ impl Operator for Filter {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         let (input_cardinality, mut statistics) = (stat_info.cardinality, stat_info.statistics);
         // Derive cardinality
-        let mut sb = SelectivityEstimator::new(&mut statistics);
+        let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
         let mut selectivity = MAX_SELECTIVITY;
         for pred in self.predicates.iter() {
             // Compute selectivity for each conjunction
             selectivity *= sb.compute_selectivity(pred, true)?;
         }
+        // Update other columns's statistic according to selectivity.
+        sb.update_other_statistic_by_selectivity(selectivity);
         let cardinality = input_cardinality * selectivity;
 
         // Derive column statistics

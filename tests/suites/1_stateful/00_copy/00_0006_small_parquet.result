@@ -1,32 +1,24 @@
 --- copy, threshold=0 stage=data_fs
-1	(1,'a')
-2	(3,'b')
-3	(3,'c')
+400
 --- copy from select, threshold=0 stage=data_fs
-1	(1,'a')
-2	(3,'b')
-3	(3,'c')
+400
 --- copy, threshold=0 stage=data_s3
-1	(1,'a')
-2	(3,'b')
-3	(3,'c')
+400
 --- copy from select, threshold=0 stage=data_s3
-1	(1,'a')
-2	(3,'b')
-3	(3,'c')
---- copy, threshold=4096 stage=data_fs
-1	(1,'a')
-2	(3,'b')
-3	(3,'c')
---- copy from select, threshold=4096 stage=data_fs
-1	(1,'a')
-2	(3,'b')
-3	(3,'c')
---- copy, threshold=4096 stage=data_s3
-1	(1,'a')
-2	(3,'b')
-3	(3,'c')
---- copy from select, threshold=4096 stage=data_s3
-1	(1,'a')
-2	(3,'b')
-3	(3,'c')
+400
+--- copy, threshold=3000 stage=data_fs
+400
+--- copy from select, threshold=3000 stage=data_fs
+400
+--- copy, threshold=3000 stage=data_s3
+400
+--- copy from select, threshold=3000 stage=data_s3
+400
+--- copy, threshold=10000 stage=data_fs
+400
+--- copy from select, threshold=10000 stage=data_fs
+400
+--- copy, threshold=10000 stage=data_s3
+400
+--- copy from select, threshold=10000 stage=data_s3
+400

@@ -25,6 +25,7 @@ arrow-schema = "37.0.0"
 common-config = { path = "../query/config" }
 common-exception = { path = "../common/exception" }
 common-expression = { path = "../query/expression" }
+common-license = { path = "../common/license" }
 common-meta-app = { path = "../meta/app" }
 common-meta-embedded = { path = "../meta/embedded" }
 databend-query = { path = "../query/service", features = [

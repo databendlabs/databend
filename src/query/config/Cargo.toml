@@ -29,7 +29,7 @@ common-users = { path = "../users" }
 clap = { workspace = true }
 hex = "0.4.3"
 once_cell = "1.15.0"
-semver = "1.0.14"
+semver = { workspace = true }
 serde = { workspace = true }
 serfig = "0.1.0"
 strum = "0.24.1"

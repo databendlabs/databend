@@ -18,6 +18,7 @@ use crate::plan::PruningStatistics;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, Debug, Default)]
 pub struct PartStatistics {
+    pub snapshot: Option<String>,
     /// Total rows of the query read.
     pub read_rows: usize,
     /// Total bytes of the query read.
@@ -34,12 +35,14 @@ pub struct PartStatistics {
 
 impl PartStatistics {
     pub fn new_estimated(
+        snapshot: Option<String>,
         read_rows: usize,
         read_bytes: usize,
         partitions_scanned: usize,
         partitions_total: usize,
     ) -> Self {
         PartStatistics {
+            snapshot,
             read_rows,
             read_bytes,
             partitions_scanned,
@@ -61,6 +64,7 @@ impl PartStatistics {
             partitions_scanned,
             partitions_total,
             is_exact: true,
+            snapshot: None,
             pruning_stats: Default::default(),
         }
     }

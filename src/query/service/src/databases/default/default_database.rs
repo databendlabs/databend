@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_meta_api::SchemaApi;
+use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DropTableByIdReq;
@@ -130,9 +131,9 @@ impl Database for DefaultDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
-        self.ctx.meta.create_table(req).await?;
-        Ok(())
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
+        let res = self.ctx.meta.create_table(req).await?;
+        Ok(res)
     }
 
     #[async_backtrace::framed]
