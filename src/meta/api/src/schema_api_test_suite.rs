@@ -3936,7 +3936,7 @@ impl SchemaApiTestSuite {
             info!("--- upsert table lock revision 1");
             let req1 = UpsertTableLockRevReq {
                 table_id,
-                expire_at: (Utc::now().timestamp() + 1) as u64,
+                expire_at: (Utc::now().timestamp() + 2) as u64,
                 revision: None,
             };
 
@@ -3945,7 +3945,7 @@ impl SchemaApiTestSuite {
             info!("--- upsert table lock revision 2");
             let req2 = UpsertTableLockRevReq {
                 table_id,
-                expire_at: (Utc::now().timestamp() + 2) as u64,
+                expire_at: (Utc::now().timestamp() + 4) as u64,
                 revision: None,
             };
             let res2 = mt.upsert_table_lock_rev(req2).await?;
@@ -3960,7 +3960,7 @@ impl SchemaApiTestSuite {
             assert_eq!(res3.revisions[1], res2.revision);
 
             info!("--- table lock revision 1 retired");
-            std::thread::sleep(std::time::Duration::from_secs(1));
+            std::thread::sleep(std::time::Duration::from_secs(2));
             let req4 = ListTableLockRevReq { table_id };
             let res4 = mt.list_table_lock_revs(req4).await?;
             assert_eq!(res4.revisions.len(), 1);
