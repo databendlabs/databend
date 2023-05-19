@@ -49,7 +49,6 @@ impl TransformIEJoinLeft {
         output_port: Arc<OutputPort>,
         ie_join_state: Arc<IEJoinState>,
     ) -> Box<dyn Processor> {
-        dbg!("TransformIEJoinLeft create");
         ie_join_state.left_attach();
         Box::new(TransformIEJoinLeft {
             input_port,
@@ -104,7 +103,6 @@ impl Processor for TransformIEJoinLeft {
                     if !self.execute_finished {
                         Ok(Event::Sync)
                     } else {
-                        dbg!("finish");
                         self.output_port.finish();
                         Ok(Event::Finished)
                     }
@@ -137,7 +135,6 @@ impl Processor for TransformIEJoinLeft {
 
     async fn async_process(&mut self) -> Result<()> {
         if let IEJoinStep::Merging = self.step {
-            dbg!("async");
             self.state.wait_merge_finish().await?;
             self.step = IEJoinStep::Execute;
         }

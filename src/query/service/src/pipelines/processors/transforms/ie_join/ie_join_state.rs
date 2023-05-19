@@ -131,7 +131,7 @@ impl IEJoinState {
             // `_tuple_id` column
             SortColumnDescription {
                 offset: 0,
-                asc: true,
+                asc: false,
                 nulls_first: false,
                 is_nullable: false,
             },
@@ -152,7 +152,7 @@ impl IEJoinState {
             // `_tuple_id` column
             SortColumnDescription {
                 offset: 0,
-                asc: true,
+                asc: false,
                 nulls_first: false,
                 is_nullable: false,
             },
@@ -333,7 +333,6 @@ impl IEJoinState {
     }
 
     pub fn merge_sort(&self) -> Result<()> {
-        dbg!("merge_sort");
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         // Merge sort `l1_sorted_blocks`
         let mut l1_sorted_blocks = self.l1_sorted_blocks.write();
@@ -361,27 +360,22 @@ impl IEJoinState {
         for (left_idx, left_block) in l1_sorted_blocks.iter().enumerate() {
             for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
                 // First check two blocks whether have intersection
-                if self.intersection(left_block, right_block) {
-                    tasks.push((left_idx, right_idx));
-                }
+                // if self.intersection(left_block, right_block) {
+                tasks.push((left_idx, right_idx));
+                // }
             }
         }
-        dbg!(&tasks);
         Ok(())
     }
 
     pub fn ie_join(&self, task_id: usize) -> Result<DataBlock> {
-        dbg!("ie_join");
-        dbg!(task_id);
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
         let l1_sorted_blocks = self.l1_sorted_blocks.read();
         let right_sorted_blocks = self.right_sorted_blocks.read();
-        dbg!(&l1_sorted_blocks[left_idx]);
         let mut l1_sorted_blocks = vec![l1_sorted_blocks[left_idx].clone()];
         l1_sorted_blocks.push(right_sorted_blocks[right_idx].clone());
-        dbg!(&right_sorted_blocks[right_idx]);
 
         let data_schema = DataSchemaRefExt::create(
             self.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
@@ -516,8 +510,8 @@ impl IEJoinState {
                 continue;
             }
             let mut j = off1;
-            loop {
-                if bit_array.get(j) && j < len {
+            while j < len {
+                if bit_array.get(j) {
                     // right, left
                     if let ScalarRef::Number(NumberScalar::Int64(right)) =
                         l1_index_column.index(j as usize).unwrap()
@@ -529,11 +523,8 @@ impl IEJoinState {
                     {
                         left_buffer.push((left - 1) as usize);
                     }
-
-                    j += 1;
-                } else {
-                    break;
                 }
+                j += 1;
             }
         }
         let left_table = self.left_table.read();
@@ -652,39 +643,36 @@ fn order_match(op: &str, order: Ordering) -> bool {
 }
 
 // Exponential search
-fn probe_l1(l1: &Column, pos: usize, op1: &str, off1: usize) -> usize {
+fn probe_l1(l1: &Column, pos: usize, op1: &str, mut off1: usize) -> usize {
     let mut step = 1;
     let n = l1.len();
     let mut hi = pos;
     let mut lo = pos;
     if matches!(op1, "gte" | "lte") {
-        if off1 < n && order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
-            lo = off1;
-            hi = off1;
-        }
         lo -= min(step, lo);
         step *= 2;
-        while lo > 0 && order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(lo).unwrap())) {
+        off1 = lo;
+        while lo > 0 && order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
             hi = lo;
             lo -= min(step, lo);
             step *= 2;
+            off1 = lo;
         }
     } else {
-        if off1 < n && !order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
-            lo = off1;
-            hi = off1;
-        }
         hi += min(step, n - hi);
         step *= 2;
-        while hi < n && !order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(hi).unwrap())) {
+        off1 = hi;
+        while hi < n && !order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
             lo = hi;
             hi += min(step, n - hi);
             step *= 2;
+            off1 = hi;
         }
     }
     while lo < hi {
         let mid = lo + (hi - lo) / 2;
-        if order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(mid).unwrap())) {
+        off1 = mid;
+        if order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
             hi = mid;
         } else {
             lo = mid + 1;
