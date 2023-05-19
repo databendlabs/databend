@@ -15,7 +15,6 @@
 
 from databend import SessionContext
 import pandas as pd
-import numpy as np
 
 class TestBasic:
     ctx = SessionContext()
