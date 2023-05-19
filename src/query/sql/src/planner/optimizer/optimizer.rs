@@ -155,7 +155,7 @@ pub fn optimize_query(
             DPhpy::new(ctx.clone(), metadata.clone(), false).optimize(result.clone())?;
         result = dp_res;
         if !optimized {
-            // Callback to CascadesOptimizer
+            // Callback to CascadesOptimizer.
             let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
             result = cascades.optimize(result)?;
         }
