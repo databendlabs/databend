@@ -1,6 +1,6 @@
 ---
 title: Arithmetic Operators
-title_includes: plus, minus, multiply, div, divide, mod, caret, modulo, negate, +, -, /, %, *, ^, |/, ||/, @, &, |, #, ~, <<, >>
+title_includes: plus, minus, multiply, div, divide, mod, caret, modulo, negate, +, -, /, //, %, *, ^, |/, ||/, @, &, |, #, ~, <<, >>
 ---
 
 SQL arithmetic operators.
