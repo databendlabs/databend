@@ -365,7 +365,7 @@ impl IEJoinState {
             for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
                 // First check two blocks whether have intersection
                 // if self.intersection(left_block, right_block) {
-                    tasks.push((left_idx, right_idx));
+                tasks.push((left_idx, right_idx));
                 // }
             }
         }
