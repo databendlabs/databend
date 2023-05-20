@@ -755,11 +755,7 @@ pub struct ListTableLockRevReq {
     pub table_id: u64,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct ListTableLockRevReply {
-    pub revisions: Vec<u64>,
-    pub prefix: String,
-}
+pub type Revision = u64;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpsertTableLockRevReq {

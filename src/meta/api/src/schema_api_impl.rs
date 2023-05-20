@@ -82,13 +82,13 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexByTableIdReq;
-use common_meta_app::schema::ListTableLockRevReply;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
+use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::TableCopiedFileNameIdent;
 use common_meta_app::schema::TableId;
@@ -2536,7 +2536,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     async fn list_table_lock_revs(
         &self,
         req: ListTableLockRevReq,
-    ) -> Result<ListTableLockRevReply, KVAppError> {
+    ) -> Result<Vec<Revision>, KVAppError> {
         let prefix = format!("{}/{}", TableLockKey::PREFIX, req.table_id);
         let reply = self.prefix_list_kv(&prefix).await?;
 
@@ -2550,9 +2550,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             revisions.push(lock_key.revision);
         }
-        // sort ascending.
-        revisions.sort();
-        Ok(ListTableLockRevReply { revisions, prefix })
+        Ok(revisions)
     }
 
     async fn upsert_table_lock_rev(
@@ -2561,18 +2559,15 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     ) -> Result<UpsertTableLockRevReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        let mut retry = 0;
         let table_id = req.table_id;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+
+        let revision = loop {
+            trials.next().unwrap()?;
 
             let tbid = TableId { table_id };
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-            if tb_meta_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, "upsert_table_lock_rev"),
-                )));
-            }
+            let (_tb_meta_seq, tb_meta) = get_table_by_id_or_err(self, &tbid, ctx).await?;
 
             debug!(
                 ident = display(&tbid),
@@ -2621,13 +2616,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(UpsertTableLockRevReply { revision });
+                break revision;
             }
-        }
-
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("upsert_table_lock_rev", TXN_MAX_RETRY_TIMES),
-        )))
+        };
+        Ok(UpsertTableLockRevReply { revision })
     }
 
     async fn delete_table_lock_rev(
@@ -2636,19 +2628,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     ) -> Result<DeleteTableLockRevReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        let mut retry = 0;
         let table_id = req.table_id;
         let revision = req.revision;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+
+        loop {
+            trials.next().unwrap()?;
 
             let tbid = TableId { table_id };
-            let (tb_meta_seq, tb_meta): (_, Option<TableMeta>) = get_pb_value(self, &tbid).await?;
-            if tb_meta_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UnknownTableId(
-                    UnknownTableId::new(table_id, "delete_table_lock_rev"),
-                )));
-            }
+            let (_tb_meta_seq, tb_meta) = get_table_by_id_or_err(self, &tbid, ctx).await?;
 
             debug!(
                 ident = display(&tbid),
@@ -2680,13 +2669,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             );
 
             if succ {
-                return Ok(DeleteTableLockRevReply {});
+                break;
             }
         }
 
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("delete_table_lock_rev", TXN_MAX_RETRY_TIMES),
-        )))
+        Ok(DeleteTableLockRevReply {})
     }
 
     fn name(&self) -> String {

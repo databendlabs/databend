@@ -20,6 +20,8 @@ use common_base::base::GlobalInstance;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableLockKey;
+use common_meta_kvapi::kvapi::Key;
 use common_meta_types::protobuf::watch_request::FilterType;
 use common_meta_types::protobuf::WatchRequest;
 use common_storages_fuse::TableContext;
@@ -53,7 +55,7 @@ impl TableLockHandler for RealTableLockHandler {
         loop {
             // List all revisions and check if the current is the minimum.
             let reply = catalog.list_table_lock_revs(table_id).await?;
-            let position = reply.revisions.iter().position(|x| *x == revision).ok_or(
+            let position = reply.iter().position(|x| *x == revision).ok_or(
                 // If the current is not found in list,  it means that the current has expired.
                 ErrorCode::TableLockExpired("the acquired table lock has expired".to_string()),
             )?;
@@ -64,9 +66,12 @@ impl TableLockHandler for RealTableLockHandler {
             }
 
             // Get the previous revision, watch the delete event.
-            let key = format!("{}/{}", reply.prefix, reply.revisions[position - 1]);
+            let lock_key = TableLockKey {
+                table_id,
+                revision: reply[position - 1],
+            };
             let req = WatchRequest {
-                key,
+                key: lock_key.to_string_key(),
                 key_end: None,
                 filter_type: FilterType::Delete.into(),
             };

@@ -3985,6 +3985,7 @@ dependencies = [
  "common-exception",
  "common-license",
  "common-meta-app",
+ "common-meta-kvapi",
  "common-meta-types",
  "common-settings",
  "common-storages-fuse",

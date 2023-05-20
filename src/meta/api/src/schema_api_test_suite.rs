@@ -3673,51 +3673,17 @@ impl SchemaApiTestSuite {
     #[tracing::instrument(level = "debug", skip_all)]
     async fn index_create_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
-        let db_name = "db1";
-        let table_name = "tb1";
-        let table_id;
+        let created_on = Utc::now();
         let index_id;
 
-        let db_table_name_ident = TableNameIdent {
-            tenant: tenant.to_string(),
-            db_name: db_name.to_string(),
-            table_name: table_name.to_string(),
-        };
+        let mut util = Util::new(mt, tenant, "db1", "tb1");
+        let table_id;
 
-        let schema = || {
-            Arc::new(TableSchema::new(vec![
-                TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
-                TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
-            ]))
-        };
-
-        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
-
-        let table_meta = |created_on| TableMeta {
-            schema: schema(),
-            engine: "JSON".to_string(),
-            options: options(),
-            updated_on: created_on,
-            created_on,
-            ..TableMeta::default()
-        };
-
-        let created_on = Utc::now();
-
-        let req = CreateTableReq {
-            if_not_exists: false,
-            name_ident: db_table_name_ident.clone(),
-            table_meta: table_meta(created_on),
-        };
-
+        info!("--- prepare db and table");
         {
-            info!("--- prepare db and table");
-            // prepare db1
-            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
-            assert_eq!(1, res.db_id);
-
-            let res = mt.create_table(req).await?;
-            table_id = res.table_id;
+            util.create_db().await?;
+            let (tid, _table_meta) = util.create_table().await?;
+            table_id = tid;
         }
 
         let index_name_1 = "idx1";
@@ -3885,67 +3851,29 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn test_table_lock<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let tenant = "tenant1";
-        let db_name = "db1";
-        let table_name = "tb1";
+        let mut util = Util::new(mt, "tenant1", "db1", "tb1");
         let table_id;
 
-        let db_table_name_ident = TableNameIdent {
-            tenant: tenant.to_string(),
-            db_name: db_name.to_string(),
-            table_name: table_name.to_string(),
-        };
-
-        let schema = || {
-            Arc::new(TableSchema::new(vec![
-                TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
-                TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
-            ]))
-        };
-
-        let options = || maplit::btreemap! {"opt-1".into() => "val-1".into()};
-
-        let table_meta = |created_on| TableMeta {
-            schema: schema(),
-            engine: "JSON".to_string(),
-            options: options(),
-            updated_on: created_on,
-            created_on,
-            ..TableMeta::default()
-        };
-
-        let created_on = Utc::now();
-
-        let req = CreateTableReq {
-            if_not_exists: true,
-            name_ident: db_table_name_ident.clone(),
-            table_meta: table_meta(created_on),
-        };
-
+        info!("--- prepare db and table");
         {
-            info!("--- prepare db and table");
-            // prepare db1
-            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
-            assert_eq!(1, res.db_id);
-
-            let res = mt.create_table(req).await?;
-            table_id = res.table_id;
+            util.create_db().await?;
+            let (tid, _table_meta) = util.create_table().await?;
+            table_id = tid;
         }
 
         {
-            info!("--- upsert table lock revision 1");
+            info!("--- create table lock revision 1");
             let req1 = UpsertTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 2) as u64,
                 revision: None,
             };
-
             let res1 = mt.upsert_table_lock_rev(req1).await?;
 
-            info!("--- upsert table lock revision 2");
+            info!("--- create table lock revision 2");
             let req2 = UpsertTableLockRevReq {
                 table_id,
-                expire_at: (Utc::now().timestamp() + 4) as u64,
+                expire_at: (Utc::now().timestamp() + 2) as u64,
                 revision: None,
             };
             let res2 = mt.upsert_table_lock_rev(req2).await?;
@@ -3954,29 +3882,37 @@ impl SchemaApiTestSuite {
             info!("--- list table lock revisiosn");
             let req3 = ListTableLockRevReq { table_id };
             let res3 = mt.list_table_lock_revs(req3).await?;
-            assert_eq!(res3.prefix, format!("__fd_table_lock/{}", table_id));
-            assert_eq!(res3.revisions.len(), 2);
-            assert_eq!(res3.revisions[0], res1.revision);
-            assert_eq!(res3.revisions[1], res2.revision);
+            assert_eq!(res3.len(), 2);
+            assert_eq!(res3[0], res1.revision);
+            assert_eq!(res3[1], res2.revision);
+
+            info!("--- update table lock revision 2 expire");
+            let req4 = UpsertTableLockRevReq {
+                table_id,
+                expire_at: (Utc::now().timestamp() + 4) as u64,
+                revision: Some(res2.revision),
+            };
+            let res4 = mt.upsert_table_lock_rev(req4).await?;
+            assert_eq!(res4.revision, res2.revision);
 
             info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(2));
-            let req4 = ListTableLockRevReq { table_id };
-            let res4 = mt.list_table_lock_revs(req4).await?;
-            assert_eq!(res4.revisions.len(), 1);
-            assert_eq!(res4.revisions[0], res2.revision);
+            let req5 = ListTableLockRevReq { table_id };
+            let res5 = mt.list_table_lock_revs(req5).await?;
+            assert_eq!(res5.len(), 1);
+            assert_eq!(res5[0], res2.revision);
 
             info!("--- delete table lock revision 2");
-            let req5 = DeleteTableLockRevReq {
+            let req6 = DeleteTableLockRevReq {
                 table_id,
                 revision: res2.revision,
             };
-            mt.delete_table_lock_rev(req5).await?;
+            mt.delete_table_lock_rev(req6).await?;
 
             info!("--- check table locks is empty");
-            let req6 = ListTableLockRevReq { table_id };
-            let res6 = mt.list_table_lock_revs(req6).await?;
-            assert_eq!(res6.revisions.len(), 0);
+            let req7 = ListTableLockRevReq { table_id };
+            let res7 = mt.list_table_lock_revs(req7).await?;
+            assert_eq!(res7.len(), 0);
         }
 
         Ok(())

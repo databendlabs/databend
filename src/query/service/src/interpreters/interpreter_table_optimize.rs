@@ -100,7 +100,7 @@ impl OptimizeTableInterpreter {
         let reply = catalog
             .list_table_lock_revs(table.get_table_info().ident.table_id)
             .await?;
-        if !reply.revisions.is_empty() {
+        if !reply.is_empty() {
             return Err(ErrorCode::TableAlreadyLocked(format!(
                 "table '{}' is locked, please retry compaction later",
                 self.plan.table
