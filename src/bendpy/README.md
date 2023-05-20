@@ -75,9 +75,10 @@ pdoc opendal
 
 ## Storage configuration
 
-- Meta Storage directory(Catalogs, Databases, Tables, Partitions, etc.): `./.databend/meta`
-- Data Storage directory: `./.databend/data`
-- Cache Storage directory: `./.databend/cache`
+- Meta Storage directory(Catalogs, Databases, Tables, Partitions, etc.): `./.databend/_meta`
+- Data Storage directory: `./.databend/_data`
+- Cache Storage directory: `./.databend/_cache`
+- Logs directory: `./.databend/logs`
 
 ## More
 

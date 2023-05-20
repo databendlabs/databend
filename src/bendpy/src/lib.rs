@@ -22,6 +22,7 @@ mod utils;
 
 use std::env;
 
+use common_config::Config;
 use common_config::InnerConfig;
 use common_license::license_manager::LicenseManager;
 use common_license::license_manager::OssLicenseManager;
@@ -37,7 +38,7 @@ use utils::RUNTIME;
 fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
     env::set_var("META_EMBEDDED_DIR", ".databend/_meta");
 
-    let mut conf: InnerConfig = InnerConfig::load().unwrap();
+    let mut conf: InnerConfig = Config::load(false).unwrap().try_into().unwrap();
     conf.storage.allow_insecure = true;
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         root: ".databend/_data".to_string(),
