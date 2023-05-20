@@ -194,6 +194,8 @@ pub enum TokenKind {
     Multiply,
     #[token("/")]
     Divide,
+    #[token("//")]
+    IntDiv,
     #[token("%")]
     Modulo,
     #[token("||")]
@@ -970,6 +972,7 @@ impl TokenKind {
                 | Minus
                 | Multiply
                 | Divide
+                | IntDiv
                 | Modulo
                 | StringConcat
                 | LParen
