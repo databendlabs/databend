@@ -161,12 +161,7 @@ message TableCopiedFileInfo {
   optional string last_modified = 3;
 }
 
-message TableCopiedFileLock {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-}
-
-message TableLock {
+message EmptyProto {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 }

@@ -70,6 +70,7 @@ use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::EmptyProto;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
@@ -97,7 +98,6 @@ use common_meta_app::schema::TableIdListKey;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::TableLock;
 use common_meta_app::schema::TableLockKey;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
@@ -2584,14 +2584,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             let lock_key = TableLockKey { table_id, revision };
 
-            let (lock_key_seq, _): (_, Option<TableLock>) = get_pb_value(self, &lock_key).await?;
+            let (lock_key_seq, _): (_, Option<EmptyProto>) = get_pb_value(self, &lock_key).await?;
 
             if lock_key_seq > 0 && req.revision.is_none() {
                 // lock key has been created by other process.
                 continue;
             }
 
-            let lock = TableLock {};
+            let lock = EmptyProto {};
 
             let condition = vec![txn_cond_seq(&lock_key, Eq, lock_key_seq)];
 
@@ -2646,7 +2646,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             );
 
             let lock_key = TableLockKey { table_id, revision };
-            let (lock_key_seq, _): (_, Option<TableLock>) = get_pb_value(self, &lock_key).await?;
+            let (lock_key_seq, _): (_, Option<EmptyProto>) = get_pb_value(self, &lock_key).await?;
             if lock_key_seq == 0 {
                 return Ok(DeleteTableLockRevReply {});
             }

@@ -252,8 +252,8 @@ pub(crate) fn new_table_copied_file_info_v6() -> mt::TableCopiedFileInfo {
     }
 }
 
-pub(crate) fn new_table_copied_file_lock_v7() -> mt::TableCopiedFileLock {
-    mt::TableCopiedFileLock {}
+pub(crate) fn new_empty_proto() -> mt::EmptyProto {
+    mt::EmptyProto {}
 }
 
 #[test]
@@ -389,14 +389,14 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         println!("copied_file:{:?}", buf);
     }
 
-    // TableCopiedFileLock
+    // EmptyProto
     {
-        let copied_file_lock = new_table_copied_file_lock_v7();
-        let p = copied_file_lock.to_pb()?;
+        let empty_proto = new_empty_proto();
+        let p = empty_proto.to_pb()?;
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("copied_file_lock:{:?}", buf);
+        println!("empty_proto:{:?}", buf);
     }
 
     // schema
