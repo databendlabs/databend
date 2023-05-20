@@ -72,11 +72,10 @@ impl Interpreter for CreateIndexInterpreter {
             meta: IndexMeta {
                 ident: IndexNameIdent { tenant, index_name },
                 table_id: self.plan.table_id,
-                table_desc: self.plan.table_desc.clone(),
                 index_type: IndexType::AGGREGATING,
                 created_on: Utc::now(),
                 drop_on: None,
-                query: self.plan.subquery.clone(),
+                query: self.plan.query.clone(),
             },
         };
 

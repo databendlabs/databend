@@ -3732,7 +3732,6 @@ impl SchemaApiTestSuite {
         let index_meta_1 = IndexMeta {
             ident: name_ident_1.clone(),
             table_id,
-            table_desc: format!("{db_name}.{table_name}"),
             index_type: IndexType::AGGREGATING,
             created_on,
             drop_on: None,
@@ -3742,7 +3741,6 @@ impl SchemaApiTestSuite {
         let index_meta_2 = IndexMeta {
             ident: name_ident_2.clone(),
             table_id,
-            table_desc: format!("{db_name}.{table_name}"),
             index_type: IndexType::AGGREGATING,
             created_on,
             drop_on: None,

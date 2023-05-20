@@ -139,7 +139,6 @@ pub struct IndexMeta {
     pub ident: IndexNameIdent,
 
     pub table_id: MetaId,
-    pub table_desc: String,
 
     pub index_type: IndexType,
     pub created_on: DateTime<Utc>,
@@ -153,7 +152,6 @@ impl Default for IndexMeta {
         IndexMeta {
             ident: IndexNameIdent::default(),
             table_id: 0,
-            table_desc: "".to_string(),
             index_type: IndexType::default(),
             created_on: Utc::now(),
             drop_on: None,

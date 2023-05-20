@@ -76,7 +76,6 @@ impl FromToProto for mt::IndexMeta {
                 })?,
             },
             table_id: p.table_id,
-            table_desc: p.table_desc,
             index_type: FromPrimitive::from_i32(p.index_type).ok_or_else(|| Incompatible {
                 reason: format!("invalid IndexType: {}", p.index_type),
             })?,
@@ -96,7 +95,6 @@ impl FromToProto for mt::IndexMeta {
             min_reader_ver: MIN_READER_VER,
             ident: Some(self.ident.to_pb()?),
             table_id: self.table_id,
-            table_desc: self.table_desc.clone(),
             index_type: self.index_type.clone() as i32,
             created_on: self.created_on.to_pb()?,
             drop_on: match self.drop_on {

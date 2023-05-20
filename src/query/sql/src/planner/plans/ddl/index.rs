@@ -20,10 +20,8 @@ pub struct CreateIndexPlan {
     pub if_not_exists: bool,
     pub index_type: TableIndexType,
     pub index_name: String,
-    pub subquery: String,
+    pub query: String,
     pub table_id: MetaId,
-    // database.table_name
-    pub table_desc: String,
 }
 
 /// Drop.

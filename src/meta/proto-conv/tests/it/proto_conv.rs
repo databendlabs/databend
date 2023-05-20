@@ -208,11 +208,10 @@ fn new_index_meta() -> mt::IndexMeta {
             index_name: "idx".to_string(),
         },
         table_id: 7,
-        table_desc: "default.t1".to_string(),
         index_type: IndexType::AGGREGATING,
         created_on: Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap(),
         drop_on: None,
-        query: "SELECT a, sum(b) FROM t1 WHERE a > 3 GROUP BY b".to_string(),
+        query: "SELECT a, sum(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string(),
     }
 }
 

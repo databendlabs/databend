@@ -19,6 +19,7 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::types::StringType;
+use common_expression::types::TimestampType;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::TableDataType;
@@ -61,31 +62,21 @@ impl AsyncSystemTable for IndexesTable {
         {
             let mut names = Vec::with_capacity(indexes.len());
             let mut types = Vec::with_capacity(indexes.len());
-            let mut tables = Vec::with_capacity(indexes.len());
             let mut defs = Vec::with_capacity(indexes.len());
             let mut created_on = Vec::with_capacity(indexes.len());
 
             for (_, index) in indexes {
                 names.push(index.ident.index_name.as_bytes().to_vec());
                 types.push(index.index_type.to_string().as_bytes().to_vec());
-                tables.push(index.table_desc.as_bytes().to_vec());
                 defs.push(index.query.as_bytes().to_vec());
-                created_on.push(
-                    index
-                        .created_on
-                        .format("%Y-%m-%d %H:%M:%S.%3f %z")
-                        .to_string()
-                        .as_bytes()
-                        .to_vec(),
-                );
+                created_on.push(index.created_on.timestamp_micros());
             }
 
             Ok(DataBlock::new_from_columns(vec![
                 StringType::from_data(names),
                 StringType::from_data(types),
-                StringType::from_data(tables),
                 StringType::from_data(defs),
-                StringType::from_data(created_on),
+                TimestampType::from_data(created_on),
             ]))
         } else {
             Ok(DataBlock::empty_with_schema(Arc::new(
@@ -100,9 +91,8 @@ impl IndexesTable {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("name", TableDataType::String),
             TableField::new("type", TableDataType::String),
-            TableField::new("table", TableDataType::String),
             TableField::new("definition", TableDataType::String),
-            TableField::new("created_on", TableDataType::String),
+            TableField::new("created_on", TableDataType::Timestamp),
         ]);
 
         let table_info = TableInfo {
