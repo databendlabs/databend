@@ -20,8 +20,6 @@ use common_meta_api::SchemaApi;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DeleteTableLockRevReply;
-use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -37,8 +35,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableLockRevReply;
-use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 
@@ -185,24 +181,6 @@ impl Database for DefaultDatabase {
     #[async_backtrace::framed]
     async fn truncate_table(&self, req: TruncateTableReq) -> Result<TruncateTableReply> {
         let res = self.ctx.meta.truncate_table(req).await?;
-        Ok(res)
-    }
-
-    #[async_backtrace::framed]
-    async fn upsert_table_lock_rev(
-        &self,
-        req: UpsertTableLockRevReq,
-    ) -> Result<UpsertTableLockRevReply> {
-        let res = self.ctx.meta.upsert_table_lock_rev(req).await?;
-        Ok(res)
-    }
-
-    #[async_backtrace::framed]
-    async fn delete_table_lock_rev(
-        &self,
-        req: DeleteTableLockRevReq,
-    ) -> Result<DeleteTableLockRevReply> {
-        let res = self.ctx.meta.delete_table_lock_rev(req).await?;
         Ok(res)
     }
 }

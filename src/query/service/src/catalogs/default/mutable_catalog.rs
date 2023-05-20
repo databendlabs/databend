@@ -407,15 +407,8 @@ impl Catalog for MutableCatalog {
             expire_at: Utc::now().timestamp() as u64 + expire_secs,
             revision,
         };
-        match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.upsert_table_lock_rev(req).await?),
-            DatabaseType::ShareDB(share_ident) => {
-                let db = self
-                    .get_database(&share_ident.tenant, &share_ident.share_name)
-                    .await?;
-                db.upsert_table_lock_rev(req).await
-            }
-        }
+        let reply = self.ctx.meta.upsert_table_lock_rev(req).await?;
+        Ok(reply)
     }
 
     #[async_backtrace::framed]
@@ -428,15 +421,8 @@ impl Catalog for MutableCatalog {
             table_id: table_info.ident.table_id,
             revision,
         };
-        match table_info.db_type.clone() {
-            DatabaseType::NormalDB => Ok(self.ctx.meta.delete_table_lock_rev(req).await?),
-            DatabaseType::ShareDB(share_ident) => {
-                let db = self
-                    .get_database(&share_ident.tenant, &share_ident.share_name)
-                    .await?;
-                db.delete_table_lock_rev(req).await
-            }
-        }
+        let reply = self.ctx.meta.delete_table_lock_rev(req).await?;
+        Ok(reply)
     }
 
     fn get_table_engines(&self) -> Vec<StorageDescription> {

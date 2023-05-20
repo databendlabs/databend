@@ -20,8 +20,6 @@ use common_exception::Result;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DeleteTableLockRevReply;
-use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
@@ -35,8 +33,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableLockRevReply;
-use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use dyn_clone::DynClone;
@@ -175,28 +171,6 @@ pub trait Database: DynClone + Sync + Send {
     async fn truncate_table(&self, _req: TruncateTableReq) -> Result<TruncateTableReply> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement truncate_table in {} Database",
-            self.name()
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn upsert_table_lock_rev(
-        &self,
-        _req: UpsertTableLockRevReq,
-    ) -> Result<UpsertTableLockRevReply> {
-        Err(ErrorCode::Unimplemented(format!(
-            "UnImplement upsert_table_lock_rev in {} Database",
-            self.name()
-        )))
-    }
-
-    #[async_backtrace::framed]
-    async fn delete_table_lock_rev(
-        &self,
-        _req: DeleteTableLockRevReq,
-    ) -> Result<DeleteTableLockRevReply> {
-        Err(ErrorCode::Unimplemented(format!(
-            "UnImplement delete_table_lock_rev in {} Database",
             self.name()
         )))
     }
