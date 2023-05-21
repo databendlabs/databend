@@ -15,7 +15,6 @@
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
-use common_base::base::tokio::task::JoinHandle;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
 use common_catalog::plan::PushDownInfo;
@@ -41,13 +40,11 @@ use storages_common_table_meta::meta::ClusterKey;
 use tracing::warn;
 
 use crate::pruning::new_segment_pruner::NewSegmentPruner;
-use crate::pruning::segment_pruner;
 use crate::pruning::BlockPruner;
 use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
 use crate::pruning::FusePruningStatistics;
 use crate::pruning::SegmentLocation;
-use crate::pruning::SegmentPruner;
 
 pub struct PruningContext {
     pub ctx: Arc<dyn TableContext>,
@@ -190,11 +187,16 @@ impl FusePruner {
             NewSegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
         let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
 
-        let batch = (segment_locs.len() - (self.max_concurrency - 1)) / self.max_concurrency + 1;
+        let mut remain = segment_locs.len() % self.max_concurrency;
+        let batch_size = segment_locs.len() / self.max_concurrency;
         let mut works = Vec::with_capacity(self.max_concurrency);
 
         while !segment_locs.is_empty() {
-            let mut batch = segment_locs.drain(0..batch).collect::<Vec<_>>();
+            let gap_size = std::cmp::min(1, remain);
+            let batch_size = batch_size + gap_size;
+            remain -= gap_size;
+
+            let mut batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
 
             works.push(self.pruning_ctx.pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();

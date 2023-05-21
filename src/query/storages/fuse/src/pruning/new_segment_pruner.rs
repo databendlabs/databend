@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::TableSchemaRef;
-use common_expression::SEGMENT_NAME_COL_NAME;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 
