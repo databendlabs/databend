@@ -45,7 +45,7 @@ EvalScalar
         ├── estimated rows: 1.00
         └── Filter
             ├── filters: [t.number (#0) > 10]
-            ├── estimated rows: 989.89
+            ├── estimated rows: 990.00
             └── TableScan
                 ├── table: default.default.t
                 ├── read rows: 1000

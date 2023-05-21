@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::BitAnd;
+use std::ops::BitOr;
+use std::ops::BitXor;
+use std::ops::Sub;
+
 use common_expression::types::bitmap::BitmapType;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::ArrayType;
 use common_expression::types::BooleanType;
 use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
+use common_expression::EvalContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
 use itertools::join;
@@ -192,15 +199,20 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_max",
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
-            match RoaringTreemap::deserialize_from(b) {
+            let val = match RoaringTreemap::deserialize_from(b) {
                 Ok(rb) => match rb.max() {
-                    Some(val) => builder.push(val),
-                    None => ctx.set_error(builder.len(), "The bitmap is empty"),
+                    Some(val) => val,
+                    None => {
+                        ctx.set_error(builder.len(), "The bitmap is empty");
+                        0
+                    }
                 },
                 Err(e) => {
                     ctx.set_error(builder.len(), e.to_string());
+                    0
                 }
-            }
+            };
+            builder.push(val);
         }),
     );
 
@@ -208,15 +220,94 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_min",
         |_| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<BitmapType, UInt64Type>(|b, builder, ctx| {
-            match RoaringTreemap::deserialize_from(b) {
+            let val = match RoaringTreemap::deserialize_from(b) {
                 Ok(rb) => match rb.min() {
-                    Some(val) => builder.push(val),
-                    None => ctx.set_error(builder.len(), "The bitmap is empty"),
+                    Some(val) => val,
+                    None => {
+                        ctx.set_error(builder.len(), "The bitmap is empty");
+                        0
+                    }
                 },
                 Err(e) => {
                     ctx.set_error(builder.len(), e.to_string());
+                    0
                 }
-            }
+            };
+            builder.push(val);
         }),
     );
+
+    registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BitmapType, _, _>(
+        "bitmap_or",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<BitmapType, BitmapType, BitmapType>(
+            |arg1, arg2, builder, ctx| bitmap_logic_operate(arg1, arg2, builder, ctx, LogicOp::Or),
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BitmapType, _, _>(
+        "bitmap_and",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<BitmapType, BitmapType, BitmapType>(
+            |arg1, arg2, builder, ctx| bitmap_logic_operate(arg1, arg2, builder, ctx, LogicOp::And),
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BitmapType, _, _>(
+        "bitmap_xor",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<BitmapType, BitmapType, BitmapType>(
+            |arg1, arg2, builder, ctx| bitmap_logic_operate(arg1, arg2, builder, ctx, LogicOp::Xor),
+        ),
+    );
+
+    registry.register_passthrough_nullable_2_arg::<BitmapType, BitmapType, BitmapType, _, _>(
+        "bitmap_not",
+        |_, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_2_arg::<BitmapType, BitmapType, BitmapType>(
+            |arg1, arg2, builder, ctx| bitmap_logic_operate(arg1, arg2, builder, ctx, LogicOp::Not),
+        ),
+    );
+
+    registry.register_aliases("bitmap_not", &["bitmap_and_not"]);
+}
+
+enum LogicOp {
+    Or,
+    And,
+    Xor,
+    Not,
+}
+
+/// perform a logical operation on two input bitmap, and write result bitmap to builder
+fn bitmap_logic_operate(
+    arg1: &[u8],
+    arg2: &[u8],
+    builder: &mut StringColumnBuilder,
+    ctx: &mut EvalContext,
+    op: LogicOp,
+) {
+    let Some(rb1) =  RoaringTreemap::deserialize_from(arg1).map_err(|e| {
+        ctx.set_error(builder.len(), e.to_string());
+        builder.commit_row();
+    }).ok() else {
+        return;
+    };
+
+    let Some(rb2) =  RoaringTreemap::deserialize_from(arg2).map_err(|e| {
+        ctx.set_error(builder.len(), e.to_string());
+        builder.commit_row();
+    }).ok() else {
+        return;
+    };
+
+    let rb = match op {
+        LogicOp::Or => rb1.bitor(rb2),
+        LogicOp::And => rb1.bitand(rb2),
+        LogicOp::Xor => rb1.bitxor(rb2),
+        LogicOp::Not => rb1.sub(rb2),
+    };
+
+    rb.serialize_into(&mut builder.data).unwrap();
+    builder.commit_row();
 }
