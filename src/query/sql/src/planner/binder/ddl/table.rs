@@ -149,7 +149,7 @@ impl Binder {
                 .with_column("data_compressed_size")
                 .with_column("index_size");
         } else {
-            select_builder.with_column(format!("name AS Tables_in_{database}"));
+            select_builder.with_column(format!("name AS `Tables_in_{database}`"));
             if *with_history {
                 select_builder.with_column("dropped_on AS drop_time");
             };

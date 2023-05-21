@@ -25,6 +25,7 @@ use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::pruning::FusePruner;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use databend_query::sessions::TableContext;
@@ -123,8 +124,9 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let schema = TableSchemaRef::new(TableSchema::empty());
     let ctx: Arc<dyn TableContext> = ctx.clone();
     let segment_locations = base_snapshot.segments.clone();
+    let segment_locations = create_segment_location_vector(segment_locations, None);
     let block_metas = FusePruner::create(&ctx, data_accessor.clone(), schema, &None)?
-        .pruning(segment_locations, None, None)
+        .pruning(segment_locations)
         .await?;
     let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
     block_metas.iter().for_each(|(idx, b)| {

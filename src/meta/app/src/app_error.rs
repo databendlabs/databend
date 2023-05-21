@@ -43,6 +43,22 @@ impl DatabaseAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("DatamaskAlreadyExists: `{name}` while `{context}`")]
+pub struct DatamaskAlreadyExists {
+    name: String,
+    context: String,
+}
+
+impl DatamaskAlreadyExists {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("CreateDatabaseWithDropTime: `{db_name}` with drop_on")]
 pub struct CreateDatabaseWithDropTime {
     db_name: String,
@@ -231,6 +247,22 @@ impl UnknownDatabase {
     pub fn new(db_name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             db_name: db_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownDatamask: `{name}` while `{context}`")]
+pub struct UnknownDatamask {
+    name: String,
+    context: String,
+}
+
+impl UnknownDatamask {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
             context: context.into(),
         }
     }
@@ -536,6 +568,66 @@ impl TxnRetryMaxTimes {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CreateIndexWithDropTime: create {index_name} with drop time")]
+pub struct CreateIndexWithDropTime {
+    index_name: String,
+}
+
+impl CreateIndexWithDropTime {
+    pub fn new(index_name: impl Into<String>) -> Self {
+        Self {
+            index_name: index_name.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("IndexAlreadyExists: `{index_name}` while `{context}`")]
+pub struct IndexAlreadyExists {
+    index_name: String,
+    context: String,
+}
+
+impl IndexAlreadyExists {
+    pub fn new(index_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            index_name: index_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("CreateIndexWithDropTime: create {index_name} with drop time")]
+pub struct UnknownIndex {
+    index_name: String,
+    context: String,
+}
+
+impl UnknownIndex {
+    pub fn new(index_name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            index_name: index_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("DropIndexWithDropTime: drop {index_name} with drop time")]
+pub struct DropIndexWithDropTime {
+    index_name: String,
+}
+
+impl DropIndexWithDropTime {
+    pub fn new(index_name: impl Into<String>) -> Self {
+        Self {
+            index_name: index_name.into(),
+        }
+    }
+}
+
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -637,6 +729,24 @@ pub enum AppError {
 
     #[error(transparent)]
     CannotShareDatabaseCreatedFromShare(#[from] CannotShareDatabaseCreatedFromShare),
+
+    #[error(transparent)]
+    CreateIndexWithDropTime(#[from] CreateIndexWithDropTime),
+
+    #[error(transparent)]
+    IndexAlreadyExists(#[from] IndexAlreadyExists),
+
+    #[error(transparent)]
+    UnknownIndex(#[from] UnknownIndex),
+
+    #[error(transparent)]
+    DropIndexWithDropTime(#[from] DropIndexWithDropTime),
+
+    #[error(transparent)]
+    DatamaskAlreadyExists(#[from] DatamaskAlreadyExists),
+
+    #[error(transparent)]
+    UnknownDatamask(#[from] UnknownDatamask),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -838,6 +948,42 @@ impl AppErrorMessage for DropDbWithDropTime {
     }
 }
 
+impl AppErrorMessage for CreateIndexWithDropTime {
+    fn message(&self) -> String {
+        format!("Create Index '{}' with drop time", self.index_name)
+    }
+}
+
+impl AppErrorMessage for IndexAlreadyExists {
+    fn message(&self) -> String {
+        format!("Index '{}' already exists", self.index_name)
+    }
+}
+
+impl AppErrorMessage for UnknownIndex {
+    fn message(&self) -> String {
+        format!("Unknown index '{}'", self.index_name)
+    }
+}
+
+impl AppErrorMessage for DropIndexWithDropTime {
+    fn message(&self) -> String {
+        format!("Drop Index '{}' with drop time", self.index_name)
+    }
+}
+
+impl AppErrorMessage for DatamaskAlreadyExists {
+    fn message(&self) -> String {
+        format!("Datamask '{}' already exists", self.name)
+    }
+}
+
+impl AppErrorMessage for UnknownDatamask {
+    fn message(&self) -> String {
+        format!("Datamask '{}' does not exists", self.name)
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -899,6 +1045,14 @@ impl From<AppError> for ErrorCode {
             }
             AppError::TxnRetryMaxTimes(err) => ErrorCode::TxnRetryMaxTimes(err.message()),
             AppError::DuplicatedUpsertFiles(err) => ErrorCode::DuplicatedUpsertFiles(err.message()),
+            AppError::CreateIndexWithDropTime(err) => {
+                ErrorCode::CreateIndexWithDropTime(err.message())
+            }
+            AppError::IndexAlreadyExists(err) => ErrorCode::IndexAlreadyExists(err.message()),
+            AppError::UnknownIndex(err) => ErrorCode::UnknownIndex(err.message()),
+            AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
+            AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
+            AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
         }
     }
 }

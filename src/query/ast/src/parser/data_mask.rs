@@ -64,11 +64,15 @@ fn data_mask_return_type(i: Input) -> IResult<TypeName> {
 
 pub fn data_mask_policy(i: Input) -> IResult<DataMaskPolicy> {
     map(
-        rule! { #data_mask_args ~ #data_mask_return_type ~ "->" ~ #data_mask_body },
-        |(args, return_type, _, body)| DataMaskPolicy {
+        rule! { #data_mask_args ~ #data_mask_return_type ~ "->" ~ #data_mask_body ~ ( COMMENT ~ "=" ~ #literal_string)? },
+        |(args, return_type, _, body, comment_opt)| DataMaskPolicy {
             args,
             return_type,
             body,
+            comment: match comment_opt {
+                Some(opt) => Some(opt.2),
+                None => None,
+            },
         },
     )(i)
 }

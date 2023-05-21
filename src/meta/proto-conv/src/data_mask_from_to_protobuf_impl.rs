@@ -17,6 +17,8 @@
 
 use std::collections::BTreeMap;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_meta_app::schema as mt;
 use common_protos::pb;
 
@@ -26,12 +28,12 @@ use crate::Incompatible;
 use crate::MIN_READER_VER;
 use crate::VER;
 
-impl FromToProto for mt::DatamaskPolicy {
-    type PB = pb::DatamaskPolicy;
+impl FromToProto for mt::DatamaskMeta {
+    type PB = pb::DatamaskMeta;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
-    fn from_pb(p: pb::DatamaskPolicy) -> Result<Self, Incompatible> {
+    fn from_pb(p: pb::DatamaskMeta) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
@@ -42,21 +44,33 @@ impl FromToProto for mt::DatamaskPolicy {
                 .collect::<Vec<_>>(),
             return_type: p.return_type,
             body: p.body,
+            comment: p.comment.clone(),
+            create_on: DateTime::<Utc>::from_pb(p.create_on)?,
+            update_on: match p.update_on {
+                Some(t) => Some(DateTime::<Utc>::from_pb(t)?),
+                None => None,
+            },
         };
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::DatamaskPolicy, Incompatible> {
+    fn to_pb(&self) -> Result<pb::DatamaskMeta, Incompatible> {
         let mut args = BTreeMap::new();
         for (arg_name, arg_type) in &self.args {
             args.insert(arg_name.to_string(), arg_type.to_string());
         }
-        let p = pb::DatamaskPolicy {
+        let p = pb::DatamaskMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             args,
             return_type: self.return_type.clone(),
             body: self.body.clone(),
+            comment: self.comment.clone(),
+            create_on: self.create_on.to_pb()?,
+            update_on: match &self.update_on {
+                Some(t) => Some(t.to_pb()?),
+                None => None,
+            },
         };
         Ok(p)
     }

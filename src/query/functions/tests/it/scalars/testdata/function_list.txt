@@ -4,9 +4,11 @@ array_contains -> contains
 array_get -> get
 array_length -> length
 array_slice -> slice
+bitmap_and_not -> bitmap_not
 bitmap_cardinality -> bitmap_count
 ceiling -> ceil
 character_length -> char_length
+date_format -> to_string
 intdiv -> div
 ipv4_num_to_string -> inet_ntoa
 ipv4_string_to_num -> inet_aton
@@ -22,6 +24,8 @@ remove_nullable -> assume_not_null
 rlike -> regexp
 sha1 -> sha
 siphash -> siphash64
+str_to_date -> to_date
+str_to_timestamp -> to_timestamp
 substring -> substr
 substring_utf8 -> substr_utf8
 subtract -> minus
@@ -687,8 +691,26 @@ Functions overloads:
 125 bit_xor(Int64 NULL, Int32 NULL) :: Int64 NULL
 126 bit_xor(Int64, Int64) :: Int64
 127 bit_xor(Int64 NULL, Int64 NULL) :: Int64 NULL
+0 bitmap_and(Bitmap, Bitmap) :: Bitmap
+1 bitmap_and(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
+0 bitmap_contains(Bitmap, UInt64) :: Boolean
+1 bitmap_contains(Bitmap NULL, UInt64 NULL) :: Boolean NULL
 0 bitmap_count(Bitmap) :: UInt64
 1 bitmap_count(Bitmap NULL) :: UInt64 NULL
+0 bitmap_has_all(Bitmap, Bitmap) :: Boolean
+1 bitmap_has_all(Bitmap NULL, Bitmap NULL) :: Boolean NULL
+0 bitmap_has_any(Bitmap, Bitmap) :: Boolean
+1 bitmap_has_any(Bitmap NULL, Bitmap NULL) :: Boolean NULL
+0 bitmap_max(Bitmap) :: UInt64
+1 bitmap_max(Bitmap NULL) :: UInt64 NULL
+0 bitmap_min(Bitmap) :: UInt64
+1 bitmap_min(Bitmap NULL) :: UInt64 NULL
+0 bitmap_not(Bitmap, Bitmap) :: Bitmap
+1 bitmap_not(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
+0 bitmap_or(Bitmap, Bitmap) :: Bitmap
+1 bitmap_or(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
+0 bitmap_xor(Bitmap, Bitmap) :: Bitmap
+1 bitmap_xor(Bitmap NULL, Bitmap NULL) :: Bitmap NULL
 0 blake3(String) :: String
 1 blake3(String NULL) :: String NULL
 0 build_bitmap(Array(UInt64)) :: Bitmap
@@ -3050,12 +3072,14 @@ Functions overloads:
 19 to_boolean(Int64 NULL) :: Boolean NULL
 0 to_date(Variant) :: Date
 1 to_date(Variant NULL) :: Date NULL
-2 to_date(String) :: Date
-3 to_date(String NULL) :: Date NULL
-4 to_date(Timestamp) :: Date
-5 to_date(Timestamp NULL) :: Date NULL
-6 to_date(Int64) :: Date
-7 to_date(Int64 NULL) :: Date NULL
+2 to_date(String, String) :: Date NULL
+3 to_date(String NULL, String NULL) :: Date NULL
+4 to_date(String) :: Date
+5 to_date(String NULL) :: Date NULL
+6 to_date(Timestamp) :: Date
+7 to_date(Timestamp NULL) :: Date NULL
+8 to_date(Int64) :: Date
+9 to_date(Int64 NULL) :: Date NULL
 0 to_day_of_month(Date) :: UInt8
 1 to_day_of_month(Date NULL) :: UInt8 NULL
 2 to_day_of_month(Timestamp) :: UInt8
@@ -3295,20 +3319,24 @@ Functions overloads:
 22 to_string(Float64 NULL) :: String NULL
 23 to_string(Boolean) :: String
 24 to_string(Boolean NULL) :: String NULL
-25 to_string(Date) :: String
-26 to_string(Date NULL) :: String NULL
-27 to_string(Timestamp) :: String
-28 to_string(Timestamp NULL) :: String NULL
-29 to_string(Bitmap) :: String
-30 to_string(Bitmap NULL) :: String NULL
+25 to_string(Timestamp, String) :: String NULL
+26 to_string(Timestamp NULL, String NULL) :: String NULL
+27 to_string(Date) :: String
+28 to_string(Date NULL) :: String NULL
+29 to_string(Timestamp) :: String
+30 to_string(Timestamp NULL) :: String NULL
+31 to_string(Bitmap) :: String
+32 to_string(Bitmap NULL) :: String NULL
 0 to_timestamp(Variant) :: Timestamp
 1 to_timestamp(Variant NULL) :: Timestamp NULL
 2 to_timestamp(String) :: Timestamp
 3 to_timestamp(String NULL) :: Timestamp NULL
-4 to_timestamp(Date) :: Timestamp
-5 to_timestamp(Date NULL) :: Timestamp NULL
-6 to_timestamp(Int64) :: Timestamp
-7 to_timestamp(Int64 NULL) :: Timestamp NULL
+4 to_timestamp(String, String) :: Timestamp NULL
+5 to_timestamp(String NULL, String NULL) :: Timestamp NULL
+6 to_timestamp(Date) :: Timestamp
+7 to_timestamp(Date NULL) :: Timestamp NULL
+8 to_timestamp(Int64) :: Timestamp
+9 to_timestamp(Int64 NULL) :: Timestamp NULL
 0 to_uint16(Variant) :: UInt16
 1 to_uint16(Variant NULL) :: UInt16 NULL
 2 to_uint16(String) :: UInt16

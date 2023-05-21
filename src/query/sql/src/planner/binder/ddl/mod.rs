@@ -17,6 +17,7 @@ mod catalog;
 mod column;
 mod data_mask;
 mod database;
+mod index;
 mod role;
 mod share;
 mod stage;

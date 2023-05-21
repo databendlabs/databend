@@ -13,12 +13,9 @@
 // limitations under the License.
 
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::tokio;
-use common_base::runtime::GlobalIORuntime;
-use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -30,7 +27,6 @@ use tracing::info;
 use crate::servers::http::v1::json_block::block_to_json_value;
 use crate::servers::http::v1::query::sized_spsc::SizedChannelReceiver;
 use crate::servers::http::v1::JsonBlock;
-use crate::sessions::QueryContext;
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Wait {
@@ -61,7 +57,6 @@ pub struct PageManager {
     row_buffer: VecDeque<Vec<JsonValue>>,
     block_receiver: SizedChannelReceiver<DataBlock>,
     format_settings: FormatSettings,
-    query_ctx_ref: Option<Arc<QueryContext>>,
 }
 
 impl PageManager {
@@ -71,7 +66,6 @@ impl PageManager {
         block_receiver: SizedChannelReceiver<DataBlock>,
         schema: DataSchemaRef,
         format_settings: FormatSettings,
-        query_ctx_ref: Arc<QueryContext>,
     ) -> PageManager {
         PageManager {
             query_id,
@@ -85,7 +79,6 @@ impl PageManager {
             block_receiver,
             max_rows_per_page,
             format_settings,
-            query_ctx_ref: Some(query_ctx_ref),
         }
     }
 
@@ -198,12 +191,6 @@ impl PageManager {
         // try to report 'no more data' earlier to client to avoid unnecessary http call
         if !self.block_end {
             self.block_end = self.block_receiver.is_empty();
-        }
-        if self.block_end {
-            let ctx = self.query_ctx_ref.take();
-            GlobalIORuntime::instance().spawn(async move {
-                drop(ctx);
-            });
         }
         let end = self.block_end && self.row_buffer.is_empty();
         Ok((block, end))

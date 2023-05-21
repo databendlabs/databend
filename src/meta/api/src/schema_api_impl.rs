@@ -20,11 +20,14 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::CreateDatabaseWithDropTime;
+use common_meta_app::app_error::CreateIndexWithDropTime;
 use common_meta_app::app_error::CreateTableWithDropTime;
 use common_meta_app::app_error::DatabaseAlreadyExists;
 use common_meta_app::app_error::DropDbWithDropTime;
+use common_meta_app::app_error::DropIndexWithDropTime;
 use common_meta_app::app_error::DropTableWithDropTime;
 use common_meta_app::app_error::DuplicatedUpsertFiles;
+use common_meta_app::app_error::IndexAlreadyExists;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use common_meta_app::app_error::TableAlreadyExists;
 use common_meta_app::app_error::TableVersionMismatched;
@@ -35,6 +38,7 @@ use common_meta_app::app_error::UndropTableAlreadyExists;
 use common_meta_app::app_error::UndropTableHasNoHistory;
 use common_meta_app::app_error::UndropTableWithNoDropTime;
 use common_meta_app::app_error::UnknownDatabaseId;
+use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::WrongShare;
@@ -44,6 +48,8 @@ use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateIndexReply;
+use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DBIdTableName;
@@ -58,13 +64,22 @@ use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropIndexReply;
+use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::IndexId;
+use common_meta_app::schema::IndexIdList;
+use common_meta_app::schema::IndexIdListKey;
+use common_meta_app::schema::IndexIdToName;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListIndexByTableIdReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -139,6 +154,7 @@ use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
+use crate::util::get_index_metas_by_ids;
 use crate::util::get_table_by_id_or_err;
 use crate::util::get_table_names_by_ids;
 use crate::util::list_tables_from_share_db;
@@ -846,6 +862,222 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         }
 
         Ok(db_infos)
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let tenant_index = &req.name_ident;
+
+        if req.meta.drop_on.is_some() {
+            return Err(KVAppError::AppError(AppError::CreateIndexWithDropTime(
+                CreateIndexWithDropTime::new(&tenant_index.index_name),
+            )));
+        }
+
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+            // Get index by name to ensure absence
+            let (index_id_seq, index_id) = get_u64_value(self, tenant_index).await?;
+            debug!(index_id_seq, index_id, ?tenant_index, "get_index_seq_id");
+
+            if index_id_seq > 0 {
+                return if req.if_not_exists {
+                    Ok(CreateIndexReply { index_id })
+                } else {
+                    Err(KVAppError::AppError(AppError::IndexAlreadyExists(
+                        IndexAlreadyExists::new(
+                            &tenant_index.index_name,
+                            format!("create index with tenant: {}", tenant_index.tenant),
+                        ),
+                    )))
+                };
+            }
+
+            // get index id list from _fd_index_id_list/<tenant>/<table_id>
+            let index_id_list_key = IndexIdListKey {
+                tenant: tenant_index.tenant.clone(),
+                table_id: req.meta.table_id,
+            };
+            let (index_id_list_seq, index_id_list_opt): (_, Option<IndexIdList>) =
+                get_pb_value(self, &index_id_list_key).await?;
+
+            let mut index_id_list = if index_id_list_seq == 0 {
+                IndexIdList::new()
+            } else {
+                match index_id_list_opt {
+                    Some(list) => list,
+                    None => IndexIdList::new(),
+                }
+            };
+
+            // Create index by inserting these record:
+            // (tenant, index_name) -> index_id
+            // (index_id) -> index_meta
+            // append index_id into __fd_index_id_list/<tenant>/<table_id>
+            // (index_id) -> (tenant,index_name)
+
+            let index_id = fetch_id(self, IdGenerator::index_id()).await?;
+            let id_key = IndexId { index_id };
+            let id_to_name_key = IndexIdToName { index_id };
+
+            debug!(index_id, index_key = debug(&tenant_index), "new index id");
+
+            {
+                // append index_id into index_id_list
+                index_id_list.append(index_id);
+
+                let condition = vec![
+                    txn_cond_seq(tenant_index, Eq, 0),
+                    txn_cond_seq(&id_to_name_key, Eq, 0),
+                    txn_cond_seq(&index_id_list_key, Eq, index_id_list_seq),
+                ];
+                let if_then = vec![
+                    txn_op_put(tenant_index, serialize_u64(index_id)?), /* (tenant, index_name) -> index_id */
+                    txn_op_put(&id_key, serialize_struct(&req.meta)?),  // (index_id) -> index_meta
+                    txn_op_put(&index_id_list_key, serialize_struct(&index_id_list)?), /* _fd_index_id_list/<tenant> -> index_id_list */
+                    txn_op_put(&id_to_name_key, serialize_struct(tenant_index)?), /* __fd_index_id_to_name/<index_id> -> (tenant,index_name) */
+                ];
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    index_name = debug(&tenant_index),
+                    id = debug(&id_key),
+                    succ = display(succ),
+                    "create_index"
+                );
+
+                if succ {
+                    return Ok(CreateIndexReply { index_id });
+                }
+            }
+        }
+
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("create_index", TXN_MAX_RETRY_TIMES),
+        )))
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let tenant_index = &req.name_ident;
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+
+        loop {
+            trials.next().unwrap()?;
+
+            let res = get_index_or_err(self, tenant_index).await?;
+
+            let (index_id_seq, index_id, index_meta_seq, index_meta) = res;
+
+            if index_id_seq == 0 {
+                return if req.if_exists {
+                    Ok(DropIndexReply {})
+                } else {
+                    return Err(KVAppError::AppError(AppError::UnknownIndex(
+                        UnknownIndex::new(&tenant_index.index_name, "drop_index"),
+                    )));
+                };
+            }
+
+            let index_id_key = IndexId { index_id };
+            // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
+            let mut index_meta = index_meta.unwrap();
+
+            debug!(index_id, name_key = debug(&tenant_index), "drop_index");
+
+            // drop an index with drop time
+            if index_meta.drop_on.is_some() {
+                return Err(KVAppError::AppError(AppError::DropIndexWithDropTime(
+                    DropIndexWithDropTime::new(&tenant_index.index_name),
+                )));
+            }
+            // update drop on time
+            index_meta.drop_on = Some(Utc::now());
+
+            // Delete index by these operations:
+            // del (tenant, index_name) -> index_id
+            // set index_meta.drop_on = now and update (index_id) -> index_meta
+            let condition = vec![
+                txn_cond_seq(tenant_index, Eq, index_id_seq),
+                txn_cond_seq(&index_id_key, Eq, index_meta_seq),
+            ];
+
+            let if_then = vec![
+                txn_op_del(tenant_index), // (tenant, index_name) -> index_id
+                txn_op_put(&index_id_key, serialize_struct(&index_meta)?), /* (index_id) -> index_meta */
+            ];
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                name = debug(&tenant_index),
+                id = debug(&IndexId { index_id }),
+                succ = display(succ),
+                "drop_index"
+            );
+
+            if succ {
+                break;
+            }
+        }
+        Ok(DropIndexReply {})
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn get_indexes_by_table_id(
+        &self,
+        req: ListIndexByTableIdReq,
+    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        // get index id list from _fd_index_id_list/<tenant>/<table_id>
+        let index_id_list_key = IndexIdListKey {
+            tenant: req.tenant.clone(),
+            table_id: req.table_id,
+        };
+
+        let (_, index_id_list): (_, Option<IndexIdList>) =
+            get_pb_value(self, &index_id_list_key).await?;
+
+        debug!(
+            ident = display(&index_id_list_key),
+            "get_indexes_by_table_id"
+        );
+
+        if index_id_list.is_none() {
+            return Ok(None);
+        }
+
+        // filter the dropped indexes.
+        let index_metas = {
+            let ids = index_id_list.unwrap().id_list;
+            let index_metas = get_index_metas_by_ids(self, &ids).await?;
+            index_metas
+                .into_iter()
+                .filter(|(_, meta)| meta.drop_on.is_none())
+                .collect::<Vec<_>>()
+        };
+
+        Ok(Some(index_metas))
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
@@ -2850,4 +3082,16 @@ fn set_update_expire_operation(
         }
     }
     Ok(())
+}
+
+/// Returns (index_id_seq, index_id, index_meta_seq, index_meta)
+pub(crate) async fn get_index_or_err(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_key: &IndexNameIdent,
+) -> Result<(u64, u64, u64, Option<IndexMeta>), KVAppError> {
+    let (index_id_seq, index_id) = get_u64_value(kv_api, name_key).await?;
+    let id_key = IndexId { index_id };
+    let (index_meta_seq, index_meta) = get_pb_value(kv_api, &id_key).await?;
+
+    Ok((index_id_seq, index_id, index_meta_seq, index_meta))
 }

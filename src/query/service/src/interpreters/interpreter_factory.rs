@@ -20,6 +20,8 @@ use common_expression::DataSchemaRef;
 use tracing::error;
 
 use super::interpreter_catalog_create::CreateCatalogInterpreter;
+use super::interpreter_index_create::CreateIndexInterpreter;
+use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
@@ -218,6 +220,17 @@ impl InterpreterFactory {
                 *drop_view.clone(),
             )?)),
 
+            // Indexes
+            Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+
+            Plan::DropIndex(index) => Ok(Arc::new(DropIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+
             // Users
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
                 ctx,
@@ -386,6 +399,10 @@ impl InterpreterFactory {
                 *p.clone(),
             )?)),
             Plan::CreateDatamaskPolicy(p) => Ok(Arc::new(CreateDataMaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropDatamaskPolicy(p) => Ok(Arc::new(DropDataMaskInterpreter::try_create(
                 ctx,
                 *p.clone(),
             )?)),

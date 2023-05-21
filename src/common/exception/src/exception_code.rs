@@ -90,6 +90,7 @@ build_exceptions! {
     BadDataArrayLength(1018),
     UnknownTableId(1020),
     UnknownTable(1025),
+    UnknownView(1026),
     UnknownAggregateFunction(1027),
     NumberArgumentsNotMatch(1028),
     EmptyDataFromServer(1030),
@@ -139,6 +140,7 @@ build_exceptions! {
     TableWithInternalColumnName(1110),
     EmptyShareEndpointConfig(1111),
     LicenceDenied(1112),
+    UnknownDatamask(1113),
 
     // Data Related Errors
 
@@ -223,6 +225,8 @@ build_exceptions! {
     /// - not exists.
     /// - and without `IF EXISTS`
     CatalogNotFound(2320),
+    /// data mask error codes
+    DatamaskAlreadyExists(2321),
 
 
     // Cluster error codes.
@@ -267,6 +271,13 @@ build_exceptions! {
     UnknownShareEndpointId(2716),
     UnknownShareTable(2717),
     CannotShareDatabaseCreatedFromShare(2718),
+
+    // Index error codes.
+    UnsupportedIndex(2719),
+    CreateIndexWithDropTime(2720),
+    IndexAlreadyExists(2721),
+    UnknownIndex(2722),
+    DropIndexWithDropTime(2723),
 
     // Variable error codes.
     UnknownVariable(2801),

@@ -66,6 +66,10 @@ pub trait Visitor<'ast>: Sized {
         walk_identifier(self, table);
     }
 
+    fn visit_index_ref(&mut self, index: &'ast Identifier) {
+        walk_identifier(self, index);
+    }
+
     fn visit_column_ref(
         &mut self,
         _span: Span,
@@ -449,6 +453,9 @@ pub trait Visitor<'ast>: Sized {
     fn visit_alter_view(&mut self, _stmt: &'ast AlterViewStmt) {}
 
     fn visit_drop_view(&mut self, _stmt: &'ast DropViewStmt) {}
+
+    fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
+    fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
 
     fn visit_show_users(&mut self) {}
 

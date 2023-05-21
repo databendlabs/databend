@@ -28,6 +28,7 @@ pub struct DataMaskPolicy {
     pub args: Vec<DataMaskArg>,
     pub return_type: TypeName,
     pub body: Expr,
+    pub comment: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

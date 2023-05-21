@@ -245,18 +245,15 @@ impl MutationAccumulator {
 
             tasks.push(async move {
                 // read the old segment
-                let segment_info =
+                let mut segment_info =
                     SegmentsIO::read_segment(op.clone(), location, schema, false).await?;
-                // prepare the new segment
-                let mut new_segment =
-                    SegmentInfo::new(segment_info.blocks.clone(), segment_info.summary.clone());
+
                 // take away the blocks, they are being mutated
                 let mut block_editor = BTreeMap::<_, _>::from_iter(
-                    std::mem::take(&mut new_segment.blocks)
+                    std::mem::take(&mut segment_info.blocks)
                         .into_iter()
                         .enumerate(),
                 );
-
                 for (idx, new_meta) in segment_mutation.replaced_blocks {
                     block_editor.insert(idx, new_meta);
                 }
@@ -264,12 +261,13 @@ impl MutationAccumulator {
                     block_editor.remove(&idx);
                 }
 
-                // assign back the mutated blocks to segment
-                new_segment.blocks = block_editor.into_values().collect();
-                if !new_segment.blocks.is_empty() {
+                if !block_editor.is_empty() {
+                    // assign back the mutated blocks to segment
+                    let new_blocks = block_editor.into_values().collect::<Vec<_>>();
                     // re-calculate the segment statistics
-                    let new_summary = reduce_block_metas(&new_segment.blocks, thresholds)?;
-                    new_segment.summary = new_summary.clone();
+                    let new_summary = reduce_block_metas(&new_blocks, thresholds)?;
+                    // create new segment info
+                    let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
 
                     // write the segment info.
                     let location = location_gen.gen_segment_info_location();
@@ -282,13 +280,13 @@ impl MutationAccumulator {
                     Ok(SegmentLite {
                         index,
                         new_segment_info: Some((location, new_summary)),
-                        origin_summary: segment_info.summary.clone(),
+                        origin_summary: segment_info.summary,
                     })
                 } else {
                     Ok(SegmentLite {
                         index,
                         new_segment_info: None,
-                        origin_summary: segment_info.summary.clone(),
+                        origin_summary: segment_info.summary,
                     })
                 }
             });

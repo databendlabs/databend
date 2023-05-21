@@ -353,8 +353,8 @@ group by
 order by
     o_year;
 ----
-1995 0.02859999
-1996 0.0182
+1995 0.02864874
+1996 0.01825027
 
 statement ok
 set enable_bushy_join = 0
@@ -800,7 +800,7 @@ where
             l_partkey = p_partkey
 );
 ----
-23512.75
+23512.75195312
 
 #Q18
 query I

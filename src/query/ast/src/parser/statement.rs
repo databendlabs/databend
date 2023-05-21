@@ -690,6 +690,35 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    let create_index = map(
+        rule! {
+            CREATE ~ AGGREGATING ~ INDEX ~ ( IF ~ NOT ~ EXISTS )?
+            ~ #ident
+            ~ AS ~ #query
+        },
+        |(_, _, _, opt_if_not_exists, index_name, _, query)| {
+            Statement::CreateIndex(CreateIndexStmt {
+                index_type: TableIndexType::Aggregating,
+                if_not_exists: opt_if_not_exists.is_some(),
+                index_name,
+                query: Box::new(query),
+            })
+        },
+    );
+
+    let drop_index = map(
+        rule! {
+            DROP ~ AGGREGATING ~ INDEX ~ ( IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, index)| {
+            Statement::DropIndex(DropIndexStmt {
+                if_exists: opt_if_exists.is_some(),
+                index,
+            })
+        },
+    );
+
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
@@ -1225,6 +1254,10 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             #create_view : "`CREATE VIEW [IF NOT EXISTS] [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
             | #drop_view : "`DROP VIEW [IF EXISTS] [<database>.]<view>`"
             | #alter_view : "`ALTER VIEW [<database>.]<view> [(<column>, ...)] AS SELECT ...`"
+        ),
+        rule!(
+            #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
+            | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"

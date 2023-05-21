@@ -24,7 +24,6 @@ use common_expression::infer_table_schema;
 use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
-use common_expression::Expr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -36,10 +35,10 @@ use common_meta_app::schema::TableMeta;
 use common_sql::Planner;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
-use tracing::log::debug;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_filter;
 
 pub struct ColumnsTable {
     table_info: TableInfo,
@@ -153,7 +152,7 @@ impl ColumnsTable {
         if let Some(push_downs) = push_downs {
             if let Some(filter) = push_downs.filter {
                 let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-                find_eq_db_table(&expr, &mut |col_name, scalar| {
+                find_eq_filter(&expr, &mut |col_name, scalar| {
                     if col_name == "database" {
                         if let Scalar::String(s) = scalar {
                             if let Ok(database) = String::from_utf8(s.clone()) {
@@ -181,29 +180,16 @@ impl ColumnsTable {
         let mut rows: Vec<(String, String, TableField)> = vec![];
         for database in databases {
             let tables = if tables.is_empty() {
-                match catalog.list_tables(tenant.as_str(), &database).await {
-                    Ok(table) => table,
-                    Err(_) => {
-                        debug!(
-                            "list all tables in {:?}.{:?} failed.",
-                            CATALOG_DEFAULT, database
-                        );
-                        vec![]
-                    }
+                if let Ok(table) = catalog.list_tables(tenant.as_str(), &database).await {
+                    table
+                } else {
+                    vec![]
                 }
             } else {
                 let mut res = Vec::new();
                 for table in &tables {
-                    match catalog.get_table(tenant.as_str(), &database, table).await {
-                        Ok(table) => {
-                            res.push(table);
-                        }
-                        Err(_) => {
-                            debug!(
-                                "Can not get table {:?}.{:?}.{:?}",
-                                CATALOG_DEFAULT, database, table
-                            )
-                        }
+                    if let Ok(table) = catalog.get_table(tenant.as_str(), &database, table).await {
+                        res.push(table);
                     }
                 }
                 res
@@ -231,30 +217,5 @@ impl ColumnsTable {
         }
 
         Ok(rows)
-    }
-}
-
-pub fn find_eq_db_table(expr: &Expr<String>, visitor: &mut impl FnMut(&str, &Scalar)) {
-    match expr {
-        Expr::Constant { .. } | Expr::ColumnRef { .. } => {}
-        Expr::Cast { expr, .. } => find_eq_db_table(expr, visitor),
-        Expr::FunctionCall { function, args, .. } => {
-            if function.signature.name == "eq" {
-                match args.as_slice() {
-                    [Expr::ColumnRef { id, .. }, Expr::Constant { scalar, .. }]
-                    | [Expr::Constant { scalar, .. }, Expr::ColumnRef { id, .. }] => {
-                        visitor(id, scalar);
-                    }
-                    _ => {}
-                }
-            } else if function.signature.name == "and_filters" {
-                // only support this:
-                // 1. where xx and xx and xx
-                // 2. filter: Column `table`
-                for arg in args {
-                    find_eq_db_table(arg, visitor)
-                }
-            }
-        }
     }
 }

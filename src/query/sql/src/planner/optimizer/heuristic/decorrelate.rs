@@ -12,15 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::collections::HashSet;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
-use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
-use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::JoinPredicate;
 use crate::binder::Visibility;
@@ -30,7 +27,6 @@ use crate::optimizer::heuristic::subquery_rewriter::UnnestResult;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
-use crate::planner::binder::wrap_cast;
 use crate::plans::Aggregate;
 use crate::plans::AggregateFunction;
 use crate::plans::AggregateMode;
@@ -48,7 +44,6 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
-use crate::plans::Statistics;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
 use crate::BaseTableColumn;
@@ -166,21 +161,8 @@ impl SubqueryRewriter {
                     left, right, op, ..
                 } => {
                     if op == ComparisonOp::Equal {
-                        if left.data_type()?.eq(&right.data_type()?) {
-                            left_conditions.push(left.clone());
-                            right_conditions.push(right.clone());
-                            continue;
-                        }
-                        let join_type = common_super_type(
-                            left.data_type()?,
-                            right.data_type()?,
-                            &BUILTIN_FUNCTIONS.default_cast_rules,
-                        )
-                        .ok_or_else(|| ErrorCode::Internal("Cannot find common type"))?;
-                        let left = wrap_cast(left, &join_type);
-                        let right = wrap_cast(right, &join_type);
-                        left_conditions.push(left);
-                        right_conditions.push(right);
+                        left_conditions.push(left.clone());
+                        right_conditions.push(right.clone());
                     } else {
                         non_equi_conditions.push(pred.clone());
                     }
@@ -327,21 +309,18 @@ impl SubqueryRewriter {
                 )?;
                 let output_column = subquery.output_column.clone();
                 let column_name = format!("subquery_{}", output_column.index);
-                let right_condition = wrap_cast(
-                    &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                        span: subquery.span,
-                        column: ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name,
-                            index: output_column.index,
-                            data_type: output_column.data_type,
-                            visibility: Visibility::Visible,
-                        },
-                    }),
-                    &subquery.data_type,
-                );
+                let right_condition = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: subquery.span,
+                    column: ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        table_index: None,
+                        column_name,
+                        index: output_column.index,
+                        data_type: output_column.data_type,
+                        visibility: Visibility::Visible,
+                    },
+                });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
                 let op = *subquery.compare_op.as_ref().unwrap();
                 // Make <child_expr op right_condition> as non_equi_conditions even if op is equal operator.
@@ -413,14 +392,7 @@ impl SubqueryRewriter {
                 Scan {
                     table_index,
                     columns: self.derived_columns.values().cloned().collect(),
-                    push_down_predicates: None,
-                    limit: None,
-                    order_by: None,
-                    statistics: Statistics {
-                        statistics: None,
-                        col_stats: HashMap::new(),
-                    },
-                    prewhere: None,
+                    ..Default::default()
                 }
                 .into(),
             );

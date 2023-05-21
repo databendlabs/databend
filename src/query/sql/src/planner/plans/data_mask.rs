@@ -14,13 +14,17 @@
 
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_ast::ast::DataMaskPolicy;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_meta_app::schema::CreateDatamaskReq;
+use common_meta_app::schema::DatamaskNameIdent;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDatamaskPolicyPlan {
     pub if_not_exists: bool,
+    pub tenant: String,
     pub name: String,
     pub policy: DataMaskPolicy,
 }
@@ -28,6 +32,28 @@ pub struct CreateDatamaskPolicyPlan {
 impl CreateDatamaskPolicyPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
+    }
+}
+
+impl From<CreateDatamaskPolicyPlan> for CreateDatamaskReq {
+    fn from(p: CreateDatamaskPolicyPlan) -> Self {
+        CreateDatamaskReq {
+            if_not_exists: p.if_not_exists,
+            name: DatamaskNameIdent {
+                tenant: p.tenant.clone(),
+                name: p.name.clone(),
+            },
+            args: p
+                .policy
+                .args
+                .iter()
+                .map(|arg| (arg.arg_name.to_string(), arg.arg_type.to_string()))
+                .collect(),
+            return_type: p.policy.return_type.to_string(),
+            body: p.policy.body.to_string(),
+            comment: p.policy.comment,
+            create_on: Utc::now(),
+        }
     }
 }
 

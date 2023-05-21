@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use crate::binder::Binder;
 use crate::plans::CreateDatamaskPolicyPlan;
+use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::Plan;
 
 impl Binder {
@@ -25,6 +26,7 @@ impl Binder {
         &mut self,
         stmt: &CreateDatamaskPolicyStmt,
     ) -> Result<Plan> {
+        let tenant = self.ctx.get_tenant();
         let CreateDatamaskPolicyStmt {
             if_not_exists,
             name,
@@ -33,6 +35,7 @@ impl Binder {
 
         let plan = CreateDatamaskPolicyPlan {
             if_not_exists: *if_not_exists,
+            tenant,
             name: name.to_string(),
             policy: policy.clone(),
         };

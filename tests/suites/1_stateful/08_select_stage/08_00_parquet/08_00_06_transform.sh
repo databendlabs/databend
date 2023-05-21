@@ -41,4 +41,9 @@ echo "create stage s2 url='s3://testbucket/admin/data/' connection=(aws_key_id =
 echo "copy into t2 from (select (t.id+1) from @s2 t)  files=('tuple.parquet');" | $MYSQL_CLIENT_CONNECT
 echo "select * from t2 order by a;" | $MYSQL_CLIENT_CONNECT
 
+echo '--- copy from uri with transform'
+echo "truncate table t2;" | $MYSQL_CLIENT_CONNECT
+echo "copy into t2 from (select (t.id+1) from '${DATADIR}' t)  PATTERN='.*parquet';" | $MYSQL_CLIENT_CONNECT
+echo "select * from t2 order by a;" | $MYSQL_CLIENT_CONNECT
+
 rm -rf ${DATADIR_PATH}

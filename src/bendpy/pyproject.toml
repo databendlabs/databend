@@ -11,6 +11,12 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 
+
+[project.optional-dependencies]
+benchmark = []
+docs = ["pdoc"]
+test = ["pytest", "pandas"]
+
 [project.urls]
 Documentation = "https://databend.rs"
 Homepage =  "https://databend.rs"

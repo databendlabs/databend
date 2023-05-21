@@ -103,14 +103,7 @@ pub struct VacuumTablePlan {
 
 impl VacuumTablePlan {
     pub fn schema(&self) -> DataSchemaRef {
-        if self.option.dry_run.is_some() {
-            Arc::new(DataSchema::new(vec![DataField::new(
-                "Files",
-                DataType::String,
-            )]))
-        } else {
-            Arc::new(DataSchema::empty())
-        }
+        Arc::new(DataSchema::empty())
     }
 }
 

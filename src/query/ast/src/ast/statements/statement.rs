@@ -124,6 +124,10 @@ pub enum Statement {
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
 
+    // indexes
+    CreateIndex(CreateIndexStmt),
+    DropIndex(DropIndexStmt),
+
     // User
     ShowUsers,
     CreateUser(CreateUserStmt),
@@ -374,6 +378,8 @@ impl Display for Statement {
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,

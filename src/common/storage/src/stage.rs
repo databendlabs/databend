@@ -285,7 +285,7 @@ fn blocking_list_files_with_pattern(
 
     // path is a dir
     let mut files = Vec::new();
-    let list = operator.list(path)?;
+    let list = operator.scan(path)?;
     let mut limit = 0;
     for obj in list {
         let obj = obj?;

@@ -15,7 +15,7 @@
 mod aggregate;
 mod call;
 mod copy;
-mod data_mask;
+pub mod data_mask;
 mod ddl;
 mod delete;
 mod dummy_table_scan;

@@ -24,11 +24,11 @@ use crate::sessions::TableContext;
 
 pub struct DropDataMaskInterpreter {
     ctx: Arc<QueryContext>,
-    plan: CreateDatamaskPolicyPlan,
+    plan: DropDatamaskPolicyPlan,
 }
 
 impl DropDataMaskInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: CreateDatamaskPolicyPlan) -> Result<Self> {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DropDatamaskPolicyPlan) -> Result<Self> {
         Ok(DropDataMaskInterpreter { ctx, plan })
     }
 }

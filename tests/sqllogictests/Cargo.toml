@@ -19,7 +19,7 @@ clap = { version = "4.1.11", features = ["derive", "env"] }
 common-exception = { path = "../../src/common/exception" }
 env_logger = "0.10.0"
 futures-util = "0.3.25"
-lazy_static = "1.4.0"
+lazy_static = { workspace = true }
 mysql_async = { version = "0.31", default-features = false, features = ["rustls-tls"] }
 rand = "0.8.5"
 regex = "1.8.1"

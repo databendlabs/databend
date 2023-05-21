@@ -15,7 +15,10 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_license::license_manager::get_license_manager;
 use common_sql::plans::CreateDatamaskPolicyPlan;
+use common_users::UserApiProvider;
+use data_mask::get_datamask_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -41,6 +44,18 @@ impl Interpreter for CreateDataMaskInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let license_manager = get_license_manager();
+        license_manager.manager.check_enterprise_enabled(
+            &self.ctx.get_settings(),
+            self.ctx.get_tenant(),
+            "data_mask".to_string(),
+        )?;
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let handler = get_datamask_handler();
+        handler
+            .create_data_mask(meta_api, self.plan.clone())
+            .await?;
+
         Ok(PipelineBuildResult::create())
     }
 }

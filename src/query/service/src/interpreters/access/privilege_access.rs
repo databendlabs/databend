@@ -86,12 +86,15 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?
             }
-            Plan::CreateUDF(_) | Plan::CreateDatabase(_) => {
+            Plan::CreateUDF(_) | Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Create])
                     .await?;
             }
-            Plan::DropDatabase(_) | Plan::UndropDatabase(_) | Plan::DropUDF(_) => {
+            Plan::DropDatabase(_)
+            | Plan::UndropDatabase(_)
+            | Plan::DropUDF(_)
+            | Plan::DropIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Drop])
                     .await?;
@@ -472,7 +475,7 @@ impl AccessChecker for PrivilegeAccess {
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;
             }
-            Plan::CreateDatamaskPolicy(_) => {
+            Plan::CreateDatamaskPolicy(_) | Plan::DropDatamaskPolicy(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![
                         UserPrivilegeType::CreateDataMask,

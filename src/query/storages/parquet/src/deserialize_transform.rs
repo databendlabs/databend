@@ -141,15 +141,17 @@ impl ParquetDeserializeTransform {
         &mut self,
         part: &ParquetSmallFilesPart,
         buffers: Vec<Vec<u8>>,
-    ) -> Result<()> {
+    ) -> Result<Vec<DataBlock>> {
         assert_eq!(part.files.len(), buffers.len());
+        let mut blocks = Vec::new();
         for (path, data) in part.files.iter().zip(buffers.into_iter()) {
-            self.process_small_file(path.0.as_str(), data)?;
+            blocks.extend(self.process_small_file(path.0.as_str(), data)?);
         }
-        Ok(())
+        Ok(blocks)
     }
 
-    fn process_small_file(&mut self, path: &str, data: Vec<u8>) -> Result<()> {
+    fn process_small_file(&mut self, path: &str, data: Vec<u8>) -> Result<Vec<DataBlock>> {
+        let mut res = Vec::new();
         use opendal::services::Memory;
         use opendal::Operator;
         let builder = Memory::default();
@@ -169,16 +171,18 @@ impl ParquetDeserializeTransform {
             let mut readers = self
                 .source_reader
                 .row_group_readers_from_blocking_io(&part, &blocking_op)?;
-            self.process_row_group(&part, &mut readers)?;
+            if let Some(block) = self.process_row_group(&part, &mut readers)? {
+                res.push(block)
+            }
         }
-        Ok(())
+        Ok(res)
     }
 
     fn process_row_group(
         &mut self,
         part: &ParquetRowGroupPart,
         readers: &mut IndexedReaders,
-    ) -> Result<()> {
+    ) -> Result<Option<DataBlock>> {
         let row_selection = part
             .row_selection
             .as_ref()
@@ -187,8 +191,7 @@ impl ParquetDeserializeTransform {
         // this means it's empty projection
         if readers.is_empty() {
             let data_block = DataBlock::new(vec![], part.num_rows);
-            self.add_block(data_block)?;
-            return Ok(());
+            return Ok(Some(data_block));
         }
 
         let data_block = match self.prewhere_info.as_mut() {
@@ -219,7 +222,7 @@ impl ParquetDeserializeTransform {
                         .as_column()
                         .unwrap();
                     if sorter.never_match_any(col) {
-                        return Ok(());
+                        return Ok(None);
                     }
                 }
 
@@ -233,7 +236,7 @@ impl ParquetDeserializeTransform {
 
                 // Step 3: Apply the filter, if it's all filtered, we can skip the remain columns.
                 if FilterHelpers::is_all_unset(&filter) {
-                    return Ok(());
+                    return Ok(None);
                 }
 
                 // Step 4: Apply the filter to topk and update the bitmap, this will filter more results
@@ -252,7 +255,7 @@ impl ParquetDeserializeTransform {
                 };
 
                 if FilterHelpers::is_all_unset(&filter) {
-                    return Ok(());
+                    return Ok(None);
                 }
 
                 // Step 5 Remove columns that are not needed for output. Use dummy column to replace them.
@@ -305,8 +308,7 @@ impl ParquetDeserializeTransform {
             }
         }?;
 
-        self.add_block(data_block)?;
-        Ok(())
+        Ok(Some(data_block))
     }
 }
 
@@ -365,10 +367,20 @@ impl Processor for ParquetDeserializeTransform {
             let part = ParquetPart::from_part(&part)?;
             match (&part, data) {
                 (ParquetPart::RowGroup(rg), ParquetPartData::RowGroup(mut reader)) => {
-                    self.process_row_group(rg, &mut reader)?;
+                    if let Some(block) = self.process_row_group(rg, &mut reader)? {
+                        self.add_block(block)?;
+                    }
                 }
                 (ParquetPart::SmallFiles(p), ParquetPartData::SmallFiles(buffers)) => {
-                    self.process_small_files(p, buffers)?;
+                    let blocks = self.process_small_files(p, buffers)?;
+                    if !blocks.is_empty() {
+                        let block = if blocks.len() > 1 {
+                            DataBlock::concat(&blocks)?
+                        } else {
+                            blocks[0].clone()
+                        };
+                        self.add_block(block)?;
+                    }
                 }
                 _ => {
                     unreachable!("wrong type ParquetPartData for ParquetPart")
@@ -384,7 +396,7 @@ impl Processor for ParquetDeserializeTransform {
 fn intervals_to_bitmap(interval: &[Interval], num_rows: usize) -> Bitmap {
     debug_assert!(
         interval.is_empty()
-            || interval.last().unwrap().start + interval.last().unwrap().length < num_rows
+            || interval.last().unwrap().start + interval.last().unwrap().length <= num_rows
     );
 
     let mut bitmap = MutableBitmap::with_capacity(num_rows);

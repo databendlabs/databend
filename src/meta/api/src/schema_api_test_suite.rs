@@ -26,6 +26,7 @@ use common_expression::TableSchema;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
@@ -37,11 +38,16 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::IndexNameIdent;
+use common_meta_app::schema::IndexType;
 use common_meta_app::schema::ListDatabaseReq;
+use common_meta_app::schema::ListIndexByTableIdReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
@@ -259,6 +265,7 @@ impl SchemaApiTestSuite {
         suite
             .update_table_with_copied_files(&b.build().await)
             .await?;
+        suite.index_create_list_drop(&b.build().await).await?;
         Ok(())
     }
 
@@ -3654,6 +3661,219 @@ impl SchemaApiTestSuite {
                 assert_eq!(Some(&"t1".to_string()), res[0].2.options.get("name"));
                 assert_eq!(Some(&"t2".to_string()), res[1].2.options.get("name"));
             }
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
+    async fn index_create_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+        let db_name = "db1";
+        let table_name = "tb1";
+        let table_id;
+        let index_id;
+
+        let db_table_name_ident = TableNameIdent {
+            tenant: tenant.to_string(),
+            db_name: db_name.to_string(),
+            table_name: table_name.to_string(),
+        };
+
+        let schema = || {
+            Arc::new(TableSchema::new(vec![
+                TableField::new("a", TableDataType::Number(NumberDataType::UInt64)),
+                TableField::new("b", TableDataType::Number(NumberDataType::UInt64)),
+            ]))
+        };
+
+        let options = || maplit::btreemap! {"opt‐1".into() => "val-1".into()};
+
+        let table_meta = |created_on| TableMeta {
+            schema: schema(),
+            engine: "JSON".to_string(),
+            options: options(),
+            updated_on: created_on,
+            created_on,
+            ..TableMeta::default()
+        };
+
+        let created_on = Utc::now();
+
+        let req = CreateTableReq {
+            if_not_exists: false,
+            name_ident: db_table_name_ident.clone(),
+            table_meta: table_meta(created_on),
+        };
+
+        {
+            info!("--- prepare db and table");
+            // prepare db1
+            let res = self.create_database(mt, tenant, "db1", "eng1").await?;
+            assert_eq!(1, res.db_id);
+
+            let res = mt.create_table(req).await?;
+            table_id = res.table_id;
+        }
+
+        let index_name_1 = "idx1";
+        let index_meta_1 = IndexMeta {
+            table_id,
+            index_type: IndexType::AGGREGATING,
+            created_on,
+            drop_on: None,
+            query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
+        };
+
+        let index_name_2 = "idx2";
+        let index_meta_2 = IndexMeta {
+            table_id,
+            index_type: IndexType::AGGREGATING,
+            created_on,
+            drop_on: None,
+            query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
+        };
+
+        let name_ident_1 = IndexNameIdent {
+            tenant: tenant.to_string(),
+            index_name: index_name_1.to_string(),
+        };
+
+        let name_ident_2 = IndexNameIdent {
+            tenant: tenant.to_string(),
+            index_name: index_name_2.to_string(),
+        };
+
+        {
+            info!("--- list index with no create before");
+            let req = ListIndexByTableIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.get_indexes_by_table_id(req).await?;
+            assert!(res.is_none())
+        }
+
+        {
+            info!("--- create index");
+            let req = CreateIndexReq {
+                if_not_exists: false,
+                name_ident: name_ident_1.clone(),
+                meta: index_meta_1.clone(),
+            };
+
+            let res = mt.create_index(req).await?;
+            index_id = res.index_id;
+
+            let req = CreateIndexReq {
+                if_not_exists: false,
+                name_ident: name_ident_2.clone(),
+                meta: index_meta_2.clone(),
+            };
+
+            mt.create_index(req).await?;
+        }
+
+        {
+            info!("--- create index again with if_not_exists = false");
+            let req = CreateIndexReq {
+                if_not_exists: false,
+                name_ident: name_ident_1.clone(),
+                meta: index_meta_1.clone(),
+            };
+
+            let res = mt.create_index(req).await;
+            let status = res.err().unwrap();
+            let err_code = ErrorCode::from(status);
+
+            assert_eq!(ErrorCode::IndexAlreadyExists("").code(), err_code.code());
+        }
+
+        {
+            info!("--- create index again with if_not_exists = true");
+            let req = CreateIndexReq {
+                if_not_exists: true,
+                name_ident: name_ident_1.clone(),
+                meta: index_meta_1.clone(),
+            };
+
+            let res = mt.create_index(req).await?;
+            assert_eq!(index_id, res.index_id);
+        }
+
+        {
+            info!("--- list index");
+            let req = ListIndexByTableIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.get_indexes_by_table_id(req).await?;
+            assert_eq!(2, res.unwrap().len());
+        }
+
+        {
+            info!("--- drop index");
+            let req = DropIndexReq {
+                if_exists: false,
+                name_ident: name_ident_1.clone(),
+            };
+
+            let res = mt.drop_index(req).await;
+            assert!(res.is_ok())
+        }
+
+        {
+            info!("--- list index after drop one");
+            let req = ListIndexByTableIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.get_indexes_by_table_id(req).await?;
+            assert_eq!(1, res.unwrap().len());
+        }
+
+        {
+            info!("--- list index after drop all");
+            let req = DropIndexReq {
+                if_exists: false,
+                name_ident: name_ident_2.clone(),
+            };
+
+            let res = mt.drop_index(req).await;
+            assert!(res.is_ok());
+
+            let req = ListIndexByTableIdReq {
+                tenant: tenant.to_string(),
+                table_id,
+            };
+
+            let res = mt.get_indexes_by_table_id(req).await?;
+            assert_eq!(0, res.unwrap().len())
+        }
+
+        {
+            info!("--- drop index with if exists = false");
+            let req = DropIndexReq {
+                if_exists: false,
+                name_ident: name_ident_1.clone(),
+            };
+
+            let res = mt.drop_index(req).await;
+            assert!(res.is_err())
+        }
+
+        {
+            info!("--- drop index with if exists = true");
+            let req = DropIndexReq {
+                if_exists: true,
+                name_ident: name_ident_1.clone(),
+            };
+
+            let res = mt.drop_index(req).await;
+            assert!(res.is_ok())
         }
 
         Ok(())

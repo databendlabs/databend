@@ -26,10 +26,9 @@ pub trait DatamaskApi: Send + Sync {
     async fn create_data_mask(
         &self,
         req: CreateDatamaskReq,
-    ) -> Result<(CreateDatamaskReply, KVAppError)>;
+    ) -> Result<CreateDatamaskReply, KVAppError>;
 
-    async fn drop_data_mask(&self, req: DropDatamaskReq)
-    -> Result<(DropDatamaskReply, KVAppError)>;
+    async fn drop_data_mask(&self, req: DropDatamaskReq) -> Result<DropDatamaskReply, KVAppError>;
 
-    async fn get_data_mask(&self, req: GetDatamaskReq) -> Result<(GetDatamaskReply, KVAppError)>;
+    async fn get_data_mask(&self, req: GetDatamaskReq) -> Result<GetDatamaskReply, KVAppError>;
 }

@@ -1496,6 +1496,28 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_create_index(&mut self, stmt: &'ast CreateIndexStmt) {
+        self.visit_index_ref(&stmt.index_name);
+        let index_child = self.children.pop().unwrap();
+        self.visit_query(&stmt.query);
+        let query_child = self.children.pop().unwrap();
+
+        let name = "CreateIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 2);
+        let node = FormatTreeNode::with_children(format_ctx, vec![index_child, query_child]);
+        self.children.push(node);
+    }
+
+    fn visit_drop_index(&mut self, stmt: &'ast DropIndexStmt) {
+        self.visit_index_ref(&stmt.index);
+        let child = self.children.pop().unwrap();
+
+        let name = "DropIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
     fn visit_show_users(&mut self) {
         let name = "ShowUsers".to_string();
         let format_ctx = AstFormatContext::new(name);

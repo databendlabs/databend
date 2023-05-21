@@ -30,6 +30,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::HttpQueryContext;
+use crate::interpreters::InterpreterFactory;
 use crate::interpreters::InterpreterQueryLog;
 use crate::servers::http::v1::query::execute_state::ExecuteStarting;
 use crate::servers::http::v1::query::execute_state::ExecuteStopped;
@@ -289,12 +290,13 @@ impl HttpQuery {
         let block_sender_closer = block_sender.closer();
         let state_clone = state.clone();
         let ctx_clone = ctx.clone();
-        let ctx_clone2 = ctx.clone();
         let sql = request.sql.clone();
         let query_id = id.clone();
         let query_id_clone = id.clone();
 
-        let schema = ExecuteState::get_schema(&sql, ctx.clone()).await?;
+        let (plan, plan_extras) = ExecuteState::plan_sql(&sql, ctx.clone()).await?;
+        let schema = InterpreterFactory::get(ctx.clone(), &plan).await?.schema();
+
         let http_query_runtime_instance = GlobalQueryRuntime::instance();
         http_query_runtime_instance
             .runtime()
@@ -302,7 +304,8 @@ impl HttpQuery {
                 let state = state_clone.clone();
                 if let Err(e) = ExecuteState::try_start_query(
                     state,
-                    &sql,
+                    plan,
+                    plan_extras,
                     session,
                     ctx_clone.clone(),
                     block_sender,
@@ -334,7 +337,6 @@ impl HttpQuery {
             block_receiver,
             schema,
             format_settings,
-            ctx_clone2,
         )));
         let query = HttpQuery {
             id,
