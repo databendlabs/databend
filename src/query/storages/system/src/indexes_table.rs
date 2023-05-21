@@ -60,20 +60,20 @@ impl AsyncSystemTable for IndexesTable {
             })
             .await?
         {
-            let mut names = Vec::with_capacity(indexes.len());
+            // let mut names = Vec::with_capacity(indexes.len());
             let mut types = Vec::with_capacity(indexes.len());
             let mut defs = Vec::with_capacity(indexes.len());
             let mut created_on = Vec::with_capacity(indexes.len());
 
             for (_, index) in indexes {
-                names.push(index.ident.index_name.as_bytes().to_vec());
+                // names.push(index.ident.index_name.as_bytes().to_vec());
                 types.push(index.index_type.to_string().as_bytes().to_vec());
                 defs.push(index.query.as_bytes().to_vec());
                 created_on.push(index.created_on.timestamp_micros());
             }
 
             Ok(DataBlock::new_from_columns(vec![
-                StringType::from_data(names),
+                // StringType::from_data(names),
                 StringType::from_data(types),
                 StringType::from_data(defs),
                 TimestampType::from_data(created_on),

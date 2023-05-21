@@ -18,7 +18,6 @@
 use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app::schema as mt;
-use common_meta_app::schema::IndexNameIdent;
 use common_protos::pb;
 use num::FromPrimitive;
 
@@ -69,12 +68,6 @@ impl FromToProto for mt::IndexMeta {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {
-            ident: match p.ident {
-                Some(ident) => IndexNameIdent::from_pb(ident)?,
-                None => Err(Incompatible {
-                    reason: "IndexMeta.ident cannot be None".to_string(),
-                })?,
-            },
             table_id: p.table_id,
             index_type: FromPrimitive::from_i32(p.index_type).ok_or_else(|| Incompatible {
                 reason: format!("invalid IndexType: {}", p.index_type),
@@ -93,7 +86,6 @@ impl FromToProto for mt::IndexMeta {
         let p = pb::IndexMeta {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            ident: Some(self.ident.to_pb()?),
             table_id: self.table_id,
             index_type: self.index_type.clone() as i32,
             created_on: self.created_on.to_pb()?,

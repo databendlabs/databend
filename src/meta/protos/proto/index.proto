@@ -42,22 +42,19 @@ message IndexMeta {
   uint64 ver = 100;
   uint64 min_reader_ver = 101;
 
-  // The index ident
-  IndexNameIdent ident = 1;
+  // The table_id index belong to
+  uint64 table_id = 1;
 
-  // The table index belong to
-  uint64 table_id = 2;
-
-  IndexType index_type = 3;
+  IndexType index_type = 2;
 
   // The time index created.
-  string created_on = 4;
+  string created_on = 3;
 
   // The time index dropped.
-  optional string drop_on = 5;
+  optional string drop_on = 4;
 
   // The index based query string
-  string query = 6;
+  string query = 5;
 }
 
 // Save index id list history.

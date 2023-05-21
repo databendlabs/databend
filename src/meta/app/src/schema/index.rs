@@ -45,6 +45,17 @@ impl Display for IndexNameIdent {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]
+pub struct IndexIdToName {
+    pub index_id: u64,
+}
+
+impl Display for IndexIdToName {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.index_id)
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct IndexId {
     pub index_id: u64,
@@ -136,8 +147,6 @@ impl Display for IndexIdList {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct IndexMeta {
-    pub ident: IndexNameIdent,
-
     pub table_id: MetaId,
 
     pub index_type: IndexType,
@@ -150,7 +159,6 @@ pub struct IndexMeta {
 impl Default for IndexMeta {
     fn default() -> Self {
         IndexMeta {
-            ident: IndexNameIdent::default(),
             table_id: 0,
             index_type: IndexType::default(),
             created_on: Utc::now(),
@@ -163,6 +171,7 @@ impl Default for IndexMeta {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexReq {
     pub if_not_exists: bool,
+    pub name_ident: IndexNameIdent,
     pub meta: IndexMeta,
 }
 
@@ -171,7 +180,7 @@ impl Display for CreateIndexReq {
         write!(
             f,
             "create_index(if_not_exists={}):{}={:?}",
-            self.if_not_exists, self.meta.ident.tenant, self.meta
+            self.if_not_exists, self.name_ident.tenant, self.meta
         )
     }
 }
@@ -220,10 +229,12 @@ mod kvapi_key_impl {
 
     use crate::schema::IndexId;
     use crate::schema::IndexIdListKey;
+    use crate::schema::IndexIdToName;
     use crate::schema::IndexNameIdent;
     use crate::schema::PREFIX_INDEX;
     use crate::schema::PREFIX_INDEX_BY_ID;
     use crate::schema::PREFIX_INDEX_ID_LIST;
+    use crate::schema::PREFIX_INDEX_ID_TO_NAME;
 
     /// <prefix>/<tenant>/<index_name> -> <index_id>
     impl kvapi::Key for IndexNameIdent {
@@ -264,6 +275,26 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(IndexId { index_id })
+        }
+    }
+
+    /// "<prefix>/<index_id> -> IndexNameIdent"
+    impl kvapi::Key for IndexIdToName {
+        const PREFIX: &'static str = PREFIX_INDEX_ID_TO_NAME;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.index_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let index_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(IndexIdToName { index_id })
         }
     }
 

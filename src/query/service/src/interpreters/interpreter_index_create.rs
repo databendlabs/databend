@@ -69,8 +69,8 @@ impl Interpreter for CreateIndexInterpreter {
 
         let create_index_req = CreateIndexReq {
             if_not_exists: self.plan.if_not_exists,
+            name_ident: IndexNameIdent { tenant, index_name },
             meta: IndexMeta {
-                ident: IndexNameIdent { tenant, index_name },
                 table_id: self.plan.table_id,
                 index_type: IndexType::AGGREGATING,
                 created_on: Utc::now(),
