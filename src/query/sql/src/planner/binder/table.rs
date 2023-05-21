@@ -240,7 +240,7 @@ impl Binder {
                                 .unwrap_or(vec![]);
 
                             let mut s_exprs = Vec::with_capacity(indexes.len());
-                            for (index_id, index_meta) in indexes {
+                            for (index_id, _, index_meta) in indexes {
                                 let tokens = tokenize_sql(&index_meta.query)?;
                                 let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                                 let mut new_bind_context =
@@ -838,10 +838,10 @@ impl Binder {
         tenant: &str,
         catalog_name: &str,
         table_id: MetaId,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>> {
         let catalog = self.catalogs.get_catalog(catalog_name)?;
         let index_metas = catalog
-            .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
+            .list_indexes(ListIndexesReq::new(tenant, Some(table_id), false))
             .await?;
 
         Ok(index_metas)

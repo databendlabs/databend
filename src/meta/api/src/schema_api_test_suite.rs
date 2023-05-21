@@ -43,6 +43,7 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
+use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::IndexType;
@@ -3749,6 +3750,7 @@ impl SchemaApiTestSuite {
             let req = ListIndexesReq {
                 tenant: tenant.to_string(),
                 table_id: Some(table_id),
+                with_name: false,
             };
 
             let res = mt.list_indexes(req).await?;
@@ -3807,6 +3809,7 @@ impl SchemaApiTestSuite {
             let req = ListIndexesReq {
                 tenant: tenant.to_string(),
                 table_id: None,
+                with_name: false,
             };
 
             let res = mt.list_indexes(req).await?;
@@ -3815,6 +3818,7 @@ impl SchemaApiTestSuite {
             let req = ListIndexesReq {
                 tenant: tenant.to_string(),
                 table_id: Some(u64::MAX),
+                with_name: false,
             };
 
             let res = mt.list_indexes(req).await?;
@@ -3825,7 +3829,7 @@ impl SchemaApiTestSuite {
             info!("--- drop index");
             let req = DropIndexReq {
                 if_exists: false,
-                name_ident: name_ident_1.clone(),
+                name_ident: name_ident_2.clone(),
             };
 
             let res = mt.drop_index(req).await;
@@ -3837,6 +3841,7 @@ impl SchemaApiTestSuite {
             let req = ListIndexesReq {
                 tenant: tenant.to_string(),
                 table_id: Some(table_id),
+                with_name: false,
             };
 
             let res = mt.list_indexes(req).await?;
@@ -3844,10 +3849,42 @@ impl SchemaApiTestSuite {
         }
 
         {
+            info!("--- list index without name");
+            let req = ListIndexesReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+                with_name: false,
+            };
+
+            let res = mt.list_indexes(req).await?.unwrap();
+            assert_eq!(1, res.len());
+            assert_eq!(
+                vec![(IndexId { index_id }, "".to_string(), index_meta_1.clone())],
+                res
+            );
+        }
+
+        {
+            info!("--- list index with name");
+            let req = ListIndexesReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+                with_name: true,
+            };
+
+            let res = mt.list_indexes(req).await?.unwrap();
+            assert_eq!(1, res.len());
+            assert_eq!(
+                vec![(IndexId { index_id }, index_name_1.to_string(), index_meta_1)],
+                res
+            );
+        }
+
+        {
             info!("--- list index after drop all");
             let req = DropIndexReq {
                 if_exists: false,
-                name_ident: name_ident_2.clone(),
+                name_ident: name_ident_1.clone(),
             };
 
             let res = mt.drop_index(req).await;
@@ -3856,6 +3893,7 @@ impl SchemaApiTestSuite {
             let req = ListIndexesReq {
                 tenant: tenant.to_string(),
                 table_id: Some(table_id),
+                with_name: false,
             };
 
             let res = mt.list_indexes(req).await?;

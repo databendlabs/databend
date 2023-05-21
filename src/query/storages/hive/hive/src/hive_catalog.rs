@@ -430,7 +430,7 @@ impl Catalog for HiveCatalog {
     async fn list_indexes(
         &self,
         _req: ListIndexesReq,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>> {
         unimplemented!()
     }
 

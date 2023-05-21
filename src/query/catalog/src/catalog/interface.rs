@@ -88,7 +88,10 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply>;
 
-    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Option<Vec<(IndexId, IndexMeta)>>>;
+    async fn list_indexes(
+        &self,
+        req: ListIndexesReq,
+    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>>;
 
     #[async_backtrace::framed]
     async fn exists_database(&self, tenant: &str, db_name: &str) -> Result<bool> {

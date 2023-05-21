@@ -213,13 +213,20 @@ pub struct DropIndexReply {}
 pub struct ListIndexesReq {
     pub tenant: String,
     pub table_id: Option<MetaId>,
+    // If need index name.
+    pub with_name: bool,
 }
 
 impl ListIndexesReq {
-    pub fn new(tenant: impl Into<String>, table_id: Option<MetaId>) -> ListIndexesReq {
+    pub fn new(
+        tenant: impl Into<String>,
+        table_id: Option<MetaId>,
+        with_name: bool,
+    ) -> ListIndexesReq {
         ListIndexesReq {
             tenant: tenant.into(),
             table_id,
+            with_name,
         }
     }
 }

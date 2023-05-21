@@ -105,7 +105,7 @@ pub trait SchemaApi: Send + Sync {
     async fn list_indexes(
         &self,
         req: ListIndexesReq,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>, KVAppError>;
+    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>, KVAppError>;
 
     // table
 

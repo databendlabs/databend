@@ -221,7 +221,10 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+    async fn list_indexes(
+        &self,
+        req: ListIndexesReq,
+    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>> {
         Ok(self.ctx.meta.list_indexes(req).await?)
     }
 

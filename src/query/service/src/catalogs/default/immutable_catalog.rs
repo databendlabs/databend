@@ -286,7 +286,7 @@ impl Catalog for ImmutableCatalog {
     async fn list_indexes(
         &self,
         _req: ListIndexesReq,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>> {
         unimplemented!()
     }
 }

@@ -155,6 +155,7 @@ use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
 use crate::util::get_index_metas_by_ids;
+use crate::util::get_index_names_by_ids;
 use crate::util::get_table_by_id_or_err;
 use crate::util::get_table_names_by_ids;
 use crate::util::list_tables_from_share_db;
@@ -1045,7 +1046,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     async fn list_indexes(
         &self,
         req: ListIndexesReq,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>, KVAppError> {
+    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         // get index id list from _fd_index_id_list/<tenant>
@@ -1063,12 +1064,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         }
 
         // filter the dropped indexes.
-        let index_metas = {
+        let mut index_metas = {
             let ids = index_id_list.unwrap().id_list;
             let index_metas = get_index_metas_by_ids(self, &ids).await?;
             index_metas
                 .into_iter()
-                .filter(|(_, meta)| {
+                .filter(|(_, _, meta)| {
                     // 1. index is not dropped.
                     // 2. table_id is not specified
                     //    or table_id is specified and equals to the given table_id.
@@ -1077,6 +1078,19 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 })
                 .collect::<Vec<_>>()
         };
+
+        if req.with_name {
+            let ids = index_metas
+                .iter()
+                .map(|(id, _, _)| id.index_id)
+                .collect::<Vec<_>>();
+            let index_names = get_index_names_by_ids(self, &ids).await?;
+            debug_assert!(index_metas.len() == index_names.len());
+            index_metas
+                .iter_mut()
+                .zip(index_names.into_iter())
+                .for_each(|((_, name, _), s)| *name = s);
+        }
 
         Ok(Some(index_metas))
     }

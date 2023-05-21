@@ -481,7 +481,10 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+    async fn list_indexes(
+        &self,
+        req: ListIndexesReq,
+    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>> {
         self.mutable_catalog.list_indexes(req).await
     }
 
