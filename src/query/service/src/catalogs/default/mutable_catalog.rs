@@ -54,7 +54,6 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -389,7 +388,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(&self, table_id: u64) -> Result<Vec<Revision>> {
+    async fn list_table_lock_revs(&self, table_id: u64) -> Result<Vec<u64>> {
         let req = ListTableLockRevReq { table_id };
         let res = self.ctx.meta.list_table_lock_revs(req).await?;
         Ok(res)

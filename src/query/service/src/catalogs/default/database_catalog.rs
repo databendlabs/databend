@@ -43,7 +43,6 @@ use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
-use common_meta_app::schema::Revision;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
@@ -509,7 +508,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_table_lock_revs(&self, table_id: u64) -> Result<Vec<Revision>> {
+    async fn list_table_lock_revs(&self, table_id: u64) -> Result<Vec<u64>> {
         self.mutable_catalog.list_table_lock_revs(table_id).await
     }
 

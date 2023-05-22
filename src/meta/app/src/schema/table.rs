@@ -752,8 +752,6 @@ pub struct ListTableLockRevReq {
     pub table_id: u64,
 }
 
-pub type Revision = u64;
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateTableLockRevReq {
     pub table_id: u64,

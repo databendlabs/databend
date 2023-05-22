@@ -66,7 +66,6 @@ pub use table::ListTableLockRevReq;
 pub use table::ListTableReq;
 pub use table::RenameTableReply;
 pub use table::RenameTableReq;
-pub use table::Revision;
 pub use table::TableCopiedFileInfo;
 pub use table::TableCopiedFileLockKey;
 pub use table::TableCopiedFileNameIdent;
