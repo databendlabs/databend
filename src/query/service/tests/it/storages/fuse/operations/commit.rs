@@ -46,6 +46,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
@@ -744,6 +745,31 @@ impl Catalog for FakedCatalog {
     }
 
     fn as_any(&self) -> &dyn Any {
+        todo!()
+    }
+
+    async fn list_table_lock_revs(&self, _table_id: u64) -> Result<Vec<u64>> {
+        todo!()
+    }
+
+    async fn create_table_lock_rev(
+        &self,
+        _expire_sec: u64,
+        _table_info: &TableInfo,
+    ) -> Result<CreateTableLockRevReply> {
+        todo!()
+    }
+
+    async fn extend_table_lock_rev(
+        &self,
+        _expire_sec: u64,
+        _table_info: &TableInfo,
+        _revision: u64,
+    ) -> Result<()> {
+        todo!()
+    }
+
+    async fn delete_table_lock_rev(&self, _table_info: &TableInfo, _revision: u64) -> Result<()> {
         todo!()
     }
 }

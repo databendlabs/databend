@@ -2637,6 +2637,7 @@ dependencies = [
  "storages-common-pruner",
  "storages-common-table-meta",
  "streaming-decompression",
+ "table-lock",
  "tracing",
  "typetag",
  "uuid",
@@ -3659,6 +3660,7 @@ dependencies = [
  "storages-common-table-meta",
  "strength_reduce",
  "sysinfo",
+ "table-lock",
  "temp-env",
  "tempfile",
  "time 0.3.17",
@@ -3984,13 +3986,18 @@ dependencies = [
  "common-exception",
  "common-license",
  "common-meta-app",
+ "common-meta-kvapi",
+ "common-meta-types",
  "common-settings",
  "common-storages-fuse",
+ "common-users",
  "dashmap",
  "databend-query",
+ "futures-util",
  "jwt-simple",
  "storages-common-cache",
  "storages-common-table-meta",
+ "table-lock",
  "tracing",
  "vacuum-handler",
 ]
@@ -10052,6 +10059,21 @@ dependencies = [
  "once_cell",
  "rayon",
  "winapi",
+]
+
+[[package]]
+name = "table-lock"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-license",
+ "common-meta-app",
+ "futures",
+ "rand 0.8.5",
 ]
 
 [[package]]

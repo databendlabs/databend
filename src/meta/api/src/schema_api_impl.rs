@@ -50,6 +50,8 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DBIdTableName;
@@ -62,12 +64,15 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
+use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::EmptyProto;
+use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
@@ -78,6 +83,7 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -91,6 +97,7 @@ use common_meta_app::schema::TableIdListKey;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableLockKey;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TruncateTableReply;
@@ -2507,6 +2514,176 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         );
 
         Ok(CountTablesReply { count })
+    }
+
+    async fn list_table_lock_revs(&self, req: ListTableLockRevReq) -> Result<Vec<u64>, KVAppError> {
+        let prefix = format!("{}/{}", TableLockKey::PREFIX, req.table_id);
+        let reply = self.prefix_list_kv(&prefix).await?;
+
+        let mut revisions = vec![];
+        for (k, _) in reply.into_iter() {
+            let lock_key = TableLockKey::from_str_key(&k).map_err(|e| {
+                let inv = InvalidReply::new("list_table_lock_revs", &e);
+                let meta_net_err = MetaNetworkError::InvalidReply(inv);
+                MetaError::NetworkError(meta_net_err)
+            })?;
+
+            revisions.push(lock_key.revision);
+        }
+        Ok(revisions)
+    }
+
+    async fn create_table_lock_rev(
+        &self,
+        req: CreateTableLockRevReq,
+    ) -> Result<CreateTableLockRevReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let table_id = req.table_id;
+        let tbid = TableId { table_id };
+
+        let revision = fetch_id(self, IdGenerator::table_lock_id()).await?;
+
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+        loop {
+            trials.next().unwrap()?;
+
+            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
+            let lock_key = TableLockKey { table_id, revision };
+
+            let lock = EmptyProto {};
+
+            let condition = vec![
+                // table is not changed
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                // assumes lock are absent.
+                txn_cond_seq(&lock_key, Eq, 0),
+            ];
+
+            let if_then = vec![txn_op_put_with_expire(
+                &lock_key,
+                serialize_struct(&lock)?,
+                req.expire_at,
+            )];
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                ident = display(&tbid),
+                succ = display(succ),
+                "create_table_lock_rev"
+            );
+
+            if succ {
+                break;
+            }
+        }
+
+        Ok(CreateTableLockRevReply { revision })
+    }
+
+    async fn extend_table_lock_rev(&self, req: ExtendTableLockRevReq) -> Result<(), KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let table_id = req.table_id;
+        let revision = req.revision;
+
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+
+        loop {
+            trials.next().unwrap()?;
+
+            let tbid = TableId { table_id };
+            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
+
+            let lock_key = TableLockKey { table_id, revision };
+            let (lock_key_seq, _): (_, Option<EmptyProto>) = get_pb_value(self, &lock_key).await?;
+
+            let lock = EmptyProto {};
+
+            let condition = vec![
+                // table is not changed
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                txn_cond_seq(&lock_key, Eq, lock_key_seq),
+            ];
+
+            let if_then = vec![txn_op_put_with_expire(
+                &lock_key,
+                serialize_struct(&lock)?,
+                req.expire_at,
+            )];
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                ident = display(&tbid),
+                succ = display(succ),
+                "extend_table_lock_rev"
+            );
+
+            if succ {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    async fn delete_table_lock_rev(&self, req: DeleteTableLockRevReq) -> Result<(), KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let table_id = req.table_id;
+        let revision = req.revision;
+
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+
+        loop {
+            trials.next().unwrap()?;
+
+            let lock_key = TableLockKey { table_id, revision };
+            let (lock_key_seq, _): (_, Option<EmptyProto>) = get_pb_value(self, &lock_key).await?;
+            if lock_key_seq == 0 {
+                return Ok(());
+            }
+
+            let condition = vec![txn_cond_seq(&lock_key, Eq, lock_key_seq)];
+            let if_then = vec![txn_op_del(&lock_key)];
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            let tbid = TableId { table_id };
+            debug!(
+                ident = display(&tbid),
+                succ = display(succ),
+                "delete_table_lock_rev"
+            );
+
+            if succ {
+                break;
+            }
+        }
+
+        Ok(())
     }
 
     fn name(&self) -> String {

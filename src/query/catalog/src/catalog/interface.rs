@@ -23,6 +23,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
@@ -176,6 +177,23 @@ pub trait Catalog: DynClone + Send + Sync {
         table_info: &TableInfo,
         req: TruncateTableReq,
     ) -> Result<TruncateTableReply>;
+
+    async fn list_table_lock_revs(&self, table_id: u64) -> Result<Vec<u64>>;
+
+    async fn create_table_lock_rev(
+        &self,
+        expire_secs: u64,
+        table_info: &TableInfo,
+    ) -> Result<CreateTableLockRevReply>;
+
+    async fn extend_table_lock_rev(
+        &self,
+        expire_secs: u64,
+        table_info: &TableInfo,
+        revision: u64,
+    ) -> Result<()>;
+
+    async fn delete_table_lock_rev(&self, table_info: &TableInfo, revision: u64) -> Result<()>;
 
     /// Table function
 

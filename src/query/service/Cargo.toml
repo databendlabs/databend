@@ -94,13 +94,14 @@ common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
-storages-common-cache = { path = "../storages/common/cache" }
 
 aggregating-index = { path = "../ee-features/aggregating-index" }
 storages-common-blocks = { path = "../storages/common/blocks" }
+storages-common-cache = { path = "../storages/common/cache" }
 storages-common-cache-manager = { path = "../storages/common/cache-manager" }
 storages-common-index = { path = "../storages/common/index" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
+table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
 
 # GitHub dependencies
