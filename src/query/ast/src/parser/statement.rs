@@ -200,6 +200,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
         |(_, _, limit)| Statement::ShowTableFunctions { limit },
     );
+    let show_indexes = value(Statement::ShowIndexes, rule! { SHOW ~ INDEXES });
 
     // kill query 199;
     let kill_stmt = map(
@@ -1223,6 +1224,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_process_list : "`SHOW PROCESSLIST`"
             | #show_metrics : "`SHOW METRICS`"
             | #show_functions : "`SHOW FUNCTIONS [<show_limit>]`"
+            | #show_indexes : "`SHOW INDEXES`"
             | #kill_stmt : "`KILL (QUERY | CONNECTION) <object_id>`"
             | #set_role: "`SET [DEFAULT] ROLE <role>`"
             | #show_databases : "`SHOW [FULL] DATABASES [(FROM | IN) <catalog>] [<show_limit>]`"

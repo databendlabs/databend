@@ -18,10 +18,10 @@ explain select * from (select * from numbers(1)) as t1 where number = 1
 ----
 EvalScalar
 ├── expressions: [t1.number (#0), numbers.number (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── Filter
     ├── filters: [t1.number (#0) = 1]
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1
@@ -36,13 +36,13 @@ explain select * from (select number as a, number + 1 as b from numbers(1)) as t
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1)]
-├── estimated rows: 0.11
+├── estimated rows: 0.01
 └── EvalScalar
     ├── expressions: [numbers.number (#0), numbers.number (#0) + 1]
-    ├── estimated rows: 0.11
+    ├── estimated rows: 0.01
     └── Filter
         ├── filters: [numbers.number (#0) = 1, numbers.number (#0) + 1 = 1]
-        ├── estimated rows: 0.11
+        ├── estimated rows: 0.01
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 1
@@ -57,13 +57,13 @@ explain select * from (select number as a, number + 1 as b from numbers(1)) as t
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── EvalScalar
     ├── expressions: [numbers.number (#0), numbers.number (#0) + 1]
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     └── Filter
         ├── filters: [t1.a (#0) = 1]
-        ├── estimated rows: 0.33
+        ├── estimated rows: 0.10
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 1
@@ -78,10 +78,10 @@ explain select * from numbers(1) where number = pow(1, 1 + 1)
 ----
 EvalScalar
 ├── expressions: [numbers.number (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── Filter
     ├── filters: [to_float64(numbers.number (#0)) = 1]
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     └── TableScan
         ├── table: default.system.numbers
         ├── read rows: 1

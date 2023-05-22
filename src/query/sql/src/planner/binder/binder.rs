@@ -205,6 +205,10 @@ impl<'a> Binder {
                     .await?
             }
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
+            Statement::ShowIndexes => {
+                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.indexes", RewriteKind::ShowProcessList)
+                    .await?
+            }
             // Catalogs
             Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,

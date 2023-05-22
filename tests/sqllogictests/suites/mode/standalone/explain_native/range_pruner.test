@@ -9,7 +9,7 @@ explain select 1 from range_t where c > 'efg'
 ----
 EvalScalar
 ├── expressions: [1]
-├── estimated rows: 0.67
+├── estimated rows: 0.20
 └── TableScan
     ├── table: default.default.range_t
     ├── read rows: 0
@@ -19,14 +19,14 @@ EvalScalar
     ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [range_t.c (#0) > 'efg'], limit: NONE]
     ├── output columns: []
-    └── estimated rows: 0.67
+    └── estimated rows: 0.20
 
 query T
 explain select 1 from range_t where i > 20
 ----
 EvalScalar
 ├── expressions: [1]
-├── estimated rows: 0.67
+├── estimated rows: 0.20
 └── TableScan
     ├── table: default.default.range_t
     ├── read rows: 0
@@ -36,7 +36,7 @@ EvalScalar
     ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [range_t.i (#1) > 20], limit: NONE]
     ├── output columns: []
-    └── estimated rows: 0.67
+    └── estimated rows: 0.20
 
 query T
 explain select number from numbers(10) where number > 5 and try_cast(get(try_parse_json(number::String),'xx') as varchar) < '10' and 1 = 0;

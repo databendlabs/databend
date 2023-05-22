@@ -271,7 +271,7 @@ error:
   --> SQL:1:6
   |
 1 | SHOW GRANT FOR ROLE role1;
-  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 16 more ...
+  |      ^^^^^ expected `SETTINGS`, `STAGES`, `ENGINES`, `PROCESSLIST`, `METRICS`, `FUNCTIONS`, or 17 more ...
 
 
 ---------- Input ----------
@@ -382,7 +382,7 @@ error:
   --> SQL:1:41
   |
 1 | SELECT * FROM t GROUP BY GROUPING SETS ()
-  | ------                                  ^ expected `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, or 65 more ...
+  | ------                                  ^ expected `(`, `IS`, `IN`, `EXISTS`, `BETWEEN`, `+`, or 66 more ...
   | |                                        
   | while parsing `SELECT ...`
 
