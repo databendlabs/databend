@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow_array::RecordBatch;
 use common_arrow::parquet::arrow::arrow_writer::ArrowWriter;
 use common_arrow::parquet::file::properties::WriterProperties;
 use common_arrow::parquet::format::FileMetaData;
@@ -32,10 +31,10 @@ pub fn blocks_to_parquet(
 ) -> Result<(u64, FileMetaData)> {
     let start_pos = write_buffer.len() as u64;
     let data_schema: DataSchema = schema.into();
-    let batches: Vec<RecordBatch> = blocks
+    let batches = blocks
         .into_iter()
-        .map(|block| block.to_record_batch(&data_schema).unwrap())
-        .collect();
+        .map(|block| block.to_record_batch(&data_schema))
+        .collect::<std::result::Result<Vec<_>,_>>()?;
     assert!(!batches.is_empty());
     let props = WriterProperties::builder()
         .set_compression(compression.into())
