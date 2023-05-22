@@ -39,7 +39,7 @@ use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterKey;
 use tracing::warn;
 
-use crate::pruning::new_segment_pruner::NewSegmentPruner;
+use crate::pruning::segment_pruner::SegmentPruner;
 use crate::pruning::BlockPruner;
 use crate::pruning::BloomPruner;
 use crate::pruning::BloomPrunerCreator;
@@ -184,7 +184,7 @@ impl FusePruner {
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Segment pruner.
         let segment_pruner =
-            NewSegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
+            SegmentPruner::create(self.pruning_ctx.clone(), self.table_schema.clone())?;
         let block_pruner = Arc::new(BlockPruner::create(self.pruning_ctx.clone())?);
 
         let mut remain = segment_locs.len() % self.max_concurrency;
