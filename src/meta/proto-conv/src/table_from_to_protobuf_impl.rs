@@ -65,20 +65,20 @@ impl FromToProto for mt::TableCopiedFileInfo {
     }
 }
 
-impl FromToProto for mt::TableCopiedFileLock {
-    type PB = pb::TableCopiedFileLock;
+impl FromToProto for mt::EmptyProto {
+    type PB = pb::EmptyProto;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
     }
-    fn from_pb(p: pb::TableCopiedFileLock) -> Result<Self, Incompatible> {
+    fn from_pb(p: pb::EmptyProto) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         let v = Self {};
         Ok(v)
     }
 
-    fn to_pb(&self) -> Result<pb::TableCopiedFileLock, Incompatible> {
-        let p = pb::TableCopiedFileLock {
+    fn to_pb(&self) -> Result<pb::EmptyProto, Incompatible> {
+        let p = pb::EmptyProto {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
         };
