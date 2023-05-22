@@ -23,7 +23,7 @@ EvalScalar
     └── TableScan
         ├── table: default.default.bloom_test_t
         ├── read rows: 3
-        ├── read bytes: 86
+        ├── read bytes: 158
         ├── partitions total: 2
         ├── partitions scanned: 1
         ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 2 to 1>]

@@ -49,7 +49,7 @@ EvalScalar
             └── TableScan
                 ├── table: default.default.t
                 ├── read rows: 1000
-                ├── read bytes: 1598
+                ├── read bytes: 2737
                 ├── partitions total: 2
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
