@@ -156,9 +156,6 @@ impl BlockReader {
                 num_rows,
             )?
         };
-        for column in data_block.columns() {
-            println!("test select column: {:?}", column);
-        }
 
         // populate cache if necessary
         if let Some(cache) = CacheManager::instance().get_table_data_array_cache() {

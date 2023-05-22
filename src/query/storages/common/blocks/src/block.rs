@@ -41,7 +41,6 @@ pub fn blocks_to_parquet(
     write_buffer: &mut Vec<u8>,
     compression: TableCompression,
 ) -> Result<(u64, FileMetaData)> {
-    println!("before buffer len: {}", write_buffer.len());
     let start_pos = write_buffer.len() as u64;
     let data_schema: DataSchema = schema.into();
     let batches: Vec<RecordBatch> = blocks
@@ -52,7 +51,8 @@ pub fn blocks_to_parquet(
     let props = WriterProperties::builder()
         .set_compression(compression.into())
         .build();
-    let mut writer = ArrowWriter::try_new(&mut *write_buffer, batches[0].schema(), Some(props)).unwrap();
+    let mut writer =
+        ArrowWriter::try_new(&mut *write_buffer, batches[0].schema(), Some(props)).unwrap();
 
     batches.iter().try_for_each(|batch| writer.write(batch))?;
 
@@ -63,51 +63,4 @@ pub fn blocks_to_parquet(
             cause,
         ))),
     }
-    // let metadata = writer.close()?;
-    // let end_pos = writer.into_inner()?.len() as u64;
-    // Ok((end_pos-start_pos, metadata))
-    // let arrow_schema = schema.as_ref().to_arrow();
-    //
-    // let row_group_write_options = WriteOptions {
-    //     write_statistics: false,
-    //     version: Version::V2,
-    //     compression: compression.into(),
-    //     data_pagesize_limit: None,
-    // };
-    // let batches = blocks
-    //     .into_iter()
-    //     .map(Chunk::try_from)
-    //     .collect::<Result<Vec<_>>>()?;
-    //
-    // let encoding_map = |data_type: &ArrowDataType| match data_type {
-    //     ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
-    //     _ => col_encoding(data_type),
-    // };
-    //
-    // let encodings: Vec<Vec<_>> = arrow_schema
-    //     .fields
-    //     .iter()
-    //     .map(|f| transverse(&f.data_type, encoding_map))
-    //     .collect::<Vec<_>>();
-    //
-    // let row_groups = RowGroupIterator::try_new(
-    //     batches.into_iter().map(Ok),
-    //     &arrow_schema,
-    //     row_group_write_options,
-    //     encodings,
-    // )?;
-    //
-    // use common_arrow::parquet2::write::WriteOptions as FileWriteOption;
-    // let options = FileWriteOption {
-    //     write_statistics: false,
-    //     version: Version::V2,
-    // };
-    //
-    // match write_parquet_file(write_buffer, row_groups, arrow_schema, options) {
-    //     Ok(result) => Ok(result),
-    //     Err(cause) => Err(ErrorCode::Internal(format!(
-    //         "write_parquet_file: {:?}",
-    //         cause,
-    //     ))),
-    // }
 }
