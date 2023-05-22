@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use common_arrow::parquet::format::FileMetaData;
-
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;

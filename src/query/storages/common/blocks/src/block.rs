@@ -12,21 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-
-
-
-
-
-
 use common_arrow::arrow_array::RecordBatch;
 use common_arrow::parquet::arrow::arrow_writer::ArrowWriter;
 use common_arrow::parquet::file::properties::WriterProperties;
 use common_arrow::parquet::format::FileMetaData;
-
-
-
-
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;

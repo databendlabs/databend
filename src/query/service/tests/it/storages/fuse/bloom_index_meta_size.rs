@@ -17,7 +17,6 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::parquet::format::FileMetaData;
-
 use common_base::base::tokio;
 use common_cache::Cache;
 use common_expression::types::Int32Type;
