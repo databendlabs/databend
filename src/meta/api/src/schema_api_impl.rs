@@ -2613,9 +2613,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
+        let revision = req.revision;
+
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
-        let revision = req.revision;
 
         loop {
             trials.next().unwrap()?;
@@ -2666,6 +2667,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
         let table_id = req.table_id;
         let revision = req.revision;
+
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
 
