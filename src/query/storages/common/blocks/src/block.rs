@@ -12,21 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::io::Bytes;
 
-use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::io::parquet::write::transverse;
-use common_arrow::arrow::io::parquet::write::RowGroupIterator;
-use common_arrow::arrow::io::parquet::write::WriteOptions;
+
+
+
+
+
+
 use common_arrow::arrow_array::RecordBatch;
 use common_arrow::parquet::arrow::arrow_writer::ArrowWriter;
 use common_arrow::parquet::file::properties::WriterProperties;
 use common_arrow::parquet::format::FileMetaData;
-use common_arrow::parquet2::encoding::Encoding;
-use common_arrow::parquet2::metadata::ThriftFileMetaData;
-use common_arrow::parquet2::write::Version;
-use common_arrow::write_parquet_file;
+
+
+
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -47,7 +47,7 @@ pub fn blocks_to_parquet(
         .into_iter()
         .map(|block| block.to_record_batch(&data_schema).unwrap())
         .collect();
-    assert!(batches.len() > 0);
+    assert!(!batches.is_empty());
     let props = WriterProperties::builder()
         .set_compression(compression.into())
         .build();

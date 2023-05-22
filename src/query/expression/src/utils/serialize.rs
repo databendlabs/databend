@@ -16,23 +16,23 @@ use std::cmp::Ordering;
 
 use chrono::Datelike;
 use chrono::NaiveDate;
-use common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use common_arrow::arrow::datatypes::DataType as ArrowDataType;
-use common_arrow::arrow::io::parquet::write::transverse;
-use common_arrow::arrow::io::parquet::write::RowGroupIterator;
-use common_arrow::arrow::io::parquet::write::WriteOptions;
-use common_arrow::parquet2::compression::CompressionOptions;
-use common_arrow::parquet2::encoding::Encoding;
-use common_arrow::parquet2::metadata::ThriftFileMetaData;
-use common_arrow::parquet2::write::Version;
-use common_arrow::write_parquet_file;
+
+
+
+
+
+
+
+
+
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::types::decimal::Decimal;
 use crate::types::decimal::DecimalSize;
-use crate::DataBlock;
-use crate::TableSchema;
+
+
 
 pub const EPOCH_DAYS_FROM_CE: i32 = 719_163;
 
