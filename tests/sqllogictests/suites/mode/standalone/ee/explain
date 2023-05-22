@@ -60,7 +60,7 @@ EvalScalar
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [t1.b (#5) > 3], limit: NONE]
-                    ├── aggregating index: [SELECT b, SUM(a) FROM t1 WHERE (b > 3) GROUP BY b]
+                    ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
                     ├── rewritten query: [selection: [index_col_0 (#0), index_col_1 (#1)]]
                     └── estimated rows: 0.00
 
@@ -91,7 +91,7 @@ EvalScalar
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [t1.b (#5) > 3], limit: NONE]
-                    ├── aggregating index: [SELECT b, SUM(a) FROM t1 WHERE (b > 3) GROUP BY b]
+                    ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
                     ├── rewritten query: [selection: [index_col_0 (#0)]]
                     ├── output columns: [b]
                     └── estimated rows: 0.00
@@ -123,7 +123,7 @@ EvalScalar
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [t1.b (#5) > 3], limit: NONE]
-                    ├── aggregating index: [SELECT b, SUM(a) FROM t1 WHERE (b > 3) GROUP BY b]
+                    ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
                     ├── rewritten query: [selection: [index_col_1 (#1) + CAST(1 AS UInt8 NULL)]]
                     └── estimated rows: 0.00
 
@@ -154,7 +154,7 @@ EvalScalar
                     ├── partitions total: 0
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [t1.b (#5) > 5], limit: NONE]
-                    ├── aggregating index: [SELECT b, SUM(a) FROM t1 WHERE (b > 3) GROUP BY b]
+                    ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
                     ├── rewritten query: [selection: [index_col_1 (#1) + CAST(1 AS UInt8 NULL)], filter: index_col_0 (#0) > 5]
                     └── estimated rows: 0.00
 
@@ -200,7 +200,7 @@ EvalScalar
             │                       ├── partitions total: 0
             │                       ├── partitions scanned: 0
             │                       ├── push downs: [filters: [t.b (#13) > 3], limit: NONE]
-            │                       ├── aggregating index: [SELECT b, SUM(a) FROM t1 WHERE (b > 3) GROUP BY b]
+            │                       ├── aggregating index: [SELECT b, SUM(a) FROM test_index_db.t1 WHERE (b > 3) GROUP BY b]
             │                       ├── rewritten query: [selection: [index_col_1 (#1), index_col_0 (#0)]]
             │                       └── estimated rows: 0.00
             └── AggregateFinal(Probe)
