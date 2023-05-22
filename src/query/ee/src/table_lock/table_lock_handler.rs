@@ -45,7 +45,7 @@ impl TableLockHandler for RealTableLockHandler {
         let expire_secs = ctx.get_settings().get_table_lock_expire_secs()?;
         // get a new table lock revision.
         let res = catalog
-            .upsert_table_lock_rev(expire_secs, &table_info, None)
+            .create_table_lock_rev(expire_secs, &table_info)
             .await?;
         let revision = res.revision;
 

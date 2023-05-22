@@ -25,9 +25,9 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DeleteTableLockRevReply;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -55,7 +55,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableLockRevReply;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MetaId;
@@ -515,23 +514,30 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn upsert_table_lock_rev(
+    async fn create_table_lock_rev(
         &self,
         expire_secs: u64,
         table_info: &TableInfo,
-        revision: Option<u64>,
-    ) -> Result<UpsertTableLockRevReply> {
+    ) -> Result<CreateTableLockRevReply> {
         self.mutable_catalog
-            .upsert_table_lock_rev(expire_secs, table_info, revision)
+            .create_table_lock_rev(expire_secs, table_info)
             .await
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(
+    async fn extend_table_lock_rev(
         &self,
+        expire_secs: u64,
         table_info: &TableInfo,
         revision: u64,
-    ) -> Result<DeleteTableLockRevReply> {
+    ) -> Result<()> {
+        self.mutable_catalog
+            .extend_table_lock_rev(expire_secs, table_info, revision)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn delete_table_lock_rev(&self, table_info: &TableInfo, revision: u64) -> Result<()> {
         self.mutable_catalog
             .delete_table_lock_rev(table_info, revision)
             .await

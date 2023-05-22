@@ -69,7 +69,7 @@ impl TableLockHeartbeat {
                         Either::Right((_, new_notified)) => {
                             notified = new_notified;
                             catalog
-                                .upsert_table_lock_rev(expire_secs, &table_info, Some(revision))
+                                .extend_table_lock_rev(expire_secs, &table_info, revision)
                                 .await?;
                         }
                     }

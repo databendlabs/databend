@@ -755,14 +755,20 @@ pub struct ListTableLockRevReq {
 pub type Revision = u64;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableLockRevReq {
+pub struct CreateTableLockRevReq {
     pub table_id: u64,
     pub expire_at: u64,
-    pub revision: Option<u64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpsertTableLockRevReply {
+pub struct CreateTableLockRevReply {
+    pub revision: u64,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct ExtendTableLockRevReq {
+    pub table_id: u64,
+    pub expire_at: u64,
     pub revision: u64,
 }
 
@@ -771,9 +777,6 @@ pub struct DeleteTableLockRevReq {
     pub table_id: u64,
     pub revision: u64,
 }
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DeleteTableLockRevReply {}
 
 mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;

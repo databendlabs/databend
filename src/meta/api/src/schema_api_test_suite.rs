@@ -27,6 +27,7 @@ use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
@@ -41,6 +42,7 @@ use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -69,7 +71,6 @@ use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::CreateShareReq;
@@ -3863,20 +3864,18 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- create table lock revision 1");
-            let req1 = UpsertTableLockRevReq {
+            let req1 = CreateTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 2) as u64,
-                revision: None,
             };
-            let res1 = mt.upsert_table_lock_rev(req1).await?;
+            let res1 = mt.create_table_lock_rev(req1).await?;
 
             info!("--- create table lock revision 2");
-            let req2 = UpsertTableLockRevReq {
+            let req2 = CreateTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 2) as u64,
-                revision: None,
             };
-            let res2 = mt.upsert_table_lock_rev(req2).await?;
+            let res2 = mt.create_table_lock_rev(req2).await?;
             assert!(res2.revision > res1.revision);
 
             info!("--- list table lock revisiosn");
@@ -3886,14 +3885,13 @@ impl SchemaApiTestSuite {
             assert_eq!(res3[0], res1.revision);
             assert_eq!(res3[1], res2.revision);
 
-            info!("--- update table lock revision 2 expire");
-            let req4 = UpsertTableLockRevReq {
+            info!("--- extend table lock revision 2 expire");
+            let req4 = ExtendTableLockRevReq {
                 table_id,
                 expire_at: (Utc::now().timestamp() + 4) as u64,
-                revision: Some(res2.revision),
+                revision: res2.revision,
             };
-            let res4 = mt.upsert_table_lock_rev(req4).await?;
-            assert_eq!(res4.revision, res2.revision);
+            mt.extend_table_lock_rev(req4).await?;
 
             info!("--- table lock revision 1 retired");
             std::thread::sleep(std::time::Duration::from_secs(2));

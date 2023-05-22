@@ -20,10 +20,11 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseInfo;
-use common_meta_app::schema::DeleteTableLockRevReply;
 use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
@@ -31,6 +32,7 @@ use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
@@ -58,8 +60,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableLockRevReply;
-use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::GCDroppedDataReply;
@@ -174,15 +174,14 @@ pub trait SchemaApi: Send + Sync {
         req: ListTableLockRevReq,
     ) -> Result<Vec<Revision>, KVAppError>;
 
-    async fn upsert_table_lock_rev(
+    async fn create_table_lock_rev(
         &self,
-        req: UpsertTableLockRevReq,
-    ) -> Result<UpsertTableLockRevReply, KVAppError>;
+        req: CreateTableLockRevReq,
+    ) -> Result<CreateTableLockRevReply, KVAppError>;
 
-    async fn delete_table_lock_rev(
-        &self,
-        req: DeleteTableLockRevReq,
-    ) -> Result<DeleteTableLockRevReply, KVAppError>;
+    async fn extend_table_lock_rev(&self, req: ExtendTableLockRevReq) -> Result<(), KVAppError>;
+
+    async fn delete_table_lock_rev(&self, req: DeleteTableLockRevReq) -> Result<(), KVAppError>;
 
     fn name(&self) -> String;
 }

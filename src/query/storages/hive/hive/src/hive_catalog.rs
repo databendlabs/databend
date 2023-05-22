@@ -33,9 +33,9 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
-use common_meta_app::schema::DeleteTableLockRevReply;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
@@ -63,7 +63,6 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
-use common_meta_app::schema::UpsertTableLockRevReply;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::*;
@@ -421,21 +420,26 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn upsert_table_lock_rev(
+    async fn create_table_lock_rev(
         &self,
         _expire_sec: u64,
         _table_info: &TableInfo,
-        _revision: Option<u64>,
-    ) -> Result<UpsertTableLockRevReply> {
+    ) -> Result<CreateTableLockRevReply> {
         unimplemented!()
     }
 
     #[async_backtrace::framed]
-    async fn delete_table_lock_rev(
+    async fn extend_table_lock_rev(
         &self,
+        _expire_sec: u64,
         _table_info: &TableInfo,
         _revision: u64,
-    ) -> Result<DeleteTableLockRevReply> {
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn delete_table_lock_rev(&self, _table_info: &TableInfo, _revision: u64) -> Result<()> {
         unimplemented!()
     }
 

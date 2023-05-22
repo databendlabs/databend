@@ -50,6 +50,8 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
+use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DBIdTableName;
@@ -62,7 +64,6 @@ use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::DbIdList;
 use common_meta_app::schema::DbIdListKey;
-use common_meta_app::schema::DeleteTableLockRevReply;
 use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
@@ -71,6 +72,7 @@ use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::EmptyProto;
+use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
@@ -110,8 +112,6 @@ use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_meta_app::schema::UpsertTableLockRevReply;
-use common_meta_app::schema::UpsertTableLockRevReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::share::ShareGrantObject;
@@ -2553,47 +2553,33 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         Ok(revisions)
     }
 
-    async fn upsert_table_lock_rev(
+    async fn create_table_lock_rev(
         &self,
-        req: UpsertTableLockRevReq,
-    ) -> Result<UpsertTableLockRevReply, KVAppError> {
+        req: CreateTableLockRevReq,
+    ) -> Result<CreateTableLockRevReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
+        let tbid = TableId { table_id };
+
+        let revision = fetch_id(self, IdGenerator::table_lock_id()).await?;
+
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
-
-        let revision = loop {
+        loop {
             trials.next().unwrap()?;
 
-            let tbid = TableId { table_id };
-            let (_tb_meta_seq, tb_meta) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-
-            debug!(
-                ident = display(&tbid),
-                table_meta = debug(&tb_meta),
-                "upsert_table_lock_rev"
-            );
-
-            let revision = if let Some(rev) = req.revision {
-                rev
-            } else {
-                // generate a new revision.
-                fetch_id(self, IdGenerator::table_lock_id()).await?
-            };
-
+            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
             let lock_key = TableLockKey { table_id, revision };
-
-            let (lock_key_seq, _): (_, Option<EmptyProto>) = get_pb_value(self, &lock_key).await?;
-
-            if lock_key_seq > 0 && req.revision.is_none() {
-                // lock key has been created by other process.
-                continue;
-            }
 
             let lock = EmptyProto {};
 
-            let condition = vec![txn_cond_seq(&lock_key, Eq, lock_key_seq)];
+            let condition = vec![
+                // table is not changed
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                // assumes lock are absent.
+                txn_cond_seq(&lock_key, Eq, 0),
+            ];
 
             let if_then = vec![txn_op_put_with_expire(
                 &lock_key,
@@ -2612,20 +2598,70 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             debug!(
                 ident = display(&tbid),
                 succ = display(succ),
-                "upsert_table_lock_rev"
+                "create_table_lock_rev"
             );
 
             if succ {
-                break revision;
+                break;
             }
-        };
-        Ok(UpsertTableLockRevReply { revision })
+        }
+
+        Ok(CreateTableLockRevReply { revision })
     }
 
-    async fn delete_table_lock_rev(
-        &self,
-        req: DeleteTableLockRevReq,
-    ) -> Result<DeleteTableLockRevReply, KVAppError> {
+    async fn extend_table_lock_rev(&self, req: ExtendTableLockRevReq) -> Result<(), KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let table_id = req.table_id;
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+        let revision = req.revision;
+
+        loop {
+            trials.next().unwrap()?;
+
+            let tbid = TableId { table_id };
+            let (tb_meta_seq, _) = get_table_by_id_or_err(self, &tbid, ctx).await?;
+
+            let lock_key = TableLockKey { table_id, revision };
+            let (lock_key_seq, _): (_, Option<EmptyProto>) = get_pb_value(self, &lock_key).await?;
+
+            let lock = EmptyProto {};
+
+            let condition = vec![
+                // table is not changed
+                txn_cond_seq(&tbid, Eq, tb_meta_seq),
+                txn_cond_seq(&lock_key, Eq, lock_key_seq),
+            ];
+
+            let if_then = vec![txn_op_put_with_expire(
+                &lock_key,
+                serialize_struct(&lock)?,
+                req.expire_at,
+            )];
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                ident = display(&tbid),
+                succ = display(succ),
+                "extend_table_lock_rev"
+            );
+
+            if succ {
+                break;
+            }
+        }
+        Ok(())
+    }
+
+    async fn delete_table_lock_rev(&self, req: DeleteTableLockRevReq) -> Result<(), KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
         let table_id = req.table_id;
@@ -2636,19 +2672,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let tbid = TableId { table_id };
-            let (_tb_meta_seq, tb_meta) = get_table_by_id_or_err(self, &tbid, ctx).await?;
-
-            debug!(
-                ident = display(&tbid),
-                table_meta = debug(&tb_meta),
-                "delete_table_lock_rev"
-            );
-
             let lock_key = TableLockKey { table_id, revision };
             let (lock_key_seq, _): (_, Option<EmptyProto>) = get_pb_value(self, &lock_key).await?;
             if lock_key_seq == 0 {
-                return Ok(DeleteTableLockRevReply {});
+                return Ok(());
             }
 
             let condition = vec![txn_cond_seq(&lock_key, Eq, lock_key_seq)];
@@ -2662,6 +2689,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
             let (succ, _responses) = send_txn(self, txn_req).await?;
 
+            let tbid = TableId { table_id };
             debug!(
                 ident = display(&tbid),
                 succ = display(succ),
@@ -2673,7 +2701,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             }
         }
 
-        Ok(DeleteTableLockRevReply {})
+        Ok(())
     }
 
     fn name(&self) -> String {
