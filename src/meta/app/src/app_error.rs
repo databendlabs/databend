@@ -746,6 +746,7 @@ impl AppErrorMessage for UnknownTableId {}
 impl AppErrorMessage for UnknownDatabaseId {}
 
 impl AppErrorMessage for TableVersionMismatched {}
+
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
 impl AppErrorMessage for TableAlreadyExists {

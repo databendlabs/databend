@@ -207,7 +207,7 @@ fn new_index_meta() -> mt::IndexMeta {
         index_type: IndexType::AGGREGATING,
         created_on: Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap(),
         drop_on: None,
-        query: "SELECT a, sum(b) FROM t1 WHERE a > 3 GROUP BY b".to_string(),
+        query: "SELECT a, sum(b) FROM default.t1 WHERE a > 3 GROUP BY b".to_string(),
     }
 }
 
@@ -252,8 +252,8 @@ pub(crate) fn new_table_copied_file_info_v6() -> mt::TableCopiedFileInfo {
     }
 }
 
-pub(crate) fn new_table_copied_file_lock_v7() -> mt::TableCopiedFileLock {
-    mt::TableCopiedFileLock {}
+pub(crate) fn new_empty_proto() -> mt::EmptyProto {
+    mt::EmptyProto {}
 }
 
 #[test]
@@ -389,14 +389,14 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         println!("copied_file:{:?}", buf);
     }
 
-    // TableCopiedFileLock
+    // EmptyProto
     {
-        let copied_file_lock = new_table_copied_file_lock_v7();
-        let p = copied_file_lock.to_pb()?;
+        let empty_proto = new_empty_proto();
+        let p = empty_proto.to_pb()?;
 
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
-        println!("copied_file_lock:{:?}", buf);
+        println!("empty_proto:{:?}", buf);
     }
 
     // schema
