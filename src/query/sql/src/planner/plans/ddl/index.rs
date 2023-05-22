@@ -17,11 +17,10 @@ use common_meta_types::MetaId;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexPlan {
-    pub tenant: String,
     pub if_not_exists: bool,
     pub index_type: TableIndexType,
     pub index_name: String,
-    pub subquery: String,
+    pub query: String,
     pub table_id: MetaId,
 }
 
@@ -29,7 +28,5 @@ pub struct CreateIndexPlan {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DropIndexPlan {
     pub if_exists: bool,
-    pub tenant: String,
-    pub catalog: String,
     pub index: String,
 }

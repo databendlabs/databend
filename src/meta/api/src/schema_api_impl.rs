@@ -73,13 +73,11 @@ use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
 use common_meta_app::schema::IndexId;
-use common_meta_app::schema::IndexIdList;
-use common_meta_app::schema::IndexIdListKey;
 use common_meta_app::schema::IndexIdToName;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::ListDatabaseReq;
-use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -154,6 +152,7 @@ use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
+use crate::util::deserialize_u64;
 use crate::util::get_index_metas_by_ids;
 use crate::util::get_table_by_id_or_err;
 use crate::util::get_table_names_by_ids;
@@ -896,27 +895,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 };
             }
 
-            // get index id list from _fd_index_id_list/<tenant>/<table_id>
-            let index_id_list_key = IndexIdListKey {
-                tenant: tenant_index.tenant.clone(),
-                table_id: req.meta.table_id,
-            };
-            let (index_id_list_seq, index_id_list_opt): (_, Option<IndexIdList>) =
-                get_pb_value(self, &index_id_list_key).await?;
-
-            let mut index_id_list = if index_id_list_seq == 0 {
-                IndexIdList::new()
-            } else {
-                match index_id_list_opt {
-                    Some(list) => list,
-                    None => IndexIdList::new(),
-                }
-            };
-
             // Create index by inserting these record:
             // (tenant, index_name) -> index_id
             // (index_id) -> index_meta
-            // append index_id into __fd_index_id_list/<tenant>/<table_id>
             // (index_id) -> (tenant,index_name)
 
             let index_id = fetch_id(self, IdGenerator::index_id()).await?;
@@ -926,18 +907,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             debug!(index_id, index_key = debug(&tenant_index), "new index id");
 
             {
-                // append index_id into index_id_list
-                index_id_list.append(index_id);
-
                 let condition = vec![
                     txn_cond_seq(tenant_index, Eq, 0),
                     txn_cond_seq(&id_to_name_key, Eq, 0),
-                    txn_cond_seq(&index_id_list_key, Eq, index_id_list_seq),
                 ];
                 let if_then = vec![
                     txn_op_put(tenant_index, serialize_u64(index_id)?), /* (tenant, index_name) -> index_id */
                     txn_op_put(&id_key, serialize_struct(&req.meta)?),  // (index_id) -> index_meta
-                    txn_op_put(&index_id_list_key, serialize_struct(&index_id_list)?), /* _fd_index_id_list/<tenant> -> index_id_list */
                     txn_op_put(&id_to_name_key, serialize_struct(tenant_index)?), /* __fd_index_id_to_name/<index_id> -> (tenant,index_name) */
                 ];
 
@@ -1043,41 +1019,49 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn get_indexes_by_table_id(
+    async fn list_indexes(
         &self,
-        req: ListIndexByTableIdReq,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>, KVAppError> {
+        req: ListIndexesReq,
+    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        // get index id list from _fd_index_id_list/<tenant>/<table_id>
-        let index_id_list_key = IndexIdListKey {
-            tenant: req.tenant.clone(),
-            table_id: req.table_id,
-        };
+        // Get index id list by `prefix_list` "<prefix>/<tenant>"
+        let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
+            .push_str(&req.tenant)
+            .done();
 
-        let (_, index_id_list): (_, Option<IndexIdList>) =
-            get_pb_value(self, &index_id_list_key).await?;
+        let id_list = self.prefix_list_kv(&prefix_key).await?;
+        let mut id_name_list = Vec::with_capacity(id_list.len());
+        for (key, seq) in id_list.iter() {
+            let name_ident = IndexNameIdent::from_str_key(key).map_err(|e| {
+                KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
+            })?;
+            let index_id = deserialize_u64(&seq.data)?;
+            id_name_list.push((index_id.0, name_ident.index_name));
+        }
 
-        debug!(
-            ident = display(&index_id_list_key),
-            "get_indexes_by_table_id"
-        );
+        debug!(ident = display(&prefix_key), "list_indexes");
 
-        if index_id_list.is_none() {
-            return Ok(None);
+        if id_name_list.is_empty() {
+            return Ok(vec![]);
         }
 
         // filter the dropped indexes.
         let index_metas = {
-            let ids = index_id_list.unwrap().id_list;
-            let index_metas = get_index_metas_by_ids(self, &ids).await?;
+            let index_metas = get_index_metas_by_ids(self, id_name_list).await?;
             index_metas
                 .into_iter()
-                .filter(|(_, meta)| meta.drop_on.is_none())
+                .filter(|(_, _, meta)| {
+                    // 1. index is not dropped.
+                    // 2. table_id is not specified
+                    //    or table_id is specified and equals to the given table_id.
+                    meta.drop_on.is_none()
+                        && req.table_id.filter(|id| *id != meta.table_id).is_none()
+                })
                 .collect::<Vec<_>>()
         };
 
-        Ok(Some(index_metas))
+        Ok(index_metas)
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
