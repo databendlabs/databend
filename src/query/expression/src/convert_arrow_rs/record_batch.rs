@@ -26,9 +26,12 @@ impl DataBlock {
         let mut arrays = Vec::with_capacity(self.columns().len());
         for entry in self.convert_to_full().columns() {
             let column = entry.value.to_owned().into_column().unwrap();
+            println!("column: {:?}", column);
             arrays.push(column.into_arrow_rs()?)
         }
         let schema = Arc::new(data_schema.into());
+        println!("record schema: {:?}", schema);
+        println!("record arrays: {:?}", arrays);
         RecordBatch::try_new(schema, arrays)
     }
 

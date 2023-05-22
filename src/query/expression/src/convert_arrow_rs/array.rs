@@ -24,7 +24,9 @@ use crate::DataField;
 impl Column {
     pub fn into_arrow_rs(self) -> Result<Arc<dyn Array>, ArrowError> {
         let arrow2_array = self.as_arrow();
+        println!("arrow2_array: {:?}", arrow2_array);
         let arrow_array: Arc<dyn Array> = arrow2_array.into();
+        println!("arrow_array: {:?}", arrow_array);
         Ok(arrow_array)
     }
 

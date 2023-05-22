@@ -118,6 +118,7 @@ fn set_nullable(ty: &ArrowDataType) -> ArrowDataType {
 
 impl From<&DataField> for ArrowField {
     fn from(f: &DataField) -> Self {
+        println!("datafield,f: {:?}", f);
         let ty = f.data_type().into();
 
         // TODO Nested metadata
@@ -146,7 +147,7 @@ impl From<&DataField> for ArrowField {
             }
             _ => Default::default(),
         };
-        match ty {
+        let arrow_filed = match ty {
             ArrowDataType::Struct(_) if f.is_nullable() => {
                 let ty = set_nullable(&ty);
                 ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata)
@@ -154,7 +155,9 @@ impl From<&DataField> for ArrowField {
             // Must set nullable for DataType::Null
             // Or error: Column 'null' is declared as non-nullable but contains null values
             _ => ArrowField::new(f.name(), ty, f.is_nullable_or_null()).with_metadata(metadata),
-        }
+        };
+        println!("arrow_filed: {:?}", arrow_filed);
+        arrow_filed
     }
 }
 
