@@ -14,7 +14,7 @@
 
 use storages_common_table_meta::meta::Location;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SegmentLocation {
     pub segment_idx: usize,
     pub location: Location,
