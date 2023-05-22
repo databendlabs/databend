@@ -57,6 +57,14 @@ struct Point {
 }
 ```
 
+## Contributing Documentation
+
+You can also join us contribute Databend documentation along with your code. Databend documentation pages are made of markdown files. We recommend Visual Studio Code for editing your markdown files and use Code Spell Checker extension as your spell checker.
+
+If you submit a document for a command or function, please use the following templates:
+
+- [command-template](../../public/templates/command-template.md.zip)
+- [function-template](../../public/templates/function-template.md.zip)
 
 ## Pull Requests
 
