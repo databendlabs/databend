@@ -552,6 +552,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_drop_data_mask_policy(&mut self, _stmt: &'ast DropDatamaskPolicyStmt) {}
 
+    fn visit_desc_data_mask_policy(&mut self, _stmt: &'ast DescDatamaskPolicyStmt) {}
+
     fn visit_with(&mut self, with: &'ast With) {
         let With { ctes, .. } = with;
         for cte in ctes.iter() {

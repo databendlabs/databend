@@ -18,6 +18,9 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 
+const PREFIX_DATAMASK: &str = "__fd_datamask";
+const PREFIX_DATAMASK_BY_ID: &str = "__fd_datamask_by_id";
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct DatamaskNameIdent {
     pub tenant: String,
@@ -104,8 +107,8 @@ mod kvapi_key_impl {
 
     use super::DatamaskId;
     use super::DatamaskNameIdent;
-    use crate::schema::PREFIX_DATAMASK;
-    use crate::schema::PREFIX_DATAMASK_BY_ID;
+    use super::PREFIX_DATAMASK;
+    use super::PREFIX_DATAMASK_BY_ID;
 
     /// __fd_database/<tenant>/<name> -> <data_mask_id>
     impl kvapi::Key for DatamaskNameIdent {

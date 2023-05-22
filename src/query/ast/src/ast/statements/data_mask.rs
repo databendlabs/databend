@@ -80,3 +80,16 @@ impl Display for DropDatamaskPolicyStmt {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DescDatamaskPolicyStmt {
+    pub name: String,
+}
+
+impl Display for DescDatamaskPolicyStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "DESCRIBE MASKING POLICY {}", self.name)?;
+
+        Ok(())
+    }
+}

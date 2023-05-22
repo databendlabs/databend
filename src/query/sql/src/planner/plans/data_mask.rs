@@ -16,10 +16,13 @@ use std::sync::Arc;
 
 use chrono::Utc;
 use common_ast::ast::DataMaskPolicy;
+use common_expression::types::DataType;
+use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_meta_app::schema::CreateDatamaskReq;
-use common_meta_app::schema::DatamaskNameIdent;
+use common_meta_app::data_mask::CreateDatamaskReq;
+use common_meta_app::data_mask::DatamaskNameIdent;
+use common_meta_app::data_mask::DropDatamaskReq;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct CreateDatamaskPolicyPlan {
@@ -60,11 +63,40 @@ impl From<CreateDatamaskPolicyPlan> for CreateDatamaskReq {
 #[derive(Clone, Debug, PartialEq)]
 pub struct DropDatamaskPolicyPlan {
     pub if_exists: bool,
+    pub tenant: String,
     pub name: String,
 }
 
 impl DropDatamaskPolicyPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
+    }
+}
+
+impl From<DropDatamaskPolicyPlan> for DropDatamaskReq {
+    fn from(p: DropDatamaskPolicyPlan) -> Self {
+        DropDatamaskReq {
+            if_exists: p.if_exists,
+            name: DatamaskNameIdent {
+                tenant: p.tenant.clone(),
+                name: p.name.clone(),
+            },
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DescDatamaskPolicyPlan {
+    pub name: String,
+}
+
+impl DescDatamaskPolicyPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::new(vec![
+            DataField::new("Name", DataType::String),
+            DataField::new("Signature", DataType::String),
+            DataField::new("ReturnType", DataType::String),
+            DataField::new("Body", DataType::String),
+        ]))
     }
 }

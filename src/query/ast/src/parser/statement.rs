@@ -1199,6 +1199,16 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             Statement::DropDatamaskPolicy(stmt)
         },
     );
+    let describe_data_mask_policy = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ MASKING ~ POLICY ~ #ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescDatamaskPolicy(DescDatamaskPolicyStmt {
+                name: name.to_string(),
+            })
+        },
+    );
 
     let statement_body = alt((
         rule!(
@@ -1311,6 +1321,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #create_data_mask_policy: "`CREATE MASKING POLICY [IF NOT EXISTS] mask_name as (val1 val_type1 [, val type]) return type -> case`"
             | #drop_data_mask_policy: "`DROP MASKING POLICY [IF EXISTS] mask_name`"
+            | #describe_data_mask_policy: "`DESC MASKING POLICY mask_name`"
         ),
         // share
         rule!(

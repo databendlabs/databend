@@ -15,7 +15,6 @@
 //! Schema types
 
 mod catalog;
-mod data_mask;
 mod database;
 mod index;
 mod table;
@@ -27,15 +26,6 @@ pub use catalog::CatalogType;
 pub use catalog::CreateCatalogReq;
 pub use catalog::DropCatalogReq;
 pub use catalog::IcebergCatalogOption;
-pub use data_mask::CreateDatamaskReply;
-pub use data_mask::CreateDatamaskReq;
-pub use data_mask::DatamaskId;
-pub use data_mask::DatamaskMeta;
-pub use data_mask::DatamaskNameIdent;
-pub use data_mask::DropDatamaskReply;
-pub use data_mask::DropDatamaskReq;
-pub use data_mask::GetDatamaskReply;
-pub use data_mask::GetDatamaskReq;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;
@@ -111,6 +101,3 @@ const PREFIX_INDEX: &str = "__fd_index";
 const PREFIX_INDEX_ID_LIST: &str = "__fd_index_id_list";
 const PREFIX_INDEX_ID_TO_NAME: &str = "__fd_index_id_to_name";
 const PREFIX_INDEX_BY_ID: &str = "__fd_index_by_id";
-
-const PREFIX_DATAMASK: &str = "__fd_datamask";
-const PREFIX_DATAMASK_BY_ID: &str = "__fd_datamask_by_id";

@@ -481,8 +481,11 @@ impl<'a> Binder {
             Statement::CreateDatamaskPolicy(stmt) => {
                 self.bind_create_data_mask_policy(stmt).await?
             }
-                        Statement::DropDatamaskPolicy(stmt) => {
+            Statement::DropDatamaskPolicy(stmt) => {
                 self.bind_drop_data_mask_policy(stmt).await?
+            }
+            Statement::DescDatamaskPolicy(stmt) => {
+                self.bind_desc_data_mask_policy(stmt).await?
             }
         };
         Ok(plan)

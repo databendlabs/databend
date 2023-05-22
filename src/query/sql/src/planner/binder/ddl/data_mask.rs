@@ -17,6 +17,7 @@ use common_exception::Result;
 
 use crate::binder::Binder;
 use crate::plans::CreateDatamaskPolicyPlan;
+use crate::plans::DescDatamaskPolicyPlan;
 use crate::plans::DropDatamaskPolicyPlan;
 use crate::plans::Plan;
 
@@ -26,13 +27,13 @@ impl Binder {
         &mut self,
         stmt: &CreateDatamaskPolicyStmt,
     ) -> Result<Plan> {
-        let tenant = self.ctx.get_tenant();
         let CreateDatamaskPolicyStmt {
             if_not_exists,
             name,
             policy,
         } = stmt;
 
+        let tenant = self.ctx.get_tenant();
         let plan = CreateDatamaskPolicyPlan {
             if_not_exists: *if_not_exists,
             tenant,
@@ -49,10 +50,25 @@ impl Binder {
     ) -> Result<Plan> {
         let DropDatamaskPolicyStmt { if_exists, name } = stmt;
 
+        let tenant = self.ctx.get_tenant();
         let plan = DropDatamaskPolicyPlan {
             if_exists: *if_exists,
+            tenant,
             name: name.to_string(),
         };
         Ok(Plan::DropDatamaskPolicy(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_desc_data_mask_policy(
+        &mut self,
+        stmt: &DescDatamaskPolicyStmt,
+    ) -> Result<Plan> {
+        let DescDatamaskPolicyStmt { name } = stmt;
+
+        let plan = DescDatamaskPolicyPlan {
+            name: name.to_string(),
+        };
+        Ok(Plan::DescDatamaskPolicy(Box::new(plan)))
     }
 }

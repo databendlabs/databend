@@ -30,8 +30,10 @@ use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
 use common_exception::Result;
+use common_meta_app::data_mask::DatamaskMeta;
 use common_meta_store::MetaStore;
 use common_sql::plans::data_mask::CreateDatamaskPolicyPlan;
+use common_sql::plans::DropDatamaskPolicyPlan;
 
 #[async_trait::async_trait]
 pub trait DatamaskHandler: Sync + Send {
@@ -40,6 +42,19 @@ pub trait DatamaskHandler: Sync + Send {
         meta_api: Arc<MetaStore>,
         plan: CreateDatamaskPolicyPlan,
     ) -> Result<()>;
+
+    async fn drop_data_mask(
+        &self,
+        meta_api: Arc<MetaStore>,
+        plan: DropDatamaskPolicyPlan,
+    ) -> Result<()>;
+
+    async fn get_data_mask(
+        &self,
+        meta_api: Arc<MetaStore>,
+        tenant: String,
+        name: String,
+    ) -> Result<DatamaskMeta>;
 }
 
 pub struct DatamaskHandlerWrapper {
@@ -57,6 +72,23 @@ impl DatamaskHandlerWrapper {
         plan: CreateDatamaskPolicyPlan,
     ) -> Result<()> {
         self.handler.create_data_mask(meta_api, plan).await
+    }
+
+    pub async fn drop_data_mask(
+        &self,
+        meta_api: Arc<MetaStore>,
+        plan: DropDatamaskPolicyPlan,
+    ) -> Result<()> {
+        self.handler.drop_data_mask(meta_api, plan).await
+    }
+
+    pub async fn get_data_mask(
+        &self,
+        meta_api: Arc<MetaStore>,
+        tenant: String,
+        name: String,
+    ) -> Result<DatamaskMeta> {
+        self.handler.get_data_mask(meta_api, tenant, name).await
     }
 }
 

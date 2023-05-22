@@ -138,6 +138,7 @@ impl Plan {
             // data mask
             Plan::CreateDatamaskPolicy(p) => Ok(format!("{:?}", p)),
             Plan::DropDatamaskPolicy(p) => Ok(format!("{:?}", p)),
+            Plan::DescDatamaskPolicy(p) => Ok(format!("{:?}", p)),
         }
     }
 }

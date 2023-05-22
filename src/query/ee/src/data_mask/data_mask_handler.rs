@@ -28,11 +28,14 @@
 
 use std::sync::Arc;
 
-use common_base::base::GlobalInstance;
 use common_exception::Result;
 use common_meta_api::DatamaskApi;
+use common_meta_app::data_mask::DatamaskMeta;
+use common_meta_app::data_mask::DatamaskNameIdent;
+use common_meta_app::data_mask::GetDatamaskReq;
 use common_meta_store::MetaStore;
 use common_sql::plans::data_mask::CreateDatamaskPolicyPlan;
+use common_sql::plans::DropDatamaskPolicyPlan;
 use data_mask::data_mask_handler::DatamaskHandler;
 
 pub struct RealDatamaskHandler {}
@@ -44,8 +47,32 @@ impl DatamaskHandler for RealDatamaskHandler {
         meta_api: Arc<MetaStore>,
         plan: CreateDatamaskPolicyPlan,
     ) -> Result<()> {
-        let resp = meta_api.create_data_mask(plan.into()).await?;
+        let _ = meta_api.create_data_mask(plan.into()).await?;
 
         Ok(())
+    }
+
+    async fn drop_data_mask(
+        &self,
+        meta_api: Arc<MetaStore>,
+        plan: DropDatamaskPolicyPlan,
+    ) -> Result<()> {
+        let _ = meta_api.drop_data_mask(plan.into()).await?;
+
+        Ok(())
+    }
+
+    async fn get_data_mask(
+        &self,
+        meta_api: Arc<MetaStore>,
+        tenant: String,
+        name: String,
+    ) -> Result<DatamaskMeta> {
+        let resp = meta_api
+            .get_data_mask(GetDatamaskReq {
+                name: DatamaskNameIdent { tenant, name },
+            })
+            .await?;
+        Ok(resp.policy)
     }
 }

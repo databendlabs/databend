@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::schema::CreateDatamaskReply;
-use common_meta_app::schema::CreateDatamaskReq;
-use common_meta_app::schema::DropDatamaskReply;
-use common_meta_app::schema::DropDatamaskReq;
-use common_meta_app::schema::GetDatamaskReply;
-use common_meta_app::schema::GetDatamaskReq;
+use common_meta_app::data_mask::CreateDatamaskReply;
+use common_meta_app::data_mask::CreateDatamaskReq;
+use common_meta_app::data_mask::DropDatamaskReply;
+use common_meta_app::data_mask::DropDatamaskReq;
+use common_meta_app::data_mask::GetDatamaskReply;
+use common_meta_app::data_mask::GetDatamaskReq;
 
 use crate::kv_app_error::KVAppError;
 

@@ -488,6 +488,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::ExplainSyntax { .. } => {}
             // just used in clickhouse-sqlalchemy, no need to check
             Plan::ExistsTable(_) => {}
+            Plan::DescDatamaskPolicy(_) => {}
         }
 
         Ok(())

@@ -71,6 +71,7 @@ members = [
     "src/query/users",
     "src/query/ee-features/vacuum-handler",
     "src/query/ee-features/aggregating-index",
+    "src/query/ee-features/data-mask",
     # databend-query
     "src/query/service",
     # enterprise

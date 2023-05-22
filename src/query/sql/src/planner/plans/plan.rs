@@ -25,6 +25,7 @@ use common_expression::DataSchemaRefExt;
 use super::data_mask::CreateDatamaskPolicyPlan;
 use super::CreateIndexPlan;
 use super::CreateShareEndpointPlan;
+use super::DescDatamaskPolicyPlan;
 use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
@@ -238,6 +239,7 @@ pub enum Plan {
     // Data mask
     CreateDatamaskPolicy(Box<CreateDatamaskPolicyPlan>),
     DropDatamaskPolicy(Box<DropDatamaskPolicyPlan>),
+    DescDatamaskPolicy(Box<DescDatamaskPolicyPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -351,6 +353,9 @@ impl Display for Plan {
             Plan::DropDatamaskPolicy(..) => {
                 write!(f, "Drop Data Mask Policy")
             }
+            Plan::DescDatamaskPolicy(..) => {
+                write!(f, "Desc Data Mask Policy")
+            }
         }
     }
 }
@@ -393,6 +398,7 @@ impl Plan {
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
             Plan::CreateDatamaskPolicy(plan) => plan.schema(),
             Plan::DropDatamaskPolicy(plan) => plan.schema(),
+            Plan::DescDatamaskPolicy(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())

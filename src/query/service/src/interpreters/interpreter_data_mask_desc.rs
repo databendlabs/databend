@@ -15,8 +15,11 @@
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::DataBlock;
+use common_expression::FromData;
 use common_license::license_manager::get_license_manager;
-use common_sql::plans::DropDatamaskPolicyPlan;
+use common_sql::plans::DescDatamaskPolicyPlan;
 use common_users::UserApiProvider;
 use data_mask::get_datamask_handler;
 
@@ -25,21 +28,21 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-pub struct DropDataMaskInterpreter {
+pub struct DescDataMaskInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropDatamaskPolicyPlan,
+    plan: DescDatamaskPolicyPlan,
 }
 
-impl DropDataMaskInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropDatamaskPolicyPlan) -> Result<Self> {
-        Ok(DropDataMaskInterpreter { ctx, plan })
+impl DescDataMaskInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: DescDatamaskPolicyPlan) -> Result<Self> {
+        Ok(DescDataMaskInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropDataMaskInterpreter {
+impl Interpreter for DescDataMaskInterpreter {
     fn name(&self) -> &str {
-        "DropDataMaskInterpreter"
+        "DescDataMaskInterpreter"
     }
 
     #[async_backtrace::framed]
@@ -52,8 +55,24 @@ impl Interpreter for DropDataMaskInterpreter {
         )?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
-        handler.drop_data_mask(meta_api, self.plan.clone()).await?;
+        let policy = handler
+            .get_data_mask(meta_api, self.ctx.get_tenant(), self.plan.name.clone())
+            .await?;
 
-        Ok(PipelineBuildResult::create())
+        let name: Vec<Vec<u8>> = vec![self.plan.name.as_bytes().to_vec()];
+        let signature: Vec<Vec<u8>> = policy
+            .args
+            .iter()
+            .map(|(_, arg_type)| arg_type.to_string().as_bytes().to_vec())
+            .collect();
+        let return_type = vec![policy.return_type.as_bytes().to_vec()];
+        let body = vec![policy.body.as_bytes().to_vec()];
+
+        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+            StringType::from_data(name),
+            StringType::from_data(signature),
+            StringType::from_data(return_type),
+            StringType::from_data(body),
+        ])])
     }
 }
