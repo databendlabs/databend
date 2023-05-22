@@ -357,6 +357,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
 
+    fn visit_show_indexes(&mut self) {}
+
     fn visit_show_table_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
 
     fn visit_show_limit(&mut self, _limit: &mut ShowLimit) {}

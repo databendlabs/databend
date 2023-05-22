@@ -15,8 +15,10 @@
 use common_ast::ast::CreateIndexStmt;
 use common_ast::ast::DropIndexStmt;
 use common_ast::ast::GroupBy;
+use common_ast::ast::Identifier;
 use common_ast::ast::Query;
 use common_ast::ast::SetExpr;
+use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -43,11 +45,11 @@ impl Binder {
         // check if query support index
         Self::check_index_support(query)?;
 
-        let tenant = self.ctx.get_tenant();
         let index_name = self.normalize_object_identifier(index_name);
-        let subquery = format!("{}", query);
 
+        bind_context.planning_agg_index = true;
         self.bind_query(bind_context, query).await?;
+        bind_context.planning_agg_index = false;
 
         let tables = self.metadata.read().tables().to_vec();
 
@@ -57,7 +59,8 @@ impl Binder {
             ));
         }
 
-        let table = tables[0].table();
+        let table_entry = &tables[0];
+        let table = table_entry.table();
 
         if !table.support_index() {
             return Err(ErrorCode::UnsupportedIndex(format!(
@@ -67,13 +70,14 @@ impl Binder {
         }
 
         let table_id = table.get_id();
+        let mut query = *query.clone();
+        Self::rewrite_query_with_database(&mut query, table_entry.database());
 
         let plan = CreateIndexPlan {
-            tenant,
             if_not_exists: *if_not_exists,
             index_type: *index_type,
             index_name,
-            subquery,
+            query: query.to_string(),
             table_id,
         };
         Ok(Plan::CreateIndex(Box::new(plan)))
@@ -86,14 +90,8 @@ impl Binder {
     ) -> Result<Plan> {
         let DropIndexStmt { if_exists, index } = stmt;
 
-        let tenant = self.ctx.get_tenant();
-
-        self.ctx.get_current_catalog();
-
         let plan = DropIndexPlan {
             if_exists: *if_exists,
-            tenant,
-            catalog: self.ctx.get_current_catalog(),
             index: index.to_string(),
         };
         Ok(Plan::DropIndex(Box::new(plan)))
@@ -105,7 +103,7 @@ impl Binder {
             "SELECT ... FROM ... WHERE ... GROUP BY ..."
         )));
 
-        if query.with.is_some() || !query.order_by.is_empty() {
+        if query.with.is_some() || !query.order_by.is_empty() || !query.limit.is_empty() {
             return err;
         }
 
@@ -132,5 +130,19 @@ impl Binder {
         }
 
         Ok(())
+    }
+
+    fn rewrite_query_with_database(query: &mut Query, name: &str) {
+        if let SetExpr::Select(stmt) = &mut query.body {
+            if let TableReference::Table { database, .. } = &mut stmt.from[0] {
+                if database.is_none() {
+                    *database = Some(Identifier {
+                        name: name.to_string(),
+                        quote: None,
+                        span: None,
+                    });
+                }
+            }
+        }
     }
 }

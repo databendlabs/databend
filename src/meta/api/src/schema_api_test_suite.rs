@@ -50,7 +50,7 @@ use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::IndexType;
 use common_meta_app::schema::ListDatabaseReq;
-use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
 use common_meta_app::schema::RenameDatabaseReq;
@@ -270,7 +270,7 @@ impl SchemaApiTestSuite {
             .update_table_with_copied_files(&b.build().await)
             .await?;
         suite.index_create_list_drop(&b.build().await).await?;
-        suite.test_table_lock(&b.build().await).await?;
+        suite.table_lock_revision(&b.build().await).await?;
         Ok(())
     }
 
@@ -3311,7 +3311,7 @@ impl SchemaApiTestSuite {
 
     #[tracing::instrument(level = "debug", skip_all)]
     async fn truncate_table<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let mut util = Util::new(mt, "tenant1", "db1", "tb2");
+        let mut util = Util::new(mt, "tenant1", "db1", "tb2", "JSON");
         let table_id;
 
         info!("--- prepare db and table");
@@ -3677,7 +3677,7 @@ impl SchemaApiTestSuite {
         let created_on = Utc::now();
         let index_id;
 
-        let mut util = Util::new(mt, tenant, "db1", "tb1");
+        let mut util = Util::new(mt, tenant, "db1", "tb1", "eng1");
         let table_id;
 
         info!("--- prepare db and table");
@@ -3717,13 +3717,13 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list index with no create before");
-            let req = ListIndexByTableIdReq {
+            let req = ListIndexesReq {
                 tenant: tenant.to_string(),
-                table_id,
+                table_id: Some(table_id),
             };
 
-            let res = mt.get_indexes_by_table_id(req).await?;
-            assert!(res.is_none())
+            let res = mt.list_indexes(req).await?;
+            assert!(res.is_empty())
         }
 
         {
@@ -3775,20 +3775,28 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list index");
-            let req = ListIndexByTableIdReq {
+            let req = ListIndexesReq {
                 tenant: tenant.to_string(),
-                table_id,
+                table_id: None,
             };
 
-            let res = mt.get_indexes_by_table_id(req).await?;
-            assert_eq!(2, res.unwrap().len());
+            let res = mt.list_indexes(req).await?;
+            assert_eq!(2, res.len());
+
+            let req = ListIndexesReq {
+                tenant: tenant.to_string(),
+                table_id: Some(u64::MAX),
+            };
+
+            let res = mt.list_indexes(req).await?;
+            assert!(res.is_empty())
         }
 
         {
             info!("--- drop index");
             let req = DropIndexReq {
                 if_exists: false,
-                name_ident: name_ident_1.clone(),
+                name_ident: name_ident_2.clone(),
             };
 
             let res = mt.drop_index(req).await;
@@ -3797,32 +3805,47 @@ impl SchemaApiTestSuite {
 
         {
             info!("--- list index after drop one");
-            let req = ListIndexByTableIdReq {
+            let req = ListIndexesReq {
                 tenant: tenant.to_string(),
-                table_id,
+                table_id: Some(table_id),
             };
 
-            let res = mt.get_indexes_by_table_id(req).await?;
-            assert_eq!(1, res.unwrap().len());
+            let res = mt.list_indexes(req).await?;
+            assert_eq!(1, res.len());
+        }
+
+        {
+            info!("--- check list index content");
+            let req = ListIndexesReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_indexes(req).await?;
+            assert_eq!(1, res.len());
+            assert_eq!(
+                vec![(index_id, index_name_1.to_string(), index_meta_1.clone())],
+                res
+            );
         }
 
         {
             info!("--- list index after drop all");
             let req = DropIndexReq {
                 if_exists: false,
-                name_ident: name_ident_2.clone(),
+                name_ident: name_ident_1.clone(),
             };
 
             let res = mt.drop_index(req).await;
             assert!(res.is_ok());
 
-            let req = ListIndexByTableIdReq {
+            let req = ListIndexesReq {
                 tenant: tenant.to_string(),
-                table_id,
+                table_id: Some(table_id),
             };
 
-            let res = mt.get_indexes_by_table_id(req).await?;
-            assert_eq!(0, res.unwrap().len())
+            let res = mt.list_indexes(req).await?;
+            assert!(res.is_empty())
         }
 
         {
@@ -3851,8 +3874,8 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
-    async fn test_table_lock<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
-        let mut util = Util::new(mt, "tenant1", "db1", "tb1");
+    async fn table_lock_revision<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
         let table_id;
 
         info!("--- prepare db and table");
@@ -4556,6 +4579,7 @@ where MT: SchemaApi
     tenant: String,
     db_name: String,
     table_name: String,
+    engine: String,
     created_on: DateTime<Utc>,
     table_id: u64,
     mt: &'a MT,
@@ -4570,11 +4594,13 @@ where MT: SchemaApi
         tenant: impl ToString,
         db_name: impl ToString,
         tbl_name: impl ToString,
+        engine: impl ToString,
     ) -> Self {
         Self {
             tenant: tenant.to_string(),
             db_name: db_name.to_string(),
             table_name: tbl_name.to_string(),
+            engine: engine.to_string(),
             created_on: Utc::now(),
             table_id: 0,
             mt,
@@ -4592,6 +4618,10 @@ where MT: SchemaApi
         self.table_name.clone()
     }
 
+    fn engine(&self) -> String {
+        self.engine.clone()
+    }
+
     fn schema(&self) -> Arc<TableSchema> {
         Arc::new(TableSchema::new(vec![TableField::new(
             "number",
@@ -4606,7 +4636,7 @@ where MT: SchemaApi
     fn table_meta(&self) -> TableMeta {
         TableMeta {
             schema: self.schema(),
-            engine: "JSON".to_string(),
+            engine: self.engine(),
             options: self.options(),
             created_on: self.created_on,
             ..TableMeta::default()
@@ -4621,7 +4651,7 @@ where MT: SchemaApi
                 db_name: self.db_name(),
             },
             meta: DatabaseMeta {
-                engine: "".to_string(),
+                engine: self.engine(),
                 ..DatabaseMeta::default()
             },
         };
