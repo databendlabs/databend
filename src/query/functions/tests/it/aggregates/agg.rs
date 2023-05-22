@@ -98,7 +98,7 @@ fn gen_bitmap_data() -> Column {
     // construct bitmap column with 4 row:
     // 0..5, 1..6, 2..7, 3..8
     const N: u64 = 4;
-    let rbs_iter = (0..N).into_iter().map(|i| {
+    let rbs_iter = (0..N).map(|i| {
         let mut rb = RoaringTreemap::new();
         rb.insert_range(i..(i + 5));
         rb
