@@ -26,16 +26,19 @@ use common_expression::types::StringType;
 use common_expression::utils::FromData;
 use common_expression::DataBlock;
 use common_expression::FromOptData;
+use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
+use crate::util::find_eq_filter;
 
 pub struct TablesTable<const WITH_HISTORY: bool> {
     table_info: TableInfo,
@@ -94,7 +97,7 @@ where TablesTable<T>: HistoryAware
     async fn get_full_data(
         &self,
         ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog_mgr = CatalogManager::instance();
@@ -109,7 +112,31 @@ where TablesTable<T>: HistoryAware
 
         let mut database_tables = vec![];
         for (ctl_name, ctl) in ctls.into_iter() {
-            let dbs = ctl.list_databases(tenant.as_str()).await?;
+            let mut dbs = Vec::new();
+            if let Some(push_downs) = &push_downs {
+                let mut db_name = Vec::new();
+                if let Some(filter) = &push_downs.filter {
+                    let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+                    find_eq_filter(&expr, &mut |col_name, scalar| {
+                        if col_name == "database" {
+                            if let Scalar::String(s) = scalar {
+                                if let Ok(database) = String::from_utf8(s.clone()) {
+                                    db_name.push(database);
+                                }
+                            }
+                        }
+                    });
+                    for db in db_name {
+                        if let Ok(database) = ctl.get_database(tenant.as_str(), db.as_str()).await {
+                            dbs.push(database);
+                        }
+                    }
+                }
+            }
+
+            if dbs.is_empty() {
+                dbs = ctl.list_databases(tenant.as_str()).await?;
+            }
             let ctl_name: &str = Box::leak(ctl_name.into_boxed_str());
 
             for db in dbs {

@@ -34,7 +34,6 @@ use common_ast::ast::WindowFrameUnits;
 use common_ast::ast::WindowSpec;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -121,7 +120,6 @@ pub struct TypeChecker<'a> {
     in_window_function: bool,
 
     allow_ambiguous: bool,
-    allow_pushdown: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -132,7 +130,6 @@ impl<'a> TypeChecker<'a> {
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
         allow_ambiguous: bool,
-        allow_pushdown: bool,
     ) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
         Self {
@@ -145,7 +142,6 @@ impl<'a> TypeChecker<'a> {
             in_aggregate_function: false,
             in_window_function: false,
             allow_ambiguous,
-            allow_pushdown,
         }
     }
 
@@ -197,21 +193,15 @@ impl<'a> TypeChecker<'a> {
                 )?;
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
-                        if let Some(virtual_computed_expr) = column.virtual_computed_expr {
-                            let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
-                            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
-                            return self.resolve(&expr).await;
-                        } else {
-                            let data_type = *column.data_type.clone();
-                            (
-                                BoundColumnRef {
-                                    span: *span,
-                                    column,
-                                }
-                                .into(),
-                                data_type,
-                            )
-                        }
+                        let data_type = *column.data_type.clone();
+                        (
+                            BoundColumnRef {
+                                span: *span,
+                                column,
+                            }
+                            .into(),
+                            data_type,
+                        )
                     }
                     NameResolutionResult::InternalColumn(column) => {
                         // add internal column binding into `BindContext`
@@ -475,7 +465,7 @@ impl<'a> TypeChecker<'a> {
             Expr::Cast {
                 expr, target_type, ..
             } => {
-                let box (scalar, data_type) = self.resolve(expr).await?;
+                let box (scalar, _) = self.resolve(expr).await?;
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: false,
@@ -484,21 +474,15 @@ impl<'a> TypeChecker<'a> {
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
-                // if the source type is nullable, cast target type should also be nullable.
-                let target_type = if data_type.is_nullable() {
-                    checked_expr.data_type().wrap_nullable()
-                } else {
-                    checked_expr.data_type().clone()
-                };
                 Box::new((
                     CastExpr {
                         span: expr.span(),
                         is_try: false,
                         argument: Box::new(scalar),
-                        target_type: Box::new(target_type.clone()),
+                        target_type: Box::new(checked_expr.data_type().clone()),
                     }
                     .into(),
-                    target_type,
+                    checked_expr.data_type().clone(),
                 ))
             }
 
@@ -1846,9 +1830,6 @@ impl<'a> TypeChecker<'a> {
             }
             // Try convert get function of Variant data type into a virtual column
             ("get", args) => {
-                if !self.allow_pushdown {
-                    return None;
-                }
                 let mut paths = VecDeque::new();
                 let mut get_args = args.to_vec();
                 loop {
@@ -2246,29 +2227,27 @@ impl<'a> TypeChecker<'a> {
             if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
                 table_data_type = data_type;
             }
-            if self.allow_pushdown {
-                match table_data_type.remove_nullable() {
-                    TableDataType::Tuple { .. } => {
-                        let box (inner_scalar, _inner_data_type) = self
-                            .resolve_tuple_map_access_pushdown(
-                                expr.span(),
-                                column.clone(),
-                                &mut table_data_type,
-                                &mut paths,
-                            )
-                            .await?;
-                        scalar = inner_scalar;
-                    }
-                    TableDataType::Variant => {
-                        if let Some(result) = self
-                            .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
-                            .await
-                        {
-                            return result;
-                        }
-                    }
-                    _ => {}
+            match table_data_type.remove_nullable() {
+                TableDataType::Tuple { .. } => {
+                    let box (inner_scalar, _inner_data_type) = self
+                        .resolve_tuple_map_access_pushdown(
+                            expr.span(),
+                            column.clone(),
+                            &mut table_data_type,
+                            &mut paths,
+                        )
+                        .await?;
+                    scalar = inner_scalar;
                 }
+                TableDataType::Variant => {
+                    if let Some(result) = self
+                        .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
+                        .await
+                    {
+                        return result;
+                    }
+                }
+                _ => {}
             }
         }
 
@@ -2527,7 +2506,6 @@ impl<'a> TypeChecker<'a> {
             index,
             data_type: Box::new(data_type.clone()),
             visibility: Visibility::InVisible,
-            virtual_computed_expr: None,
         };
         let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,

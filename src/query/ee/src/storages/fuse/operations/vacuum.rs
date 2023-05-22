@@ -18,6 +18,7 @@ use std::time::Instant;
 
 use chrono::DateTime;
 use chrono::Utc;
+use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -354,8 +355,9 @@ pub async fn do_vacuum(
 ) -> Result<Option<Vec<String>>> {
     let start = Instant::now();
     // First, do purge
+    let instant = Some(NavigationPoint::TimePoint(retention_time));
     let purge_files_opt = fuse_table
-        .purge(ctx.clone(), None, true, dry_run_limit)
+        .purge(ctx.clone(), instant, true, dry_run_limit)
         .await?;
     let status = format!(
         "do_vacuum: purged table, cost:{} sec",

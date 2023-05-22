@@ -219,8 +219,8 @@ impl PartitionPruner {
         // 1. Read parquet meta data. Distinguish between sync and async reading.
         let file_metas = if is_blocking_io {
             let mut file_metas = Vec::with_capacity(locations.len());
-            for (location, _size) in large_files {
-                let mut reader = operator.blocking().reader(&location)?;
+            for (location, _size) in &large_files {
+                let mut reader = operator.blocking().reader(location)?;
                 let file_meta = pread::read_metadata(&mut reader).map_err(|e| {
                     ErrorCode::Internal(format!(
                         "Read parquet file '{}''s meta error: {}",
@@ -239,8 +239,11 @@ impl PartitionPruner {
         // If one row group does not have stats, we cannot use the stats for topk optimization.
         for (file_id, file_meta) in file_metas.into_iter().enumerate() {
             stats.partitions_total += file_meta.row_groups.len();
-            let (sub_stats, parts) =
-                self.read_and_prune_file_meta(&locations[file_id].0, file_meta, operator.clone())?;
+            let (sub_stats, parts) = self.read_and_prune_file_meta(
+                &large_files[file_id].0,
+                file_meta,
+                operator.clone(),
+            )?;
             for p in parts {
                 partitions.push(ParquetPart::RowGroup(p));
             }
@@ -671,7 +674,6 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -705,7 +707,6 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -739,7 +740,6 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -783,7 +783,6 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -818,7 +817,6 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -853,7 +851,6 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {
@@ -888,7 +885,6 @@ mod tests {
                             index: 0,
                             data_type: Box::new(DataType::Number(NumberDataType::Int32)),
                             visibility: Visibility::Visible,
-                            virtual_computed_expr: None,
                         },
                     }),
                     ScalarExpr::ConstantExpr(ConstantExpr {

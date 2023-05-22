@@ -247,13 +247,13 @@ impl Binder {
                                 if let Statement::Query(query) = &stmt {
                                     let (s_expr, _) =
                                         self.bind_query(&mut new_bind_context, query).await?;
-                                    s_exprs.push((index_id, s_expr));
+                                    s_exprs.push((index_id.index_id, s_expr));
                                 }
                             }
 
                             self.metadata
                                 .write()
-                                .add_table_indexes(table_meta.get_id(), s_exprs);
+                                .add_agg_indexes(table_meta.get_id(), s_exprs);
                         }
                     }
                 }
@@ -700,7 +700,7 @@ impl Binder {
                     data_type,
                     leaf_index,
                     table_index,
-                    virtual_computed_expr,
+                    ..
                 }) => {
                     let column_binding = ColumnBinding {
                         database_name: Some(database_name.to_string()),
@@ -714,10 +714,9 @@ impl Binder {
                         } else {
                             Visibility::Visible
                         },
-                        virtual_computed_expr: virtual_computed_expr.clone(),
                     };
                     bind_context.add_column_binding(column_binding);
-                    if path_indices.is_none() && virtual_computed_expr.is_none() {
+                    if path_indices.is_none() {
                         if let Some(col_id) = *leaf_index {
                             let col_stat =
                                 statistics_provider.column_statistics(col_id as ColumnId);
@@ -755,14 +754,11 @@ impl Binder {
                             }
                         })
                         .collect(),
-                    push_down_predicates: None,
-                    limit: None,
-                    order_by: None,
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,
                     },
-                    prewhere: None,
+                    ..Default::default()
                 }
                 .into(),
             ),
@@ -804,7 +800,6 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
-                    false,
                     false,
                 );
                 let box (scalar, _) = type_checker.resolve(expr).await?;

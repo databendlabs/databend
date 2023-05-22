@@ -19,10 +19,7 @@ use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::types::number::NumberScalar;
-use common_expression::DataBlock;
 use common_expression::Scalar;
-use common_expression::ScalarRef;
-use common_expression::SendableDataBlockStream;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::statistics::reducers::merge_statistics_mut;
 use common_storages_fuse::FuseTable;
@@ -36,7 +33,7 @@ use databend_query::test_kits::table_test_fixture::do_update;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
-use futures_util::TryStreamExt;
+use databend_query::test_kits::utils::query_count;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
@@ -64,7 +61,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     // check count
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
-    assert_eq!(num_inserts, check_count(stream).await? as usize);
+    assert_eq!(num_inserts, query_count(stream).await? as usize);
 
     let expected = HashMap::from([(0, num_inserts as u64)]);
     check_column_ndv_statistics(table.clone(), expected.clone()).await?;
@@ -76,7 +73,7 @@ async fn test_table_modify_column_ndv_statistics() -> Result<()> {
     // check count
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
-    assert_eq!(num_inserts * 2, check_count(stream).await? as usize);
+    assert_eq!(num_inserts * 2, query_count(stream).await? as usize);
 
     check_column_ndv_statistics(table.clone(), expected.clone()).await?;
 
@@ -178,20 +175,6 @@ async fn check_column_ndv_statistics(
     }
 
     Ok(())
-}
-
-async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
-    let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
-    let mut count: u64 = 0;
-    for block in blocks {
-        let value = &block.get_by_offset(0).value;
-        let value = value.as_ref();
-        let value = unsafe { value.index_unchecked(0) };
-        if let ScalarRef::Number(NumberScalar::UInt64(v)) = value {
-            count += v;
-        }
-    }
-    Ok(count)
 }
 
 async fn append_rows(ctx: Arc<QueryContext>, n: usize) -> Result<()> {

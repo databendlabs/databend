@@ -72,8 +72,8 @@ jobs:
       - name: Get Toolchain
         id: toolchain
         run: |
-         RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
-         echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
+          RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
+          echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
 
       # NOTE: for exporting ACTIONS_RUNTIME_TOKEN and ACTIONS_CACHE_URL
       - name: Expose GitHub Runtime
@@ -108,6 +108,14 @@ jobs:
           args: ${{ steps.opts.outputs.BUILD_ARGS }}
           docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
           before-script-linux: ../../scripts/setup/dev_setup.sh -yb
+
+      - name: Run tests
+        working-directory: src/bendpy
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          pip install dist/*.whl
+          pip install pytest pyarrow pandas
+          pytest -v tests/*
 
       - name: Upload artifact
         if: github.event_name == 'pull_request'

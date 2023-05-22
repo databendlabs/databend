@@ -16,7 +16,7 @@ and [VERIFY](https://databend.rs/doc/faq/license-faqs/#verify-a-license) your li
 
 | Feature                                                                             | Description                                                                                                                                                                                                                                                             |
 |-------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [Data Vacuum with Fail-Safe](../14-sql-commands/00-ddl/20-table/91-vacuum-table.md) | Optimizes data storage:<br/>**1. Reducing historical/outdated data with fail-safe guarantees.** <br/> **2. Supporting `dry-run` of the `VACUUM` command for a safe user experience.** <br/> **3. Allowing data retrieval within a given period to prevent data loss.** |
+| [Data Vacuum with Fail-Safe](../14-sql-commands/00-ddl/20-table/91-vacuum-table.md) | Deep clean your storage space:<br/>- Remove orphan segment and block files. <br/>- Ensure secure data cleaning with fail-safe guarantees. <br/>- Safely preview the removal of data files using the dry-run option. |
 
 
 

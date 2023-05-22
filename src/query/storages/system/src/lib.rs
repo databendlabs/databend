@@ -45,6 +45,7 @@ mod table_functions_table;
 mod tables_table;
 mod tracing_table;
 mod users_table;
+mod util;
 
 pub use build_options_table::BuildOptionsTable;
 pub use caches_table::CachesTable;

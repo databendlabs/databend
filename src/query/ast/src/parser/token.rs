@@ -194,6 +194,8 @@ pub enum TokenKind {
     Multiply,
     #[token("/")]
     Divide,
+    #[token("//")]
+    IntDiv,
     #[token("%")]
     Modulo,
     #[token("||")]
@@ -803,8 +805,6 @@ pub enum TokenKind {
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
     STATUS,
-    #[token("STORED", ignore(ascii_case))]
-    STORED,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]
@@ -901,8 +901,6 @@ pub enum TokenKind {
     VARIANT,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
-    #[token("VIRTUAL", ignore(ascii_case))]
-    VIRTUAL,
     #[token("WEEK", ignore(ascii_case))]
     WEEK,
     #[token("WHEN", ignore(ascii_case))]
@@ -974,6 +972,7 @@ impl TokenKind {
                 | Minus
                 | Multiply
                 | Divide
+                | IntDiv
                 | Modulo
                 | StringConcat
                 | LParen
