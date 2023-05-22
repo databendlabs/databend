@@ -3674,11 +3674,10 @@ impl SchemaApiTestSuite {
     #[tracing::instrument(level = "debug", skip_all)]
     async fn index_create_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let tenant = "tenant1";
-        let created_on = Utc::now();
-        let index_id;
 
         let mut util = Util::new(mt, tenant, "db1", "tb1", "eng1");
         let table_id;
+        let index_id;
 
         info!("--- prepare db and table");
         {
@@ -3686,6 +3685,8 @@ impl SchemaApiTestSuite {
             let (tid, _table_meta) = util.create_table().await?;
             table_id = tid;
         }
+
+        let created_on = Utc::now();
 
         let index_name_1 = "idx1";
         let index_meta_1 = IndexMeta {
