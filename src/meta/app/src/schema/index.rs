@@ -92,59 +92,6 @@ impl Display for IndexType {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct IndexIdListKey {
-    pub tenant: String,
-}
-
-impl Display for IndexIdListKey {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "'{}'", self.tenant)
-    }
-}
-
-/// Save index id list history.
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, Default, PartialEq)]
-pub struct IndexIdList {
-    pub id_list: Vec<u64>,
-}
-
-impl IndexIdList {
-    pub fn new() -> IndexIdList {
-        IndexIdList::default()
-    }
-
-    pub fn len(&self) -> usize {
-        self.id_list.len()
-    }
-
-    pub fn id_list(&self) -> &Vec<u64> {
-        &self.id_list
-    }
-
-    pub fn append(&mut self, index_id: u64) {
-        self.id_list.push(index_id);
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.id_list.is_empty()
-    }
-
-    pub fn pop(&mut self) -> Option<u64> {
-        self.id_list.pop()
-    }
-
-    pub fn last(&mut self) -> Option<&u64> {
-        self.id_list.last()
-    }
-}
-
-impl Display for IndexIdList {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "Index id list: {:?}", self.id_list)
-    }
-}
-
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
 pub struct IndexMeta {
     pub table_id: MetaId,
@@ -228,12 +175,10 @@ mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;
 
     use crate::schema::IndexId;
-    use crate::schema::IndexIdListKey;
     use crate::schema::IndexIdToName;
     use crate::schema::IndexNameIdent;
     use crate::schema::PREFIX_INDEX;
     use crate::schema::PREFIX_INDEX_BY_ID;
-    use crate::schema::PREFIX_INDEX_ID_LIST;
     use crate::schema::PREFIX_INDEX_ID_TO_NAME;
 
     /// <prefix>/<tenant>/<index_name> -> <index_id>
@@ -295,26 +240,6 @@ mod kvapi_key_impl {
             p.done()?;
 
             Ok(IndexIdToName { index_id })
-        }
-    }
-
-    /// "<prefix>/<tenant> -> index_id_list"
-    impl kvapi::Key for IndexIdListKey {
-        const PREFIX: &'static str = PREFIX_INDEX_ID_LIST;
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_str(&self.tenant)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let tenant = p.next_str()?;
-            p.done()?;
-
-            Ok(IndexIdListKey { tenant })
         }
     }
 }
