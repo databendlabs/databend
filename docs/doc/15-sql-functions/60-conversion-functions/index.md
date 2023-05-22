@@ -2,6 +2,10 @@
 title: 'Conversion Functions'
 ---
 
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced: v1.1.39"/>
+
 Below is a list of functions that allow you to convert an expression from one data type to another.
 
 :::tip

@@ -1,6 +1,6 @@
 ---
 title: Arithmetic Operators
-title_includes: plus, minus, multiply, div, divide, mod, caret, modulo, negate, +, -, /, %, *, ^, |/, ||/, @, &, |, #, ~, <<, >>
+title_includes: plus, minus, multiply, div, divide, mod, caret, modulo, negate, +, -, /, //, %, *, ^, |/, ||/, @, &, |, #, ~, <<, >>
 ---
 
 SQL arithmetic operators.
@@ -13,6 +13,7 @@ SQL arithmetic operators.
 | **-**                 | Subtract two numeric expressions                       | **4 - 1**                  | 3      |
 | __*__                 | Multiplies two numeric expressions                     | **4 * 1**                  | 4      |
 | **/**                 | Divides one numeric expression (`a`) by another (`b`)  | **4 / 2**                  | 2      |
+| **//**                | Computes the integer division of numeric expression    | **4 // 3**                 | 1      |
 | **%**                 | Computes the modulo of numeric expression              | **4 % 2**                  | 0      |
 | **^**                 | Computes the exponentiation of numeric expression      | **4 ^ 2**                  | 16     |
 | **&verbar;/**         | Computes the square root of numeric expression         | **&verbar;/ 25.0**         | 5      |
