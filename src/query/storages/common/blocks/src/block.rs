@@ -30,9 +30,7 @@ pub fn blocks_to_parquet(
     compression: TableCompression,
 ) -> Result<(u64, FileMetaData)> {
     let start_pos = write_buffer.len() as u64;
-    println!("schema: {:?}", schema.as_ref());
     let data_schema: DataSchema = schema.into();
-    println!("data_schema: {:?}", data_schema);
     let batches = blocks
         .into_iter()
         .map(|block| block.to_record_batch(&data_schema))

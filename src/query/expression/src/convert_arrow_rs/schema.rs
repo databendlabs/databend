@@ -101,7 +101,6 @@ impl From<&DataType> for ArrowDataType {
 
 impl From<&DataField> for ArrowField {
     fn from(f: &DataField) -> Self {
-        println!("datafield,f: {:?}", f);
         let ty = f.data_type().into();
 
         // TODO Nested metadata
