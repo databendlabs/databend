@@ -204,13 +204,22 @@ impl PipelineBuilder {
     }
 
     fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
-        let state = Arc::new(IEJoinState::new(self.ctx.clone(), ie_join));
+        let left_schema = ie_join.left.output_schema()?;
+        let right_schema = ie_join.right.output_schema()?;
+        let state = Arc::new(IEJoinState::new(
+            self.ctx.clone(),
+            ie_join,
+            left_schema,
+            right_schema,
+        ));
         self.expand_right_side_pipeline(ie_join, state.clone())?;
         self.build_left_side(ie_join, state)
     }
 
     fn build_left_side(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {
         self.build_pipeline(&ie_join.left)?;
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        self.main_pipeline.resize(max_threads)?;
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformIEJoinLeft::create(input, output, state.clone());
             if self.enable_profiling {
