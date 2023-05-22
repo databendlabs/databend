@@ -3,10 +3,10 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where t.number = 
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── Filter
     ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = if(CAST(is_not_null(scalar_subquery_5 (#5)) AS Boolean NULL), scalar_subquery_5 (#5), 0))]
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     └── HashJoin
         ├── join type: SINGLE
         ├── build keys: [number (#2)]
@@ -109,16 +109,16 @@ explain select t.number from numbers(1) as t where exists (select * from numbers
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     ├── Filter(Build)
     │   ├── filters: [count(*) (#2) = 1]
-    │   ├── estimated rows: 0.33
+    │   ├── estimated rows: 0.10
     │   └── AggregateFinal
     │       ├── group by: []
     │       ├── aggregate functions: [count()]
@@ -130,10 +130,10 @@ EvalScalar
     │           └── Limit
     │               ├── limit: 1
     │               ├── offset: 0
-    │               ├── estimated rows: 0.33
+    │               ├── estimated rows: 0.10
     │               └── Filter
     │                   ├── filters: [numbers.number (#1) = 0]
-    │                   ├── estimated rows: 0.33
+    │                   ├── estimated rows: 0.10
     │                   └── TableScan
     │                       ├── table: default.system.numbers
     │                       ├── read rows: 1
@@ -156,10 +156,10 @@ explain select t.number from numbers(1) as t where number = (select * from numbe
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── Filter
     ├── filters: [is_true(CAST(t.number (#0) AS UInt64 NULL) = scalar_subquery_1 (#1))]
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     └── HashJoin
         ├── join type: SINGLE
         ├── build keys: []
@@ -168,10 +168,10 @@ EvalScalar
         ├── estimated rows: 1.00
         ├── EvalScalar(Build)
         │   ├── expressions: [numbers.number (#1)]
-        │   ├── estimated rows: 0.33
+        │   ├── estimated rows: 0.10
         │   └── Filter
         │       ├── filters: [numbers.number (#1) = 0]
-        │       ├── estimated rows: 0.33
+        │       ├── estimated rows: 0.10
         │       └── TableScan
         │           ├── table: default.system.numbers
         │           ├── read rows: 1
@@ -290,19 +290,19 @@ explain select t.number from numbers(1) as t where exists (select * from numbers
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── HashJoin
     ├── join type: LEFT SEMI
     ├── build keys: [numbers.number (#1)]
     ├── probe keys: [t.number (#0)]
     ├── filters: []
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     ├── EvalScalar(Build)
     │   ├── expressions: [numbers.number (#1), numbers.number (#1)]
-    │   ├── estimated rows: 0.33
+    │   ├── estimated rows: 0.10
     │   └── Filter
     │       ├── filters: [numbers.number (#1) = 0]
-    │       ├── estimated rows: 0.33
+    │       ├── estimated rows: 0.10
     │       └── TableScan
     │           ├── table: default.system.numbers
     │           ├── read rows: 1
@@ -313,7 +313,7 @@ EvalScalar
     │           └── estimated rows: 1.00
     └── Filter(Probe)
         ├── filters: [t.number (#0) < 10]
-        ├── estimated rows: 0.33
+        ├── estimated rows: 0.10
         └── TableScan
             ├── table: default.system.numbers
             ├── read rows: 1
@@ -392,10 +392,10 @@ explain select t.number from numbers(1) as t, numbers(1) as t1 where (select cou
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 0.33
+├── estimated rows: 0.10
 └── Filter
     ├── filters: [is_true(try_to_boolean(if(CAST(is_not_null(scalar_subquery_4 (#4)) AS Boolean NULL), TRY_CAST(scalar_subquery_4 (#4) AS UInt64 NULL), 0)))]
-    ├── estimated rows: 0.33
+    ├── estimated rows: 0.10
     └── HashJoin
         ├── join type: SINGLE
         ├── build keys: [number (#2)]

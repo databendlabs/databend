@@ -60,6 +60,25 @@ Build bindings:
 maturin develop
 ```
 
+Run tests:
+
+```shell
+maturin develop -E test
+```
+
+Build API docs:
+
+```shell
+maturin develop -E docs
+pdoc opendal
+```
+
+## Storage configuration
+
+- Meta Storage directory(Catalogs, Databases, Tables, Partitions, etc.): `./.databend/_meta`
+- Data Storage directory: `./.databend/_data`
+- Cache Storage directory: `./.databend/_cache`
+- Logs directory: `./.databend/logs`
 
 ## More
 

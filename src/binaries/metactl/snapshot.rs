@@ -124,11 +124,12 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
             DataVersion::V0
         };
 
-        if version != DATA_VERSION {
+        if !DATA_VERSION.is_compatible(version) {
             return Err(anyhow!(
-                "invalid data version: {:?}, This program can only import {:?}",
+                "invalid data version: {:?}, This program version is {:?}; The latest compatible program version is: {:?}",
                 version,
-                DATA_VERSION
+                DATA_VERSION,
+                version.max_compatible_working_version(),
             ));
         }
 

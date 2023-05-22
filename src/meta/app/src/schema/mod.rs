@@ -98,6 +98,5 @@ const PREFIX_TABLE_COPIED_FILES: &str = "__fd_table_copied_files";
 const PREFIX_TABLE_COPIED_FILES_LOCK: &str = "__fd_table_copied_file_lock";
 
 const PREFIX_INDEX: &str = "__fd_index";
-const PREFIX_INDEX_ID_LIST: &str = "__fd_index_id_list";
 const PREFIX_INDEX_ID_TO_NAME: &str = "__fd_index_id_to_name";
 const PREFIX_INDEX_BY_ID: &str = "__fd_index_by_id";

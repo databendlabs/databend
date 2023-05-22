@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use common_meta_sled_store::sled;
 use common_meta_sled_store::SledBytesError;
 use common_meta_sled_store::SledSerde;
@@ -29,6 +31,21 @@ pub struct Header {
     ///
     /// If it is present, the data is upgrading.
     pub upgrading: Option<DataVersion>,
+}
+
+impl fmt::Display for Header {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "version: {}, upgrading: {}",
+            self.version,
+            if let Some(upgrading) = self.upgrading {
+                upgrading.to_string()
+            } else {
+                "None".to_string()
+            }
+        )
+    }
 }
 
 impl SledSerde for Header {

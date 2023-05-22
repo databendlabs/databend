@@ -273,7 +273,7 @@ pub(super) fn fill_internal_column_meta(
     // Fill `BlockMetaInfoPtr` if query internal columns
     let block_meta = fuse_part.block_meta_index().unwrap();
     let internal_column_meta = InternalColumnMeta {
-        segment_id: block_meta.segment_id,
+        segment_idx: block_meta.segment_idx,
         block_id: block_meta.block_id,
         block_location: block_meta.block_location.clone(),
         segment_location: block_meta.segment_location.clone(),

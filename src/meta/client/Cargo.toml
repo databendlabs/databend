@@ -31,7 +31,7 @@ futures = "0.3.24"
 once_cell = "1.15.0"
 parking_lot = "0.12.1"
 prost = { workspace = true }
-semver = "1.0.14"
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tonic = { workspace = true }

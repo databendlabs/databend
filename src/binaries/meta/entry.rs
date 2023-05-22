@@ -92,27 +92,38 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     init_sled_db(conf.raft_config.raft_dir.clone());
     init_default_metrics_recorder();
 
+    let single_or_join = if conf.raft_config.single {
+        "single".to_string()
+    } else {
+        format!("join {:#?}", conf.raft_config.join)
+    };
+
+    let grpc_advertise = if let Some(a) = conf.grpc_api_advertise_address() {
+        a
+    } else {
+        "-".to_string()
+    };
+
+    let raft_listen = conf.raft_config.raft_api_listen_host_string();
+    let raft_advertise = conf.raft_config.raft_api_advertise_host_string();
+
     // Print information to users.
     println!("Databend Metasrv");
     println!();
     println!("Version: {}", METASRV_COMMIT_VERSION.as_str());
-    println!("Data version: {:?}", DATA_VERSION);
+    println!("Working DataVersion: {:?}", DATA_VERSION);
     println!();
 
-    info!(
-        "Initialize on-disk data version at {}",
-        conf.raft_config.raft_dir
-    );
+    info!("Initialize on-disk data at {}", conf.raft_config.raft_dir);
 
     let db = get_sled_db();
     let mut on_disk = OnDisk::open(&db, &conf.raft_config).await?;
+    on_disk.log_stderr(true);
 
     println!("On Disk Data:");
     println!("    Dir: {}", conf.raft_config.raft_dir);
-    println!(
-        "    Version: version={:?}, upgrading={:?}",
-        on_disk.header.version, on_disk.header.upgrading
-    );
+    println!("    DataVersion: {:?}", on_disk.header.version);
+    println!("    In-Upgrading: {:?}", on_disk.header.upgrading);
     println!();
     println!("Log:");
     println!("    File: {}", conf.log.file);
@@ -120,36 +131,16 @@ pub async fn entry(conf: Config) -> anyhow::Result<()> {
     println!("Id: {}", conf.raft_config.config_id);
     println!("Raft Cluster Name: {}", conf.raft_config.cluster_name);
     println!("Raft Dir: {}", conf.raft_config.raft_dir);
-    println!(
-        "Raft Status: {}",
-        if conf.raft_config.single {
-            "single".to_string()
-        } else {
-            format!("join {:#?}", conf.raft_config.join)
-        }
-    );
+    println!("Raft Status: {}", single_or_join);
     println!();
     println!("HTTP API");
     println!("   listening at {}", conf.admin_api_address);
     println!("gRPC API");
     println!("   listening at {}", conf.grpc_api_address);
-    println!(
-        "   advertise:  {}",
-        if let Some(a) = conf.grpc_api_advertise_address() {
-            a
-        } else {
-            "-".to_string()
-        }
-    );
+    println!("   advertise:  {}", grpc_advertise);
     println!("Raft API");
-    println!(
-        "   listening at {}",
-        conf.raft_config.raft_api_listen_host_string()
-    );
-    println!(
-        "   advertise:  {}",
-        conf.raft_config.raft_api_advertise_host_string()
-    );
+    println!("   listening at {}", raft_listen,);
+    println!("   advertise:  {}", raft_advertise,);
     println!();
 
     on_disk.upgrade().await?;
