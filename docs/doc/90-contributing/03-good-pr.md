@@ -59,12 +59,14 @@ struct Point {
 
 ## Contributing Documentation
 
-You can also join us contribute Databend documentation along with your code. Databend documentation pages are made of markdown files. We recommend Visual Studio Code for editing your markdown files and use Code Spell Checker extension as your spell checker.
+We welcome you to contribute to the Databend documentation, alongside your code! The Databend documentation is composed of markdown files, which makes it easy to write and maintain. To ensure high-quality documentation, we recommend using [Visual Studio Code](https://code.visualstudio.com/) as your markdown editor. Additionally, installing the [Code Spell Checker](https://marketplace.visualstudio.com/items?itemName=streetsidesoftware.code-spell-checker) extension will help you catch any spelling mistakes.
 
-If you submit a document for a command or function, please use the following templates:
+When submitting a document for a new command or function, it is crucial to adhere to the provided templates and guidelines to maintain consistency and ensure clarity in the Databend documentation. These templates are designed to include all the necessary information and formatting conventions, making it easier for users to understand and use the commands or functions.
 
-- [command-template](../../public/templates/command-template.md.zip)
-- [function-template](../../public/templates/function-template.md.zip)
+- [command-template](../../public/templates/command-template.zip)
+- [function-template](../../public/templates/function-template.zip)
+
+In addition to following the templates, please pay attention to the code included within them. The code serves the purpose of explicitly indicating whether the new command or function is exclusively available for Databend Enterprise and provides information about when the command or function was introduced. This contextual information is crucial for users as it allows them to accurately assess the scope and limitations of the feature. It also enables users to identify the specific versions of Databend that support the feature, enabling them to plan their usage effectively.
 
 ## Pull Requests
 
