@@ -1105,7 +1105,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let (tb_id_seq, tb_id) = get_u64_value(self, &dbid_tbname).await?;
             if tb_id_seq > 0 {
                 return if req.if_not_exists {
-                    Ok(CreateTableReply { table_id: tb_id })
+                    Ok(CreateTableReply {
+                        table_id: tb_id,
+                        new_table: false,
+                    })
                 } else {
                     Err(KVAppError::AppError(AppError::TableAlreadyExists(
                         TableAlreadyExists::new(
@@ -1212,7 +1215,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 );
 
                 if succ {
-                    return Ok(CreateTableReply { table_id });
+                    return Ok(CreateTableReply {
+                        table_id,
+                        new_table: true,
+                    });
                 }
             }
         }

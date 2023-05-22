@@ -34,7 +34,7 @@ explain select * from t_nullable_prune where a is not null
 ----
 EvalScalar
 ├── expressions: [t_nullable_prune.a (#0)]
-├── estimated rows: 2.00
+├── estimated rows: 0.60
 └── TableScan
     ├── table: default.default.t_nullable_prune
     ├── read rows: 3
@@ -43,14 +43,14 @@ EvalScalar
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [is_not_null(t_nullable_prune.a (#0))], limit: NONE]
-    └── estimated rows: 2.00
+    └── estimated rows: 0.60
 
 query T
 explain select * from t_nullable_prune where a is null
 ----
 EvalScalar
 ├── expressions: [t_nullable_prune.a (#0)]
-├── estimated rows: 4.00
+├── estimated rows: 5.40
 └── TableScan
     ├── table: default.default.t_nullable_prune
     ├── read rows: 3
@@ -59,7 +59,7 @@ EvalScalar
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 2 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
     ├── push downs: [filters: [NOT is_not_null(t_nullable_prune.a (#0))], limit: NONE]
-    └── estimated rows: 4.00
+    └── estimated rows: 5.40
 
 statement ok
 DROP TABLE default.default.t_nullable_prune

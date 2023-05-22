@@ -9,10 +9,10 @@ explain select 1 from range_t where c > 'efg'
 ----
 EvalScalar
 ├── expressions: [1]
-├── estimated rows: 0.67
+├── estimated rows: 0.20
 └── Filter
     ├── filters: [range_t.c (#0) > 'efg']
-    ├── estimated rows: 0.67
+    ├── estimated rows: 0.20
     └── TableScan
         ├── table: default.default.range_t
         ├── read rows: 0
@@ -30,10 +30,10 @@ explain select 1 from range_t where i > 20
 ----
 EvalScalar
 ├── expressions: [1]
-├── estimated rows: 0.67
+├── estimated rows: 0.20
 └── Filter
     ├── filters: [range_t.i (#1) > 20]
-    ├── estimated rows: 0.67
+    ├── estimated rows: 0.20
     └── TableScan
         ├── table: default.default.range_t
         ├── read rows: 0

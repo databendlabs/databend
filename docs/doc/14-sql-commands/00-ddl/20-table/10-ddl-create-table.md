@@ -376,7 +376,6 @@ SELECT * FROM visits;
 Create a table from a specific snapshot, allowing you to create a new table based on the data at a specific point in time:
 
 ```sql
-```sql
 CREATE TABLE members 
   ( 
      name VARCHAR 
@@ -432,10 +431,10 @@ Create a table with data stored on an external location, such as Amazon S3:
 CREATE TABLE mytable (
   a INT
 ) 
-external_location='s3://testbucket/admin/data/' 
-connection=(
+'s3://testbucket/admin/data/' 
+CONNECTION=(
   ACCESS_KEY_ID='<your_aws_key_id>' 
   SECRET_ACCESS_KEY='<your_aws_secret_key>' 
-  endpoint_url='https://s3.amazonaws.com'
+  ENDPOINT_URL='https://s3.amazonaws.com'
 );
 ```

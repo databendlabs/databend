@@ -15,7 +15,6 @@
 
 from databend import SessionContext
 import pandas as pd
-import numpy as np
 
 class TestBasic:
     ctx = SessionContext()
@@ -30,4 +29,3 @@ class TestBasic:
         self.ctx.sql("insert into aa select number, number, true, number from numbers(10)").collect()
         df = self.ctx.sql("select sum(a) x, max(b) y, max(d) z from aa where c").to_pandas()
         assert df.values.tolist() == [[90.0, b'9', 9.0]]
-

@@ -44,7 +44,31 @@ CREATE USER user1 IDENTIFIED BY 'abc123';
 GRANT ALL on *.* TO user1;
 ```
 
-### Step 2. Write a Python Program
+### Step 2. Configuring Connection String
+
+The driver supports various parameters that can be configured either as URL parameters or as properties passed to the Client. The two examples provided below demonstrate equivalent ways of setting these parameters for the common DSN:
+
+Example 1: Using URL parameters
+
+```python
+# Format: <schema>://<username>:<password>@<host_port>/<database>?<connection_params>
+client = Client.from_url('http://root@localhost:8000/db?secure=False&copy_purge=True&debug=True')
+```
+
+Example 2: Using Client parameters
+
+```python
+client = Client(
+    host='tenant--warehouse.ch.datafusecloud.com',
+    database="default",
+    user="user",
+    port="443",
+    password="password", settings={"copy_purge": True, "force": True})
+```
+
+To create a valid DSN, select appropriate connection parameters outlined [here](https://github.com/databendcloud/databend-py/blob/main/docs/connection.md) based on the your requirements.
+
+### Step 3. Write a Python Program
 
 In this step, you'll create a simple Python program that communicates with Databend. The program will involve tasks such as creating a table, inserting data, and executing data queries.
 

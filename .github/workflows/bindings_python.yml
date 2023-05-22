@@ -72,8 +72,8 @@ jobs:
       - name: Get Toolchain
         id: toolchain
         run: |
-         RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
-         echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
+          RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
+          echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
 
       # NOTE: for exporting ACTIONS_RUNTIME_TOKEN and ACTIONS_CACHE_URL
       - name: Expose GitHub Runtime
@@ -111,9 +111,10 @@ jobs:
 
       - name: Run tests
         working-directory: src/bendpy
-        uses: PyO3/maturin-action@v1
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
         run: |
-          pip install -e .[test]
+          pip install dist/*.whl
+          pip install pytest pyarrow pandas
           pytest -v tests/*
 
       - name: Upload artifact

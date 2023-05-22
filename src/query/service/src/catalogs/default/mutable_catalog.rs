@@ -24,6 +24,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
@@ -278,7 +279,7 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         let db = self
             .get_database(&req.name_ident.tenant, &req.name_ident.db_name)
             .await?;

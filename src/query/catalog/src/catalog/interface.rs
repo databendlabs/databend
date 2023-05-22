@@ -23,6 +23,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
@@ -125,7 +126,7 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn list_tables_history(&self, tenant: &str, db_name: &str)
     -> Result<Vec<Arc<dyn Table>>>;
 
-    async fn create_table(&self, req: CreateTableReq) -> Result<()>;
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply>;
 
     async fn drop_table_by_id(&self, req: DropTableByIdReq) -> Result<DropTableReply>;
 
