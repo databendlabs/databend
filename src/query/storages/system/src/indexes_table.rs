@@ -53,37 +53,31 @@ impl AsyncSystemTable for IndexesTable {
     ) -> Result<DataBlock> {
         let tenant = ctx.get_tenant();
         let catalog = ctx.get_catalog(CATALOG_DEFAULT)?;
-        if let Some(indexes) = catalog
+        let indexes = catalog
             .list_indexes(ListIndexesReq {
                 tenant,
                 table_id: None,
-                with_name: true,
             })
-            .await?
-        {
-            let mut names = Vec::with_capacity(indexes.len());
-            let mut types = Vec::with_capacity(indexes.len());
-            let mut defs = Vec::with_capacity(indexes.len());
-            let mut created_on = Vec::with_capacity(indexes.len());
+            .await?;
 
-            for (_, name, index) in indexes {
-                names.push(name.as_bytes().to_vec());
-                types.push(index.index_type.to_string().as_bytes().to_vec());
-                defs.push(index.query.as_bytes().to_vec());
-                created_on.push(index.created_on.timestamp_micros());
-            }
+        let mut names = Vec::with_capacity(indexes.len());
+        let mut types = Vec::with_capacity(indexes.len());
+        let mut defs = Vec::with_capacity(indexes.len());
+        let mut created_on = Vec::with_capacity(indexes.len());
 
-            Ok(DataBlock::new_from_columns(vec![
-                StringType::from_data(names),
-                StringType::from_data(types),
-                StringType::from_data(defs),
-                TimestampType::from_data(created_on),
-            ]))
-        } else {
-            Ok(DataBlock::empty_with_schema(Arc::new(
-                self.table_info.schema().into(),
-            )))
+        for (_, name, index) in indexes {
+            names.push(name.as_bytes().to_vec());
+            types.push(index.index_type.to_string().as_bytes().to_vec());
+            defs.push(index.query.as_bytes().to_vec());
+            created_on.push(index.created_on.timestamp_micros());
         }
+
+        Ok(DataBlock::new_from_columns(vec![
+            StringType::from_data(names),
+            StringType::from_data(types),
+            StringType::from_data(defs),
+            TimestampType::from_data(created_on),
+        ]))
     }
 }
 

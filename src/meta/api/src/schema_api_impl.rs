@@ -154,8 +154,8 @@ use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
 use crate::txn_op_put_with_expire;
+use crate::util::deserialize_u64;
 use crate::util::get_index_metas_by_ids;
-use crate::util::get_index_names_by_ids;
 use crate::util::get_table_by_id_or_err;
 use crate::util::get_table_names_by_ids;
 use crate::util::list_tables_from_share_db;
@@ -1046,27 +1046,32 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     async fn list_indexes(
         &self,
         req: ListIndexesReq,
-    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>, KVAppError> {
+    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        // get index id list from _fd_index_id_list/<tenant>
-        let index_id_list_key = IndexIdListKey {
-            tenant: req.tenant.clone(),
-        };
+        // Get index id list by `prefix_list` "<prefix>/<tenant>"
+        let prefix_key = kvapi::KeyBuilder::new_prefixed(IndexNameIdent::PREFIX)
+            .push_str(&req.tenant)
+            .done();
 
-        let (_, index_id_list): (_, Option<IndexIdList>) =
-            get_pb_value(self, &index_id_list_key).await?;
+        let id_list = self.prefix_list_kv(&prefix_key).await?;
+        let mut id_name_list = Vec::with_capacity(id_list.len());
+        for (key, seq) in id_list.iter() {
+            // Safety: the key is derived from the `prefix_key` above.
+            let name_ident = IndexNameIdent::from_str_key(key).unwrap();
+            let index_id = deserialize_u64(&seq.data)?;
+            id_name_list.push((index_id.0, name_ident.index_name));
+        }
 
-        debug!(ident = display(&index_id_list_key), "list_indexes");
+        debug!(ident = display(&prefix_key), "list_indexes");
 
-        if index_id_list.is_none() {
-            return Ok(None);
+        if id_name_list.is_empty() {
+            return Ok(vec![]);
         }
 
         // filter the dropped indexes.
-        let mut index_metas = {
-            let ids = index_id_list.unwrap().id_list;
-            let index_metas = get_index_metas_by_ids(self, &ids).await?;
+        let index_metas = {
+            let index_metas = get_index_metas_by_ids(self, id_name_list).await?;
             index_metas
                 .into_iter()
                 .filter(|(_, _, meta)| {
@@ -1079,20 +1084,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 .collect::<Vec<_>>()
         };
 
-        if req.with_name {
-            let ids = index_metas
-                .iter()
-                .map(|(id, _, _)| id.index_id)
-                .collect::<Vec<_>>();
-            let index_names = get_index_names_by_ids(self, &ids).await?;
-            debug_assert!(index_metas.len() == index_names.len());
-            index_metas
-                .iter_mut()
-                .zip(index_names.into_iter())
-                .for_each(|((_, name, _), s)| *name = s);
-        }
-
-        Ok(Some(index_metas))
+        Ok(index_metas)
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]

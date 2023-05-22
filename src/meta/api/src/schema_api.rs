@@ -33,7 +33,6 @@ use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
-use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexesReq;
@@ -105,7 +104,7 @@ pub trait SchemaApi: Send + Sync {
     async fn list_indexes(
         &self,
         req: ListIndexesReq,
-    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>, KVAppError>;
+    ) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError>;
 
     // table
 

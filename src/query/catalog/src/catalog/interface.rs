@@ -32,7 +32,6 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -88,10 +87,7 @@ pub trait Catalog: DynClone + Send + Sync {
 
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply>;
 
-    async fn list_indexes(
-        &self,
-        req: ListIndexesReq,
-    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>>;
+    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>>;
 
     #[async_backtrace::framed]
     async fn exists_database(&self, tenant: &str, db_name: &str) -> Result<bool> {

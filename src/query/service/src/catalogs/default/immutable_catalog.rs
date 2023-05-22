@@ -33,7 +33,6 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::RenameDatabaseReply;
@@ -283,10 +282,7 @@ impl Catalog for ImmutableCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_indexes(
-        &self,
-        _req: ListIndexesReq,
-    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>> {
+    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         unimplemented!()
     }
 }

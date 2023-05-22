@@ -37,9 +37,7 @@ use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::IndexId;
-use common_meta_app::schema::IndexIdToName;
 use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::IndexNameIdent;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
@@ -1169,10 +1167,10 @@ pub async fn get_share_table_info(
 
 pub async fn get_index_metas_by_ids(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    ids: &[u64],
-) -> Result<Vec<(IndexId, String, IndexMeta)>, KVAppError> {
-    let mut index_meta_keys = Vec::with_capacity(ids.len());
-    for id in ids.iter() {
+    id_name_list: Vec<(u64, String)>,
+) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
+    let mut index_meta_keys = Vec::with_capacity(id_name_list.len());
+    for (id, _) in id_name_list.iter() {
         let index_id = IndexId { index_id: *id };
 
         index_meta_keys.push(index_id.to_string_key());
@@ -1180,44 +1178,20 @@ pub async fn get_index_metas_by_ids(
 
     let seq_index_metas = kv_api.mget_kv(&index_meta_keys).await?;
 
-    let mut index_metas = Vec::with_capacity(ids.len());
+    let mut index_metas = Vec::with_capacity(id_name_list.len());
 
-    for (i, (id, seq_meta_opt)) in ids.iter().zip(seq_index_metas.iter()).enumerate() {
+    for (i, ((id, name), seq_meta_opt)) in id_name_list
+        .into_iter()
+        .zip(seq_index_metas.iter())
+        .enumerate()
+    {
         if let Some(seq_meta) = seq_meta_opt {
             let index_meta: IndexMeta = deserialize_struct(&seq_meta.data)?;
-            let index_id = IndexId { index_id: *id };
-            index_metas.push((index_id, String::new(), index_meta));
+            index_metas.push((id, name, index_meta));
         } else {
             debug!(k = display(&index_meta_keys[i]), "index_meta not found");
         }
     }
 
     Ok(index_metas)
-}
-
-pub async fn get_index_names_by_ids(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    ids: &[u64],
-) -> Result<Vec<String>, KVAppError> {
-    let mut index_name_keys = Vec::with_capacity(ids.len());
-    for id in ids.iter() {
-        let index_id_to_name = IndexIdToName { index_id: *id };
-
-        index_name_keys.push(index_id_to_name.to_string_key());
-    }
-
-    let seq_index_names = kv_api.mget_kv(&index_name_keys).await?;
-
-    let mut index_names = Vec::with_capacity(ids.len());
-
-    for (i, (_, seq_opt)) in ids.iter().zip(seq_index_names.iter()).enumerate() {
-        if let Some(seq_meta) = seq_opt {
-            let index_name_ident: IndexNameIdent = deserialize_struct(&seq_meta.data)?;
-            index_names.push(index_name_ident.index_name);
-        } else {
-            debug!(k = display(&index_name_keys[i]), "index_name not found");
-        }
-    }
-
-    Ok(index_names)
 }

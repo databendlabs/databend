@@ -739,10 +739,7 @@ impl Catalog for FakedCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn list_indexes(
-        &self,
-        _req: ListIndexesReq,
-    ) -> Result<Option<Vec<(IndexId, String, IndexMeta)>>> {
+    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         unimplemented!()
     }
 
