@@ -43,15 +43,15 @@ Stay connected with the latest news about Databend.
 
 ### Computed Columns
 
-Computed columns are used to generate data from other columns by defining a scalar expression. There are two types of computed columns: **STORED** and **VIRTUAL**.
+Computed columns are generated from other columns by a scalar expression. There are two types of computed columns: stored and virtual.
 
-A stored computed column computes the data when the row is inserted and stores the result value like other columns. To create a stored computed column, use this SQL syntax:
+A stored computed column computes and stores the result value when a row is inserted. Use this SQL syntax to create one:
 
   ```sql
   column_name <type> AS (<expr>) STORED
   ```
 
-On the other hand, a virtual computed column does not store the result value; it is computed at query time. To create a virtual computed column, use this SQL syntax:
+While a virtual computed column is calculated at query time and does not store the result value. To create one, use this SQL syntax:
 
   ```sql
   column_name <type> AS (<expr>) VIRTUAL
@@ -68,7 +68,7 @@ The `VACUUM TABLE` command helps to optimize the system performance by freeing u
 
 `VACUUM TABLE` requires **Enterprise Edition**. To inquire about upgrading, please contact [Databend Support](https://www.databend.com/contact-us).
 
-If you are interested in learning more, please check out the resources listed below.
+If you are interested in learning more, please check out the resources listed below:
 
 - [Docs | VACUUM TABLE](https://databend.rs/doc/sql-commands/ddl/table/vacuum-table)
 
@@ -105,7 +105,7 @@ For data caching, it can be enabled through environment variables.
 └────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Feel free to integrate it with your data science workflow.
+Feel free to use it in your data science workflow:
 
 - [databend · PyPI](https://pypi.org/project/databend/)
 
@@ -114,8 +114,8 @@ Feel free to integrate it with your data science workflow.
 Here are some noteworthy items recorded here, perhaps you can find something that interests you.
 
 - Read [Docs | Date & Time - Formatting Date and Time](https://databend.rs/doc/sql-reference/data-types/data-type-time-date-types#formatting-date-and-time) to learn how to precisely control the format of time and date.
-- Supported transform data from uri.
-- Supported replace with stage attachment.
+- Added support for transforming data when loading it from a URI.
+- Added support for replacing with stage attachment.
 - Added bitmap-related functions: `bitmap_contains`, `bitmap_has_all`, `bitmap_has_any`, `bitmap_or`, `bitmap_and`, `bitmap_xor`, etc.
 - Supported `intdiv` operator `//`.
 
@@ -125,7 +125,7 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Remove `if_not_exists` from the Meta Request
 
-In `CreateIndexReq`/`CreateTableReq`, we use `if_not_existed` to indicate whether the index/table exists.
+In `CreateIndexReq`/`CreateTableReq`, we use `if_not_existed` to indicate whether an index/table exists.
 
 ```rust
 pub struct CreateIndexReq {
@@ -135,9 +135,9 @@ pub struct CreateIndexReq {
 }
 ```
 
-The `if_not_exists` clause only impacts the outcome that is presented to the user, and does not alter the behavior of the meta-service operation.
+The `if_not_exists` clause only affects the outcome that is presented to the user, and does not alter the behavior of the meta-service operation.
 
-As a result, it would be more effective for `SchemaApi` to provide either a **Created** or an **Exist** status code, allowing the caller to determine whether or not to generate an error message.
+Therefore, it will be more effective for `SchemaApi` to provide either a **Created** or an **Exist** status code, allowing the caller to determine whether to generate an error message.
 
 [Issue #11456 | Moving if_not_exists out of meta request body](https://github.com/datafuselabs/databend/issues/11456)
 
