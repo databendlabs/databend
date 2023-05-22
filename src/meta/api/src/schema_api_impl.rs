@@ -1033,8 +1033,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         let id_list = self.prefix_list_kv(&prefix_key).await?;
         let mut id_name_list = Vec::with_capacity(id_list.len());
         for (key, seq) in id_list.iter() {
-            // Safety: the key is derived from the `prefix_key` above.
-            let name_ident = IndexNameIdent::from_str_key(key).unwrap();
+            let name_ident = IndexNameIdent::from_str_key(key).map_err(|e| {
+                KVAppError::MetaError(MetaError::from(InvalidReply::new("list_indexes", &e)))
+            })?;
             let index_id = deserialize_u64(&seq.data)?;
             id_name_list.push((index_id.0, name_ident.index_name));
         }
