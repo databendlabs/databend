@@ -1007,6 +1007,36 @@ impl PhysicalPlanBuilder {
                             default: new_default,
                         })
                     }
+                    WindowFuncType::Lead(lead) => {
+                        let new_default = match &lead.default {
+                            None => LagLeadDefault::Null,
+                            Some(d) => {
+                                match d {
+                                    box ScalarExpr::BoundColumnRef(col) => LagLeadDefault::Index(col.column.index),
+                                    _ => unreachable!()
+                                }
+                            }
+                        };
+                        WindowFunction::Lead(LagLeadFunctionDesc {
+                            sig: LagLeadFunctionSignature {
+                                name: "lead".to_string(),
+                                arg: lead.arg.data_type()?,
+                                offset: lead.offset,
+                                default: match lead.default.as_ref().map(|d|d.data_type()) {
+                                    None => None,
+                                    Some(d) => Some(d?),
+                                },
+                                return_type: *lead.return_type.clone(),
+                            },
+                            output_column: w.index,
+                            arg: if let ScalarExpr::BoundColumnRef(col) = *lead.arg.clone() {
+                                Ok(col.column.index)
+                            }else {
+                                Err(ErrorCode::Internal("Window's lag, lead function argument must be a BoundColumnRef".to_string()))
+                            }?,
+                            default: new_default,
+                        })
+                    }
                     WindowFuncType::RowNumber => WindowFunction::RowNumber,
                     WindowFuncType::Rank => WindowFunction::Rank,
                     WindowFuncType::DenseRank => WindowFunction::DenseRank,

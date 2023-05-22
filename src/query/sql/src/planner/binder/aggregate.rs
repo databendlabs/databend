@@ -181,6 +181,20 @@ impl<'a> AggregateRewriter<'a> {
                             return_type: lag.return_type.clone(),
                         })
                     }
+                    WindowFuncType::Lead(lead) => {
+                        let new_arg = self.visit(&lead.arg)?;
+                        let new_default = match lead.default.clone().map(|d| self.visit(&d)) {
+                            None => None,
+                            Some(d) => Some(Box::new(d?)),
+                        };
+
+                        WindowFuncType::Lead(LagLeadFunction {
+                            arg: Box::new(new_arg),
+                            offset: lead.offset,
+                            default: new_default,
+                            return_type: lead.return_type.clone(),
+                        })
+                    }
                     func => func.clone(),
                 };
 

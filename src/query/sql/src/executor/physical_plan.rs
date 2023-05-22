@@ -300,6 +300,7 @@ pub enum WindowFunction {
     DenseRank,
     PercentRank,
     Lag(LagLeadFunctionDesc),
+    Lead(LagLeadFunctionDesc),
 }
 
 impl WindowFunction {
@@ -310,7 +311,7 @@ impl WindowFunction {
                 Ok(DataType::Number(NumberDataType::UInt64))
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
-            WindowFunction::Lag(lag) => Ok(lag.sig.return_type.clone()),
+            WindowFunction::Lag(f) | WindowFunction::Lead(f) => Ok(f.sig.return_type.clone()),
         }
     }
 }
@@ -324,6 +325,7 @@ impl Display for WindowFunction {
             WindowFunction::DenseRank => write!(f, "dense_rank"),
             WindowFunction::PercentRank => write!(f, "percent_rank"),
             WindowFunction::Lag(_) => write!(f, "lag"),
+            WindowFunction::Lead(_) => write!(f, "lead"),
         }
     }
 }

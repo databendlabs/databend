@@ -665,7 +665,7 @@ impl<'a> TypeChecker<'a> {
                         )));
                     }
                     let func = if !args.is_empty() {
-                        self.resolve_window_function(&name, &args).await?
+                        self.resolve_general_window_function(&name, &args).await?
                     } else {
                         WindowFuncType::from_name(&name)?
                     };
@@ -1083,6 +1083,17 @@ impl<'a> TypeChecker<'a> {
                     ))),
                 });
             }
+            WindowFuncType::Lead(lead) => {
+                return Ok(WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
+                        NumberScalar::UInt64(lead.offset),
+                    ))),
+                    end_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
+                        NumberScalar::UInt64(lead.offset),
+                    ))),
+                });
+            }
             _ => {}
         }
         if let Some(frame) = window_frame {
@@ -1114,7 +1125,7 @@ impl<'a> TypeChecker<'a> {
 
     /// Resolve general window function call.
     #[async_backtrace::framed]
-    async fn resolve_window_function(
+    async fn resolve_general_window_function(
         &mut self,
         func_name: &str,
         args: &[&Expr],
@@ -1128,24 +1139,21 @@ impl<'a> TypeChecker<'a> {
             arg_types.push(arg_type);
         }
         self.in_window_function = false;
-        debug_assert!(arguments.len() >= 1);
-        debug_assert!(arg_types.len() >= 1);
+        debug_assert!(!arguments.is_empty());
+        debug_assert!(!arg_types.is_empty());
 
         let offset = if arguments.len() >= 2 {
             let off = match &arguments[1] {
                 ScalarExpr::ConstantExpr(con) => match con.value {
-                    Scalar::Number(num) => {
-                        let result = match num {
-                            NumberScalar::UInt64(n) => Ok(n),
-                            NumberScalar::UInt32(n) => Ok(n as u64),
-                            NumberScalar::UInt16(n) => Ok(n as u64),
-                            NumberScalar::UInt8(n) => Ok(n as u64),
-                            _ => Err(ErrorCode::SemanticError(
-                                "Window function LAG/LEAD offset just support positive integer",
-                            )),
-                        };
-                        result
-                    }
+                    Scalar::Number(num) => match num {
+                        NumberScalar::UInt64(n) => Ok(n),
+                        NumberScalar::UInt32(n) => Ok(n as u64),
+                        NumberScalar::UInt16(n) => Ok(n as u64),
+                        NumberScalar::UInt8(n) => Ok(n as u64),
+                        _ => Err(ErrorCode::SemanticError(
+                            "Window function LAG/LEAD offset just support positive integer",
+                        )),
+                    },
                     _ => Err(ErrorCode::SemanticError(
                         "Window function LAG/LEAD offset just support positive integer",
                     )),

@@ -233,6 +233,7 @@ pub enum WindowFuncType {
     DenseRank,
     PercentRank,
     Lag(LagLeadFunction),
+    Lead(LagLeadFunction),
 }
 
 impl WindowFuncType {
@@ -263,6 +264,12 @@ impl WindowFuncType {
                 default: default.map(Box::new),
                 return_type: Box::new(return_type),
             })),
+            "lead" => Ok(WindowFuncType::Lead(LagLeadFunction {
+                arg: Box::new(arg),
+                offset: offset.unwrap_or(1),
+                default: default.map(Box::new),
+                return_type: Box::new(return_type),
+            })),
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {name}"
             ))),
@@ -276,6 +283,7 @@ impl WindowFuncType {
             WindowFuncType::DenseRank => "dense_rank".to_string(),
             WindowFuncType::PercentRank => "percent_rank".to_string(),
             WindowFuncType::Lag(_) => "lag".to_string(),
+            WindowFuncType::Lead(_) => "lead".to_string(),
         }
     }
 
@@ -284,9 +292,18 @@ impl WindowFuncType {
             WindowFuncType::Aggregate(agg) => {
                 agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
             }
-            WindowFuncType::Lag(lag) => match lag.default.clone() {
+            WindowFuncType::Lag(lag) => match &lag.default {
                 None => lag.arg.used_columns(),
                 Some(d) => lag
+                    .arg
+                    .used_columns()
+                    .union(&d.used_columns())
+                    .cloned()
+                    .collect(),
+            },
+            WindowFuncType::Lead(lead) => match &lead.default {
+                None => lead.arg.used_columns(),
+                Some(d) => lead
                     .arg
                     .used_columns()
                     .union(&d.used_columns())
@@ -305,6 +322,7 @@ impl WindowFuncType {
             }
             WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
             WindowFuncType::Lag(lag) => *lag.return_type.clone(),
+            WindowFuncType::Lead(lead) => *lead.return_type.clone(),
         }
     }
 }

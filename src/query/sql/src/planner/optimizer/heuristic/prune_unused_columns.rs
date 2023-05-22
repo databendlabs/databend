@@ -200,9 +200,9 @@ impl UnusedColumnPruner {
                                 required.extend(item.used_columns());
                             });
                         }
-                        WindowFuncType::Lag(lag) => {
-                            required.extend(lag.arg.used_columns());
-                            if let Some(default) = &lag.default {
+                        WindowFuncType::Lag(f) | WindowFuncType::Lead(f) => {
+                            required.extend(f.arg.used_columns());
+                            if let Some(default) = &f.default {
                                 required.extend(default.used_columns());
                             }
                         }

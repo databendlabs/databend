@@ -180,6 +180,19 @@ fn replace_column_binding(
                         return_type: lag.return_type.clone(),
                     })
                 }
+                WindowFuncType::Lead(lead) => {
+                    let new_arg = replace_column_binding(index_pairs, *lead.arg)?;
+                    let new_default = match &lead.default {
+                        None => None,
+                        Some(d) => Some(Box::new(replace_column_binding(index_pairs, *d.clone())?)),
+                    };
+                    WindowFuncType::Lead(LagLeadFunction {
+                        arg: Box::new(new_arg),
+                        offset: lead.offset,
+                        default: new_default,
+                        return_type: lead.return_type.clone(),
+                    })
+                }
                 t => t,
             },
             partition_by: expr

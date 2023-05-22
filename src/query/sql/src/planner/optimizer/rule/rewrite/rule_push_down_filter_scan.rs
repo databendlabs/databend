@@ -145,6 +145,23 @@ impl RulePushDownFilterScan {
                             return_type: lag.return_type.clone(),
                         })
                     }
+                    WindowFuncType::Lead(lead) => {
+                        let new_arg =
+                            Self::replace_view_column(&lead.arg, table_entries, column_entries)?;
+                        let new_default =
+                            match lead.default.clone().map(|d| {
+                                Self::replace_view_column(&d, table_entries, column_entries)
+                            }) {
+                                None => None,
+                                Some(d) => Some(Box::new(d?)),
+                            };
+                        WindowFuncType::Lead(LagLeadFunction {
+                            arg: Box::new(new_arg),
+                            offset: lead.offset,
+                            default: new_default,
+                            return_type: lead.return_type.clone(),
+                        })
+                    }
                     func => func.clone(),
                 };
 

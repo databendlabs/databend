@@ -38,6 +38,7 @@ pub enum WindowFunctionInfo {
     DenseRank,
     PercentRank,
     Lag(WindowFuncLagLeadImpl),
+    Lead(WindowFuncLagLeadImpl),
 }
 
 pub struct WindowFuncAggImpl {
@@ -104,6 +105,7 @@ pub enum WindowFunctionImpl {
     DenseRank,
     PercentRank,
     Lag(WindowFuncLagLeadImpl),
+    Lead(WindowFuncLagLeadImpl),
 }
 
 impl WindowFunctionInfo {
@@ -145,6 +147,22 @@ impl WindowFunctionInfo {
                     return_type: lag.sig.return_type.clone(),
                 })
             }
+            WindowFunction::Lead(lead) => {
+                let new_arg = schema.index_of(&lead.arg.to_string())?;
+                let new_default = match &lead.default {
+                    LagLeadDefault::Null => LagLeadDefault::Null,
+                    LagLeadDefault::Index(i) => {
+                        let offset = schema.index_of(&i.to_string())?;
+                        LagLeadDefault::Index(offset)
+                    }
+                };
+                Self::Lead(WindowFuncLagLeadImpl {
+                    arg: new_arg,
+                    offset: lead.sig.offset,
+                    default: new_default,
+                    return_type: lead.sig.return_type.clone(),
+                })
+            }
         })
     }
 }
@@ -172,6 +190,7 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::DenseRank => Self::DenseRank,
             WindowFunctionInfo::PercentRank => Self::PercentRank,
             WindowFunctionInfo::Lag(lag) => Self::Lag(lag),
+            WindowFunctionInfo::Lead(lead) => Self::Lead(lead),
         })
     }
 
@@ -182,7 +201,7 @@ impl WindowFunctionImpl {
                 DataType::Number(NumberDataType::UInt64)
             }
             Self::PercentRank => DataType::Number(NumberDataType::Float64),
-            Self::Lag(lag) => lag.return_type.clone(),
+            Self::Lag(f) | Self::Lead(f) => f.return_type.clone(),
         })
     }
 

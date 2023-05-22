@@ -65,9 +65,9 @@ pub trait ScalarVisitor: Sized {
                                                 stack.push(RecursionProcessing::Call(arg));
                                             }
                                         }
-                                        WindowFuncType::Lag(lag) => {
-                                            stack.push(RecursionProcessing::Call(&lag.arg));
-                                            if let Some(default) = &lag.default {
+                                        WindowFuncType::Lag(f) | WindowFuncType::Lead(f) => {
+                                            stack.push(RecursionProcessing::Call(&f.arg));
+                                            if let Some(default) = &f.default {
                                                 stack.push(RecursionProcessing::Call(default));
                                             }
                                         }
