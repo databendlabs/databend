@@ -1276,6 +1276,8 @@ impl TokenKind {
             | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::IGNORE_RESULT
+            | TokenKind::MASKING
+            | TokenKind::POLICY
             if !after_as => true,
             _ => false
         }

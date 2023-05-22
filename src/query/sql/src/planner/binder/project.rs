@@ -147,11 +147,6 @@ impl Binder {
         scalars.sort_by_key(|s| s.index);
         let eval_scalar = EvalScalar { items: scalars };
 
-        println!(
-            "bind_projection eval_scalar: {:?}, child: {:?}",
-            eval_scalar, child
-        );
-
         let new_expr = SExpr::create_unary(eval_scalar.into(), child);
 
         // Set output columns

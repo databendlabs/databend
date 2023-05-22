@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod data_mask_handler;
+pub use data_mask_handler::RealDatamaskHandler;

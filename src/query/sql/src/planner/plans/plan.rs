@@ -428,6 +428,7 @@ impl Plan {
                 | Plan::ShowGrants(_)
                 | Plan::Presign(_)
                 | Plan::VacuumTable(_)
+                | Plan::DescDatamaskPolicy(_)
         )
     }
 }

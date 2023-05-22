@@ -94,9 +94,11 @@ impl DescDatamaskPolicyPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::new(vec![
             DataField::new("Name", DataType::String),
+            DataField::new("Create On", DataType::String),
             DataField::new("Signature", DataType::String),
-            DataField::new("ReturnType", DataType::String),
+            DataField::new("Return Type", DataType::String),
             DataField::new("Body", DataType::String),
+            DataField::new("Comment", DataType::String),
         ]))
     }
 }

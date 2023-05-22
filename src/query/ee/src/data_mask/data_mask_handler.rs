@@ -28,6 +28,7 @@
 
 use std::sync::Arc;
 
+use common_base::base::GlobalInstance;
 use common_exception::Result;
 use common_meta_api::DatamaskApi;
 use common_meta_app::data_mask::DatamaskMeta;
@@ -37,6 +38,7 @@ use common_meta_store::MetaStore;
 use common_sql::plans::data_mask::CreateDatamaskPolicyPlan;
 use common_sql::plans::DropDatamaskPolicyPlan;
 use data_mask::data_mask_handler::DatamaskHandler;
+use data_mask::data_mask_handler::DatamaskHandlerWrapper;
 
 pub struct RealDatamaskHandler {}
 
@@ -74,5 +76,14 @@ impl DatamaskHandler for RealDatamaskHandler {
             })
             .await?;
         Ok(resp.policy)
+    }
+}
+
+impl RealDatamaskHandler {
+    pub fn init() -> Result<()> {
+        let rm = RealDatamaskHandler {};
+        let wrapper = DatamaskHandlerWrapper::new(Box::new(rm));
+        GlobalInstance::set(Arc::new(wrapper));
+        Ok(())
     }
 }

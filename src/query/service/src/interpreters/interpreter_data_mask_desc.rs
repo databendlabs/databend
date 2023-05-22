@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 use common_expression::FromData;
 use common_license::license_manager::get_license_manager;
 use common_sql::plans::DescDatamaskPolicyPlan;
@@ -45,6 +46,10 @@ impl Interpreter for DescDataMaskInterpreter {
         "DescDataMaskInterpreter"
     }
 
+    fn schema(&self) -> DataSchemaRef {
+        self.plan.schema()
+    }
+
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let license_manager = get_license_manager();
@@ -60,19 +65,34 @@ impl Interpreter for DescDataMaskInterpreter {
             .await?;
 
         let name: Vec<Vec<u8>> = vec![self.plan.name.as_bytes().to_vec()];
-        let signature: Vec<Vec<u8>> = policy
-            .args
-            .iter()
-            .map(|(_, arg_type)| arg_type.to_string().as_bytes().to_vec())
-            .collect();
+        let create_on: Vec<Vec<u8>> = vec![policy.create_on.to_string().as_bytes().to_vec()];
+        let args = format!(
+            "({})",
+            policy
+                .args
+                .iter()
+                .map(|(arg_name, arg_type)| format!("{} {}", arg_name, arg_type))
+                .into_iter()
+                .rev()
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let signature: Vec<Vec<u8>> = vec![args.as_bytes().to_vec()];
         let return_type = vec![policy.return_type.as_bytes().to_vec()];
         let body = vec![policy.body.as_bytes().to_vec()];
+        let comment = vec![match policy.comment {
+            Some(comment) => comment.as_bytes().to_vec(),
+            None => "".to_string().as_bytes().to_vec(),
+        }];
 
-        PipelineBuildResult::from_blocks(vec![DataBlock::new_from_columns(vec![
+        let blocks = vec![DataBlock::new_from_columns(vec![
             StringType::from_data(name),
+            StringType::from_data(create_on),
             StringType::from_data(signature),
             StringType::from_data(return_type),
             StringType::from_data(body),
-        ])])
+            StringType::from_data(comment),
+        ])];
+        PipelineBuildResult::from_blocks(blocks)
     }
 }
