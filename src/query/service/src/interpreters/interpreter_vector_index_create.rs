@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_base::base::tokio;
 use common_exception::Result;
 use common_sql::plans::CreateVectorIndexPlan;
 use common_storages_fuse::FuseTable;
@@ -60,13 +59,8 @@ impl Interpreter for CreateVectorIndexInterpreter {
                 plan.column,
                 table.name()
             )))?;
-        // build index in background task and return immediately
-        let handle = tokio::spawn(async move {
-            let table = FuseTable::try_from_table(table.as_ref())?;
-            table.create_vector_index(ctx, column_idx, nlists).await?;
-            Ok::<(), common_exception::ErrorCode>(())
-        });
-        handle.await.unwrap()?; //TODO:run in background
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        table.create_vector_index(ctx, column_idx, nlists).await?;
         Ok(PipelineBuildResult::create())
     }
 }
