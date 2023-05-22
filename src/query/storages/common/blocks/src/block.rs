@@ -34,7 +34,7 @@ pub fn blocks_to_parquet(
     let batches = blocks
         .into_iter()
         .map(|block| block.to_record_batch(&data_schema))
-        .collect::<std::result::Result<Vec<_>,_>>()?;
+        .collect::<std::result::Result<Vec<_>, _>>()?;
     assert!(!batches.is_empty());
     let props = WriterProperties::builder()
         .set_compression(compression.into())
