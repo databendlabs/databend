@@ -28,7 +28,7 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_build_pb_buf()`
 #[test]
-fn test_decode_v38_data_mask() -> anyhow::Result<()> {
+fn test_decode_v39_data_mask() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![
         10, 11, 10, 1, 97, 18, 6, 83, 116, 114, 105, 110, 103, 18, 6, 83, 116, 114, 105, 110, 103,
         26, 68, 67, 65, 83, 69, 32, 87, 72, 69, 78, 32, 99, 117, 114, 114, 101, 110, 116, 95, 114,
@@ -37,7 +37,7 @@ fn test_decode_v38_data_mask() -> anyhow::Result<()> {
         32, 69, 78, 68, 34, 12, 115, 111, 109, 101, 32, 99, 111, 109, 109, 101, 110, 116, 42, 23,
         50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67,
         50, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85,
-        84, 67, 160, 6, 38, 168, 6, 24,
+        84, 67, 160, 6, 39, 168, 6, 24,
     ];
 
     let want = || common_meta_app::data_mask::DatamaskMeta {
@@ -50,5 +50,5 @@ fn test_decode_v38_data_mask() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), bytes.as_slice(), 38, want())
+    common::test_load_old(func_name!(), bytes.as_slice(), 39, want())
 }
