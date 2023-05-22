@@ -16,6 +16,14 @@ SELECT 8 / 2
 statement error 1001
 SELECT 8 / 0
 
+query III
+SELECT 1 // 2, 4 // 3, 1 // (5 // 2)
+----
+0 1 0
+
+statement error 1001
+SELECT 8 // 0
+
 statement error 1001
 SELECT 20 DIV 0
 

@@ -46,18 +46,18 @@ GRANT ALL on *.* TO user1;
 
 ### Step 2. Configuring Connection String
 
+The driver supports various parameters that can be configured either as URL parameters or as properties passed to the Client. The two examples provided below demonstrate equivalent ways of setting these parameters for the common DSN:
 
-The driver supports various parameters that may be set as URL parameters or as properties passed to Client. Both of the following examples are equivalent:
-The common DSN is:
+Example 1: Using URL parameters
+
 ```python
-<schema>://<username>:<password>@<host_port>/<database>?<connection_params>
-```
-For example,
-```python
-# URL parameters
+# Format: <schema>://<username>:<password>@<host_port>/<database>?<connection_params>
 client = Client.from_url('http://root@localhost:8000/db?secure=False&copy_purge=True&debug=True')
+```
 
-# Client parameters
+Example 2: Using Client parameters
+
+```python
 client = Client(
     host='tenant--warehouse.ch.datafusecloud.com',
     database="default",
@@ -65,7 +65,8 @@ client = Client(
     port="443",
     password="password", settings={"copy_purge": True, "force": True})
 ```
-To make a proper DSN you need select proper connection parameters according to [connection-parameters](https://github.com/databendcloud/databend-py/blob/main/docs/connection.md)
+
+To create a valid DSN, select appropriate connection parameters outlined [here](https://github.com/databendcloud/databend-py/blob/main/docs/connection.md) based on the your requirements.
 
 ### Step 3. Write a Python Program
 
