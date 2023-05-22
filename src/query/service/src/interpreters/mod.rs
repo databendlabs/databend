@@ -91,7 +91,10 @@ mod interpreter_user_stage_remove;
 mod interpreter_user_udf_alter;
 mod interpreter_user_udf_create;
 mod interpreter_user_udf_drop;
+#[cfg(feature = "vector-index")]
 mod interpreter_vector_index_create;
+#[cfg(not(feature = "vector-index"))]
+mod interpreter_vector_index_create_empty;
 mod interpreter_view_alter;
 mod interpreter_view_create;
 mod interpreter_view_drop;
@@ -164,7 +167,10 @@ pub use interpreter_user_stage_remove::RemoveUserStageInterpreter;
 pub use interpreter_user_udf_alter::AlterUserUDFInterpreter;
 pub use interpreter_user_udf_create::CreateUserUDFInterpreter;
 pub use interpreter_user_udf_drop::DropUserUDFInterpreter;
+#[cfg(feature = "vector-index")]
 pub use interpreter_vector_index_create::CreateVectorIndexInterpreter;
+#[cfg(not(feature = "vector-index"))]
+pub use interpreter_vector_index_create_empty::CreateVectorIndexInterpreter;
 pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;

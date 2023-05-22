@@ -26,6 +26,7 @@ pub mod operations;
 pub mod pruning;
 pub mod statistics;
 pub mod table_functions;
+#[cfg(feature = "vector-index")]
 pub mod vector_index;
 
 mod metrics;

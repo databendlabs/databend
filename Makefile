@@ -115,4 +115,9 @@ clean:
 	rm -rf ./src/common/base/_logs*/ ./src/meta/raft-store/_logs*/ ./src/meta/sled-store/_logs*/
 	rm -rf ./.databend ./query/service/.databend ./meta/service/.databend
 
+vi-build:
+	cargo build --bin=databend-query --features vector-index --bin=databend-meta --bin=databend-metactl --bin=open-sharing --bin=databend-query-oss --bin=databend-meta-oss
+vi-run-debug: vi-build
+	bash ./scripts/ci/deploy/databend-query-standalone.sh	
+
 .PHONY: setup test run build fmt lint clean docs

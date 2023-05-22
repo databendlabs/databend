@@ -16,6 +16,7 @@ default = ["simd", "z3-prove"]
 simd = ["common-arrow/simd"]
 
 z3-prove = ["common-sql/z3-prove"]
+vector-index = ["common-storages-fuse/vector-index"]
 disable_initial_exec_tls = ["common-base/disable_initial_exec_tls"]
 
 tokio-console = ["common-tracing/console", "common-base/tracing"]
