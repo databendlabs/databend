@@ -43,3 +43,4 @@ mod v033_table_meta;
 mod v034_schema;
 mod v035_user_stage;
 mod v037_index_meta;
+mod v038_data_mask;

@@ -3447,16 +3447,12 @@ checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 name = "data-mask"
 version = "0.1.0"
 dependencies = [
- "async-backtrace",
  "async-trait",
- "chrono",
  "common-base",
- "common-catalog",
  "common-exception",
  "common-meta-app",
  "common-meta-store",
  "common-sql",
- "common-storages-fuse",
 ]
 
 [[package]]

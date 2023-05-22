@@ -79,7 +79,7 @@ impl From<DropDatamaskPolicyPlan> for DropDatamaskReq {
             if_exists: p.if_exists,
             name: DatamaskNameIdent {
                 tenant: p.tenant.clone(),
-                name: p.name.clone(),
+                name: p.name,
             },
         }
     }

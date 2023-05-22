@@ -72,7 +72,6 @@ impl Interpreter for DescDataMaskInterpreter {
                 .args
                 .iter()
                 .map(|(arg_name, arg_type)| format!("{} {}", arg_name, arg_type))
-                .into_iter()
                 .rev()
                 .collect::<Vec<_>>()
                 .join(",")

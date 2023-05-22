@@ -67,6 +67,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (35, "2023-05-08: Add: CopyOptions::disable_variant_check", ),
     (36, "2023-05-12: Add: metadata.proto/ComputedExpr (reverted)", ),
     (37, "2023-05-05: Add: index.proto", ),
+    (38, "2023-05-22: Add: data_mask.proto", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

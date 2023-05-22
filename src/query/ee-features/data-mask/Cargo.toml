@@ -14,16 +14,12 @@ test = false
 [dependencies]
 # Workspace dependencies
 common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
-common-storages-fuse = { path = "../../storages/fuse" }
-common-sql = { path = "../../sql" }
-common-meta-store = { path = "../../../meta/store" }
 common-meta-app = { path = "../../../meta/app" }
+common-meta-store = { path = "../../../meta/store" }
+common-sql = { path = "../../sql" }
 
-async-backtrace = { workspace = true }
 async-trait = "0.1.57"
-chrono = { workspace = true }
 
 [build-dependencies]
 

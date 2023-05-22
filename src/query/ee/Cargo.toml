@@ -24,13 +24,13 @@ common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-store = { path = "../../meta/store" }
 common-settings = { path = "../../query/settings" }
+common-sql = { path = "../sql" }
 common-storages-fuse = { path = "../storages/fuse" }
+data-mask = { path = "../ee-features/data-mask" }
 databend-query = { path = "../service" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
-common-sql = { path = "../sql" }
-data-mask = { path = "../ee-features/data-mask" }
 
 async-trait = "0.1.57"
 chrono = { workspace = true }
