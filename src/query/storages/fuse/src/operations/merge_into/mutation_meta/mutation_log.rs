@@ -130,6 +130,7 @@ pub struct CommitMeta {
     pub segments: Vec<Location>,
     pub summary: Statistics,
     pub abort_operation: AbortOperation,
+    pub need_lock: bool,
 }
 
 impl CommitMeta {
@@ -137,11 +138,13 @@ impl CommitMeta {
         segments: Vec<Location>,
         summary: Statistics,
         abort_operation: AbortOperation,
+        need_lock: bool,
     ) -> Self {
         CommitMeta {
             segments,
             summary,
             abort_operation,
+            need_lock,
         }
     }
 }
