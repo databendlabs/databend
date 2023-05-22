@@ -65,6 +65,10 @@ impl<'a> Visitor<'a> for SrfCollector {
                 params: params.to_vec(),
                 window: over.clone(),
             });
+        } else {
+            for arg in args.iter() {
+                self.visit_expr(arg);
+            }
         }
     }
 }

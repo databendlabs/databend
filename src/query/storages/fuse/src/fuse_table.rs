@@ -709,6 +709,10 @@ impl Table for FuseTable {
         matches!(self.storage_format, FuseStorageFormat::Native)
     }
 
+    fn support_index(&self) -> bool {
+        true
+    }
+
     fn support_virtual_columns(&self) -> bool {
         matches!(self.storage_format, FuseStorageFormat::Native)
     }
@@ -749,14 +753,18 @@ struct FuseTableColumnStatisticsProvider {
 impl ColumnStatisticsProvider for FuseTableColumnStatisticsProvider {
     fn column_statistics(&self, column_id: ColumnId) -> Option<ColumnStatistics> {
         let col_stats = &self.column_stats.get(&column_id);
-        col_stats.map(|s| ColumnStatistics {
-            min: s.min.clone(),
-            max: s.max.clone(),
-            null_count: s.null_count,
-            number_of_distinct_values: self
+        col_stats.map(|s| {
+            let mut ndv = self
                 .column_distinct_values
                 .as_ref()
-                .map_or(self.row_count, |map| map.get(&column_id).map_or(0, |v| *v)),
+                .map_or(self.row_count, |map| map.get(&column_id).map_or(0, |v| *v));
+            ndv = self.adjust_ndv_by_min_max(ndv, s.min.clone(), s.max.clone());
+            ColumnStatistics {
+                min: s.min.clone(),
+                max: s.max.clone(),
+                null_count: s.null_count,
+                number_of_distinct_values: ndv,
+            }
         })
     }
 }

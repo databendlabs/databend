@@ -122,7 +122,7 @@ pub fn histogram_from_ndv(
     };
 
     let num_buckets = if num_buckets > ndv as usize {
-        (ndv - 1) as usize
+        ndv as usize
     } else {
         num_buckets
     };
@@ -130,7 +130,7 @@ pub fn histogram_from_ndv(
     let mut buckets: Vec<HistogramBucket> = Vec::with_capacity(num_buckets);
     let sample_set = UniformSampleSet { min, max };
 
-    for idx in 0..num_buckets {
+    for idx in 0..num_buckets + 1 {
         let upper_bound = sample_set.get_upper_bound(num_buckets, idx)?;
         if idx == 0 {
             // The first bucket is a dummy bucket
@@ -187,6 +187,11 @@ impl HistogramBucket {
 
     pub fn aggregate_values(&mut self) {
         self.num_values = self.num_distinct;
+    }
+
+    pub fn update(&mut self, selectivity: f64) {
+        self.num_values *= selectivity;
+        self.num_distinct *= selectivity
     }
 }
 
@@ -251,24 +256,17 @@ impl SampleSet for UniformSampleSet {
                 let min = *min;
                 let max = *max;
                 // TODO(xudong): better histogram computation.
-                let bucket_range = max.checked_sub(min).ok_or("overflowed")? / num_buckets as i64;
-                let upper_bound = match bucket_index {
-                    0 => min,
-                    _ if bucket_index == num_buckets - 1 => max,
-                    _ => min + bucket_range * bucket_index as i64,
-                };
+                let bucket_range = max.saturating_add(1).checked_sub(min).ok_or("overflowed")?
+                    / num_buckets as i64;
+                let upper_bound = min + bucket_range * bucket_index as i64;
                 Ok(Datum::Int(upper_bound))
             }
 
             (Datum::UInt(min), Datum::UInt(max)) => {
                 let min = *min;
                 let max = *max;
-                let bucket_range = (max - min) / num_buckets as u64;
-                let upper_bound = match bucket_index {
-                    0 => min,
-                    _ if bucket_index == num_buckets - 1 => max,
-                    _ => min + bucket_range * bucket_index as u64,
-                };
+                let bucket_range = (max.saturating_add(1) - min) / num_buckets as u64;
+                let upper_bound = min + bucket_range * bucket_index as u64;
                 Ok(Datum::UInt(upper_bound))
             }
 
@@ -277,11 +275,7 @@ impl SampleSet for UniformSampleSet {
                 let max = *max;
                 // TODO(xudong): better histogram computation.
                 let bucket_range = max.checked_sub(min).ok_or("overflowed")? / num_buckets as f64;
-                let upper_bound = match bucket_index {
-                    0 => min,
-                    _ if bucket_index == num_buckets - 1 => max,
-                    _ => min + bucket_range * bucket_index as f64,
-                };
+                let upper_bound = min + bucket_range * bucket_index as f64;
                 Ok(Datum::Float(upper_bound))
             }
 

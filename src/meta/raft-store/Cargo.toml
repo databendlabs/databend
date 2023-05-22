@@ -33,9 +33,11 @@ byteorder = "1.4.3"
 chrono = { workspace = true }
 derive_more = { workspace = true }
 hostname = "0.3.1"
+lazy_static = { workspace = true }
 maplit = "1.0.2"
 num = "0.4.0"
 once_cell = "1.15.0"
+semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = "0.1.36"

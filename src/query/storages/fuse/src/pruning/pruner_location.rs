@@ -12,13 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
-
 use storages_common_table_meta::meta::Location;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SegmentLocation {
-    pub segment_id: usize,
+    pub segment_idx: usize,
     pub location: Location,
     pub snapshot_loc: Option<String>,
 }
@@ -26,30 +24,16 @@ pub struct SegmentLocation {
 pub fn create_segment_location_vector(
     locations: Vec<Location>,
     snapshot_loc: Option<String>,
-    segment_id_map: Option<HashMap<Location, usize>>,
 ) -> Vec<SegmentLocation> {
     let segment_count = locations.len();
-    if let Some(segment_id_map) = segment_id_map {
-        let mut seg_locations = Vec::with_capacity(segment_count);
-        for location in locations {
-            seg_locations.push(SegmentLocation {
-                segment_id: *segment_id_map.get(&location).unwrap(),
-                location,
-                snapshot_loc: snapshot_loc.clone(),
-            });
-        }
-
-        seg_locations
-    } else {
-        let mut seg_locations = Vec::with_capacity(segment_count);
-        for (i, location) in locations.into_iter().enumerate() {
-            seg_locations.push(SegmentLocation {
-                segment_id: segment_count - i - 1,
-                location,
-                snapshot_loc: snapshot_loc.clone(),
-            });
-        }
-
-        seg_locations
+    let mut seg_locations = Vec::with_capacity(segment_count);
+    for (segment_idx, location) in locations.into_iter().enumerate() {
+        seg_locations.push(SegmentLocation {
+            segment_idx,
+            location,
+            snapshot_loc: snapshot_loc.clone(),
+        });
     }
+
+    seg_locations
 }

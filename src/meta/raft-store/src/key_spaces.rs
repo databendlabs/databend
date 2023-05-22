@@ -148,25 +148,6 @@ pub enum RaftStoreEntry {
     LogMeta          { key: <LogMeta          as SledKeySpace>::K, value: <LogMeta          as SledKeySpace>::V, },
 }
 
-/// Convert (sub_tree_prefix, key, value, key_space1, key_space2...) into a [`RaftStoreEntry`].
-///
-/// It compares the sub_tree_prefix with prefix defined by every key space to determine which key space it belongs to.
-macro_rules! deserialize_by_prefix {
-    ($prefix: expr, $vec_key: expr, $vec_value: expr, $($key_space: tt),+ ) => {
-        $(
-
-        if <$key_space as SledKeySpace>::PREFIX == $prefix {
-            let key = <<$key_space as SledKeySpace>::K as SledOrderedSerde>::de(
-                $vec_key,
-            )?;
-            let val =
-                <<$key_space as SledKeySpace>::V as SledSerde>::de($vec_value)?;
-            return Ok(RaftStoreEntry::$key_space { key, value: val, });
-        }
-        )+
-    };
-}
-
 impl RaftStoreEntry {
     /// Serialize a key-value entry into a two elt vec of vec<u8>: `[key, value]`.
     #[rustfmt::skip]
@@ -192,9 +173,30 @@ impl RaftStoreEntry {
     }
 
     /// Deserialize a serialized key-value entry `[key, value]`.
+    ///
+    /// It is able to deserialize openraft-v7 or openraft-v8 key-value pairs.
+    /// The compatibility is provided by [`SledSerde`] implementation for value types.
     pub fn deserialize(prefix_key: &[u8], vec_value: &[u8]) -> Result<Self, MetaStorageError> {
         let prefix = prefix_key[0];
         let vec_key = &prefix_key[1..];
+
+        // Convert (sub_tree_prefix, key, value, key_space1, key_space2...) into a [`RaftStoreEntry`].
+        //
+        // It compares the sub_tree_prefix with prefix defined by every key space to determine which key space it belongs to.
+        macro_rules! deserialize_by_prefix {
+            ($prefix: expr, $vec_key: expr, $vec_value: expr, $($key_space: tt),+ ) => {
+                $(
+
+                if <$key_space as SledKeySpace>::PREFIX == $prefix {
+
+                    let key = SledOrderedSerde::de($vec_key)?;
+                    let value = SledSerde::de($vec_value)?;
+
+                    return Ok(RaftStoreEntry::$key_space { key, value, });
+                }
+                )+
+            };
+        }
 
         deserialize_by_prefix!(
             prefix,
@@ -248,5 +250,57 @@ impl openraft::compat::Upgrade<RaftStoreEntry> for RaftStoreEntryCompat {
             RaftStoreEntryCompat::ClientLastResps  { key, value } => RaftStoreEntry::ClientLastResps  { key, value, },
             RaftStoreEntryCompat::LogMeta          { key, value } => RaftStoreEntry::LogMeta          { key, value: value.upgrade(), },
         }
+    }
+}
+impl RaftStoreEntryCompat {
+    /// Deserialize a serialized key-value entry `[key, value]`.
+    ///
+    /// It is able to deserialize openraft-v7 or openraft-v8 key-value pairs and output oepnraft-v8 type: RaftStoreEntry
+    pub fn deserialize(
+        prefix_key: &[u8],
+        vec_value: &[u8],
+    ) -> Result<RaftStoreEntry, MetaStorageError> {
+        use openraft::compat::Upgrade;
+
+        let prefix = prefix_key[0];
+        let vec_key = &prefix_key[1..];
+
+        // Convert (sub_tree_prefix, key, value, key_space1, key_space2...) into a [`RaftStoreEntry`].
+        //
+        // It compares the sub_tree_prefix with prefix defined by every key space to determine which key space it belongs to.
+        macro_rules! deserialize_by_prefix {
+            ($prefix: expr, $vec_key: expr, $vec_value: expr, $($key_space: tt),+ ) => {
+                $(
+
+                if <$key_space as SledKeySpace>::PREFIX == $prefix {
+
+                    let key = SledOrderedSerde::de($vec_key)?;
+                    let value = SledSerde::de($vec_value)?;
+
+                    let entry = RaftStoreEntryCompat::$key_space { key, value, };
+                    return Ok(entry.upgrade());
+                }
+                )+
+            };
+        }
+
+        deserialize_by_prefix!(
+            prefix,
+            vec_key,
+            vec_value,
+            // Available key spaces:
+            DataHeader,
+            Logs,
+            Nodes,
+            StateMachineMeta,
+            RaftStateKV,
+            Expire,
+            GenericKV,
+            Sequences,
+            ClientLastResps,
+            LogMeta
+        );
+
+        unreachable!("unknown prefix: {}", prefix);
     }
 }

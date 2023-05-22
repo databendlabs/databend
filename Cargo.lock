@@ -18,6 +18,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f26201604c87b1e01bd3d98f8d5d9a8fcbb815e8cedb41ffccbeb4bf593a35fe"
 
 [[package]]
+name = "aggregating-index"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
+]
+
+[[package]]
 name = "ahash"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -863,20 +875,23 @@ checksum = "3a8241f3ebb85c056b509d4327ad0358fbbba6ffb340bf388f26350aeda225b1"
 
 [[package]]
 name = "bendpy"
-version = "0.1.2"
+version = "0.0.0"
 dependencies = [
  "arrow",
  "arrow-schema",
  "common-config",
  "common-exception",
  "common-expression",
+ "common-license",
  "common-meta-app",
+ "common-meta-embedded",
  "ctor",
  "databend-query",
  "pyo3",
  "pyo3-build-config",
  "tokio",
  "tokio-stream",
+ "uuid",
 ]
 
 [[package]]
@@ -2214,11 +2229,13 @@ dependencies = [
  "common-tracing",
  "derive_more",
  "hostname",
+ "lazy_static",
  "maplit",
  "num",
  "once_cell",
  "openraft 0.8.4",
  "pretty_assertions",
+ "semver",
  "serde",
  "serde_json",
  "tempfile",
@@ -2500,6 +2517,7 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-functions",
+ "common-license",
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
@@ -3526,6 +3544,7 @@ dependencies = [
 name = "databend-query"
 version = "0.1.0"
 dependencies = [
+ "aggregating-index",
  "aho-corasick 0.7.20",
  "arrow-array",
  "arrow-cast",
@@ -3953,6 +3972,7 @@ dependencies = [
 name = "enterprise-query"
 version = "0.1.0"
 dependencies = [
+ "aggregating-index",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -3962,6 +3982,7 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-license",
+ "common-meta-app",
  "common-settings",
  "common-storages-fuse",
  "dashmap",

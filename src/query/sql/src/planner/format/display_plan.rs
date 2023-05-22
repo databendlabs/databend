@@ -77,6 +77,10 @@ impl Plan {
             Plan::AlterView(alter_view) => Ok(format!("{:?}", alter_view)),
             Plan::DropView(drop_view) => Ok(format!("{:?}", drop_view)),
 
+            // Indexes
+            Plan::CreateIndex(index) => Ok(format!("{:?}", index)),
+            Plan::DropIndex(index) => Ok(format!("{:?}", index)),
+
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),
             Plan::Replace(replace) => Ok(format!("{:?}", replace)),

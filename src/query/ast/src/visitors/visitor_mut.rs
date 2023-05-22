@@ -357,6 +357,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
 
+    fn visit_show_indexes(&mut self) {}
+
     fn visit_show_table_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
 
     fn visit_show_limit(&mut self, _limit: &mut ShowLimit) {}
@@ -450,6 +452,9 @@ pub trait VisitorMut: Sized {
     fn visit_alter_view(&mut self, _stmt: &mut AlterViewStmt) {}
 
     fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
+
+    fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
+    fn visit_drop_index(&mut self, _stmt: &mut DropIndexStmt) {}
 
     fn visit_show_users(&mut self) {}
 

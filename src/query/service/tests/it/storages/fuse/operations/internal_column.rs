@@ -46,7 +46,7 @@ fn expected_data_block(
         let block_meta = fuse_part.block_meta_index.as_ref().unwrap();
         let mut columns = Vec::new();
         let internal_column_meta = InternalColumnMeta {
-            segment_id: block_meta.segment_id,
+            segment_idx: block_meta.segment_idx,
             block_id: block_meta.block_id,
             block_location: block_meta.block_location.clone(),
             segment_location: block_meta.segment_location.clone(),

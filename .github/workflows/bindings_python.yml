@@ -1,49 +1,135 @@
-name: Python Release Build
+name: Bindings Python
 
 on:
-  push:
-    tags:
-      - "v*"
-  schedule:
-    # Release at 00:00 UTC+8
-    - cron: "0 16 * * *"
-  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "website/**"
+      - "**.md"
+      - "docker/**"
+      - "scripts/setup/**"
+      - ".devcontainer/**"
+  workflow_call:
     inputs:
-      tags:
-        description: The tags to be released
-        required: false
+      tag:
+        description: The tag to release
+        required: true
         type: string
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  RUNNER_PROVIDER: github
+
 jobs:
-  release:
+  build_linux:
+    name: ${{ matrix.target }}
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
-          toolchain: stable
-          override: true
+          fetch-depth: 0
+
+      - uses: everpcpc/actions-cache@v1
+        if: env.RUNNER_PROVIDER == 'aws'
+        env:
+          AWS_REGION: us-east-2
+        with:
+          bucket: "databend-ci"
+          root: "cache/cargo"
+          path: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
+          key: |
+            ${{ runner.os }}/${{ matrix.target }}/${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}/${{ matrix.target }}/
+            ${{ runner.os }}/
+
       - name: Generate version
+        working-directory: src/bendpy
         run: |
-            tag=`git describe --tags --abbrev=0 | sed 's/-nightly//g' | sed 's/v//g'`
-            sed -i "s#0.1.2#$tag#g"" src/bendpy/cargo.toml
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            GIT_TAG=$(git describe --tags --abbrev=0)
+          else
+            GIT_TAG=${{ inputs.tag }}
+          fi
+          echo "building version: $GIT_TAG"
+          VERSION=${GIT_TAG/v/}
+          VERSION=${VERSION/-nightly/}
+          sed -i "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml
+
+      - name: Get Toolchain
+        id: toolchain
+        run: |
+          RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
+          echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
+
+      # NOTE: for exporting ACTIONS_RUNTIME_TOKEN and ACTIONS_CACHE_URL
+      - name: Expose GitHub Runtime
+        uses: crazy-max/ghaction-github-runtime@v2
+        if: env.RUNNER_PROVIDER == 'github'
+
+      - name: Get opts
+        id: opts
+        run: |
+          if [[ "${RUNNER_PROVIDER}" == "aws" ]]; then
+            echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_BUCKET=databend-ci --env SCCACHE_REGION=us-east-2 --env SCCACHE_S3_KEY_PREFIX=cache/sccache/ --env SCCACHE_S3_USE_SSL=true" >> $GITHUB_OUTPUT
+          else
+            echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true" >> $GITHUB_OUTPUT
+          fi
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "BUILD_ARGS=--strip --out dist" >> $GITHUB_OUTPUT
+            echo "BUILD_PROFILE=debug" >> $GITHUB_ENV
+          else
+            echo "BUILD_ARGS=--release --strip --out dist" >> $GITHUB_OUTPUT
+            echo "BUILD_PROFILE=release" >> $GITHUB_ENV
+          fi
 
       - name: Build wheels
         uses: PyO3/maturin-action@v1
-        env:
-          RUST_BACKTRACE: 1
         with:
-          rust-toolchain: nightly
-          target: x86_64
+          rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
+          working-directory: src/bendpy
+          target: ${{ matrix.target }}
           manylinux: auto
           # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
           rustup-components: rust-std rustfmt
-          args: --release --strip --manylinux 2014 --sdist --out dist
+          args: ${{ steps.opts.outputs.BUILD_ARGS }}
+          docker-options: ${{ steps.opts.outputs.DOCKER_OPTS }}
+          before-script-linux: ../../scripts/setup/dev_setup.sh -yb
+
+      - name: Run tests
+        working-directory: src/bendpy
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          pip install dist/*.whl
+          pip install pytest pyarrow pandas
+          pytest -v tests/*
+
+      - name: Upload artifact
+        if: github.event_name == 'pull_request'
+        uses: ./.github/actions/artifact_upload
+        with:
+          sha: ${{ github.sha }}
+          target: ${{ matrix.target }}
+          category: python
+          path: src/bendpy/dist
 
       - name: Publish package to PyPI
+        if: github.event_name != 'pull_request'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           password: ${{ secrets.PYPI_API_TOKEN }}
-          repository-url: https://pypi.org/project/databend/
-          packages-dir: dist/
+          packages-dir: src/bendpy/dist/
+          skip-existing: true

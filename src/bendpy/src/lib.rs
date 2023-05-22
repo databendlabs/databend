@@ -20,7 +20,15 @@ mod dataframe;
 mod schema;
 mod utils;
 
+use std::env;
+
+use common_config::Config;
 use common_config::InnerConfig;
+use common_license::license_manager::LicenseManager;
+use common_license::license_manager::OssLicenseManager;
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageParams;
+use common_meta_embedded::MetaEmbedded;
 use databend_query::GlobalServices;
 use pyo3::prelude::*;
 use utils::RUNTIME;
@@ -28,11 +36,23 @@ use utils::RUNTIME;
 /// A Python module implemented in Rust.
 #[pymodule]
 fn databend(_py: Python, m: &PyModule) -> PyResult<()> {
+    env::set_var("META_EMBEDDED_DIR", ".databend/_meta");
+
+    let mut conf: InnerConfig = Config::load(false).unwrap().try_into().unwrap();
+    conf.storage.allow_insecure = true;
+    conf.storage.params = StorageParams::Fs(StorageFsConfig {
+        root: ".databend/_data".to_string(),
+    });
+
     RUNTIME.block_on(async {
-        let mut conf: InnerConfig = InnerConfig::default();
-        conf.storage.allow_insecure = true;
+        MetaEmbedded::init_global_meta_store(".databend/_meta".to_string())
+            .await
+            .unwrap();
         GlobalServices::init(conf).await.unwrap();
     });
+
+    // init oss license manager
+    OssLicenseManager::init().unwrap();
 
     m.add_class::<context::PySessionContext>()?;
     Ok(())

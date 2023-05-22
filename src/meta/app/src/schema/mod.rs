@@ -16,6 +16,7 @@
 
 mod catalog;
 mod database;
+mod index;
 mod table;
 
 pub use catalog::CatalogMeta;
@@ -43,6 +44,7 @@ pub use database::RenameDatabaseReply;
 pub use database::RenameDatabaseReq;
 pub use database::UndropDatabaseReply;
 pub use database::UndropDatabaseReq;
+pub use index::*;
 pub use table::CountTablesKey;
 pub use table::CountTablesReply;
 pub use table::CountTablesReq;
@@ -94,3 +96,7 @@ const PREFIX_TABLE_COUNT: &str = "__fd_table_count";
 const PREFIX_TABLE_ID_TO_NAME: &str = "__fd_table_id_to_name";
 const PREFIX_TABLE_COPIED_FILES: &str = "__fd_table_copied_files";
 const PREFIX_TABLE_COPIED_FILES_LOCK: &str = "__fd_table_copied_file_lock";
+
+const PREFIX_INDEX: &str = "__fd_index";
+const PREFIX_INDEX_ID_TO_NAME: &str = "__fd_index_id_to_name";
+const PREFIX_INDEX_BY_ID: &str = "__fd_index_by_id";

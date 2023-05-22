@@ -27,3 +27,6 @@ ERROR 1105 (HY000) at line 1: Code: 1002, Text = stage table function only suppo
 2
 3
 4
+--- copy from uri with transform
+2
+5

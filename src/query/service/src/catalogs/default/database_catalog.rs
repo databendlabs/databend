@@ -23,13 +23,20 @@ use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
+use common_meta_app::schema::CreateIndexReply;
+use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
+use common_meta_app::schema::DropIndexReply;
+use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -316,7 +323,7 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn create_table(&self, req: CreateTableReq) -> Result<()> {
+    async fn create_table(&self, req: CreateTableReq) -> Result<CreateTableReply> {
         if req.tenant().is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
                 "Tenant can not empty(while create table)",
@@ -459,6 +466,23 @@ impl Catalog for DatabaseCatalog {
         self.mutable_catalog
             .update_table_meta(table_info, req)
             .await
+    }
+
+    // Table index
+
+    #[async_backtrace::framed]
+    async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply> {
+        self.mutable_catalog.create_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
+        self.mutable_catalog.drop_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        self.mutable_catalog.list_indexes(req).await
     }
 
     fn get_table_function(

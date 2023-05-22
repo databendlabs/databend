@@ -22,7 +22,9 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
+use super::CreateIndexPlan;
 use super::CreateShareEndpointPlan;
+use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
@@ -174,6 +176,10 @@ pub enum Plan {
     AlterView(Box<AlterViewPlan>),
     DropView(Box<DropViewPlan>),
 
+    // Indexes
+    CreateIndex(Box<CreateIndexPlan>),
+    DropIndex(Box<DropIndexPlan>),
+
     // Account
     AlterUser(Box<AlterUserPlan>),
     CreateUser(Box<CreateUserPlan>),
@@ -234,6 +240,7 @@ pub enum RewriteKind {
     ShowMetrics,
     ShowProcessList,
     ShowEngines,
+    ShowIndexes,
 
     ShowCatalogs,
     ShowDatabases,
@@ -286,6 +293,8 @@ impl Display for Plan {
             Plan::CreateView(_) => write!(f, "CreateView"),
             Plan::AlterView(_) => write!(f, "AlterView"),
             Plan::DropView(_) => write!(f, "DropView"),
+            Plan::CreateIndex(_) => write!(f, "CreateIndex"),
+            Plan::DropIndex(_) => write!(f, "DropIndex"),
             Plan::AlterUser(_) => write!(f, "AlterUser"),
             Plan::CreateUser(_) => write!(f, "CreateUser"),
             Plan::DropUser(_) => write!(f, "DropUser"),
@@ -352,78 +361,30 @@ impl Plan {
             Plan::ExplainAnalyze { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
-            Plan::Copy(_) => Arc::new(DataSchema::empty()),
             Plan::ShowCreateCatalog(plan) => plan.schema(),
-            Plan::CreateCatalog(plan) => plan.schema(),
-            Plan::DropCatalog(plan) => plan.schema(),
             Plan::ShowCreateDatabase(plan) => plan.schema(),
-            Plan::CreateDatabase(plan) => plan.schema(),
-            Plan::UseDatabase(_) => Arc::new(DataSchema::empty()),
-            Plan::DropDatabase(plan) => plan.schema(),
-            Plan::UndropDatabase(plan) => plan.schema(),
-            Plan::RenameDatabase(plan) => plan.schema(),
             Plan::ShowCreateTable(plan) => plan.schema(),
             Plan::DescribeTable(plan) => plan.schema(),
-            Plan::CreateTable(plan) => plan.schema(),
-            Plan::DropTable(plan) => plan.schema(),
-            Plan::UndropTable(plan) => plan.schema(),
-            Plan::RenameTable(plan) => plan.schema(),
-            Plan::AddTableColumn(plan) => plan.schema(),
-            Plan::DropTableColumn(plan) => plan.schema(),
-            Plan::AlterTableClusterKey(plan) => plan.schema(),
-            Plan::DropTableClusterKey(plan) => plan.schema(),
-            Plan::ReclusterTable(plan) => plan.schema(),
-            Plan::TruncateTable(plan) => plan.schema(),
-            Plan::OptimizeTable(plan) => plan.schema(),
             Plan::VacuumTable(plan) => plan.schema(),
-            Plan::AnalyzeTable(plan) => plan.schema(),
             Plan::ExistsTable(plan) => plan.schema(),
-            Plan::CreateView(plan) => plan.schema(),
-            Plan::AlterView(plan) => plan.schema(),
-            Plan::DropView(plan) => plan.schema(),
-            Plan::AlterUser(plan) => plan.schema(),
-            Plan::CreateUser(plan) => plan.schema(),
-            Plan::DropUser(plan) => plan.schema(),
-            Plan::CreateRole(plan) => plan.schema(),
-            Plan::DropRole(plan) => plan.schema(),
             Plan::ShowRoles(plan) => plan.schema(),
-            Plan::GrantRole(plan) => plan.schema(),
-            Plan::GrantPriv(plan) => plan.schema(),
             Plan::ShowGrants(plan) => plan.schema(),
-            Plan::CreateStage(plan) => plan.schema(),
-            Plan::DropStage(plan) => plan.schema(),
-            Plan::RemoveStage(plan) => plan.schema(),
-            Plan::CreateFileFormat(plan) => plan.schema(),
-            Plan::DropFileFormat(plan) => plan.schema(),
             Plan::ShowFileFormats(plan) => plan.schema(),
-            Plan::RevokePriv(_) => Arc::new(DataSchema::empty()),
-            Plan::RevokeRole(_) => Arc::new(DataSchema::empty()),
-            Plan::CreateUDF(_) => Arc::new(DataSchema::empty()),
-            Plan::AlterUDF(_) => Arc::new(DataSchema::empty()),
-            Plan::DropUDF(_) => Arc::new(DataSchema::empty()),
+
             Plan::Insert(plan) => plan.schema(),
             Plan::Replace(plan) => plan.schema(),
-            Plan::Delete(_) => Arc::new(DataSchema::empty()),
-            Plan::Update(_) => Arc::new(DataSchema::empty()),
+
             Plan::Call(_) => Arc::new(DataSchema::empty()),
             Plan::Presign(plan) => plan.schema(),
-            Plan::SetVariable(plan) => plan.schema(),
-            Plan::UnSetVariable(plan) => plan.schema(),
-            Plan::SetRole(plan) => plan.schema(),
-            Plan::Kill(_) => Arc::new(DataSchema::empty()),
-            Plan::CreateShareEndpoint(plan) => plan.schema(),
             Plan::ShowShareEndpoint(plan) => plan.schema(),
-            Plan::DropShareEndpoint(plan) => plan.schema(),
-            Plan::CreateShare(plan) => plan.schema(),
-            Plan::DropShare(plan) => plan.schema(),
-            Plan::GrantShareObject(plan) => plan.schema(),
-            Plan::RevokeShareObject(plan) => plan.schema(),
-            Plan::AlterShareTenants(plan) => plan.schema(),
             Plan::DescShare(plan) => plan.schema(),
             Plan::ShowShares(plan) => plan.schema(),
-            Plan::ShowObjectGrantPrivileges(plan) => plan.schema(),
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
-            Plan::RevertTable(plan) => plan.schema(),
+
+            other => {
+                debug_assert!(!other.has_result_set());
+                Arc::new(DataSchema::empty())
+            }
         }
     }
 

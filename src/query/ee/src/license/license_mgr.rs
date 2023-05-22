@@ -68,7 +68,9 @@ impl LicenseManager for RealLicenseManager {
         )?;
 
         if license_key.is_empty() {
-            return Err(ErrorCode::LicenseKeyInvalid("license key is empty"));
+            return Err(ErrorCode::LicenseKeyInvalid(format!(
+                "use of {feature} requires an enterprise license. license key is empty for {tenant}"
+            )));
         }
 
         if let Some(v) = self.cache.get(license_key.as_str()) {

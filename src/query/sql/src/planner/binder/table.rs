@@ -47,8 +47,12 @@ use common_expression::ConstantFolder;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageInfo;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::ListIndexesReq;
+use common_meta_types::MetaId;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
@@ -214,6 +218,45 @@ impl Binder {
                         .set_span(*span));
                     }
                 };
+
+                // Avoid death loop
+                if !bind_context.planning_agg_index && table_meta.support_index() {
+                    let license_manager = get_license_manager();
+                    match license_manager.manager.check_enterprise_enabled(
+                        &self.ctx.get_settings(),
+                        self.ctx.get_tenant(),
+                        "aggregating_index".to_string(),
+                    ) {
+                        Err(_) => {}
+                        Ok(_) => {
+                            let indexes = self
+                                .resolve_table_indexes(
+                                    tenant.as_str(),
+                                    catalog.as_str(),
+                                    table_meta.get_id(),
+                                )
+                                .await?;
+
+                            let mut s_exprs = Vec::with_capacity(indexes.len());
+                            for (index_id, _, index_meta) in indexes {
+                                let tokens = tokenize_sql(&index_meta.query)?;
+                                let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                                let mut new_bind_context =
+                                    BindContext::with_parent(Box::new(bind_context.clone()));
+                                new_bind_context.planning_agg_index = true;
+                                if let Statement::Query(query) = &stmt {
+                                    let (s_expr, _) =
+                                        self.bind_query(&mut new_bind_context, query).await?;
+                                    s_exprs.push((index_id, s_expr));
+                                }
+                            }
+
+                            self.metadata
+                                .write()
+                                .add_agg_indexes(table_meta.get_id(), s_exprs);
+                        }
+                    }
+                }
 
                 match table_meta.engine() {
                     "VIEW" => {
@@ -598,6 +641,7 @@ impl Binder {
             view_info: None,
             srfs: Default::default(),
             expr_context: ExprContext::default(),
+            planning_agg_index: false,
         };
         let (s_expr, mut new_bind_context) = self
             .bind_query(&mut new_bind_context, &cte_info.query)
@@ -711,14 +755,11 @@ impl Binder {
                             }
                         })
                         .collect(),
-                    push_down_predicates: None,
-                    limit: None,
-                    order_by: None,
                     statistics: Statistics {
                         statistics: stat,
                         col_stats,
                     },
-                    prewhere: None,
+                    ..Default::default()
                 }
                 .into(),
             ),
@@ -787,6 +828,21 @@ impl Binder {
                 }
             }
         }
+    }
+
+    #[async_backtrace::framed]
+    pub(crate) async fn resolve_table_indexes(
+        &self,
+        tenant: &str,
+        catalog_name: &str,
+        table_id: MetaId,
+    ) -> Result<Vec<(u64, String, IndexMeta)>> {
+        let catalog = self.catalogs.get_catalog(catalog_name)?;
+        let index_metas = catalog
+            .list_indexes(ListIndexesReq::new(tenant, Some(table_id)))
+            .await?;
+
+        Ok(index_metas)
     }
 }
 

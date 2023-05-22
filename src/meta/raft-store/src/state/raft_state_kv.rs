@@ -146,17 +146,19 @@ pub(crate) mod compat_with_07 {
         }
     }
 
+    impl SledSerde for RaftStateValueCompat {
+        fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
+        where Self: Sized {
+            let s = serde_json::from_slice(v.as_ref())?;
+            Ok(s)
+        }
+    }
+
     impl SledSerde for RaftStateValue {
         fn de<T: AsRef<[u8]>>(v: T) -> Result<Self, SledBytesError>
         where Self: Sized {
-            let s: RaftStateValueCompat = serde_json::from_slice(v.as_ref())?;
-
-            let v = match s {
-                RaftStateValueCompat::NodeId(nid) => Self::NodeId(nid),
-                RaftStateValueCompat::HardState(h) => Self::HardState(h.upgrade()),
-                RaftStateValueCompat::StateMachineId(x) => Self::StateMachineId(x),
-            };
-            Ok(v)
+            let s = serde_json::from_slice(v.as_ref())?;
+            Ok(s)
         }
     }
 }

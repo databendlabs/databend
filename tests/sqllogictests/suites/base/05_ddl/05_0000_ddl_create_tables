@@ -115,6 +115,12 @@ SELECT a FROM db2.test3
 statement ok
 CREATE TABLE db2.test4(a Varchar null, y Varchar null) ENGINE=fuse AS SELECT b, a FROM db1.test1
 
+statement ok
+CREATE TABLE if not exists db2.test4 AS SELECT b, a FROM db1.test1
+
+statement ok
+CREATE TABLE if not exists db2.test4 AS SELECT b, a FROM db1.test1
+
 query TTTTT
 DESCRIBE db2.test4
 ----

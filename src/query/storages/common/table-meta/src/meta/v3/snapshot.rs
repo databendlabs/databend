@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::io::Cursor;
 
 use chrono::DateTime;
@@ -179,15 +178,6 @@ impl TableSnapshot {
     #[inline]
     pub fn encoding() -> Encoding {
         Encoding::default()
-    }
-
-    pub fn build_segment_id_map(&self) -> HashMap<Location, usize> {
-        let segment_count = self.segments.len();
-        let mut segment_id_map = HashMap::new();
-        for (i, segment_loc) in self.segments.iter().enumerate() {
-            segment_id_map.insert(segment_loc.clone(), segment_count - i - 1);
-        }
-        segment_id_map
     }
 }
 

@@ -36,6 +36,8 @@ use common_meta_app::schema::DatabaseIdToName;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
 use common_meta_app::schema::DatabaseType;
+use common_meta_app::schema::IndexId;
+use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::TableId;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
@@ -76,8 +78,9 @@ pub const DEFAULT_MGET_SIZE: usize = 256;
 /// Get value that its type is `u64`.
 ///
 /// It expects the kv-value's type is `u64`, such as:
-/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
-/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
+/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`,
+/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`, or
+/// `__fd_index/<tenant>/<index_name> -> (seq, index_id)`.
 ///
 /// It returns (seq, `u64` value).
 /// If not found, (0,0) is returned.
@@ -163,8 +166,9 @@ pub async fn list_keys<K: kvapi::Key>(
 /// List kvs whose value's type is `u64`.
 ///
 /// It expects the kv-value' type is `u64`, such as:
-/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`, or
-/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`.
+/// `__fd_table/<db_id>/<table_name> -> (seq, table_id)`,
+/// `__fd_database/<tenant>/<db_name> -> (seq, db_id)`, or
+/// `__fd_index/<tenant>/<index_name> -> (seq, index_id)`.
 ///
 /// It returns a vec of structured key(such as DatabaseNameIdent) and a vec of `u64`.
 pub async fn list_u64_value<K: kvapi::Key>(
@@ -1159,4 +1163,35 @@ pub async fn get_share_table_info(
         }
         None => Ok((share_name.share_name.clone(), None)),
     }
+}
+
+pub async fn get_index_metas_by_ids(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    id_name_list: Vec<(u64, String)>,
+) -> Result<Vec<(u64, String, IndexMeta)>, KVAppError> {
+    let mut index_meta_keys = Vec::with_capacity(id_name_list.len());
+    for (id, _) in id_name_list.iter() {
+        let index_id = IndexId { index_id: *id };
+
+        index_meta_keys.push(index_id.to_string_key());
+    }
+
+    let seq_index_metas = kv_api.mget_kv(&index_meta_keys).await?;
+
+    let mut index_metas = Vec::with_capacity(id_name_list.len());
+
+    for (i, ((id, name), seq_meta_opt)) in id_name_list
+        .into_iter()
+        .zip(seq_index_metas.iter())
+        .enumerate()
+    {
+        if let Some(seq_meta) = seq_meta_opt {
+            let index_meta: IndexMeta = deserialize_struct(&seq_meta.data)?;
+            index_metas.push((id, name, index_meta));
+        } else {
+            debug!(k = display(&index_meta_keys[i]), "index_meta not found");
+        }
+    }
+
+    Ok(index_metas)
 }

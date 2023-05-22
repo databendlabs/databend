@@ -194,6 +194,8 @@ pub enum TokenKind {
     Multiply,
     #[token("/")]
     Divide,
+    #[token("//")]
+    IntDiv,
     #[token("%")]
     Modulo,
     #[token("||")]
@@ -285,6 +287,8 @@ pub enum TokenKind {
     ALL,
     #[token("ADD", ignore(ascii_case))]
     ADD,
+    #[token("AGGREGATING", ignore(ascii_case))]
+    AGGREGATING,
     #[token("ANY", ignore(ascii_case))]
     ANY,
     #[token("ARGS", ignore(ascii_case))]
@@ -545,6 +549,8 @@ pub enum TokenKind {
     IF,
     #[token("IN", ignore(ascii_case))]
     IN,
+    #[token("INDEX", ignore(ascii_case))]
+    INDEX,
     #[token("INNER", ignore(ascii_case))]
     INNER,
     #[token("INSERT", ignore(ascii_case))]
@@ -939,6 +945,8 @@ pub enum TokenKind {
     CUBE,
     #[token("ROLLUP", ignore(ascii_case))]
     ROLLUP,
+    #[token("INDEXES", ignore(ascii_case))]
+    INDEXES,
 }
 
 // Reference: https://www.postgresql.org/docs/current/sql-keywords-appendix.html
@@ -966,6 +974,7 @@ impl TokenKind {
                 | Minus
                 | Multiply
                 | Divide
+                | IntDiv
                 | Modulo
                 | StringConcat
                 | LParen

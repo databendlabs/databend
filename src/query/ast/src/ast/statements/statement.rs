@@ -54,6 +54,7 @@ pub enum Statement {
     ShowTableFunctions {
         limit: Option<ShowLimit>,
     },
+    ShowIndexes,
 
     KillStmt {
         kill_target: KillTarget,
@@ -123,6 +124,10 @@ pub enum Statement {
     CreateView(CreateViewStmt),
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
+
+    // indexes
+    CreateIndex(CreateIndexStmt),
+    DropIndex(DropIndexStmt),
 
     // User
     ShowUsers,
@@ -295,6 +300,7 @@ impl Display for Statement {
             Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
             Statement::ShowMetrics => write!(f, "SHOW METRICS")?,
             Statement::ShowEngines => write!(f, "SHOW ENGINES")?,
+            Statement::ShowIndexes => write!(f, "SHOW INDEXES")?,
             Statement::ShowFunctions { limit } => {
                 write!(f, "SHOW FUNCTIONS")?;
                 if let Some(limit) = limit {
@@ -370,6 +376,8 @@ impl Display for Statement {
             Statement::CreateView(stmt) => write!(f, "{stmt}")?,
             Statement::AlterView(stmt) => write!(f, "{stmt}")?,
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,

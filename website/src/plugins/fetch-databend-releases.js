@@ -7,7 +7,7 @@ const MAC_X86 = 'Mac Intel Chip (x86, 64-bit)';
 const MAC_ARM = 'Mac Apple Chip (ARM, 64-bit)';
 const GITHUB_DOWNLOAD = 'https://github.com/datafuselabs/databend/releases/download';
 const GITHUB_REPO = 'https://api.github.com/repos/datafuselabs/databend';
-const DATABEND_RELEASES = 'https://repo.databend.rs/databend/releases.json';
+const DATABEND_RELEASES = 'https://api.github.com/repos/datafuselabs/databend/releases';
 const DATABEND_DOWNLOAD =  'https://repo.databend.rs/databend';
 
 const IGNORE_TEXT = '<!-- Release notes generated using configuration in .github/release.yml at main -->';

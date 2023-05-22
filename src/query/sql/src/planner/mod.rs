@@ -33,6 +33,7 @@ pub use binder::ScalarVisitor;
 pub use binder::SelectBuilder;
 pub use binder::Visibility;
 pub use expression_parser::*;
+pub use format::format_scalar;
 pub use metadata::*;
 pub use planner::PlanExtras;
 pub use planner::Planner;
