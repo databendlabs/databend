@@ -221,7 +221,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("enable_bushy_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enables generating a bushy join plan with the optimizer.",
                     possible_values: None,
                     display_in_show_settings: true,
