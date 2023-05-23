@@ -51,10 +51,8 @@ Databend makes it easy to load data from various sources, stage, Amazon S3, loca
 <TabItem value="Stage" label="Stage" default>
 
 * [Understanding Stages](../12-load-data/00-stage/00-whystage.md)
-* [Staging Files](../12-load-data/00-stage/01-manage-stages.md)
-* [Querying Staged Files](../12-load-data/00-transform/05-querying-stage.md)
-* [Retrieving Metadata](../12-load-data/00-transform/06-querying-metadata.md)
-* [Transforming Data During Load](../12-load-data/00-transform/07-data-load-transform.md)
+* [Managing Stages](../12-load-data/00-stage/01-manage-stages.md)
+* [Staging Files with API](../12-load-data/00-stage/01-manage-stages.md)
 
 </TabItem>
 
