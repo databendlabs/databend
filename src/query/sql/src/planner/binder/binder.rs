@@ -223,8 +223,9 @@ impl<'a> Binder {
             Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
             Statement::UseDatabase { database } => {
+                let database = normalize_identifier(database, &self.name_resolution_ctx).name;
                 Plan::UseDatabase(Box::new(UseDatabasePlan {
-                    database: database.name.clone(),
+                    database,
                 }))
             }
             // Columns
