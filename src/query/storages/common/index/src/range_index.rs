@@ -24,6 +24,7 @@ use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::types::ValueType;
 use common_expression::with_number_mapped_type;
+use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::Domain;
 use common_expression::Expr;
@@ -41,6 +42,9 @@ pub struct RangeIndex {
     expr: Expr<String>,
     func_ctx: FunctionContext,
     schema: TableSchemaRef,
+
+    // Default stats for each column if no stats are available (e.g. for new-add columns)
+    default_stats: StatisticsOfColumns,
 }
 
 impl RangeIndex {
@@ -48,11 +52,13 @@ impl RangeIndex {
         func_ctx: FunctionContext,
         expr: &Expr<String>,
         schema: TableSchemaRef,
+        default_stats: StatisticsOfColumns,
     ) -> Result<Self> {
         Ok(Self {
             expr: expr.clone(),
             func_ctx,
             schema,
+            default_stats,
         })
     }
 
@@ -65,17 +71,29 @@ impl RangeIndex {
     }
 
     #[tracing::instrument(level = "debug", name = "range_filter_eval", skip_all)]
-    pub fn apply(&self, stats: &StatisticsOfColumns) -> Result<bool> {
+    pub fn apply<F>(&self, stats: &StatisticsOfColumns, column_is_default: F) -> Result<bool>
+    where F: Fn(&ColumnId) -> bool {
         let input_domains = self
             .expr
             .column_refs()
             .into_iter()
             .map(|(name, ty)| {
                 let column_ids = self.schema.leaf_columns_of(&name);
-                let stats = column_ids
+                let stats: _ = column_ids
                     .iter()
-                    .filter_map(|column_id| stats.get(column_id))
-                    .collect::<_>();
+                    .filter_map(|column_id| match stats.get(column_id) {
+                        None => {
+                            if column_is_default(column_id)
+                                && self.default_stats.contains_key(column_id)
+                            {
+                                Some(&self.default_stats[column_id])
+                            } else {
+                                None
+                            }
+                        }
+                        other => other,
+                    })
+                    .collect();
 
                 let domain = statistics_to_domain(stats, &ty);
                 Ok((name, domain))
