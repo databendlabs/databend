@@ -341,6 +341,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::ShowEngines => visitor.visit_show_engines(),
         Statement::ShowFunctions { limit } => visitor.visit_show_functions(limit),
         Statement::ShowTableFunctions { limit } => visitor.visit_show_table_functions(limit),
+        Statement::ShowIndexes => visitor.visit_show_indexes(),
         Statement::KillStmt {
             kill_target,
             object_id,

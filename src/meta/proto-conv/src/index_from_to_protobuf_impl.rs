@@ -98,28 +98,3 @@ impl FromToProto for mt::IndexMeta {
         Ok(p)
     }
 }
-
-impl FromToProto for mt::IndexIdList {
-    type PB = pb::IndexIdList;
-
-    fn get_pb_ver(p: &Self::PB) -> u64 {
-        p.ver
-    }
-
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-    where Self: Sized {
-        reader_check_msg(p.ver, p.min_reader_ver)?;
-
-        let v = Self { id_list: p.ids };
-        Ok(v)
-    }
-
-    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
-        let p = pb::IndexIdList {
-            ver: VER,
-            min_reader_ver: MIN_READER_VER,
-            ids: self.id_list.clone(),
-        };
-        Ok(p)
-    }
-}

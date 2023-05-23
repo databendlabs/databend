@@ -512,6 +512,7 @@ pub enum BinaryOperator {
     Multiply,
     Div,
     Divide,
+    IntDiv,
     Modulo,
     StringConcat,
     // `>` operator
@@ -713,6 +714,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::Divide => {
                 write!(f, "/")
+            }
+            BinaryOperator::IntDiv => {
+                write!(f, "//")
             }
             BinaryOperator::Modulo => {
                 write!(f, "%")

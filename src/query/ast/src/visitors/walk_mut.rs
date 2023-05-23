@@ -311,6 +311,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowMetrics => visitor.visit_show_metrics(),
         Statement::ShowEngines => visitor.visit_show_engines(),
         Statement::ShowFunctions { limit } => visitor.visit_show_functions(limit),
+        Statement::ShowIndexes => visitor.visit_show_indexes(),
         Statement::ShowTableFunctions { limit } => visitor.visit_show_table_functions(limit),
         Statement::KillStmt {
             kill_target,

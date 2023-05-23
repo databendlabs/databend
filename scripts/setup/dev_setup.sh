@@ -291,37 +291,36 @@ function install_jdk {
 	esac
 }
 
-function install_blas {
-	PACKAGE_MANAGER=$1
+function install_lapack {
+    PACKAGE_MANAGER=$1
 
-	echo "==> installing openblas..."
+    echo "==> installing lapack library..."
 
-	case "$PACKAGE_MANAGER" in
-	apt-get)
-		install_pkg libopenblas-dev "$PACKAGE_MANAGER"
-		;;
-	pacman)
-		install_pkg openblas "$PACKAGE_MANAGER"
-		;;
-	apk)
-		install_pkg openblas "$PACKAGE_MANAGER"
-		;;	
-	yum)
-		install_pkg openblas "$PACKAGE_MANAGER"
-		;;
-	dnf)
-		install_pkg openblas "$PACKAGE_MANAGER"
-		;;			
-	brew)
-		install_pkg openblas "$PACKAGE_MANAGER"
-		;;
-	*)
-		echo "Unable to install blas with package manager: $PACKAGE_MANAGER"
-		exit 1
-		;;
-	esac
+    case "$PACKAGE_MANAGER" in
+    apt-get)
+        install_pkg liblapack-dev "$PACKAGE_MANAGER"
+        ;;
+    pacman)
+        install_pkg lapack "$PACKAGE_MANAGER"
+        ;;
+    apk)
+        install_pkg lapack-dev "$PACKAGE_MANAGER"
+        ;;
+    yum)
+        install_pkg lapack-devel "$PACKAGE_MANAGER"
+        ;;
+    dnf)
+        install_pkg lapack-devel "$PACKAGE_MANAGER"
+        ;;
+    brew)
+        install_pkg lapack "$PACKAGE_MANAGER"
+        ;;
+    *)
+        echo "Unable to install lapack with package manager: $PACKAGE_MANAGER"
+        exit 1
+        ;;
+    esac
 }
-
 
 function install_pkg_config {
 	PACKAGE_MANAGER=$1
@@ -603,7 +602,7 @@ if [[ "$INSTALL_BUILD_TOOLS" == "true" ]]; then
 	install_protobuf "$PACKAGE_MANAGER"
 	install_thrift "$PACKAGE_MANAGER"
 	install_jdk "$PACKAGE_MANAGER"
-	install_blas "$PACKAGE_MANAGER"
+	install_lapack "$PACKAGE_MANAGER"
 
 	install_pkg cmake "$PACKAGE_MANAGER"
 	install_pkg clang "$PACKAGE_MANAGER"

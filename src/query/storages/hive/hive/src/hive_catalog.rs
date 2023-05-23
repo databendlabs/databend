@@ -33,6 +33,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
@@ -43,9 +44,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -413,6 +413,35 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn list_table_lock_revs(&self, _table_id: u64) -> Result<Vec<u64>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_lock_rev(
+        &self,
+        _expire_sec: u64,
+        _table_info: &TableInfo,
+    ) -> Result<CreateTableLockRevReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn extend_table_lock_rev(
+        &self,
+        _expire_sec: u64,
+        _table_info: &TableInfo,
+        _revision: u64,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn delete_table_lock_rev(&self, _table_info: &TableInfo, _revision: u64) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
     async fn count_tables(&self, _req: CountTablesReq) -> Result<CountTablesReply> {
         unimplemented!()
     }
@@ -428,10 +457,7 @@ impl Catalog for HiveCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_indexes_by_table_id(
-        &self,
-        _req: ListIndexByTableIdReq,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
+    async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         unimplemented!()
     }
 
