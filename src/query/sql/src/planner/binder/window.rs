@@ -24,6 +24,7 @@ use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Window;
@@ -240,6 +241,28 @@ impl<'a> WindowRewriter<'a> {
                     return_type: agg.return_type.clone(),
                 })
             }
+            WindowFuncType::Lag(lag) => {
+                let (new_arg, new_default) =
+                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, lag)?;
+
+                WindowFuncType::Lag(LagLeadFunction {
+                    arg: Box::new(new_arg),
+                    offset: lag.offset,
+                    default: new_default,
+                    return_type: lag.return_type.clone(),
+                })
+            }
+            WindowFuncType::Lead(lead) => {
+                let (new_arg, new_default) =
+                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, lead)?;
+
+                WindowFuncType::Lead(LagLeadFunction {
+                    arg: Box::new(new_arg),
+                    offset: lead.offset,
+                    default: new_default,
+                    return_type: lead.return_type.clone(),
+                })
+            }
             func => func.clone(),
         };
 
@@ -373,6 +396,56 @@ impl<'a> WindowRewriter<'a> {
         };
 
         Ok(replaced_window.into())
+    }
+
+    fn replace_lag_lead_args(
+        &mut self,
+        agg_args: &mut Vec<ScalarItem>,
+        window_func_name: &String,
+        f: &LagLeadFunction,
+    ) -> Result<(ScalarExpr, Option<Box<ScalarExpr>>)> {
+        let new_arg = self.visit(&f.arg)?;
+        let new_default = match &f.default {
+            None => None,
+            Some(d) => {
+                let d = self.visit(d)?;
+                let replaced_default = if let ScalarExpr::BoundColumnRef(column_ref) = &d {
+                    agg_args.push(ScalarItem {
+                        index: column_ref.column.index,
+                        scalar: d.clone(),
+                    });
+                    column_ref.clone().into()
+                } else {
+                    let name = format!("{}_default_value", &window_func_name);
+                    let index = self
+                        .metadata
+                        .write()
+                        .add_derived_column(name.clone(), d.data_type()?);
+
+                    let column_binding = ColumnBinding {
+                        database_name: None,
+                        table_name: None,
+                        table_index: None,
+                        column_name: name,
+                        index,
+                        data_type: Box::new(d.data_type()?),
+                        visibility: Visibility::Visible,
+                    };
+                    agg_args.push(ScalarItem {
+                        index,
+                        scalar: d.clone(),
+                    });
+
+                    BoundColumnRef {
+                        span: d.span(),
+                        column: column_binding,
+                    }
+                    .into()
+                };
+                Some(Box::new(replaced_default))
+            }
+        };
+        Ok((new_arg, new_default))
     }
 }
 

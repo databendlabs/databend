@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
-
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::FunctionContext;
 use once_cell::sync::Lazy;
 
 use super::prune_unused_columns::UnusedColumnPruner;
@@ -60,25 +58,25 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.
 pub struct HeuristicOptimizer {
-    ctx: Arc<dyn TableContext>,
+    func_ctx: FunctionContext,
     bind_context: Box<BindContext>,
     metadata: MetadataRef,
 }
 
 impl HeuristicOptimizer {
     pub fn new(
-        ctx: Arc<dyn TableContext>,
+        func_ctx: FunctionContext,
         bind_context: Box<BindContext>,
         metadata: MetadataRef,
     ) -> Self {
         HeuristicOptimizer {
-            ctx,
+            func_ctx,
             bind_context,
             metadata,
         }
     }
 
-    fn pre_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    fn pre_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let mut s_expr = s_expr;
         if s_expr.contain_subquery() {
             s_expr = decorrelate_subquery(self.metadata.clone(), s_expr)?;
@@ -90,42 +88,39 @@ impl HeuristicOptimizer {
         pruner.remove_unused_columns(&s_expr, require_columns)
     }
 
-    fn post_optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    fn post_optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let pruner = UnusedColumnPruner::new(self.metadata.clone());
         let require_columns: ColumnSet = self.bind_context.column_set();
         pruner.remove_unused_columns(&s_expr, require_columns)
     }
 
-    pub fn optimize(&mut self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let pre_optimized = self.pre_optimize(s_expr)?;
-        let optimized = self.optimize_expression(&pre_optimized)?;
+        let optimized = self.optimize_expression(&pre_optimized, &DEFAULT_REWRITE_RULES)?;
         let post_optimized = self.post_optimize(optimized)?;
 
         Ok(post_optimized)
     }
 
-    fn optimize_expression(&self, s_expr: &SExpr) -> Result<SExpr> {
+    pub fn optimize_expression(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
         for expr in s_expr.children() {
-            optimized_children.push(self.optimize_expression(expr)?);
+            optimized_children.push(self.optimize_expression(expr, rules)?);
         }
         let optimized_expr = s_expr.replace_children(optimized_children);
-        let result = self.apply_transform_rules(&optimized_expr)?;
+        let result = self.apply_transform_rules(&optimized_expr, rules)?;
 
         Ok(result)
     }
 
     /// Try to apply the rules to the expression.
     /// Return the final result that no rule can be applied.
-    fn apply_transform_rules(&self, s_expr: &SExpr) -> Result<SExpr> {
+    fn apply_transform_rules(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let mut s_expr = s_expr.clone();
 
-        for rule_id in DEFAULT_REWRITE_RULES.iter() {
-            let rule = RuleFactory::create_rule(
-                *rule_id,
-                self.metadata.clone(),
-                self.ctx.get_function_context()?,
-            )?;
+        for rule_id in rules {
+            let rule =
+                RuleFactory::create_rule(*rule_id, self.metadata.clone(), self.func_ctx.clone())?;
             let mut state = TransformResult::new();
             if rule
                 .patterns()
@@ -138,7 +133,7 @@ impl HeuristicOptimizer {
                 if !state.results().is_empty() {
                     // Recursive optimize the result
                     let result = &state.results()[0];
-                    let optimized_result = self.optimize_expression(result)?;
+                    let optimized_result = self.optimize_expression(result, rules)?;
                     return Ok(optimized_result);
                 }
             }

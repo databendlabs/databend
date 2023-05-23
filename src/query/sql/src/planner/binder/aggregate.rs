@@ -40,6 +40,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFunc;
@@ -164,6 +165,34 @@ impl<'a> AggregateRewriter<'a> {
                             distinct: agg.distinct,
                             params: agg.params.clone(),
                             return_type: agg.return_type.clone(),
+                        })
+                    }
+                    WindowFuncType::Lag(lag) => {
+                        let new_arg = self.visit(&lag.arg)?;
+                        let new_default = match lag.default.clone().map(|d| self.visit(&d)) {
+                            None => None,
+                            Some(d) => Some(Box::new(d?)),
+                        };
+
+                        WindowFuncType::Lag(LagLeadFunction {
+                            arg: Box::new(new_arg),
+                            offset: lag.offset,
+                            default: new_default,
+                            return_type: lag.return_type.clone(),
+                        })
+                    }
+                    WindowFuncType::Lead(lead) => {
+                        let new_arg = self.visit(&lead.arg)?;
+                        let new_default = match lead.default.clone().map(|d| self.visit(&d)) {
+                            None => None,
+                            Some(d) => Some(Box::new(d?)),
+                        };
+
+                        WindowFuncType::Lead(LagLeadFunction {
+                            arg: Box::new(new_arg),
+                            offset: lead.offset,
+                            default: new_default,
+                            return_type: lead.return_type.clone(),
                         })
                     }
                     func => func.clone(),

@@ -19,6 +19,7 @@ use std::sync::Arc;
 
 use common_catalog::catalog::CatalogManager;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
+use common_catalog::plan::AggIndexInfo;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
@@ -65,6 +66,9 @@ use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::FragmentKind;
+use crate::executor::LagLeadDefault;
+use crate::executor::LagLeadFunctionDesc;
+use crate::executor::LagLeadFunctionSignature;
 use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
@@ -83,6 +87,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
+use crate::plans::Window as LogicalWindow;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
@@ -292,6 +297,104 @@ impl PhysicalPlanBuilder {
         }))
     }
 
+    #[async_backtrace::framed]
+    async fn build_scan(&mut self, scan: &Scan, stat_info: PlanStatsInfo) -> Result<PhysicalPlan> {
+        let mut has_inner_column = false;
+        let mut has_virtual_column = false;
+        let mut name_mapping = BTreeMap::new();
+        let mut project_internal_columns = BTreeMap::new();
+        let metadata = self.metadata.read().clone();
+
+        for index in scan.columns.iter() {
+            if metadata.is_lazy_column(*index) {
+                continue;
+            }
+            let column = metadata.column(*index);
+            if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) = column {
+                if path_indices.is_some() {
+                    has_inner_column = true;
+                }
+            } else if let ColumnEntry::InternalColumn(TableInternalColumn {
+                internal_column, ..
+            }) = column
+            {
+                project_internal_columns.insert(*index, internal_column.to_owned());
+            } else if let ColumnEntry::VirtualColumn(_) = column {
+                has_virtual_column = true;
+            }
+
+            if let Some(prewhere) = &scan.prewhere {
+                // if there is a prewhere optimization,
+                // we can prune `PhysicalScan`'s output schema.
+                if prewhere.output_columns.contains(index) {
+                    name_mapping.insert(column.name().to_string(), *index);
+                }
+            } else {
+                name_mapping.insert(column.name().to_string(), *index);
+            }
+        }
+
+        if !metadata.lazy_columns().is_empty() {
+            // Lazy materilaztion is enabled.
+            if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID_COL_NAME.to_string()) {
+                let internal_column = INTERNAL_COLUMN_FACTORY
+                    .get_internal_column(ROW_ID_COL_NAME)
+                    .unwrap();
+                let index = self
+                    .metadata
+                    .write()
+                    .add_internal_column(scan.table_index, internal_column.clone());
+                entry.insert(index);
+                project_internal_columns.insert(index, internal_column);
+            }
+        }
+
+        let table_entry = metadata.table(scan.table_index);
+        let table = table_entry.table();
+        let mut table_schema = table.schema();
+        if !project_internal_columns.is_empty() {
+            let mut schema = table_schema.as_ref().clone();
+            for internal_column in project_internal_columns.values() {
+                schema.add_internal_field(
+                    internal_column.column_name(),
+                    internal_column.table_data_type(),
+                    internal_column.column_id(),
+                );
+            }
+            table_schema = Arc::new(schema);
+        }
+
+        let push_downs =
+            self.push_downs(scan, &table_schema, has_inner_column, has_virtual_column)?;
+
+        let source = table
+            .read_plan_with_catalog(
+                self.ctx.clone(),
+                table_entry.catalog().to_string(),
+                Some(push_downs),
+                if project_internal_columns.is_empty() {
+                    None
+                } else {
+                    Some(project_internal_columns.clone())
+                },
+            )
+            .await?;
+
+        let internal_column = if project_internal_columns.is_empty() {
+            None
+        } else {
+            Some(project_internal_columns)
+        };
+        Ok(PhysicalPlan::TableScan(TableScan {
+            plan_id: self.next_plan_id(),
+            name_mapping,
+            source: Box::new(source),
+            table_index: scan.table_index,
+            stat_info: Some(stat_info),
+            internal_column,
+        }))
+    }
+
     #[async_recursion::async_recursion]
     #[async_backtrace::framed]
     pub async fn build(&mut self, s_expr: &SExpr) -> Result<PhysicalPlan> {
@@ -299,105 +402,7 @@ impl PhysicalPlanBuilder {
         let stat_info = self.build_plan_stat_info(s_expr)?;
 
         match s_expr.plan() {
-            RelOperator::Scan(scan) => {
-                let mut has_inner_column = false;
-                let mut has_virtual_column = false;
-                let mut name_mapping = BTreeMap::new();
-                let mut project_internal_columns = BTreeMap::new();
-                let metadata = self.metadata.read().clone();
-
-                for index in scan.columns.iter() {
-                    if metadata.is_lazy_column(*index) {
-                        continue;
-                    }
-                    let column = metadata.column(*index);
-                    if let ColumnEntry::BaseTableColumn(BaseTableColumn { path_indices, .. }) =
-                        column
-                    {
-                        if path_indices.is_some() {
-                            has_inner_column = true;
-                        }
-                    } else if let ColumnEntry::InternalColumn(TableInternalColumn {
-                        internal_column,
-                        ..
-                    }) = column
-                    {
-                        project_internal_columns.insert(*index, internal_column.to_owned());
-                    } else if let ColumnEntry::VirtualColumn(_) = column {
-                        has_virtual_column = true;
-                    }
-
-                    if let Some(prewhere) = &scan.prewhere {
-                        // if there is a prewhere optimization,
-                        // we can prune `PhysicalScan`'s output schema.
-                        if prewhere.output_columns.contains(index) {
-                            name_mapping.insert(column.name().to_string(), *index);
-                        }
-                    } else {
-                        name_mapping.insert(column.name().to_string(), *index);
-                    }
-                }
-
-                if !metadata.lazy_columns().is_empty() {
-                    // Lazy materilaztion is enabled.
-                    if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID_COL_NAME.to_string()) {
-                        let internal_column = INTERNAL_COLUMN_FACTORY
-                            .get_internal_column(ROW_ID_COL_NAME)
-                            .unwrap();
-                        let index = self
-                            .metadata
-                            .write()
-                            .add_internal_column(scan.table_index, internal_column.clone());
-                        entry.insert(index);
-                        project_internal_columns.insert(index, internal_column);
-                    }
-                }
-
-                let table_entry = metadata.table(scan.table_index);
-                let table = table_entry.table();
-                let mut table_schema = table.schema();
-                if !project_internal_columns.is_empty() {
-                    let mut schema = table_schema.as_ref().clone();
-                    for internal_column in project_internal_columns.values() {
-                        schema.add_internal_field(
-                            internal_column.column_name(),
-                            internal_column.table_data_type(),
-                            internal_column.column_id(),
-                        );
-                    }
-                    table_schema = Arc::new(schema);
-                }
-
-                let push_downs =
-                    self.push_downs(scan, &table_schema, has_inner_column, has_virtual_column)?;
-
-                let source = table
-                    .read_plan_with_catalog(
-                        self.ctx.clone(),
-                        table_entry.catalog().to_string(),
-                        Some(push_downs),
-                        if project_internal_columns.is_empty() {
-                            None
-                        } else {
-                            Some(project_internal_columns.clone())
-                        },
-                    )
-                    .await?;
-
-                let internal_column = if project_internal_columns.is_empty() {
-                    None
-                } else {
-                    Some(project_internal_columns)
-                };
-                Ok(PhysicalPlan::TableScan(TableScan {
-                    plan_id: self.next_plan_id(),
-                    name_mapping,
-                    source: Box::new(source),
-                    table_index: scan.table_index,
-                    stat_info: Some(stat_info),
-                    internal_column,
-                }))
-            }
+            RelOperator::Scan(scan) => self.build_scan(scan, stat_info).await,
             RelOperator::DummyTableScan(_) => {
                 let catalogs = CatalogManager::instance();
                 let table = catalogs
@@ -840,156 +845,7 @@ impl PhysicalPlanBuilder {
 
                 Ok(result)
             }
-            RelOperator::Window(w) => {
-                let input = self.build(s_expr.child(0)?).await?;
-                let input_schema = input.output_schema()?;
-
-                let mut w = w.clone();
-
-                // Unify the data type for range frame.
-                if w.frame.units.is_range() && w.order_by.len() == 1 {
-                    let order_by = &mut w.order_by[0].order_by_item.scalar;
-
-                    let mut start = match &mut w.frame.start_bound {
-                        WindowFuncFrameBound::Preceding(scalar)
-                        | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
-                        _ => None,
-                    };
-                    let mut end = match &mut w.frame.end_bound {
-                        WindowFuncFrameBound::Preceding(scalar)
-                        | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
-                        _ => None,
-                    };
-
-                    let mut common_ty = order_by
-                        .resolve_and_check(&*input_schema)?
-                        .data_type()
-                        .clone();
-                    for scalar in start.iter_mut().chain(end.iter_mut()) {
-                        let ty = scalar.as_ref().infer_data_type();
-                        common_ty = common_super_type(
-                            common_ty.clone(),
-                            ty.clone(),
-                            &BUILTIN_FUNCTIONS.default_cast_rules,
-                        )
-                        .ok_or_else(|| {
-                            ErrorCode::IllegalDataType(format!(
-                                "Cannot find common type for {:?} and {:?}",
-                                &common_ty, &ty
-                            ))
-                        })?;
-                    }
-
-                    *order_by = wrap_cast(order_by, &common_ty);
-                    for scalar in start.iter_mut().chain(end.iter_mut()) {
-                        let raw_expr = RawExpr::<usize>::Cast {
-                            span: w.span,
-                            is_try: false,
-                            expr: Box::new(RawExpr::Constant {
-                                span: w.span,
-                                scalar: scalar.clone(),
-                            }),
-                            dest_type: common_ty.clone(),
-                        };
-                        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                        let (expr, _) = ConstantFolder::fold(
-                            &expr,
-                            &FunctionContext::default(),
-                            &BUILTIN_FUNCTIONS,
-                        );
-                        if let common_expression::Expr::Constant {
-                            scalar: new_scalar, ..
-                        } = expr
-                        {
-                            if new_scalar.is_positive() {
-                                **scalar = new_scalar;
-                                continue;
-                            }
-                        }
-                        return Err(ErrorCode::SemanticError(
-                            "Only positive numbers are allowed in RANGE offset".to_string(),
-                        )
-                        .set_span(w.span));
-                    }
-                }
-
-                // Generate a `EvalScalar` as the input of `Window`.
-                let mut scalar_items: Vec<ScalarItem> = Vec::new();
-                for arg in &w.arguments {
-                    scalar_items.push(arg.clone());
-                }
-                for part in &w.partition_by {
-                    scalar_items.push(part.clone());
-                }
-                for order in &w.order_by {
-                    scalar_items.push(order.order_by_item.clone())
-                }
-                let input = if !scalar_items.is_empty() {
-                    self.build_eval_scalar(
-                        input,
-                        &crate::planner::plans::EvalScalar {
-                            items: scalar_items,
-                        },
-                        stat_info.clone(),
-                    )?
-                } else {
-                    input
-                };
-
-                let order_by_items = w
-                    .order_by
-                    .iter()
-                    .map(|v| SortDesc {
-                        asc: v.asc.unwrap_or(true),
-                        nulls_first: v.nulls_first.unwrap_or(false),
-                        order_by: v.order_by_item.index,
-                    })
-                    .collect::<Vec<_>>();
-                let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
-
-                let func = match &w.function {
-                    WindowFuncType::Aggregate(agg) => {
-                        WindowFunction::Aggregate(AggregateFunctionDesc {
-                            sig: AggregateFunctionSignature {
-                                name: agg.func_name.clone(),
-                                args: agg.args.iter().map(|s| s.data_type()).collect::<Result<_>>()?,
-                                params: agg.params.clone(),
-                            },
-                            output_column: w.index,
-                            args: agg.args.iter().map(|arg| {
-                                if let ScalarExpr::BoundColumnRef(col) = arg {
-                                    Ok(col.column.index)
-                                } else {
-                                    Err(ErrorCode::Internal("Window's aggregate function argument must be a BoundColumnRef".to_string()))
-                                }
-                            }).collect::<Result<_>>()?,
-                            arg_indices: agg.args.iter().map(|arg| {
-                                if let ScalarExpr::BoundColumnRef(col) = arg {
-                                    Ok(col.column.index)
-                                } else {
-                                    Err(ErrorCode::Internal(
-                                        "Aggregate function argument must be a BoundColumnRef".to_string()
-                                    ))
-                                }
-                            }).collect::<Result<_>>()?,
-                        })
-                    }
-                    WindowFuncType::RowNumber => WindowFunction::RowNumber,
-                    WindowFuncType::Rank => WindowFunction::Rank,
-                    WindowFuncType::DenseRank => WindowFunction::DenseRank,
-                    WindowFuncType::PercentRank => WindowFunction::PercentRank,
-                };
-
-                Ok(PhysicalPlan::Window(Window {
-                    plan_id: self.next_plan_id(),
-                    index: w.index,
-                    input: Box::new(input),
-                    func,
-                    partition_by: partition_items,
-                    order_by: order_by_items,
-                    window_frame: w.frame.clone(),
-                }))
-            }
+            RelOperator::Window(w) => self.build_physical_window(s_expr, &stat_info, w).await,
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
                 plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
@@ -1246,6 +1102,240 @@ impl PhysicalPlanBuilder {
         }
     }
 
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
+    async fn build_physical_window(
+        &mut self,
+        s_expr: &SExpr,
+        stat_info: &PlanStatsInfo,
+        w: &LogicalWindow,
+    ) -> Result<PhysicalPlan> {
+        let input = self.build(s_expr.child(0)?).await?;
+        let input_schema = input.output_schema()?;
+
+        let mut w = w.clone();
+
+        // Unify the data type for range frame.
+        if w.frame.units.is_range() && w.order_by.len() == 1 {
+            let order_by = &mut w.order_by[0].order_by_item.scalar;
+
+            let mut start = match &mut w.frame.start_bound {
+                WindowFuncFrameBound::Preceding(scalar)
+                | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
+                _ => None,
+            };
+            let mut end = match &mut w.frame.end_bound {
+                WindowFuncFrameBound::Preceding(scalar)
+                | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
+                _ => None,
+            };
+
+            let mut common_ty = order_by
+                .resolve_and_check(&*input_schema)?
+                .data_type()
+                .clone();
+            for scalar in start.iter_mut().chain(end.iter_mut()) {
+                let ty = scalar.as_ref().infer_data_type();
+                common_ty = common_super_type(
+                    common_ty.clone(),
+                    ty.clone(),
+                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                )
+                .ok_or_else(|| {
+                    ErrorCode::IllegalDataType(format!(
+                        "Cannot find common type for {:?} and {:?}",
+                        &common_ty, &ty
+                    ))
+                })?;
+            }
+
+            *order_by = wrap_cast(order_by, &common_ty);
+            for scalar in start.iter_mut().chain(end.iter_mut()) {
+                let raw_expr = RawExpr::<usize>::Cast {
+                    span: w.span,
+                    is_try: false,
+                    expr: Box::new(RawExpr::Constant {
+                        span: w.span,
+                        scalar: scalar.clone(),
+                    }),
+                    dest_type: common_ty.clone(),
+                };
+                let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+                let (expr, _) =
+                    ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
+                if let common_expression::Expr::Constant {
+                    scalar: new_scalar, ..
+                } = expr
+                {
+                    if new_scalar.is_positive() {
+                        **scalar = new_scalar;
+                        continue;
+                    }
+                }
+                return Err(ErrorCode::SemanticError(
+                    "Only positive numbers are allowed in RANGE offset".to_string(),
+                )
+                .set_span(w.span));
+            }
+        }
+
+        // Generate a `EvalScalar` as the input of `Window`.
+        let mut scalar_items: Vec<ScalarItem> = Vec::new();
+        for arg in &w.arguments {
+            scalar_items.push(arg.clone());
+        }
+        for part in &w.partition_by {
+            scalar_items.push(part.clone());
+        }
+        for order in &w.order_by {
+            scalar_items.push(order.order_by_item.clone())
+        }
+        let input = if !scalar_items.is_empty() {
+            self.build_eval_scalar(
+                input,
+                &crate::planner::plans::EvalScalar {
+                    items: scalar_items,
+                },
+                stat_info.clone(),
+            )?
+        } else {
+            input
+        };
+
+        let order_by_items = w
+            .order_by
+            .iter()
+            .map(|v| SortDesc {
+                asc: v.asc.unwrap_or(true),
+                nulls_first: v.nulls_first.unwrap_or(false),
+                order_by: v.order_by_item.index,
+            })
+            .collect::<Vec<_>>();
+        let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
+
+        let func = match &w.function {
+            WindowFuncType::Aggregate(agg) => WindowFunction::Aggregate(AggregateFunctionDesc {
+                sig: AggregateFunctionSignature {
+                    name: agg.func_name.clone(),
+                    args: agg
+                        .args
+                        .iter()
+                        .map(|s| s.data_type())
+                        .collect::<Result<_>>()?,
+                    params: agg.params.clone(),
+                },
+                output_column: w.index,
+                args: agg
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        if let ScalarExpr::BoundColumnRef(col) = arg {
+                            Ok(col.column.index)
+                        } else {
+                            Err(ErrorCode::Internal(
+                                "Window's aggregate function argument must be a BoundColumnRef"
+                                    .to_string(),
+                            ))
+                        }
+                    })
+                    .collect::<Result<_>>()?,
+                arg_indices: agg
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        if let ScalarExpr::BoundColumnRef(col) = arg {
+                            Ok(col.column.index)
+                        } else {
+                            Err(ErrorCode::Internal(
+                                "Aggregate function argument must be a BoundColumnRef".to_string(),
+                            ))
+                        }
+                    })
+                    .collect::<Result<_>>()?,
+            }),
+            WindowFuncType::Lag(lag) => {
+                let new_default = match &lag.default {
+                    None => LagLeadDefault::Null,
+                    Some(d) => match d {
+                        box ScalarExpr::BoundColumnRef(col) => {
+                            LagLeadDefault::Index(col.column.index)
+                        }
+                        _ => unreachable!(),
+                    },
+                };
+                WindowFunction::Lag(LagLeadFunctionDesc {
+                    sig: LagLeadFunctionSignature {
+                        name: "lag".to_string(),
+                        arg: lag.arg.data_type()?,
+                        offset: lag.offset,
+                        default: match lag.default.as_ref().map(|d| d.data_type()) {
+                            None => None,
+                            Some(d) => Some(d?),
+                        },
+                        return_type: *lag.return_type.clone(),
+                    },
+                    output_column: w.index,
+                    arg: if let ScalarExpr::BoundColumnRef(col) = *lag.arg.clone() {
+                        Ok(col.column.index)
+                    } else {
+                        Err(ErrorCode::Internal(
+                            "Window's lag, lead function argument must be a BoundColumnRef"
+                                .to_string(),
+                        ))
+                    }?,
+                    default: new_default,
+                })
+            }
+            WindowFuncType::Lead(lead) => {
+                let new_default = match &lead.default {
+                    None => LagLeadDefault::Null,
+                    Some(d) => match d {
+                        box ScalarExpr::BoundColumnRef(col) => {
+                            LagLeadDefault::Index(col.column.index)
+                        }
+                        _ => unreachable!(),
+                    },
+                };
+                WindowFunction::Lead(LagLeadFunctionDesc {
+                    sig: LagLeadFunctionSignature {
+                        name: "lead".to_string(),
+                        arg: lead.arg.data_type()?,
+                        offset: lead.offset,
+                        default: match lead.default.as_ref().map(|d| d.data_type()) {
+                            None => None,
+                            Some(d) => Some(d?),
+                        },
+                        return_type: *lead.return_type.clone(),
+                    },
+                    output_column: w.index,
+                    arg: if let ScalarExpr::BoundColumnRef(col) = *lead.arg.clone() {
+                        Ok(col.column.index)
+                    } else {
+                        Err(ErrorCode::Internal(
+                            "Window's lag, lead function argument must be a BoundColumnRef"
+                                .to_string(),
+                        ))
+                    }?,
+                    default: new_default,
+                })
+            }
+            WindowFuncType::RowNumber => WindowFunction::RowNumber,
+            WindowFuncType::Rank => WindowFunction::Rank,
+            WindowFuncType::DenseRank => WindowFunction::DenseRank,
+            WindowFuncType::PercentRank => WindowFunction::PercentRank,
+        };
+
+        Ok(PhysicalPlan::Window(Window {
+            plan_id: self.next_plan_id(),
+            index: w.index,
+            input: Box::new(input),
+            func,
+            partition_by: partition_items,
+            order_by: order_by_items,
+            window_frame: w.frame.clone(),
+        }))
+    }
+
     fn build_eval_scalar(
         &mut self,
         input: PhysicalPlan,
@@ -1484,6 +1574,44 @@ impl PhysicalPlanBuilder {
 
         let virtual_columns = self.build_virtual_columns(&scan.columns);
 
+        let agg_index = scan
+            .agg_index
+            .as_ref()
+            .map(|agg| -> Result<_> {
+                let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "and".to_string(),
+                        params: vec![],
+                        arguments: vec![lhs, rhs],
+                    })
+                });
+                let filter = predicate
+                    .map(|pred| -> Result<_> {
+                        Ok(cast_expr_to_non_null_boolean(
+                            pred.as_expr()?.project_column_ref(|col| col.index),
+                        )?
+                        .as_remote_expr())
+                    })
+                    .transpose()?;
+                let selection = agg
+                    .selection
+                    .iter()
+                    .map(|sel| {
+                        Ok(sel
+                            .as_expr()?
+                            .project_column_ref(|col| col.index)
+                            .as_remote_expr())
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(AggIndexInfo {
+                    index_id: agg.index_id,
+                    filter,
+                    selection,
+                })
+            })
+            .transpose()?;
+
         Ok(PushDownInfo {
             projection: Some(projection),
             output_columns,
@@ -1494,6 +1622,7 @@ impl PhysicalPlanBuilder {
             order_by: order_by.unwrap_or_default(),
             virtual_columns,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
+            agg_index,
         })
     }
 

@@ -149,6 +149,96 @@ sales 4800 1
 sales 4800 1
 sales 5000 3
 
+# lag ignore default value
+query II
+SELECT salary, lag(salary, 2) OVER (ORDER BY enroll_date) FROM empsalary
+----
+5000 NULL
+6000 NULL
+3900 5000
+5200 6000
+4800 3900
+4800 5200
+5200 4800
+3500 4800
+4200 5200
+4500 3500
+
+# lag with constant default value
+query II
+SELECT salary, lag(salary, 2, 888) OVER (ORDER BY enroll_date) FROM empsalary
+----
+5000 888
+6000 888
+3900 5000
+5200 6000
+4800 3900
+4800 5200
+5200 4800
+3500 4800
+4200 5200
+4500 3500
+
+# lag with column default value
+query II
+SELECT salary, lag(salary, 2, salary) OVER (ORDER BY enroll_date) FROM empsalary
+----
+5000 5000
+6000 6000
+3900 5000
+5200 6000
+4800 3900
+4800 5200
+5200 4800
+3500 4800
+4200 5200
+4500 3500
+
+# lead ignore default value
+query II
+SELECT salary, lead(salary, 2) OVER (ORDER BY enroll_date) FROM empsalary
+----
+5000 3900
+6000 5200
+3900 4800
+5200 4800
+4800 5200
+4800 3500
+5200 4200
+3500 4500
+4200 NULL
+4500 NULL
+
+# lead with constant default value
+query II
+SELECT salary, lead(salary, 2, 888) OVER (ORDER BY enroll_date) FROM empsalary
+----
+5000 3900
+6000 5200
+3900 4800
+5200 4800
+4800 5200
+4800 3500
+5200 4200
+3500 4500
+4200 888
+4500 888
+
+# lead with column default value
+query II
+SELECT salary, lead(salary, 2, salary) OVER (ORDER BY enroll_date) FROM empsalary
+----
+5000 3900
+6000 5200
+3900 4800
+5200 4800
+4800 5200
+4800 3500
+5200 4200
+3500 4500
+4200 4200
+4500 4500
+
 # min/max/avg
 query TIIR
 SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1, max(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m2, AVG(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m3 FROM empsalary ORDER BY depname, empno
