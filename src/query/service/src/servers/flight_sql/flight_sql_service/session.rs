@@ -19,6 +19,9 @@ use base64::prelude::BASE64_STANDARD;
 use base64::Engine;
 use common_meta_app::principal::AuthInfo;
 use common_users::UserApiProvider;
+use rand::distributions::Alphanumeric;
+use rand::Rng;
+use sha256::digest;
 use tonic::metadata::MetadataMap;
 use tonic::Request;
 use tonic::Status;
@@ -127,5 +130,14 @@ impl FlightSqlServiceImpl {
             .await
             .map_err(|e| status!("set_authed_user fail {}", e))?;
         Ok(session)
+    }
+
+    pub(super) fn generate_token(session_id: String) -> String {
+        let salt: String = rand::thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(6)
+            .map(char::from)
+            .collect();
+        format!("{}#{}", salt, digest(format!("{}{}", salt, session_id)))
     }
 }
