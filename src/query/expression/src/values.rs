@@ -43,6 +43,7 @@ use serde::Serialize;
 use serde::Serializer;
 
 use crate::property::Domain;
+use crate::set_nullable;
 use crate::types::array::ArrayColumn;
 use crate::types::array::ArrayColumnBuilder;
 use crate::types::bitmap::BitmapType;
@@ -1195,13 +1196,10 @@ impl Column {
                         array.clone()
                     })
                     .collect::<Vec<_>>();
+                let ty = set_nullable(arrow_array.data_type());
                 Box::new(
-                    common_arrow::arrow::array::StructArray::try_new(
-                        arrow_array.data_type().clone(),
-                        fields,
-                        Some(validity),
-                    )
-                    .unwrap(),
+                    common_arrow::arrow::array::StructArray::try_new(ty, fields, Some(validity))
+                        .unwrap(),
                 )
             }
             _ => arrow_array.with_validity(Some(validity)),

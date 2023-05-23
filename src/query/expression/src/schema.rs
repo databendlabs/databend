@@ -1281,7 +1281,7 @@ impl From<&TableField> for ArrowField {
     }
 }
 
-fn set_nullable(ty: &ArrowDataType) -> ArrowDataType {
+pub(crate) fn set_nullable(ty: &ArrowDataType) -> ArrowDataType {
     // if the struct type is nullable, need to set inner fields as nullable
     match ty {
         ArrowDataType::Struct(fields) => {
