@@ -398,7 +398,7 @@ fn test_statement() {
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
         r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
         r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
-        r#"CREATE INDEX ON items USING ivfflat (embedding cosine) WITH (nlist = 100)",
+        r#"CREATE INDEX ON items USING ivfflat (embedding cosine) WITH (nlist = 100)"#,
     ];
 
     for case in cases {
