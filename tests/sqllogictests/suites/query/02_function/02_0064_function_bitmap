@@ -60,3 +60,8 @@ query TT
 SELECT bitmap_and_not(build_bitmap([2,3]), build_bitmap([2,3,5]))::String, bitmap_and_not(build_bitmap([1,3,5]), build_bitmap([1,5]))::String
 ----
 (empty) 3
+
+query F
+SELECT sub_bitmap(build_bitmap([1, 2, 3, 4, 5]), 1, 3)::String;
+----
+2,3,4

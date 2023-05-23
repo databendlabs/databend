@@ -63,11 +63,11 @@ echo "Data loaded in ${load_time}s."
 data_size=$(echo "select sum(data_compressed_size) from system.tables where database = '${BENCHMARK_DATASET}';" | bendsql -o tsv)
 
 echo '{}' >result.json
-yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
-yq -i ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" result.json
-yq -i ".machine = \"${instance_type}\"" result.json
-yq -i '.cluster_size = 1' result.json
-yq -i '.tags = ["gp3"]' result.json
+yq -i ".date = \"$(date -u +%Y-%m-%d)\"" -o json result.json
+yq -i ".load_time = ${load_time} | .data_size = ${data_size} | .result = []" -o json result.json
+yq -i ".machine = \"${instance_type}\"" -o json result.json
+yq -i '.cluster_size = 1' -o json result.json
+yq -i '.tags = ["gp3"]' -o json result.json
 
 echo "Running queries..."
 
@@ -80,7 +80,7 @@ function run_query() {
     q_time=$(echo "$query" | bendsql --time)
     if [[ -n $q_time ]]; then
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
-        yq -i ".result[${query_num}] += [${q_time}]" result.json
+        yq -i ".result[${query_num}] += [${q_time}]" -o json result.json
     else
         echo "Q${query_num}[$seq] failed"
     fi
@@ -92,7 +92,7 @@ while read -r query; do
     echo "Running Q${QUERY_NUM}: ${query}"
     sync
     echo 3 | sudo tee /proc/sys/vm/drop_caches
-    yq -i ".result += [[]]" result.json
+    yq -i ".result += [[]]" -o json result.json
     for i in $(seq 1 $TRIES); do
         run_query "$QUERY_NUM" "$i" "$query"
     done
