@@ -229,6 +229,7 @@ impl MutationAccumulator {
             new_segments,
             self.summary.clone(),
             self.abort_operation.clone(),
+            false,
         );
         Ok(meta)
     }

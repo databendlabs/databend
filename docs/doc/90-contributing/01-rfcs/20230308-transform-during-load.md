@@ -28,7 +28,7 @@ COPY into table1 from (select c1， c2 from @stage1/path/to/dir where c3 > 1);
 
 ### limitation to the subquery part:
 
-1. contain only one **base table** and must be a [stage table function](../../15-sql-functions/112-table-functions/stage_table_function.md)
+1. contain only one **base table**.
 2. aggregation is not allowed, because each record inserted should belong to some file. 
 3. due to the prev 2 limits, it is reasonable to state that nested subquery is not need, we may choose to forbidden it.
 
