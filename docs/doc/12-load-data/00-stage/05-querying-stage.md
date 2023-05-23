@@ -1,5 +1,5 @@
 ---
-title: Querying Data in Staged Files
+title: Querying Staged Files
 ---
 
 Databend allows you to directly query data in the files stored in one of the following locations without loading them into a table:

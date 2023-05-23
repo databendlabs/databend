@@ -1,5 +1,5 @@
 ---
-title: Retrieving Metadata from Staged Files
+title: Retrieving Metadata
 ---
 
 ### Why and What is Metadata?
