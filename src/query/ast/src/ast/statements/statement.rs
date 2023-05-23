@@ -54,6 +54,7 @@ pub enum Statement {
     ShowTableFunctions {
         limit: Option<ShowLimit>,
     },
+    ShowIndexes,
 
     KillStmt {
         kill_target: KillTarget,
@@ -299,6 +300,7 @@ impl Display for Statement {
             Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
             Statement::ShowMetrics => write!(f, "SHOW METRICS")?,
             Statement::ShowEngines => write!(f, "SHOW ENGINES")?,
+            Statement::ShowIndexes => write!(f, "SHOW INDEXES")?,
             Statement::ShowFunctions { limit } => {
                 write!(f, "SHOW FUNCTIONS")?;
                 if let Some(limit) = limit {
