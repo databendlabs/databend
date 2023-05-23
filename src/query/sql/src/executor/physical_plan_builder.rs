@@ -1101,6 +1101,8 @@ impl PhysicalPlanBuilder {
         }
     }
 
+    #[async_recursion::async_recursion]
+    #[async_backtrace::framed]
     async fn build_physical_window(
         &mut self,
         s_expr: &SExpr,
