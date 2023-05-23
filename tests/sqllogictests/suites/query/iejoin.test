@@ -28,6 +28,13 @@ on s1.time > s2.time AND s1.cost < s2.cost ORDER BY 1, 2;
 s1	s3
 s4	s3
 
+query TT
+SELECT east.rid, west.rid
+FROM east join west
+ON east.dur + east.rev < west.time AND east.rev > west.cost;
+----
+r2 s2
+
 statement ok
 drop table east;
 

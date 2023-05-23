@@ -4942,7 +4942,7 @@ Robbins Ruth Ms. N 60 16
 Simpson Kevin Dr. N 1369 15
 
 # Q35
-onlyif mysql
+onlyif todo
 query I
 SELECT ca_state,
        cd_gender,

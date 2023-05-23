@@ -204,14 +204,7 @@ impl PipelineBuilder {
     }
 
     fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
-        let left_schema = ie_join.left.output_schema()?;
-        let right_schema = ie_join.right.output_schema()?;
-        let state = Arc::new(IEJoinState::new(
-            self.ctx.clone(),
-            ie_join,
-            left_schema,
-            right_schema,
-        ));
+        let state = Arc::new(IEJoinState::new(self.ctx.clone(), ie_join));
         self.expand_right_side_pipeline(ie_join, state.clone())?;
         self.build_left_side(ie_join, state)
     }
@@ -249,7 +242,7 @@ impl PipelineBuilder {
         let mut right_res = right_side_builder.finalize(&ie_join.right)?;
         right_res.main_pipeline.add_sink(|input| {
             let transform = Sinker::<TransformIEJoinRight>::create(
-                input.clone(),
+                input,
                 TransformIEJoinRight::create(state.clone()),
             );
             if self.enable_profiling {

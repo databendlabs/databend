@@ -51,17 +51,12 @@ use crate::sessions::QueryContext;
 
 struct IEConditionState {
     l1_data_type: DataType,
-    l2_data_type: DataType,
-    // Sort description for left/right
-    table_sort_descriptions: Vec<SortColumnDescription>,
     // Sort description for L1
     l1_sort_descriptions: Vec<SortColumnDescription>,
     // Sort description for L2
     l2_sort_descriptions: Vec<SortColumnDescription>,
     // true is asc
     l1_order: bool,
-    // L2 order
-    l2_order: bool,
 }
 
 pub struct IEJoinState {
@@ -75,10 +70,6 @@ pub struct IEJoinState {
     // The origin data for left/right table
     left_table: RwLock<Vec<DataBlock>>,
     right_table: RwLock<Vec<DataBlock>>,
-    // left table schema
-    left_table_schema: DataSchemaRef,
-    // right table schema
-    right_table_schema: DataSchemaRef,
     // IEJoin related
     // Currently only support inner join
     // join_type: JoinType,
@@ -86,7 +77,7 @@ pub struct IEJoinState {
     // Todo: support other_conditions
     // other_conditions: Vec<RemoteExpr>,
     // Pipeline event related
-    merge_finished: RwLock<bool>,
+    partition_finished: RwLock<bool>,
     finished_notify: Arc<Notify>,
     left_sinker_count: AtomicU64,
     right_sinker_count: AtomicU64,
@@ -98,12 +89,7 @@ pub struct IEJoinState {
 }
 
 impl IEJoinState {
-    pub fn new(
-        ctx: Arc<QueryContext>,
-        ie_join: &IEJoin,
-        left_schema: DataSchemaRef,
-        right_schema: DataSchemaRef,
-    ) -> Self {
+    pub fn new(ctx: Arc<QueryContext>, ie_join: &IEJoin) -> Self {
         let mut fields = Vec::with_capacity(4);
         let l1_data_type = ie_join.conditions[0]
             .left_expr
@@ -126,7 +112,7 @@ impl IEJoinState {
 
         let l1_order = !matches!(ie_join.conditions[0].operator.as_str(), "gt" | "gte");
         let l2_order = matches!(ie_join.conditions[1].operator.as_str(), "gt" | "gte");
-        let mut desc = vec![
+        let l1_sort_descriptions = vec![
             SortColumnDescription {
                 offset: 0,
                 asc: l1_order,
@@ -139,15 +125,14 @@ impl IEJoinState {
                 nulls_first: false,
                 is_nullable: l2_data_type.is_nullable(),
             },
+            SortColumnDescription {
+                offset: 2,
+                asc: false,
+                nulls_first: false,
+                is_nullable: false,
+            },
         ];
 
-        let mut l1_sort_descriptions = desc.clone();
-        l1_sort_descriptions.push(SortColumnDescription {
-            offset: 2,
-            asc: false,
-            nulls_first: false,
-            is_nullable: false,
-        });
         let l2_sort_descriptions = vec![
             SortColumnDescription {
                 offset: 1,
@@ -174,22 +159,17 @@ impl IEJoinState {
             ctx,
             ie_condition_state: IEConditionState {
                 l1_data_type,
-                l2_data_type,
-                table_sort_descriptions: desc,
                 l1_sort_descriptions,
                 l2_sort_descriptions,
                 l1_order,
-                l2_order,
             },
             right_sorted_blocks: Default::default(),
             l1_sorted_blocks: Default::default(),
             data_schema: DataSchemaRefExt::create(fields),
             left_table: RwLock::new(Vec::new()),
             right_table: RwLock::new(Vec::new()),
-            left_table_schema: left_schema,
-            right_table_schema: right_schema,
             conditions: ie_join.conditions.clone(),
-            merge_finished: RwLock::new(false),
+            partition_finished: RwLock::new(false),
             finished_notify: Arc::new(Default::default()),
             left_sinker_count: AtomicU64::new(0),
             right_sinker_count: AtomicU64::new(0),
@@ -202,50 +182,26 @@ impl IEJoinState {
     pub fn sink_right(&self, block: DataBlock) -> Result<()> {
         // Sink block to right table
         let mut right_table = self.right_table.write();
-        right_table.push(DataBlock::sort(
-            &block,
-            &self.ie_condition_state.table_sort_descriptions,
-            None,
-        )?);
+        right_table.push(block);
         Ok(())
     }
 
     pub fn sink_left(&self, block: DataBlock) -> Result<()> {
         // Sink block to left table
         let mut left_table = self.left_table.write();
-        left_table.push(DataBlock::sort(
-            &block,
-            &self.ie_condition_state.table_sort_descriptions,
-            None,
-        )?);
+        left_table.push(block);
         Ok(())
     }
 
-    pub fn merge_sort(&self) -> Result<()> {
-        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
-        // Merge sort left/right table
-        let mut left_table = self.left_table.write();
-        let mut right_table = self.right_table.write();
-
-        *left_table = sort_merge(
-            self.left_table_schema.clone(),
-            block_size,
-            self.ie_condition_state.table_sort_descriptions.clone(),
-            &left_table,
-        )?;
-
-        *right_table = sort_merge(
-            self.right_table_schema.clone(),
-            block_size,
-            self.ie_condition_state.table_sort_descriptions.clone(),
-            &right_table,
-        )?;
+    pub fn partition(&self) -> Result<()> {
+        let left_table = self.left_table.read();
+        let right_table = self.right_table.read();
 
         let mut l1_sorted_blocks = self.l1_sorted_blocks.write();
         let mut right_sorted_blocks = self.right_sorted_blocks.write();
 
         let mut current_rows = 0;
-        for left_sorted_block in left_table.iter() {
+        for left_block in left_table.iter() {
             // Generate keys block by join keys
             // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
             // We can get the key blocks by evaluating the join keys expressions on the block
@@ -253,29 +209,29 @@ impl IEJoinState {
             // Append join keys columns
             for condition in self.conditions.iter() {
                 let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(left_sorted_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator = Evaluator::new(left_block, &func_ctx, &BUILTIN_FUNCTIONS);
                 let expr = condition.left_expr.as_expr(&BUILTIN_FUNCTIONS);
                 let column = evaluator
                     .run(&expr)?
-                    .convert_to_full_column(expr.data_type(), left_sorted_block.num_rows());
+                    .convert_to_full_column(expr.data_type(), left_block.num_rows());
                 columns.push(column);
             }
             // Generate idx column from current_rows to current_rows + block.num_rows()
             let mut column_builder = ColumnBuilder::with_capacity(
                 &DataType::Number(NumberDataType::Int64),
-                left_sorted_block.num_rows(),
+                left_block.num_rows(),
             );
-            for idx in current_rows..(current_rows + left_sorted_block.num_rows()) {
+            for idx in current_rows..(current_rows + left_block.num_rows()) {
                 column_builder.push(ScalarRef::Number(NumberScalar::Int64((idx + 1) as i64)));
             }
             columns.push(column_builder.build());
-            let mut keys_block = DataBlock::new_from_columns(columns);
+            let keys_block = DataBlock::new_from_columns(columns);
             l1_sorted_blocks.push(keys_block);
-            current_rows += left_sorted_block.num_rows();
+            current_rows += left_block.num_rows();
         }
 
         current_rows = 0;
-        for right_sorted_block in right_table.iter() {
+        for right_block in right_table.iter() {
             // Generate keys block by join keys
             // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
             // We can get the key blocks by evaluating the join keys expressions on the block
@@ -283,25 +239,25 @@ impl IEJoinState {
             // Append join keys columns
             for condition in self.conditions.iter() {
                 let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(right_sorted_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let evaluator = Evaluator::new(right_block, &func_ctx, &BUILTIN_FUNCTIONS);
                 let expr = condition.right_expr.as_expr(&BUILTIN_FUNCTIONS);
                 let column = evaluator
                     .run(&expr)?
-                    .convert_to_full_column(expr.data_type(), right_sorted_block.num_rows());
+                    .convert_to_full_column(expr.data_type(), right_block.num_rows());
                 columns.push(column);
             }
             // Generate idx column from current_rows to current_rows + block.num_rows()
             let mut column_builder = ColumnBuilder::with_capacity(
                 &DataType::Number(NumberDataType::Int64),
-                right_sorted_block.num_rows(),
+                right_block.num_rows(),
             );
-            for idx in current_rows..(current_rows + right_sorted_block.num_rows()) {
+            for idx in current_rows..(current_rows + right_block.num_rows()) {
                 column_builder.push(ScalarRef::Number(NumberScalar::Int64(-(idx as i64 + 1))));
             }
             columns.push(column_builder.build());
-            let mut keys_block = DataBlock::new_from_columns(columns);
+            let keys_block = DataBlock::new_from_columns(columns);
             right_sorted_blocks.push(keys_block);
-            current_rows += right_sorted_block.num_rows();
+            current_rows += right_block.num_rows();
         }
         // Add tasks
         let mut row_offset = self.row_offset.write();
@@ -331,15 +287,15 @@ impl IEJoinState {
             &self.ie_condition_state.l1_sort_descriptions,
             None,
         )?;
-        let right_sorted_block = DataBlock::sort(
+        let right_block = DataBlock::sort(
             &right_sorted_blocks[right_idx],
             &self.ie_condition_state.l1_sort_descriptions,
             None,
         )?;
-        if !self.intersection(&l1_sorted_block, &right_sorted_block) {
+        if !self.intersection(&l1_sorted_block, &right_block) {
             return Ok(DataBlock::empty());
         }
-        let mut l1_sorted_blocks = vec![l1_sorted_block, right_sorted_block];
+        let mut l1_sorted_blocks = vec![l1_sorted_block, right_block];
 
         let data_schema = DataSchemaRefExt::create(
             self.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
@@ -446,7 +402,7 @@ impl IEJoinState {
         let len = p_array.len();
         let mut left_buffer = Vec::with_capacity(block_size);
         let mut right_buffer = Vec::with_capacity(block_size);
-        let mut off1: usize = 0;
+        let mut off1;
         let mut off2 = 0;
         for (idx, p) in p_array.iter().enumerate() {
             if let ScalarRef::Number(NumberScalar::Int64(val)) =
@@ -472,7 +428,7 @@ impl IEJoinState {
                 }
                 off2 += 1;
             }
-            off1 = probe_l1(l1, *p as usize, &self.conditions[0].operator, off1);
+            off1 = probe_l1(l1, *p as usize, &self.conditions[0].operator);
             if off1 >= len {
                 continue;
             }
@@ -481,7 +437,7 @@ impl IEJoinState {
                 if bit_array.get(j) {
                     // right, left
                     if let ScalarRef::Number(NumberScalar::Int64(right)) =
-                        unsafe { l1_index_column.index_unchecked(j as usize) }
+                        unsafe { l1_index_column.index_unchecked(j) }
                     {
                         right_buffer.push((-right - 1) as usize - right_offset);
                     }
@@ -504,13 +460,13 @@ impl IEJoinState {
             indices.push((0usize, *res, 1usize));
         }
         let mut left_result_block =
-            DataBlock::take_blocks(&vec![&left_table[left_idx]], &indices, indices.len());
+            DataBlock::take_blocks(&[&left_table[left_idx]], &indices, indices.len());
         indices.clear();
         for res in right_buffer.iter() {
             indices.push((0usize, *res, 1usize));
         }
         let right_result_block =
-            DataBlock::take_blocks(&vec![&right_table[right_idx]], &indices, indices.len());
+            DataBlock::take_blocks(&[&right_table[right_idx]], &indices, indices.len());
         // Merge left_result_block and right_result_block
         for col in right_result_block.columns() {
             left_result_block.add_column(col.clone());
@@ -552,11 +508,11 @@ impl IEJoinState {
         match self.ie_condition_state.l1_order {
             true => {
                 // if l1_order is asc, then op1 is < / <=
-                !(left_l1_min > right_l1_max)
+                left_l1_min <= right_l1_max
             }
             false => {
                 // If l1_order is desc, then op is > / >=
-                !(right_l1_min > left_l1_max)
+                right_l1_min <= left_l1_max
             }
         }
     }
@@ -575,11 +531,11 @@ impl IEJoinState {
             loop {
                 if self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
                     // Left and right both finish sink
-                    // Merge sort left/right and partition them
-                    self.merge_sort()?;
-                    // Set merge finished
-                    let mut merge_finished = self.merge_finished.write();
-                    *merge_finished = true;
+                    // Partition left/right table
+                    self.partition()?;
+                    // Set partition finished
+                    let mut partition_finished = self.partition_finished.write();
+                    *partition_finished = true;
                     self.finished_notify.notify_waiters();
                     break;
                 }
@@ -607,7 +563,7 @@ impl IEJoinState {
     }
 
     pub(crate) async fn wait_merge_finish(&self) -> Result<()> {
-        if !*self.merge_finished.read() {
+        if !*self.partition_finished.read() {
             self.finished_notify.notified().await;
         }
         Ok(())
@@ -625,11 +581,12 @@ fn order_match(op: &str, order: Ordering) -> bool {
 }
 
 // Exponential search
-fn probe_l1(l1: &Column, pos: usize, op1: &str, mut off1: usize) -> usize {
+fn probe_l1(l1: &Column, pos: usize, op1: &str) -> usize {
     let mut step = 1;
     let n = l1.len();
     let mut hi = pos;
     let mut lo = pos;
+    let mut off1;
     if matches!(op1, "gte" | "lte") {
         lo -= min(step, lo);
         step *= 2;

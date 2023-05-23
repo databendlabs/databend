@@ -95,18 +95,16 @@ impl Processor for TransformIEJoinLeft {
                 }
             }
             IEJoinStep::Execute => {
-                return if !self.output_data_blocks.is_empty() {
+                if !self.output_data_blocks.is_empty() {
                     let data = self.output_data_blocks.pop_front().unwrap();
                     self.output_port.push_data(Ok(data));
                     Ok(Event::NeedConsume)
+                } else if !self.execute_finished {
+                    Ok(Event::Sync)
                 } else {
-                    if !self.execute_finished {
-                        Ok(Event::Sync)
-                    } else {
-                        self.output_port.finish();
-                        Ok(Event::Finished)
-                    }
-                };
+                    self.output_port.finish();
+                    Ok(Event::Finished)
+                }
             }
             _ => unreachable!(),
         }
