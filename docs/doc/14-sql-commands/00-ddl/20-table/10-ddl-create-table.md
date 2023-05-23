@@ -540,7 +540,7 @@ SELECT id, first_name, last_name, full_name
 FROM employees;
 
 ---
- id | first_name | last_name |    full_name    
+ id | first_name | last_name | full_name    
 ----+------------+-----------+-----------------
   1 | John       | Doe       | John Doe
   2 | Jane       | Smith     | Jane Smith
