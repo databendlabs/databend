@@ -253,18 +253,15 @@ impl BlockPruner {
             }
 
             let row_count = meta_info.row_count;
-            if range_pruner.should_keep(&meta_info.col_stats)
-                && limit_pruner.within_limit(row_count)
-            {
-                // Perf.
-                {
-                    metrics_inc_blocks_range_pruning_after(1);
-                    metrics_inc_bytes_block_range_pruning_after(meta_info.block_size);
+            mask_res[idx] &= limit_pruner.within_limit(row_count);
+            mask_res[idx] &= range_pruner.should_keep(&meta_info.col_stats);
 
-                    pruning_stats.set_blocks_range_pruning_after(1);
-                }
+            // Perf.
+            if mask_res[idx] {
+                metrics_inc_blocks_range_pruning_after(1);
+                metrics_inc_bytes_block_range_pruning_after(meta_info.block_size);
 
-                mask_res[idx] &= true;
+                pruning_stats.set_blocks_range_pruning_after(1);
             }
         }
 
