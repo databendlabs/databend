@@ -69,7 +69,7 @@ impl SegmentPruner {
                 pruning_stats.set_segments_range_pruning_before(1);
             }
 
-            if range_pruner.should_keep(&info.summary.col_stats) {
+            if range_pruner.should_keep(&info.summary.col_stats, None) {
                 // Perf.
                 {
                     metrics_inc_segments_range_pruning_after(1);
@@ -81,7 +81,6 @@ impl SegmentPruner {
                 res.push((segment_location, info.clone()));
             }
         }
-
         Ok(res)
     }
 
