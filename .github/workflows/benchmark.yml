@@ -43,7 +43,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: actions/checkout@v3
-        if: github.event_name != 'pull_request_target'
+        if: github.event_name == 'pull_request_target'
         with:
           fetch-depth: 0
           ref: "refs/pull/${{ github.event.number }}/merge"
