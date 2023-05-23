@@ -98,6 +98,11 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'storage' | 'azblob.container'                         | ''                               | ''       |
 | 'storage' | 'azblob.endpoint_url'                      | ''                               | ''       |
 | 'storage' | 'azblob.root'                              | ''                               | ''       |
+| 'storage' | 'cos.bucket'                               | ''                               | ''       |
+| 'storage' | 'cos.endpoint_url'                         | ''                               | ''       |
+| 'storage' | 'cos.root'                                 | ''                               | ''       |
+| 'storage' | 'cos.secret_id'                            | ''                               | ''       |
+| 'storage' | 'cos.secret_key'                           | ''                               | ''       |
 | 'storage' | 'fs.data_path'                             | '_data'                          | ''       |
 | 'storage' | 'gcs.bucket'                               | ''                               | ''       |
 | 'storage' | 'gcs.credential'                           | ''                               | ''       |
