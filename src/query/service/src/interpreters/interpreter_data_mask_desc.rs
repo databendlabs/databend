@@ -23,6 +23,7 @@ use common_license::license_manager::get_license_manager;
 use common_sql::plans::DescDatamaskPolicyPlan;
 use common_users::UserApiProvider;
 use data_mask::get_datamask_handler;
+use tracing::error;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -62,7 +63,15 @@ impl Interpreter for DescDataMaskInterpreter {
         let handler = get_datamask_handler();
         let policy = handler
             .get_data_mask(meta_api, self.ctx.get_tenant(), self.plan.name.clone())
-            .await?;
+            .await;
+
+        let policy = match policy {
+            Ok(policy) => policy,
+            Err(err) => {
+                error!("DescDataMaskInterpreter err: {}", err);
+                return Ok(PipelineBuildResult::create());
+            }
+        };
 
         let name: Vec<Vec<u8>> = vec![self.plan.name.as_bytes().to_vec()];
         let create_on: Vec<Vec<u8>> = vec![policy.create_on.to_string().as_bytes().to_vec()];
