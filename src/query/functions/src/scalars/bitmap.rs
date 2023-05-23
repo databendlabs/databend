@@ -155,16 +155,11 @@ pub fn register(registry: &mut FunctionRegistry) {
                         empty_rb.serialize_into(&mut builder.data).unwrap();
                     } else {
                         let subset_start = rb.iter().position(|x| x == range_start).unwrap_or(0);
-                        let subset_bitmap = rb.iter().take((limit as usize) + 1).skip(subset_start);
+                        let subset_bitmap = rb.iter().skip(subset_start).take(limit as usize);
                         let subset_rb: RoaringTreemap = subset_bitmap.collect();
-                        if subset_rb.is_empty() {
-                            let empty_rb = RoaringTreemap::new();
-                            empty_rb.serialize_into(&mut builder.data).unwrap();
-                        } else {
-                            subset_rb.serialize_into(&mut builder.data).unwrap();
-                        }
-                        builder.commit_row();
+                        subset_rb.serialize_into(&mut builder.data).unwrap();
                     }
+                    builder.commit_row();
                 }
                 Err(e) => {
                     ctx.set_error(builder.len(), e.to_string());
