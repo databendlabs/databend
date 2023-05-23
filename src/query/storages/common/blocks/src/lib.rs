@@ -15,5 +15,6 @@
 #![allow(clippy::uninlined_format_args)]
 
 mod block;
+mod encoding;
 
 pub use block::blocks_to_parquet;

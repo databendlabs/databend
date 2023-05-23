@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use common_arrow::arrow::chunk::Chunk;
-use common_arrow::arrow::datatypes::{DataType as ArrowDataType, Schema as ArrowSchema};
+use common_arrow::arrow::datatypes::DataType as ArrowDataType;
+use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::write::transverse;
 use common_arrow::arrow::io::parquet::write::RowGroupIterator;
 use common_arrow::arrow::io::parquet::write::WriteOptions;
@@ -24,10 +25,13 @@ use common_arrow::write_parquet_file;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::serialize::col_encoding;
-use common_expression::{DataBlock, Value};
-use common_expression::TableSchema;
 use common_expression::types::AnyType;
+use common_expression::DataBlock;
+use common_expression::TableSchema;
+use common_expression::Value;
 use storages_common_table_meta::table::TableCompression;
+
+use crate::encoding::get_encodings;
 
 /// Serialize data blocks to parquet format.
 pub fn blocks_to_parquet(
@@ -46,7 +50,8 @@ pub fn blocks_to_parquet(
         compression: compression.into(),
         data_pagesize_limit: None,
     };
-    let batches = blocks.clone()
+    let batches = blocks
+        .clone()
         .into_iter()
         .map(Chunk::try_from)
         .collect::<Result<Vec<_>>>()?;
@@ -55,21 +60,6 @@ pub fn blocks_to_parquet(
         .into_iter()
         .map(|block| get_encodings(&block, &arrow_schema))
         .collect::<Vec<_>>();
-
-
-    // let encoding_map = |data_type: &ArrowDataType| match data_type {
-    //     ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
-    //     _ => col_encoding(data_type),
-    // };
-    //
-    // let encodings: Vec<Vec<_>> = arrow_schema
-    //     .fields
-    //     .iter()
-    //     .map(|f| {
-    //         println!("f.data_type: {:?}", f.data_type);
-    //         transverse(&f.data_type, encoding_map)
-    //     })
-    //     .collect::<Vec<_>>();
 
     let row_groups = RowGroupIterator::try_new(
         batches.into_iter().map(Ok),
@@ -91,32 +81,4 @@ pub fn blocks_to_parquet(
             cause,
         ))),
     }
-}
-
-fn get_encodings(block: &DataBlock, schema: &ArrowSchema) -> Vec<Encoding> {
-    block.columns().into_iter().zip(schema.fields.iter()).map(
-        |(column, field)| {
-            get_encoding(&column.value, &field.data_type)
-        }
-    ).collect()
-    //
-    // let mut encodings = Vec::with_capacity(block.num_columns());
-    // for i in 0..block.num_columns() {
-    //     let field = schema.field(i);
-    //     let data_type = field.data_type();
-    //     let encoding = match data_type {
-    //         ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
-    //         _ => col_encoding(data_type),
-    //     };
-    //     encodings.push(encoding);
-    // }
-    // encodings
-}
-
-fn get_encoding(value: &Value<AnyType>, data_type:&ArrowDataType)->Encoding{
-    let encoding = match data_type {
-        ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
-        _ => col_encoding(data_type),
-    };
-    encoding
 }
