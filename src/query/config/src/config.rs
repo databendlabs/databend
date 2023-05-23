@@ -1123,11 +1123,7 @@ pub struct CosStorageConfig {
     #[serde(rename = "bucket")]
     pub cos_bucket: String,
 
-    /// Endpoint URL for OBS
-    ///
-    /// # TODO(xuanwo)
-    ///
-    /// Clap doesn't allow us to use endpoint_url directly.
+    /// Endpoint URL for COS
     #[clap(long = "storage-cos-endpoint-url", default_value_t)]
     #[serde(rename = "endpoint_url")]
     pub cos_endpoint_url: String,
