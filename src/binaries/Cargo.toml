@@ -8,7 +8,7 @@ publish = { workspace = true }
 edition = { workspace = true }
 
 [features]
-default = ["simd", "jemalloc", "z3-prove"]
+default = ["simd", "jemalloc", "z3-prove", "vector-index"]
 memory-profiling = ["databend-meta/memory-profiling", "databend-query/memory-profiling", "common-base/memory-profiling"]
 simd = ["databend-meta/simd", "databend-query/simd"]
 z3-prove = ["databend-query/z3-prove"]

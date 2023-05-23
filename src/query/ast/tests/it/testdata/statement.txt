@@ -10552,3 +10552,62 @@ Query(
 )
 
 
+---------- Input ----------
+CREATE INDEX ON items USING ivfflat (embedding cosine) WITH (nlist = 100)
+---------- Output ---------
+CREATE INDEX IVFFLAT ON items USING cosine distance(embedding)
+---------- AST ------------
+CreateVectorIndex(
+    CreateVectorIndexStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "items",
+            quote: None,
+            span: Some(
+                16..21,
+            ),
+        },
+        index_type: IVFFLAT,
+        column: Identifier {
+            name: "embedding",
+            quote: None,
+            span: Some(
+                37..46,
+            ),
+        },
+        metric_type: COSINE,
+        paras: [
+            BinaryOp {
+                span: Some(
+                    67..68,
+                ),
+                op: Eq,
+                left: ColumnRef {
+                    span: Some(
+                        61..66,
+                    ),
+                    database: None,
+                    table: None,
+                    column: Identifier {
+                        name: "nlist",
+                        quote: None,
+                        span: Some(
+                            61..66,
+                        ),
+                    },
+                },
+                right: Literal {
+                    span: Some(
+                        69..72,
+                    ),
+                    lit: UInt64(
+                        100,
+                    ),
+                },
+            },
+        ],
+    },
+)
+
+
