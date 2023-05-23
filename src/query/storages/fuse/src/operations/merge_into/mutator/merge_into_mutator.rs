@@ -334,7 +334,7 @@ impl MergeIntoOperationAggregator {
     }
 
     // if any item of `column_min_max` does NOT overlap with the corresponding item of `column_stats`
-    // returns false, otherwise returns ture.
+    // returns false, otherwise returns true.
     fn check_overlap(
         on_conflict_fields: &[OnConflictField],
         column_stats: &HashMap<ColumnId, ColumnStatistics>,
