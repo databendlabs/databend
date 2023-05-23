@@ -86,6 +86,7 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Scan;
+use crate::plans::Window as LogicalWindow;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
@@ -843,216 +844,7 @@ impl PhysicalPlanBuilder {
 
                 Ok(result)
             }
-            RelOperator::Window(w) => {
-                let input = self.build(s_expr.child(0)?).await?;
-                let input_schema = input.output_schema()?;
-
-                let mut w = w.clone();
-
-                // Unify the data type for range frame.
-                if w.frame.units.is_range() && w.order_by.len() == 1 {
-                    let order_by = &mut w.order_by[0].order_by_item.scalar;
-
-                    let mut start = match &mut w.frame.start_bound {
-                        WindowFuncFrameBound::Preceding(scalar)
-                        | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
-                        _ => None,
-                    };
-                    let mut end = match &mut w.frame.end_bound {
-                        WindowFuncFrameBound::Preceding(scalar)
-                        | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
-                        _ => None,
-                    };
-
-                    let mut common_ty = order_by
-                        .resolve_and_check(&*input_schema)?
-                        .data_type()
-                        .clone();
-                    for scalar in start.iter_mut().chain(end.iter_mut()) {
-                        let ty = scalar.as_ref().infer_data_type();
-                        common_ty = common_super_type(
-                            common_ty.clone(),
-                            ty.clone(),
-                            &BUILTIN_FUNCTIONS.default_cast_rules,
-                        )
-                        .ok_or_else(|| {
-                            ErrorCode::IllegalDataType(format!(
-                                "Cannot find common type for {:?} and {:?}",
-                                &common_ty, &ty
-                            ))
-                        })?;
-                    }
-
-                    *order_by = wrap_cast(order_by, &common_ty);
-                    for scalar in start.iter_mut().chain(end.iter_mut()) {
-                        let raw_expr = RawExpr::<usize>::Cast {
-                            span: w.span,
-                            is_try: false,
-                            expr: Box::new(RawExpr::Constant {
-                                span: w.span,
-                                scalar: scalar.clone(),
-                            }),
-                            dest_type: common_ty.clone(),
-                        };
-                        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                        let (expr, _) = ConstantFolder::fold(
-                            &expr,
-                            &FunctionContext::default(),
-                            &BUILTIN_FUNCTIONS,
-                        );
-                        if let common_expression::Expr::Constant {
-                            scalar: new_scalar, ..
-                        } = expr
-                        {
-                            if new_scalar.is_positive() {
-                                **scalar = new_scalar;
-                                continue;
-                            }
-                        }
-                        return Err(ErrorCode::SemanticError(
-                            "Only positive numbers are allowed in RANGE offset".to_string(),
-                        )
-                        .set_span(w.span));
-                    }
-                }
-
-                // Generate a `EvalScalar` as the input of `Window`.
-                let mut scalar_items: Vec<ScalarItem> = Vec::new();
-                for arg in &w.arguments {
-                    scalar_items.push(arg.clone());
-                }
-                for part in &w.partition_by {
-                    scalar_items.push(part.clone());
-                }
-                for order in &w.order_by {
-                    scalar_items.push(order.order_by_item.clone())
-                }
-                let input = if !scalar_items.is_empty() {
-                    self.build_eval_scalar(
-                        input,
-                        &crate::planner::plans::EvalScalar {
-                            items: scalar_items,
-                        },
-                        stat_info.clone(),
-                    )?
-                } else {
-                    input
-                };
-
-                let order_by_items = w
-                    .order_by
-                    .iter()
-                    .map(|v| SortDesc {
-                        asc: v.asc.unwrap_or(true),
-                        nulls_first: v.nulls_first.unwrap_or(false),
-                        order_by: v.order_by_item.index,
-                    })
-                    .collect::<Vec<_>>();
-                let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
-
-                let func = match &w.function {
-                    WindowFuncType::Aggregate(agg) => {
-                        WindowFunction::Aggregate(AggregateFunctionDesc {
-                            sig: AggregateFunctionSignature {
-                                name: agg.func_name.clone(),
-                                args: agg.args.iter().map(|s| s.data_type()).collect::<Result<_>>()?,
-                                params: agg.params.clone(),
-                            },
-                            output_column: w.index,
-                            args: agg.args.iter().map(|arg| {
-                                if let ScalarExpr::BoundColumnRef(col) = arg {
-                                    Ok(col.column.index)
-                                } else {
-                                    Err(ErrorCode::Internal("Window's aggregate function argument must be a BoundColumnRef".to_string()))
-                                }
-                            }).collect::<Result<_>>()?,
-                            arg_indices: agg.args.iter().map(|arg| {
-                                if let ScalarExpr::BoundColumnRef(col) = arg {
-                                    Ok(col.column.index)
-                                } else {
-                                    Err(ErrorCode::Internal(
-                                        "Aggregate function argument must be a BoundColumnRef".to_string()
-                                    ))
-                                }
-                            }).collect::<Result<_>>()?,
-                        })
-                    }
-                    WindowFuncType::Lag(lag) => {
-                        let new_default = match &lag.default {
-                            None => LagLeadDefault::Null,
-                            Some(d) => {
-                                match d {
-                                    box ScalarExpr::BoundColumnRef(col) => LagLeadDefault::Index(col.column.index),
-                                    _ => unreachable!()
-                                }
-                            }
-                        };
-                        WindowFunction::Lag(LagLeadFunctionDesc {
-                            sig: LagLeadFunctionSignature {
-                                name: "lag".to_string(),
-                                arg: lag.arg.data_type()?,
-                                offset: lag.offset,
-                                default: match lag.default.as_ref().map(|d|d.data_type()) {
-                                    None => None,
-                                    Some(d) => Some(d?),
-                                },
-                                return_type: *lag.return_type.clone(),
-                            },
-                            output_column: w.index,
-                            arg: if let ScalarExpr::BoundColumnRef(col) = *lag.arg.clone() {
-                                Ok(col.column.index)
-                            }else {
-                                Err(ErrorCode::Internal("Window's lag, lead function argument must be a BoundColumnRef".to_string()))
-                            }?,
-                            default: new_default,
-                        })
-                    }
-                    WindowFuncType::Lead(lead) => {
-                        let new_default = match &lead.default {
-                            None => LagLeadDefault::Null,
-                            Some(d) => {
-                                match d {
-                                    box ScalarExpr::BoundColumnRef(col) => LagLeadDefault::Index(col.column.index),
-                                    _ => unreachable!()
-                                }
-                            }
-                        };
-                        WindowFunction::Lead(LagLeadFunctionDesc {
-                            sig: LagLeadFunctionSignature {
-                                name: "lead".to_string(),
-                                arg: lead.arg.data_type()?,
-                                offset: lead.offset,
-                                default: match lead.default.as_ref().map(|d|d.data_type()) {
-                                    None => None,
-                                    Some(d) => Some(d?),
-                                },
-                                return_type: *lead.return_type.clone(),
-                            },
-                            output_column: w.index,
-                            arg: if let ScalarExpr::BoundColumnRef(col) = *lead.arg.clone() {
-                                Ok(col.column.index)
-                            }else {
-                                Err(ErrorCode::Internal("Window's lag, lead function argument must be a BoundColumnRef".to_string()))
-                            }?,
-                            default: new_default,
-                        })
-                    }
-                    WindowFuncType::RowNumber => WindowFunction::RowNumber,
-                    WindowFuncType::Rank => WindowFunction::Rank,
-                    WindowFuncType::DenseRank => WindowFunction::DenseRank,
-                    WindowFuncType::PercentRank => WindowFunction::PercentRank,
-                };
-
-                Ok(PhysicalPlan::Window(Window {
-                    plan_id: self.next_plan_id(),
-                    index: w.index,
-                    input: Box::new(input),
-                    func,
-                    partition_by: partition_items,
-                    order_by: order_by_items,
-                    window_frame: w.frame.clone(),
-                }))
-            }
+            RelOperator::Window(w) => self.build_physical_window(s_expr, &stat_info, w).await,
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
                 plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
@@ -1307,6 +1099,238 @@ impl PhysicalPlanBuilder {
                 s_expr.plan()
             ))),
         }
+    }
+
+    async fn build_physical_window(
+        &mut self,
+        s_expr: &SExpr,
+        stat_info: &PlanStatsInfo,
+        w: &LogicalWindow,
+    ) -> Result<PhysicalPlan> {
+        let input = self.build(s_expr.child(0)?).await?;
+        let input_schema = input.output_schema()?;
+
+        let mut w = w.clone();
+
+        // Unify the data type for range frame.
+        if w.frame.units.is_range() && w.order_by.len() == 1 {
+            let order_by = &mut w.order_by[0].order_by_item.scalar;
+
+            let mut start = match &mut w.frame.start_bound {
+                WindowFuncFrameBound::Preceding(scalar)
+                | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
+                _ => None,
+            };
+            let mut end = match &mut w.frame.end_bound {
+                WindowFuncFrameBound::Preceding(scalar)
+                | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
+                _ => None,
+            };
+
+            let mut common_ty = order_by
+                .resolve_and_check(&*input_schema)?
+                .data_type()
+                .clone();
+            for scalar in start.iter_mut().chain(end.iter_mut()) {
+                let ty = scalar.as_ref().infer_data_type();
+                common_ty = common_super_type(
+                    common_ty.clone(),
+                    ty.clone(),
+                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                )
+                .ok_or_else(|| {
+                    ErrorCode::IllegalDataType(format!(
+                        "Cannot find common type for {:?} and {:?}",
+                        &common_ty, &ty
+                    ))
+                })?;
+            }
+
+            *order_by = wrap_cast(order_by, &common_ty);
+            for scalar in start.iter_mut().chain(end.iter_mut()) {
+                let raw_expr = RawExpr::<usize>::Cast {
+                    span: w.span,
+                    is_try: false,
+                    expr: Box::new(RawExpr::Constant {
+                        span: w.span,
+                        scalar: scalar.clone(),
+                    }),
+                    dest_type: common_ty.clone(),
+                };
+                let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
+                let (expr, _) =
+                    ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
+                if let common_expression::Expr::Constant {
+                    scalar: new_scalar, ..
+                } = expr
+                {
+                    if new_scalar.is_positive() {
+                        **scalar = new_scalar;
+                        continue;
+                    }
+                }
+                return Err(ErrorCode::SemanticError(
+                    "Only positive numbers are allowed in RANGE offset".to_string(),
+                )
+                .set_span(w.span));
+            }
+        }
+
+        // Generate a `EvalScalar` as the input of `Window`.
+        let mut scalar_items: Vec<ScalarItem> = Vec::new();
+        for arg in &w.arguments {
+            scalar_items.push(arg.clone());
+        }
+        for part in &w.partition_by {
+            scalar_items.push(part.clone());
+        }
+        for order in &w.order_by {
+            scalar_items.push(order.order_by_item.clone())
+        }
+        let input = if !scalar_items.is_empty() {
+            self.build_eval_scalar(
+                input,
+                &crate::planner::plans::EvalScalar {
+                    items: scalar_items,
+                },
+                stat_info.clone(),
+            )?
+        } else {
+            input
+        };
+
+        let order_by_items = w
+            .order_by
+            .iter()
+            .map(|v| SortDesc {
+                asc: v.asc.unwrap_or(true),
+                nulls_first: v.nulls_first.unwrap_or(false),
+                order_by: v.order_by_item.index,
+            })
+            .collect::<Vec<_>>();
+        let partition_items = w.partition_by.iter().map(|v| v.index).collect::<Vec<_>>();
+
+        let func = match &w.function {
+            WindowFuncType::Aggregate(agg) => WindowFunction::Aggregate(AggregateFunctionDesc {
+                sig: AggregateFunctionSignature {
+                    name: agg.func_name.clone(),
+                    args: agg
+                        .args
+                        .iter()
+                        .map(|s| s.data_type())
+                        .collect::<Result<_>>()?,
+                    params: agg.params.clone(),
+                },
+                output_column: w.index,
+                args: agg
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        if let ScalarExpr::BoundColumnRef(col) = arg {
+                            Ok(col.column.index)
+                        } else {
+                            Err(ErrorCode::Internal(
+                                "Window's aggregate function argument must be a BoundColumnRef"
+                                    .to_string(),
+                            ))
+                        }
+                    })
+                    .collect::<Result<_>>()?,
+                arg_indices: agg
+                    .args
+                    .iter()
+                    .map(|arg| {
+                        if let ScalarExpr::BoundColumnRef(col) = arg {
+                            Ok(col.column.index)
+                        } else {
+                            Err(ErrorCode::Internal(
+                                "Aggregate function argument must be a BoundColumnRef".to_string(),
+                            ))
+                        }
+                    })
+                    .collect::<Result<_>>()?,
+            }),
+            WindowFuncType::Lag(lag) => {
+                let new_default = match &lag.default {
+                    None => LagLeadDefault::Null,
+                    Some(d) => match d {
+                        box ScalarExpr::BoundColumnRef(col) => {
+                            LagLeadDefault::Index(col.column.index)
+                        }
+                        _ => unreachable!(),
+                    },
+                };
+                WindowFunction::Lag(LagLeadFunctionDesc {
+                    sig: LagLeadFunctionSignature {
+                        name: "lag".to_string(),
+                        arg: lag.arg.data_type()?,
+                        offset: lag.offset,
+                        default: match lag.default.as_ref().map(|d| d.data_type()) {
+                            None => None,
+                            Some(d) => Some(d?),
+                        },
+                        return_type: *lag.return_type.clone(),
+                    },
+                    output_column: w.index,
+                    arg: if let ScalarExpr::BoundColumnRef(col) = *lag.arg.clone() {
+                        Ok(col.column.index)
+                    } else {
+                        Err(ErrorCode::Internal(
+                            "Window's lag, lead function argument must be a BoundColumnRef"
+                                .to_string(),
+                        ))
+                    }?,
+                    default: new_default,
+                })
+            }
+            WindowFuncType::Lead(lead) => {
+                let new_default = match &lead.default {
+                    None => LagLeadDefault::Null,
+                    Some(d) => match d {
+                        box ScalarExpr::BoundColumnRef(col) => {
+                            LagLeadDefault::Index(col.column.index)
+                        }
+                        _ => unreachable!(),
+                    },
+                };
+                WindowFunction::Lead(LagLeadFunctionDesc {
+                    sig: LagLeadFunctionSignature {
+                        name: "lead".to_string(),
+                        arg: lead.arg.data_type()?,
+                        offset: lead.offset,
+                        default: match lead.default.as_ref().map(|d| d.data_type()) {
+                            None => None,
+                            Some(d) => Some(d?),
+                        },
+                        return_type: *lead.return_type.clone(),
+                    },
+                    output_column: w.index,
+                    arg: if let ScalarExpr::BoundColumnRef(col) = *lead.arg.clone() {
+                        Ok(col.column.index)
+                    } else {
+                        Err(ErrorCode::Internal(
+                            "Window's lag, lead function argument must be a BoundColumnRef"
+                                .to_string(),
+                        ))
+                    }?,
+                    default: new_default,
+                })
+            }
+            WindowFuncType::RowNumber => WindowFunction::RowNumber,
+            WindowFuncType::Rank => WindowFunction::Rank,
+            WindowFuncType::DenseRank => WindowFunction::DenseRank,
+            WindowFuncType::PercentRank => WindowFunction::PercentRank,
+        };
+
+        Ok(PhysicalPlan::Window(Window {
+            plan_id: self.next_plan_id(),
+            index: w.index,
+            input: Box::new(input),
+            func,
+            partition_by: partition_items,
+            order_by: order_by_items,
+            window_frame: w.frame.clone(),
+        }))
     }
 
     fn build_eval_scalar(

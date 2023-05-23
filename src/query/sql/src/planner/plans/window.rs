@@ -80,9 +80,9 @@ impl Window {
                         .collect();
                 }
             }
-            WindowFuncType::Lag(lag) => {
-                used_columns.extend(lag.arg.used_columns());
-                if let Some(default) = &lag.default {
+            WindowFuncType::Lag(f) | WindowFuncType::Lead(f) => {
+                used_columns.extend(f.arg.used_columns());
+                if let Some(default) = &f.default {
                     used_columns.extend(default.used_columns());
                 }
             }
@@ -250,7 +250,7 @@ impl WindowFuncType {
         }
     }
 
-    pub fn get_lag_lead_func(
+    pub fn get_general_window_func(
         name: &str,
         arg: ScalarExpr,
         offset: Option<u64>,

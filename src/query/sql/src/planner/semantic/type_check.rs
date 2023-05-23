@@ -664,11 +664,7 @@ impl<'a> TypeChecker<'a> {
                             "window function {name} can only be used in window clause"
                         )));
                     }
-                    let func = if !args.is_empty() {
-                        self.resolve_general_window_function(&name, &args).await?
-                    } else {
-                        WindowFuncType::from_name(&name)?
-                    };
+                    let func = self.resolve_general_window_function(&name, &args).await?;
                     let window = window.as_ref().unwrap();
                     // WindowReference already rewritten by `SelectRewriter` before.
                     let window = window.as_window_spec().unwrap();
@@ -1130,6 +1126,9 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[&Expr],
     ) -> Result<WindowFuncType> {
+        if args.is_empty() {
+            return WindowFuncType::from_name(func_name);
+        }
         self.in_window_function = true;
         let mut arguments = vec![];
         let mut arg_types = vec![];
@@ -1143,26 +1142,19 @@ impl<'a> TypeChecker<'a> {
         debug_assert!(!arg_types.is_empty());
 
         let offset = if arguments.len() >= 2 {
-            let off = match &arguments[1] {
-                ScalarExpr::ConstantExpr(con) => match con.value {
-                    Scalar::Number(num) => match num {
-                        NumberScalar::UInt64(n) => Ok(n),
-                        NumberScalar::UInt32(n) => Ok(n as u64),
-                        NumberScalar::UInt16(n) => Ok(n as u64),
-                        NumberScalar::UInt8(n) => Ok(n as u64),
-                        _ => Err(ErrorCode::SemanticError(
-                            "Window function LAG/LEAD offset just support positive integer",
-                        )),
-                    },
-                    _ => Err(ErrorCode::SemanticError(
-                        "Window function LAG/LEAD offset just support positive integer",
-                    )),
-                },
-                _ => Err(ErrorCode::SemanticError(
-                    "Window function LAG/LEAD offset just support positive integer",
-                )),
-            };
-            Some(off?)
+            let off = ScalarExpr::CastExpr(CastExpr {
+                span: arguments[1].span(),
+                is_try: true,
+                argument: Box::new(arguments[1].clone()),
+                target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+            })
+            .as_expr()?;
+            Some(check_number::<_, u64>(
+                off.span(),
+                &self.func_ctx,
+                &off,
+                &BUILTIN_FUNCTIONS,
+            )?)
         } else {
             None
         };
@@ -1193,7 +1185,7 @@ impl<'a> TypeChecker<'a> {
             })
             .transpose()?;
 
-        WindowFuncType::get_lag_lead_func(
+        WindowFuncType::get_general_window_func(
             func_name,
             arguments[0].clone(),
             offset,
