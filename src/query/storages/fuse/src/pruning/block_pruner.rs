@@ -220,74 +220,91 @@ impl BlockPruner {
         Ok(result)
     }
 
-    fn block_pruning_sync(
-        &self,
-        segment_location: SegmentLocation,
-        segment_info: &CompactSegmentInfo,
-    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
-        let pruning_stats = self.pruning_ctx.pruning_stats.clone();
+    fn block_pruning_sync_1(&self, metas: &[Arc<BlockMeta>]) -> Result<Vec<bool>> {
+        let mut mask_res = vec![true; metas.len()];
+
+        if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner {
+            for (idx, meta_info) in metas.iter().enumerate() {
+                mask_res[idx] =
+                    internal_column_pruner.should_keep(BLOCK_NAME_COL_NAME, &meta_info.location.0);
+            }
+        }
+
         let limit_pruner = self.pruning_ctx.limit_pruner.clone();
         let range_pruner = self.pruning_ctx.range_pruner.clone();
-        let page_pruner = self.pruning_ctx.page_pruner.clone();
+        let pruning_stats = self.pruning_ctx.pruning_stats.clone();
+        for (idx, meta_info) in metas.iter().enumerate() {
+            if !mask_res[idx] {
+                continue;
+            }
 
-        let start = Instant::now();
-
-        let segment_block_metas = segment_info.block_metas()?;
-        let blocks = if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner
-        {
-            segment_block_metas
-                .iter()
-                .enumerate()
-                .filter(|(_, block)| {
-                    internal_column_pruner.should_keep(BLOCK_NAME_COL_NAME, &block.location.0)
-                })
-                .collect::<Vec<_>>()
-        } else {
-            segment_block_metas.iter().enumerate().collect::<Vec<_>>()
-        };
-        let mut result = Vec::with_capacity(blocks.len());
-        let block_num = segment_info.summary.block_count as usize;
-        for (block_idx, block_meta) in blocks {
             // Perf.
             {
                 metrics_inc_blocks_range_pruning_after(1);
-                metrics_inc_bytes_block_range_pruning_before(block_meta.block_size);
+                metrics_inc_bytes_block_range_pruning_before(meta_info.block_size);
 
                 pruning_stats.set_blocks_range_pruning_before(1);
             }
 
             // check limit speculatively
             if limit_pruner.exceeded() {
-                break;
+                mask_res[idx] = false;
+                continue;
             }
-            let row_count = block_meta.row_count;
-            if range_pruner.should_keep(&block_meta.col_stats)
+
+            let row_count = meta_info.row_count;
+            if range_pruner.should_keep(&meta_info.col_stats)
                 && limit_pruner.within_limit(row_count)
             {
                 // Perf.
                 {
                     metrics_inc_blocks_range_pruning_after(1);
-                    metrics_inc_bytes_block_range_pruning_after(block_meta.block_size);
+                    metrics_inc_bytes_block_range_pruning_after(meta_info.block_size);
 
                     pruning_stats.set_blocks_range_pruning_after(1);
                 }
 
-                let (keep, range) = page_pruner.should_keep(&block_meta.cluster_stats);
-                if keep {
-                    result.push((
-                        BlockMetaIndex {
-                            segment_idx: segment_location.segment_idx,
-                            block_idx,
-                            range,
-                            page_size: block_meta.page_size() as usize,
-                            block_id: block_id_in_segment(block_num, block_idx),
-                            block_location: block_meta.as_ref().location.0.clone(),
-                            segment_location: segment_location.location.0.clone(),
-                            snapshot_location: segment_location.snapshot_loc.clone(),
-                        },
-                        block_meta.clone(),
-                    ))
-                }
+                mask_res[idx] &= true;
+            }
+        }
+
+        Ok(mask_res)
+    }
+
+    fn block_pruning_sync(
+        &self,
+        segment_location: SegmentLocation,
+        segment_info: &CompactSegmentInfo,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        let start = Instant::now();
+        let segment_block_metas = segment_info.block_metas()?;
+        let mut result = Vec::with_capacity(segment_block_metas.len());
+
+        let filter_mask = self.block_pruning_sync_1(&segment_block_metas)?;
+
+        let block_num = segment_info.summary.block_count as usize;
+        let page_pruner = self.pruning_ctx.page_pruner.clone();
+        for (idx, mask) in filter_mask.into_iter().enumerate() {
+            if !mask {
+                continue;
+            }
+
+            let block_meta = &segment_block_metas[idx];
+            let block_stats = &block_meta.cluster_stats;
+            if let (true, range) = page_pruner.should_keep(block_stats) {
+                result.push((
+                    BlockMetaIndex {
+                        segment_idx: segment_location.segment_idx,
+                        block_idx: idx,
+                        range,
+                        page_size: block_meta.page_size() as usize,
+                        block_id: block_id_in_segment(block_num, idx),
+                        block_location: block_meta.as_ref().location.0.clone(),
+                        segment_location: segment_location.location.0.clone(),
+                        snapshot_location: segment_location.snapshot_loc.clone(),
+                    },
+                    block_meta.clone(),
+                ))
             }
         }
 
