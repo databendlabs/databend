@@ -65,7 +65,7 @@ impl RangePruner for RangeIndex {
     ) -> bool {
         match self.apply(stats, |k| {
             if let Some(metas) = metas {
-                metas.get(&k).is_none()
+                metas.get(k).is_none()
             } else {
                 false
             }

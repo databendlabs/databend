@@ -687,7 +687,7 @@ mod tests {
                 .project_column_ref(|col| col.column_name.clone());
             let pruner =
                 RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
-            assert!(!pruner.should_keep(&row_group_stats[0]));
+            assert!(!pruner.should_keep(&row_group_stats[0], None));
         }
 
         // col1 < 0
@@ -720,7 +720,7 @@ mod tests {
                 .project_column_ref(|col| col.column_name.clone());
             let pruner =
                 RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
-            assert!(!pruner.should_keep(&row_group_stats[0]));
+            assert!(!pruner.should_keep(&row_group_stats[0], None));
         }
 
         // col1 <= 5
@@ -753,7 +753,7 @@ mod tests {
                 .project_column_ref(|col| col.column_name.clone());
             let pruner =
                 RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
-            assert!(pruner.should_keep(&row_group_stats[0]));
+            assert!(pruner.should_keep(&row_group_stats[0], None));
         }
 
         Ok(())

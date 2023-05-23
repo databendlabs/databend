@@ -92,13 +92,13 @@ pub fn check<Index: ColumnIndex>(
                                 span: *span,
                                 is_try: false,
                                 expr: Box::new(c.clone()),
-                                dest_type: dest_data_type.clone(),
+                                dest_type: dest_data_type,
                             };
 
                             let (new_expr, _) = ConstantFolder::fold(
                                 &new_expr,
                                 &FunctionContext::default(),
-                                &fn_registry,
+                                fn_registry,
                             );
 
                             if new_expr.as_constant().is_some() {

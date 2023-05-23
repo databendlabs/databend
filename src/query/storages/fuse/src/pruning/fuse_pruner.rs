@@ -117,7 +117,7 @@ impl FusePruner {
 
                 let stats = ColumnStatistics {
                     min: default_scalar.clone(),
-                    max: default_scalar.clone(),
+                    max: default_scalar,
                     null_count: 0,
                     in_memory_size: 0,
                     distinct_of_values: Some(1),
