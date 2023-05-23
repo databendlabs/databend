@@ -91,18 +91,28 @@ pub fn serialize_to_parquet(
     serialize_to_parquet_with_compression(blocks, schema, buf, CompressionOptions::Lz4Raw)
 }
 
-pub fn col_encoding(_data_type: &ArrowDataType) -> Encoding {
+pub fn col_encoding(data_type: &ArrowDataType) -> Encoding {
     // Although encoding does work, parquet2 has not implemented decoding of DeltaLengthByteArray yet, we fallback to Plain
     // From parquet2: Decoding "DeltaLengthByteArray"-encoded required V2 pages is not yet implemented for Binary.
     //
-    // match data_type {
-    //    ArrowDataType::Binary
-    //    | ArrowDataType::LargeBinary
-    //    | ArrowDataType::Utf8
-    //    | ArrowDataType::LargeUtf8 => Encoding::DeltaLengthByteArray,
-    //    _ => Encoding::Plain,
-    //}
-    Encoding::Plain
+    match data_type {
+        ArrowDataType::Null
+        | ArrowDataType::UInt8
+        | ArrowDataType::UInt16
+        | ArrowDataType::UInt32
+        | ArrowDataType::UInt64
+        | ArrowDataType::Int8
+        | ArrowDataType::Int16
+        | ArrowDataType::Int32
+        | ArrowDataType::Date32
+        | ArrowDataType::Time32(_)
+        | ArrowDataType::Int64
+        | ArrowDataType::Date64
+        | ArrowDataType::Time64(_)
+        | ArrowDataType::Timestamp(_, _)
+        | ArrowDataType::Duration(_) => Encoding::DeltaBinaryPacked,
+        _ => Encoding::Plain,
+    }
 }
 
 pub const EPOCH_DAYS_FROM_CE: i32 = 719_163;
