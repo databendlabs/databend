@@ -333,11 +333,11 @@ impl MergeIntoOperationAggregator {
         for (idx, field) in self.on_conflict_fields.iter().enumerate() {
             let column_id = field.table_field.column_id();
             let (min, max) = &columns_min_max[idx];
-            if self.overlapped_by_stats(column_stats.get(&column_id), min, max) {
-                return true;
+            if !self.overlapped_by_stats(column_stats.get(&column_id), min, max) {
+                return false;
             }
         }
-        false
+        true
     }
 
     fn overlapped_by_stats(

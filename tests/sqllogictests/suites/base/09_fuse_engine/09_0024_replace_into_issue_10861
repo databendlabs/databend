@@ -10,6 +10,7 @@ USE issue_10861
 statement ok
 create table s(id int);
 
+# setup: multiple segments and blocks
 statement ok
 insert into s values(1);
 
