@@ -333,6 +333,8 @@ impl MergeIntoOperationAggregator {
         Self::check_overlap(&self.on_conflict_fields, column_stats, columns_min_max)
     }
 
+    // if any item of `column_min_max` does NOT overlap with the corresponding item of `column_stats`
+    // returns false, otherwise returns ture.
     fn check_overlap(
         on_conflict_fields: &[OnConflictField],
         column_stats: &HashMap<ColumnId, ColumnStatistics>,
@@ -374,7 +376,7 @@ mod tests {
 
     #[test]
     fn test_check_overlap() -> Result<()> {
-        // case description:
+        // setup :
         //
         // - on conflict('xx_id', 'xx_type', 'xx_time');
         //
@@ -382,16 +384,6 @@ mod tests {
         //   'xx_id' : [1, 10]
         //   'xx_type' : ["a", "z"]
         //   'xx_time' : [100, 200]
-        //
-        // - min/max of input values (to be checked)
-        //
-        //  'xx_id' : [11, 12]
-        //  'xx_type' : ["b", "b"]
-        //  'xx_time' : [100, 100]
-        //
-        // - expected result: overlap
-        //   columns 'xx_type' and 'xx_time' do overlap, but 'xx_id' does not overlap
-        //   so the result is NOT overlap
 
         // setup schema
         let field_type_id = TableDataType::Number(NumberDataType::UInt64);
@@ -406,7 +398,7 @@ mod tests {
 
         let fields = schema.fields();
 
-        // setup on conflict fields
+        // setup the ON CONFLICT fields
         let on_conflict_fields = fields
             .iter()
             .enumerate()
@@ -416,7 +408,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
 
-        let mut column_stats = HashMap::new();
+        // set up range index of columns
 
         let range = |min: Scalar, max: Scalar| {
             ColumnStatistics {
@@ -429,34 +421,96 @@ mod tests {
             }
         };
 
-        // stats of xx_id [1, 10]
-        column_stats.insert(
-            0,
-            range(
+        let column_range_indexes = HashMap::from_iter([
+            // range of xx_id [1, 10]
+            (
+                0,
+                range(
+                    Scalar::Number(NumberScalar::UInt64(1)),
+                    Scalar::Number(NumberScalar::UInt64(10)),
+                ),
+            ),
+            // range of xx_type [a, z]
+            (
+                1,
+                range(
+                    Scalar::String("a".to_string().into_bytes()),
+                    Scalar::String("z".to_string().into_bytes()),
+                ),
+            ),
+            // range of xx_time [100, 200]
+            (
+                2,
+                range(
+                    Scalar::Number(NumberScalar::UInt32(100)),
+                    Scalar::Number(NumberScalar::UInt32(200)),
+                ),
+            ),
+        ]);
+
+        // case 1:
+        //
+        // - min/max of input block
+        //
+        //  'xx_id' : [1, 9]
+        //  'xx_type' : ["b", "y"]
+        //  'xx_time' : [101, 200]
+        //
+        // - recall that the range index of columns are:
+        //
+        //   'xx_id' : [1, 10]
+        //   'xx_type' : ["a", "z"]
+        //   'xx_time' : [100, 200]
+        //
+        // - expected : overlap == true
+        //   since value of all the ON CONFLICT columns of input block overlap with range index
+
+        let input_column_min_max = [
+            // for xx_id column, overlaps
+            (
                 Scalar::Number(NumberScalar::UInt64(1)),
-                Scalar::Number(NumberScalar::UInt64(10)),
+                Scalar::Number(NumberScalar::UInt64(9)),
             ),
-        );
-
-        // stats of xx_type [a, z]
-        column_stats.insert(
-            1,
-            range(
-                Scalar::String("a".to_string().into_bytes()),
-                Scalar::String("z".to_string().into_bytes()),
+            // for xx_type column, overlaps
+            (
+                Scalar::String("b".to_string().into_bytes()),
+                Scalar::String("y".to_string().into_bytes()),
             ),
-        );
-
-        // stats of xx_time [100, 200]
-        column_stats.insert(
-            2,
-            range(
-                Scalar::Number(NumberScalar::UInt32(100)),
+            // for xx_time column, overlaps
+            (
+                Scalar::Number(NumberScalar::UInt32(101)),
                 Scalar::Number(NumberScalar::UInt32(200)),
             ),
+        ];
+
+        let overlap = super::MergeIntoOperationAggregator::check_overlap(
+            &on_conflict_fields,
+            &column_range_indexes,
+            &input_column_min_max,
         );
 
-        let columns_min_max = [
+        assert!(overlap);
+
+        // case 2:
+        //
+        // - min/max of input block
+        //
+        //  'xx_id' : [11, 12]
+        //  'xx_type' : ["b", "b"]
+        //  'xx_time' : [100, 100]
+        //
+        // - recall that the range index of columns are:
+        //
+        //   'xx_id' : [1, 10]
+        //   'xx_type' : ["a", "z"]
+        //   'xx_time' : [100, 200]
+        //
+        // - expected : overlap == false
+        //
+        //   although columns 'xx_type' and 'xx_time' do overlap, but 'xx_id' does not overlap,
+        //   so the result is NOT overlap
+
+        let input_column_min_max = [
             // for xx_id column, NOT overlaps
             (
                 Scalar::Number(NumberScalar::UInt64(11)),
@@ -476,11 +530,10 @@ mod tests {
 
         let overlap = super::MergeIntoOperationAggregator::check_overlap(
             &on_conflict_fields,
-            &column_stats,
-            &columns_min_max,
+            &column_range_indexes,
+            &input_column_min_max,
         );
 
-        // any column that does NOT overlaps imply NOT overlaps
         assert!(!overlap);
 
         Ok(())
