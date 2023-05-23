@@ -19,24 +19,30 @@ use common_expression::types::DataType;
 use common_expression::Scalar;
 
 use crate::binder::split_conjunctions;
+use crate::optimizer::HeuristicOptimizer;
+use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
-use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
-use crate::plans::ScalarItem;
 use crate::ColumnBinding;
+use crate::ColumnEntry;
 use crate::ColumnSet;
 use crate::IndexType;
 use crate::ScalarExpr;
 use crate::Visibility;
 
-pub fn try_rewrite(s_expr: &SExpr, index_plans: &[(u64, SExpr)]) -> Result<Option<SExpr>> {
+pub fn try_rewrite(
+    optimizer: &HeuristicOptimizer,
+    base_columns: &[ColumnEntry],
+    s_expr: &SExpr,
+    index_plans: &[(u64, String, SExpr)],
+) -> Result<Option<SExpr>> {
     if index_plans.is_empty() {
         return Ok(None);
     }
@@ -46,12 +52,20 @@ pub fn try_rewrite(s_expr: &SExpr, index_plans: &[(u64, SExpr)]) -> Result<Optio
         return Ok(None);
     }
 
+    let col_index_map = base_columns
+        .iter()
+        .map(|col| (col.name(), col.index()))
+        .collect::<HashMap<_, _>>();
+
     let query_predicates = query_info.predicates.map(distinguish_predicates);
     let query_group_items = query_info.formatted_group_items();
 
     // Search all index plans, find the first matched index to rewrite the query.
-    for (index_id, plan) in index_plans.iter() {
-        let index_info = collect_information(plan)?;
+    for (index_id, _, plan) in index_plans.iter() {
+        let plan = optimizer.optimize_expression(plan, &[RuleID::FoldConstant])?;
+        let plan = rewrite_index_plan(&col_index_map, &plan);
+
+        let index_info = collect_information(&plan)?;
         debug_assert!(index_info.can_apply_index());
 
         // 1. Check if group items are the same.
@@ -66,12 +80,10 @@ pub fn try_rewrite(s_expr: &SExpr, index_plans: &[(u64, SExpr)]) -> Result<Optio
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
         for item in query_info.selection.items.iter() {
-            if let Some(rewritten) = rewrite_query_item(&query_info, &item.scalar, &index_selection)
+            if let Some(rewritten) =
+                rewrite_by_selection(&query_info, &item.scalar, &index_selection)
             {
-                new_selection.push(ScalarItem {
-                    index: item.index,
-                    scalar: rewritten,
-                });
+                new_selection.push(rewritten);
             } else {
                 flag = false;
                 break;
@@ -137,10 +149,62 @@ pub fn try_rewrite(s_expr: &SExpr, index_plans: &[(u64, SExpr)]) -> Result<Optio
     Ok(None)
 }
 
+/// Rewrite base column index in the original index plan by `columns`.
+fn rewrite_index_plan(columns: &HashMap<String, IndexType>, s_expr: &SExpr) -> SExpr {
+    match s_expr.plan() {
+        RelOperator::EvalScalar(eval) => {
+            let mut new_expr = eval.clone();
+            for item in new_expr.items.iter_mut() {
+                rewrite_scalar_index(columns, &mut item.scalar);
+            }
+            SExpr::create_unary(
+                new_expr.into(),
+                rewrite_index_plan(columns, s_expr.child(0).unwrap()),
+            )
+        }
+        RelOperator::Filter(filter) => {
+            let mut new_expr = filter.clone();
+            for pred in new_expr.predicates.iter_mut() {
+                rewrite_scalar_index(columns, pred);
+            }
+            SExpr::create_unary(
+                new_expr.into(),
+                rewrite_index_plan(columns, s_expr.child(0).unwrap()),
+            )
+        }
+        RelOperator::Scan(_) => s_expr.clone(), // Terminate the recursion.
+        _ => s_expr.replace_children(vec![rewrite_index_plan(columns, s_expr.child(0).unwrap())]),
+    }
+}
+
+fn rewrite_scalar_index(columns: &HashMap<String, IndexType>, scalar: &mut ScalarExpr) {
+    match scalar {
+        ScalarExpr::BoundColumnRef(col) => {
+            if let Some(index) = columns.get(&col.column.column_name) {
+                col.column.index = *index;
+            }
+        }
+        ScalarExpr::AggregateFunction(agg) => {
+            agg.args
+                .iter_mut()
+                .for_each(|arg| rewrite_scalar_index(columns, arg));
+        }
+        ScalarExpr::FunctionCall(func) => {
+            func.arguments
+                .iter_mut()
+                .for_each(|arg| rewrite_scalar_index(columns, arg));
+        }
+        ScalarExpr::CastExpr(cast) => {
+            rewrite_scalar_index(columns, &mut cast.argument);
+        }
+        _ => { /*  do nothing */ }
+    }
+}
+
 /// [`Range`] is to represent the value range of a column according to the predicates.
 ///
 /// Notes that only conjunctions will be parsed, and disjunctions will be ignored.
-#[derive(Default, PartialEq)]
+#[derive(Default, PartialEq, Debug)]
 struct Range<'a> {
     min: Option<&'a Scalar>,
     min_close: bool,
@@ -735,7 +799,7 @@ fn rewrite_query_item(
                     try_create_column_binding(index_selection, &format_col_name(col.column.index))?;
                 Some(col.into())
             }
-            s => rewrite_query_item(query_info, s, index_selection),
+            s => rewrite_by_selection(query_info, s, index_selection),
         },
         ScalarExpr::ConstantExpr(_) => Some(query_item.clone()),
         ScalarExpr::CastExpr(cast) => {
@@ -766,24 +830,7 @@ fn rewrite_query_item(
                 .into(),
             )
         }
-        ScalarExpr::AggregateFunction(agg) => {
-            let mut new_args = Vec::with_capacity(agg.args.len());
-            for arg in agg.args.iter() {
-                let new_arg = rewrite_by_selection(query_info, arg, index_selection)?;
-                new_args.push(new_arg);
-            }
-            Some(
-                AggregateFunction {
-                    func_name: agg.func_name.clone(),
-                    distinct: agg.distinct,
-                    params: agg.params.clone(),
-                    return_type: agg.return_type.clone(),
-                    args: new_args,
-                    display_name: agg.display_name.clone(),
-                }
-                .into(),
-            )
-        }
+        ScalarExpr::AggregateFunction(_) => None, /* Aggregate function must appear in index selection. */
         _ => unreachable!(), // Window function and subquery will not appear in index.
     }
 }

@@ -188,6 +188,12 @@ fn table_scan_to_format_tree(
         })
     });
 
+    let agg_index = plan
+        .source
+        .push_downs
+        .as_ref()
+        .and_then(|extras| extras.agg_index.as_ref());
+
     let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
 
     // Part stats.
@@ -204,6 +210,36 @@ fn table_scan_to_format_tree(
         }
     };
     children.push(FormatTreeNode::new(push_downs));
+    // Aggregating index
+    if let Some(agg_index) = agg_index {
+        let metadata = metadata.read();
+        let (_, agg_index_sql, _) = metadata
+            .get_agg_indexes(&table_name)
+            .unwrap()
+            .iter()
+            .find(|(index, _, _)| *index == agg_index.index_id)
+            .unwrap();
+
+        children.push(FormatTreeNode::new(format!(
+            "aggregating index: [{agg_index_sql}]"
+        )));
+
+        let agg_sel = agg_index
+            .selection
+            .iter()
+            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .join(", ");
+        let agg_filter = agg_index
+            .filter
+            .as_ref()
+            .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).sql_display());
+        let text = if let Some(f) = agg_filter {
+            format!("rewritten query: [selection: [{agg_sel}], filter: {f}]")
+        } else {
+            format!("rewritten query: [selection: [{agg_sel}]]")
+        };
+        children.push(FormatTreeNode::new(text));
+    }
 
     let output_columns = plan.source.output_schema.fields();
 
