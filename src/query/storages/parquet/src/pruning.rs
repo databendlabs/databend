@@ -107,7 +107,7 @@ impl PartitionPruner {
                     .zip(file_meta.row_groups.iter())
                     .enumerate()
                 {
-                    row_group_pruned[idx] = !pruner.should_keep(stats);
+                    row_group_pruned[idx] = !pruner.should_keep(stats, None);
                 }
                 Some(row_group_stats)
             } else {
@@ -333,7 +333,7 @@ fn filter_pages<R: Read + Seek>(
                 let stats = BatchStatistics::from_column_statistics(stats, &data_type.into())?;
                 for (page_num, intv) in page_intervals.iter().enumerate() {
                     let stat = stats.get(page_num);
-                    if pruner.should_keep(&HashMap::from([(*col_offset as u32, stat)])) {
+                    if pruner.should_keep(&HashMap::from([(*col_offset as u32, stat)]), None) {
                         row_selection.push(*intv);
                     }
                 }
@@ -687,7 +687,7 @@ mod tests {
                 .project_column_ref(|col| col.column_name.clone());
             let pruner =
                 RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
-            assert!(!pruner.should_keep(&row_group_stats[0]));
+            assert!(!pruner.should_keep(&row_group_stats[0], None));
         }
 
         // col1 < 0
@@ -720,7 +720,7 @@ mod tests {
                 .project_column_ref(|col| col.column_name.clone());
             let pruner =
                 RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
-            assert!(!pruner.should_keep(&row_group_stats[0]));
+            assert!(!pruner.should_keep(&row_group_stats[0], None));
         }
 
         // col1 <= 5
@@ -753,7 +753,7 @@ mod tests {
                 .project_column_ref(|col| col.column_name.clone());
             let pruner =
                 RangePrunerCreator::try_create(FunctionContext::default(), &schema, Some(&filter))?;
-            assert!(pruner.should_keep(&row_group_stats[0]));
+            assert!(pruner.should_keep(&row_group_stats[0], None));
         }
 
         Ok(())

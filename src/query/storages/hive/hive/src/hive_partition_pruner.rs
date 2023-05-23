@@ -78,6 +78,7 @@ impl HivePartitionPruner {
             self.ctx.get_function_context()?,
             &self.filter,
             self.full_schema.clone(),
+            StatisticsOfColumns::default(),
         )?;
         let column_stats = self.get_column_stats(&partitions)?;
         let mut filtered_partitions = vec![];
@@ -92,7 +93,7 @@ impl HivePartitionPruner {
                 })
                 .collect();
 
-            if range_filter.apply(&block_stats)? {
+            if range_filter.apply(&block_stats, |_| false)? {
                 filtered_partitions.push(partitions[idx].clone());
             }
         }

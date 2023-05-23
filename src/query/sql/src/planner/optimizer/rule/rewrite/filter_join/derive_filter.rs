@@ -123,10 +123,19 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             *scalar = (*col_to_scalar.get(&column_index).unwrap()).clone();
         }
         ScalarExpr::WindowFunction(expr) => {
-            if let WindowFuncType::Aggregate(agg) = &mut expr.func {
-                for arg in agg.args.iter_mut() {
-                    replace_column(arg, col_to_scalar);
+            match &mut expr.func {
+                WindowFuncType::Aggregate(agg) => {
+                    for arg in agg.args.iter_mut() {
+                        replace_column(arg, col_to_scalar);
+                    }
                 }
+                WindowFuncType::Lag(f) | WindowFuncType::Lead(f) => {
+                    replace_column(&mut f.arg, col_to_scalar);
+                    if let Some(ref mut default) = &mut f.default {
+                        replace_column(default, col_to_scalar);
+                    }
+                }
+                _ => {}
             }
             for arg in expr.partition_by.iter_mut() {
                 replace_column(arg, col_to_scalar)

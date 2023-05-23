@@ -25,6 +25,7 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchemaRef;
 use common_expression::SEGMENT_NAME_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_sql::field_default_value;
 use opendal::Operator;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_pruner::InternalColumnPruner;
@@ -37,6 +38,8 @@ use storages_common_pruner::RangePrunerCreator;
 use storages_common_pruner::TopNPrunner;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterKey;
+use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 use tracing::warn;
 
 use crate::pruning::segment_pruner::SegmentPruner;
@@ -103,10 +106,34 @@ impl FusePruner {
         // prepare the limiter. in case that limit is none, an unlimited limiter will be returned
         let limit_pruner = LimiterPrunerCreator::create(limit);
 
+        let default_stats: StatisticsOfColumns = filter_expr
+            .as_ref()
+            .map(|f| f.column_refs())
+            .into_iter()
+            .flatten()
+            .filter_map(|(name, _)| {
+                let field = table_schema.field_with_name(&name).ok()?;
+                let default_scalar = field_default_value(ctx.clone(), field).ok()?;
+
+                let stats = ColumnStatistics {
+                    min: default_scalar.clone(),
+                    max: default_scalar,
+                    null_count: 0,
+                    in_memory_size: 0,
+                    distinct_of_values: Some(1),
+                };
+                Some((field.column_id(), stats))
+            })
+            .collect();
+
         // Range filter.
         // if filter_expression is none, an dummy pruner will be returned, which prunes nothing
-        let range_pruner =
-            RangePrunerCreator::try_create(func_ctx.clone(), &table_schema, filter_expr.as_ref())?;
+        let range_pruner = RangePrunerCreator::try_create_with_default_stats(
+            func_ctx.clone(),
+            &table_schema,
+            filter_expr.as_ref(),
+            default_stats,
+        )?;
 
         // Bloom pruner.
         // None will be returned, if filter is not applicable (e.g. unsuitable filter expression, index not available, etc.)

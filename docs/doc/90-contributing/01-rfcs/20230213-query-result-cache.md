@@ -78,7 +78,7 @@ pub struct ResultCacheValue {
 
 #### Garbage collection
 
-Databend will cache every query result is query result cache is enabled. If the result cache is expired, the cache will not be used any more. To save the disk or object storage space, Databend needs a daemon thread to scan all the query cache periodically and remove the expired ones.
+Databend will cache every query result if query result cache is enabled. If the result cache is expired, the cache will not be used any more. To save the disk or object storage space, Databend needs a daemon thread to scan all the query cache periodically and remove the expired ones.
 
 ### Related configurations
 

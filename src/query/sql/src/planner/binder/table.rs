@@ -220,41 +220,43 @@ impl Binder {
                 };
 
                 // Avoid death loop
-                if !bind_context.planning_agg_index && table_meta.support_index() {
+                let mut agg_indexes = vec![];
+                if !bind_context.planning_agg_index
+                    && table_meta.support_index()
+                    && table_meta.engine() != "VIEW"
+                {
                     let license_manager = get_license_manager();
-                    match license_manager.manager.check_enterprise_enabled(
-                        &self.ctx.get_settings(),
-                        self.ctx.get_tenant(),
-                        "aggregating_index".to_string(),
-                    ) {
-                        Err(_) => {}
-                        Ok(_) => {
-                            let indexes = self
-                                .resolve_table_indexes(
-                                    tenant.as_str(),
-                                    catalog.as_str(),
-                                    table_meta.get_id(),
-                                )
-                                .await?;
+                    if license_manager
+                        .manager
+                        .check_enterprise_enabled(
+                            &self.ctx.get_settings(),
+                            self.ctx.get_tenant(),
+                            "aggregating_index".to_string(),
+                        )
+                        .is_ok()
+                    {
+                        let indexes = self
+                            .resolve_table_indexes(
+                                tenant.as_str(),
+                                catalog.as_str(),
+                                table_meta.get_id(),
+                            )
+                            .await?;
 
-                            let mut s_exprs = Vec::with_capacity(indexes.len());
-                            for (index_id, _, index_meta) in indexes {
-                                let tokens = tokenize_sql(&index_meta.query)?;
-                                let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
-                                let mut new_bind_context =
-                                    BindContext::with_parent(Box::new(bind_context.clone()));
-                                new_bind_context.planning_agg_index = true;
-                                if let Statement::Query(query) = &stmt {
-                                    let (s_expr, _) =
-                                        self.bind_query(&mut new_bind_context, query).await?;
-                                    s_exprs.push((index_id, s_expr));
-                                }
+                        let mut s_exprs = Vec::with_capacity(indexes.len());
+                        for (index_id, _, index_meta) in indexes {
+                            let tokens = tokenize_sql(&index_meta.query)?;
+                            let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+                            let mut new_bind_context =
+                                BindContext::with_parent(Box::new(bind_context.clone()));
+                            new_bind_context.planning_agg_index = true;
+                            if let Statement::Query(query) = &stmt {
+                                let (s_expr, _) =
+                                    self.bind_query(&mut new_bind_context, query).await?;
+                                s_exprs.push((index_id, index_meta.query.clone(), s_expr));
                             }
-
-                            self.metadata
-                                .write()
-                                .add_agg_indexes(table_meta.get_id(), s_exprs);
                         }
+                        agg_indexes.extend(s_exprs);
                     }
                 }
 
@@ -305,6 +307,8 @@ impl Binder {
                         }
                     }
                     _ => {
+                        let table_name = table_meta.name();
+                        let full_table_name = format!("{catalog}.{database}.{table_name}");
                         let table_index = self.metadata.write().add_table(
                             catalog,
                             database.clone(),
@@ -312,6 +316,13 @@ impl Binder {
                             table_alias_name,
                             bind_context.view_info.is_some(),
                         );
+
+                        if !agg_indexes.is_empty() {
+                            // Should use bound table id.
+                            self.metadata
+                                .write()
+                                .add_agg_indexes(full_table_name, agg_indexes);
+                        }
 
                         let (s_expr, mut bind_context) = self
                             .bind_base_table(bind_context, database.as_str(), table_index)
