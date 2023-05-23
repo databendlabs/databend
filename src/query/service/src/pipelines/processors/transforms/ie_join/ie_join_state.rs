@@ -50,9 +50,7 @@ use parking_lot::RwLock;
 use crate::sessions::QueryContext;
 
 struct IEConditionState {
-    // Todo(xudong): need to find common type for l1
     l1_data_type: DataType,
-    // Todo(xudong): need to find common type for l2
     l2_data_type: DataType,
     // Sort description for left/right
     table_sort_descriptions: Vec<SortColumnDescription>,
@@ -199,56 +197,6 @@ impl IEJoinState {
             row_offset: Default::default(),
             finished_tasks: AtomicU64::new(0),
         }
-    }
-
-    pub fn left_attach(&self) {
-        self.left_sinker_count
-            .fetch_add(1, atomic::Ordering::SeqCst);
-    }
-
-    pub fn left_detach(&self) -> Result<()> {
-        self.left_sinker_count
-            .fetch_sub(1, atomic::Ordering::SeqCst);
-        if self.left_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
-            loop {
-                if self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
-                    // Left and right both finish sink
-                    // Merge sort left/right and partition them
-                    self.merge_sort()?;
-                    // Set merge finished
-                    let mut merge_finished = self.merge_finished.write();
-                    *merge_finished = true;
-                    self.finished_notify.notify_waiters();
-                    break;
-                }
-            }
-        }
-        Ok(())
-    }
-
-    pub fn right_attach(&self) {
-        self.right_sinker_count
-            .fetch_add(1, atomic::Ordering::SeqCst);
-    }
-
-    pub fn task_id(&self) -> Option<usize> {
-        let task_id = self.finished_tasks.fetch_add(1, atomic::Ordering::SeqCst);
-        if task_id >= self.tasks.read().len() as u64 {
-            return None;
-        }
-        Some(task_id as usize)
-    }
-
-    pub fn right_detach(&self) {
-        self.right_sinker_count
-            .fetch_sub(1, atomic::Ordering::SeqCst);
-    }
-
-    pub(crate) async fn wait_merge_finish(&self) -> Result<()> {
-        if !*self.merge_finished.read() {
-            self.finished_notify.notified().await;
-        }
-        Ok(())
     }
 
     pub fn sink_right(&self, block: DataBlock) -> Result<()> {
@@ -611,6 +559,58 @@ impl IEJoinState {
                 !(right_l1_min > left_l1_max)
             }
         }
+    }
+}
+
+impl IEJoinState {
+    pub fn left_attach(&self) {
+        self.left_sinker_count
+            .fetch_add(1, atomic::Ordering::SeqCst);
+    }
+
+    pub fn left_detach(&self) -> Result<()> {
+        self.left_sinker_count
+            .fetch_sub(1, atomic::Ordering::SeqCst);
+        if self.left_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
+            loop {
+                if self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
+                    // Left and right both finish sink
+                    // Merge sort left/right and partition them
+                    self.merge_sort()?;
+                    // Set merge finished
+                    let mut merge_finished = self.merge_finished.write();
+                    *merge_finished = true;
+                    self.finished_notify.notify_waiters();
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn right_attach(&self) {
+        self.right_sinker_count
+            .fetch_add(1, atomic::Ordering::SeqCst);
+    }
+
+    pub fn task_id(&self) -> Option<usize> {
+        let task_id = self.finished_tasks.fetch_add(1, atomic::Ordering::SeqCst);
+        if task_id >= self.tasks.read().len() as u64 {
+            return None;
+        }
+        Some(task_id as usize)
+    }
+
+    pub fn right_detach(&self) {
+        self.right_sinker_count
+            .fetch_sub(1, atomic::Ordering::SeqCst);
+    }
+
+    pub(crate) async fn wait_merge_finish(&self) -> Result<()> {
+        if !*self.merge_finished.read() {
+            self.finished_notify.notified().await;
+        }
+        Ok(())
     }
 }
 
