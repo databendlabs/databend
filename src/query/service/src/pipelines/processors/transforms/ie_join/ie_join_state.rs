@@ -94,6 +94,8 @@ pub struct IEJoinState {
     right_sinker_count: AtomicU64,
     // Task that need to be executed, pair.0 is left table block, pair.1 is right table block
     tasks: RwLock<Vec<(usize, usize)>>,
+    // Row index offset for left/right
+    row_offset: RwLock<Vec<(usize, usize)>>,
     finished_tasks: AtomicU64,
 }
 
@@ -194,6 +196,7 @@ impl IEJoinState {
             left_sinker_count: AtomicU64::new(0),
             right_sinker_count: AtomicU64::new(0),
             tasks: RwLock::new(vec![]),
+            row_offset: Default::default(),
             finished_tasks: AtomicU64::new(0),
         }
     }
@@ -352,17 +355,19 @@ impl IEJoinState {
             right_sorted_blocks.push(keys_block);
             current_rows += right_sorted_block.num_rows();
         }
-        *left_table = vec![DataBlock::concat(&left_table)?];
-        *right_table = vec![DataBlock::concat(&right_table)?];
         // Add tasks
+        let mut row_offset = self.row_offset.write();
+        let mut left_offset = 0;
+        let mut right_offset = 0;
         let mut tasks = self.tasks.write();
         for (left_idx, left_block) in l1_sorted_blocks.iter().enumerate() {
             for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
-                // First check two blocks whether have intersection
-                // if self.intersection(left_block, right_block) {
+                row_offset.push((left_offset, right_offset));
                 tasks.push((left_idx, right_idx));
-                // }
+                right_offset += right_block.num_rows();
             }
+            right_offset = 0;
+            left_offset += left_block.num_rows();
         }
         Ok(())
     }
@@ -373,16 +378,20 @@ impl IEJoinState {
         let (left_idx, right_idx) = tasks[task_id];
         let l1_sorted_blocks = self.l1_sorted_blocks.read();
         let right_sorted_blocks = self.right_sorted_blocks.read();
-        let mut l1_sorted_blocks = vec![DataBlock::sort(
+        let l1_sorted_block = DataBlock::sort(
             &l1_sorted_blocks[left_idx],
             &self.ie_condition_state.l1_sort_descriptions,
             None,
-        )?];
-        l1_sorted_blocks.push(DataBlock::sort(
+        )?;
+        let right_sorted_block = DataBlock::sort(
             &right_sorted_blocks[right_idx],
             &self.ie_condition_state.l1_sort_descriptions,
             None,
-        )?);
+        )?;
+        if !self.intersection(&l1_sorted_block, &right_sorted_block) {
+            return Ok(DataBlock::empty());
+        }
+        let mut l1_sorted_blocks = vec![l1_sorted_block, right_sorted_block];
 
         let data_schema = DataSchemaRefExt::create(
             self.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
@@ -467,8 +476,9 @@ impl IEJoinState {
         );
 
         drop(l2_sorted_blocks);
+        drop(l1_sorted_blocks);
 
-        self.finalize(l1, l2, l1_index_column, &p_array, bit_array)
+        self.finalize(l1, l2, l1_index_column, &p_array, bit_array, task_id)
     }
 
     pub fn finalize(
@@ -478,28 +488,35 @@ impl IEJoinState {
         l1_index_column: Column,
         p_array: &[u64],
         mut bit_array: MutableBitmap,
+        task_id: usize,
     ) -> Result<DataBlock> {
+        let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let row_offset = self.row_offset.read();
+        let (left_offset, right_offset) = row_offset[task_id];
+        let tasks = self.tasks.read();
+        let (left_idx, right_idx) = tasks[task_id];
         let len = p_array.len();
-        let mut left_buffer = vec![];
-        let mut right_buffer = vec![];
+        let mut left_buffer = Vec::with_capacity(block_size);
+        let mut right_buffer = Vec::with_capacity(block_size);
         let mut off1: usize = 0;
         let mut off2 = 0;
         for (idx, p) in p_array.iter().enumerate() {
             if let ScalarRef::Number(NumberScalar::Int64(val)) =
-                l1_index_column.index(*p as usize).unwrap()
+                unsafe { l1_index_column.index_unchecked(*p as usize) }
             {
                 if val < 0 {
                     continue;
                 }
             }
             while off2 < len {
-                let order = l2.index(idx).unwrap().cmp(&l2.index(off2).unwrap());
+                let order =
+                    unsafe { l2.index_unchecked(idx) }.cmp(&unsafe { l2.index_unchecked(off2) });
                 if !order_match(&self.conditions[1].operator, order) {
                     break;
                 }
                 let p2 = p_array[off2];
                 if let ScalarRef::Number(NumberScalar::Int64(val)) =
-                    l1_index_column.index(p2 as usize).unwrap()
+                    unsafe { l1_index_column.index_unchecked(p2 as usize) }
                 {
                     if val < 0 {
                         bit_array.set(p2 as usize, true);
@@ -516,14 +533,14 @@ impl IEJoinState {
                 if bit_array.get(j) {
                     // right, left
                     if let ScalarRef::Number(NumberScalar::Int64(right)) =
-                        l1_index_column.index(j as usize).unwrap()
+                        unsafe { l1_index_column.index_unchecked(j as usize) }
                     {
-                        right_buffer.push((-right - 1) as usize);
+                        right_buffer.push((-right - 1) as usize - right_offset);
                     }
                     if let ScalarRef::Number(NumberScalar::Int64(left)) =
-                        l1_index_column.index(*p as usize).unwrap()
+                        unsafe { l1_index_column.index_unchecked(*p as usize) }
                     {
-                        left_buffer.push((left - 1) as usize);
+                        left_buffer.push((left - 1) as usize - left_offset);
                     }
                 }
                 j += 1;
@@ -539,13 +556,13 @@ impl IEJoinState {
             indices.push((0usize, *res, 1usize));
         }
         let mut left_result_block =
-            DataBlock::take_blocks(&vec![&left_table[0]], &indices, indices.len());
+            DataBlock::take_blocks(&vec![&left_table[left_idx]], &indices, indices.len());
         indices.clear();
         for res in right_buffer.iter() {
             indices.push((0usize, *res, 1usize));
         }
         let right_result_block =
-            DataBlock::take_blocks(&vec![&right_table[0]], &indices, indices.len());
+            DataBlock::take_blocks(&vec![&right_table[right_idx]], &indices, indices.len());
         // Merge left_result_block and right_result_block
         for col in right_result_block.columns() {
             left_result_block.add_column(col.clone());
@@ -556,18 +573,12 @@ impl IEJoinState {
     fn intersection(&self, left_block: &DataBlock, right_block: &DataBlock) -> bool {
         let left_len = left_block.num_rows();
         let right_len = right_block.num_rows();
-        let left_l1_column = left_block.columns()[1]
+        let left_l1_column = left_block.columns()[0]
             .value
             .convert_to_full_column(&self.ie_condition_state.l1_data_type, left_len);
-        let left_l2_column = left_block.columns()[2]
-            .value
-            .convert_to_full_column(&self.ie_condition_state.l2_data_type, left_len);
-        let right_l1_column = right_block.columns()[1]
+        let right_l1_column = right_block.columns()[0]
             .value
             .convert_to_full_column(&self.ie_condition_state.l1_data_type, right_len);
-        let right_l2_column = right_block.columns()[2]
-            .value
-            .convert_to_full_column(&self.ie_condition_state.l2_data_type, right_len);
         // If `left_l1_column` and `right_l1_column` have intersection && `left_l2_column` and `right_l2_column` have intersection, return true
         let (left_l1_min, left_l1_max, right_l1_min, right_l1_max) =
             match self.ie_condition_state.l1_order {
@@ -590,28 +601,7 @@ impl IEJoinState {
                     )
                 }
             };
-        let (left_l2_min, left_l2_max, right_l2_min, right_l2_max) =
-            match self.ie_condition_state.l2_order {
-                true => {
-                    // l2 is asc
-                    (
-                        left_l2_column.index(0).unwrap(),
-                        left_l2_column.index(left_len - 1).unwrap(),
-                        right_l2_column.index(0).unwrap(),
-                        right_l2_column.index(right_len - 1).unwrap(),
-                    )
-                }
-                false => {
-                    // l2 is desc
-                    (
-                        left_l2_column.index(left_len - 1).unwrap(),
-                        left_l2_column.index(0).unwrap(),
-                        right_l2_column.index(right_len - 1).unwrap(),
-                        right_l2_column.index(0).unwrap(),
-                    )
-                }
-            };
-        let l1_intersection = match self.ie_condition_state.l1_order {
+        match self.ie_condition_state.l1_order {
             true => {
                 // if l1_order is asc, then op1 is < / <=
                 !(left_l1_min > right_l1_max)
@@ -620,20 +610,7 @@ impl IEJoinState {
                 // If l1_order is desc, then op is > / >=
                 !(right_l1_min > left_l1_max)
             }
-        };
-
-        let l2_intersection = match self.ie_condition_state.l2_order {
-            true => {
-                // if l2_order is asc, then op2 is > / >=
-                !(right_l2_min > left_l2_max)
-            }
-            false => {
-                // If l2_order is desc, then op is < / <=
-                !(left_l2_min > right_l2_max)
-            }
-        };
-
-        l1_intersection && l2_intersection
+        }
     }
 }
 
@@ -657,7 +634,12 @@ fn probe_l1(l1: &Column, pos: usize, op1: &str, mut off1: usize) -> usize {
         lo -= min(step, lo);
         step *= 2;
         off1 = lo;
-        while lo > 0 && order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
+        while lo > 0
+            && order_match(
+                op1,
+                unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
+            )
+        {
             hi = lo;
             lo -= min(step, lo);
             step *= 2;
@@ -667,7 +649,12 @@ fn probe_l1(l1: &Column, pos: usize, op1: &str, mut off1: usize) -> usize {
         hi += min(step, n - hi);
         step *= 2;
         off1 = hi;
-        while hi < n && !order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
+        while hi < n
+            && !order_match(
+                op1,
+                unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
+            )
+        {
             lo = hi;
             hi += min(step, n - hi);
             step *= 2;
@@ -677,7 +664,10 @@ fn probe_l1(l1: &Column, pos: usize, op1: &str, mut off1: usize) -> usize {
     while lo < hi {
         let mid = lo + (hi - lo) / 2;
         off1 = mid;
-        if order_match(op1, l1.index(pos).unwrap().cmp(&l1.index(off1).unwrap())) {
+        if order_match(
+            op1,
+            unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
+        ) {
             hi = mid;
         } else {
             lo = mid + 1;
