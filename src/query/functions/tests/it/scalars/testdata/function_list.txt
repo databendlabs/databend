@@ -3004,6 +3004,8 @@ Functions overloads:
 19 sqrt(Float64 NULL) :: Float64 NULL
 0 strcmp(String, String) :: Int8
 1 strcmp(String NULL, String NULL) :: Int8 NULL
+0 sub_bitmap(Bitmap, UInt64, UInt64) :: Bitmap
+1 sub_bitmap(Bitmap NULL, UInt64 NULL, UInt64 NULL) :: Bitmap NULL
 0 substr(String, Int64) :: String
 1 substr(String NULL, Int64 NULL) :: String NULL
 2 substr(String, Int64, UInt64) :: String
