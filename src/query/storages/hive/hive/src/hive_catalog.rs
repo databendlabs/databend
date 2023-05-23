@@ -33,6 +33,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
@@ -408,6 +409,35 @@ impl Catalog for HiveCatalog {
         _table_info: &TableInfo,
         _req: TruncateTableReq,
     ) -> Result<TruncateTableReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_table_lock_revs(&self, _table_id: u64) -> Result<Vec<u64>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_lock_rev(
+        &self,
+        _expire_sec: u64,
+        _table_info: &TableInfo,
+    ) -> Result<CreateTableLockRevReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn extend_table_lock_rev(
+        &self,
+        _expire_sec: u64,
+        _table_info: &TableInfo,
+        _revision: u64,
+    ) -> Result<()> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn delete_table_lock_rev(&self, _table_info: &TableInfo, _revision: u64) -> Result<()> {
         unimplemented!()
     }
 

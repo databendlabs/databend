@@ -25,6 +25,7 @@ use common_expression::types::StringType;
 use common_expression::types::UInt64Type;
 use common_expression::vectorize_with_builder_1_arg;
 use common_expression::vectorize_with_builder_2_arg;
+use common_expression::vectorize_with_builder_3_arg;
 use common_expression::EvalContext;
 use common_expression::FunctionDomain;
 use common_expression::FunctionRegistry;
@@ -139,6 +140,35 @@ pub fn register(registry: &mut FunctionRegistry) {
                     builder.push(false);
                     ctx.set_error(builder.len(), e.to_string());
                 }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType, _, _>(
+        "sub_bitmap",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
+            |b, offset, length, builder, ctx| {
+                    match RoaringTreemap::deserialize_from(b) {
+                        Ok(rb) => {
+                            let subset_start = offset;
+                            let subset_length = length;
+                            if subset_start >= b.len() as u64 {
+                                let rb = RoaringTreemap::new();
+                                rb.serialize_into(&mut builder.data).unwrap();
+                                builder.commit_row();
+                            } else {
+                                let adjusted_length = (subset_start + subset_length).min(b.len() as u64) - subset_start;
+                                let subset_bitmap = &rb.into_iter().collect::<Vec<_>>()[subset_start as usize ..(subset_start + adjusted_length) as usize];
+                                let rb = RoaringTreemap::from_iter(subset_bitmap.iter());
+                                rb.serialize_into(&mut builder.data).unwrap();
+                                builder.commit_row();
+                            }
+                        }
+                        Err(e) => {
+                            ctx.set_error(builder.len(), e.to_string());
+                        }
+                    }
             },
         ),
     );
