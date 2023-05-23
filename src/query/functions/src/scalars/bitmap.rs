@@ -148,10 +148,10 @@ pub fn register(registry: &mut FunctionRegistry) {
         "sub_bitmap",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
-            |b, item, length, builder, ctx| {
+            |b, offset, length, builder, ctx| {
                     match RoaringTreemap::deserialize_from(b) {
                         Ok(rb) => {
-                            let subset_start = item;
+                            let subset_start = offset;
                             let subset_length = length;
                             if subset_start >= b.len() as u64 {
                                 ctx.set_error(builder.len(), "invalid subset");
