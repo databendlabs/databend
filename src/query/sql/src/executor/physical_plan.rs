@@ -299,6 +299,8 @@ pub enum WindowFunction {
     Rank,
     DenseRank,
     PercentRank,
+    Lag(LagLeadFunctionDesc),
+    Lead(LagLeadFunctionDesc),
 }
 
 impl WindowFunction {
@@ -309,6 +311,7 @@ impl WindowFunction {
                 Ok(DataType::Number(NumberDataType::UInt64))
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
+            WindowFunction::Lag(f) | WindowFunction::Lead(f) => Ok(f.sig.return_type.clone()),
         }
     }
 }
@@ -321,6 +324,8 @@ impl Display for WindowFunction {
             WindowFunction::Rank => write!(f, "rank"),
             WindowFunction::DenseRank => write!(f, "dense_rank"),
             WindowFunction::PercentRank => write!(f, "percent_rank"),
+            WindowFunction::Lag(_) => write!(f, "lag"),
+            WindowFunction::Lead(_) => write!(f, "lead"),
         }
     }
 }
@@ -794,6 +799,29 @@ pub struct AggregateFunctionDesc {
     pub output_column: IndexType,
     pub args: Vec<usize>,
     pub arg_indices: Vec<IndexType>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum LagLeadDefault {
+    Null,
+    Index(IndexType),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LagLeadFunctionDesc {
+    pub sig: LagLeadFunctionSignature,
+    pub output_column: IndexType,
+    pub arg: usize,
+    pub default: LagLeadDefault,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LagLeadFunctionSignature {
+    pub name: String,
+    pub arg: DataType,
+    pub offset: u64,
+    pub default: Option<DataType>,
+    pub return_type: DataType,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
