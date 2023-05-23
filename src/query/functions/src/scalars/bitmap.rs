@@ -144,21 +144,27 @@ pub fn register(registry: &mut FunctionRegistry) {
         ),
     );
 
-    registry.register_passthrough_nullable_2_arg::<BitmapType, UInt64Type, BitmapType, _, _>(
+    registry.register_passthrough_nullable_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType, _, _>(
         "bitmap_subset_limit",
-        |_, _| FunctionDomain::MayThrow,
-        vectorize_with_builder_2_arg::<BitmapType, UInt64Type, BitmapType>(
-            |b, limit, builder, ctx| match RoaringTreemap::deserialize_from(b) {
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
+            |b, range_start, limit, builder, ctx| match RoaringTreemap::deserialize_from(b) {
                 Ok(rb) => {
-                    if limit > rb.len() as u64 {
+                    if limit > rb.len() {
                         let empty_rb = RoaringTreemap::new();
                         empty_rb.serialize_into(&mut builder.data).unwrap();
                     } else {
-                        let subset_bitmap = rb
-                            .into_iter()
-                            .take(limit as usize)
-                            .collect::<RoaringTreemap>();
-                        subset_bitmap.serialize_into(&mut builder.data).unwrap();
+                        let subset_start = rb.iter().position(|x| x == range_start).unwrap_or(0);
+                        let subset_limit = limit as usize;
+                        let subset_end = subset_start + subset_limit;
+                        if subset_start >= subset_end || subset_end as u64 > rb.len() {
+                            let empty_rb = RoaringTreemap::new();
+                            empty_rb.serialize_into(&mut builder.data).unwrap();
+                        } else {
+                            let subset_bitmap = rb.iter().skip(subset_start).take(subset_limit);
+                            let subset_rb: RoaringTreemap = subset_bitmap.collect();
+                            subset_rb.serialize_into(&mut builder.data).unwrap();
+                        }
                         builder.commit_row();
                     }
                 }
@@ -173,20 +179,18 @@ pub fn register(registry: &mut FunctionRegistry) {
         "bitmap_subset_in_range",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
-            |b, start, end, builder, ctx| {
+            |b, range_start, limit, builder, ctx| {
                 match RoaringTreemap::deserialize_from(b) {
                     Ok(rb) => {
-                        let subset_start = start;
-                        let subset_end = end;
-                        if subset_start >= rb.len() as u64 {
+                        let subset_start = rb.iter().position(|x| x == range_start).unwrap_or(rb.len() as usize);
+                        let subset_end = subset_start + limit as usize;
+                        let subset_bitmap = rb.iter().take((limit as usize) + 1);
+                        let subset_rb: RoaringTreemap = subset_bitmap.collect();
+                        if subset_start >= rb.len() as usize || subset_start >= subset_end {
                             let empty_rb = RoaringTreemap::new();
                             empty_rb.serialize_into(&mut builder.data).unwrap();
                         } else {
-                            let subset_bitmap = rb
-                                .into_iter()
-                                .filter(|&x| x >= subset_start && x <= subset_end)
-                                .collect::<RoaringTreemap>();
-                            subset_bitmap.serialize_into(&mut builder.data).unwrap();
+                            subset_rb.serialize_into(&mut builder.data).unwrap();
                         }
                         builder.commit_row();
                     }
