@@ -23,8 +23,8 @@ Databend aims to be easy to use by design and does NOT require any of those oper
 ```sql
 CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
 (
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }] [AS (<expr>) STORED | VIRTUAL],
+    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }] [AS (<expr>) STORED | VIRTUAL],
     ...
 )
 ```
@@ -195,6 +195,7 @@ DESC t_null;
 ```
 
 ## Default Values
+
 ```sql
 DEFAULT <expr>
 ```
@@ -230,6 +231,53 @@ SELECT * FROM t_default_value;
 |    1 | b    |
 +------+------+
 ```
+
+## Computed Columns
+
+Computed columns are columns that are generated from other columns in a table using a scalar expression. When data in any of the columns used in the computation is updated, the computed column will automatically recalculate its value to reflect the update. 
+
+Databend supports two types of computed columns: stored and virtual. Stored computed columns are physically stored in the database and occupy storage space, while virtual computed columns are not physically stored and their values are calculated on the fly when accessed.
+
+```sql
+CREATE [TRANSIENT] TABLE [IF NOT EXISTS] [db.]table_name
+(
+    <column_name> <data_type> [ NOT NULL | NULL] [AS (<expr>) STORED | VIRTUAL],
+    <column_name> <data_type> [ NOT NULL | NULL] [AS (<expr>) STORED | VIRTUAL],
+    ...
+)
+```
+
+The following is an example of creating a stored computed column: Whenever the values of the "price" or "quantity" columns are updated, the "total_price" column will automatically recalculate and update its stored value.
+
+```sql
+CREATE TABLE IF NOT EXISTS products (
+  id INT,
+  price FLOAT,
+  quantity INT,
+  total_price FLOAT AS (price * quantity) STORED
+);
+```
+
+The following is an example of creating a virtual computed column: The "full_name" column is dynamically calculated based on the current values of the "first_name" and "last_name" columns. It does not occupy additional storage space. Whenever the "first_name" or "last_name" values are accessed, the "full_name" column will be computed and returned.
+
+```sql
+CREATE TABLE IF NOT EXISTS employees (
+  id INT,
+  first_name VARCHAR,
+  last_name VARCHAR,
+  full_name VARCHAR AS (CONCAT(first_name, ' ', last_name)) VIRTUAL
+);
+```
+
+:::tip STORED or VIRTUAL?
+When choosing between stored computed columns and virtual computed columns, consider the following factors:
+
+- Storage Space: Stored computed columns occupy additional storage space in the table because their computed values are physically stored. If you have limited database space or want to minimize storage usage, virtual computed columns can be a better choice.
+
+- Real-time Updates: Stored computed columns update their computed values immediately when the dependent columns are updated. This ensures that you always have the latest computed values when querying. Virtual computed columns, on the other hand, compute their values dynamically during queries, which may slightly increase the processing time.
+
+- Data Integrity and Consistency: Stored computed columns maintain immediate data consistency since their computed values are updated upon write operations. Virtual computed columns, however, calculate their values on-the-fly during queries, which means there might be a momentary inconsistency between write operations and subsequent queries.
+:::
 
 ## MySQL Compatibility
 
@@ -437,4 +485,64 @@ CONNECTION=(
   SECRET_ACCESS_KEY='<your_aws_secret_key>' 
   ENDPOINT_URL='https://s3.amazonaws.com'
 );
+```
+
+### Create Table ... Column As STORED | VIRTUAL
+
+The following example demonstrates a table with a stored computed column that automatically recalculates based on updates to the "price" or "quantity" columns:
+
+```sql
+-- Create the table with a stored computed column
+CREATE TABLE IF NOT EXISTS products (
+  id INT,
+  price FLOAT,
+  quantity INT,
+  total_price FLOAT AS (price * quantity) STORED
+);
+
+-- Insert data into the table
+INSERT INTO products (id, price, quantity)
+VALUES (1, 10.5, 3),
+       (2, 15.2, 5),
+       (3, 8.7, 2);
+
+-- Query the table to see the computed column
+SELECT id, price, quantity, total_price
+FROM products;
+
+---
+ id | price | quantity | total_price
+----+-------+----------+-------------
+  1 |  10.5 |        3 |        31.5
+  2 |  15.2 |        5 |          76
+  3 |   8.7 |        2 |        17.4
+```
+
+The following example includes a table called "employees" with a virtual computed column named "full_name" that concatenates the "first_name" and "last_name" columns:
+
+```sql
+-- Create the table with a virtual computed column
+CREATE TABLE IF NOT EXISTS employees (
+  id INT,
+  first_name VARCHAR,
+  last_name VARCHAR,
+  full_name VARCHAR AS (CONCAT(first_name, ' ', last_name)) VIRTUAL
+);
+
+-- Insert data into the table
+INSERT INTO employees (id, first_name, last_name)
+VALUES (1, 'John', 'Doe'),
+       (2, 'Jane', 'Smith'),
+       (3, 'Mike', 'Johnson');
+
+-- Query the table to see the computed column
+SELECT id, first_name, last_name, full_name
+FROM employees;
+
+---
+ id | first_name | last_name |    full_name    
+----+------------+-----------+-----------------
+  1 | John       | Doe       | John Doe
+  2 | Jane       | Smith     | Jane Smith
+  3 | Mike       | Johnson   | Mike Johnson
 ```
