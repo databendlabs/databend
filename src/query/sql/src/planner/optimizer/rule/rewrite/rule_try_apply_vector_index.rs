@@ -27,27 +27,39 @@ pub struct RuleTryApplyVectorIndex {
 impl RuleTryApplyVectorIndex {
     pub fn new() -> Self {
         Self {
-            id: RuleID::UseVectorIndex,
-            //   Sort
+            id: RuleID::TryApplyVectorIndex,
+            // Input:
+            //   Limit
             //     \
-            //     EvalScalar
-            //       \
-            //        Scan
+            //    Sort
+            //      \
+            //      EvalScalar
+            //        \
+            //         Scan
+            //
+            // Output:
+            //   Scan(order_by, limit, similarity)
             patterns: vec![SExpr::create_unary(
                 PatternPlan {
-                    plan_type: RelOp::Sort,
+                    plan_type: RelOp::Limit,
                 }
                 .into(),
                 SExpr::create_unary(
                     PatternPlan {
-                        plan_type: RelOp::EvalScalar,
+                        plan_type: RelOp::Sort,
                     }
                     .into(),
-                    SExpr::create_leaf(
+                    SExpr::create_unary(
                         PatternPlan {
-                            plan_type: RelOp::Scan,
+                            plan_type: RelOp::EvalScalar,
                         }
                         .into(),
+                        SExpr::create_leaf(
+                            PatternPlan {
+                                plan_type: RelOp::Scan,
+                            }
+                            .into(),
+                        ),
                     ),
                 ),
             )],
@@ -65,10 +77,12 @@ impl Rule for RuleTryApplyVectorIndex {
         s_expr: &crate::optimizer::SExpr,
         state: &mut crate::optimizer::rule::TransformResult,
     ) -> common_exception::Result<()> {
-        let sort = s_expr.plan().as_sort().unwrap();
-        let eval_scalar = s_expr.walk_down(1).plan().as_eval_scalar().unwrap();
+        let limit = s_expr.plan().as_limit().unwrap();
+        let sort = s_expr.walk_down(1).plan().as_sort().unwrap();
+        let eval_scalar = s_expr.walk_down(2).plan().as_eval_scalar().unwrap();
 
-        if sort.limit.is_none() || sort.items.len() != 1 || !sort.items[0].asc {
+        if limit.offset != 0 || limit.limit.is_none() || sort.items.len() != 1 || !sort.items[0].asc
+        {
             state.add_result(s_expr.clone());
             return Ok(());
         }
@@ -81,14 +95,12 @@ impl Rule for RuleTryApplyVectorIndex {
         let sort_by_item = &eval_scalar.items[sort_by_idx];
         match &sort_by_item.scalar {
             ScalarExpr::FunctionCall(func) if func.func_name == "cosine_distance" => {
-                let mut result = s_expr.clone();
-                let mut new_scan = s_expr.walk_down(2).clone();
+                let mut new_scan = s_expr.walk_down(3).clone();
                 new_scan.plan.as_scan_mut().unwrap().order_by = Some(sort.items.clone());
-                new_scan.plan.as_scan_mut().unwrap().limit = Some(sort.limit.unwrap());
+                new_scan.plan.as_scan_mut().unwrap().limit = Some(limit.limit.unwrap());
                 new_scan.plan.as_scan_mut().unwrap().similarity = Some(Box::new(func.clone()));
-                result.walk_down(1).replace_children(vec![new_scan]);
-                result.set_applied_rule(&self.id);
-                state.add_result(result);
+                new_scan.set_applied_rule(&self.id);
+                state.add_result(new_scan);
             }
             _ => state.add_result(s_expr.clone()),
         }

@@ -96,7 +96,7 @@ impl RuleFactory {
             RuleID::RightExchangeJoin => Ok(Box::new(RuleRightExchangeJoin::new())),
             RuleID::ExchangeJoin => Ok(Box::new(RuleExchangeJoin::new())),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
-            RuleID::UseVectorIndex => Ok(Box::new(RuleTryApplyVectorIndex::new())),
+            RuleID::TryApplyVectorIndex => Ok(Box::new(RuleTryApplyVectorIndex::new())),
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
         }
     }
