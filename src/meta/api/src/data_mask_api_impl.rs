@@ -16,7 +16,6 @@ use std::fmt::Display;
 
 use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::DatamaskAlreadyExists;
-use common_meta_app::app_error::TxnRetryMaxTimes;
 use common_meta_app::app_error::UnknownDatamask;
 use common_meta_app::data_mask::CreateDatamaskReply;
 use common_meta_app::data_mask::CreateDatamaskReq;
@@ -46,7 +45,7 @@ use crate::serialize_u64;
 use crate::txn_cond_seq;
 use crate::txn_op_del;
 use crate::txn_op_put;
-use crate::TXN_MAX_RETRY_TIMES;
+use crate::util::txn_trials;
 
 /// DatamaskApi is implemented upon kvapi::KVApi.
 /// Thus every type that impl kvapi::KVApi impls DatamaskApi.
@@ -60,9 +59,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
         let name_key = &req.name;
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+        let id = loop {
+            trials.next().unwrap()?;
             // Get db mask by name to ensure absence
             let (seq, id) = get_u64_value(self, name_key).await?;
             debug!(seq, id, ?name_key, "create_data_mask");
@@ -117,25 +117,23 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
                 );
 
                 if succ {
-                    return Ok(CreateDatamaskReply { id });
+                    break id;
                 }
             }
-        }
+        };
 
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("create_data_mask", TXN_MAX_RETRY_TIMES),
-        )))
+        Ok(CreateDatamaskReply { id })
     }
 
     async fn drop_data_mask(&self, req: DropDatamaskReq) -> Result<DropDatamaskReply, KVAppError> {
         debug!(req = debug(&req), "DatamaskApi: {}", func_name!());
 
         let name_key = &req.name;
-        let mut retry = 0;
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
 
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
-
+        loop {
+            trials.next().unwrap()?;
             let (id_seq, id, data_mask_seq, _) =
                 get_data_mask_or_err(self, name_key, format!("drop_data_mask: {}", name_key))
                     .await?;
@@ -163,13 +161,11 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
             );
 
             if succ {
-                return Ok(DropDatamaskReply {});
+                break;
             }
         }
 
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("drop_data_mask", TXN_MAX_RETRY_TIMES),
-        )))
+        Ok(DropDatamaskReply {})
     }
 
     async fn get_data_mask(&self, req: GetDatamaskReq) -> Result<GetDatamaskReply, KVAppError> {

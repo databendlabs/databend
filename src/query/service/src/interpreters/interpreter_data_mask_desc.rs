@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::StringType;
 use common_expression::DataBlock;
@@ -23,7 +24,7 @@ use common_license::license_manager::get_license_manager;
 use common_sql::plans::DescDatamaskPolicyPlan;
 use common_users::UserApiProvider;
 use data_mask::get_datamask_handler;
-use tracing::error;
+use tracing::warn;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -68,7 +69,10 @@ impl Interpreter for DescDataMaskInterpreter {
         let policy = match policy {
             Ok(policy) => policy,
             Err(err) => {
-                error!("DescDataMaskInterpreter err: {}", err);
+                warn!("DescDataMaskInterpreter err: {}", err);
+                if err.code() != ErrorCode::UnknownDatamask("").code() {
+                    return Err(err);
+                }
                 return Ok(PipelineBuildResult::create());
             }
         };
