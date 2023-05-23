@@ -112,7 +112,7 @@ impl BlockPruner {
 
                 let block_meta = block_meta.clone();
                 let row_count = block_meta.row_count;
-                if range_pruner.should_keep(&block_meta.col_stats) {
+                if range_pruner.should_keep(&block_meta.col_stats, Some(&block_meta.col_metas)) {
                     // Perf.
                     {
                         metrics_inc_blocks_range_pruning_after(1);
@@ -254,7 +254,7 @@ impl BlockPruner {
 
             let row_count = meta_info.row_count;
             mask_res[idx] &= limit_pruner.within_limit(row_count);
-            mask_res[idx] &= range_pruner.should_keep(&meta_info.col_stats);
+            mask_res[idx] &= range_pruner.should_keep(&meta_info.col_stats, Some(&meta_info.col_metas));
 
             // Perf.
             if mask_res[idx] {

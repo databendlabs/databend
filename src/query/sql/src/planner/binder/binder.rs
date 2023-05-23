@@ -205,6 +205,10 @@ impl<'a> Binder {
                     .await?
             }
             Statement::ShowSettings { like } => self.bind_show_settings(bind_context, like).await?,
+            Statement::ShowIndexes => {
+                self.bind_rewrite_to_query(bind_context, "SELECT * FROM system.indexes", RewriteKind::ShowProcessList)
+                    .await?
+            }
             // Catalogs
             Statement::ShowCatalogs(stmt) => self.bind_show_catalogs(bind_context, stmt).await?,
             Statement::ShowCreateCatalog(stmt) => self.bind_show_create_catalogs(stmt).await?,
@@ -219,8 +223,9 @@ impl<'a> Binder {
             Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
             Statement::UseDatabase { database } => {
+                let database = normalize_identifier(database, &self.name_resolution_ctx).name;
                 Plan::UseDatabase(Box::new(UseDatabasePlan {
-                    database: database.name.clone(),
+                    database,
                 }))
             }
             // Columns

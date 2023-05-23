@@ -240,6 +240,7 @@ pub enum RewriteKind {
     ShowMetrics,
     ShowProcessList,
     ShowEngines,
+    ShowIndexes,
 
     ShowCatalogs,
     ShowDatabases,

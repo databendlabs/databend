@@ -56,11 +56,3 @@ message IndexMeta {
   // The index based query string
   string query = 5;
 }
-
-// Save index id list history.
-message IndexIdList {
-  uint64 ver = 100;
-  uint64 min_reader_ver = 101;
-
-  repeated uint64 ids = 1;
-}

@@ -366,6 +366,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_limit(&mut self, _limit: &'ast ShowLimit) {}
 
+    fn visit_show_indexes(&mut self) {}
+
     fn visit_kill(&mut self, _kill_target: &'ast KillTarget, _object_id: &'ast str) {}
 
     fn visit_set_variable(
