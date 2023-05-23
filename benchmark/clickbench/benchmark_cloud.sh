@@ -30,16 +30,16 @@ bendsql --version
 
 echo "Preparing benchmark metadata..."
 echo '{}' >result.json
-yq -i ".date = \"$(date -u +%Y-%m-%d)\"" result.json
-yq -i '.tags = ["s3"]' result.json
+yq -i ".date = \"$(date -u +%Y-%m-%d)\"" -o json result.json
+yq -i '.tags = ["s3"]' -o json result.json
 case ${BENCHMARK_SIZE} in
 Medium)
-    yq -i '.cluster_size = "16"' result.json
-    yq -i '.machine = "Medium"' result.json
+    yq -i '.cluster_size = "16"' -o json result.json
+    yq -i '.machine = "Medium"' -o json result.json
     ;;
 Large)
-    yq -i '.cluster_size = "64"' result.json
-    yq -i '.machine = "Large"' result.json
+    yq -i '.cluster_size = "64"' -o json result.json
+    yq -i '.machine = "Large"' -o json result.json
     ;;
 *)
     echo "Unsupported benchmark size: ${BENCHMARK_SIZE}"
@@ -84,7 +84,7 @@ function run_query() {
     q_time=$(echo "$query" | bendsql --time)
     if [[ -n $q_time ]]; then
         echo "Q${query_num}[$seq] succeeded in $q_time seconds"
-        yq -i ".result[${query_num}] += [${q_time}]" result.json
+        yq -i ".result[${query_num}] += [${q_time}]" -o json result.json
     else
         echo "Q${query_num}[$seq] failed"
     fi
@@ -94,7 +94,7 @@ TRIES=3
 QUERY_NUM=0
 while read -r query; do
     echo "Running Q${QUERY_NUM}: ${query}"
-    yq -i ".result += [[]]" result.json
+    yq -i ".result += [[]]" -o json result.json
     for i in $(seq 1 $TRIES); do
         run_query "$QUERY_NUM" "$i" "$query"
     done
