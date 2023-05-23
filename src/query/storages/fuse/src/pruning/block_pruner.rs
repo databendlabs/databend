@@ -25,12 +25,15 @@ use common_exception::Result;
 use common_expression::BLOCK_NAME_COL_NAME;
 use futures_util::future;
 use storages_common_pruner::BlockMetaIndex;
+use storages_common_pruner::Limiter;
+use storages_common_pruner::RangePruner;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::CompactSegmentInfo;
 
 use super::SegmentLocation;
 use crate::metrics::*;
 use crate::pruning::BloomPruner;
+use crate::pruning::FusePruningStatistics;
 use crate::pruning::PruningContext;
 
 pub struct BlockPruner {
@@ -230,41 +233,12 @@ impl BlockPruner {
             }
         }
 
-        let limit_pruner = self.pruning_ctx.limit_pruner.clone();
-        let range_pruner = self.pruning_ctx.range_pruner.clone();
-        let pruning_stats = self.pruning_ctx.pruning_stats.clone();
-        for (idx, meta_info) in metas.iter().enumerate() {
-            if !mask_res[idx] {
-                continue;
-            }
+        let block_meta_pruner = LimitBlockMetaPruner::create(
+            &self.pruning_ctx,
+            RangeBlockMetaPruner::create(&self.pruning_ctx),
+        );
 
-            // Perf.
-            {
-                metrics_inc_blocks_range_pruning_after(1);
-                metrics_inc_bytes_block_range_pruning_before(meta_info.block_size);
-
-                pruning_stats.set_blocks_range_pruning_before(1);
-            }
-
-            // check limit speculatively
-            if limit_pruner.exceeded() {
-                mask_res[idx] = false;
-                continue;
-            }
-
-            let row_count = meta_info.row_count;
-            mask_res[idx] &= limit_pruner.within_limit(row_count);
-            mask_res[idx] &= range_pruner.should_keep(&meta_info.col_stats, Some(&meta_info.col_metas));
-
-            // Perf.
-            if mask_res[idx] {
-                metrics_inc_blocks_range_pruning_after(1);
-                metrics_inc_bytes_block_range_pruning_after(meta_info.block_size);
-
-                pruning_stats.set_blocks_range_pruning_after(1);
-            }
-        }
-
+        block_meta_pruner.pruning(metas, &mut mask_res)?;
         Ok(mask_res)
     }
 
@@ -311,5 +285,103 @@ impl BlockPruner {
         }
 
         Ok(result)
+    }
+}
+
+#[async_trait::async_trait]
+pub trait BlockMetaPruner: Send + Sync {
+    fn apply(&self, meta: &BlockMeta) -> bool;
+
+    fn pruning(&self, metas: &[Arc<BlockMeta>], mask: &mut [bool]) -> Result<()>;
+}
+
+pub struct RangeBlockMetaPruner {
+    stats: Arc<FusePruningStatistics>,
+    inner: Arc<dyn RangePruner + Send + Sync>,
+}
+
+impl RangeBlockMetaPruner {
+    pub fn create(ctx: &PruningContext) -> RangeBlockMetaPruner {
+        RangeBlockMetaPruner {
+            stats: ctx.pruning_stats.clone(),
+            inner: ctx.range_pruner.clone(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl BlockMetaPruner for RangeBlockMetaPruner {
+    #[inline(always)]
+    fn apply(&self, meta: &BlockMeta) -> bool {
+        // Perf.
+        {
+            metrics_inc_blocks_range_pruning_after(1);
+            metrics_inc_bytes_block_range_pruning_before(meta.block_size);
+
+            self.stats.set_blocks_range_pruning_before(1);
+        }
+
+        match self
+            .inner
+            .should_keep(&meta.col_stats, Some(&meta.col_metas))
+        {
+            false => false,
+            true => {
+                // Perf.
+                metrics_inc_blocks_range_pruning_after(1);
+                metrics_inc_bytes_block_range_pruning_after(meta.block_size);
+
+                self.stats.set_blocks_range_pruning_after(1);
+                true
+            }
+        }
+    }
+
+    #[inline(always)]
+    fn pruning(&self, metas: &[Arc<BlockMeta>], mask_res: &mut [bool]) -> Result<()> {
+        for (idx, meta_info) in metas.iter().enumerate() {
+            if mask_res[idx] {
+                mask_res[idx] &= self.apply(meta_info);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+pub struct LimitBlockMetaPruner<T: BlockMetaPruner> {
+    inner: T,
+    limit_pruner: Arc<dyn Limiter + Send + Sync>,
+}
+
+impl<T: BlockMetaPruner> LimitBlockMetaPruner<T> {
+    pub fn create(ctx: &PruningContext, inner: T) -> LimitBlockMetaPruner<T> {
+        LimitBlockMetaPruner::<T> {
+            inner,
+            limit_pruner: ctx.limit_pruner.clone(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: BlockMetaPruner> BlockMetaPruner for LimitBlockMetaPruner<T> {
+    #[inline(always)]
+    fn apply(&self, meta: &BlockMeta) -> bool {
+        // check limit speculatively
+        let row_count = meta.row_count;
+        !self.limit_pruner.exceeded()
+            && self.inner.apply(meta)
+            && self.limit_pruner.within_limit(row_count)
+    }
+
+    #[inline(always)]
+    fn pruning(&self, metas: &[Arc<BlockMeta>], mask_res: &mut [bool]) -> Result<()> {
+        for (idx, meta_info) in metas.iter().enumerate() {
+            if mask_res[idx] {
+                mask_res[idx] &= self.apply(meta_info);
+            }
+        }
+
+        Ok(())
     }
 }
