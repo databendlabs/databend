@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Index;
 use std::time::Instant;
 
 use mysql_async::prelude::Queryable;
 use mysql_async::Conn;
 use mysql_async::Pool;
 use mysql_async::Row;
+use mysql_async::Value;
 use sqllogictest::DBOutput;
 use sqllogictest::DefaultColumnType;
 
@@ -58,11 +60,21 @@ impl MySQLClient {
         if self.debug {
             println!("Running sql with mysql client: [{sql}] ({elapsed:?})");
         };
-        let types = vec![DefaultColumnType::Any; rows.len()];
+        let mut types = Vec::with_capacity(rows.len());
         let mut parsed_rows = Vec::with_capacity(rows.len());
         for row in rows.into_iter() {
             let mut parsed_row = Vec::new();
             for i in 0..row.len() {
+                if i == 0 {
+                    match row.index(0) {
+                        Value::Bytes(_) => types.push(DefaultColumnType::Text),
+                        Value::Int(_) | Value::UInt(_) => types.push(DefaultColumnType::Integer),
+                        Value::Float(_) | Value::Double(_) => {
+                            types.push(DefaultColumnType::FloatingPoint)
+                        }
+                        _ => types.push(DefaultColumnType::Any),
+                    }
+                }
                 let value: Option<Option<String>> = row.get(i);
                 if let Some(v) = value {
                     match v {
@@ -74,7 +86,6 @@ impl MySQLClient {
             }
             parsed_rows.push(parsed_row);
         }
-        // Todo: add types to compare
         Ok(DBOutput::Rows {
             types,
             rows: parsed_rows,
