@@ -154,14 +154,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                             let subset_start = offset;
                             let subset_length = length;
                             if subset_start >= b.len() as u64 {
-                                ctx.set_error(builder.len(), "invalid subset");
+                                let rb = RoaringTreemap::new();
+                                rb.serialize_into(&mut builder.data).unwrap();
+                                builder.commit_row();
                             } else {
                                 let adjusted_length = (subset_start + subset_length).min(b.len() as u64) - subset_start;
                                 let subset_bitmap = &rb.into_iter().collect::<Vec<_>>()[subset_start as usize ..(subset_start + adjusted_length) as usize];
-                                let mut rb = RoaringTreemap::new();
-                                for a in subset_bitmap.iter() {
-                                    rb.insert(*a);
-                                }
+                                let rb = RoaringTreemap::from_iter(subset_bitmap.iter());
                                 rb.serialize_into(&mut builder.data).unwrap();
                                 builder.commit_row();
                             }
