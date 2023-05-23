@@ -46,7 +46,7 @@ pub fn blocks_to_parquet(
         compression: compression.into(),
         data_pagesize_limit: None,
     };
-    let batches = blocks
+    let batches = blocks.clone()
         .into_iter()
         .map(Chunk::try_from)
         .collect::<Result<Vec<_>>>()?;
@@ -94,17 +94,11 @@ pub fn blocks_to_parquet(
 }
 
 fn get_encodings(block: &DataBlock, schema: &ArrowSchema) -> Vec<Encoding> {
-    block.columns().into_iter().zip(schema.fields.into_iter()).map(
+    block.columns().into_iter().zip(schema.fields.iter()).map(
         |(column, field)| {
-            get_encoding(column.value, field.data_type)
-            // let data_type = field.data_type();
-            // let encoding = match data_type {
-            //     ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
-            //     _ => col_encoding(data_type),
-            // };
-            // encoding
+            get_encoding(&column.value, &field.data_type)
         }
-    ).collect::<Vec<_>>()
+    ).collect()
     //
     // let mut encodings = Vec::with_capacity(block.num_columns());
     // for i in 0..block.num_columns() {
@@ -119,7 +113,7 @@ fn get_encodings(block: &DataBlock, schema: &ArrowSchema) -> Vec<Encoding> {
     // encodings
 }
 
-fn get_encoding(value: Value<AnyType>, data_type:ArrowDataType)->Encoding{
+fn get_encoding(value: &Value<AnyType>, data_type:&ArrowDataType)->Encoding{
     let encoding = match data_type {
         ArrowDataType::Dictionary(..) => Encoding::RleDictionary,
         _ => col_encoding(data_type),
