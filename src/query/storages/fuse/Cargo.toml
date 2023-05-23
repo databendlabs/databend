@@ -32,6 +32,7 @@ common-sharing = { path = "../../sharing" }
 common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
 jsonb = { workspace = true }
+table-lock = { path = "../../ee-features/table-lock" }
 
 storages-common-blocks = { path = "../common/blocks" }
 storages-common-cache = { path = "../common/cache" }

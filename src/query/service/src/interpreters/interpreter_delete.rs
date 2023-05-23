@@ -14,10 +14,12 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
+use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -51,7 +53,22 @@ impl Interpreter for DeleteInterpreter {
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
+
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
+        let table_info = tbl.get_table_info().clone();
+
+        // Add table lock heartbeat.
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        let mut heartbeat = handler
+            .try_lock(self.ctx.clone(), table_info.clone())
+            .await?;
+
+        // refresh table.
+        let tbl = self
+            .ctx
+            .get_catalog(catalog_name)?
+            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
+            .await?;
 
         let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
             let filter = cast_expr_to_non_null_boolean(
@@ -87,6 +104,19 @@ impl Interpreter for DeleteInterpreter {
             &mut build_res.main_pipeline,
         )
         .await?;
+
+        if build_res.main_pipeline.is_empty() {
+            heartbeat.shutdown().await?;
+        } else {
+            build_res.main_pipeline.set_on_finished(move |may_error| {
+                // shutdown table lock heartbeat.
+                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
+                match may_error {
+                    None => Ok(()),
+                    Some(error_code) => Err(error_code.clone()),
+                }
+            });
+        }
 
         Ok(build_res)
     }

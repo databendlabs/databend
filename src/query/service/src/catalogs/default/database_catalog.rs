@@ -25,6 +25,7 @@ use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
 use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::DropDatabaseReply;
@@ -35,9 +36,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
-use common_meta_app::schema::IndexId;
 use common_meta_app::schema::IndexMeta;
-use common_meta_app::schema::ListIndexByTableIdReq;
+use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -482,11 +482,8 @@ impl Catalog for DatabaseCatalog {
     }
 
     #[async_backtrace::framed]
-    async fn get_indexes_by_table_id(
-        &self,
-        req: ListIndexByTableIdReq,
-    ) -> Result<Option<Vec<(IndexId, IndexMeta)>>> {
-        self.mutable_catalog.get_indexes_by_table_id(req).await
+    async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        self.mutable_catalog.list_indexes(req).await
     }
 
     fn get_table_function(
@@ -504,5 +501,40 @@ impl Catalog for DatabaseCatalog {
     fn get_table_engines(&self) -> Vec<StorageDescription> {
         // only return mutable_catalog storage table engines
         self.mutable_catalog.get_table_engines()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_table_lock_revs(&self, table_id: u64) -> Result<Vec<u64>> {
+        self.mutable_catalog.list_table_lock_revs(table_id).await
+    }
+
+    #[async_backtrace::framed]
+    async fn create_table_lock_rev(
+        &self,
+        expire_secs: u64,
+        table_info: &TableInfo,
+    ) -> Result<CreateTableLockRevReply> {
+        self.mutable_catalog
+            .create_table_lock_rev(expire_secs, table_info)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn extend_table_lock_rev(
+        &self,
+        expire_secs: u64,
+        table_info: &TableInfo,
+        revision: u64,
+    ) -> Result<()> {
+        self.mutable_catalog
+            .extend_table_lock_rev(expire_secs, table_info, revision)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    async fn delete_table_lock_rev(&self, table_info: &TableInfo, revision: u64) -> Result<()> {
+        self.mutable_catalog
+            .delete_table_lock_rev(table_info, revision)
+            .await
     }
 }

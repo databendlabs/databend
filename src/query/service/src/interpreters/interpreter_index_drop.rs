@@ -45,6 +45,7 @@ impl Interpreter for DropIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        let tenant = self.ctx.get_tenant();
         let license_manager = get_license_manager();
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
@@ -53,14 +54,10 @@ impl Interpreter for DropIndexInterpreter {
         )?;
 
         let index_name = self.plan.index.clone();
-
-        let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+        let catalog = self.ctx.get_catalog(&self.ctx.get_current_catalog())?;
         let drop_index_req = DropIndexReq {
             if_exists: self.plan.if_exists,
-            name_ident: IndexNameIdent {
-                tenant: self.plan.tenant.clone(),
-                index_name,
-            },
+            name_ident: IndexNameIdent { tenant, index_name },
         };
 
         let handler = get_agg_index_handler();

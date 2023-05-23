@@ -27,4 +27,3 @@ pub use fuse_pruner::PruningContext;
 pub use pruner_location::create_segment_location_vector;
 pub use pruner_location::SegmentLocation;
 pub use pruning_statistics::FusePruningStatistics;
-pub use segment_pruner::SegmentPruner;
