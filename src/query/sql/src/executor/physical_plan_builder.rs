@@ -1628,6 +1628,7 @@ impl PhysicalPlanBuilder {
             }
         }
         if ie_conditions.len() != 2 || !other_conditions.is_empty() {
+            // Todo(xudong): support other conditions
             return Ok(None);
         }
         // Construct IEJoin
