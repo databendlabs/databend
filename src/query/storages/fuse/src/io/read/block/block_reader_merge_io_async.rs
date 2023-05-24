@@ -21,7 +21,7 @@ use common_base::runtime::UnlimitedFuture;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
-use futures_util::future::try_join_all;
+use futures::future::try_join_all;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;
