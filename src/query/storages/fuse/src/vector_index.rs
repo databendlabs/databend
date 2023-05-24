@@ -20,6 +20,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::array::ArrayColumn;
 use common_expression::types::Float32Type;
+use faiss::index::io::deserialize;
 use faiss::index::io::serialize;
 use faiss::index_factory;
 use faiss::Index;
