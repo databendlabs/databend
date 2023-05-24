@@ -194,7 +194,7 @@ impl MergeIntoOperationAggregator {
         &self,
         segment_index: SegmentIndex,
         block_index: BlockIndex,
-        block_meta: &BlockMeta,
+        block_meta: &Arc<BlockMeta>,
         deleted_key_hashes: &HashSet<UniqueKeyDigest>,
     ) -> Result<Option<ReplacementLogEntry>> {
         info!(
@@ -205,16 +205,32 @@ impl MergeIntoOperationAggregator {
             return Ok(None);
         }
 
-        let reader = &self.block_reader;
+        let reader = self.block_reader.clone();
         let on_conflict_fields = &self.on_conflict_fields;
-        // TODO optimization "prewhere"?
-        let data_block = reader
-            .read_by_meta(
-                &self.read_settings,
-                block_meta,
-                &self.write_settings.storage_format,
-            )
+
+        // load block data
+        let columns_meta = &block_meta.col_metas;
+        let block_path = &block_meta.location.0.clone();
+        let merged_io_read_result = reader
+            .read_columns_data_by_merge_io(&self.read_settings, block_path, columns_meta)
             .await?;
+
+        // deserialize block data
+        // cpu intensive task, send them to dedicated thread pool
+        let storage_format = self.write_settings.storage_format.clone();
+        let block_meta_ptr = block_meta.clone();
+        let data_block = GlobalIORuntime::instance()
+            .spawn_blocking(move || {
+                let column_chunks = merged_io_read_result.columns_chunks()?;
+                reader.deserialize_chunks_with_buffer(
+                    column_chunks,
+                    &block_meta_ptr,
+                    None,
+                    &storage_format,
+                )
+            })
+            .await?;
+
         let num_rows = data_block.num_rows();
 
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
@@ -273,7 +289,6 @@ impl MergeIntoOperationAggregator {
         if delete_nums == block_meta.row_count as usize {
             info!("whole block deletion");
             // whole block deletion
-            // NOTE that if deletion marker is enabled, check the real meaning of `row_count`
             let mutation = ReplacementLogEntry {
                 index: BlockMetaIndex {
                     segment_idx: segment_index,

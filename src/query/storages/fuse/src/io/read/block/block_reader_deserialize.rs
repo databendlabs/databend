@@ -59,6 +59,35 @@ impl BlockReader {
         }
     }
 
+    pub(crate) fn deserialize_chunks_with_buffer(
+        &self,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        meta: &BlockMeta,
+        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
+        storage_format: &FuseStorageFormat,
+    ) -> Result<DataBlock> {
+        let num_rows = meta.row_count as usize;
+        let columns_meta = &meta.col_metas;
+        match storage_format {
+            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks_with_buffer(
+                &meta.location.0,
+                num_rows,
+                &meta.compression,
+                columns_meta,
+                column_chunks,
+                uncompressed_buffer,
+            ),
+            FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
+                &meta.location.0,
+                num_rows,
+                &meta.compression,
+                columns_meta,
+                column_chunks,
+                uncompressed_buffer,
+            ),
+        }
+    }
+
     #[tracing::instrument(level = "debug", skip_all)]
     #[async_backtrace::framed]
     pub async fn read_by_meta(

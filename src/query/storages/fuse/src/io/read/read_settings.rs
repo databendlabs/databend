@@ -21,6 +21,8 @@ use common_exception::Result;
 pub struct ReadSettings {
     pub storage_io_min_bytes_for_seek: u64,
     pub storage_io_max_page_bytes_for_read: u64,
+    pub max_threads: u64,
+    pub max_storage_io_requests: u64,
 }
 
 impl ReadSettings {
@@ -32,15 +34,8 @@ impl ReadSettings {
             storage_io_max_page_bytes_for_read: ctx
                 .get_settings()
                 .get_storage_io_max_page_bytes_for_read()?,
+            max_threads: ctx.get_settings().get_max_threads()?,
+            max_storage_io_requests: ctx.get_settings().get_max_storage_io_requests()?,
         })
-    }
-}
-
-impl Default for ReadSettings {
-    fn default() -> Self {
-        ReadSettings {
-            storage_io_min_bytes_for_seek: 1024,
-            storage_io_max_page_bytes_for_read: 1024 * 1024,
-        }
     }
 }
