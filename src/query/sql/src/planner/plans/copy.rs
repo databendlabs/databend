@@ -15,12 +15,18 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str::FromStr;
+use std::sync::Arc;
+use std::time::Instant;
 
-use common_catalog::plan::DataSourcePlan;
-use common_expression::TableSchemaRef;
+use common_catalog::plan::StageTableInfo;
+use common_catalog::table_context::TableContext;
+use common_exception::Result;
+use common_expression::DataSchemaRef;
+use common_expression::Scalar;
 use common_meta_app::principal::StageInfo;
-use common_meta_types::MetaId;
+use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
+use tracing::info;
 
 use crate::plans::Plan;
 
@@ -53,31 +59,140 @@ impl FromStr for ValidationMode {
     }
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub enum CopyIntoTableMode {
+    Insert { overwrite: bool },
+    Replace,
+    Copy,
+}
+
+#[derive(Clone)]
+pub struct CopyIntoTablePlan {
+    pub catalog_name: String,
+    pub database_name: String,
+    pub table_name: String,
+
+    pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
+    pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
+    pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
+
+    pub write_mode: CopyIntoTableMode,
+    pub validation_mode: ValidationMode,
+    pub force: bool,
+
+    pub stage_table_info: StageTableInfo,
+    pub query: Option<Box<Plan>>,
+}
+
+fn set_and_log_status(ctx: &Arc<dyn TableContext>, status: &str) {
+    ctx.set_status_info(status);
+    info!(status);
+}
+
+impl CopyIntoTablePlan {
+    pub async fn collect_files(&self, ctx: &Arc<dyn TableContext>) -> Result<Vec<StageFileInfo>> {
+        set_and_log_status(ctx, "begin to list files");
+        let start = Instant::now();
+
+        let stage_table_info = &self.stage_table_info;
+        let max_files = stage_table_info.stage_info.copy_options.max_files;
+        let max_files = if max_files == 0 {
+            None
+        } else {
+            Some(max_files)
+        };
+
+        let operator = init_stage_operator(&stage_table_info.stage_info)?;
+        let all_source_file_infos = if operator.info().can_blocking() {
+            if self.force {
+                stage_table_info
+                    .files_info
+                    .blocking_list(&operator, false, max_files)
+            } else {
+                stage_table_info
+                    .files_info
+                    .blocking_list(&operator, false, None)
+            }
+        } else if self.force {
+            stage_table_info
+                .files_info
+                .list(&operator, false, max_files)
+                .await
+        } else {
+            stage_table_info
+                .files_info
+                .list(&operator, false, None)
+                .await
+        }?;
+
+        let num_all_files = all_source_file_infos.len();
+
+        info!("end to list files: got {} files", num_all_files);
+
+        let need_copy_file_infos = if self.force {
+            info!(
+                "force mode, ignore file filtering. ({}.{})",
+                &self.database_name, &self.table_name
+            );
+            all_source_file_infos
+        } else {
+            // Status.
+            set_and_log_status(ctx, "begin to filter out copied files");
+            let files = ctx
+                .filter_out_copied_files(
+                    &self.catalog_name,
+                    &self.database_name,
+                    &self.table_name,
+                    &all_source_file_infos,
+                    max_files,
+                )
+                .await?;
+
+            info!("end filtering out copied files: {}", num_all_files);
+            files
+        };
+
+        info!(
+            "copy: read files with max_files={:?} finished, all:{}, need copy:{}, elapsed:{}",
+            max_files,
+            num_all_files,
+            need_copy_file_infos.len(),
+            start.elapsed().as_secs()
+        );
+
+        Ok(need_copy_file_infos)
+    }
+}
+
+impl Debug for CopyIntoTablePlan {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let CopyIntoTablePlan {
+            catalog_name,
+            database_name,
+            table_name,
+            validation_mode,
+            force,
+            stage_table_info,
+            query,
+            ..
+        } = self;
+        write!(
+            f,
+            "Copy into {catalog_name:}.{database_name:}.{table_name:}"
+        )?;
+        write!(f, ", validation_mode: {validation_mode:?}")?;
+        write!(f, ", from: {stage_table_info:?}")?;
+        write!(f, " force: {force}")?;
+        write!(f, " query: {query:?}")?;
+        Ok(())
+    }
+}
+
 /// CopyPlan supports CopyIntoTable & CopyIntoStage
 #[derive(Clone)]
 pub enum CopyPlan {
     NoFileToCopy,
-    IntoTable {
-        catalog_name: String,
-        database_name: String,
-        table_name: String,
-        table_id: MetaId,
-        validation_mode: ValidationMode,
-        from: Box<DataSourcePlan>,
-        force: bool,
-    },
-    IntoTableWithTransform {
-        catalog_name: String,
-        database_name: String,
-        table_name: String,
-        table_id: MetaId,
-        schema: Option<TableSchemaRef>,
-        stage_info: Box<StageInfo>,
-        validation_mode: ValidationMode,
-        from: Box<Plan>,
-        need_copy_file_infos: Vec<StageFileInfo>,
-        force: bool,
-    },
+    IntoTable(CopyIntoTablePlan),
     IntoStage {
         stage: Box<StageInfo>,
         path: String,
@@ -90,29 +205,8 @@ impl Debug for CopyPlan {
     // Ignore the schema.
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match &self {
-            CopyPlan::IntoTable {
-                database_name,
-                table_name,
-                from,
-                validation_mode,
-                force,
-                ..
-            } => {
-                write!(f, "Copy into {database_name:}.{table_name:}")?;
-                write!(f, ", validation_mode: {validation_mode:?}")?;
-                write!(f, ", from: {from:?}")?;
-                write!(f, " force: {force}")?;
-            }
-            CopyPlan::IntoTableWithTransform {
-                database_name,
-                table_name,
-                from,
-                validation_mode,
-                ..
-            } => {
-                write!(f, "Copy into {database_name:}.{table_name:}")?;
-                write!(f, ", validation_mode: {validation_mode:?}")?;
-                write!(f, ", from: {from:?}")?;
+            CopyPlan::IntoTable(plan) => {
+                write!(f, "{plan:?}")?;
             }
             CopyPlan::IntoStage {
                 stage,

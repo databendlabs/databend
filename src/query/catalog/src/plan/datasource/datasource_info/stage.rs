@@ -16,9 +16,11 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::principal::StageInfo;
+use common_storage::init_stage_operator;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 
@@ -37,6 +39,18 @@ impl StageTableInfo {
 
     pub fn desc(&self) -> String {
         self.stage_info.stage_name.clone()
+    }
+
+    #[async_backtrace::framed]
+    pub async fn list_files(&self, max_files: Option<usize>) -> Result<Vec<StageFileInfo>> {
+        let op = init_stage_operator(&self.stage_info)?;
+        let infos = self
+            .files_info
+            .list(&op, false, max_files)
+            .await?
+            .into_iter()
+            .collect::<Vec<_>>();
+        Ok(infos)
     }
 }
 
