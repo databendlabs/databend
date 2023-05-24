@@ -12,20 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BinaryHeap;
 use std::sync::Arc;
 
+use common_arrow::arrow::compute::limit;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::array::ArrayColumn;
 use common_expression::types::Float32Type;
+use common_expression::TopKSorter;
 use faiss::index::io::deserialize;
 use faiss::index::io::serialize;
+use faiss::index::SearchResult;
 use faiss::index_factory;
+use faiss::Idx;
 use faiss::Index;
 use faiss::MetricType;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Versioned;
 
@@ -103,4 +109,69 @@ impl FuseTable {
         }
         Ok(())
     }
+
+    pub async fn read_by_vector_index(
+        &self,
+        projections: usize,
+        ctx: Arc<dyn TableContext>,
+        limit: usize,
+    ) -> Result<()> {
+        let projection = Projection::Columns(vec![projections]);
+        let read_settings = ReadSettings::from_ctx(&ctx)?;
+        let snapshot_location = self.snapshot_loc().await?;
+        if snapshot_location.is_none() {
+            return Ok(());
+        }
+        let snapshot_location = snapshot_location.unwrap();
+        let snapshot_reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
+        let params = LoadParams {
+            location: snapshot_location,
+            len_hint: None,
+            ver,
+            put_cache: true,
+        };
+        let snapshot = snapshot_reader.read(&params).await?;
+        let schema = Arc::new(snapshot.schema.clone());
+        let mut search_results_snapshot = Vec::new();
+        for (seg_loc, _) in &snapshot.segments {
+            let segment_reader =
+                MetaReaders::segment_info_reader(self.get_operator(), schema.clone());
+            let params = LoadParams {
+                location: seg_loc.clone(),
+                len_hint: None,
+                ver: SegmentInfo::VERSION,
+                put_cache: true,
+            };
+            let segment_info = segment_reader.read(&params).await?;
+            let block_metas = segment_info.block_metas()?;
+            let mut search_results_segment = Vec::new();
+            for block_meta in &block_metas {
+                let index_location = block_meta.location.0.clone() + "_ivf.index";
+                let index_bin = self.get_operator().read(&index_location).await?;
+                let mut index = deserialize(&index_bin).unwrap();
+                let SearchResult {
+                    distances: _,
+                    labels,
+                } = index.search(&[0.0f32; 128], limit).unwrap();
+                search_results_segment.push((labels, block_meta.clone()));
+            }
+            search_results_snapshot.extend(search_results_segment);
+        }
+        let merged_search_results = merge_search_results(search_results_snapshot, limit);
+        let block_reader = self.create_block_reader(projection.clone(), false, ctx.clone())?;
+        for (idx, block_meta) in merged_search_results {
+            let block = block_reader
+                .read_by_meta(&read_settings, &block_meta, &self.storage_format)
+                .await?;
+        }
+        Ok(())
+    }
+}
+
+fn merge_search_results(
+    search_results: Vec<(Vec<Idx>, Arc<BlockMeta>)>,
+    limit: usize,
+) -> Vec<(Idx, Arc<BlockMeta>)> {
+    todo!()
 }
