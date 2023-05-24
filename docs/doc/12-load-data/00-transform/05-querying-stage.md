@@ -1,14 +1,14 @@
 ---
-title: Querying Data in Staged Files
+title: Querying Staged Files
 ---
 
 Databend allows you to directly query data in the files stored in one of the following locations without loading them into a table:
 
 - User stage, internal stage, or external stage.
 - Bucket or container created within your object storage, such as Amazon S3, Google Cloud Storage, and Microsoft Azure.
-- Remote servers accessible via HTTPS and IPFS.
+- Remote servers accessible via HTTPS.
 
-During this process, the schema is automatically detected, just like with the [infer_schema](../../15-sql-functions/112-table-functions/infer_schema.md) function. This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
+During this process, Databend automatically detects the schema with the [INFER_SCHEMA](../../15-sql-functions/112-table-functions/infer_schema.md) function. This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
 
 :::note
 This feature is currently only available for the Parquet file format.
