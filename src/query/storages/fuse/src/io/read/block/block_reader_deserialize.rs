@@ -29,6 +29,7 @@ use super::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::ReadSettings;
 use crate::io::UncompressedBuffer;
+use crate::FusePartInfo;
 use crate::FuseStorageFormat;
 
 pub enum DeserializedArray<'a> {
@@ -47,43 +48,46 @@ pub struct FieldDeserializationContext<'a> {
 
 impl BlockReader {
     /// Deserialize column chunks data from parquet format to DataBlock.
-    pub fn deserialize_chunks(
+    pub fn deserialize_chunks_with_part_info(
         &self,
         part: PartInfoPtr,
         chunks: HashMap<ColumnId, DataItem>,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
-        match storage_format {
-            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(part, chunks),
-            FuseStorageFormat::Native => self.deserialize_native_chunks(part, chunks),
-        }
+        let part = FusePartInfo::from_part(&part)?;
+        self.deserialize_chunks(
+            &part.location,
+            part.nums_rows,
+            &part.compression,
+            &part.columns_meta,
+            chunks,
+            storage_format,
+        )
     }
 
-    pub(crate) fn deserialize_chunks_with_buffer(
+    pub fn deserialize_chunks(
         &self,
+        block_path: &str,
+        num_rows: usize,
+        compression: &Compression,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
         column_chunks: HashMap<ColumnId, DataItem>,
-        meta: &BlockMeta,
-        uncompressed_buffer: Option<Arc<UncompressedBuffer>>,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
-        let num_rows = meta.row_count as usize;
-        let columns_meta = &meta.col_metas;
         match storage_format {
-            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks_with_buffer(
-                &meta.location.0,
+            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(
+                block_path,
                 num_rows,
-                &meta.compression,
-                columns_meta,
+                compression,
+                column_metas,
                 column_chunks,
-                uncompressed_buffer,
             ),
-            FuseStorageFormat::Native => self.deserialize_native_chunks_with_buffer(
-                &meta.location.0,
+            FuseStorageFormat::Native => self.deserialize_native_chunks(
+                block_path,
                 num_rows,
-                &meta.compression,
-                columns_meta,
+                compression,
+                column_metas,
                 column_chunks,
-                uncompressed_buffer,
             ),
         }
     }

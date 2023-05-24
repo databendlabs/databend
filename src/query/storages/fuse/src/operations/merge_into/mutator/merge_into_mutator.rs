@@ -215,17 +215,19 @@ impl MergeIntoOperationAggregator {
             .read_columns_data_by_merge_io(&self.read_settings, block_path, columns_meta)
             .await?;
 
-        // deserialize block data
-        // cpu intensive task, send them to dedicated thread pool
+        // deserialize block data.
         let storage_format = self.write_settings.storage_format;
-        let block_meta_ptr = block_meta.clone();
+        let meta = block_meta.clone();
+        // cpu intensive task, submit it to global io runtime as block task
         let data_block = GlobalIORuntime::instance()
             .spawn_blocking(move || {
                 let column_chunks = merged_io_read_result.columns_chunks()?;
-                reader.deserialize_chunks_with_buffer(
+                reader.deserialize_chunks(
+                    &meta.location.0,
+                    meta.row_count as usize,
+                    &meta.compression,
+                    &meta.col_metas,
                     column_chunks,
-                    &block_meta_ptr,
-                    None,
                     &storage_format,
                 )
             })
