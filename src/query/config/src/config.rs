@@ -1415,6 +1415,10 @@ pub struct QueryConfig {
     #[clap(long, default_value = "")]
     pub openai_api_key: String,
 
+    // For azure openai.
+    #[clap(long, default_value = "")]
+    pub openai_api_version: String,
+
     /// https://platform.openai.com/docs/models/embeddings
     #[clap(long, default_value = "text-embedding-ada-002")]
     pub openai_api_embedding_model: String,
@@ -1490,6 +1494,7 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             openai_api_key: self.openai_api_key,
             openai_api_completion_model: self.openai_api_completion_model,
             openai_api_embedding_model: self.openai_api_embedding_model,
+            openai_api_version: self.openai_api_version,
         })
     }
 }
@@ -1567,6 +1572,7 @@ impl From<InnerQueryConfig> for QueryConfig {
             disable_system_table_load: inner.disable_system_table_load,
             openai_api_base_url: inner.openai_api_base_url,
             openai_api_key: inner.openai_api_key,
+            openai_api_version: inner.openai_api_version,
             openai_api_completion_model: inner.openai_api_completion_model,
             openai_api_embedding_model: inner.openai_api_embedding_model,
         }

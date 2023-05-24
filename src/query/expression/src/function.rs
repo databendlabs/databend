@@ -93,6 +93,7 @@ pub struct FunctionContext {
 
     pub openai_api_base_url: String,
     pub openai_api_key: String,
+    pub openai_api_version: String,
     pub openai_api_embedding_model: String,
     pub openai_api_completion_model: String,
 }

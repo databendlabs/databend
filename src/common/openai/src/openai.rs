@@ -14,6 +14,7 @@
 
 pub struct OpenAI {
     pub(crate) api_key: String,
+    pub(crate) api_version: String,
     pub(crate) api_base: String,
     pub(crate) embedding_model: String,
     pub(crate) completion_model: String,
@@ -23,6 +24,7 @@ impl OpenAI {
     pub fn create(
         api_base: String,
         api_key: String,
+        api_version: String,
         embedding_model: String,
         completion_model: String,
     ) -> Self {
@@ -50,6 +52,7 @@ impl OpenAI {
             api_key,
             embedding_model,
             completion_model,
+            api_version,
         }
     }
 }

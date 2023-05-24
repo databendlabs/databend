@@ -7202,7 +7202,7 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 [[package]]
 name = "openai_api_rust"
 version = "0.1.4"
-source = "git+https://github.com/datafuse-extras/openai-api?rev=87a140c#87a140cb32a08f2a65c230d29d5e0f085f3ade4c"
+source = "git+https://github.com/datafuse-extras/openai-api?rev=66a9ac4#66a9ac475e7b78723ac3f86d940fcee869e7267c"
 dependencies = [
  "log",
  "serde",
