@@ -26,6 +26,7 @@ use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
+use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::operations::fuse_source::build_fuse_source_pipeline;
 use crate::pruning::SegmentLocation;
@@ -140,6 +141,14 @@ impl FuseTable {
             )
         });
 
+        let index_reader = Arc::new(
+            plan.push_downs
+                .as_ref()
+                .and_then(|p| p.agg_index.as_ref())
+                .map(|agg| AggIndexReader::try_create(ctx.clone(), self.operator.clone(), agg))
+                .transpose()?,
+        );
+
         build_fuse_source_pipeline(
             ctx,
             pipeline,
@@ -148,6 +157,7 @@ impl FuseTable {
             plan,
             topk,
             max_io_requests,
+            index_reader,
         )
     }
 }

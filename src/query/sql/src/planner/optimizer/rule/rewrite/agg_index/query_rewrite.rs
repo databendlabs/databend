@@ -16,11 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::infer_schema_type;
 use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::Scalar;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
 use itertools::Itertools;
 
 use crate::binder::split_conjunctions;
@@ -146,19 +145,14 @@ pub fn try_rewrite(
         let index_fields = index_selection
             .iter()
             .sorted_by_key(|(_, (idx, _))| *idx)
-            .map(|(_, (idx, ty))| {
-                Ok(TableField::new(
-                    &format!("index_col_{idx}"),
-                    infer_schema_type(ty)?,
-                ))
-            })
+            .map(|(_, (idx, ty))| Ok(DataField::new(&format!("index_col_{idx}"), ty.clone())))
             .collect::<Result<Vec<_>>>()?;
 
         let result = push_down_index_scan(s_expr, AggIndexInfo {
             index_id: *index_id,
             selection: new_selection,
             predicates: new_predicates,
-            schema: TableSchemaRefExt::create(index_fields),
+            schema: DataSchema::new(index_fields),
         })?;
         return Ok(Some(result));
     }

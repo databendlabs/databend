@@ -21,10 +21,12 @@ use common_exception::Result;
 use common_pipeline_core::Pipeline;
 
 use crate::fuse_table::FuseStorageFormat;
+use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
 use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_fuse_source_pipeline(
     ctx: Arc<dyn TableContext>,
     pipeline: &mut Pipeline,
@@ -33,6 +35,7 @@ pub fn build_fuse_source_pipeline(
     plan: &DataSourcePlan,
     top_k: Option<TopK>,
     max_io_requests: usize,
+    index_reader: Arc<Option<AggIndexReader>>,
 ) -> Result<()> {
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
 
@@ -53,6 +56,7 @@ pub fn build_fuse_source_pipeline(
             plan,
             max_threads,
             max_io_requests,
+            index_reader,
         ),
     }
 }

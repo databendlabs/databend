@@ -14,11 +14,13 @@
 
 use std::sync::Arc;
 
+use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
 use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
@@ -267,6 +269,13 @@ impl Transform for CompoundBlockOperator {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
+        if let Some(meta) = data_block.get_meta() {
+            if AggIndexMeta::downcast_ref_from(meta).is_some() {
+                // Is from aggregating index.
+                return Ok(data_block);
+            }
+        }
+
         self.operators
             .iter()
             .try_fold(data_block, |input, op| op.execute(&self.ctx, input))

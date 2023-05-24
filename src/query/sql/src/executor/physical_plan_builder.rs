@@ -1619,6 +1619,7 @@ impl PhysicalPlanBuilder {
                     index_id: agg.index_id,
                     filter,
                     selection,
+                    schema: agg.schema.clone(),
                 })
             })
             .transpose()?;
