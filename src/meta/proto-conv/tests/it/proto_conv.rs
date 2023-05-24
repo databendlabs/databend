@@ -256,6 +256,17 @@ pub(crate) fn new_empty_proto() -> mt::EmptyProto {
     mt::EmptyProto {}
 }
 
+fn new_data_mask_meta() -> common_meta_app::data_mask::DatamaskMeta {
+    common_meta_app::data_mask::DatamaskMeta {
+        args: vec![("a".to_string(), "String".to_string())],
+        return_type: "String".to_string(),
+        body: "CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END".to_string(),
+        comment: Some("some comment".to_string()),
+        create_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
+        update_on: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap()),
+    }
+}
+
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -282,6 +293,12 @@ fn test_pb_from_to() -> anyhow::Result<()> {
     let p = index.to_pb()?;
     let got = mt::IndexMeta::from_pb(p)?;
     assert_eq!(index, got);
+
+    let data_mask_meta = new_data_mask_meta();
+    let p = data_mask_meta.to_pb()?;
+    let got = common_meta_app::data_mask::DatamaskMeta::from_pb(p)?;
+    assert_eq!(data_mask_meta, got);
+
     Ok(())
 }
 
@@ -407,6 +424,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("schema:{:?}", buf);
+    }
+
+    // data mask
+    {
+        let data_mask_meta = new_data_mask_meta();
+        let p = data_mask_meta.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("data mask:{:?}", buf);
     }
 
     Ok(())

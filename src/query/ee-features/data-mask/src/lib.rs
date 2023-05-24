@@ -12,20 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! This crate defines meta data types used by meta-client application, e.g. Schema, User, Share etc.
-//! Such as Database, Table and User etc.
-//!
-//! Types in this crate will not be used directly by databend-meta.
-//! But instead, they are used by the caller of meta-client, e.g, databend-query.
+pub mod data_mask_handler;
 
-#![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
-#![feature(no_sanitize)]
-
-pub mod app_error;
-pub mod data_mask;
-pub mod principal;
-pub mod schema;
-pub mod share;
-pub mod storage;
-pub mod tenant;
+pub use data_mask_handler::get_datamask_handler;
+pub use data_mask_handler::DatamaskHandler;
+pub use data_mask_handler::DatamaskHandlerWrapper;

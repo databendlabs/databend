@@ -433,5 +433,8 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
             visitor.visit_show_object_grant_privileges(stmt)
         }
         Statement::ShowGrantsOfShare(stmt) => visitor.visit_show_grants_of_share(stmt),
+        Statement::CreateDatamaskPolicy(stmt) => visitor.visit_create_data_mask_policy(stmt),
+        Statement::DropDatamaskPolicy(stmt) => visitor.visit_drop_data_mask_policy(stmt),
+        Statement::DescDatamaskPolicy(stmt) => visitor.visit_desc_data_mask_policy(stmt),
     }
 }
