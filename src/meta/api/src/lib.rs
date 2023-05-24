@@ -17,6 +17,9 @@
 extern crate common_meta_types;
 
 pub mod compat_errors;
+mod data_mask_api;
+mod data_mask_api_impl;
+mod data_mask_api_keys;
 mod id;
 mod id_generator;
 pub mod kv_app_error;
@@ -32,6 +35,7 @@ mod share_api_test_suite;
 pub(crate) mod testing;
 pub(crate) mod util;
 
+pub use data_mask_api::DatamaskApi;
 pub use id::Id;
 pub(crate) use id_generator::IdGenerator;
 pub use schema_api::SchemaApi;

@@ -3445,6 +3445,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 
 [[package]]
+name = "data-mask"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "common-base",
+ "common-exception",
+ "common-meta-app",
+ "common-meta-store",
+ "common-sql",
+]
+
+[[package]]
 name = "databend-binaries"
 version = "0.1.0"
 dependencies = [
@@ -3613,6 +3625,7 @@ dependencies = [
  "criterion",
  "ctor",
  "dashmap",
+ "data-mask",
  "ethnum",
  "futures",
  "futures-util",
@@ -3985,13 +3998,17 @@ dependencies = [
  "common-config",
  "common-exception",
  "common-license",
+ "common-meta-api",
  "common-meta-app",
  "common-meta-kvapi",
+ "common-meta-store",
  "common-meta-types",
  "common-settings",
+ "common-sql",
  "common-storages-fuse",
  "common-users",
  "dashmap",
+ "data-mask",
  "databend-query",
  "futures-util",
  "jwt-simple",
