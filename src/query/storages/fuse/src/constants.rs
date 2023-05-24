@@ -25,6 +25,7 @@ pub const FUSE_TBL_SEGMENT_PREFIX: &str = "_sg";
 pub const FUSE_TBL_SNAPSHOT_PREFIX: &str = "_ss";
 pub const FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX: &str = "_ts";
 pub const FUSE_TBL_LAST_SNAPSHOT_HINT: &str = "last_snapshot_location_hint";
+pub const FUSE_TBL_AGG_INDEX_PREFIX: &str = "_i_a";
 
 pub const DEFAULT_BLOCK_PER_SEGMENT: usize = 1000;
 pub const DEFAULT_ROW_PER_PAGE: usize = 8192;

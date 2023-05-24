@@ -20,6 +20,7 @@ use common_catalog::table::ColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::TableSchemaRef;
 use itertools::Itertools;
 
 use crate::optimizer::histogram_from_ndv;
@@ -56,6 +57,7 @@ pub struct Prewhere {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AggIndexInfo {
     pub index_id: u64,
+    pub schema: TableSchemaRef,
     pub selection: Vec<ScalarExpr>,
     pub predicates: Vec<ScalarExpr>,
 }

@@ -29,6 +29,7 @@ use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
 use crate::index::filters::BlockFilter;
+use crate::FUSE_TBL_AGG_INDEX_PREFIX;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 
@@ -137,6 +138,14 @@ impl TableMetaLocationGenerator {
 
     pub fn gen_last_snapshot_hint_location(&self) -> String {
         format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT)
+    }
+
+    pub fn gen_agg_index_location_from_block_location(loc: &str, index_id: u64) -> String {
+        let splits = loc.split('/').collect::<Vec<_>>();
+        let len = splits.len();
+        let prefix = splits[..len - 2].join("/");
+        let block_name = splits[len - 1];
+        format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
     }
 }
 

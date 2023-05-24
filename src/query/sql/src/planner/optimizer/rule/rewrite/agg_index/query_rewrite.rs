@@ -16,8 +16,12 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
+use common_expression::infer_schema_type;
 use common_expression::types::DataType;
 use common_expression::Scalar;
+use common_expression::TableField;
+use common_expression::TableSchemaRefExt;
+use itertools::Itertools;
 
 use crate::binder::split_conjunctions;
 use crate::optimizer::HeuristicOptimizer;
@@ -77,7 +81,7 @@ pub fn try_rewrite(
         }
 
         // 2. Check query output and try to rewrite it.
-        let index_selection = index_info.formatted_selection();
+        let index_selection = index_info.formatted_selection()?;
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
         for item in query_info.selection.items.iter() {
@@ -139,10 +143,22 @@ pub fn try_rewrite(
             (None, None) => { /* Matched */ }
         }
 
+        let index_fields = index_selection
+            .iter()
+            .sorted_by_key(|(_, (idx, _))| *idx)
+            .map(|(_, (idx, ty))| {
+                Ok(TableField::new(
+                    &format!("index_col_{idx}"),
+                    infer_schema_type(ty)?,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
         let result = push_down_index_scan(s_expr, AggIndexInfo {
             index_id: *index_id,
             selection: new_selection,
             predicates: new_predicates,
+            schema: TableSchemaRefExt::create(index_fields),
         })?;
         return Ok(Some(result));
     }
@@ -432,7 +448,7 @@ type Predicates<'a> = (
 );
 
 type AggregationInfo<'a> = (&'a Aggregate, HashMap<IndexType, &'a ScalarExpr>);
-type SelectionMap<'a> = HashMap<String, (IndexType, &'a ScalarExpr)>;
+type SelectionMap<'a> = HashMap<String, (IndexType, DataType)>;
 
 // Record information helping to rewrite the query plan.
 pub struct RewriteInfomartion<'a> {
@@ -477,13 +493,14 @@ impl RewriteInfomartion<'_> {
         vec![]
     }
 
-    fn formatted_selection(&self) -> SelectionMap<'_> {
+    fn formatted_selection(&self) -> Result<SelectionMap<'_>> {
         let mut outputs = HashMap::with_capacity(self.selection.items.len());
         for (index, item) in self.selection.items.iter().enumerate() {
+            let ty = item.scalar.data_type()?;
             let key = self.format_scalar(&item.scalar);
-            outputs.insert(key, (index, &item.scalar));
+            outputs.insert(key, (index, ty));
         }
-        outputs
+        Ok(outputs)
     }
 
     // If the column ref is already rewritten, recover it.
@@ -712,15 +729,15 @@ fn check_predicates_range(
                 if !index_output_bound_cols.contains(col) {
                     return None;
                 }
-                let (new_index, scalar) = index_selection[&format_col_name(*col)];
-                out.push((*col, new_index, scalar.data_type().ok()?))
+                let (new_index, ty) = &index_selection[&format_col_name(*col)];
+                out.push((*col, *new_index, ty))
             }
         } else if !index_output_bound_cols.contains(col) {
             // If the column is not in index predicates, it should be in index output columns.
             return None;
         } else {
-            let (new_index, scalar) = index_selection[&format_col_name(*col)];
-            out.push((*col, new_index, scalar.data_type().ok()?))
+            let (new_index, ty) = &index_selection[&format_col_name(*col)];
+            out.push((*col, *new_index, ty))
         }
     }
 
@@ -752,7 +769,7 @@ fn try_create_column_binding(
     index_selection: &SelectionMap<'_>,
     formatted_scalar: &str,
 ) -> Option<BoundColumnRef> {
-    if let Some((index, scalar)) = index_selection.get(formatted_scalar) {
+    if let Some((index, ty)) = index_selection.get(formatted_scalar) {
         Some(BoundColumnRef {
             span: None,
             column: ColumnBinding {
@@ -761,7 +778,7 @@ fn try_create_column_binding(
                 table_index: None,
                 column_name: format!("index_col_{index}"),
                 index: *index,
-                data_type: Box::new(scalar.data_type().ok()?),
+                data_type: Box::new(ty.clone()),
                 visibility: Visibility::Visible,
             },
         })
