@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
@@ -44,17 +46,23 @@ impl RulePushDownLimitExpression {
         Self {
             id: RuleID::RulePushDownLimitExpression,
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Limit,
-                }
-                .into(),
-                SExpr::create_unary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::EvalScalar,
+                        plan_type: RelOp::Limit,
                     }
                     .into(),
-                    SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
                 ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::EvalScalar,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan { plan_type: Pattern }.into(),
+                    ))),
+                )),
             )],
         }
     }
@@ -70,9 +78,14 @@ impl Rule for RulePushDownLimitExpression {
         let eval_plan = s_expr.child(0)?;
         let eval_scalar: EvalScalar = eval_plan.plan().clone().try_into()?;
 
-        let limit_expr =
-            SExpr::create_unary(RelOperator::Limit(limit), eval_plan.child(0)?.clone());
-        let mut result = SExpr::create_unary(RelOperator::EvalScalar(eval_scalar), limit_expr);
+        let limit_expr = SExpr::create_unary(
+            Arc::new(RelOperator::Limit(limit)),
+            Arc::new(eval_plan.child(0)?.clone()),
+        );
+        let mut result = SExpr::create_unary(
+            Arc::new(RelOperator::EvalScalar(eval_scalar)),
+            Arc::new(limit_expr),
+        );
 
         result.set_applied_rule(&self.id);
         state.add_result(result);

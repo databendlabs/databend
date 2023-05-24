@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -52,22 +54,26 @@ impl RulePushDownFilterEvalScalar {
             //    \
             //     *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_unary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::EvalScalar,
+                        plan_type: RelOp::Filter,
                     }
                     .into(),
-                    SExpr::create_leaf(
+                ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::EvalScalar,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Pattern,
                         }
                         .into(),
-                    ),
-                ),
+                    ))),
+                )),
             )],
             metadata,
         }
@@ -265,8 +271,11 @@ impl Rule for RulePushDownFilterEvalScalar {
             // For example, `select a from (select a, a+1 as b from t) where a = 1 and b = 2`
             // can be optimized as `select a from (select a, a+1 as b from t where a = 1) where b = 2`
             let new_expr = SExpr::create_unary(
-                eval_scalar.into(),
-                SExpr::create_unary(filter.into(), input.child(0)?.clone()),
+                Arc::new(eval_scalar.into()),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(filter.into()),
+                    Arc::new(input.child(0)?.clone()),
+                )),
             );
             state.add_result(new_expr);
         }

@@ -38,7 +38,7 @@ impl CostModel for DefaultCostModel {
 }
 
 fn compute_cost_impl(memo: &Memo, m_expr: &MExpr) -> Result<Cost> {
-    match &m_expr.plan {
+    match m_expr.plan.as_ref() {
         RelOperator::Scan(plan) => compute_cost_scan(memo, m_expr, plan),
         RelOperator::DummyTableScan(_) => Ok(Cost(0.0)),
         RelOperator::Join(plan) => compute_cost_join(memo, m_expr, plan),
