@@ -217,7 +217,7 @@ impl MergeIntoOperationAggregator {
 
         // deserialize block data
         // cpu intensive task, send them to dedicated thread pool
-        let storage_format = self.write_settings.storage_format.clone();
+        let storage_format = self.write_settings.storage_format;
         let block_meta_ptr = block_meta.clone();
         let data_block = GlobalIORuntime::instance()
             .spawn_blocking(move || {

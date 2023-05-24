@@ -17,11 +17,11 @@ use std::ops::Range;
 use std::time::Instant;
 
 use common_base::rangemap::RangeMerger;
-use common_base::runtime::execute_futures_in_parallel;
 use common_base::runtime::UnlimitedFuture;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
+use futures_util::future::try_join_all;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCacheKey;
@@ -80,31 +80,17 @@ impl BlockReader {
                 metrics_inc_remote_io_read_bytes_after_merged(range.end - range.start);
             }
 
-            read_handlers.push(UnlimitedFuture::create({
-                let path = location.to_owned();
-                let op = op.clone();
-                let range = range.clone();
-                async move { Self::read_range(op, path, idx, range.start, range.end).await }
-            }));
+            read_handlers.push(UnlimitedFuture::create(Self::read_range(
+                op.clone(),
+                location,
+                idx,
+                range.start,
+                range.end,
+            )));
         }
 
         let start = Instant::now();
-
-        // TODO: too much parallelism,  may cause OOM.
-        let threads_nums = read_settings.max_threads as usize;
-        let permit_nums = read_settings.max_storage_io_requests as usize;
-        let r = execute_futures_in_parallel(
-            read_handlers,
-            threads_nums,
-            permit_nums,
-            "merge-io-block-reader".to_owned(),
-        )
-        .await?
-        .into_iter()
-        .collect::<Result<_>>()?;
-
-        // let owner_memory = OwnerMemory::create(try_join_all(read_handlers).await?);
-        let owner_memory = OwnerMemory::create(r);
+        let owner_memory = OwnerMemory::create(try_join_all(read_handlers).await?);
         let table_data_cache = CacheManager::instance().get_table_data_cache();
         let mut read_res = MergeIOReadResult::create(
             owner_memory,
@@ -198,12 +184,12 @@ impl BlockReader {
     #[async_backtrace::framed]
     pub async fn read_range(
         op: Operator,
-        path: impl AsRef<str>,
+        path: &str,
         index: usize,
         start: u64,
         end: u64,
     ) -> Result<(usize, Vec<u8>)> {
-        let chunk = op.range_read(path.as_ref(), start..end).await?;
+        let chunk = op.range_read(path, start..end).await?;
         Ok((index, chunk))
     }
 }
