@@ -19,7 +19,6 @@ use common_expression::DataBlock;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::SnapshotVersion;
-use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
 use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
@@ -36,6 +35,8 @@ static SNAPSHOT_V0: SnapshotVersion = SnapshotVersion::V0(PhantomData);
 static SNAPSHOT_V1: SnapshotVersion = SnapshotVersion::V1(PhantomData);
 static SNAPSHOT_V2: SnapshotVersion = SnapshotVersion::V2(PhantomData);
 static SNAPSHOT_V3: SnapshotVersion = SnapshotVersion::V3(PhantomData);
+static SNAPSHOT_V4: SnapshotVersion = SnapshotVersion::V4(PhantomData);
+
 static SNAPSHOT_STATISTICS_V0: TableSnapshotStatisticsVersion =
     TableSnapshotStatisticsVersion::V0(PhantomData);
 
@@ -111,7 +112,9 @@ impl TableMetaLocationGenerator {
     }
 
     pub fn snapshot_version(location: impl AsRef<str>) -> u64 {
-        if location.as_ref().ends_with(SNAPSHOT_V3.suffix().as_str()) {
+        if location.as_ref().ends_with(SNAPSHOT_V4.suffix().as_str()) {
+            SNAPSHOT_V4.version()
+        } else if location.as_ref().ends_with(SNAPSHOT_V3.suffix().as_str()) {
             SNAPSHOT_V3.version()
         } else if location.as_ref().ends_with(SNAPSHOT_V2.suffix().as_str()) {
             SNAPSHOT_V2.version()
@@ -161,9 +164,8 @@ impl SnapshotLocationCreator for SnapshotVersion {
             SnapshotVersion::V0(_) => "".to_string(),
             SnapshotVersion::V1(_) => "_v1.json".to_string(),
             SnapshotVersion::V2(_) => "_v2.json".to_string(),
-            SnapshotVersion::V3(_) => {
-                format!("_v3.{}", TableSnapshot::encoding().as_str())
-            }
+            SnapshotVersion::V3(_) => "_v3.bincode".to_string(),
+            SnapshotVersion::V4(_) => "_v4.mpk".to_string(),
         }
     }
 }

@@ -13,3 +13,5 @@
 //  limitations under the License.
 
 mod snapshot;
+
+mod serialization_format_compatability;
