@@ -25,6 +25,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use rand::prelude::SliceRandom;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -276,7 +277,7 @@ impl FuseTable {
     ) -> Result<Vec<PipeItem>> {
         let chunks = Self::partition_segments(&table_snapshot.segments, num_partition);
         let read_settings = ReadSettings::from_ctx(&ctx)?;
-        let mut items = vec![];
+        let mut items = Vec::with_capacity(num_partition);
         for chunk_of_segment_locations in chunks {
             let item = MergeIntoOperationAggregator::try_create(
                 ctx.clone(),
@@ -298,13 +299,16 @@ impl FuseTable {
         num_partition: usize,
     ) -> Vec<Vec<(SegmentIndex, Location)>> {
         let chunk_size = segments.len() / num_partition;
-        // caller site guarantees this
         assert!(chunk_size >= 1);
 
-        let mut chunks = vec![];
-        for (chunk_idx, chunk) in segments.chunks(chunk_size).enumerate() {
-            let mut segment_chunk = (chunk_idx * chunk_size..)
-                .zip(chunk.to_vec())
+        let mut indexed_segment = segments.iter().enumerate().collect::<Vec<_>>();
+        indexed_segment.shuffle(&mut rand::thread_rng());
+
+        let mut chunks = Vec::with_capacity(num_partition);
+        for chunk in indexed_segment.chunks(chunk_size) {
+            let mut segment_chunk = chunk
+                .iter()
+                .map(|(segment_idx, location)| (*segment_idx, (*location).clone()))
                 .collect::<Vec<_>>();
             if chunks.len() < num_partition {
                 chunks.push(segment_chunk);

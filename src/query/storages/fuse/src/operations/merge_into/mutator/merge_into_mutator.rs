@@ -155,8 +155,11 @@ impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
         let mut mutation_logs = Vec::new();
+        info!(
+            "applying {} deletion mutations",
+            self.deletion_accumulator.deletions.len()
+        );
         for (segment_idx, block_deletion) in &self.deletion_accumulator.deletions {
-            // do we need a local cache?
             let (path, ver) = self.segment_locations.get(segment_idx).ok_or_else(|| {
                 ErrorCode::Internal(format!(
                     "unexpected, segment (idx {}) not found, during applying mutation log",
