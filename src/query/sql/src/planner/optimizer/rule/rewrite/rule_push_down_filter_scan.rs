@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
@@ -23,6 +25,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scan;
@@ -49,16 +52,18 @@ impl RulePushDownFilterScan {
             //  \
             //   LogicalGet
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Filter,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Scan,
                     }
                     .into(),
-                ),
+                ))),
             )],
             metadata,
         }
@@ -125,6 +130,40 @@ impl RulePushDownFilterScan {
                             args,
                             return_type: agg.return_type.clone(),
                             display_name: agg.display_name.clone(),
+                        })
+                    }
+                    WindowFuncType::Lag(lag) => {
+                        let new_arg =
+                            Self::replace_view_column(&lag.arg, table_entries, column_entries)?;
+                        let new_default =
+                            match lag.default.clone().map(|d| {
+                                Self::replace_view_column(&d, table_entries, column_entries)
+                            }) {
+                                None => None,
+                                Some(d) => Some(Box::new(d?)),
+                            };
+                        WindowFuncType::Lag(LagLeadFunction {
+                            arg: Box::new(new_arg),
+                            offset: lag.offset,
+                            default: new_default,
+                            return_type: lag.return_type.clone(),
+                        })
+                    }
+                    WindowFuncType::Lead(lead) => {
+                        let new_arg =
+                            Self::replace_view_column(&lead.arg, table_entries, column_entries)?;
+                        let new_default =
+                            match lead.default.clone().map(|d| {
+                                Self::replace_view_column(&d, table_entries, column_entries)
+                            }) {
+                                None => None,
+                                Some(d) => Some(Box::new(d?)),
+                            };
+                        WindowFuncType::Lead(LagLeadFunction {
+                            arg: Box::new(new_arg),
+                            offset: lead.offset,
+                            default: new_default,
+                            return_type: lead.return_type.clone(),
                         })
                     }
                     func => func.clone(),
@@ -258,7 +297,10 @@ impl Rule for RulePushDownFilterScan {
             None => get.push_down_predicates = Some(add_filters),
         }
 
-        let mut result = SExpr::create_unary(filter.into(), SExpr::create_leaf(get.into()));
+        let mut result = SExpr::create_unary(
+            Arc::new(filter.into()),
+            Arc::new(SExpr::create_leaf(Arc::new(get.into()))),
+        );
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())

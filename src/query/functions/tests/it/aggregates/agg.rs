@@ -16,6 +16,7 @@ use std::io::Write;
 
 use common_expression::types::number::Int64Type;
 use common_expression::types::number::UInt64Type;
+use common_expression::types::BitmapType;
 use common_expression::types::BooleanType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
@@ -23,6 +24,7 @@ use common_expression::Column;
 use common_expression::FromData;
 use common_functions::aggregates::eval_aggr;
 use goldenfile::Mint;
+use roaring::RoaringTreemap;
 
 use super::run_agg_ast;
 use super::simulate_two_groups_group_by;
@@ -57,6 +59,7 @@ fn test_agg() {
     test_agg_median(file, eval_aggr);
     test_agg_array_agg(file, eval_aggr);
     test_agg_string_agg(file, eval_aggr);
+    test_agg_bitmap_count(file, eval_aggr);
 }
 
 #[test]
@@ -88,6 +91,26 @@ fn test_agg_group_by() {
     test_agg_approx_count_distinct(file, simulate_two_groups_group_by);
     test_agg_array_agg(file, simulate_two_groups_group_by);
     test_agg_string_agg(file, simulate_two_groups_group_by);
+    test_agg_bitmap_count(file, simulate_two_groups_group_by);
+}
+
+fn gen_bitmap_data() -> Column {
+    // construct bitmap column with 4 row:
+    // 0..5, 1..6, 2..7, 3..8
+    const N: u64 = 4;
+    let rbs_iter = (0..N).map(|i| {
+        let mut rb = RoaringTreemap::new();
+        rb.insert_range(i..(i + 5));
+        rb
+    });
+
+    let rbs = rbs_iter.map(|rb| {
+        let mut data = Vec::new();
+        rb.serialize_into(&mut data).unwrap();
+        data
+    });
+
+    BitmapType::from_data(rbs)
 }
 
 fn get_example() -> Vec<(&'static str, Column)> {
@@ -133,6 +156,7 @@ fn get_example() -> Vec<(&'static str, Column)> {
                 true, false, true, true,
             ]),
         ),
+        ("bm", gen_bitmap_data()),
     ]
 }
 
@@ -489,6 +513,27 @@ fn test_agg_string_agg(file: &mut impl Write, simulator: impl AggregationSimulat
     run_agg_ast(
         file,
         "string_agg(s_null, '-')",
+        get_example().as_slice(),
+        simulator,
+    );
+}
+
+fn test_agg_bitmap_count(file: &mut impl Write, simulator: impl AggregationSimulator) {
+    run_agg_ast(
+        file,
+        "bitmap_and_count(bm)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "bitmap_or_count(bm)",
+        get_example().as_slice(),
+        simulator,
+    );
+    run_agg_ast(
+        file,
+        "bitmap_xor_count(bm)",
         get_example().as_slice(),
         simulator,
     );

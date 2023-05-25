@@ -71,6 +71,7 @@ members = [
     "src/query/users",
     "src/query/ee-features/vacuum-handler",
     "src/query/ee-features/aggregating-index",
+    "src/query/ee-features/data-mask",
     "src/query/ee-features/table-lock",
     # databend-query
     "src/query/service",
@@ -102,7 +103,7 @@ members = [
 [workspace.dependencies]
 # databend maintains:
 sled = { git = "https://github.com/datafuse-extras/sled", tag = "v0.34.7-datafuse.1", default-features = false }
-opendal = { version = "0.34", features = [
+opendal = { version = "0.35", features = [
     "layers-tracing",
     "layers-metrics",
     "services-ipfs",

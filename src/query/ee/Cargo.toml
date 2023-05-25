@@ -20,12 +20,16 @@ common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
 common-license = { path = "../../common/license" }
+common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
+common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-settings = { path = "../../query/settings" }
+common-sql = { path = "../sql" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-users = { path = "../users" }
+data-mask = { path = "../ee-features/data-mask" }
 databend-query = { path = "../service" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }

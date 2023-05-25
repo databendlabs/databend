@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_exception::Result;
 
@@ -80,26 +81,34 @@ pub fn try_derive_predicates(
 
     if !left_push_down.is_empty() {
         left_child = SExpr::create_unary(
-            Filter {
-                predicates: left_push_down,
-                is_having: false,
-            }
-            .into(),
-            left_child,
+            Arc::new(
+                Filter {
+                    predicates: left_push_down,
+                    is_having: false,
+                }
+                .into(),
+            ),
+            Arc::new(left_child),
         );
     }
 
     if !right_push_down.is_empty() {
         right_child = SExpr::create_unary(
-            Filter {
-                predicates: right_push_down,
-                is_having: false,
-            }
-            .into(),
-            right_child,
+            Arc::new(
+                Filter {
+                    predicates: right_push_down,
+                    is_having: false,
+                }
+                .into(),
+            ),
+            Arc::new(right_child),
         );
     }
-    Ok(SExpr::create_binary(join.into(), left_child, right_child))
+    Ok(SExpr::create_binary(
+        Arc::new(join.into()),
+        Arc::new(left_child),
+        Arc::new(right_child),
+    ))
 }
 
 fn derive_predicate(
@@ -123,10 +132,19 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
             *scalar = (*col_to_scalar.get(&column_index).unwrap()).clone();
         }
         ScalarExpr::WindowFunction(expr) => {
-            if let WindowFuncType::Aggregate(agg) = &mut expr.func {
-                for arg in agg.args.iter_mut() {
-                    replace_column(arg, col_to_scalar);
+            match &mut expr.func {
+                WindowFuncType::Aggregate(agg) => {
+                    for arg in agg.args.iter_mut() {
+                        replace_column(arg, col_to_scalar);
+                    }
                 }
+                WindowFuncType::Lag(f) | WindowFuncType::Lead(f) => {
+                    replace_column(&mut f.arg, col_to_scalar);
+                    if let Some(ref mut default) = &mut f.default {
+                        replace_column(default, col_to_scalar);
+                    }
+                }
+                _ => {}
             }
             for arg in expr.partition_by.iter_mut() {
                 replace_column(arg, col_to_scalar)

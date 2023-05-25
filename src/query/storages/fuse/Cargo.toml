@@ -55,6 +55,7 @@ metrics = "0.20.1"
 ndarray = "0.15.6"
 opendal = { workspace = true }
 parquet-format-safe = "0.2"
+rand = "0.8.5"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"

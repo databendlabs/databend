@@ -35,8 +35,8 @@ use crate::ScalarExpr;
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct SExpr {
-    pub(crate) plan: RelOperator,
-    pub(crate) children: Arc<Vec<SExpr>>,
+    pub(crate) plan: Arc<RelOperator>,
+    pub(crate) children: Vec<Arc<SExpr>>,
 
     pub(crate) original_group: Option<IndexType>,
 
@@ -59,15 +59,15 @@ pub struct SExpr {
 
 impl SExpr {
     pub fn create(
-        plan: RelOperator,
-        children: Vec<SExpr>,
+        plan: Arc<RelOperator>,
+        children: impl IntoIterator<Item = Arc<SExpr>>,
         original_group: Option<IndexType>,
         rel_prop: Option<RelationalProperty>,
         stat_info: Option<StatInfo>,
     ) -> Self {
         SExpr {
             plan,
-            children: Arc::new(children),
+            children: children.into_iter().collect(),
             original_group,
             rel_prop: Arc::new(Mutex::new(rel_prop)),
             stat_info: Arc::new(Mutex::new(stat_info)),
@@ -75,24 +75,30 @@ impl SExpr {
         }
     }
 
-    pub fn create_unary(plan: RelOperator, child: SExpr) -> Self {
+    pub fn create_unary(plan: Arc<RelOperator>, child: Arc<SExpr>) -> Self {
         Self::create(plan, vec![child], None, None, None)
     }
 
-    pub fn create_binary(plan: RelOperator, left_child: SExpr, right_child: SExpr) -> Self {
+    pub fn create_binary(
+        plan: Arc<RelOperator>,
+        left_child: Arc<SExpr>,
+        right_child: Arc<SExpr>,
+    ) -> Self {
         Self::create(plan, vec![left_child, right_child], None, None, None)
     }
 
-    pub fn create_leaf(plan: RelOperator) -> Self {
+    pub fn create_leaf(plan: Arc<RelOperator>) -> Self {
         Self::create(plan, vec![], None, None, None)
     }
 
     pub fn create_pattern_leaf() -> Self {
         Self::create(
-            PatternPlan {
-                plan_type: RelOp::Pattern,
-            }
-            .into(),
+            Arc::new(
+                PatternPlan {
+                    plan_type: RelOp::Pattern,
+                }
+                .into(),
+            ),
             vec![],
             None,
             None,
@@ -104,13 +110,14 @@ impl SExpr {
         &self.plan
     }
 
-    pub fn children(&self) -> &[SExpr] {
+    pub fn children(&self) -> &[Arc<SExpr>] {
         &self.children
     }
 
     pub fn child(&self, n: usize) -> Result<&SExpr> {
         self.children
             .get(n)
+            .map(|v| v.as_ref())
             .ok_or_else(|| ErrorCode::Internal(format!("Invalid children index: {}", n)))
     }
 
@@ -152,20 +159,20 @@ impl SExpr {
     /// Replace children with given new `children`.
     /// Note that this method will keep the `applied_rules` of
     /// current `SExpr` unchanged.
-    pub fn replace_children(&self, children: Vec<SExpr>) -> Self {
+    pub fn replace_children(&self, children: impl IntoIterator<Item = Arc<SExpr>>) -> Self {
         Self {
             plan: self.plan.clone(),
             original_group: None,
             rel_prop: Arc::new(Mutex::new(None)),
             stat_info: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
-            children: Arc::new(children),
+            children: children.into_iter().collect(),
         }
     }
 
     pub fn replace_plan(&self, plan: RelOperator) -> Self {
         Self {
-            plan,
+            plan: Arc::new(plan),
             original_group: self.original_group,
             rel_prop: self.rel_prop.clone(),
             stat_info: self.stat_info.clone(),
@@ -204,25 +211,28 @@ impl SExpr {
             table_index: IndexType,
         ) -> SExpr {
             let mut s_expr = s_expr.clone();
-            if let RelOperator::Scan(p) = &mut s_expr.plan {
+            s_expr.plan = if let RelOperator::Scan(mut p) = (*s_expr.plan).clone() {
                 if p.table_index == table_index {
                     p.columns.insert(column_index);
                 }
-            }
+                Arc::new(p.into())
+            } else {
+                s_expr.plan
+            };
 
             if s_expr.children.is_empty() {
                 s_expr
             } else {
                 let mut children = Vec::with_capacity(s_expr.children.len());
-                for child in s_expr.children.as_ref() {
-                    children.push(add_internal_column_index_into_child(
+                for child in s_expr.children.iter() {
+                    children.push(Arc::new(add_internal_column_index_into_child(
                         child,
                         column_index,
                         table_index,
-                    ));
+                    )));
                 }
 
-                s_expr.children = Arc::new(children);
+                s_expr.children = children;
 
                 s_expr
             }

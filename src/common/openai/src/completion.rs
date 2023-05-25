@@ -53,6 +53,7 @@ impl OpenAI {
                 organization: None,
             },
             &self.api_base,
+            &self.api_version,
             Duration::from_secs(120),
         );
 

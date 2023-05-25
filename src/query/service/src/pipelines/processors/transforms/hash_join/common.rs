@@ -254,7 +254,7 @@ impl JoinHashTable {
         // For right/full join, build side will appear at least once in the joined table
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
-        for (chunk_index, chunk) in self.row_space.chunks.read().unwrap().iter().enumerate() {
+        for (chunk_index, chunk) in self.row_space.chunks.read().iter().enumerate() {
             for row_index in 0..chunk.num_rows() {
                 if row_state[chunk_index][row_index] == 0 {
                     unmatched_build_indexes.push(RowPtr::new(chunk_index, row_index));
@@ -270,7 +270,7 @@ impl JoinHashTable {
         &self,
         unmatched_build_indexes: &Vec<RowPtr>,
     ) -> Result<DataBlock> {
-        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)
@@ -315,7 +315,7 @@ impl JoinHashTable {
     // Record row in build side that is matched how many rows in probe side.
     pub(crate) fn row_state_for_right_join(&self) -> Result<Vec<Vec<usize>>> {
         let build_indexes = self.hash_join_desc.join_state.build_indexes.read();
-        let chunks = self.row_space.chunks.read().unwrap();
+        let chunks = self.row_space.chunks.read();
         let mut row_state = Vec::with_capacity(chunks.len());
         for chunk in chunks.iter() {
             let mut rows = Vec::with_capacity(chunk.num_rows());
@@ -337,7 +337,7 @@ impl JoinHashTable {
     }
 
     pub(crate) fn rest_block(&self) -> Result<DataBlock> {
-        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)

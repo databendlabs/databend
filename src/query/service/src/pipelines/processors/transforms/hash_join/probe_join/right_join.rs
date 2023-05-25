@@ -50,7 +50,7 @@ impl JoinHashTable {
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
         let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
-        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)

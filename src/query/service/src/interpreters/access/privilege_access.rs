@@ -489,12 +489,20 @@ impl AccessChecker for PrivilegeAccess {
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;
             }
+            Plan::CreateDatamaskPolicy(_) | Plan::DropDatamaskPolicy(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![
+                        UserPrivilegeType::CreateDataMask,
+                    ])
+                    .await?;
+            }
             // Note: No need to check privileges
             Plan::Presign(_) => {}
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
             // just used in clickhouse-sqlalchemy, no need to check
             Plan::ExistsTable(_) => {}
+            Plan::DescDatamaskPolicy(_) => {}
         }
 
         Ok(())

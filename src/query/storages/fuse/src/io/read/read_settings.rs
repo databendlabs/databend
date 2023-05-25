@@ -35,12 +35,3 @@ impl ReadSettings {
         })
     }
 }
-
-impl Default for ReadSettings {
-    fn default() -> Self {
-        ReadSettings {
-            storage_io_min_bytes_for_seek: 1024,
-            storage_io_max_page_bytes_for_read: 1024 * 1024,
-        }
-    }
-}

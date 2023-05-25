@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::types::NumberScalar;
 use common_expression::Scalar;
@@ -44,16 +46,18 @@ impl RuleFoldCountAggregate {
             //  \
             //   *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Aggregate,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Aggregate,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Pattern,
                     }
                     .into(),
-                ),
+                ))),
             )],
         }
     }
@@ -116,8 +120,8 @@ impl Rule for RuleFoldCountAggregate {
             let eval_scalar = EvalScalar { items: scalars };
             let dummy_table_scan = DummyTableScan;
             state.add_result(SExpr::create_unary(
-                eval_scalar.into(),
-                SExpr::create_leaf(dummy_table_scan.into()),
+                Arc::new(eval_scalar.into()),
+                Arc::new(SExpr::create_leaf(Arc::new(dummy_table_scan.into()))),
             ));
         }
         Ok(())

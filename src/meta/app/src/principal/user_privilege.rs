@@ -62,6 +62,8 @@ pub enum UserPrivilegeType {
     DropRole = 1 << 14,
     // Privilege to Drop user.
     DropUser = 1 << 15,
+    // Privilege to Create/Drop DataMask.
+    CreateDataMask = 1 << 16,
     // TODO: remove this later
     Set = 1 << 4,
 }
@@ -83,6 +85,7 @@ const ALL_PRIVILEGES: BitFlags<UserPrivilegeType> = make_bitflags!(
         | Grant
         | CreateStage
         | Set
+        | CreateDataMask
     }
 );
 
@@ -105,6 +108,7 @@ impl std::fmt::Display for UserPrivilegeType {
             UserPrivilegeType::CreateStage => "CREATE STAGE",
             UserPrivilegeType::Grant => "GRANT",
             UserPrivilegeType::Set => "SET",
+            UserPrivilegeType::CreateDataMask => "CREATE DATAMASK",
         })
     }
 }
@@ -129,7 +133,7 @@ impl UserPrivilegeSet {
     /// on databases and tables, and has some Global only privileges.
     pub fn available_privileges_on_global() -> Self {
         let database_privs = Self::available_privileges_on_database();
-        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | Grant });
+        let privs = make_bitflags!(UserPrivilegeType::{ Usage | Super | CreateUser | DropUser | CreateRole | DropRole | Grant | CreateDataMask });
         (database_privs.privileges | privs).into()
     }
 

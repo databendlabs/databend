@@ -15,6 +15,7 @@
 use std::default::Default;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -25,6 +26,7 @@ use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use rand::prelude::SliceRandom;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -232,6 +234,9 @@ impl FuseTable {
             let dummy_item = create_dummy_item();
             pipe_items.push(dummy_item);
 
+            let max_io_request = ctx.get_settings().get_max_storage_io_requests()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+
             // setup the merge into operation aggregators
             let mut merge_into_operation_aggregators = self
                 .merge_into_mutators(
@@ -240,6 +245,7 @@ impl FuseTable {
                     block_builder,
                     on_conflicts.clone(),
                     &base_snapshot,
+                    io_request_semaphore,
                 )
                 .await?;
             assert_eq!(
@@ -273,10 +279,11 @@ impl FuseTable {
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
         table_snapshot: &TableSnapshot,
+        io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
         let chunks = Self::partition_segments(&table_snapshot.segments, num_partition);
         let read_settings = ReadSettings::from_ctx(&ctx)?;
-        let mut items = vec![];
+        let mut items = Vec::with_capacity(num_partition);
         for chunk_of_segment_locations in chunks {
             let item = MergeIntoOperationAggregator::try_create(
                 ctx.clone(),
@@ -287,6 +294,7 @@ impl FuseTable {
                 self.get_write_settings(),
                 read_settings.clone(),
                 block_builder.clone(),
+                io_request_semaphore.clone(),
             )?;
             items.push(item.into_pipe_item());
         }
@@ -298,13 +306,16 @@ impl FuseTable {
         num_partition: usize,
     ) -> Vec<Vec<(SegmentIndex, Location)>> {
         let chunk_size = segments.len() / num_partition;
-        // caller site guarantees this
         assert!(chunk_size >= 1);
 
-        let mut chunks = vec![];
-        for (chunk_idx, chunk) in segments.chunks(chunk_size).enumerate() {
-            let mut segment_chunk = (chunk_idx * chunk_size..)
-                .zip(chunk.to_vec())
+        let mut indexed_segment = segments.iter().enumerate().collect::<Vec<_>>();
+        indexed_segment.shuffle(&mut rand::thread_rng());
+
+        let mut chunks = Vec::with_capacity(num_partition);
+        for chunk in indexed_segment.chunks(chunk_size) {
+            let mut segment_chunk = chunk
+                .iter()
+                .map(|(segment_idx, location)| (*segment_idx, (*location).clone()))
                 .collect::<Vec<_>>();
             if chunks.len() < num_partition {
                 chunks.push(segment_chunk);

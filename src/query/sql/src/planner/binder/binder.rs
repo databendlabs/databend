@@ -223,8 +223,9 @@ impl<'a> Binder {
             Statement::UndropDatabase(stmt) => self.bind_undrop_database(stmt).await?,
             Statement::AlterDatabase(stmt) => self.bind_alter_database(stmt).await?,
             Statement::UseDatabase { database } => {
+                let database = normalize_identifier(database, &self.name_resolution_ctx).name;
                 Plan::UseDatabase(Box::new(UseDatabasePlan {
-                    database: database.name.clone(),
+                    database,
                 }))
             }
             // Columns
@@ -484,6 +485,15 @@ impl<'a> Binder {
             }
             Statement::ShowGrantsOfShare(stmt) => {
                 self.bind_show_grants_of_share(stmt).await?
+            }
+            Statement::CreateDatamaskPolicy(stmt) => {
+                self.bind_create_data_mask_policy(stmt).await?
+            }
+            Statement::DropDatamaskPolicy(stmt) => {
+                self.bind_drop_data_mask_policy(stmt).await?
+            }
+            Statement::DescDatamaskPolicy(stmt) => {
+                self.bind_desc_data_mask_policy(stmt).await?
             }
         };
         Ok(plan)

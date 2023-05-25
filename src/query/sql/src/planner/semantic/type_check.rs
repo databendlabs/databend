@@ -664,16 +664,12 @@ impl<'a> TypeChecker<'a> {
                             "window function {name} can only be used in window clause"
                         )));
                     }
-                    if !args.is_empty() {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "window function {name} does not have any argument"
-                        )));
-                    }
+                    let func = self.resolve_general_window_function(&name, &args).await?;
                     let window = window.as_ref().unwrap();
                     // WindowReference already rewritten by `SelectRewriter` before.
                     let window = window.as_window_spec().unwrap();
                     let display_name = format!("{:#}", expr);
-                    let func = WindowFuncType::from_name(&name)?;
+
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(&name) {
@@ -1064,12 +1060,37 @@ impl<'a> TypeChecker<'a> {
         order_by: &mut [WindowOrderBy],
         window_frame: Option<WindowFrame>,
     ) -> Result<WindowFuncFrame> {
-        if matches!(func, WindowFuncType::PercentRank) {
-            return Ok(WindowFuncFrame {
-                units: WindowFuncFrameUnits::Rows,
-                start_bound: WindowFuncFrameBound::Preceding(None),
-                end_bound: WindowFuncFrameBound::Following(None),
-            });
+        match func {
+            WindowFuncType::PercentRank => {
+                return Ok(WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(None),
+                    end_bound: WindowFuncFrameBound::Following(None),
+                });
+            }
+            WindowFuncType::Lag(lag) => {
+                return Ok(WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
+                        NumberScalar::UInt64(lag.offset),
+                    ))),
+                    end_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
+                        NumberScalar::UInt64(lag.offset),
+                    ))),
+                });
+            }
+            WindowFuncType::Lead(lead) => {
+                return Ok(WindowFuncFrame {
+                    units: WindowFuncFrameUnits::Rows,
+                    start_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
+                        NumberScalar::UInt64(lead.offset),
+                    ))),
+                    end_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
+                        NumberScalar::UInt64(lead.offset),
+                    ))),
+                });
+            }
+            _ => {}
         }
         if let Some(frame) = window_frame {
             if frame.units.is_range() {
@@ -1096,6 +1117,81 @@ impl<'a> TypeChecker<'a> {
                 end_bound: WindowFuncFrameBound::CurrentRow,
             })
         }
+    }
+
+    /// Resolve general window function call.
+    #[async_backtrace::framed]
+    async fn resolve_general_window_function(
+        &mut self,
+        func_name: &str,
+        args: &[&Expr],
+    ) -> Result<WindowFuncType> {
+        if args.is_empty() {
+            return WindowFuncType::from_name(func_name);
+        }
+        self.in_window_function = true;
+        let mut arguments = vec![];
+        let mut arg_types = vec![];
+        for arg in args.iter() {
+            let box (argument, arg_type) = self.resolve(arg).await?;
+            arguments.push(argument);
+            arg_types.push(arg_type);
+        }
+        self.in_window_function = false;
+        debug_assert!(!arguments.is_empty());
+        debug_assert!(!arg_types.is_empty());
+
+        let offset = if arguments.len() >= 2 {
+            let off = ScalarExpr::CastExpr(CastExpr {
+                span: arguments[1].span(),
+                is_try: true,
+                argument: Box::new(arguments[1].clone()),
+                target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+            })
+            .as_expr()?;
+            Some(check_number::<_, u64>(
+                off.span(),
+                &self.func_ctx,
+                &off,
+                &BUILTIN_FUNCTIONS,
+            )?)
+        } else {
+            None
+        };
+
+        let default = if arguments.len() == 3 {
+            Some(arguments[2].clone())
+        } else {
+            None
+        };
+        let return_type = match default {
+            Some(_) => arg_types[0].clone(),
+            None => DataType::Nullable(Box::new(arg_types[0].clone())),
+        };
+
+        let cast_default = default
+            .map(|d| match d.clone() {
+                ScalarExpr::BoundColumnRef(_)
+                | ScalarExpr::CastExpr(_)
+                | ScalarExpr::ConstantExpr(_) => Ok(ScalarExpr::CastExpr(CastExpr {
+                    span: d.span(),
+                    is_try: true,
+                    argument: Box::new(d),
+                    target_type: Box::new(return_type.clone()),
+                })),
+                _ => Err(ErrorCode::SemanticError(
+                    "default value just support literal value and column, or ignore it",
+                )),
+            })
+            .transpose()?;
+
+        WindowFuncType::get_general_window_func(
+            func_name,
+            arguments[0].clone(),
+            offset,
+            cast_default,
+            return_type,
+        )
     }
 
     /// Resolve aggregation function call.

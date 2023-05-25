@@ -98,6 +98,7 @@ impl RuleFactory {
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
             RuleID::TryApplyVectorIndex => Ok(Box::new(RuleTryApplyVectorIndex::new())),
             RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
+            RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(func_ctx, metadata))),
         }
     }
 }

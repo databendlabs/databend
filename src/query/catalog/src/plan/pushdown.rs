@@ -79,6 +79,14 @@ pub enum VectorSimilarityMetric {
     Cosine,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
+pub struct AggIndexInfo {
+    pub index_id: u64,
+    // The index in aggregating index is the offset in the output list.
+    pub selection: Vec<RemoteExpr>,
+    pub filter: Option<RemoteExpr>,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
@@ -104,6 +112,8 @@ pub struct PushDownInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
     /// If lazy materialization is enabled in this query.
     pub lazy_materialization: bool,
+    /// Aggregating index information.
+    pub agg_index: Option<AggIndexInfo>,
     /// Optional vector similarity info
     pub similarity: Option<VectorSimilarityInfo>,
 }

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use ahash::HashMap;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -25,6 +27,7 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -57,28 +60,32 @@ impl RulePushDownFilterUnion {
             //     /  \
             //   ...   ...
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_binary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::UnionAll,
+                        plan_type: RelOp::Filter,
                     }
                     .into(),
-                    SExpr::create_leaf(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ),
-                    SExpr::create_leaf(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ),
                 ),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::UnionAll,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
+                )),
             )],
         }
     }
@@ -111,10 +118,15 @@ impl Rule for RulePushDownFilterUnion {
         let mut union_right_child = union_s_expr.child(1)?.clone();
 
         // Add filter to union children
-        union_left_child = SExpr::create_unary(filter.into(), union_left_child);
-        union_right_child = SExpr::create_unary(right_filer.into(), union_right_child);
+        union_left_child = SExpr::create_unary(Arc::new(filter.into()), Arc::new(union_left_child));
+        union_right_child =
+            SExpr::create_unary(Arc::new(right_filer.into()), Arc::new(union_right_child));
 
-        let result = SExpr::create_binary(union.into(), union_left_child, union_right_child);
+        let result = SExpr::create_binary(
+            Arc::new(union.into()),
+            Arc::new(union_left_child),
+            Arc::new(union_right_child),
+        );
         state.add_result(result);
 
         Ok(())
@@ -166,6 +178,32 @@ fn replace_column_binding(
                         .collect::<Result<Vec<_>>>()?,
                     return_type: arg.return_type,
                 }),
+                WindowFuncType::Lag(lag) => {
+                    let new_arg = replace_column_binding(index_pairs, *lag.arg)?;
+                    let new_default = match &lag.default {
+                        None => None,
+                        Some(d) => Some(Box::new(replace_column_binding(index_pairs, *d.clone())?)),
+                    };
+                    WindowFuncType::Lag(LagLeadFunction {
+                        arg: Box::new(new_arg),
+                        offset: lag.offset,
+                        default: new_default,
+                        return_type: lag.return_type.clone(),
+                    })
+                }
+                WindowFuncType::Lead(lead) => {
+                    let new_arg = replace_column_binding(index_pairs, *lead.arg)?;
+                    let new_default = match &lead.default {
+                        None => None,
+                        Some(d) => Some(Box::new(replace_column_binding(index_pairs, *d.clone())?)),
+                    };
+                    WindowFuncType::Lead(LagLeadFunction {
+                        arg: Box::new(new_arg),
+                        offset: lead.offset,
+                        default: new_default,
+                        return_type: lead.return_type.clone(),
+                    })
+                }
                 t => t,
             },
             partition_by: expr
