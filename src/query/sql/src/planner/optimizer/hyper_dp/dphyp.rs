@@ -37,7 +37,6 @@ use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
-const MOCK_NUMBER: usize = 1000;
 const RELATION_THRESHOLD: usize = 10;
 
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
@@ -50,26 +49,22 @@ pub struct DPhpy {
     // base table index -> index of join_relations
     table_index_map: HashMap<IndexType, IndexType>,
     dp_table: HashMap<Vec<IndexType>, JoinNode>,
-    subquery_table_index_map: HashMap<IndexType, HashMap<IndexType, IndexType>>,
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
     filters: HashSet<Filter>,
-    is_in_subquery: bool,
 }
 
 impl DPhpy {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef, is_in_subquery: bool) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
         Self {
             ctx,
             metadata,
             join_relations: vec![],
             table_index_map: Default::default(),
             dp_table: Default::default(),
-            subquery_table_index_map: Default::default(),
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
             filters: HashSet::new(),
-            is_in_subquery,
         }
     }
 
@@ -88,19 +83,14 @@ impl DPhpy {
         }
 
         if is_subquery {
-            if self.is_in_subquery {
-                // There is a subquery in a subquery, do not support this for now.
-                return Ok(false);
-            }
             // If it's a subquery, start a new dphyp
-            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone(), true);
+            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
             let (res, optimized) = dphyp.optimize(s_expr)?;
             if optimized {
-                let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
-                self.subquery_table_index_map
-                    .insert(key, dphyp.table_index_map);
-                self.table_index_map
-                    .insert(key, self.join_relations.len() as IndexType);
+                let relation_idx = self.join_relations.len() as IndexType;
+                for table_index in dphyp.table_index_map.keys() {
+                    self.table_index_map.insert(*table_index, relation_idx);
+                }
                 self.join_relations.push(JoinRelation::new(&res));
             }
             return Ok(optimized);
@@ -154,14 +144,14 @@ impl DPhpy {
                     let metadata = self.metadata.clone();
                     let left_expr = s_expr.children()[0].clone();
                     let left_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(ctx, metadata, true);
+                        let mut dphyp = DPhpy::new(ctx, metadata);
                         (dphyp.optimize(left_expr.as_ref()), dphyp.table_index_map)
                     });
                     let ctx = self.ctx.clone();
                     let metadata = self.metadata.clone();
                     let right_expr = s_expr.children()[1].clone();
                     let right_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(ctx, metadata, true);
+                        let mut dphyp = DPhpy::new(ctx, metadata);
                         (dphyp.optimize(right_expr.as_ref()), dphyp.table_index_map)
                     });
                     let left_res = left_res.join()?;
@@ -169,15 +159,15 @@ impl DPhpy {
                     let right_res = right_res.join()?;
                     let (right_expr, right_optimized) = right_res.0?;
                     if left_optimized && right_optimized {
-                        let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
-                        self.subquery_table_index_map.insert(key, left_res.1);
-                        self.table_index_map
-                            .insert(key, self.join_relations.len() as IndexType);
+                        let relation_idx = self.join_relations.len() as IndexType;
+                        for table_index in left_res.1.keys() {
+                            self.table_index_map.insert(*table_index, relation_idx);
+                        }
                         self.join_relations.push(JoinRelation::new(&left_expr));
-                        let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
-                        self.subquery_table_index_map.insert(key, right_res.1);
-                        self.table_index_map
-                            .insert(key, self.join_relations.len() as IndexType);
+                        let relation_idx = self.join_relations.len() as IndexType;
+                        for table_index in right_res.1.keys() {
+                            self.table_index_map.insert(*table_index, relation_idx);
+                        }
                         self.join_relations.push(JoinRelation::new(&right_expr));
                         Ok(true)
                     } else {
@@ -260,30 +250,11 @@ impl DPhpy {
             let mut right_relation_set = HashSet::new();
             let left_used_tables = left_condition.used_tables(self.metadata.clone())?;
             for table in left_used_tables.iter() {
-                if let Some(idx) = self.table_index_map.get(table) {
-                    left_relation_set.insert(*idx);
-                }
-                // Start to traverse `subquery_table_index_map` to find the corresponding table index
-                for (key, val) in self.subquery_table_index_map.iter() {
-                    if val.get(table).is_some() {
-                        if let Some(idx) = self.table_index_map.get(key) {
-                            left_relation_set.insert(*idx);
-                        }
-                    }
-                }
+                left_relation_set.insert(self.table_index_map[table]);
             }
             let right_used_tables = right_condition.used_tables(self.metadata.clone())?;
             for table in right_used_tables.iter() {
-                if let Some(idx) = self.table_index_map.get(table) {
-                    right_relation_set.insert(*idx);
-                }
-                for (key, val) in self.subquery_table_index_map.iter() {
-                    if val.get(table).is_some() {
-                        if let Some(idx) = self.table_index_map.get(key) {
-                            right_relation_set.insert(*idx);
-                        }
-                    }
-                }
+                right_relation_set.insert(self.table_index_map[table]);
             }
 
             if !left_relation_set.is_empty() && !right_relation_set.is_empty() {
