@@ -1,0 +1,16 @@
+[package]
+name = "vector_index_benchmark"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+databend-driver = "0.2.22"
+tokio = { version = "1.28.1", features = ["full"] }
+prettytable-rs = "0.10.0"
+rand = "0.8.5"
+quanta = "0.11.0"
+futures-util = "0.3.28"
+
+[workspace]
