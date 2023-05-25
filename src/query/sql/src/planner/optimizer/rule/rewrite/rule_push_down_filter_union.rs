@@ -26,6 +26,7 @@ use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::Filter;
+use crate::plans::FirstLastFunction;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
 use crate::plans::PatternPlan;
@@ -202,6 +203,20 @@ fn replace_column_binding(
                         offset: lead.offset,
                         default: new_default,
                         return_type: lead.return_type.clone(),
+                    })
+                }
+                WindowFuncType::FirstValue(func) => {
+                    let new_arg = replace_column_binding(index_pairs, *func.arg)?;
+                    WindowFuncType::FirstValue(FirstLastFunction {
+                        arg: Box::new(new_arg),
+                        return_type: func.return_type.clone(),
+                    })
+                }
+                WindowFuncType::LastValue(func) => {
+                    let new_arg = replace_column_binding(index_pairs, *func.arg)?;
+                    WindowFuncType::LastValue(FirstLastFunction {
+                        arg: Box::new(new_arg),
+                        return_type: func.return_type.clone(),
                     })
                 }
                 t => t,

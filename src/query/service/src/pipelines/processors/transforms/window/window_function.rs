@@ -39,6 +39,8 @@ pub enum WindowFunctionInfo {
     PercentRank,
     Lag(WindowFuncLagLeadImpl),
     Lead(WindowFuncLagLeadImpl),
+    FirstValue(WindowFuncFirstLastImpl),
+    LastValue(WindowFuncFirstLastImpl),
 }
 
 pub struct WindowFuncAggImpl {
@@ -98,6 +100,12 @@ pub struct WindowFuncLagLeadImpl {
     pub return_type: DataType,
 }
 
+#[derive(Clone)]
+pub struct WindowFuncFirstLastImpl {
+    pub arg: usize,
+    pub return_type: DataType,
+}
+
 pub enum WindowFunctionImpl {
     Aggregate(WindowFuncAggImpl),
     RowNumber,
@@ -106,6 +114,8 @@ pub enum WindowFunctionImpl {
     PercentRank,
     Lag(WindowFuncLagLeadImpl),
     Lead(WindowFuncLagLeadImpl),
+    FirstValue(WindowFuncFirstLastImpl),
+    LastValue(WindowFuncFirstLastImpl),
 }
 
 impl WindowFunctionInfo {
@@ -163,6 +173,20 @@ impl WindowFunctionInfo {
                     return_type: lead.sig.return_type.clone(),
                 })
             }
+            WindowFunction::FirstValue(func) => {
+                let new_arg = schema.index_of(&func.arg.to_string())?;
+                Self::FirstValue(WindowFuncFirstLastImpl {
+                    arg: new_arg,
+                    return_type: func.sig.return_type.clone(),
+                })
+            }
+            WindowFunction::LastValue(func) => {
+                let new_arg = schema.index_of(&func.arg.to_string())?;
+                Self::LastValue(WindowFuncFirstLastImpl {
+                    arg: new_arg,
+                    return_type: func.sig.return_type.clone(),
+                })
+            }
         })
     }
 }
@@ -191,6 +215,8 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::PercentRank => Self::PercentRank,
             WindowFunctionInfo::Lag(lag) => Self::Lag(lag),
             WindowFunctionInfo::Lead(lead) => Self::Lead(lead),
+            WindowFunctionInfo::FirstValue(func) => Self::FirstValue(func),
+            WindowFunctionInfo::LastValue(func) => Self::LastValue(func),
         })
     }
 
@@ -202,6 +228,7 @@ impl WindowFunctionImpl {
             }
             Self::PercentRank => DataType::Number(NumberDataType::Float64),
             Self::Lag(f) | Self::Lead(f) => f.return_type.clone(),
+            Self::FirstValue(f) | Self::LastValue(f) => f.return_type.clone(),
         })
     }
 

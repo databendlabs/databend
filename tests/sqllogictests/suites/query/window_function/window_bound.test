@@ -71,6 +71,34 @@ SELECT sum(unique1) over (order by unique1 rows between unbounded preceding and 
 45
 45
 
+query II
+SELECT unique1, first_value(unique1) over (order by unique1 rows between 1 preceding and unbounded following) first FROM tenk1 order by unique1
+----
+0 0
+1 0
+2 1
+3 2
+4 3
+5 4
+6 5
+7 6
+8 7
+9 8
+
+query II
+SELECT unique1, last_value(unique1) over (order by unique1 rows between current row and unbounded following) last FROM tenk1 order by unique1
+----
+0 9
+1 9
+2 9
+3 9
+4 9
+5 9
+6 9
+7 9
+8 9
+9 9
+
 statement ok
 DROP TABLE IF EXISTS tenk1
 
