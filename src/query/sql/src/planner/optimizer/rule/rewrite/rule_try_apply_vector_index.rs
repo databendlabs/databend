@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -40,28 +42,34 @@ impl RuleTryApplyVectorIndex {
             // Output:
             //   Scan(order_by, limit, similarity)
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Limit,
-                }
-                .into(),
-                SExpr::create_unary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::Sort,
+                        plan_type: RelOp::Limit,
                     }
                     .into(),
-                    SExpr::create_unary(
+                ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
                         PatternPlan {
-                            plan_type: RelOp::EvalScalar,
+                            plan_type: RelOp::Sort,
                         }
                         .into(),
-                        SExpr::create_leaf(
+                    ),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(
+                            PatternPlan {
+                                plan_type: RelOp::EvalScalar,
+                            }
+                            .into(),
+                        ),
+                        Arc::new(SExpr::create_leaf(Arc::new(
                             PatternPlan {
                                 plan_type: RelOp::Scan,
                             }
                             .into(),
-                        ),
-                    ),
-                ),
+                        ))),
+                    )),
+                )),
             )],
         }
     }
