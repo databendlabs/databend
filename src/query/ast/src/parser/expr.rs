@@ -800,7 +800,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
         COUNT ~ "(" ~ "*" ~ ")" ~ (OVER ~ #window_spec_ident)?
         },
         |(_, _, _, _, window)| ExprElement::CountAll {
-            window: window.map(|w|w.1),
+            window: window.map(|w| w.1),
         },
     );
     let tuple = map(
