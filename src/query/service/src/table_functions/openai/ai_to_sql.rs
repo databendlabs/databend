@@ -216,7 +216,10 @@ impl AsyncSource for GPT2SQLSource {
         info!("openai request prompt: {}", prompt);
 
         // Response.
-        let api_base = GlobalConfig::instance().query.openai_api_base_url.clone();
+        let api_base = GlobalConfig::instance()
+            .query
+            .openai_api_chat_base_url
+            .clone();
         let api_key = GlobalConfig::instance().query.openai_api_key.clone();
         let api_version = GlobalConfig::instance().query.openai_api_version.clone();
         let api_embedding_model = GlobalConfig::instance()
@@ -234,6 +237,9 @@ impl AsyncSource for GPT2SQLSource {
             api_embedding_model,
             api_completion_model,
         );
+
+        info!("openai info: {:?}", openai);
+
         let (sql, _) = openai.completion_sql_request(prompt)?;
 
         let sql = format!("SELECT {}", sql);

@@ -65,7 +65,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let data = std::str::from_utf8(data).unwrap();
 
-            let api_base = ctx.func_ctx.openai_api_base_url.clone();
+            let api_base = ctx.func_ctx.openai_api_embedding_base_url.clone();
             let api_key = ctx.func_ctx.openai_api_key.clone();
             let api_version = ctx.func_ctx.openai_api_version.clone();
             let embedding_model = ctx.func_ctx.openai_api_embedding_model.clone();
@@ -114,7 +114,7 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
 
             let data = std::str::from_utf8(data).unwrap();
-            let api_base = ctx.func_ctx.openai_api_base_url.clone();
+            let api_base = ctx.func_ctx.openai_api_chat_base_url.clone();
             let api_key = ctx.func_ctx.openai_api_key.clone();
             let api_version = ctx.func_ctx.openai_api_version.clone();
             let embedding_model = ctx.func_ctx.openai_api_embedding_model.clone();
