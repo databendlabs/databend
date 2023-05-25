@@ -56,17 +56,20 @@ Databend makes it easy to load data from various sources, stage, Amazon S3, loca
 
 </TabItem>
 
-<TabItem value="Load" label="Load">
+<TabItem value="Query&Transform" label="Query & Transform" default>
+
+* [Querying Staged Files](../12-load-data/00-transform/05-querying-stage.md)
+* [Retrieving Metadata](../12-load-data/00-transform/06-querying-metadata.md)
+* [Transforming Data on Load](../12-load-data/00-transform/07-data-load-transform.md)
+
+</TabItem>
+
+<TabItem value="Load&Unload" label="Load & Unload">
 
 * [Loading from Stage](../12-load-data/01-load/00-stage.md)
 * [Loading from Bucket](../12-load-data/01-load/01-s3.md)
 * [Loading from Local File](../12-load-data/01-load/02-local.md)
 * [Loading from Remote File](../12-load-data/01-load/04-http.md)
-
-</TabItem>
-
-<TabItem value="Unload" label="Unload">
-
 * [Unloading Data](../12-load-data/09-unload.md)
 
 </TabItem>
