@@ -41,7 +41,10 @@ pub trait HashJoinState: Send + Sync {
     fn divide_finalize_task(&self) -> Result<()>;
 
     /// Get the finalize task and using the `chunks` in `row_space` to build hash table in parallel.
-    fn finalize(&self) -> Result<bool>;
+    fn finalize(&self, task: (usize, usize)) -> Result<()>;
+
+    /// Get one finalize task
+    fn task(&self) -> Option<(usize, usize)>;
 
     /// Detach to state: `finalize_count`.
     fn finalize_end(&self) -> Result<()>;
