@@ -745,7 +745,7 @@ impl Binder {
         let stat = table.table().table_statistics()?;
 
         Ok((
-            SExpr::create_leaf(
+            SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
                     columns: columns
@@ -773,7 +773,7 @@ impl Binder {
                     ..Default::default()
                 }
                 .into(),
-            ),
+            )),
             bind_context,
         ))
     }

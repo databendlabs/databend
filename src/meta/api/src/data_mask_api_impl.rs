@@ -134,10 +134,22 @@ impl<KV: kvapi::KVApi<Error = MetaError>> DatamaskApi for KV {
 
         loop {
             trials.next().unwrap()?;
-            let (id_seq, id, data_mask_seq, _) =
-                get_data_mask_or_err(self, name_key, format!("drop_data_mask: {}", name_key))
-                    .await?;
 
+            let result =
+                get_data_mask_or_err(self, name_key, format!("drop_data_mask: {}", name_key)).await;
+
+            let (id_seq, id, data_mask_seq, _) = match result {
+                Ok((id_seq, id, data_mask_seq, meta)) => (id_seq, id, data_mask_seq, meta),
+                Err(err) => {
+                    if let KVAppError::AppError(AppError::UnknownDatamask(_)) = err {
+                        if req.if_exists {
+                            return Ok(DropDatamaskReply {});
+                        }
+                    }
+
+                    return Err(err);
+                }
+            };
             let id_key = DatamaskId { id };
             let condition = vec![
                 txn_cond_seq(name_key, Eq, id_seq),

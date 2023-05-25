@@ -168,17 +168,7 @@ pub struct TransformHashJoinBuild {
 
     step: HashJoinStep,
     join_state: Arc<dyn HashJoinState>,
-    called_on_build_end: bool,
-    called_on_finalize_end: bool,
-}
-
-impl Drop for TransformHashJoinBuild {
-    fn drop(&mut self) {
-        if !self.called_on_finalize_end {
-            self.called_on_finalize_end = true;
-            let _ = self.join_state.finalize_end();
-        }
-    }
+    finalize_finished: bool,
 }
 
 impl TransformHashJoinBuild {
@@ -191,8 +181,7 @@ impl TransformHashJoinBuild {
             input_data: None,
             step: HashJoinStep::Build,
             join_state,
-            called_on_build_end: false,
-            called_on_finalize_end: false,
+            finalize_finished: false,
         })
     }
 
@@ -220,10 +209,8 @@ impl Processor for TransformHashJoinBuild {
                 }
 
                 if self.input_port.is_finished() {
-                    return match !self.called_on_build_end {
-                        true => Ok(Event::Sync),
-                        false => Ok(Event::Async),
-                    };
+                    self.join_state.build_end()?;
+                    return Ok(Event::Async);
                 }
 
                 match self.input_port.has_data() {
@@ -237,9 +224,9 @@ impl Processor for TransformHashJoinBuild {
                     }
                 }
             }
-            HashJoinStep::Finalize => match !self.called_on_finalize_end {
-                true => Ok(Event::Sync),
-                false => Ok(Event::Finished),
+            HashJoinStep::Finalize => match self.finalize_finished {
+                false => Ok(Event::Sync),
+                true => Ok(Event::Finished),
             },
             HashJoinStep::Probe => unreachable!(),
         }
@@ -254,18 +241,16 @@ impl Processor for TransformHashJoinBuild {
             HashJoinStep::Build => {
                 if let Some(data_block) = self.input_data.take() {
                     self.join_state.build(data_block)?;
-                } else if !self.called_on_build_end {
-                    self.called_on_build_end = true;
-                    self.join_state.build_end()?;
                 }
                 Ok(())
             }
             HashJoinStep::Finalize => {
-                if !self.called_on_finalize_end && !self.join_state.finalize()? {
-                    self.called_on_finalize_end = true;
-                    self.join_state.finalize_end()?;
+                if let Some(task) = self.join_state.task() {
+                    self.join_state.finalize(task)
+                } else {
+                    self.finalize_finished = true;
+                    self.join_state.finalize_end()
                 }
-                Ok(())
             }
             HashJoinStep::Probe => unreachable!(),
         }

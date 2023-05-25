@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_ast::ast::Identifier;
 use common_ast::ast::Indirection;
@@ -147,7 +148,7 @@ impl Binder {
         scalars.sort_by_key(|s| s.index);
         let eval_scalar = EvalScalar { items: scalars };
 
-        let new_expr = SExpr::create_unary(eval_scalar.into(), child);
+        let new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child));
 
         // Set output columns
         bind_context.columns = columns.to_vec();

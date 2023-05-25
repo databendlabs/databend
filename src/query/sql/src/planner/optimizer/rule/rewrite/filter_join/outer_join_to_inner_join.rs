@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::optimizer::SExpr;
@@ -77,12 +79,12 @@ pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
 
             join.join_type = new_join_type;
             Ok(SExpr::create_unary(
-                filter.into(),
-                SExpr::create_binary(
-                    join.into(),
-                    s_expr.child(0)?.child(0)?.clone(),
-                    s_expr.child(0)?.child(1)?.clone(),
-                ),
+                Arc::new(filter.into()),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(join.into()),
+                    Arc::new(s_expr.child(0)?.child(0)?.clone()),
+                    Arc::new(s_expr.child(0)?.child(1)?.clone()),
+                )),
             ))
         } else {
             Ok(s_expr.clone())

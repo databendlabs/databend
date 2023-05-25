@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
@@ -37,16 +39,18 @@ impl RuleSplitAggregate {
             //  \
             //   *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Aggregate,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Aggregate,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Pattern,
                     }
                     .into(),
-                ),
+                ))),
             )],
         }
     }
@@ -67,8 +71,11 @@ impl Rule for RuleSplitAggregate {
         let mut partial = agg.clone();
         partial.mode = AggregateMode::Partial;
         let result = SExpr::create_unary(
-            agg.into(),
-            SExpr::create_unary(partial.into(), s_expr.child(0)?.clone()),
+            Arc::new(agg.into()),
+            Arc::new(SExpr::create_unary(
+                Arc::new(partial.into()),
+                Arc::new(s_expr.child(0)?.clone()),
+            )),
         );
         state.add_result(result);
         Ok(())

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -93,22 +94,26 @@ impl SubqueryRewriter {
         //      \
         //       Get
         let pattern = SExpr::create_unary(
-            PatternPlan {
-                plan_type: RelOp::EvalScalar,
-            }
-            .into(),
-            SExpr::create_unary(
+            Arc::new(
                 PatternPlan {
-                    plan_type: RelOp::Filter,
+                    plan_type: RelOp::EvalScalar,
                 }
                 .into(),
-                SExpr::create_leaf(
+            ),
+            Arc::new(SExpr::create_unary(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Filter,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Scan,
                     }
                     .into(),
-                ),
-            ),
+                ))),
+            )),
         );
 
         if !subquery.subquery.match_pattern(&pattern) {
@@ -190,35 +195,45 @@ impl SubqueryRewriter {
         let mut left_child = input.clone();
         if !left_filters.is_empty() {
             left_child = SExpr::create_unary(
-                Filter {
-                    predicates: left_filters,
-                    is_having: false,
-                }
-                .into(),
-                left_child,
+                Arc::new(
+                    Filter {
+                        predicates: left_filters,
+                        is_having: false,
+                    }
+                    .into(),
+                ),
+                Arc::new(left_child),
             );
         }
 
         // Remove `Filter` from subquery.
         let mut right_child = SExpr::create_unary(
-            subquery.subquery.plan().clone(),
-            SExpr::create_unary(
-                subquery.subquery.plan().clone(),
-                SExpr::create_leaf(filter_tree.child(0)?.plan().clone()),
-            ),
+            Arc::new(subquery.subquery.plan().clone()),
+            Arc::new(SExpr::create_unary(
+                Arc::new(subquery.subquery.plan().clone()),
+                Arc::new(SExpr::create_leaf(Arc::new(
+                    filter_tree.child(0)?.plan().clone(),
+                ))),
+            )),
         );
         if !right_filters.is_empty() {
             right_child = SExpr::create_unary(
-                Filter {
-                    predicates: right_filters,
-                    is_having: false,
-                }
-                .into(),
-                right_child,
+                Arc::new(
+                    Filter {
+                        predicates: right_filters,
+                        is_having: false,
+                    }
+                    .into(),
+                ),
+                Arc::new(right_child),
             );
         }
 
-        let result = SExpr::create_binary(join.into(), left_child, right_child);
+        let result = SExpr::create_binary(
+            Arc::new(join.into()),
+            Arc::new(left_child),
+            Arc::new(right_child),
+        );
 
         Ok(Some(result))
     }
@@ -253,7 +268,11 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
                 };
-                let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
+                let s_expr = SExpr::create_binary(
+                    Arc::new(join_plan.into()),
+                    Arc::new(left.clone()),
+                    Arc::new(flatten_plan),
+                );
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
@@ -292,7 +311,11 @@ impl SubqueryRewriter {
                     from_correlated_subquery: true,
                     contain_runtime_filter: false,
                 };
-                let s_expr = SExpr::create_binary(join_plan.into(), left.clone(), flatten_plan);
+                let s_expr = SExpr::create_binary(
+                    Arc::new(join_plan.into()),
+                    Arc::new(left.clone()),
+                    Arc::new(flatten_plan),
+                );
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             SubqueryType::Any => {
@@ -350,7 +373,11 @@ impl SubqueryRewriter {
                 }
                 .into();
                 Ok((
-                    SExpr::create_binary(mark_join, left.clone(), flatten_plan),
+                    SExpr::create_binary(
+                        Arc::new(mark_join),
+                        Arc::new(left.clone()),
+                        Arc::new(flatten_plan),
+                    ),
                     UnnestResult::MarkJoin { marker_index },
                 ))
             }
@@ -388,14 +415,14 @@ impl SubqueryRewriter {
                     metadata.add_derived_column(name.to_string(), data_type.wrap_nullable()),
                 );
             }
-            let logical_get = SExpr::create_leaf(
+            let logical_get = SExpr::create_leaf(Arc::new(
                 Scan {
                     table_index,
                     columns: self.derived_columns.values().cloned().collect(),
                     ..Default::default()
                 }
                 .into(),
-            );
+            ));
             // Todo(xudong963): Wrap logical get with distinct to eliminate duplicates rows.
             let cross_join = Join {
                 left_conditions: vec![],
@@ -407,7 +434,11 @@ impl SubqueryRewriter {
                 contain_runtime_filter: false,
             }
             .into();
-            return Ok(SExpr::create_binary(cross_join, logical_get, plan.clone()));
+            return Ok(SExpr::create_binary(
+                Arc::new(cross_join),
+                Arc::new(logical_get),
+                Arc::new(plan.clone()),
+            ));
         }
 
         match plan.plan() {
@@ -454,8 +485,8 @@ impl SubqueryRewriter {
                     });
                 }
                 Ok(SExpr::create_unary(
-                    EvalScalar { items }.into(),
-                    flatten_plan,
+                    Arc::new(EvalScalar { items }.into()),
+                    Arc::new(flatten_plan),
                 ))
             }
             RelOperator::Filter(filter) => {
@@ -481,7 +512,10 @@ impl SubqueryRewriter {
                     is_having: filter.is_having,
                 }
                 .into();
-                Ok(SExpr::create_unary(filter_plan, flatten_plan))
+                Ok(SExpr::create_unary(
+                    Arc::new(filter_plan),
+                    Arc::new(flatten_plan),
+                ))
             }
             RelOperator::Join(join) => {
                 // Currently, we don't support join conditions contain subquery
@@ -505,18 +539,20 @@ impl SubqueryRewriter {
                     need_cross_join,
                 )?;
                 Ok(SExpr::create_binary(
-                    Join {
-                        left_conditions: join.left_conditions.clone(),
-                        right_conditions: join.right_conditions.clone(),
-                        non_equi_conditions: join.non_equi_conditions.clone(),
-                        join_type: join.join_type.clone(),
-                        marker_index: join.marker_index,
-                        from_correlated_subquery: false,
-                        contain_runtime_filter: false,
-                    }
-                    .into(),
-                    left_flatten_plan,
-                    right_flatten_plan,
+                    Arc::new(
+                        Join {
+                            left_conditions: join.left_conditions.clone(),
+                            right_conditions: join.right_conditions.clone(),
+                            non_equi_conditions: join.non_equi_conditions.clone(),
+                            join_type: join.join_type.clone(),
+                            marker_index: join.marker_index,
+                            from_correlated_subquery: false,
+                            contain_runtime_filter: false,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(left_flatten_plan),
+                    Arc::new(right_flatten_plan),
                 ))
             }
             RelOperator::Aggregate(aggregate) => {
@@ -595,17 +631,19 @@ impl SubqueryRewriter {
                     })
                 }
                 Ok(SExpr::create_unary(
-                    Aggregate {
-                        mode: AggregateMode::Initial,
-                        group_items,
-                        aggregate_functions: agg_items,
-                        from_distinct: aggregate.from_distinct,
-                        limit: aggregate.limit,
-                        grouping_id_index: aggregate.grouping_id_index,
-                        grouping_sets: aggregate.grouping_sets.clone(),
-                    }
-                    .into(),
-                    flatten_plan,
+                    Arc::new(
+                        Aggregate {
+                            mode: AggregateMode::Initial,
+                            group_items,
+                            aggregate_functions: agg_items,
+                            from_distinct: aggregate.from_distinct,
+                            limit: aggregate.limit,
+                            grouping_id_index: aggregate.grouping_id_index,
+                            grouping_sets: aggregate.grouping_sets.clone(),
+                        }
+                        .into(),
+                    ),
+                    Arc::new(flatten_plan),
                 ))
             }
             RelOperator::Sort(_) => {
@@ -616,7 +654,10 @@ impl SubqueryRewriter {
                     flatten_info,
                     need_cross_join,
                 )?;
-                Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
+                Ok(SExpr::create_unary(
+                    Arc::new(plan.plan().clone()),
+                    Arc::new(flatten_plan),
+                ))
             }
 
             RelOperator::Limit(_) => {
@@ -627,7 +668,10 @@ impl SubqueryRewriter {
                     flatten_info,
                     need_cross_join,
                 )?;
-                Ok(SExpr::create_unary(plan.plan().clone(), flatten_plan))
+                Ok(SExpr::create_unary(
+                    Arc::new(plan.plan().clone()),
+                    Arc::new(flatten_plan),
+                ))
             }
 
             RelOperator::UnionAll(op) => {
@@ -651,9 +695,9 @@ impl SubqueryRewriter {
                     need_cross_join,
                 )?;
                 Ok(SExpr::create_binary(
-                    op.clone().into(),
-                    left_flatten_plan,
-                    right_flatten_plan,
+                    Arc::new(op.clone().into()),
+                    Arc::new(left_flatten_plan),
+                    Arc::new(right_flatten_plan),
                 ))
             }
 

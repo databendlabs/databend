@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
@@ -45,17 +47,23 @@ impl RulePushDownFilterSort {
         Self {
             id: RuleID::PushDownFilterSort,
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_unary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::Sort,
+                        plan_type: RelOp::Filter,
                     }
                     .into(),
-                    SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
                 ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Sort,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan { plan_type: Pattern }.into(),
+                    ))),
+                )),
             )],
         }
     }
@@ -72,8 +80,11 @@ impl Rule for RulePushDownFilterSort {
         let sort_expr = s_expr.child(0)?;
 
         let mut result = SExpr::create_unary(
-            sort.into(),
-            SExpr::create_unary(filter.into(), sort_expr.child(0)?.clone()),
+            Arc::new(sort.into()),
+            Arc::new(SExpr::create_unary(
+                Arc::new(filter.into()),
+                Arc::new(sort_expr.child(0)?.clone()),
+            )),
         );
         result.set_applied_rule(&self.id);
         state.add_result(result);

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -35,7 +37,7 @@ pub struct MExpr {
     // index of current `MExpr` within a `Group`
     pub index: IndexType,
 
-    pub plan: RelOperator,
+    pub plan: Arc<RelOperator>,
     pub children: Vec<IndexType>,
 
     // Disable rules for current `MExpr`
@@ -46,7 +48,7 @@ impl MExpr {
     pub fn create(
         group_index: IndexType,
         index: IndexType,
-        plan: RelOperator,
+        plan: Arc<RelOperator>,
         children: Vec<IndexType>,
         applied_rules: AppliedRules,
     ) -> Self {

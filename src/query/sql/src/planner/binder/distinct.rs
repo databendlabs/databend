@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_exception::Result;
 use common_exception::Span;
@@ -60,7 +61,7 @@ impl Binder {
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };
-            new_expr = SExpr::create_unary(eval_scalar.into(), new_expr);
+            new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
         }
 
         // Like aggregate, we just use scalar directly.
@@ -85,6 +86,9 @@ impl Binder {
             grouping_sets: vec![],
         };
 
-        Ok(SExpr::create_unary(distinct_plan.into(), new_expr))
+        Ok(SExpr::create_unary(
+            Arc::new(distinct_plan.into()),
+            Arc::new(new_expr),
+        ))
     }
 }

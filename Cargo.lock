@@ -2625,6 +2625,7 @@ dependencies = [
  "metrics",
  "opendal",
  "parquet-format-safe",
+ "rand 0.8.5",
  "serde",
  "serde_json",
  "sha2",
@@ -7202,7 +7203,7 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 [[package]]
 name = "openai_api_rust"
 version = "0.1.4"
-source = "git+https://github.com/datafuse-extras/openai-api?rev=87a140c#87a140cb32a08f2a65c230d29d5e0f085f3ade4c"
+source = "git+https://github.com/datafuse-extras/openai-api?rev=819a0ed#819a0ed1384e4fe948b2bec88856e37062cb0f38"
 dependencies = [
  "log",
  "serde",

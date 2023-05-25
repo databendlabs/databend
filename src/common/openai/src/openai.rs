@@ -12,21 +12,40 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
 pub struct OpenAI {
     pub(crate) api_key: String,
+    pub(crate) api_version: String,
     pub(crate) api_base: String,
     pub(crate) embedding_model: String,
     pub(crate) completion_model: String,
+}
+
+impl Debug for OpenAI {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut ds = f.debug_struct("OpenAI");
+        ds.field("api_version", &self.api_version);
+        ds.field("api_base", &self.api_base);
+        ds.field("embedding_model", &self.embedding_model);
+        ds.field("completion_model", &self.completion_model);
+
+        ds.finish()
+    }
 }
 
 impl OpenAI {
     pub fn create(
         api_base: String,
         api_key: String,
+        api_version: String,
         embedding_model: String,
         completion_model: String,
     ) -> Self {
         // Check and default.
+        // openai: the api_base always same.
+        // azure: chat and embedding are not same, need config them.
         let api_base = if api_base.is_empty() {
             "https://api.openai.com/v1/".to_string()
         } else {
@@ -50,6 +69,7 @@ impl OpenAI {
             api_key,
             embedding_model,
             completion_model,
+            api_version,
         }
     }
 }
