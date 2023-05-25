@@ -273,7 +273,9 @@ pub enum ExprElement {
         lit: Literal,
     },
     /// `Count(*)` expression
-    CountAll,
+    CountAll {
+        window: Option<Window>,
+    },
     /// `(foo, bar)`
     Tuple {
         exprs: Vec<Expr>,
@@ -471,8 +473,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 lit,
             },
-            ExprElement::CountAll => Expr::CountAll {
+            ExprElement::CountAll { window } => Expr::CountAll {
                 span: transform_span(elem.span.0),
+                window,
             },
             ExprElement::Tuple { exprs } => Expr::Tuple {
                 span: transform_span(elem.span.0),
@@ -791,9 +794,15 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             trim_where: Some((trim_where, Box::new(trim_str))),
         },
     );
-    let count_all = value(ExprElement::CountAll, rule! {
-        COUNT ~ "(" ~ "*" ~ ^")"
-    });
+
+    let count_all_with_window = map(
+        rule! {
+        COUNT ~ "(" ~ "*" ~ ")" ~ (OVER ~ #window_spec_ident)?
+        },
+        |(_, _, _, _, window)| ExprElement::CountAll {
+            window: window.map(|w|w.1),
+        },
+    );
     let tuple = map(
         rule! {
             "(" ~ #comma_separated_list0_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
@@ -1015,7 +1024,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
-            | #count_all : "COUNT(*)"
+            | #count_all_with_window : "`COUNT(*) OVER ...`"
             | #function_call_with_window : "<function>"
             | #function_call_with_params : "<function>"
             | #function_call : "<function>"

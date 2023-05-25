@@ -490,28 +490,29 @@ impl<T: Number> TransformWindow<T> {
                 builder.push(ScalarRef::Number(NumberScalar::Float64(percent.into())));
             }
             WindowFunctionImpl::Lag(lag) => {
-                let lag_row =
-                    if self.current_row.block == 0 && self.current_row.row < lag.offset as usize {
-                        let default_value = match lag.default.clone() {
-                            LagLeadDefault::Null => Scalar::Null,
-                            LagLeadDefault::Index(col) => {
-                                let block =
-                                    &self.blocks[self.current_row.block - self.first_block].block;
-                                let col = block.get_by_offset(col).value.as_column().unwrap();
-                                col.index(self.current_row.row).unwrap().to_owned()
-                            }
-                        };
-                        default_value
-                    } else {
-                        let block = self
-                            .blocks
-                            .get(self.frame_start.block - self.first_block)
-                            .cloned()
-                            .unwrap()
-                            .block;
-                        let col = block.get_by_offset(lag.arg).value.as_column().unwrap();
-                        col.index(self.frame_start.row).unwrap().to_owned()
+                let lag_row = if self.current_row.block == self.partition_start.block
+                    && self.current_row.row < self.partition_start.row + (lag.offset as usize)
+                {
+                    let default_value = match lag.default.clone() {
+                        LagLeadDefault::Null => Scalar::Null,
+                        LagLeadDefault::Index(col) => {
+                            let block =
+                                &self.blocks[self.current_row.block - self.first_block].block;
+                            let col = block.get_by_offset(col).value.as_column().unwrap();
+                            col.index(self.current_row.row).unwrap().to_owned()
+                        }
                     };
+                    default_value
+                } else {
+                    let block = self
+                        .blocks
+                        .get(self.frame_start.block - self.first_block)
+                        .cloned()
+                        .unwrap()
+                        .block;
+                    let col = block.get_by_offset(lag.arg).value.as_column().unwrap();
+                    col.index(self.frame_start.row).unwrap().to_owned()
+                };
 
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(lag_row.as_ref());
