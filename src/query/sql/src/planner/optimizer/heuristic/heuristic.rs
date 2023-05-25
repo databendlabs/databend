@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::FunctionContext;
 use once_cell::sync::Lazy;
@@ -105,7 +107,7 @@ impl HeuristicOptimizer {
     pub fn optimize_expression(&self, s_expr: &SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
         for expr in s_expr.children() {
-            optimized_children.push(self.optimize_expression(expr, rules)?);
+            optimized_children.push(Arc::new(self.optimize_expression(expr, rules)?));
         }
         let optimized_expr = s_expr.replace_children(optimized_children);
         let result = self.apply_transform_rules(&optimized_expr, rules)?;

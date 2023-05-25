@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
@@ -41,76 +43,86 @@ impl RuleFoldConstant {
                 //  \
                 //   *
                 SExpr::create_unary(
-                    PatternPlan {
-                        plan_type: RelOp::Filter,
-                    }
-                    .into(),
-                    SExpr::create_leaf(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Filter,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Pattern,
                         }
                         .into(),
-                    ),
+                    ))),
                 ),
                 // EvalScalar
                 //  \
                 //   *
                 SExpr::create_unary(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                    SExpr::create_leaf(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::EvalScalar,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Pattern,
                         }
                         .into(),
-                    ),
+                    ))),
                 ),
                 // ProjectSet
                 //  \
                 //   *
                 SExpr::create_unary(
-                    PatternPlan {
-                        plan_type: RelOp::ProjectSet,
-                    }
-                    .into(),
-                    SExpr::create_leaf(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::ProjectSet,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Pattern,
                         }
                         .into(),
-                    ),
+                    ))),
                 ),
                 // Exchange
                 //  \
                 //   *
                 SExpr::create_unary(
-                    PatternPlan {
-                        plan_type: RelOp::Exchange,
-                    }
-                    .into(),
-                    SExpr::create_leaf(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Exchange,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Pattern,
                         }
                         .into(),
-                    ),
+                    ))),
                 ),
                 // Join
                 //  \
                 //   *
                 SExpr::create_unary(
-                    PatternPlan {
-                        plan_type: RelOp::Join,
-                    }
-                    .into(),
-                    SExpr::create_leaf(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Join,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Pattern,
                         }
                         .into(),
-                    ),
+                    ))),
                 ),
             ],
             func_ctx,

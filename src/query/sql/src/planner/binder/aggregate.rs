@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::GroupBy;
@@ -449,7 +450,7 @@ impl Binder {
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };
-            new_expr = SExpr::create_unary(eval_scalar.into(), new_expr);
+            new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
         }
 
         let aggregate_plan = Aggregate {
@@ -465,7 +466,7 @@ impl Binder {
                 .map(|g| g.index)
                 .unwrap_or(0),
         };
-        new_expr = SExpr::create_unary(aggregate_plan.into(), new_expr);
+        new_expr = SExpr::create_unary(Arc::new(aggregate_plan.into()), Arc::new(new_expr));
 
         Ok(new_expr)
     }

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
@@ -40,22 +42,26 @@ impl RuleMergeEvalScalar {
             //  \
             //   *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::EvalScalar,
-                }
-                .into(),
-                SExpr::create_unary(
+                Arc::new(
                     PatternPlan {
                         plan_type: RelOp::EvalScalar,
                     }
                     .into(),
-                    SExpr::create_leaf(
+                ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::EvalScalar,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Pattern,
                         }
                         .into(),
-                    ),
-                ),
+                    ))),
+                )),
             )],
         }
     }
@@ -91,7 +97,10 @@ impl Rule for RuleMergeEvalScalar {
                 .collect();
             let merged = EvalScalar { items };
 
-            let new_expr = SExpr::create_unary(merged.into(), s_expr.child(0)?.child(0)?.clone());
+            let new_expr = SExpr::create_unary(
+                Arc::new(merged.into()),
+                Arc::new(s_expr.child(0)?.child(0)?.clone()),
+            );
             state.add_result(new_expr);
         }
 

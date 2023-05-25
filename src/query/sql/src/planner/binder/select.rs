@@ -14,6 +14,7 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
@@ -376,7 +377,7 @@ impl Binder {
             predicates: split_conjunctions(&scalar),
             is_having: false,
         };
-        let new_expr = SExpr::create_unary(filter_plan.into(), child);
+        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
         bind_context.set_expr_context(last_expr_context);
         Ok((new_expr, scalar))
     }
@@ -466,7 +467,11 @@ impl Binder {
             .collect();
 
         let union_plan = UnionAll { pairs };
-        let mut new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
+        let mut new_expr = SExpr::create_binary(
+            Arc::new(union_plan.into()),
+            Arc::new(left_expr),
+            Arc::new(right_expr),
+        );
 
         if distinct {
             new_expr = self.bind_distinct(

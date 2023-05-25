@@ -78,13 +78,13 @@ impl Memo {
         let mut children_group = vec![];
         for expr in s_expr.children() {
             // Insert children expressions recursively and collect their group indices
-            let group = self.insert(None, expr.clone())?;
+            let group = self.insert(None, (**expr).clone())?;
             children_group.push(group);
         }
 
         if let Some((group_index, _)) = self
             .m_expr_lookup_table
-            .get(&(s_expr.plan.clone(), children_group.clone()))
+            .get(&((*s_expr.plan).clone(), children_group.clone()))
         {
             // If the expression already exists, return the group index of the existing expression
             return Ok(*group_index);
@@ -126,7 +126,7 @@ impl Memo {
 
     pub fn insert_m_expr(&mut self, group_index: IndexType, m_expr: MExpr) -> Result<()> {
         self.m_expr_lookup_table.insert(
-            (m_expr.plan.clone(), m_expr.children.clone()),
+            ((*m_expr.plan).clone(), m_expr.children.clone()),
             (m_expr.group_index, m_expr.index),
         );
         self.group_mut(group_index)?.insert(m_expr)

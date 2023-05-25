@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp;
+use std::sync::Arc;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
@@ -47,14 +48,18 @@ impl RulePushDownLimitSort {
         Self {
             id: RuleID::PushDownLimitSort,
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Limit,
-                }
-                .into(),
-                SExpr::create_unary(
-                    PatternPlan { plan_type: Sort }.into(),
-                    SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Limit,
+                    }
+                    .into(),
                 ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(PatternPlan { plan_type: Sort }.into()),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan { plan_type: Pattern }.into(),
+                    ))),
+                )),
             )],
         }
     }
@@ -72,9 +77,12 @@ impl Rule for RulePushDownLimitSort {
             let sort = s_expr.child(0)?;
             let mut sort_limit: logsort = sort.plan().clone().try_into()?;
             sort_limit.limit = Some(sort_limit.limit.map_or(count, |c| cmp::max(c, count)));
-            let sort = SExpr::create_unary(RelOperator::Sort(sort_limit), sort.child(0)?.clone());
+            let sort = SExpr::create_unary(
+                Arc::new(RelOperator::Sort(sort_limit)),
+                Arc::new(sort.child(0)?.clone()),
+            );
 
-            let mut result = s_expr.replace_children(vec![sort]);
+            let mut result = s_expr.replace_children(vec![Arc::new(sort)]);
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }

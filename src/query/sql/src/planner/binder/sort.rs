@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
@@ -236,7 +237,7 @@ impl Binder {
 
         let mut new_expr = if !scalars.is_empty() {
             let eval_scalar = EvalScalar { items: scalars };
-            SExpr::create_unary(eval_scalar.into(), child)
+            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child))
         } else {
             child
         };
@@ -245,7 +246,7 @@ impl Binder {
             items: order_by_items,
             limit: None,
         };
-        new_expr = SExpr::create_unary(sort_plan.into(), new_expr);
+        new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
         Ok(new_expr)
     }
 
@@ -295,7 +296,10 @@ impl Binder {
             items: order_by_items,
             limit: None,
         };
-        Ok(SExpr::create_unary(sort_plan.into(), child))
+        Ok(SExpr::create_unary(
+            Arc::new(sort_plan.into()),
+            Arc::new(child),
+        ))
     }
 
     #[allow(clippy::only_used_in_recursion)]

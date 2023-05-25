@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
@@ -43,12 +45,14 @@ impl RuleCommuteJoin {
             // | \
             // *  *
             patterns: vec![SExpr::create_binary(
-                PatternPlan {
-                    plan_type: RelOp::Join,
-                }
-                .into(),
-                SExpr::create_pattern_leaf(),
-                SExpr::create_pattern_leaf(),
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Join,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_pattern_leaf()),
+                Arc::new(SExpr::create_pattern_leaf()),
             )],
         }
     }
@@ -78,8 +82,11 @@ impl Rule for RuleCommuteJoin {
                 (join.left_conditions, join.right_conditions) =
                     (join.right_conditions, join.left_conditions);
                 join.join_type = join.join_type.opposite();
-                let mut result =
-                    SExpr::create_binary(join.into(), right_child.clone(), left_child.clone());
+                let mut result = SExpr::create_binary(
+                    Arc::new(join.into()),
+                    Arc::new(right_child.clone()),
+                    Arc::new(left_child.clone()),
+                );
 
                 // Disable the following rules for the generated expression
                 result.set_applied_rule(&RuleID::CommuteJoin);

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_ast::ast::Expr;
 use common_exception::Result;
 use common_exception::Span;
@@ -76,6 +78,9 @@ impl Binder {
             is_having: true,
         };
 
-        Ok(SExpr::create_unary(filter.into(), child))
+        Ok(SExpr::create_unary(
+            Arc::new(filter.into()),
+            Arc::new(child),
+        ))
     }
 }
