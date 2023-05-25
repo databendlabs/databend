@@ -104,9 +104,11 @@ impl Rule for RuleTryApplyVectorIndex {
         match &sort_by_item.scalar {
             ScalarExpr::FunctionCall(func) if func.func_name == "cosine_distance" => {
                 let mut new_scan = s_expr.walk_down(3).clone();
-                new_scan.plan.as_scan_mut().unwrap().order_by = Some(sort.items.clone());
-                new_scan.plan.as_scan_mut().unwrap().limit = Some(limit.limit.unwrap());
-                new_scan.plan.as_scan_mut().unwrap().similarity = Some(Box::new(func.clone()));
+                let mut new_operator = new_scan.plan.as_ref().clone();
+                new_operator.as_scan_mut().unwrap().order_by = Some(sort.items.clone());
+                new_operator.as_scan_mut().unwrap().limit = Some(limit.limit.unwrap());
+                new_operator.as_scan_mut().unwrap().similarity = Some(Box::new(func.clone()));
+                new_scan.plan = Arc::new(new_operator);
                 new_scan.set_applied_rule(&self.id);
                 state.add_result(new_scan);
             }

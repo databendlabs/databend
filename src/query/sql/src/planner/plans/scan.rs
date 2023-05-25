@@ -23,7 +23,6 @@ use common_exception::Result;
 use itertools::Itertools;
 
 use super::FunctionCall;
-use super::ScalarItem;
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
