@@ -52,6 +52,7 @@ faiss = { git = "https://github.com/datafuse-extras/faiss-rs.git", rev = "e410e2
 futures = "0.3.24"
 futures-util = "0.3.24"
 metrics = "0.20.1"
+ndarray = "0.15.6"
 opendal = { workspace = true }
 parquet-format-safe = "0.2"
 serde = { workspace = true }

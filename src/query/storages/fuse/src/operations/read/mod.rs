@@ -14,6 +14,8 @@
 
 mod fuse_rows_fetcher;
 pub mod fuse_source;
+#[cfg(feature = "vector-index")]
+mod fuse_vector_index;
 mod native_data_source;
 mod native_data_source_deserializer;
 mod native_data_source_reader;
@@ -21,8 +23,12 @@ mod native_rows_fetcher;
 mod parquet_data_source;
 mod parquet_data_source_deserializer;
 mod parquet_data_source_reader;
+#[cfg(feature = "vector-index")]
+mod parquet_knn_reader;
 mod parquet_rows_fetcher;
 
 pub use fuse_rows_fetcher::build_row_fetcher_pipeline;
 pub use fuse_source::build_fuse_parquet_source_pipeline;
+#[cfg(feature = "vector-index")]
+pub use fuse_vector_index::build_fuse_knn_pipeline;
 pub use parquet_data_source::DataSourceMeta;

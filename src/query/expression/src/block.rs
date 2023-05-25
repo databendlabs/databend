@@ -254,6 +254,36 @@ impl DataBlock {
         }
     }
 
+    /// # Safety
+    ///
+    /// Calling this method with an out-of-bounds index is *[undefined behavior]*
+    pub unsafe fn get_row_unchecked(&self, idx: usize) -> Vec<Scalar> {
+        self.columns()
+            .iter()
+            .map(|entry| entry.value.index_unchecked(idx).to_owned())
+            .collect()
+    }
+
+    pub fn from_rows(rows: Vec<Vec<Scalar>>) -> Self {
+        let mut columns = Vec::with_capacity(rows[0].len());
+        for col_id in 0..rows[0].len() {
+            let ty = &rows[0][col_id].as_ref().infer_data_type();
+            let mut builder = ColumnBuilder::with_capacity(ty, rows.len());
+            for row in &rows {
+                builder.push(row[col_id].as_ref());
+            }
+            columns.push(BlockEntry {
+                data_type: ty.clone(),
+                value: Value::Column(builder.build()),
+            });
+        }
+        Self {
+            columns,
+            num_rows: rows.len(),
+            meta: None,
+        }
+    }
+
     pub fn split_by_rows(&self, max_rows_per_block: usize) -> (Vec<Self>, Option<Self>) {
         let mut res = vec![];
         let mut offset = 0;

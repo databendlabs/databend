@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -73,6 +75,12 @@ pub struct BlockMeta {
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub compression: Compression,
+}
+
+impl Hash for BlockMeta {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.location.hash(state);
+    }
 }
 
 impl BlockMeta {

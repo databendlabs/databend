@@ -20,6 +20,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_pipeline_core::Pipeline;
 
+#[cfg(feature = "vector-index")]
+use super::read::build_fuse_knn_pipeline;
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::BlockReader;
 use crate::operations::read::build_fuse_parquet_source_pipeline;
@@ -35,6 +37,16 @@ pub fn build_fuse_source_pipeline(
     max_io_requests: usize,
 ) -> Result<()> {
     let max_threads = ctx.get_settings().get_max_threads()? as usize;
+
+    #[cfg(feature = "vector-index")]
+    if plan
+        .push_downs
+        .as_ref()
+        .and_then(|x| x.similarity.as_ref())
+        .is_some()
+    {
+        return build_fuse_knn_pipeline(ctx, pipeline, storage_format, block_reader, plan);
+    }
 
     match storage_format {
         FuseStorageFormat::Native => build_fuse_native_source_pipeline(
