@@ -7,12 +7,26 @@ This document provides an overview of the `ai_text_completion` function in Datab
 
 The main code implementation can be found [here](https://github.com/datafuselabs/databend/blob/1e93c5b562bd159ecb0f336bb88fd1b7f9dc4a62/src/common/openai/src/completion.rs).
 
+:::info
+Starting from Databend v1.1.47, Databend supports the [Azure OpenAI service](https://azure.microsoft.com/en-au/products/cognitive-services/openai-service).
+
+This integration offers improved data privacy.
+
+To use Azure OpenAI, add the following configurations to the `[query]` section:
+```sql
+# Azure OpenAI
+openai_api_chat_base_url = "https://<name>.openai.azure.com/openai/deployments/<name>/"
+openai_api_embedding_base_url = "https://<name>.openai.azure.com/openai/deployments/<name>/"
+openai_api_version = "2023-03-15-preview"
+```
+:::
+
 :::caution
-Databend relies on OpenAI for `AI_TEXT_COMPLETION` and sends the completion prompt data to OpenAI.
+Databend relies on (Azure) OpenAI for `AI_TEXT_COMPLETION` and sends the completion prompt data to (Azure) OpenAI.
 
 They will only work when the Databend configuration includes the `openai_api_key`, otherwise they will be inactive.
 
-This function is available by default on [Databend Cloud](https://databend.com) using our self OpenAI key. If you use them, you acknowledge that your table schema will be sent to OpenAI by us.
+This function is available by default on [Databend Cloud](https://databend.com) using our Azure OpenAI key. If you use them, you acknowledge that your data will be sent to Azure OpenAI by us.
 :::
 
 
