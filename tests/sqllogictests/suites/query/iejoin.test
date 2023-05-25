@@ -15,25 +15,39 @@ insert into west values ('s1', 404, 100,  6, 4), ('s2', 400, 140, 11, 2), ('s3',
 
 query TT
 SELECT east.rid, west.rid
-FROM east join west
-ON east.dur < west.time AND east.rev > west.cost;
+FROM east, west
+WHERE east.dur < west.time AND east.rev > west.cost;
 ----
 r2	s2
 
 query TT
 SELECT s1.rid, s2.rid
-FROM west s1 join west s2
-on s1.time > s2.time AND s1.cost < s2.cost ORDER BY 1, 2;
+FROM west s1, west s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost ORDER BY 1, 2;
 ----
 s1	s3
 s4	s3
 
 query TT
 SELECT east.rid, west.rid
-FROM east join west
-ON east.dur + east.rev < west.time AND east.rev > west.cost;
+FROM east, west
+WHERE east.dur + east.rev < west.time AND east.rev > west.cost;
 ----
 r2 s2
+
+query TT
+SELECT s1.rid, s2.rid
+FROM west s1, west s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost AND s1.rid != 's1';
+----
+s4 s3
+
+query TT
+SELECT s1.rid, s2.rid
+FROM west s1, west s2
+WHERE s1.time > s2.time AND s1.cost < s2.cost AND s1.rid > s2.rid;
+----
+s4 s3
 
 statement ok
 drop table east;
