@@ -5,13 +5,27 @@ description: 'Using SQL-based AI Functions for Knowledge Base Search and Text Co
 
 This document demonstrates how to leverage Databend's built-in AI functions for creating document embeddings, searching for similar documents, and generating text completions based on context. We will guide you through a simple example that shows how to create and store embeddings, find related documents, and generate completions using various AI functions.
 
+:::info
+Starting from Databend v1.1.47, Databend supports the [Azure OpenAI service](https://azure.microsoft.com/en-au/products/cognitive-services/openai-service).
+
+This integration offers improved data privacy.
+
+To use Azure OpenAI, add the following configurations to the `[query]` section:
+```sql
+# Azure OpenAI
+openai_api_chat_base_url = "https://<name>.openai.azure.com/openai/deployments/<name>/"
+openai_api_embedding_base_url = "https://<name>.openai.azure.com/openai/deployments/<name>/"
+openai_api_version = "2023-03-15-preview"
+```
+:::
+
 :::caution
 
-Databend relies on OpenAI for embeddings and text completions, which means your data will be sent to OpenAI. Exercise caution when using these functions.
+Databend relies on (Azure) OpenAI for embeddings and text completions, which means your data will be sent to (Azure) OpenAI. Exercise caution when using these functions.
 
 They will only work when the Databend configuration includes the `openai_api_key`, otherwise they will be inactive.
 
-These functions are available by default on [Databend Cloud](https://databend.com) using our self OpenAI key. If you use them, you acknowledge that your data will be sent to OpenAI by us.
+These functions are available by default on [Databend Cloud](https://databend.com) using our Azure OpenAI key. If you use them, you acknowledge that your data will be sent to Azure OpenAI by us.
 
 :::
 
