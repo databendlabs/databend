@@ -15,6 +15,7 @@
 use std::default::Default;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -233,6 +234,9 @@ impl FuseTable {
             let dummy_item = create_dummy_item();
             pipe_items.push(dummy_item);
 
+            let max_io_request = ctx.get_settings().get_max_storage_io_requests()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+
             // setup the merge into operation aggregators
             let mut merge_into_operation_aggregators = self
                 .merge_into_mutators(
@@ -241,6 +245,7 @@ impl FuseTable {
                     block_builder,
                     on_conflicts.clone(),
                     &base_snapshot,
+                    io_request_semaphore,
                 )
                 .await?;
             assert_eq!(
@@ -274,6 +279,7 @@ impl FuseTable {
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
         table_snapshot: &TableSnapshot,
+        io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
         let chunks = Self::partition_segments(&table_snapshot.segments, num_partition);
         let read_settings = ReadSettings::from_ctx(&ctx)?;
@@ -288,6 +294,7 @@ impl FuseTable {
                 self.get_write_settings(),
                 read_settings.clone(),
                 block_builder.clone(),
+                io_request_semaphore.clone(),
             )?;
             items.push(item.into_pipe_item());
         }
