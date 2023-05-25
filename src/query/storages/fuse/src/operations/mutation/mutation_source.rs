@@ -169,7 +169,7 @@ impl Processor for MutationSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, read_res) => {
                 let chunks = read_res.columns_chunks()?;
-                let mut data_block = self.block_reader.deserialize_chunks(
+                let mut data_block = self.block_reader.deserialize_chunks_with_part_info(
                     part.clone(),
                     chunks,
                     &self.storage_format,
@@ -271,8 +271,11 @@ impl Processor for MutationSource {
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let chunks = merged_io_read_result.columns_chunks()?;
-                    let remain_block =
-                        remain_reader.deserialize_chunks(part, chunks, &self.storage_format)?;
+                    let remain_block = remain_reader.deserialize_chunks_with_part_info(
+                        part,
+                        chunks,
+                        &self.storage_format,
+                    )?;
 
                     match self.action {
                         MutationAction::Deletion => {

@@ -16,8 +16,5 @@ mod grant;
 mod stage;
 mod table;
 pub use grant::validate_grant_object_exists;
-pub use stage::exprs_to_scalar;
-pub use stage::fill_default_value;
-pub use stage::prepared_values;
 pub use stage::try_purge_files;
 pub use table::append2table;
