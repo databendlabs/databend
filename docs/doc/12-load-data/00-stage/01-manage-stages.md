@@ -11,7 +11,7 @@ There are a variety of commands available in Databend to help you manage stages:
 - [DESC STAGE](../../14-sql-commands/00-ddl/40-stage/03-ddl-desc-stage.md): Shows the properties of a stage.
 - [SHOW STAGES](../../14-sql-commands/00-ddl/40-stage/06-ddl-show-stages.md): Returns a list of the created stages.
 
-In addition, these commands can help you manage staged files in a stage, such as listing or removing them. 
+In addition, these commands can help you manage staged files in a stage, such as listing or removing them. For how to upload files to a stage, see [Staging Files with API](02-stage-files.md).
 
 - [LIST FILES](../../14-sql-commands/00-ddl/40-stage/04-ddl-list-stage.md): Returns a list of the staged files in a stage.
 - [REMOVE FILES](../../14-sql-commands/00-ddl/40-stage/05-ddl-remove-stage.md): Removes staged files from a stage.

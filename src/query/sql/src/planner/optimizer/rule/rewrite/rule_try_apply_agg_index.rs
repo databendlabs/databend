@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::FunctionContext;
 
@@ -46,16 +48,18 @@ impl RuleTryApplyAggIndex {
                 //     |
                 //    Scan
                 SExpr::create_unary(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                    SExpr::create_leaf(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::EvalScalar,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Scan,
                         }
                         .into(),
-                    ),
+                    ))),
                 ),
                 // Expression
                 //     |
@@ -63,22 +67,26 @@ impl RuleTryApplyAggIndex {
                 //     |
                 //    Scan
                 SExpr::create_unary(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                    SExpr::create_unary(
+                    Arc::new(
                         PatternPlan {
-                            plan_type: RelOp::Filter,
+                            plan_type: RelOp::EvalScalar,
                         }
                         .into(),
-                        SExpr::create_leaf(
+                    ),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(
+                            PatternPlan {
+                                plan_type: RelOp::Filter,
+                            }
+                            .into(),
+                        ),
+                        Arc::new(SExpr::create_leaf(Arc::new(
                             PatternPlan {
                                 plan_type: RelOp::Scan,
                             }
                             .into(),
-                        ),
-                    ),
+                        ))),
+                    )),
                 ),
                 // Expression
                 //     |
@@ -88,34 +96,42 @@ impl RuleTryApplyAggIndex {
                 //     |
                 //    Scan
                 SExpr::create_unary(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                    SExpr::create_unary(
+                    Arc::new(
                         PatternPlan {
-                            plan_type: RelOp::Aggregate,
+                            plan_type: RelOp::EvalScalar,
                         }
                         .into(),
-                        SExpr::create_unary(
+                    ),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(
                             PatternPlan {
                                 plan_type: RelOp::Aggregate,
                             }
                             .into(),
-                            SExpr::create_unary(
+                        ),
+                        Arc::new(SExpr::create_unary(
+                            Arc::new(
                                 PatternPlan {
-                                    plan_type: RelOp::EvalScalar,
+                                    plan_type: RelOp::Aggregate,
                                 }
                                 .into(),
-                                SExpr::create_leaf(
+                            ),
+                            Arc::new(SExpr::create_unary(
+                                Arc::new(
+                                    PatternPlan {
+                                        plan_type: RelOp::EvalScalar,
+                                    }
+                                    .into(),
+                                ),
+                                Arc::new(SExpr::create_leaf(Arc::new(
                                     PatternPlan {
                                         plan_type: RelOp::Scan,
                                     }
                                     .into(),
-                                ),
-                            ),
-                        ),
-                    ),
+                                ))),
+                            )),
+                        )),
+                    )),
                 ),
                 // Expression
                 //     |
@@ -127,40 +143,50 @@ impl RuleTryApplyAggIndex {
                 //     |
                 //    Scan
                 SExpr::create_unary(
-                    PatternPlan {
-                        plan_type: RelOp::EvalScalar,
-                    }
-                    .into(),
-                    SExpr::create_unary(
+                    Arc::new(
                         PatternPlan {
-                            plan_type: RelOp::Aggregate,
+                            plan_type: RelOp::EvalScalar,
                         }
                         .into(),
-                        SExpr::create_unary(
+                    ),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(
                             PatternPlan {
                                 plan_type: RelOp::Aggregate,
                             }
                             .into(),
-                            SExpr::create_unary(
+                        ),
+                        Arc::new(SExpr::create_unary(
+                            Arc::new(
                                 PatternPlan {
-                                    plan_type: RelOp::EvalScalar,
+                                    plan_type: RelOp::Aggregate,
                                 }
                                 .into(),
-                                SExpr::create_unary(
+                            ),
+                            Arc::new(SExpr::create_unary(
+                                Arc::new(
                                     PatternPlan {
-                                        plan_type: RelOp::Filter,
+                                        plan_type: RelOp::EvalScalar,
                                     }
                                     .into(),
-                                    SExpr::create_leaf(
+                                ),
+                                Arc::new(SExpr::create_unary(
+                                    Arc::new(
+                                        PatternPlan {
+                                            plan_type: RelOp::Filter,
+                                        }
+                                        .into(),
+                                    ),
+                                    Arc::new(SExpr::create_leaf(Arc::new(
                                         PatternPlan {
                                             plan_type: RelOp::Scan,
                                         }
                                         .into(),
-                                    ),
-                                ),
-                            ),
-                        ),
-                    ),
+                                    ))),
+                                )),
+                            )),
+                        )),
+                    )),
                 ),
             ],
         }

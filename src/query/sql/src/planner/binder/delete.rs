@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
@@ -69,7 +71,8 @@ impl<'a> Binder {
                     predicates: vec![scalar],
                     is_having: false,
                 };
-                let filter_expr = SExpr::create_unary(filter.into(), table_expr);
+                let filter_expr =
+                    SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
                 let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
                 let filter_expr = rewriter.rewrite(&filter_expr)?;
                 (None, Some(filter_expr))

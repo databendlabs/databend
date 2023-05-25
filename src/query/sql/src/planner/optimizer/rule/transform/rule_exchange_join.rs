@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
+use std::sync::Arc;
 use std::vec;
 
 use common_exception::Result;
@@ -64,26 +66,32 @@ impl RuleExchangeJoin {
             // | \
             // *  *
             patterns: vec![SExpr::create_binary(
-                PatternPlan {
-                    plan_type: RelOp::Join,
-                }
-                .into(),
-                SExpr::create_binary(
+                Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Join,
                     }
                     .into(),
-                    SExpr::create_pattern_leaf(),
-                    SExpr::create_pattern_leaf(),
                 ),
-                SExpr::create_binary(
-                    PatternPlan {
-                        plan_type: RelOp::Join,
-                    }
-                    .into(),
-                    SExpr::create_pattern_leaf(),
-                    SExpr::create_pattern_leaf(),
-                ),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Join,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_pattern_leaf()),
+                    Arc::new(SExpr::create_pattern_leaf()),
+                )),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Join,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_pattern_leaf()),
+                    Arc::new(SExpr::create_pattern_leaf()),
+                )),
             )],
         }
     }
@@ -108,9 +116,9 @@ impl Rule for RuleExchangeJoin {
         //  join5 join6
         //  /  \   /  \
         // t1  t3 t2  t4
-        let join1: Join = s_expr.plan.clone().try_into()?;
-        let join2: Join = s_expr.child(0)?.plan.clone().try_into()?;
-        let join3: Join = s_expr.child(1)?.plan.clone().try_into()?;
+        let join1: Join = s_expr.plan.deref().clone().try_into()?;
+        let join2: Join = s_expr.child(0)?.plan.deref().clone().try_into()?;
+        let join3: Join = s_expr.child(1)?.plan.deref().clone().try_into()?;
         let t1 = s_expr.child(0)?.child(0)?;
         let t2 = s_expr.child(0)?.child(1)?;
         let t3 = s_expr.child(1)?.child(0)?;
@@ -146,15 +154,15 @@ impl Rule for RuleExchangeJoin {
         let t3_prop = RelExpr::with_s_expr(t3).derive_relational_prop()?;
         let t4_prop = RelExpr::with_s_expr(t4).derive_relational_prop()?;
         let join5_prop = RelExpr::with_s_expr(&SExpr::create_binary(
-            join_5.clone().into(),
-            t1.clone(),
-            t3.clone(),
+            Arc::new(join_5.clone().into()),
+            Arc::new(t1.clone()),
+            Arc::new(t3.clone()),
         ))
         .derive_relational_prop()?;
         let join6_prop = RelExpr::with_s_expr(&SExpr::create_binary(
-            join_6.clone().into(),
-            t2.clone(),
-            t4.clone(),
+            Arc::new(join_6.clone().into()),
+            Arc::new(t2.clone()),
+            Arc::new(t4.clone()),
         ))
         .derive_relational_prop()?;
 
@@ -247,10 +255,18 @@ impl Rule for RuleExchangeJoin {
         }
 
         let mut result = SExpr::create(
-            join_4.into(),
+            Arc::new(join_4.into()),
             vec![
-                SExpr::create_binary(join_5.into(), t1.clone(), t3.clone()),
-                SExpr::create_binary(join_6.into(), t2.clone(), t4.clone()),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(join_5.into()),
+                    Arc::new(t1.clone()),
+                    Arc::new(t3.clone()),
+                )),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(join_6.into()),
+                    Arc::new(t2.clone()),
+                    Arc::new(t4.clone()),
+                )),
             ],
             None,
             None,

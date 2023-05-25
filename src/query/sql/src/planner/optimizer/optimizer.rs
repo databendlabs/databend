@@ -153,7 +153,7 @@ pub fn optimize_query(
     let mut result = heuristic.optimize(s_expr)?;
     if ctx.get_settings().get_enable_dphyp()? {
         let (dp_res, optimized) =
-            DPhpy::new(ctx.clone(), metadata.clone(), false).optimize(result.clone())?;
+            DPhpy::new(ctx.clone(), metadata.clone(), false).optimize(&result)?;
         result = dp_res;
         if !optimized {
             // Callback to CascadesOptimizer

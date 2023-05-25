@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::Scalar;
 
@@ -100,16 +102,18 @@ impl RuleNormalizeDisjunctiveFilter {
             //  \
             //   *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Filter,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Pattern,
                     }
                     .into(),
-                ),
+                ))),
             )],
         }
     }
@@ -140,12 +144,14 @@ impl Rule for RuleNormalizeDisjunctiveFilter {
         }
         if rewritten {
             state.add_result(SExpr::create_unary(
-                Filter {
-                    predicates: split_predicates,
-                    is_having: filter.is_having,
-                }
-                .into(),
-                s_expr.child(0)?.clone(),
+                Arc::new(
+                    Filter {
+                        predicates: split_predicates,
+                        is_having: filter.is_having,
+                    }
+                    .into(),
+                ),
+                Arc::new(s_expr.child(0)?.clone()),
             ));
         }
         Ok(())

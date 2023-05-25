@@ -94,7 +94,7 @@ impl DPhpy {
             }
             // If it's a subquery, start a new dphyp
             let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone(), true);
-            let (res, optimized) = dphyp.optimize(s_expr.clone())?;
+            let (res, optimized) = dphyp.optimize(s_expr)?;
             if optimized {
                 let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
                 self.subquery_table_index_map
@@ -106,7 +106,7 @@ impl DPhpy {
             return Ok(optimized);
         }
 
-        match &s_expr.plan {
+        match s_expr.plan.as_ref() {
             RelOperator::Scan(op) => {
                 let join_relation = if let Some(relation) = join_relation {
                     // Check if relation contains filter, if exists, check if the filter in `filters`
@@ -129,8 +129,8 @@ impl DPhpy {
                 let mut right_is_subquery = false;
                 // Fixme: If join's child is EvalScalar, we think it is a subquery.
                 // Check join's child is filter or scan
-                let left_op = &s_expr.children()[0].plan;
-                let right_op = &s_expr.children()[1].plan;
+                let left_op = s_expr.child(0)?.plan.as_ref();
+                let right_op = s_expr.child(1)?.plan.as_ref();
                 if matches!(left_op, RelOperator::EvalScalar(_)) {
                     left_is_subquery = true;
                 }
@@ -155,14 +155,14 @@ impl DPhpy {
                     let left_expr = s_expr.children()[0].clone();
                     let left_res = Thread::spawn(move || {
                         let mut dphyp = DPhpy::new(ctx, metadata, true);
-                        (dphyp.optimize(left_expr), dphyp.table_index_map)
+                        (dphyp.optimize(left_expr.as_ref()), dphyp.table_index_map)
                     });
                     let ctx = self.ctx.clone();
                     let metadata = self.metadata.clone();
                     let right_expr = s_expr.children()[1].clone();
                     let right_res = Thread::spawn(move || {
                         let mut dphyp = DPhpy::new(ctx, metadata, true);
-                        (dphyp.optimize(right_expr), dphyp.table_index_map)
+                        (dphyp.optimize(right_expr.as_ref()), dphyp.table_index_map)
                     });
                     let left_res = left_res.join()?;
                     let (left_expr, left_optimized) = left_res.0?;
@@ -210,7 +210,7 @@ impl DPhpy {
             | RelOperator::Limit(_) => {
                 if join_child {
                     // If plan in filter, save it
-                    if let RelOperator::Filter(op) = &s_expr.plan {
+                    if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
                         self.filters.insert(op.clone());
                     }
                     self.get_base_relations(
@@ -241,16 +241,16 @@ impl DPhpy {
     // The input plan tree has been optimized by heuristic optimizer
     // So filters have pushed down join and cross join has been converted to inner join as possible as we can
     // The output plan will have optimal join order theoretically
-    pub fn optimize(&mut self, s_expr: SExpr) -> Result<(SExpr, bool)> {
+    pub fn optimize(&mut self, s_expr: &SExpr) -> Result<(SExpr, bool)> {
         // Firstly, we need to extract all join conditions and base tables
         // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
-        let res = self.get_base_relations(&s_expr, &mut join_conditions, false, false, None)?;
+        let res = self.get_base_relations(s_expr, &mut join_conditions, false, false, None)?;
         if !res {
-            return Ok((s_expr, false));
+            return Ok((s_expr.clone(), false));
         }
         if self.join_relations.len() == 1 {
-            return Ok((s_expr, true));
+            return Ok((s_expr.clone(), true));
         }
 
         // Second, use `join_conditions` to create edges in `query_graph`
@@ -548,18 +548,18 @@ impl DPhpy {
     }
 
     // Map join order in `JoinNode` to `SExpr`
-    fn join_reorder(&self, final_plan: &JoinNode, s_expr: SExpr) -> Result<(SExpr, bool)> {
+    fn join_reorder(&self, final_plan: &JoinNode, s_expr: &SExpr) -> Result<(SExpr, bool)> {
         // Convert `final_plan` to `SExpr`
         let join_expr = final_plan.s_expr(&self.join_relations);
         // Find first join node in `s_expr`, then replace it with `join_expr`
-        let new_s_expr = self.replace_join_expr(&join_expr, &s_expr)?;
+        let new_s_expr = self.replace_join_expr(&join_expr, s_expr)?;
         Ok((new_s_expr, true))
     }
 
     #[allow(clippy::only_used_in_recursion)]
     fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
         let mut new_s_expr = s_expr.clone();
-        match &s_expr.plan {
+        match s_expr.plan.as_ref() {
             RelOperator::Join(_) => {
                 new_s_expr.plan = join_expr.plan.clone();
                 new_s_expr.children = join_expr.children.clone();
@@ -569,29 +569,29 @@ impl DPhpy {
                     predicates.extend(filter.clone().predicates.iter().cloned())
                 }
                 new_s_expr = SExpr::create_unary(
-                    RelOperator::Filter(Filter {
+                    Arc::new(RelOperator::Filter(Filter {
                         predicates,
                         is_having: false,
-                    }),
-                    new_s_expr,
+                    })),
+                    Arc::new(new_s_expr),
                 );
                 new_s_expr = self.push_down_filter(&new_s_expr)?;
-                if let RelOperator::Filter(filter) = &new_s_expr.plan {
+                if let RelOperator::Filter(filter) = new_s_expr.plan.as_ref() {
                     if filter.predicates.is_empty() {
-                        new_s_expr = new_s_expr.children[0].clone();
+                        new_s_expr = new_s_expr.child(0)?.clone();
                     }
                 }
             }
             _ => {
                 let child_expr = self.replace_join_expr(join_expr, &s_expr.children[0])?;
-                new_s_expr.children = Arc::new(vec![child_expr]);
+                new_s_expr.children = vec![Arc::new(child_expr)];
             }
         }
         Ok(new_s_expr)
     }
 
     fn check_filter(&mut self, expr: &SExpr) {
-        if let RelOperator::Filter(filter) = &expr.plan {
+        if let RelOperator::Filter(filter) = expr.plan.as_ref() {
             if self.filters.contains(filter) {
                 self.filters.remove(filter);
             }
@@ -604,7 +604,7 @@ impl DPhpy {
     fn push_down_filter(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
         for expr in s_expr.children() {
-            optimized_children.push(self.push_down_filter(expr)?);
+            optimized_children.push(Arc::new(self.push_down_filter(expr)?));
         }
         let optimized_expr = s_expr.replace_children(optimized_children);
         let result = self.apply_rule(&optimized_expr)?;

@@ -418,7 +418,9 @@ impl TableContext for QueryContext {
             tz,
 
             openai_api_key: query_config.openai_api_key.clone(),
-            openai_api_base_url: query_config.openai_api_base_url.clone(),
+            openai_api_version: query_config.openai_api_version.clone(),
+            openai_api_chat_base_url: query_config.openai_api_chat_base_url.clone(),
+            openai_api_embedding_base_url: query_config.openai_api_embedding_base_url.clone(),
             openai_api_embedding_model: query_config.openai_api_embedding_model.clone(),
             openai_api_completion_model: query_config.openai_api_completion_model.clone(),
         })

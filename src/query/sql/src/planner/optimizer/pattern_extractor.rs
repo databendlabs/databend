@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::optimizer::group::Group;
@@ -99,9 +101,9 @@ impl PatternExtractor {
         }
 
         'LOOP: loop {
-            let mut children: Vec<SExpr> = vec![];
+            let mut children = vec![];
             for (index, cursor) in cursors.iter().enumerate() {
-                children.push(candidates[index][*cursor].clone());
+                children.push(Arc::new(candidates[index][*cursor].clone()));
             }
             results.push(SExpr::create(
                 m_expr.plan.clone(),

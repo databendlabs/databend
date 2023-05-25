@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -354,7 +354,7 @@ async fn test_query_rewrite() -> Result<()> {
         let optimzier = HeuristicOptimizer::new(func_ctx.clone(), bind_context, metadata.clone());
         let meta = metadata.read();
         let base_columns = meta.columns_by_table_index(0);
-        let result = agg_index::try_rewrite(&optimzier, &base_columns, &query, &vec![(
+        let result = agg_index::try_rewrite(&optimzier, &base_columns, &query, &[(
             0,
             suite.index.to_string(),
             index,
