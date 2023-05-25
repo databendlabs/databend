@@ -91,14 +91,47 @@ pub fn try_rewrite(
 
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
-        for item in query_info.selection.items.iter() {
-            if let Some(rewritten) =
-                rewrite_by_selection(&query_info, &item.scalar, &index_selection)
-            {
-                new_selection.push(rewritten);
-            } else {
-                flag = false;
-                break;
+
+        if let Some((query_agg, _)) = query_info.aggregation {
+            // If the query is an aggregation query, the index selection is to rewrite the input `EvalScalar` operator of `Aggregate` operators.
+            // In another word, is to rewrite the input items of the aggregation.
+            // The input of aggregation will only have the arguments of the aggregate functions and group by columns (expressions).
+            // So just need to find if the aggregate functions call and group by exprs exist in index selection.
+            for agg in query_agg.aggregate_functions.iter() {
+                if let Some(rewritten) = try_create_column_binding(
+                    &index_selection,
+                    &query_info.format_scalar(&agg.scalar),
+                ) {
+                    new_selection.push(rewritten.into());
+                } else {
+                    flag = false;
+                    break;
+                }
+            }
+            if flag {
+                for expr in query_agg.group_items.iter() {
+                    if let Some(rewritten) =
+                        rewrite_by_selection(&query_info, &expr.scalar, &index_selection)
+                    {
+                        new_selection.push(rewritten);
+                    } else {
+                        flag = false;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // If the query is not an aggregation query, the index selection is to rewrite the final output `EvalScalar` operator.
+            // In another word, is to rewrite `query_info.selection`.
+            for item in query_info.selection.items.iter() {
+                if let Some(rewritten) =
+                    rewrite_by_selection(&query_info, &item.scalar, &index_selection)
+                {
+                    new_selection.push(rewritten);
+                } else {
+                    flag = false;
+                    break;
+                }
             }
         }
         if !flag {
@@ -450,6 +483,11 @@ type Predicates<'a> = (
 );
 
 type AggregationInfo<'a> = (&'a Aggregate, HashMap<IndexType, &'a ScalarExpr>);
+
+/// The data structure to record the selection.
+///
+/// - Key: the formatted expression.
+/// - Value: (index, data type) of the expression
 type SelectionMap<'a> = HashMap<String, (IndexType, DataType)>;
 
 // Record information helping to rewrite the query plan.
@@ -593,12 +631,12 @@ fn collect_information_impl<'a>(
             let child = s_expr.child(0)?;
             if let RelOperator::EvalScalar(eval) = child.plan() {
                 // This eval scalar hold aggregation's arguments.
-                let args_map = eval
+                let inputs = eval
                     .items
                     .iter()
                     .map(|item| (item.index, &item.scalar))
                     .collect();
-                info.aggregation.replace((agg, args_map));
+                info.aggregation.replace((agg, inputs));
                 collect_information_impl(child.child(0)?, info)
             } else {
                 collect_information_impl(child, info)
@@ -816,14 +854,9 @@ fn rewrite_query_item(
     // Every call will format the scalars,
     // a more efficient way to be determined.
     match query_item {
-        ScalarExpr::BoundColumnRef(_) => match query_info.actual_column_ref(query_item) {
-            ScalarExpr::BoundColumnRef(col) => {
-                let col =
-                    try_create_column_binding(index_selection, &format_col_name(col.column.index))?;
-                Some(col.into())
-            }
-            s => rewrite_by_selection(query_info, s, index_selection),
-        },
+        ScalarExpr::BoundColumnRef(col) => Some(
+            try_create_column_binding(index_selection, &format_col_name(col.column.index))?.into(),
+        ),
         ScalarExpr::ConstantExpr(_) => Some(query_item.clone()),
         ScalarExpr::CastExpr(cast) => {
             let new_arg = rewrite_by_selection(query_info, &cast.argument, index_selection)?;
