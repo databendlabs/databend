@@ -273,6 +273,12 @@ fn get_test_suites() -> Vec<TestSuite> {
             rewritten_predicates: vec![],
         },
         TestSuite {
+            query: "select sum(a) from t group by b",
+            index: "select sum(a) from t group by b",
+            is_matched: false,
+            ..Default::default()
+        },
+        TestSuite {
             query: "select sum(a) from t group by c",
             index: "select b, sum(a) from t group by b",
             is_matched: false,

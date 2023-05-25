@@ -81,6 +81,14 @@ pub fn try_rewrite(
 
         // 2. Check query output and try to rewrite it.
         let index_selection = index_info.formatted_selection()?;
+        // group items should be in selection.
+        if !query_group_items
+            .iter()
+            .all(|item| index_selection.contains_key(item))
+        {
+            continue;
+        }
+
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
         for item in query_info.selection.items.iter() {
