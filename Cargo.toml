@@ -3,4 +3,5 @@ members = [
     "core",
     "driver",
     "cli",
+    "bindings/python"
 ]
