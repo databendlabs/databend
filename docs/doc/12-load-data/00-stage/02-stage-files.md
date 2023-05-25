@@ -6,7 +6,7 @@ You can use the [File Upload API](../../11-integrations/00-api/10-put-to-stage.m
 
 ## Examples
 
-The following examples demonstrate how to upload a sample file ([books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)) to the User Stage, an internal stage, and an external stage with the File Upload API.
+The following examples demonstrate how to upload a sample file ([books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet)) to the user stage, an internal stage, and an external stage with the File Upload API.
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';

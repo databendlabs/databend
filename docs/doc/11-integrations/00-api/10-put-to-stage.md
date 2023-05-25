@@ -22,4 +22,4 @@ In the body of the POST request, include the [Required Parameters](#required-par
 
 ## Examples
 
-See examples in [Staging Files](../../12-load-data/00-stage/01-manage-stages.md).
+See examples in [Staging Files with API](../../12-load-data/00-stage/02-stage-files.md).
