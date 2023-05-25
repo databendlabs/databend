@@ -12,21 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_ast::ast::CreateIndexStmt;
 use common_ast::ast::DropIndexStmt;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::Query;
+use common_ast::ast::RefreshIndexStmt;
 use common_ast::ast::SetExpr;
+use common_ast::ast::Statement;
 use common_ast::ast::TableReference;
+use common_ast::parser::parse_sql;
+use common_ast::parser::tokenize_sql;
+use common_ast::walk_statement_mut;
+use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::GetIndexReq;
+use common_meta_app::schema::IndexNameIdent;
 
 use crate::binder::Binder;
+use crate::optimizer::optimize;
+use crate::optimizer::OptimizerConfig;
+use crate::optimizer::OptimizerContext;
 use crate::plans::CreateIndexPlan;
 use crate::plans::DropIndexPlan;
 use crate::plans::Plan;
+use crate::plans::RefreshIndexPlan;
+use crate::AggregatingIndexRewriter;
 use crate::BindContext;
+use crate::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
 impl Binder {
     #[async_backtrace::framed]
@@ -97,9 +113,75 @@ impl Binder {
         Ok(Plan::DropIndex(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_refresh_index(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &RefreshIndexStmt,
+    ) -> Result<Plan> {
+        let RefreshIndexStmt { index, limit } = stmt;
+
+        let index_name = self.normalize_object_identifier(index);
+        let catalog = self.ctx.get_catalog(&self.ctx.get_current_catalog())?;
+        let get_index_req = GetIndexReq {
+            name_ident: IndexNameIdent {
+                tenant: self.ctx.get_tenant(),
+                index_name,
+            },
+        };
+
+        let res = catalog.get_index(get_index_req).await?;
+
+        let index_id = res.index_id;
+        let index_meta = res.index_meta;
+
+        let tokens = tokenize_sql(&index_meta.query)?;
+        let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        walk_statement_mut(
+            &mut AggregatingIndexRewriter {
+                sql_dialect: Dialect::PostgreSQL,
+            },
+            &mut stmt,
+        );
+        bind_context.planning_agg_index = true;
+        let plan = if let Statement::Query(_) = &stmt {
+            let select_plan = self.bind_statement(bind_context, &stmt).await?;
+            let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
+                enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
+            }));
+            Ok(optimize(self.ctx.clone(), opt_ctx, select_plan)?)
+        } else {
+            Err(ErrorCode::UnsupportedIndex("statement is not query"))
+        };
+        let plan = plan?;
+        bind_context.planning_agg_index = false;
+
+        let tables = self.metadata.read().tables().to_vec();
+
+        if tables.len() != 1 {
+            return Err(ErrorCode::UnsupportedIndex(
+                "Create Index currently only support single table",
+            ));
+        }
+
+        let table_entry = &tables[0];
+        let table = table_entry.table();
+        debug_assert_eq!(index_meta.table_id, table.get_id());
+
+        let plan = RefreshIndexPlan {
+            index_id,
+            limit: *limit,
+            table_info: table.get_table_info().clone(),
+            query_plan: Box::new(plan),
+            metadata: self.metadata.clone(),
+        };
+
+        Ok(Plan::RefreshIndex(Box::new(plan)))
+    }
+
     fn check_index_support(query: &Query) -> Result<()> {
         let err = Err(ErrorCode::UnsupportedIndex(format!(
-            "Currently create index just support simple query, like: {}",
+            "Currently create aggregating index just support simple query, like: {}",
             "SELECT ... FROM ... WHERE ... GROUP BY ..."
         )));
 
@@ -123,6 +205,14 @@ impl Binder {
             for target in &stmt.select_list {
                 if target.has_window() {
                     return err;
+                }
+                if let Some(fn_name) = target.function_call_name() {
+                    if !SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.contains(&&*fn_name) {
+                        return Err(ErrorCode::UnsupportedIndex(format!(
+                            "Currently create aggregating index just support these aggregate functions: {}",
+                            SUPPORTED_AGGREGATING_INDEX_FUNCTIONS.join(", ")
+                        )));
+                    }
                 }
             }
         } else {

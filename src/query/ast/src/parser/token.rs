@@ -713,6 +713,8 @@ pub enum TokenKind {
     RECORD_DELIMITER,
     #[token("REFERENCE_USAGE", ignore(ascii_case))]
     REFERENCE_USAGE,
+    #[token("REFRESH", ignore(ascii_case))]
+    REFRESH,
     #[token("REGEXP", ignore(ascii_case))]
     REGEXP,
     #[token("RENAME", ignore(ascii_case))]

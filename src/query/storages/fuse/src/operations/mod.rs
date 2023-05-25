@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_index_sink;
+mod agg_index_source;
+mod agg_source_meta;
 mod analyze;
 mod append;
 mod commit;
@@ -32,6 +35,9 @@ mod truncate;
 mod update;
 pub mod util;
 
+pub use agg_index_sink::AggIndexSink;
+pub use agg_index_source::AggIndexSource;
+pub use agg_source_meta::AggSourceMeta;
 pub use common::BlockMetaIndex;
 pub use common::FillInternalColumnProcessor;
 pub use compact::CompactOptions;

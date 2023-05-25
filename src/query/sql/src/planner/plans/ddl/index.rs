@@ -13,7 +13,11 @@
 // limitations under the License.
 
 use common_ast::ast::TableIndexType;
+use common_meta_app::schema::TableInfo;
 use common_meta_types::MetaId;
+
+use crate::plans::Plan;
+use crate::MetadataRef;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateIndexPlan {
@@ -29,4 +33,13 @@ pub struct CreateIndexPlan {
 pub struct DropIndexPlan {
     pub if_exists: bool,
     pub index: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct RefreshIndexPlan {
+    pub index_id: u64,
+    pub limit: Option<u64>,
+    pub table_info: TableInfo,
+    pub query_plan: Box<Plan>,
+    pub metadata: MetadataRef,
 }

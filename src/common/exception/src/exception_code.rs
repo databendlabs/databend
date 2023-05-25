@@ -287,6 +287,7 @@ build_exceptions! {
     IndexAlreadyExists(2721),
     UnknownIndex(2722),
     DropIndexWithDropTime(2723),
+    GetIndexWithDropTime(2724),
 
     // Variable error codes.
     UnknownVariable(2801),
