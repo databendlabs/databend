@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRef;
@@ -41,16 +43,18 @@ impl RulePushDownPrewhere {
         Self {
             id: RuleID::PushDownPrewhere,
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Filter,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Scan,
                     }
                     .into(),
-                ),
+                ))),
             )],
             metadata,
         }
@@ -146,7 +150,7 @@ impl RulePushDownPrewhere {
                 predicates: prewhere_pred,
             });
         }
-        Ok(SExpr::create_leaf(get.into()))
+        Ok(SExpr::create_leaf(Arc::new(get.into())))
     }
 }
 

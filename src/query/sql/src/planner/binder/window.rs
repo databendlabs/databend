@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -56,7 +57,10 @@ impl Binder {
             frame: window_info.frame.clone(),
         };
 
-        Ok(SExpr::create_unary(window_plan.into(), child))
+        Ok(SExpr::create_unary(
+            Arc::new(window_plan.into()),
+            Arc::new(child),
+        ))
     }
 }
 

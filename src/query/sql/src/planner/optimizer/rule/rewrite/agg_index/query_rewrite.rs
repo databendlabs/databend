@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -158,8 +159,8 @@ fn rewrite_index_plan(columns: &HashMap<String, IndexType>, s_expr: &SExpr) -> S
                 rewrite_scalar_index(columns, &mut item.scalar);
             }
             SExpr::create_unary(
-                new_expr.into(),
-                rewrite_index_plan(columns, s_expr.child(0).unwrap()),
+                Arc::new(new_expr.into()),
+                Arc::new(rewrite_index_plan(columns, s_expr.child(0).unwrap())),
             )
         }
         RelOperator::Filter(filter) => {
@@ -168,12 +169,15 @@ fn rewrite_index_plan(columns: &HashMap<String, IndexType>, s_expr: &SExpr) -> S
                 rewrite_scalar_index(columns, pred);
             }
             SExpr::create_unary(
-                new_expr.into(),
-                rewrite_index_plan(columns, s_expr.child(0).unwrap()),
+                Arc::new(new_expr.into()),
+                Arc::new(rewrite_index_plan(columns, s_expr.child(0).unwrap())),
             )
         }
         RelOperator::Scan(_) => s_expr.clone(), // Terminate the recursion.
-        _ => s_expr.replace_children(vec![rewrite_index_plan(columns, s_expr.child(0).unwrap())]),
+        _ => s_expr.replace_children(vec![Arc::new(rewrite_index_plan(
+            columns,
+            s_expr.child(0).unwrap(),
+        ))]),
     }
 }
 
@@ -844,7 +848,7 @@ fn push_down_index_scan(s_expr: &SExpr, agg_info: AggIndexInfo) -> Result<SExpr>
         }
         _ => {
             let child = push_down_index_scan(s_expr.child(0)?, agg_info)?;
-            s_expr.replace_children(vec![child])
+            s_expr.replace_children(vec![Arc::new(child)])
         }
     })
 }

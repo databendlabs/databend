@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp;
+use std::sync::Arc;
 
 use common_exception::Result;
 
@@ -45,16 +46,18 @@ impl RulePushDownLimitScan {
         Self {
             id: RuleID::PushDownLimitScan,
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Limit,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Limit,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Scan,
                     }
                     .into(),
-                ),
+                ))),
             )],
         }
     }
@@ -72,9 +75,9 @@ impl Rule for RulePushDownLimitScan {
             let mut get: Scan = child.plan().clone().try_into()?;
             count += limit.offset;
             get.limit = Some(get.limit.map_or(count, |c| cmp::max(c, count)));
-            let get = SExpr::create_leaf(RelOperator::Scan(get));
+            let get = SExpr::create_leaf(Arc::new(RelOperator::Scan(get)));
 
-            let mut result = s_expr.replace_children(vec![get]);
+            let mut result = s_expr.replace_children(vec![Arc::new(get)]);
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }

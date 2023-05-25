@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -85,7 +86,7 @@ impl SubqueryRewriter {
                     item.scalar = res.0;
                 }
 
-                Ok(SExpr::create_unary(plan.into(), input))
+                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
             RelOperator::Filter(mut plan) => {
                 let mut input = self.rewrite(s_expr.child(0)?)?;
@@ -95,7 +96,7 @@ impl SubqueryRewriter {
                     *pred = res.0;
                 }
 
-                Ok(SExpr::create_unary(plan.into(), input))
+                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
             RelOperator::Aggregate(mut plan) => {
                 let mut input = self.rewrite(s_expr.child(0)?)?;
@@ -112,7 +113,7 @@ impl SubqueryRewriter {
                     item.scalar = res.0;
                 }
 
-                Ok(SExpr::create_unary(plan.into(), input))
+                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
 
             RelOperator::Window(mut plan) => {
@@ -139,18 +140,18 @@ impl SubqueryRewriter {
                     }
                 }
 
-                Ok(SExpr::create_unary(plan.into(), input))
+                Ok(SExpr::create_unary(Arc::new(plan.into()), Arc::new(input)))
             }
 
             RelOperator::Join(_) | RelOperator::UnionAll(_) => Ok(SExpr::create_binary(
-                s_expr.plan().clone(),
-                self.rewrite(s_expr.child(0)?)?,
-                self.rewrite(s_expr.child(1)?)?,
+                Arc::new(s_expr.plan().clone()),
+                Arc::new(self.rewrite(s_expr.child(0)?)?),
+                Arc::new(self.rewrite(s_expr.child(1)?)?),
             )),
 
             RelOperator::Limit(_) | RelOperator::Sort(_) => Ok(SExpr::create_unary(
-                s_expr.plan().clone(),
-                self.rewrite(s_expr.child(0)?)?,
+                Arc::new(s_expr.plan().clone()),
+                Arc::new(self.rewrite(s_expr.child(0)?)?),
             )),
 
             RelOperator::DummyTableScan(_) | RelOperator::Scan(_) => Ok(s_expr.clone()),
@@ -342,8 +343,11 @@ impl SubqueryRewriter {
                     contain_runtime_filter: false,
                 }
                 .into();
-                let s_expr =
-                    SExpr::create_binary(join_plan, left.clone(), *subquery.subquery.clone());
+                let s_expr = SExpr::create_binary(
+                    Arc::new(join_plan),
+                    Arc::new(left.clone()),
+                    Arc::new(*subquery.subquery.clone()),
+                );
                 Ok((s_expr, UnnestResult::SingleJoin))
             }
             SubqueryType::Exists | SubqueryType::NotExists => {
@@ -353,7 +357,8 @@ impl SubqueryRewriter {
                     limit: Some(1),
                     offset: 0,
                 };
-                subquery_expr = SExpr::create_unary(limit.into(), subquery_expr.clone());
+                subquery_expr =
+                    SExpr::create_unary(Arc::new(limit.into()), Arc::new(subquery_expr.clone()));
 
                 // We will rewrite EXISTS subquery into the form `COUNT(*) = 1`.
                 // For example, `EXISTS(SELECT a FROM t WHERE a > 1)` will be rewritten into
@@ -422,8 +427,11 @@ impl SubqueryRewriter {
                 // Filter: COUNT(*) = 1 or COUNT(*) != 1
                 //     Aggregate: COUNT(*)
                 let rewritten_subquery = SExpr::create_unary(
-                    filter.into(),
-                    SExpr::create_unary(agg.into(), subquery_expr),
+                    Arc::new(filter.into()),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(agg.into()),
+                        Arc::new(subquery_expr),
+                    )),
                 );
                 let cross_join = Join {
                     left_conditions: vec![],
@@ -436,7 +444,11 @@ impl SubqueryRewriter {
                 }
                 .into();
                 Ok((
-                    SExpr::create_binary(cross_join, left.clone(), rewritten_subquery),
+                    SExpr::create_binary(
+                        Arc::new(cross_join),
+                        Arc::new(left.clone()),
+                        Arc::new(rewritten_subquery),
+                    ),
                     UnnestResult::SimpleJoin,
                 ))
             }
@@ -500,8 +512,11 @@ impl SubqueryRewriter {
                     contain_runtime_filter: false,
                 }
                 .into();
-                let s_expr =
-                    SExpr::create_binary(mark_join, left.clone(), *subquery.subquery.clone());
+                let s_expr = SExpr::create_binary(
+                    Arc::new(mark_join),
+                    Arc::new(left.clone()),
+                    Arc::new(*subquery.subquery.clone()),
+                );
                 Ok((s_expr, UnnestResult::MarkJoin { marker_index }))
             }
             _ => unreachable!(),
