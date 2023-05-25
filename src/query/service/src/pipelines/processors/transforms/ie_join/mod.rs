@@ -12,17 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod explain;
-mod format;
-mod physical_plan;
-mod physical_plan_builder;
-mod physical_plan_display;
-mod physical_plan_visitor;
-pub mod table_read_plan;
-mod util;
+mod ie_join_state;
 
-pub use physical_plan::*;
-pub use physical_plan_builder::IEJoinCondition;
-pub use physical_plan_builder::PhysicalPlanBuilder;
-pub use physical_plan_visitor::PhysicalPlanReplacer;
-pub use util::*;
+pub use ie_join_state::IEJoinState;
