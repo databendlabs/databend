@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use itertools::Itertools;
 
@@ -37,16 +39,18 @@ impl RuleEliminateFilter {
             //  \
             //   *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Filter,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Pattern,
                     }
                     .into(),
-                ),
+                ))),
             )],
         }
     }
@@ -94,7 +98,10 @@ impl Rule for RuleEliminateFilter {
                 predicates,
                 is_having: eval_scalar.is_having,
             };
-            state.add_result(SExpr::create_unary(filter.into(), s_expr.child(0)?.clone()));
+            state.add_result(SExpr::create_unary(
+                Arc::new(filter.into()),
+                Arc::new(s_expr.child(0)?.clone()),
+            ));
         }
         Ok(())
     }

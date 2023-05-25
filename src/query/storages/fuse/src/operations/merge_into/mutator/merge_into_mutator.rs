@@ -330,18 +330,27 @@ impl MergeIntoOperationAggregator {
         column_stats: &HashMap<ColumnId, ColumnStatistics>,
         columns_min_max: &[(Scalar, Scalar)],
     ) -> bool {
-        for (idx, field) in self.on_conflict_fields.iter().enumerate() {
-            let column_id = field.table_field.column_id();
-            let (min, max) = &columns_min_max[idx];
-            if self.overlapped_by_stats(column_stats.get(&column_id), min, max) {
-                return true;
-            }
-        }
-        false
+        Self::check_overlap(&self.on_conflict_fields, column_stats, columns_min_max)
     }
 
-    fn overlapped_by_stats(
-        &self,
+    // if any item of `column_min_max` does NOT overlap with the corresponding item of `column_stats`
+    // returns false, otherwise returns true.
+    fn check_overlap(
+        on_conflict_fields: &[OnConflictField],
+        column_stats: &HashMap<ColumnId, ColumnStatistics>,
+        columns_min_max: &[(Scalar, Scalar)],
+    ) -> bool {
+        for (idx, field) in on_conflict_fields.iter().enumerate() {
+            let column_id = field.table_field.column_id();
+            let (min, max) = &columns_min_max[idx];
+            if !Self::check_overlapped_by_stats(column_stats.get(&column_id), min, max) {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn check_overlapped_by_stats(
         column_stats: Option<&ColumnStatistics>,
         key_min: &Scalar,
         key_max: &Scalar,
@@ -353,5 +362,180 @@ impl MergeIntoOperationAggregator {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_expression::types::NumberDataType;
+    use common_expression::types::NumberScalar;
+    use common_expression::TableDataType;
+    use common_expression::TableField;
+
+    use super::*;
+
+    #[test]
+    fn test_check_overlap() -> Result<()> {
+        // setup :
+        //
+        // - on conflict('xx_id', 'xx_type', 'xx_time');
+        //
+        // - range index of columns
+        //   'xx_id' : [1, 10]
+        //   'xx_type' : ["a", "z"]
+        //   'xx_time' : [100, 200]
+
+        // setup schema
+        let field_type_id = TableDataType::Number(NumberDataType::UInt64);
+        let field_type_string = TableDataType::String;
+        let field_type_time = TableDataType::Number(NumberDataType::UInt32);
+
+        let xx_id = TableField::new("xx_id", field_type_id);
+        let xx_type = TableField::new("xx_type", field_type_string);
+        let xx_time = TableField::new("xx_time", field_type_time);
+
+        let schema = TableSchema::new(vec![xx_id, xx_type, xx_time]);
+
+        let fields = schema.fields();
+
+        // setup the ON CONFLICT fields
+        let on_conflict_fields = fields
+            .iter()
+            .enumerate()
+            .map(|(id, field)| OnConflictField {
+                table_field: field.clone(),
+                field_index: id,
+            })
+            .collect::<Vec<_>>();
+
+        // set up range index of columns
+
+        let range = |min: Scalar, max: Scalar| {
+            ColumnStatistics {
+                min,
+                max,
+                // the following values do not matter in this case
+                null_count: 0,
+                in_memory_size: 0,
+                distinct_of_values: None,
+            }
+        };
+
+        let column_range_indexes = HashMap::from_iter([
+            // range of xx_id [1, 10]
+            (
+                0,
+                range(
+                    Scalar::Number(NumberScalar::UInt64(1)),
+                    Scalar::Number(NumberScalar::UInt64(10)),
+                ),
+            ),
+            // range of xx_type [a, z]
+            (
+                1,
+                range(
+                    Scalar::String("a".to_string().into_bytes()),
+                    Scalar::String("z".to_string().into_bytes()),
+                ),
+            ),
+            // range of xx_time [100, 200]
+            (
+                2,
+                range(
+                    Scalar::Number(NumberScalar::UInt32(100)),
+                    Scalar::Number(NumberScalar::UInt32(200)),
+                ),
+            ),
+        ]);
+
+        // case 1:
+        //
+        // - min/max of input block
+        //
+        //  'xx_id' : [1, 9]
+        //  'xx_type' : ["b", "y"]
+        //  'xx_time' : [101, 200]
+        //
+        // - recall that the range index of columns are:
+        //
+        //   'xx_id' : [1, 10]
+        //   'xx_type' : ["a", "z"]
+        //   'xx_time' : [100, 200]
+        //
+        // - expected : overlap == true
+        //   since value of all the ON CONFLICT columns of input block overlap with range index
+
+        let input_column_min_max = [
+            // for xx_id column, overlaps
+            (
+                Scalar::Number(NumberScalar::UInt64(1)),
+                Scalar::Number(NumberScalar::UInt64(9)),
+            ),
+            // for xx_type column, overlaps
+            (
+                Scalar::String("b".to_string().into_bytes()),
+                Scalar::String("y".to_string().into_bytes()),
+            ),
+            // for xx_time column, overlaps
+            (
+                Scalar::Number(NumberScalar::UInt32(101)),
+                Scalar::Number(NumberScalar::UInt32(200)),
+            ),
+        ];
+
+        let overlap = super::MergeIntoOperationAggregator::check_overlap(
+            &on_conflict_fields,
+            &column_range_indexes,
+            &input_column_min_max,
+        );
+
+        assert!(overlap);
+
+        // case 2:
+        //
+        // - min/max of input block
+        //
+        //  'xx_id' : [11, 12]
+        //  'xx_type' : ["b", "b"]
+        //  'xx_time' : [100, 100]
+        //
+        // - recall that the range index of columns are:
+        //
+        //   'xx_id' : [1, 10]
+        //   'xx_type' : ["a", "z"]
+        //   'xx_time' : [100, 200]
+        //
+        // - expected : overlap == false
+        //
+        //   although columns 'xx_type' and 'xx_time' do overlap, but 'xx_id' does not overlap,
+        //   so the result is NOT overlap
+
+        let input_column_min_max = [
+            // for xx_id column, NOT overlaps
+            (
+                Scalar::Number(NumberScalar::UInt64(11)),
+                Scalar::Number(NumberScalar::UInt64(12)),
+            ),
+            // for xx_type column, overlaps
+            (
+                Scalar::String("b".to_string().into_bytes()),
+                Scalar::String("b".to_string().into_bytes()),
+            ),
+            // for xx_time column, overlaps
+            (
+                Scalar::Number(NumberScalar::UInt32(100)),
+                Scalar::Number(NumberScalar::UInt32(100)),
+            ),
+        ];
+
+        let overlap = super::MergeIntoOperationAggregator::check_overlap(
+            &on_conflict_fields,
+            &column_range_indexes,
+            &input_column_min_max,
+        );
+
+        assert!(!overlap);
+
+        Ok(())
     }
 }

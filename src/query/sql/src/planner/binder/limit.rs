@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
 use common_exception::ErrorCode;
@@ -48,7 +50,7 @@ impl Binder {
 
     pub(super) fn bind_limit(child: SExpr, limit: Option<usize>, offset: usize) -> SExpr {
         let limit_plan = Limit { limit, offset };
-        SExpr::create_unary(limit_plan.into(), child)
+        SExpr::create_unary(Arc::new(limit_plan.into()), Arc::new(child))
     }
 
     /// So far, we only support integer literal as limit argument.

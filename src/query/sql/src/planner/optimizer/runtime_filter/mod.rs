@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use common_exception::Result;
 
@@ -59,11 +60,15 @@ fn wrap_runtime_filter_source(
     };
     let build_side = s_expr.child(1)?.clone();
     let mut probe_side = s_expr.child(0)?.clone();
-    probe_side = SExpr::create_binary(source_node.into(), probe_side, build_side.clone());
+    probe_side = SExpr::create_binary(
+        Arc::new(source_node.into()),
+        Arc::new(probe_side),
+        Arc::new(build_side.clone()),
+    );
     let mut join: Join = s_expr.plan().clone().try_into()?;
     join.contain_runtime_filter = true;
     let s_expr = s_expr.replace_plan(RelOperator::Join(join));
-    Ok(s_expr.replace_children(vec![probe_side, build_side]))
+    Ok(s_expr.replace_children(vec![Arc::new(probe_side), Arc::new(build_side)]))
 }
 
 // Traverse plan tree and check if exists join
@@ -81,7 +86,7 @@ pub fn try_add_runtime_filter_nodes(expr: &SExpr) -> Result<SExpr> {
     let mut children = vec![];
 
     for child in new_expr.children.iter() {
-        children.push(try_add_runtime_filter_nodes(child)?);
+        children.push(Arc::new(try_add_runtime_filter_nodes(child)?));
     }
     Ok(new_expr.replace_children(children))
 }

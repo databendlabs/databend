@@ -251,7 +251,16 @@ impl HttpQuery {
             if let Some(conf_settings) = &session_conf.settings {
                 let settings = session.get_settings();
                 for (k, v) in conf_settings {
-                    settings.set_setting(k.to_string(), v.to_string())?;
+                    settings
+                        .set_setting(k.to_string(), v.to_string())
+                        .or_else(|e| {
+                            if e.code() == ErrorCode::UNKNOWN_VARIABLE {
+                                tracing::warn!("unknown session setting: {}", k);
+                                Ok(())
+                            } else {
+                                Err(e)
+                            }
+                        })?;
                 }
             }
             if let Some(secs) = session_conf.keep_server_session_secs {

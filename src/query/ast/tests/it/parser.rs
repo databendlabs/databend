@@ -398,6 +398,7 @@ fn test_statement() {
         r#"SELECT * FROM t GROUP BY GROUPING SETS ((a, b), (), (d, e))"#,
         r#"SELECT * FROM t GROUP BY CUBE (a, b, c)"#,
         r#"SELECT * FROM t GROUP BY ROLLUP (a, b, c)"#,
+        r#"CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'"#,
     ];
 
     for case in cases {

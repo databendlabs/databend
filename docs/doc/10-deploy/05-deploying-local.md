@@ -72,7 +72,7 @@ To establish a connection with Databend, you'll use the BendSQL CLI tool in this
 1. To establish a connection with a local Databend, execute the following command:
 
 ```shell
-(base) eric@Erics-iMac ~ % bendsql connect
+(base) eric@Erics-iMac ~ % bendsql
 Connected to Databend on Host: localhost
 Version: DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z)
 ```
@@ -173,7 +173,7 @@ To establish a connection with Databend, you'll use the BendSQL CLI tool in this
 1. To establish a connection with Databend using the SQL user (databend/databend), run the following command:
 
 ```shell
-(base) eric@Erics-iMac Downloads % bendsql connect -u databend -p databend
+(base) eric@Erics-iMac Downloads % bendsql -u databend -p databend
 Connected to Databend on Host: localhost
 Version: DatabendQuery v1.0.26-nightly-d9b7f4a8080b54d2b4c4a515296ee7557fc135f1(rust-1.70.0-nightly-2023-03-21T04:39:27.097687988Z)
 ```

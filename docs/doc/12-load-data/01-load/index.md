@@ -42,8 +42,3 @@ This topic does not cover all of the available data loading methods, but it prov
     <div>To learn more about using the COPY INTO command to load remote data files, check out the <a href="http">Loading from Remote File</a> page. This page includes a tutorial that shows you how to use the command to load data from a remote sample file.</div>
   </div>
 </details>
-
-Databend offers the ability to query and transform your data before and during the loading process. With this feature, you can preview your data using a SELECT statement in Databend before loading it into a table. Moreover, you can customize your data by selecting a subset of columns, changing the column order, and even converting data types when you load with the COPY INTO command. See the topics below for details:
-
-- [Querying Data in Staged Files](../00-stage/05-querying-stage.md)
-- [Transforming Data During Load](06-data-load-transform.md)

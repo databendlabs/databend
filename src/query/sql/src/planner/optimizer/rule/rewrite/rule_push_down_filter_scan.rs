@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
@@ -50,16 +52,18 @@ impl RulePushDownFilterScan {
             //  \
             //   LogicalGet
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Filter,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Scan,
                     }
                     .into(),
-                ),
+                ))),
             )],
             metadata,
         }
@@ -293,7 +297,10 @@ impl Rule for RulePushDownFilterScan {
             None => get.push_down_predicates = Some(add_filters),
         }
 
-        let mut result = SExpr::create_unary(filter.into(), SExpr::create_leaf(get.into()));
+        let mut result = SExpr::create_unary(
+            Arc::new(filter.into()),
+            Arc::new(SExpr::create_leaf(Arc::new(get.into()))),
+        );
         result.set_applied_rule(&self.id);
         state.add_result(result);
         Ok(())

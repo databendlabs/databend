@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::Scalar;
 
@@ -85,16 +87,18 @@ impl RuleNormalizeScalarFilter {
             //  \
             //   *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Filter,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Pattern,
                     }
                     .into(),
-                ),
+                ))),
             )],
         }
     }
@@ -118,7 +122,10 @@ impl Rule for RuleNormalizeScalarFilter {
             .any(|p| is_true(p) || (is_falsy(p) && filter.predicates.len() > 1))
         {
             filter.predicates = normalize_predicates(filter.predicates);
-            state.add_result(SExpr::create_unary(filter.into(), s_expr.child(0)?.clone()));
+            state.add_result(SExpr::create_unary(
+                Arc::new(filter.into()),
+                Arc::new(s_expr.child(0)?.clone()),
+            ));
             Ok(())
         } else {
             Ok(())
