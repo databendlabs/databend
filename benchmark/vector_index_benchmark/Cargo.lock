@@ -1080,10 +1080,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b40af805b3121feab8a3c29f04d8ad262fa8e0561883e7653e024ae4479e6de"
 
 [[package]]
-name = "prettytable-rs"
+name = "prettytable"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eea25e07510aa6ab6547308ebe3c036016d162b8da920dbb079e3ba8acf3d95a"
+checksum = "46480520d1b77c9a3482d39939fcf96831537a250ec62d4fd8fbdf8e0302e781"
 dependencies = [
  "csv",
  "encode_unicode",
@@ -1705,7 +1705,7 @@ version = "0.1.0"
 dependencies = [
  "databend-driver",
  "futures-util",
- "prettytable-rs",
+ "prettytable",
  "quanta",
  "rand",
  "tokio",
