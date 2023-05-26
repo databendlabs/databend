@@ -320,9 +320,9 @@ SELECT empno, first_value(empno) OVER (PARTITION BY depname ORDER BY empno) fv F
 3 1
 4 1
 
-# first
+# first with nullable column
 query II
-SELECT empno, first(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary
+SELECT empno, first(empno) OVER (PARTITION BY depname ORDER BY empno) fv FROM empsalary2
 ----
 7 7
 8 7
@@ -397,14 +397,14 @@ sales 1 4
 sales 3 4
 sales 4 4
 
-# last
+# last with nullable column
 query TII
 SELECT depname, empno,
   last(empno) OVER (
     PARTITION BY depname ORDER BY empno ASC
     ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
   ) fv
-FROM empsalary
+FROM empsalary2
 ----
 develop 7 11
 develop 8 11
