@@ -24,10 +24,23 @@ use common_expression::RemoteExpr;
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct AggIndexInfo {
     pub index_id: u64,
-    // The index in aggregating index is the offset in the output list.
-    pub selection: Vec<RemoteExpr>,
+    /// The selection on the aggregating index.
+    ///
+    /// - The first element in the tuple is the expression.
+    ///     - The index in the [`RemoteExpr`] is the offset of `schema`.
+    /// - The seoncd element in the tuple is the offset of the output schema of the table scan plan.
+    ///     - If the offset is [None], it means the selection item will be appended to the end of the output block;
+    ///     - else the selection item will be placed at the offset.
+    ///
+    /// The offsets are used to place each output of the index at the right position of the output block.
+    /// The right positions are the column positions after executing `EvalScalar` plan
+    /// because index scan will skip the execution of `EvalScalar` and `Filter`.
+    pub selection: Vec<(RemoteExpr, Option<usize>)>,
     pub filter: Option<RemoteExpr>,
     pub schema: DataSchema,
+
+    /// The size of the output fields of a table scan plan without the index.
+    pub actual_table_field_len: usize,
 }
 
 /// This meta just indicate the block is from aggregating index.

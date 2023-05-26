@@ -372,7 +372,7 @@ impl PhysicalPlanBuilder {
         let push_downs =
             self.push_downs(scan, &table_schema, has_inner_column, has_virtual_column)?;
 
-        let source = table
+        let mut source = table
             .read_plan_with_catalog(
                 self.ctx.clone(),
                 table_entry.catalog().to_string(),
@@ -385,6 +385,12 @@ impl PhysicalPlanBuilder {
             )
             .await?;
 
+        if let Some(agg_index) = &scan.agg_index {
+            let schema = source.schema();
+            let push_down = source.push_downs.as_mut().unwrap();
+            let output_fields = TableScan::output_fields(schema, &name_mapping)?;
+            Self::push_down_agg_index(push_down, agg_index, &output_fields)?;
+        }
         let internal_column = if project_internal_columns.is_empty() {
             None
         } else {
@@ -398,6 +404,55 @@ impl PhysicalPlanBuilder {
             stat_info: Some(stat_info),
             internal_column,
         }))
+    }
+
+    fn push_down_agg_index(
+        push_down: &mut PushDownInfo,
+        agg: &planner::plans::AggIndexInfo,
+        output_fields: &[DataField],
+    ) -> Result<()> {
+        let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
+            ScalarExpr::FunctionCall(FunctionCall {
+                span: None,
+                func_name: "and".to_string(),
+                params: vec![],
+                arguments: vec![lhs, rhs],
+            })
+        });
+        let filter = predicate
+            .map(|pred| -> Result<_> {
+                Ok(cast_expr_to_non_null_boolean(
+                    pred.as_expr()?.project_column_ref(|col| col.index),
+                )?
+                .as_remote_expr())
+            })
+            .transpose()?;
+        let selection = agg
+            .selection
+            .iter()
+            .map(|sel| {
+                let offset = output_fields
+                    .iter()
+                    .position(|f| sel.index.to_string() == f.name().as_str());
+                Ok((
+                    sel.scalar
+                        .as_expr()?
+                        .project_column_ref(|col| col.index)
+                        .as_remote_expr(),
+                    offset,
+                ))
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let agg_info = AggIndexInfo {
+            index_id: agg.index_id,
+            filter,
+            selection,
+            schema: agg.schema.clone(),
+            actual_table_field_len: output_fields.len(),
+        };
+        push_down.agg_index = Some(agg_info);
+
+        Ok(())
     }
 
     #[async_recursion::async_recursion]
@@ -1585,45 +1640,6 @@ impl PhysicalPlanBuilder {
 
         let virtual_columns = self.build_virtual_columns(&scan.columns);
 
-        let agg_index = scan
-            .agg_index
-            .as_ref()
-            .map(|agg| -> Result<_> {
-                let predicate = agg.predicates.iter().cloned().reduce(|lhs, rhs| {
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "and".to_string(),
-                        params: vec![],
-                        arguments: vec![lhs, rhs],
-                    })
-                });
-                let filter = predicate
-                    .map(|pred| -> Result<_> {
-                        Ok(cast_expr_to_non_null_boolean(
-                            pred.as_expr()?.project_column_ref(|col| col.index),
-                        )?
-                        .as_remote_expr())
-                    })
-                    .transpose()?;
-                let selection = agg
-                    .selection
-                    .iter()
-                    .map(|sel| {
-                        Ok(sel
-                            .as_expr()?
-                            .project_column_ref(|col| col.index)
-                            .as_remote_expr())
-                    })
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(AggIndexInfo {
-                    index_id: agg.index_id,
-                    filter,
-                    selection,
-                    schema: agg.schema.clone(),
-                })
-            })
-            .transpose()?;
-
         Ok(PushDownInfo {
             projection: Some(projection),
             output_columns,
@@ -1634,7 +1650,7 @@ impl PhysicalPlanBuilder {
             order_by: order_by.unwrap_or_default(),
             virtual_columns,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
-            agg_index,
+            agg_index: None,
         })
     }
 

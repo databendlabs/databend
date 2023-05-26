@@ -459,7 +459,7 @@ fn find_push_down_index_info(s_expr: &SExpr) -> Result<&Option<AggIndexInfo>> {
 fn format_selection(info: &AggIndexInfo) -> Vec<String> {
     info.selection
         .iter()
-        .map(common_sql::format_scalar)
+        .map(|sel| common_sql::format_scalar(&sel.scalar))
         .collect()
 }
 

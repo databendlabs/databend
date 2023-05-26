@@ -23,12 +23,15 @@ use common_catalog::plan::AggIndexMeta;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::BooleanType;
+use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FunctionContext;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use opendal::Operator;
 use tracing::warn;
@@ -42,8 +45,11 @@ pub struct AggIndexReader {
 
     func_ctx: FunctionContext,
     schema: DataSchema,
-    selection: Vec<Expr>,
+    selection: Vec<(Expr, Option<usize>)>,
     filter: Option<Expr>,
+
+    /// The size of the output fields of a table scan plan without the index.
+    pub actual_table_field_len: usize,
 }
 
 impl AggIndexReader {
@@ -56,7 +62,7 @@ impl AggIndexReader {
         let selection = agg
             .selection
             .iter()
-            .map(|sel| sel.as_expr(&BUILTIN_FUNCTIONS))
+            .map(|(sel, offset)| (sel.as_expr(&BUILTIN_FUNCTIONS), *offset))
             .collect();
         let filter = agg.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS));
 
@@ -67,6 +73,7 @@ impl AggIndexReader {
             schema: agg.schema.clone(),
             selection,
             filter,
+            actual_table_field_len: agg.actual_table_field_len,
         })
     }
 
@@ -127,18 +134,30 @@ impl AggIndexReader {
         };
 
         // 3. Compute the output block
-        let mut out = DataBlock::new_with_meta(
-            Vec::with_capacity(block.num_columns()),
-            block.num_rows(),
-            Some(AggIndexMeta::create()),
-        );
+        // Fill dummy columns first.
+        let mut output_columns = vec![
+            BlockEntry {
+                data_type: DataType::Null,
+                value: Value::Scalar(Scalar::Null),
+            };
+            self.actual_table_field_len
+        ];
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        for expr in &self.selection {
+        for (expr, offset) in &self.selection {
             let data_type = expr.data_type().clone();
             let value = evaluator.run(expr)?;
-            out.add_column(BlockEntry { data_type, value });
+            let col = BlockEntry { data_type, value };
+            if let Some(pos) = offset {
+                output_columns[*pos] = col;
+            } else {
+                output_columns.push(col);
+            }
         }
 
-        Ok(out)
+        Ok(DataBlock::new_with_meta(
+            output_columns,
+            block.num_rows(),
+            Some(AggIndexMeta::create()),
+        ))
     }
 }

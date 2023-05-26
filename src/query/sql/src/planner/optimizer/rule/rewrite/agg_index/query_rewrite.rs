@@ -34,6 +34,7 @@ use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -102,7 +103,10 @@ pub fn try_rewrite(
                     &index_selection,
                     &query_info.format_scalar(&agg.scalar),
                 ) {
-                    new_selection.push(rewritten.into());
+                    new_selection.push(ScalarItem {
+                        index: agg.index,
+                        scalar: rewritten.into(),
+                    });
                 } else {
                     flag = false;
                     break;
@@ -113,7 +117,10 @@ pub fn try_rewrite(
                     if let Some(rewritten) =
                         rewrite_by_selection(&query_info, &expr.scalar, &index_selection)
                     {
-                        new_selection.push(rewritten);
+                        new_selection.push(ScalarItem {
+                            index: expr.index,
+                            scalar: rewritten,
+                        });
                     } else {
                         flag = false;
                         break;
@@ -127,7 +134,10 @@ pub fn try_rewrite(
                 if let Some(rewritten) =
                     rewrite_by_selection(&query_info, &item.scalar, &index_selection)
                 {
-                    new_selection.push(rewritten);
+                    new_selection.push(ScalarItem {
+                        index: item.index,
+                        scalar: rewritten,
+                    });
                 } else {
                     flag = false;
                     break;
