@@ -1681,7 +1681,7 @@ impl PhysicalPlanBuilder {
     async fn try_ie_join(&mut self, join: &Join, s_expr: &SExpr) -> Result<Option<PhysicalPlan>> {
         if !join.left_conditions.is_empty()
             || join.non_equi_conditions.len() < 2
-            || join.join_type != JoinType::Inner
+            || !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
         {
             // Use hash join if exists equi conditions
             return Ok(None);
@@ -1699,8 +1699,7 @@ impl PhysicalPlanBuilder {
                 other_conditions.push(condition);
             }
         }
-        if ie_conditions.len() != 2 || !other_conditions.is_empty() {
-            // Todo(xudong): support other conditions
+        if ie_conditions.len() != 2 {
             return Ok(None);
         }
         // Construct IEJoin
