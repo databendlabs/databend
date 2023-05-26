@@ -257,11 +257,11 @@ impl WindowFuncType {
                 default: default.map(Box::new),
                 return_type: Box::new(return_type),
             })),
-            "first_value" => Ok(WindowFuncType::FirstValue(FirstLastFunction {
+            "first_value" | "first" => Ok(WindowFuncType::FirstValue(FirstLastFunction {
                 arg: Box::new(arg),
                 return_type: Box::new(return_type),
             })),
-            "last_value" => Ok(WindowFuncType::LastValue(FirstLastFunction {
+            "last_value" | "last" => Ok(WindowFuncType::LastValue(FirstLastFunction {
                 arg: Box::new(arg),
                 return_type: Box::new(return_type),
             })),

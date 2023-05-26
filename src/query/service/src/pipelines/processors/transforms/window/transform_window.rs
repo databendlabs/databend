@@ -551,10 +551,9 @@ impl<T: Number> TransformWindow<T> {
             }
             WindowFunctionImpl::FirstValue(first) => {
                 let value = if self.frame_start < self.frame_end {
-                    let block = self
+                    let block = &self
                         .blocks
                         .get(self.frame_start.block - self.first_block)
-                        .cloned()
                         .unwrap()
                         .block;
                     let col = block.get_by_offset(first.arg).value.as_column().unwrap();
@@ -570,10 +569,9 @@ impl<T: Number> TransformWindow<T> {
                     let last_row = self.goback_row(self.frame_end);
                     debug_assert!(self.frame_start <= last_row);
 
-                    let block = self
+                    let block = &self
                         .blocks
                         .get(last_row.block - self.first_block)
-                        .cloned()
                         .unwrap()
                         .block;
                     let col = block.get_by_offset(last.arg).value.as_column().unwrap();
