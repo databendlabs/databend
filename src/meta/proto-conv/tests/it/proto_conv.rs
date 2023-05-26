@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::vec;
 
 use ce::types::decimal::DecimalSize;
 use ce::types::DecimalDataType;
@@ -198,7 +199,7 @@ fn new_table_meta() -> mt::TableMeta {
         drop_on: None,
         statistics: Default::default(),
         shared_by: btreeset! {1},
-        column_mask_policy: None,
+        column_mask_policy: Some(btreemap! {s("a") => s("b")}),
     }
 }
 
