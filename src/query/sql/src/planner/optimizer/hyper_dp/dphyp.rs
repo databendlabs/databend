@@ -85,15 +85,15 @@ impl DPhpy {
         if is_subquery {
             // If it's a subquery, start a new dphyp
             let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
-            let (res, optimized) = dphyp.optimize(s_expr)?;
+            let (new_s_expr, optimized) = dphyp.optimize(s_expr)?;
             if optimized {
                 let relation_idx = self.join_relations.len() as IndexType;
                 for table_index in dphyp.table_index_map.keys() {
                     self.table_index_map.insert(*table_index, relation_idx);
                 }
-                self.join_relations.push(JoinRelation::new(&res));
+                self.join_relations.push(JoinRelation::new(&new_s_expr));
             }
-            return Ok((res, optimized));
+            return Ok((new_s_expr, optimized));
         }
 
         match s_expr.plan.as_ref() {
@@ -190,7 +190,9 @@ impl DPhpy {
                         right_is_subquery,
                         None,
                     )?;
-                    Ok((s_expr, left_res.1 && right_res.1))
+                    let new_s_expr: Arc<SExpr> =
+                        Arc::new(s_expr.replace_children([left_res.0, right_res.0]));
+                    Ok((new_s_expr, left_res.1 && right_res.1))
                 }
             }
 
@@ -205,21 +207,25 @@ impl DPhpy {
                     if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
                         self.filters.insert(op.clone());
                     }
-                    self.get_base_relations(
+                    let (child, optimized) = self.get_base_relations(
                         s_expr.children()[0].clone(),
                         join_conditions,
                         true,
                         false,
-                        Some(s_expr),
-                    )
+                        Some(s_expr.clone()),
+                    )?;
+                    let new_s_expr = Arc::new(s_expr.replace_children([child]));
+                    Ok((new_s_expr, optimized))
                 } else {
-                    self.get_base_relations(
+                    let (child, optimized) = self.get_base_relations(
                         s_expr.children()[0].clone(),
                         join_conditions,
                         false,
                         false,
                         None,
-                    )
+                    )?;
+                    let new_s_expr = Arc::new(s_expr.replace_children([child]));
+                    Ok((new_s_expr, optimized))
                 }
             }
             RelOperator::Exchange(_) | RelOperator::Pattern(_) => unreachable!(),
