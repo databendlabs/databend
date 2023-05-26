@@ -2,7 +2,7 @@ statement ok
 set max_block_size = 1;
 
 statement ok
-create table east(rid varchar, id int, dur int, rev int, cores int);
+create table east(rid varchar, id int, dur int null, rev int, cores int);
 
 statement ok
 insert into east values ('r1', 100, 140, 12, 2), ('r2', 99, 100, 12, 8), ('r3', 103,  90,  5, 4);
