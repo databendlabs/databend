@@ -166,6 +166,7 @@ pub fn try_push_down_filter_join(
                         need_push = true;
                     }
                 } else if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+                    join.join_type = JoinType::Inner;
                     join.non_equi_conditions.push(predicate.clone());
                     need_push = true;
                 } else {
