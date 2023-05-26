@@ -709,10 +709,10 @@ impl<'a> TypeChecker<'a> {
                 }
             }
 
-            Expr::CountAll { .. } => {
+            Expr::CountAll { span, window } => {
                 let agg_func = AggregateCountFunction::try_create("", vec![], vec![])?;
 
-                Box::new((
+                let (new_agg_func, data_type) = (
                     AggregateFunction {
                         display_name: format!("{:#}", expr),
                         func_name: "count".to_string(),
@@ -720,10 +720,22 @@ impl<'a> TypeChecker<'a> {
                         params: vec![],
                         args: vec![],
                         return_type: Box::new(agg_func.return_type()?),
-                    }
-                    .into(),
+                    },
                     agg_func.return_type()?,
-                ))
+                );
+
+                if let Some(window) = window {
+                    // aggregate window function
+                    let display_name = format!("{:#}", expr);
+                    let func = WindowFuncType::Aggregate(new_agg_func);
+                    // WindowReference already rewritten by `SelectRewriter` before.
+                    let window = window.as_window_spec().unwrap();
+                    self.resolve_window(*span, display_name, window, func)
+                        .await?
+                } else {
+                    // aggregate function
+                    Box::new((new_agg_func.into(), data_type))
+                }
             }
 
             Expr::Exists { subquery, not, .. } => {
@@ -1166,7 +1178,7 @@ impl<'a> TypeChecker<'a> {
         };
         let return_type = match default {
             Some(_) => arg_types[0].clone(),
-            None => DataType::Nullable(Box::new(arg_types[0].clone())),
+            None => arg_types[0].wrap_nullable(),
         };
 
         let cast_default = default
