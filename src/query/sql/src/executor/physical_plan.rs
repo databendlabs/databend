@@ -302,6 +302,8 @@ pub enum WindowFunction {
     PercentRank,
     Lag(LagLeadFunctionDesc),
     Lead(LagLeadFunctionDesc),
+    FirstValue(FirstLastFunctionDesc),
+    LastValue(FirstLastFunctionDesc),
 }
 
 impl WindowFunction {
@@ -313,6 +315,9 @@ impl WindowFunction {
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
             WindowFunction::Lag(f) | WindowFunction::Lead(f) => Ok(f.sig.return_type.clone()),
+            WindowFunction::FirstValue(f) | WindowFunction::LastValue(f) => {
+                Ok(f.sig.return_type.clone())
+            }
         }
     }
 }
@@ -327,6 +332,8 @@ impl Display for WindowFunction {
             WindowFunction::PercentRank => write!(f, "percent_rank"),
             WindowFunction::Lag(_) => write!(f, "lag"),
             WindowFunction::Lead(_) => write!(f, "lead"),
+            WindowFunction::FirstValue(_) => write!(f, "first_value"),
+            WindowFunction::LastValue(_) => write!(f, "last_value"),
         }
     }
 }
@@ -856,6 +863,20 @@ pub struct LagLeadFunctionSignature {
     pub arg: DataType,
     pub offset: u64,
     pub default: Option<DataType>,
+    pub return_type: DataType,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FirstLastFunctionDesc {
+    pub sig: FirstLastFunctionSignature,
+    pub output_column: IndexType,
+    pub arg: usize,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FirstLastFunctionSignature {
+    pub name: String,
+    pub arg: DataType,
     pub return_type: DataType,
 }
 

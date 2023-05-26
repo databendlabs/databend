@@ -345,6 +345,17 @@ impl<T: Number> TransformWindow<T> {
         row
     }
 
+    /// Goback the row to the preceding one row
+    fn goback_row(&self, mut row: RowPtr) -> RowPtr {
+        if row.row != 0 {
+            row.row -= 1;
+        } else {
+            row.block -= 1;
+            row.row = self.block_rows(&row) - 1;
+        }
+        row
+    }
+
     /// If the two rows are within the same peer group.
     fn are_peers(&self, lhs: &RowPtr, rhs: &RowPtr, for_computing_bound: bool) -> bool {
         if lhs == rhs {
@@ -537,6 +548,39 @@ impl<T: Number> TransformWindow<T> {
                 };
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(lead_row.as_ref());
+            }
+            WindowFunctionImpl::FirstValue(first) => {
+                let value = if self.frame_start < self.frame_end {
+                    let block = &self
+                        .blocks
+                        .get(self.frame_start.block - self.first_block)
+                        .unwrap()
+                        .block;
+                    let col = block.get_by_offset(first.arg).value.as_column().unwrap();
+                    col.index(self.frame_start.row).unwrap().to_owned()
+                } else {
+                    Scalar::Null
+                };
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
+                builder.push(value.as_ref());
+            }
+            WindowFunctionImpl::LastValue(last) => {
+                let value = if self.frame_start < self.frame_end {
+                    let last_row = self.goback_row(self.frame_end);
+                    debug_assert!(self.frame_start <= last_row);
+
+                    let block = &self
+                        .blocks
+                        .get(last_row.block - self.first_block)
+                        .unwrap()
+                        .block;
+                    let col = block.get_by_offset(last.arg).value.as_column().unwrap();
+                    col.index(last_row.row).unwrap().to_owned()
+                } else {
+                    Scalar::Null
+                };
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
+                builder.push(value.as_ref());
             }
         };
 
