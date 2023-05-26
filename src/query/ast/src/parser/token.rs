@@ -629,6 +629,8 @@ pub enum TokenKind {
     MINUTE,
     #[token("MONTH", ignore(ascii_case))]
     MONTH,
+    #[token("MODIFY", ignore(ascii_case))]
+    MODIFY,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]

@@ -198,6 +198,7 @@ fn new_table_meta() -> mt::TableMeta {
         drop_on: None,
         statistics: Default::default(),
         shared_by: btreeset! {1},
+        column_mask_policy: None,
     }
 }
 
