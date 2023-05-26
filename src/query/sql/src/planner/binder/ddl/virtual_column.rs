@@ -168,19 +168,18 @@ impl Binder {
                     let mut virtual_name = String::new();
                     virtual_name.push_str(&column.name);
                     while let Some(path) = paths.pop_front() {
-                        virtual_name.push('[');
                         match path {
                             Literal::UInt64(idx) => {
+                                virtual_name.push('[');
                                 virtual_name.push_str(&idx.to_string());
+                                virtual_name.push(']');
                             }
                             Literal::String(field) => {
-                                virtual_name.push('"');
+                                virtual_name.push(':');
                                 virtual_name.push_str(field.as_ref());
-                                virtual_name.push('"');
                             }
                             _ => unreachable!(),
                         }
-                        virtual_name.push(']');
                     }
                     virtual_names.push(virtual_name);
                 } else {

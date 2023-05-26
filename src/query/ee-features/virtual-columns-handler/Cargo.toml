@@ -21,7 +21,6 @@ common-storages-fuse = { path = "../../storages/fuse" }
 
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
-chrono = { workspace = true }
 
 [build-dependencies]
 

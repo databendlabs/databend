@@ -2607,21 +2607,20 @@ impl<'a> TypeChecker<'a> {
         name.push_str(&column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
         while let Some((_, path)) = paths.pop_front() {
-            name.push('[');
             let json_path = match path {
                 Literal::UInt64(idx) => {
+                    name.push('[');
                     name.push_str(&idx.to_string());
+                    name.push(']');
                     Scalar::Number(NumberScalar::UInt64(idx))
                 }
                 Literal::String(field) => {
-                    name.push('"');
+                    name.push(':');
                     name.push_str(field.as_ref());
-                    name.push('"');
                     Scalar::String(field.into_bytes())
                 }
                 _ => unreachable!(),
             };
-            name.push(']');
             json_paths.push(json_path);
         }
 
