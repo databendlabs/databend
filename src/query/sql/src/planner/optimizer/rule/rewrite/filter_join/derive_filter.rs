@@ -144,6 +144,9 @@ fn replace_column(scalar: &mut ScalarExpr, col_to_scalar: &HashMap<&IndexType, &
                         replace_column(default, col_to_scalar);
                     }
                 }
+                WindowFuncType::FirstValue(f) | WindowFuncType::LastValue(f) => {
+                    replace_column(&mut f.arg, col_to_scalar);
+                }
                 _ => {}
             }
             for arg in expr.partition_by.iter_mut() {

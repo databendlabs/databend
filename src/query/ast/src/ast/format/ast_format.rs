@@ -404,7 +404,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_count_all(&mut self, _span: Span) {
+    fn visit_count_all(&mut self, _span: Span, _window: &'ast Option<Window>) {
         let name = "Function CountAll".to_string();
         let format_ctx = AstFormatContext::new(name);
         let node = FormatTreeNode::new(format_ctx);

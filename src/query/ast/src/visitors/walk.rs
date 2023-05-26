@@ -85,7 +85,7 @@ pub fn walk_expr<'a, V: Visitor<'a>>(visitor: &mut V, expr: &'a Expr) {
             trim_where,
         } => visitor.visit_trim(*span, expr, trim_where),
         Expr::Literal { span, lit } => visitor.visit_literal(*span, lit),
-        Expr::CountAll { span } => visitor.visit_count_all(*span),
+        Expr::CountAll { span, window } => visitor.visit_count_all(*span, window),
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
             span,

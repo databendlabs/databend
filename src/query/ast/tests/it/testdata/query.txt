@@ -2149,6 +2149,7 @@ Query {
                         span: Some(
                             19..27,
                         ),
+                        window: None,
                     },
                     alias: Some(
                         Identifier {

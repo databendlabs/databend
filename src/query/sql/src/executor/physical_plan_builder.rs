@@ -55,6 +55,8 @@ use super::AggregatePartial;
 use super::EvalScalar;
 use super::Exchange as PhysicalExchange;
 use super::Filter;
+use super::FirstLastFunctionDesc;
+use super::FirstLastFunctionSignature;
 use super::HashJoin;
 use super::Limit;
 use super::ProjectSet;
@@ -1290,8 +1292,7 @@ impl PhysicalPlanBuilder {
                         Ok(col.column.index)
                     } else {
                         Err(ErrorCode::Internal(
-                            "Window's lag, lead function argument must be a BoundColumnRef"
-                                .to_string(),
+                            "Window's lag function argument must be a BoundColumnRef".to_string(),
                         ))
                     }?,
                     default: new_default,
@@ -1323,13 +1324,44 @@ impl PhysicalPlanBuilder {
                         Ok(col.column.index)
                     } else {
                         Err(ErrorCode::Internal(
-                            "Window's lag, lead function argument must be a BoundColumnRef"
-                                .to_string(),
+                            "Window's lead function argument must be a BoundColumnRef".to_string(),
                         ))
                     }?,
                     default: new_default,
                 })
             }
+            WindowFuncType::FirstValue(func) => WindowFunction::FirstValue(FirstLastFunctionDesc {
+                sig: FirstLastFunctionSignature {
+                    name: "first_value".to_string(),
+                    arg: func.arg.data_type()?,
+                    return_type: *func.return_type.clone(),
+                },
+                output_column: w.index,
+                arg: if let ScalarExpr::BoundColumnRef(col) = &*func.arg {
+                    Ok(col.column.index)
+                } else {
+                    Err(ErrorCode::Internal(
+                        "Window's first_value function argument must be a BoundColumnRef"
+                            .to_string(),
+                    ))
+                }?,
+            }),
+            WindowFuncType::LastValue(func) => WindowFunction::LastValue(FirstLastFunctionDesc {
+                sig: FirstLastFunctionSignature {
+                    name: "last_value".to_string(),
+                    arg: func.arg.data_type()?,
+                    return_type: *func.return_type.clone(),
+                },
+                output_column: w.index,
+                arg: if let ScalarExpr::BoundColumnRef(col) = &*func.arg {
+                    Ok(col.column.index)
+                } else {
+                    Err(ErrorCode::Internal(
+                        "Window's last_value function argument must be a BoundColumnRef"
+                            .to_string(),
+                    ))
+                }?,
+            }),
             WindowFuncType::RowNumber => WindowFunction::RowNumber,
             WindowFuncType::Rank => WindowFunction::Rank,
             WindowFuncType::DenseRank => WindowFunction::DenseRank,
@@ -1649,7 +1681,7 @@ impl PhysicalPlanBuilder {
     async fn try_ie_join(&mut self, join: &Join, s_expr: &SExpr) -> Result<Option<PhysicalPlan>> {
         if !join.left_conditions.is_empty()
             || join.non_equi_conditions.len() < 2
-            || join.join_type != JoinType::Inner
+            || !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
         {
             // Use hash join if exists equi conditions
             return Ok(None);
@@ -1667,8 +1699,7 @@ impl PhysicalPlanBuilder {
                 other_conditions.push(condition);
             }
         }
-        if ie_conditions.len() != 2 || !other_conditions.is_empty() {
-            // Todo(xudong): support other conditions
+        if ie_conditions.len() != 2 {
             return Ok(None);
         }
         // Construct IEJoin

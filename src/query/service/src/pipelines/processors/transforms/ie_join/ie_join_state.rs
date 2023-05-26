@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
-use std::cmp::Ordering;
 use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -37,6 +35,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
+use common_expression::RemoteExpr;
 use common_expression::ScalarRef;
 use common_expression::SortColumnDescription;
 use common_expression::Value;
@@ -47,6 +46,9 @@ use common_sql::executor::IEJoin;
 use common_sql::executor::IEJoinCondition;
 use parking_lot::RwLock;
 
+use crate::pipelines::processors::transforms::ie_join::ie_join_util::filter_block;
+use crate::pipelines::processors::transforms::ie_join::ie_join_util::order_match;
+use crate::pipelines::processors::transforms::ie_join::ie_join_util::probe_l1;
 use crate::sessions::QueryContext;
 
 struct IEConditionState {
@@ -74,8 +76,7 @@ pub struct IEJoinState {
     // Currently only support inner join
     // join_type: JoinType,
     conditions: Vec<IEJoinCondition>,
-    // Todo: support other_conditions
-    // other_conditions: Vec<RemoteExpr>,
+    other_conditions: Vec<RemoteExpr>,
     // Pipeline event related
     partition_finished: RwLock<bool>,
     finished_notify: Arc<Notify>,
@@ -169,6 +170,7 @@ impl IEJoinState {
             left_table: RwLock::new(Vec::new()),
             right_table: RwLock::new(Vec::new()),
             conditions: ie_join.conditions.clone(),
+            other_conditions: ie_join.other_conditions.clone(),
             partition_finished: RwLock::new(false),
             finished_notify: Arc::new(Default::default()),
             left_sinker_count: AtomicU64::new(0),
@@ -471,6 +473,9 @@ impl IEJoinState {
         for col in right_result_block.columns() {
             left_result_block.add_column(col.clone());
         }
+        for filter in self.other_conditions.iter() {
+            left_result_block = filter_block(left_result_block, filter)?;
+        }
         Ok(left_result_block)
     }
 
@@ -568,67 +573,4 @@ impl IEJoinState {
         }
         Ok(())
     }
-}
-
-fn order_match(op: &str, order: Ordering) -> bool {
-    match op {
-        "gt" => order == Ordering::Greater,
-        "gte" => order == Ordering::Equal || order == Ordering::Greater,
-        "lt" => order == Ordering::Less,
-        "lte" => order == Ordering::Less || order == Ordering::Equal,
-        _ => unreachable!(),
-    }
-}
-
-// Exponential search
-fn probe_l1(l1: &Column, pos: usize, op1: &str) -> usize {
-    let mut step = 1;
-    let n = l1.len();
-    let mut hi = pos;
-    let mut lo = pos;
-    let mut off1;
-    if matches!(op1, "gte" | "lte") {
-        lo -= min(step, lo);
-        step *= 2;
-        off1 = lo;
-        while lo > 0
-            && order_match(
-                op1,
-                unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
-            )
-        {
-            hi = lo;
-            lo -= min(step, lo);
-            step *= 2;
-            off1 = lo;
-        }
-    } else {
-        hi += min(step, n - hi);
-        step *= 2;
-        off1 = hi;
-        while hi < n
-            && !order_match(
-                op1,
-                unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
-            )
-        {
-            lo = hi;
-            hi += min(step, n - hi);
-            step *= 2;
-            off1 = hi;
-        }
-    }
-    while lo < hi {
-        let mid = lo + (hi - lo) / 2;
-        off1 = mid;
-        if order_match(
-            op1,
-            unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
-        ) {
-            hi = mid;
-        } else {
-            lo = mid + 1;
-        }
-    }
-    lo
 }

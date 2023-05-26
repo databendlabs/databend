@@ -40,6 +40,7 @@ use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
+use crate::plans::FirstLastFunction;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
 use crate::plans::ScalarExpr;
@@ -194,6 +195,20 @@ impl<'a> AggregateRewriter<'a> {
                             offset: lead.offset,
                             default: new_default,
                             return_type: lead.return_type.clone(),
+                        })
+                    }
+                    WindowFuncType::FirstValue(func) => {
+                        let new_arg = self.visit(&func.arg)?;
+                        WindowFuncType::FirstValue(FirstLastFunction {
+                            arg: Box::new(new_arg),
+                            return_type: func.return_type.clone(),
+                        })
+                    }
+                    WindowFuncType::LastValue(func) => {
+                        let new_arg = self.visit(&func.arg)?;
+                        WindowFuncType::LastValue(FirstLastFunction {
+                            arg: Box::new(new_arg),
+                            return_type: func.return_type.clone(),
                         })
                     }
                     func => func.clone(),

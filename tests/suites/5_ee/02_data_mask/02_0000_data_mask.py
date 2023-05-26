@@ -22,6 +22,7 @@ mydb = mysql.connector.connect(
     host="127.0.0.1", user="root", passwd="root", port="3307"
 )
 
+
 def get_license():
     return os.getenv("DATABEND_ENTERPRISE_LICENSE")
 
@@ -49,5 +50,3 @@ if __name__ == "__main__":
         mycursor.execute("desc masking policy mask;")
         mask = mycursor.fetchall()
         print(mask)
-
-

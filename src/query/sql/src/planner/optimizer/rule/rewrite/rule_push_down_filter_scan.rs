@@ -24,6 +24,7 @@ use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::Filter;
+use crate::plans::FirstLastFunction;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
 use crate::plans::PatternPlan;
@@ -164,6 +165,22 @@ impl RulePushDownFilterScan {
                             offset: lead.offset,
                             default: new_default,
                             return_type: lead.return_type.clone(),
+                        })
+                    }
+                    WindowFuncType::FirstValue(func) => {
+                        let new_arg =
+                            Self::replace_view_column(&func.arg, table_entries, column_entries)?;
+                        WindowFuncType::FirstValue(FirstLastFunction {
+                            arg: Box::new(new_arg),
+                            return_type: func.return_type.clone(),
+                        })
+                    }
+                    WindowFuncType::LastValue(func) => {
+                        let new_arg =
+                            Self::replace_view_column(&func.arg, table_entries, column_entries)?;
+                        WindowFuncType::LastValue(FirstLastFunction {
+                            arg: Box::new(new_arg),
+                            return_type: func.return_type.clone(),
                         })
                     }
                     func => func.clone(),

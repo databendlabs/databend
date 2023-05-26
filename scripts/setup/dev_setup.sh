@@ -292,34 +292,34 @@ function install_jdk {
 }
 
 function install_lapack {
-    PACKAGE_MANAGER=$1
+	PACKAGE_MANAGER=$1
 
-    echo "==> installing lapack library..."
+	echo "==> installing lapack library..."
 
-    case "$PACKAGE_MANAGER" in
-    apt-get)
-        install_pkg liblapack-dev "$PACKAGE_MANAGER"
-        ;;
-    pacman)
-        install_pkg lapack "$PACKAGE_MANAGER"
-        ;;
-    apk)
-        install_pkg lapack-dev "$PACKAGE_MANAGER"
-        ;;
-    yum)
-        install_pkg lapack-devel "$PACKAGE_MANAGER"
-        ;;
-    dnf)
-        install_pkg lapack-devel "$PACKAGE_MANAGER"
-        ;;
-    brew)
-        install_pkg lapack "$PACKAGE_MANAGER"
-        ;;
-    *)
-        echo "Unable to install lapack with package manager: $PACKAGE_MANAGER"
-        exit 1
-        ;;
-    esac
+	case "$PACKAGE_MANAGER" in
+	apt-get)
+		install_pkg liblapack-dev "$PACKAGE_MANAGER"
+		;;
+	pacman)
+		install_pkg lapack "$PACKAGE_MANAGER"
+		;;
+	apk)
+		install_pkg lapack-dev "$PACKAGE_MANAGER"
+		;;
+	yum)
+		install_pkg lapack-devel "$PACKAGE_MANAGER"
+		;;
+	dnf)
+		install_pkg lapack-devel "$PACKAGE_MANAGER"
+		;;
+	brew)
+		install_pkg lapack "$PACKAGE_MANAGER"
+		;;
+	*)
+		echo "Unable to install lapack with package manager: $PACKAGE_MANAGER"
+		exit 1
+		;;
+	esac
 }
 
 function install_pkg_config {

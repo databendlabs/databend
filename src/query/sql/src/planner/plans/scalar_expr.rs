@@ -359,6 +359,12 @@ pub struct LagLeadFunction {
     pub return_type: Box<DataType>,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct FirstLastFunction {
+    pub arg: Box<ScalarExpr>,
+    pub return_type: Box<DataType>,
+}
+
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct WindowFunc {

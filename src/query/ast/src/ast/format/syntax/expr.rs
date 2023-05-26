@@ -220,7 +220,15 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             .append(pretty_expr(*expr))
             .append(RcDoc::text(")")),
         Expr::Literal { lit, .. } => RcDoc::text(lit.to_string()),
-        Expr::CountAll { .. } => RcDoc::text("COUNT(*)"),
+        Expr::CountAll { window, .. } => {
+            RcDoc::text("COUNT(*)").append(if let Some(window) = window {
+                RcDoc::text(" OVER (")
+                    .append(RcDoc::text(window.to_string()))
+                    .append(")")
+            } else {
+                RcDoc::nil()
+            })
+        }
         Expr::Tuple { exprs, .. } => RcDoc::text("(")
             .append(inline_comma(exprs.into_iter().map(pretty_expr)))
             .append(RcDoc::text(")")),
@@ -229,6 +237,7 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
             name,
             args,
             params,
+            window,
             ..
         } => RcDoc::text(name.to_string())
             .append(if !params.is_empty() {
@@ -249,7 +258,14 @@ pub(crate) fn pretty_expr(expr: Expr) -> RcDoc<'static> {
                 RcDoc::nil()
             })
             .append(inline_comma(args.into_iter().map(pretty_expr)))
-            .append(RcDoc::text(")")),
+            .append(RcDoc::text(")"))
+            .append(if let Some(window) = window {
+                RcDoc::text(" OVER (")
+                    .append(RcDoc::text(window.to_string()))
+                    .append(")")
+            } else {
+                RcDoc::nil()
+            }),
         Expr::Case {
             operand,
             conditions,

@@ -197,7 +197,11 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_literal(&mut self, _span: Span, _lit: &'ast Literal) {}
 
-    fn visit_count_all(&mut self, _span: Span) {}
+    fn visit_count_all(&mut self, _span: Span, window: &'ast Option<Window>) {
+        if let Some(window) = window {
+            self.visit_window(window);
+        }
+    }
 
     fn visit_tuple(&mut self, _span: Span, elements: &'ast [Expr]) {
         for element in elements {
