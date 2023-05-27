@@ -26,6 +26,7 @@ common-meta-app = { path = "../../../meta/app" }
 common-pipeline-core = { path = "../core" }
 common-settings = { path = "../../settings" }
 common-storage = { path = "../../../common/storage" }
+parquet = "37.0.0"
 
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 bstr = "1.0.1"

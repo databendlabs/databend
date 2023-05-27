@@ -2398,6 +2398,7 @@ dependencies = [
  "futures-util",
  "opendal",
  "parking_lot 0.12.1",
+ "parquet",
  "serde",
  "serde_json",
  "tracing",
@@ -2559,6 +2560,7 @@ name = "common-storage"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "arrow-schema",
  "async-backtrace",
  "async-trait",
  "bytes",
@@ -2573,6 +2575,7 @@ dependencies = [
  "futures",
  "log",
  "opendal",
+ "parquet",
  "regex",
  "reqwest",
  "serde",
@@ -7341,7 +7344,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-semantic-conventions",
  "thiserror",
- "thrift",
+ "thrift 0.16.0",
  "tokio",
 ]
 
@@ -7557,6 +7560,39 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "parquet"
+version = "37.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5022d98333271f4ca3e87bab760498e61726bf5a6ca919123c80517e20ded29"
+dependencies = [
+ "ahash 0.8.3",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-cast",
+ "arrow-data",
+ "arrow-ipc",
+ "arrow-schema",
+ "arrow-select",
+ "base64 0.21.0",
+ "brotli",
+ "bytes",
+ "chrono",
+ "flate2",
+ "futures",
+ "hashbrown 0.13.2",
+ "lz4",
+ "num",
+ "num-bigint",
+ "paste",
+ "seq-macro",
+ "snap",
+ "thrift 0.17.0",
+ "tokio",
+ "twox-hash",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -10128,6 +10164,17 @@ dependencies = [
  "log",
  "ordered-float 1.1.1",
  "threadpool",
+]
+
+[[package]]
+name = "thrift"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e54bc85fc7faa8bc175c4bab5b92ba8d9a3ce893d0e9f42cc455c8ab16a9e09"
+dependencies = [
+ "byteorder",
+ "integer-encoding",
+ "ordered-float 2.10.0",
 ]
 
 [[package]]

@@ -17,6 +17,9 @@ common-exception = { path = "../exception" }
 common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../../meta/app" }
 
+arrow-schema = "39.0.0"
+parquet = { version = "39.0.0", features = ["arrow", "async", "experimental"] }
+
 anyhow = { workspace = true }
 async-backtrace = { workspace = true }
 async-trait = "0.1"

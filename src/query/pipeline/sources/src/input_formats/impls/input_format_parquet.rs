@@ -22,18 +22,18 @@ use std::io::Seek;
 use std::mem;
 use std::sync::Arc;
 
-use common_arrow::arrow::array::Array;
-use common_arrow::arrow::chunk::Chunk as ArrowChunk;
-use common_arrow::arrow::datatypes::Field;
-use common_arrow::arrow::io::parquet::read::infer_schema;
-use common_arrow::arrow::io::parquet::read::read_columns;
-use common_arrow::arrow::io::parquet::read::read_metadata_async;
-use common_arrow::arrow::io::parquet::read::to_deserializer;
-use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
-use common_arrow::parquet::metadata::ColumnChunkMetaData;
-use common_arrow::parquet::metadata::FileMetaData;
-use common_arrow::parquet::metadata::RowGroupMetaData;
-use common_arrow::parquet::read::read_metadata;
+// use common_arrow::arrow::array::Array;
+// use common_arrow::arrow::chunk::Chunk as ArrowChunk;
+// use common_arrow::arrow::datatypes::Field;
+// use common_arrow::arrow::io::parquet::read::infer_schema;
+// use common_arrow::arrow::io::parquet::read::read_columns;
+// use common_arrow::arrow::io::parquet::read::read_metadata_async;
+// use common_arrow::arrow::io::parquet::read::to_deserializer;
+// use common_arrow::arrow::io::parquet::read::RowGroupDeserializer;
+// use common_arrow::parquet::metadata::ColumnChunkMetaData;
+// use common_arrow::parquet::metadata::FileMetaData;
+// use common_arrow::parquet::metadata::RowGroupMetaData;
+// use common_arrow::parquet::read::read_metadata;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -51,6 +51,9 @@ use futures::AsyncReadExt;
 use futures::AsyncSeek;
 use futures::AsyncSeekExt;
 use opendal::Operator;
+use parquet::file::metadata::ColumnChunkMetaData;
+use parquet::file::metadata::ParquetMetaData;
+use parquet::file::metadata::RowGroupMetaData;
 use serde::Deserializer;
 use serde::Serializer;
 
@@ -70,7 +73,7 @@ pub struct InputFormatParquet;
 impl InputFormatParquet {
     fn make_splits(
         file_infos: Vec<StageFileInfo>,
-        metas: Vec<FileMetaData>,
+        metas: Vec<Arc<ParquetMetaData>>,
     ) -> Result<Vec<Arc<SplitInfo>>> {
         let mut infos = vec![];
         let mut schema = None;
@@ -505,7 +508,7 @@ fn get_field_columns<'a>(
 ) -> Vec<&'a ColumnChunkMetaData> {
     columns
         .iter()
-        .filter(|x| x.descriptor().path_in_schema[0] == field_name)
+        .filter(|x| x.column_descr().path().parts()[0] == field_name)
         .collect()
 }
 
