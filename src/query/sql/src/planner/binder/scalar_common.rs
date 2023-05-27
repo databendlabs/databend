@@ -182,9 +182,7 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
                         prune_by_children(&f.arg, columns)
                     }
                 }
-                WindowFuncType::FirstValue(f) | WindowFuncType::LastValue(f) => {
-                    prune_by_children(&f.arg, columns)
-                }
+                WindowFuncType::NthValue(f) => prune_by_children(&f.arg, columns),
                 _ => false,
             };
             flag || scalar

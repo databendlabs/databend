@@ -24,9 +24,9 @@ use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::FirstLastFunction;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Window;
@@ -258,16 +258,10 @@ impl<'a> WindowRewriter<'a> {
                     return_type: ll.return_type.clone(),
                 })
             }
-            WindowFuncType::FirstValue(func) => {
+            WindowFuncType::NthValue(func) => {
                 let new_arg = self.visit(&func.arg)?;
-                WindowFuncType::FirstValue(FirstLastFunction {
-                    arg: Box::new(new_arg),
-                    return_type: func.return_type.clone(),
-                })
-            }
-            WindowFuncType::LastValue(func) => {
-                let new_arg = self.visit(&func.arg)?;
-                WindowFuncType::LastValue(FirstLastFunction {
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: func.n,
                     arg: Box::new(new_arg),
                     return_type: func.return_type.clone(),
                 })

@@ -71,8 +71,7 @@ pub trait ScalarVisitor: Sized {
                                                 stack.push(RecursionProcessing::Call(default));
                                             }
                                         }
-                                        WindowFuncType::FirstValue(f)
-                                        | WindowFuncType::LastValue(f) => {
+                                        WindowFuncType::NthValue(f) => {
                                             stack.push(RecursionProcessing::Call(&f.arg));
                                         }
                                         _ => {}

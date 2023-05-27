@@ -24,9 +24,9 @@ use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::Filter;
-use crate::plans::FirstLastFunction;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::Scan;
@@ -151,18 +151,11 @@ impl RulePushDownFilterScan {
                             return_type: ll.return_type.clone(),
                         })
                     }
-                    WindowFuncType::FirstValue(func) => {
+                    WindowFuncType::NthValue(func) => {
                         let new_arg =
                             Self::replace_view_column(&func.arg, table_entries, column_entries)?;
-                        WindowFuncType::FirstValue(FirstLastFunction {
-                            arg: Box::new(new_arg),
-                            return_type: func.return_type.clone(),
-                        })
-                    }
-                    WindowFuncType::LastValue(func) => {
-                        let new_arg =
-                            Self::replace_view_column(&func.arg, table_entries, column_entries)?;
-                        WindowFuncType::LastValue(FirstLastFunction {
+                        WindowFuncType::NthValue(NthValueFunction {
+                            n: func.n,
                             arg: Box::new(new_arg),
                             return_type: func.return_type.clone(),
                         })

@@ -362,7 +362,13 @@ pub struct LagLeadFunction {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct FirstLastFunction {
+pub struct NthValueFunction {
+    /// The nth row of the window frame (couting from 1).
+    ///
+    /// - Some(1): `first_value`
+    /// - Some(n): `nth_value`
+    /// - None: `last_value`
+    pub n: Option<u64>,
     pub arg: Box<ScalarExpr>,
     pub return_type: Box<DataType>,
 }

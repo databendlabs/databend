@@ -417,6 +417,71 @@ sales 1 4
 sales 3 4
 sales 4 4
 
+# nth_value
+query III
+SELECT depname, empno,
+	nth_value(empno, 2) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+ORDER BY 1, 2
+----
+develop	7	8
+develop	8	9
+develop	9	10
+develop	10	11
+develop	11	NULL
+personnel	2	5
+personnel	5	NULL
+sales	1	3
+sales	3	4
+sales	4	NULL
+
+statement ok
+DROP VIEW IF EXISTS empno_nulls
+
+statement ok
+CREATE VIEW empno_nulls AS
+SELECT depname, case empno % 2 when 1 then empno else NULL end as empno, salary, enroll_date
+FROM empsalary
+
+query III
+SELECT depname, empno,
+	nth_value(empno, 2) OVER (
+		PARTITION BY depname ORDER BY empno ASC NULLS FIRST
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empno_nulls
+ORDER BY 1, 2 NULLS FIRST
+----
+develop	NULL	NULL
+develop	NULL	7
+develop	7	9
+develop	9	11
+develop	11	NULL
+personnel	NULL	5
+personnel	5	NULL
+sales	NULL	1
+sales	1	3
+sales	3	NULL
+
+statement error
+SELECT depname, empno,
+	nth_value(empno) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+
+statement error
+SELECT depname, empno,
+	nth_value(empno, 2, 3) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+
 # min/max/avg
 query TIIR
 SELECT depname, min(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m1, max(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m2, AVG(salary) OVER (PARTITION BY depname ORDER BY salary, empno) m3 FROM empsalary ORDER BY depname, empno

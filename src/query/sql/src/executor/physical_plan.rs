@@ -301,8 +301,7 @@ pub enum WindowFunction {
     DenseRank,
     PercentRank,
     LagLead(LagLeadFunctionDesc),
-    FirstValue(FirstLastFunctionDesc),
-    LastValue(FirstLastFunctionDesc),
+    NthValue(NthValueFunctionDesc),
 }
 
 impl WindowFunction {
@@ -314,9 +313,7 @@ impl WindowFunction {
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
             WindowFunction::LagLead(f) => Ok(f.sig.return_type.clone()),
-            WindowFunction::FirstValue(f) | WindowFunction::LastValue(f) => {
-                Ok(f.sig.return_type.clone())
-            }
+            WindowFunction::NthValue(f) => Ok(f.sig.return_type.clone()),
         }
     }
 }
@@ -331,8 +328,7 @@ impl Display for WindowFunction {
             WindowFunction::PercentRank => write!(f, "percent_rank"),
             WindowFunction::LagLead(lag_lead) if lag_lead.sig.is_lag => write!(f, "lag"),
             WindowFunction::LagLead(_) => write!(f, "lead"),
-            WindowFunction::FirstValue(_) => write!(f, "first_value"),
-            WindowFunction::LastValue(_) => write!(f, "last_value"),
+            WindowFunction::NthValue(_) => write!(f, "nth_value"),
         }
     }
 }
@@ -866,16 +862,15 @@ pub struct LagLeadFunctionSignature {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct FirstLastFunctionDesc {
-    pub sig: FirstLastFunctionSignature,
+pub struct NthValueFunctionDesc {
+    pub sig: NthValueFunctionSignature,
     pub output_column: IndexType,
     pub arg: usize,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct FirstLastFunctionSignature {
-    pub name: String,
-    pub arg: DataType,
+pub struct NthValueFunctionSignature {
+    pub n: Option<u64>,
     pub return_type: DataType,
 }
 
