@@ -93,7 +93,6 @@ impl Drop for WindowFuncAggImpl {
 #[derive(Clone)]
 pub struct WindowFuncLagLeadImpl {
     pub arg: usize,
-    pub offset: u64,
     pub default: LagLeadDefault,
     pub return_type: DataType,
 }
@@ -149,17 +148,16 @@ impl WindowFunctionInfo {
                 };
                 Self::LagLead(WindowFuncLagLeadImpl {
                     arg: new_arg,
-                    offset: ll.sig.offset,
                     default: new_default,
-                    return_type: ll.sig.return_type.clone(),
+                    return_type: ll.return_type.clone(),
                 })
             }
             WindowFunction::NthValue(func) => {
                 let new_arg = schema.index_of(&func.arg.to_string())?;
                 Self::NthValue(WindowFuncNthValueImpl {
-                    n: func.sig.n,
+                    n: func.n,
                     arg: new_arg,
-                    return_type: func.sig.return_type.clone(),
+                    return_type: func.return_type.clone(),
                 })
             }
         })

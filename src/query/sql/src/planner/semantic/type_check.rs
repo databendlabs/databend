@@ -1157,7 +1157,7 @@ impl<'a> TypeChecker<'a> {
 
         match func_name {
             "lag" | "lead" => {
-                self.resolve_laglead_window_function(func_name, &arguments, &arg_types)
+                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)
                     .await
             }
             "first_value" | "first" | "last_value" | "last" | "nth_value" => {
@@ -1171,7 +1171,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_laglead_window_function(
+    async fn resolve_lag_lead_window_function(
         &mut self,
         func_name: &str,
         args: &[ScalarExpr],

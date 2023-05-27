@@ -58,7 +58,6 @@ use super::Filter;
 use super::HashJoin;
 use super::Limit;
 use super::NthValueFunctionDesc;
-use super::NthValueFunctionSignature;
 use super::ProjectSet;
 use super::RowFetch;
 use super::Sort;
@@ -73,7 +72,6 @@ use crate::executor::FragmentKind;
 use crate::executor::IEJoin;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
-use crate::executor::LagLeadFunctionSignature;
 use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
@@ -1277,17 +1275,9 @@ impl PhysicalPlanBuilder {
                     },
                 };
                 WindowFunction::LagLead(LagLeadFunctionDesc {
-                    sig: LagLeadFunctionSignature {
-                        is_lag: lag_lead.is_lag,
-                        arg: lag_lead.arg.data_type()?,
-                        offset: lag_lead.offset,
-                        default: match lag_lead.default.as_ref().map(|d| d.data_type()) {
-                            None => None,
-                            Some(d) => Some(d?),
-                        },
-                        return_type: *lag_lead.return_type.clone(),
-                    },
-                    output_column: w.index,
+                    is_lag: lag_lead.is_lag,
+                    offset: lag_lead.offset,
+                    return_type: *lag_lead.return_type.clone(),
                     arg: if let ScalarExpr::BoundColumnRef(col) = *lag_lead.arg.clone() {
                         Ok(col.column.index)
                     } else {
@@ -1300,11 +1290,8 @@ impl PhysicalPlanBuilder {
             }
 
             WindowFuncType::NthValue(func) => WindowFunction::NthValue(NthValueFunctionDesc {
-                sig: NthValueFunctionSignature {
-                    n: func.n,
-                    return_type: *func.return_type.clone(),
-                },
-                output_column: w.index,
+                n: func.n,
+                return_type: *func.return_type.clone(),
                 arg: if let ScalarExpr::BoundColumnRef(col) = &*func.arg {
                     Ok(col.column.index)
                 } else {

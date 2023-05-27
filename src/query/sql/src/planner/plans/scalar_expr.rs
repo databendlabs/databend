@@ -363,7 +363,7 @@ pub struct LagLeadFunction {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct NthValueFunction {
-    /// The nth row of the window frame (couting from 1).
+    /// The nth row of the window frame (counting from 1).
     ///
     /// - Some(1): `first_value`
     /// - Some(n): `nth_value`
