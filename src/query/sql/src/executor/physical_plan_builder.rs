@@ -1266,8 +1266,8 @@ impl PhysicalPlanBuilder {
                     })
                     .collect::<Result<_>>()?,
             }),
-            WindowFuncType::Lag(lag) => {
-                let new_default = match &lag.default {
+            WindowFuncType::LagLead(lag_lead) => {
+                let new_default = match &lag_lead.default {
                     None => LagLeadDefault::Null,
                     Some(d) => match d {
                         box ScalarExpr::BoundColumnRef(col) => {
@@ -1276,19 +1276,19 @@ impl PhysicalPlanBuilder {
                         _ => unreachable!(),
                     },
                 };
-                WindowFunction::Lag(LagLeadFunctionDesc {
+                WindowFunction::LagLead(LagLeadFunctionDesc {
                     sig: LagLeadFunctionSignature {
-                        name: "lag".to_string(),
-                        arg: lag.arg.data_type()?,
-                        offset: lag.offset,
-                        default: match lag.default.as_ref().map(|d| d.data_type()) {
+                        is_lag: lag_lead.is_lag,
+                        arg: lag_lead.arg.data_type()?,
+                        offset: lag_lead.offset,
+                        default: match lag_lead.default.as_ref().map(|d| d.data_type()) {
                             None => None,
                             Some(d) => Some(d?),
                         },
-                        return_type: *lag.return_type.clone(),
+                        return_type: *lag_lead.return_type.clone(),
                     },
                     output_column: w.index,
-                    arg: if let ScalarExpr::BoundColumnRef(col) = *lag.arg.clone() {
+                    arg: if let ScalarExpr::BoundColumnRef(col) = *lag_lead.arg.clone() {
                         Ok(col.column.index)
                     } else {
                         Err(ErrorCode::Internal(
@@ -1298,38 +1298,7 @@ impl PhysicalPlanBuilder {
                     default: new_default,
                 })
             }
-            WindowFuncType::Lead(lead) => {
-                let new_default = match &lead.default {
-                    None => LagLeadDefault::Null,
-                    Some(d) => match d {
-                        box ScalarExpr::BoundColumnRef(col) => {
-                            LagLeadDefault::Index(col.column.index)
-                        }
-                        _ => unreachable!(),
-                    },
-                };
-                WindowFunction::Lead(LagLeadFunctionDesc {
-                    sig: LagLeadFunctionSignature {
-                        name: "lead".to_string(),
-                        arg: lead.arg.data_type()?,
-                        offset: lead.offset,
-                        default: match lead.default.as_ref().map(|d| d.data_type()) {
-                            None => None,
-                            Some(d) => Some(d?),
-                        },
-                        return_type: *lead.return_type.clone(),
-                    },
-                    output_column: w.index,
-                    arg: if let ScalarExpr::BoundColumnRef(col) = *lead.arg.clone() {
-                        Ok(col.column.index)
-                    } else {
-                        Err(ErrorCode::Internal(
-                            "Window's lead function argument must be a BoundColumnRef".to_string(),
-                        ))
-                    }?,
-                    default: new_default,
-                })
-            }
+
             WindowFuncType::FirstValue(func) => WindowFunction::FirstValue(FirstLastFunctionDesc {
                 sig: FirstLastFunctionSignature {
                     name: "first_value".to_string(),

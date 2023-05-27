@@ -141,9 +141,9 @@ impl WindowFunctionInfo {
             WindowFunction::Rank => Self::Rank,
             WindowFunction::DenseRank => Self::DenseRank,
             WindowFunction::PercentRank => Self::PercentRank,
-            WindowFunction::Lag(lag) => {
-                let new_arg = schema.index_of(&lag.arg.to_string())?;
-                let new_default = match &lag.default {
+            WindowFunction::LagLead(ll) => {
+                let new_arg = schema.index_of(&ll.arg.to_string())?;
+                let new_default = match &ll.default {
                     LagLeadDefault::Null => LagLeadDefault::Null,
                     LagLeadDefault::Index(i) => {
                         let offset = schema.index_of(&i.to_string())?;
@@ -152,25 +152,9 @@ impl WindowFunctionInfo {
                 };
                 Self::Lag(WindowFuncLagLeadImpl {
                     arg: new_arg,
-                    offset: lag.sig.offset,
+                    offset: ll.sig.offset,
                     default: new_default,
-                    return_type: lag.sig.return_type.clone(),
-                })
-            }
-            WindowFunction::Lead(lead) => {
-                let new_arg = schema.index_of(&lead.arg.to_string())?;
-                let new_default = match &lead.default {
-                    LagLeadDefault::Null => LagLeadDefault::Null,
-                    LagLeadDefault::Index(i) => {
-                        let offset = schema.index_of(&i.to_string())?;
-                        LagLeadDefault::Index(offset)
-                    }
-                };
-                Self::Lead(WindowFuncLagLeadImpl {
-                    arg: new_arg,
-                    offset: lead.sig.offset,
-                    default: new_default,
-                    return_type: lead.sig.return_type.clone(),
+                    return_type: ll.sig.return_type.clone(),
                 })
             }
             WindowFunction::FirstValue(func) => {

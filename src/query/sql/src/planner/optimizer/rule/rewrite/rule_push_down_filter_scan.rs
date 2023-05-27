@@ -133,38 +133,22 @@ impl RulePushDownFilterScan {
                             display_name: agg.display_name.clone(),
                         })
                     }
-                    WindowFuncType::Lag(lag) => {
+                    WindowFuncType::LagLead(ll) => {
                         let new_arg =
-                            Self::replace_view_column(&lag.arg, table_entries, column_entries)?;
+                            Self::replace_view_column(&ll.arg, table_entries, column_entries)?;
                         let new_default =
-                            match lag.default.clone().map(|d| {
+                            match ll.default.clone().map(|d| {
                                 Self::replace_view_column(&d, table_entries, column_entries)
                             }) {
                                 None => None,
                                 Some(d) => Some(Box::new(d?)),
                             };
-                        WindowFuncType::Lag(LagLeadFunction {
+                        WindowFuncType::LagLead(LagLeadFunction {
+                            is_lag: ll.is_lag,
                             arg: Box::new(new_arg),
-                            offset: lag.offset,
+                            offset: ll.offset,
                             default: new_default,
-                            return_type: lag.return_type.clone(),
-                        })
-                    }
-                    WindowFuncType::Lead(lead) => {
-                        let new_arg =
-                            Self::replace_view_column(&lead.arg, table_entries, column_entries)?;
-                        let new_default =
-                            match lead.default.clone().map(|d| {
-                                Self::replace_view_column(&d, table_entries, column_entries)
-                            }) {
-                                None => None,
-                                Some(d) => Some(Box::new(d?)),
-                            };
-                        WindowFuncType::Lead(LagLeadFunction {
-                            arg: Box::new(new_arg),
-                            offset: lead.offset,
-                            default: new_default,
-                            return_type: lead.return_type.clone(),
+                            return_type: ll.return_type.clone(),
                         })
                     }
                     WindowFuncType::FirstValue(func) => {

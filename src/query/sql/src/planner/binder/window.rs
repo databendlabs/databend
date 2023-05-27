@@ -246,26 +246,16 @@ impl<'a> WindowRewriter<'a> {
                     return_type: agg.return_type.clone(),
                 })
             }
-            WindowFuncType::Lag(lag) => {
+            WindowFuncType::LagLead(ll) => {
                 let (new_arg, new_default) =
-                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, lag)?;
+                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, ll)?;
 
-                WindowFuncType::Lag(LagLeadFunction {
+                WindowFuncType::LagLead(LagLeadFunction {
+                    is_lag: ll.is_lag,
                     arg: Box::new(new_arg),
-                    offset: lag.offset,
+                    offset: ll.offset,
                     default: new_default,
-                    return_type: lag.return_type.clone(),
-                })
-            }
-            WindowFuncType::Lead(lead) => {
-                let (new_arg, new_default) =
-                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, lead)?;
-
-                WindowFuncType::Lead(LagLeadFunction {
-                    arg: Box::new(new_arg),
-                    offset: lead.offset,
-                    default: new_default,
-                    return_type: lead.return_type.clone(),
+                    return_type: ll.return_type.clone(),
                 })
             }
             WindowFuncType::FirstValue(func) => {

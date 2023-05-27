@@ -217,8 +217,7 @@ pub enum WindowFuncType {
     Rank,
     DenseRank,
     PercentRank,
-    Lag(LagLeadFunction),
-    Lead(LagLeadFunction),
+    LagLead(LagLeadFunction),
     FirstValue(FirstLastFunction),
     LastValue(FirstLastFunction),
 }
@@ -245,13 +244,15 @@ impl WindowFuncType {
         return_type: DataType,
     ) -> Result<WindowFuncType> {
         match name {
-            "lag" => Ok(WindowFuncType::Lag(LagLeadFunction {
+            "lag" => Ok(WindowFuncType::LagLead(LagLeadFunction {
+                is_lag: true,
                 arg: Box::new(arg),
                 offset: offset.unwrap_or(1),
                 default: default.map(Box::new),
                 return_type: Box::new(return_type),
             })),
-            "lead" => Ok(WindowFuncType::Lead(LagLeadFunction {
+            "lead" => Ok(WindowFuncType::LagLead(LagLeadFunction {
+                is_lag: false,
                 arg: Box::new(arg),
                 offset: offset.unwrap_or(1),
                 default: default.map(Box::new),
@@ -277,8 +278,8 @@ impl WindowFuncType {
             WindowFuncType::Rank => "rank".to_string(),
             WindowFuncType::DenseRank => "dense_rank".to_string(),
             WindowFuncType::PercentRank => "percent_rank".to_string(),
-            WindowFuncType::Lag(_) => "lag".to_string(),
-            WindowFuncType::Lead(_) => "lead".to_string(),
+            WindowFuncType::LagLead(lag_lead) if lag_lead.is_lag => "lag".to_string(),
+            WindowFuncType::LagLead(_) => "lead".to_string(),
             WindowFuncType::FirstValue(_) => "first_value".to_string(),
             WindowFuncType::LastValue(_) => "last_value".to_string(),
         }
@@ -289,7 +290,7 @@ impl WindowFuncType {
             WindowFuncType::Aggregate(agg) => {
                 agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
             }
-            WindowFuncType::Lag(func) | WindowFuncType::Lead(func) => match &func.default {
+            WindowFuncType::LagLead(func) => match &func.default {
                 None => func.arg.used_columns(),
                 Some(d) => func
                     .arg
@@ -312,8 +313,7 @@ impl WindowFuncType {
                 DataType::Number(NumberDataType::UInt64)
             }
             WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
-            WindowFuncType::Lag(lag) => *lag.return_type.clone(),
-            WindowFuncType::Lead(lead) => *lead.return_type.clone(),
+            WindowFuncType::LagLead(lag_lead) => *lag_lead.return_type.clone(),
             WindowFuncType::FirstValue(first) => *first.return_type.clone(),
             WindowFuncType::LastValue(last) => *last.return_type.clone(),
         }
