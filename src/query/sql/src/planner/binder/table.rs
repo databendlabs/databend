@@ -653,6 +653,7 @@ impl Binder {
             srfs: Default::default(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            window_definitions: DashMap::new(),
         };
         let (s_expr, mut new_bind_context) = self
             .bind_query(&mut new_bind_context, &cte_info.query)

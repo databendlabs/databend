@@ -28,10 +28,10 @@ use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
+use common_ast::ast::Window;
 use common_ast::ast::WindowFrame;
 use common_ast::ast::WindowFrameBound;
 use common_ast::ast::WindowFrameUnits;
-use common_ast::ast::WindowSpec;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
@@ -666,10 +666,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     let func = self.resolve_general_window_function(&name, &args).await?;
                     let window = window.as_ref().unwrap();
-                    // WindowReference already rewritten by `SelectRewriter` before.
-                    let window = window.as_window_spec().unwrap();
                     let display_name = format!("{:#}", expr);
-
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(&name) {
@@ -683,8 +680,6 @@ impl<'a> TypeChecker<'a> {
                         // aggregate window function
                         let display_name = format!("{:#}", expr);
                         let func = WindowFuncType::Aggregate(new_agg_func);
-                        // WindowReference already rewritten by `SelectRewriter` before.
-                        let window = window.as_window_spec().unwrap();
                         self.resolve_window(*span, display_name, window, func)
                             .await?
                     } else {
@@ -728,8 +723,6 @@ impl<'a> TypeChecker<'a> {
                     // aggregate window function
                     let display_name = format!("{:#}", expr);
                     let func = WindowFuncType::Aggregate(new_agg_func);
-                    // WindowReference already rewritten by `SelectRewriter` before.
-                    let window = window.as_window_spec().unwrap();
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else {
@@ -902,7 +895,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         display_name: String,
-        window: &WindowSpec,
+        window: &Window,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if self.in_window_function {
@@ -913,14 +906,31 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span));
         }
-        let mut partitions = Vec::with_capacity(window.partition_by.len());
-        for p in window.partition_by.iter() {
+
+        let spec = match window {
+            Window::WindowSpec(spec) => spec.clone(),
+            Window::WindowReference(w) => self
+                .bind_context
+                .window_definitions
+                .get(&w.window_name.name)
+                .ok_or_else(|| {
+                    ErrorCode::SyntaxException(format!(
+                        "Window definition {} not found",
+                        w.window_name.name
+                    ))
+                })?
+                .value()
+                .clone(),
+        };
+
+        let mut partitions = Vec::with_capacity(spec.partition_by.len());
+        for p in spec.partition_by.iter() {
             let box (part, _part_type) = self.resolve(p).await?;
             partitions.push(part);
         }
-        let mut order_by = Vec::with_capacity(window.order_by.len());
+        let mut order_by = Vec::with_capacity(spec.order_by.len());
 
-        for o in window.order_by.iter() {
+        for o in spec.order_by.iter() {
             let box (order, _) = self.resolve(&o.expr).await?;
             order_by.push(WindowOrderBy {
                 expr: order,
@@ -929,7 +939,7 @@ impl<'a> TypeChecker<'a> {
             })
         }
         let frame = self
-            .resolve_window_frame(span, &func, &mut order_by, window.window_frame.clone())
+            .resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())
             .await?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
