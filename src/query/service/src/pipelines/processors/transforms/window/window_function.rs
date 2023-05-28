@@ -37,10 +37,8 @@ pub enum WindowFunctionInfo {
     Rank,
     DenseRank,
     PercentRank,
-    Lag(WindowFuncLagLeadImpl),
-    Lead(WindowFuncLagLeadImpl),
-    FirstValue(WindowFuncFirstLastImpl),
-    LastValue(WindowFuncFirstLastImpl),
+    LagLead(WindowFuncLagLeadImpl),
+    NthValue(WindowFuncNthValueImpl),
 }
 
 pub struct WindowFuncAggImpl {
@@ -95,13 +93,13 @@ impl Drop for WindowFuncAggImpl {
 #[derive(Clone)]
 pub struct WindowFuncLagLeadImpl {
     pub arg: usize,
-    pub offset: u64,
     pub default: LagLeadDefault,
     pub return_type: DataType,
 }
 
 #[derive(Clone)]
-pub struct WindowFuncFirstLastImpl {
+pub struct WindowFuncNthValueImpl {
+    pub n: Option<u64>,
     pub arg: usize,
     pub return_type: DataType,
 }
@@ -112,10 +110,8 @@ pub enum WindowFunctionImpl {
     Rank,
     DenseRank,
     PercentRank,
-    Lag(WindowFuncLagLeadImpl),
-    Lead(WindowFuncLagLeadImpl),
-    FirstValue(WindowFuncFirstLastImpl),
-    LastValue(WindowFuncFirstLastImpl),
+    LagLead(WindowFuncLagLeadImpl),
+    NthValue(WindowFuncNthValueImpl),
 }
 
 impl WindowFunctionInfo {
@@ -141,50 +137,27 @@ impl WindowFunctionInfo {
             WindowFunction::Rank => Self::Rank,
             WindowFunction::DenseRank => Self::DenseRank,
             WindowFunction::PercentRank => Self::PercentRank,
-            WindowFunction::Lag(lag) => {
-                let new_arg = schema.index_of(&lag.arg.to_string())?;
-                let new_default = match &lag.default {
+            WindowFunction::LagLead(ll) => {
+                let new_arg = schema.index_of(&ll.arg.to_string())?;
+                let new_default = match &ll.default {
                     LagLeadDefault::Null => LagLeadDefault::Null,
                     LagLeadDefault::Index(i) => {
                         let offset = schema.index_of(&i.to_string())?;
                         LagLeadDefault::Index(offset)
                     }
                 };
-                Self::Lag(WindowFuncLagLeadImpl {
+                Self::LagLead(WindowFuncLagLeadImpl {
                     arg: new_arg,
-                    offset: lag.sig.offset,
                     default: new_default,
-                    return_type: lag.sig.return_type.clone(),
+                    return_type: ll.return_type.clone(),
                 })
             }
-            WindowFunction::Lead(lead) => {
-                let new_arg = schema.index_of(&lead.arg.to_string())?;
-                let new_default = match &lead.default {
-                    LagLeadDefault::Null => LagLeadDefault::Null,
-                    LagLeadDefault::Index(i) => {
-                        let offset = schema.index_of(&i.to_string())?;
-                        LagLeadDefault::Index(offset)
-                    }
-                };
-                Self::Lead(WindowFuncLagLeadImpl {
-                    arg: new_arg,
-                    offset: lead.sig.offset,
-                    default: new_default,
-                    return_type: lead.sig.return_type.clone(),
-                })
-            }
-            WindowFunction::FirstValue(func) => {
+            WindowFunction::NthValue(func) => {
                 let new_arg = schema.index_of(&func.arg.to_string())?;
-                Self::FirstValue(WindowFuncFirstLastImpl {
+                Self::NthValue(WindowFuncNthValueImpl {
+                    n: func.n,
                     arg: new_arg,
-                    return_type: func.sig.return_type.clone(),
-                })
-            }
-            WindowFunction::LastValue(func) => {
-                let new_arg = schema.index_of(&func.arg.to_string())?;
-                Self::LastValue(WindowFuncFirstLastImpl {
-                    arg: new_arg,
-                    return_type: func.sig.return_type.clone(),
+                    return_type: func.return_type.clone(),
                 })
             }
         })
@@ -213,10 +186,8 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::Rank => Self::Rank,
             WindowFunctionInfo::DenseRank => Self::DenseRank,
             WindowFunctionInfo::PercentRank => Self::PercentRank,
-            WindowFunctionInfo::Lag(lag) => Self::Lag(lag),
-            WindowFunctionInfo::Lead(lead) => Self::Lead(lead),
-            WindowFunctionInfo::FirstValue(func) => Self::FirstValue(func),
-            WindowFunctionInfo::LastValue(func) => Self::LastValue(func),
+            WindowFunctionInfo::LagLead(ll) => Self::LagLead(ll),
+            WindowFunctionInfo::NthValue(func) => Self::NthValue(func),
         })
     }
 
@@ -227,8 +198,8 @@ impl WindowFunctionImpl {
                 DataType::Number(NumberDataType::UInt64)
             }
             Self::PercentRank => DataType::Number(NumberDataType::Float64),
-            Self::Lag(f) | Self::Lead(f) => f.return_type.clone(),
-            Self::FirstValue(f) | Self::LastValue(f) => f.return_type.clone(),
+            Self::LagLead(f) => f.return_type.clone(),
+            Self::NthValue(f) => f.return_type.clone(),
         })
     }
 

@@ -24,9 +24,9 @@ use crate::optimizer::SExpr;
 use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
-use crate::plans::FirstLastFunction;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::Window;
@@ -246,38 +246,22 @@ impl<'a> WindowRewriter<'a> {
                     return_type: agg.return_type.clone(),
                 })
             }
-            WindowFuncType::Lag(lag) => {
+            WindowFuncType::LagLead(ll) => {
                 let (new_arg, new_default) =
-                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, lag)?;
+                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, ll)?;
 
-                WindowFuncType::Lag(LagLeadFunction {
+                WindowFuncType::LagLead(LagLeadFunction {
+                    is_lag: ll.is_lag,
                     arg: Box::new(new_arg),
-                    offset: lag.offset,
+                    offset: ll.offset,
                     default: new_default,
-                    return_type: lag.return_type.clone(),
+                    return_type: ll.return_type.clone(),
                 })
             }
-            WindowFuncType::Lead(lead) => {
-                let (new_arg, new_default) =
-                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, lead)?;
-
-                WindowFuncType::Lead(LagLeadFunction {
-                    arg: Box::new(new_arg),
-                    offset: lead.offset,
-                    default: new_default,
-                    return_type: lead.return_type.clone(),
-                })
-            }
-            WindowFuncType::FirstValue(func) => {
+            WindowFuncType::NthValue(func) => {
                 let new_arg = self.visit(&func.arg)?;
-                WindowFuncType::FirstValue(FirstLastFunction {
-                    arg: Box::new(new_arg),
-                    return_type: func.return_type.clone(),
-                })
-            }
-            WindowFuncType::LastValue(func) => {
-                let new_arg = self.visit(&func.arg)?;
-                WindowFuncType::LastValue(FirstLastFunction {
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: func.n,
                     arg: Box::new(new_arg),
                     return_type: func.return_type.clone(),
                 })

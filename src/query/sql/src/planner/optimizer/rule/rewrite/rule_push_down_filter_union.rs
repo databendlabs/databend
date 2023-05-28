@@ -26,9 +26,9 @@ use crate::plans::AggregateFunction;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::Filter;
-use crate::plans::FirstLastFunction;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -179,42 +179,24 @@ fn replace_column_binding(
                         .collect::<Result<Vec<_>>>()?,
                     return_type: arg.return_type,
                 }),
-                WindowFuncType::Lag(lag) => {
-                    let new_arg = replace_column_binding(index_pairs, *lag.arg)?;
-                    let new_default = match &lag.default {
+                WindowFuncType::LagLead(ll) => {
+                    let new_arg = replace_column_binding(index_pairs, *ll.arg)?;
+                    let new_default = match &ll.default {
                         None => None,
                         Some(d) => Some(Box::new(replace_column_binding(index_pairs, *d.clone())?)),
                     };
-                    WindowFuncType::Lag(LagLeadFunction {
+                    WindowFuncType::LagLead(LagLeadFunction {
+                        is_lag: ll.is_lag,
                         arg: Box::new(new_arg),
-                        offset: lag.offset,
+                        offset: ll.offset,
                         default: new_default,
-                        return_type: lag.return_type.clone(),
+                        return_type: ll.return_type.clone(),
                     })
                 }
-                WindowFuncType::Lead(lead) => {
-                    let new_arg = replace_column_binding(index_pairs, *lead.arg)?;
-                    let new_default = match &lead.default {
-                        None => None,
-                        Some(d) => Some(Box::new(replace_column_binding(index_pairs, *d.clone())?)),
-                    };
-                    WindowFuncType::Lead(LagLeadFunction {
-                        arg: Box::new(new_arg),
-                        offset: lead.offset,
-                        default: new_default,
-                        return_type: lead.return_type.clone(),
-                    })
-                }
-                WindowFuncType::FirstValue(func) => {
+                WindowFuncType::NthValue(func) => {
                     let new_arg = replace_column_binding(index_pairs, *func.arg)?;
-                    WindowFuncType::FirstValue(FirstLastFunction {
-                        arg: Box::new(new_arg),
-                        return_type: func.return_type.clone(),
-                    })
-                }
-                WindowFuncType::LastValue(func) => {
-                    let new_arg = replace_column_binding(index_pairs, *func.arg)?;
-                    WindowFuncType::LastValue(FirstLastFunction {
+                    WindowFuncType::NthValue(NthValueFunction {
+                        n: func.n,
                         arg: Box::new(new_arg),
                         return_type: func.return_type.clone(),
                     })
