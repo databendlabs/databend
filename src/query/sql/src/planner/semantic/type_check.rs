@@ -76,6 +76,8 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -1090,25 +1092,25 @@ impl<'a> TypeChecker<'a> {
                     end_bound: WindowFuncFrameBound::Following(None),
                 });
             }
-            WindowFuncType::Lag(lag) => {
+            WindowFuncType::LagLead(lag_lead) if lag_lead.is_lag => {
                 return Ok(WindowFuncFrame {
                     units: WindowFuncFrameUnits::Rows,
                     start_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
-                        NumberScalar::UInt64(lag.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                     end_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
-                        NumberScalar::UInt64(lag.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                 });
             }
-            WindowFuncType::Lead(lead) => {
+            WindowFuncType::LagLead(lag_lead) => {
                 return Ok(WindowFuncFrame {
                     units: WindowFuncFrameUnits::Rows,
                     start_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
-                        NumberScalar::UInt64(lead.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                     end_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
-                        NumberScalar::UInt64(lead.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                 });
             }
@@ -1165,11 +1167,11 @@ impl<'a> TypeChecker<'a> {
 
         match func_name {
             "lag" | "lead" => {
-                self.resolve_laglead_window_function(func_name, &arguments, &arg_types)
+                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)
                     .await
             }
-            "first_value" | "first" | "last_value" | "last" => {
-                self.resolve_firstlast_window_function(func_name, &arguments, &arg_types)
+            "first_value" | "first" | "last_value" | "last" | "nth_value" => {
+                self.resolve_nth_value_window_function(func_name, &arguments, &arg_types)
                     .await
             }
             _ => Err(ErrorCode::UnknownFunction(format!(
@@ -1179,7 +1181,7 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_laglead_window_function(
+    async fn resolve_lag_lead_window_function(
         &mut self,
         func_name: &str,
         args: &[ScalarExpr],
@@ -1194,7 +1196,7 @@ impl<'a> TypeChecker<'a> {
         let offset = if args.len() >= 2 {
             let off = ScalarExpr::CastExpr(CastExpr {
                 span: args[1].span(),
-                is_try: true,
+                is_try: false,
                 argument: Box::new(args[1].clone()),
                 target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
             })
@@ -1236,30 +1238,83 @@ impl<'a> TypeChecker<'a> {
             })
             .transpose()?;
 
-        WindowFuncType::get_general_window_func(
-            func_name,
-            args[0].clone(),
-            offset,
-            cast_default,
-            return_type,
-        )
+        Ok(WindowFuncType::LagLead(LagLeadFunction {
+            is_lag: func_name == "lag",
+            arg: Box::new(args[0].clone()),
+            offset: offset.unwrap_or(1),
+            default: cast_default.map(Box::new),
+            return_type: Box::new(return_type),
+        }))
     }
 
     #[async_backtrace::framed]
-    async fn resolve_firstlast_window_function(
+    async fn resolve_nth_value_window_function(
         &mut self,
         func_name: &str,
         args: &[ScalarExpr],
         arg_types: &[DataType],
     ) -> Result<WindowFuncType> {
-        if args.len() != 1 {
-            return Err(ErrorCode::InvalidArgument(
-                "Argument number is invalid".to_string(),
-            ));
-        }
+        Ok(match func_name {
+            "first_value" | "first" => {
+                if args.len() != 1 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Argument number is invalid".to_string(),
+                    ));
+                }
+                let return_type = arg_types[0].wrap_nullable();
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: Some(1),
+                    arg: Box::new(args[0].clone()),
+                    return_type: Box::new(return_type),
+                })
+            }
+            "last_value" | "last" => {
+                if args.len() != 1 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Argument number is invalid".to_string(),
+                    ));
+                }
+                let return_type = arg_types[0].wrap_nullable();
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: None,
+                    arg: Box::new(args[0].clone()),
+                    return_type: Box::new(return_type),
+                })
+            }
+            _ => {
+                // nth_value
+                if args.len() != 2 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Argument number is invalid".to_string(),
+                    ));
+                }
+                let return_type = arg_types[0].wrap_nullable();
+                let n_expr = ScalarExpr::CastExpr(CastExpr {
+                    span: args[1].span(),
+                    is_try: false,
+                    argument: Box::new(args[1].clone()),
+                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                })
+                .as_expr()?;
+                let n = check_number::<_, u64>(
+                    n_expr.span(),
+                    &self.func_ctx,
+                    &n_expr,
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                if n == 0 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "nth_value should count from 1".to_string(),
+                    ));
+                }
 
-        let return_type = arg_types[0].wrap_nullable();
-        WindowFuncType::get_general_window_func(func_name, args[0].clone(), None, None, return_type)
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: Some(n),
+                    arg: Box::new(args[0].clone()),
+                    return_type: Box::new(return_type),
+                })
+            }
+        })
     }
 
     /// Resolve aggregation function call.
