@@ -42,11 +42,13 @@ Stay connected with the latest news about Databend.
 
 ### Native COS Support
 
-Databend now offers native support for COS! Compared to the S3 compatibility provided by COS, our native support has the following advantages:
 
-- By supporting cos's native signature algorithm, we have fixed some signing errors in certain boundary cases.
-- In the future, we will provide append and other functions that are not supported by s3 based on COS.
-- Through COS's native support, we can integrate with Tencent Cloud's RAM, STS and other services to provide authentication capabilities without static keys.
+
+Databend now offers native support for COS (Cloud Object Storage)! In comparison to the S3 compatibility provided by COS, our native support offers several advantages:
+
+- Fixed Signing Errors: We have addressed signing errors that occurred in certain boundary cases by supporting COS's native signature algorithm.
+- Enhanced Functionality: In the future, we plan to provide additional features such as append and other functions that are not supported by S3 but are available in COS.
+- Integrated Authentication: With COS's native support, we can seamlessly integrate with Tencent Cloud's RAM (Resource Access Management), STS (Security Token Service), and other services. This integration enables us to provide authentication capabilities without relying on static keys.
 
 If you are interested in learning more, please check out the resources listed below:
 
@@ -54,7 +56,7 @@ If you are interested in learning more, please check out the resources listed be
 
 ### IEJoin
 
-Inequality joins are commonly used in various applications to join relational tables based on inequality conditions. Databend has recently added support for IEJoin.
+Databend has recently introduced support for IEJoin (Inequality Join), which is commonly used in various applications to join relational tables based on inequality conditions.
 
 ![IEJoin](../static/img/blog/iejoin.png)
 
@@ -125,7 +127,7 @@ If you are interested in learning more, please check out the resources listed be
 
 ## Highlights
 
-Here are some noteworthy items recorded here, perhaps you can find something that interests you.
+We have also made these improvements to Databend that we hope you will find helpful:
 
 - Added table lock for compact.
 - Added `system.indexes` and `show indexes` command.
@@ -137,11 +139,11 @@ Here are some noteworthy items recorded here, perhaps you can find something tha
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Support Custom Character Sets
+### Support for Custom Character Sets
 
 A character set is a set of rules that defines how characters are represented, while collation determines the order of characters within the character set. Character sets are used to store data and can contain multiple collations.
 
-It would be great to have support for custom character sets in the same way as MySQL. e.g. IBM z/OS uses EBCDIC encoding by default.
+It would be great to have support for custom character sets in the same way as MySQL, e.g., IBM z/OS uses EBCDIC encoding by default.
 
 [Issue #11567 | Feature: Support custom character sets](https://github.com/datafuselabs/databend/issues/11567)
 
