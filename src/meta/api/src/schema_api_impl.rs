@@ -1194,7 +1194,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 )));
             };
 
-            let txn_req = if virtual_columns.is_empty() {
+            let txn_req = if virtual_column_meta.virtual_columns.is_empty() {
                 // If no virtual columns left, delete this record
                 TxnRequest {
                     condition: vec![],
