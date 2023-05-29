@@ -104,12 +104,14 @@ impl FuseTable {
             let num_input_columns = plan.schema().num_fields();
             let mut exprs = Vec::with_capacity(num_input_columns);
             let mut projection = Vec::with_capacity(num_input_columns);
+            let mut mask_count = 0;
             for i in 0..num_input_columns {
                 if let Some(raw_expr) = data_mask_policy.get(&i) {
                     let mut expr = raw_expr.as_expr(&BUILTIN_FUNCTIONS);
                     walk_expr(&mut expr, i);
                     exprs.push(expr);
-                    projection.push(i + num_input_columns);
+                    projection.push(mask_count + num_input_columns);
+                    mask_count += 1;
                 } else {
                     projection.push(i);
                 }
