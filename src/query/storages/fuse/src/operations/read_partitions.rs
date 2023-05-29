@@ -239,7 +239,7 @@ impl FuseTable {
             .location
             .0
             .replace(".parquet", "_virtual.parquet");
-        // Get object metadata.
+        // Read virtual column schema from file meta
         let virtual_columns_meta = if let Ok(virtual_meta) = dal.stat(&virtual_meta_loc).await {
             let length = virtual_meta.content_length();
             let schema_size_bytes = dal

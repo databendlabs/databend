@@ -1124,13 +1124,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             // Create virtual column by inserting these record:
             // (tenant, table_id) -> virtual_column_meta
             {
-                let condition = vec![];
                 let if_then = vec![
                     txn_op_put(&req.name_ident, serialize_struct(&virtual_column_meta)?), /* (tenant, table_id) -> virtual_column_meta */
                 ];
 
                 let txn_req = TxnRequest {
-                    condition,
+                    condition: vec![],
                     if_then,
                     else_then: vec![],
                 };
@@ -1167,8 +1166,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
                 get_pb_value(self, &req.name_ident).await?;
 
-            // If virtual columns already exist, merge them together
             let virtual_column_meta = if let Some(old_virtual_column) = old_virtual_column_opt {
+                // remove dropped virtual columns
                 let mut virtual_columns_set: HashSet<String> =
                     HashSet::from_iter(old_virtual_column.virtual_columns.to_vec());
                 for remove_virtual_column in &req.virtual_columns {
@@ -1195,20 +1194,28 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 )));
             };
 
-            // Create virtual column by inserting these record:
-            // (tenant, table_id) -> virtual_column_meta
-            {
-                let condition = vec![];
+            let txn_req = if virtual_columns.is_empty() {
+                // If no virtual columns left, delete this record
+                TxnRequest {
+                    condition: vec![],
+                    if_then: vec![txn_op_del(&req.name_ident)],
+                    else_then: vec![],
+                }
+            } else {
+                // Store remaining virtual columns:
+                // (tenant, table_id) -> virtual_column_meta
                 let if_then = vec![
                     txn_op_put(&req.name_ident, serialize_struct(&virtual_column_meta)?), /* (tenant, table_id) -> virtual_column_meta */
                 ];
 
-                let txn_req = TxnRequest {
-                    condition,
+                TxnRequest {
+                    condition: vec![],
                     if_then,
                     else_then: vec![],
-                };
+                }
+            };
 
+            {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(

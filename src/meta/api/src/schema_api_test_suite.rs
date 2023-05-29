@@ -3956,6 +3956,27 @@ impl SchemaApiTestSuite {
             let res = mt.list_virtual_columns(req).await?;
             assert_eq!(1, res.len());
             assert_eq!(res[0].virtual_columns, vec!["variant[1]".to_string()]);
+        }
+
+        {
+            info!("--- drop virtual column again");
+            let req = DropVirtualColumnReq {
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant[1]".to_string()],
+            };
+
+            let _res = mt.drop_virtual_column(req).await?;
+        }
+
+        {
+            info!("--- list virtual columns after drop all");
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert_eq!(0, res.len());
 
             let req = ListVirtualColumnsReq {
                 tenant: tenant.to_string(),
