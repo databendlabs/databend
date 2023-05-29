@@ -13,14 +13,11 @@
 // limitations under the License.
 
 use common_constraint::prelude::*;
-use common_expression::eval_cast;
+use common_expression::cast_scalar;
 use common_expression::types::DataType;
-use common_expression::types::Int64Type;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
-use common_expression::types::ValueType;
 use common_expression::Scalar;
-use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use ordered_float::OrderedFloat;
 use z3::ast::Bool;
@@ -277,15 +274,19 @@ fn transform_predicate_expr<'ctx>(
 /// Parse a scalar value into a i64 if possible.
 /// This is used to parse a constant expression into z3 ast.
 fn parse_int_literal(lit: &Scalar) -> Option<i64> {
-    let val = eval_cast(
-        None,
-        lit.as_ref().infer_data_type(),
-        DataType::Number(NumberDataType::Int64),
-        Value::Scalar(lit.clone()),
-        &BUILTIN_FUNCTIONS,
+    Some(
+        cast_scalar(
+            None,
+            lit.clone(),
+            DataType::Number(NumberDataType::Int64),
+            &BUILTIN_FUNCTIONS,
+        )
+        .ok()?
+        .into_number()
+        .unwrap()
+        .into_int64()
+        .unwrap(),
     )
-    .ok()?;
-    Int64Type::try_downcast_scalar(&val.into_scalar().unwrap().as_ref())
 }
 
 fn check_trivial_uint_cast(max: u64, value: &Scalar) -> (bool, u64) {

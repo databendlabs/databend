@@ -20,7 +20,7 @@ use common_exception::Result;
 use common_exception::Span;
 use itertools::Itertools;
 
-use crate::eval_cast;
+use crate::cast_scalar;
 use crate::expression::Expr;
 use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
@@ -36,7 +36,6 @@ use crate::ColumnIndex;
 use crate::ConstantFolder;
 use crate::FunctionContext;
 use crate::Scalar;
-use crate::Value;
 
 pub fn check<Index: ColumnIndex>(
     ast: &RawExpr<Index>,
@@ -104,14 +103,9 @@ pub fn check<Index: ColumnIndex>(
                         let dest_ty = e.data_type().remove_nullable();
 
                         if dest_ty.is_integer() && src_ty.is_integer() {
-                            if let Ok(val) = eval_cast(
-                                *span,
-                                src_ty,
-                                dest_ty,
-                                Value::Scalar(scalar.clone()),
-                                fn_registry,
-                            ) {
-                                let scalar = val.into_scalar().unwrap();
+                            if let Ok(scalar) =
+                                cast_scalar(*span, scalar.clone(), dest_ty, fn_registry)
+                            {
                                 return check_function(
                                     *span,
                                     name,
