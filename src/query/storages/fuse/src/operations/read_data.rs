@@ -21,6 +21,8 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnIndex;
+use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
@@ -83,18 +85,39 @@ impl FuseTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        // internal function `walk_expr` is used to modify arg column id to schema column id,
+        // Otherwise `Evaluator::check_expr` may assert fail.
+        fn walk_expr<Index: ColumnIndex>(expr: &mut Expr<Index>, index: Index) {
+            match expr {
+                Expr::ColumnRef { ref mut id, .. } => {
+                    *id = index;
+                }
+                Expr::Cast { expr, .. } => walk_expr(expr, index),
+                Expr::FunctionCall { ref mut args, .. } => args
+                    .iter_mut()
+                    .for_each(|expr| walk_expr(expr, index.clone())),
+                Expr::Constant { .. } => (),
+            }
+        }
+
         if let Some(data_mask_policy) = &plan.data_mask_policy {
             let num_input_columns = plan.schema().num_fields();
             let mut exprs = Vec::with_capacity(num_input_columns);
+            let mut projection = Vec::with_capacity(num_input_columns);
             for i in 0..num_input_columns {
-                let expr = data_mask_policy
-                    .get(&i)
-                    .map(|remote_expr| remote_expr.as_expr(&BUILTIN_FUNCTIONS));
-
-                exprs.push(expr);
+                if let Some(raw_expr) = data_mask_policy.get(&i) {
+                    let mut expr = raw_expr.as_expr(&BUILTIN_FUNCTIONS);
+                    walk_expr(&mut expr, i);
+                    exprs.push(expr);
+                    projection.push(i + num_input_columns);
+                } else {
+                    projection.push(i);
+                }
             }
 
-            let op = BlockOperator::Replace { exprs };
+            let ops = vec![BlockOperator::Map { exprs }, BlockOperator::Project {
+                projection,
+            }];
 
             let query_ctx = ctx.clone();
             let func_ctx = query_ctx.get_function_context()?;
@@ -105,11 +128,12 @@ impl FuseTable {
                     output,
                     num_input_columns,
                     func_ctx.clone(),
-                    vec![op.clone()],
+                    ops.clone(),
                 );
                 Ok(ProcessorPtr::create(transform))
             })?;
         }
+
         Ok(())
     }
 

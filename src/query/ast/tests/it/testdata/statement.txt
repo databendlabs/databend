@@ -6847,6 +6847,48 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    28..29,
+                ),
+            },
+            action: SetMaskingPolicy(
+                "mask",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a;
 ---------- Output ---------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a
