@@ -10644,3 +10644,243 @@ CreateDatamaskPolicy(
 )
 
 
+---------- Input ----------
+CREATE VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
+---------- Output ---------
+CREATE VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
+---------- AST ------------
+CreateVirtualColumns(
+    CreateVirtualColumnsStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                52..53,
+            ),
+        },
+        virtual_columns: [
+            MapAccess {
+                span: Some(
+                    31..37,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        25..31,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            24..25,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                24..25,
+                            ),
+                        },
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                26..30,
+                            ),
+                            lit: String(
+                                "k1",
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            32..36,
+                        ),
+                        lit: String(
+                            "k2",
+                        ),
+                    },
+                },
+            },
+            MapAccess {
+                span: Some(
+                    43..46,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        40..43,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            39..40,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                39..40,
+                            ),
+                        },
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                41..42,
+                            ),
+                            lit: UInt64(
+                                0,
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            44..45,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
+DROP VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
+---------- Output ---------
+DROP VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
+---------- AST ------------
+DropVirtualColumns(
+    DropVirtualColumnsStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                50..51,
+            ),
+        },
+        virtual_columns: [
+            MapAccess {
+                span: Some(
+                    29..35,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        23..29,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            22..23,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                22..23,
+                            ),
+                        },
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                24..28,
+                            ),
+                            lit: String(
+                                "k1",
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            30..34,
+                        ),
+                        lit: String(
+                            "k2",
+                        ),
+                    },
+                },
+            },
+            MapAccess {
+                span: Some(
+                    41..44,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        38..41,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            37..38,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                37..38,
+                            ),
+                        },
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                39..40,
+                            ),
+                            lit: UInt64(
+                                0,
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            42..43,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
+GENERATE VIRTUAL COLUMNS FOR t
+---------- Output ---------
+GENERATE VIRTUAL COLUMNS FOR t
+---------- AST ------------
+GenerateVirtualColumns(
+    GenerateVirtualColumnsStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                29..30,
+            ),
+        },
+    },
+)
+
+

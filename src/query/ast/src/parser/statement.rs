@@ -736,7 +736,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let drop_virtual_columns = map(
         rule! {
-            CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+            DROP ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
         },
         |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
             Statement::DropVirtualColumns(DropVirtualColumnsStmt {

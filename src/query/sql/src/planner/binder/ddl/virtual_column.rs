@@ -47,11 +47,14 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
-        let schema = self
-            .ctx
-            .get_table(&catalog, &database, &table)
-            .await?
-            .schema();
+        let table_info = self.ctx.get_table(&catalog, &database, &table).await?;
+        if table_info.engine() != "FUSE" {
+            return Err(ErrorCode::SemanticError(
+                "Virtual Column only support FUSE engine",
+            ));
+        }
+        let schema = table_info.schema();
+
         let virtual_columns = self
             .analyze_virtual_columns(virtual_columns, schema)
             .await?;
@@ -81,11 +84,14 @@ impl Binder {
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
 
-        let schema = self
-            .ctx
-            .get_table(&catalog, &database, &table)
-            .await?
-            .schema();
+        let table_info = self.ctx.get_table(&catalog, &database, &table).await?;
+        if table_info.engine() != "FUSE" {
+            return Err(ErrorCode::SemanticError(
+                "Virtual Column only support FUSE engine",
+            ));
+        }
+        let schema = table_info.schema();
+
         let virtual_columns = self
             .analyze_virtual_columns(virtual_columns, schema)
             .await?;
@@ -111,6 +117,13 @@ impl Binder {
 
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(catalog, database, table);
+
+        let table_info = self.ctx.get_table(&catalog, &database, &table).await?;
+        if table_info.engine() != "FUSE" {
+            return Err(ErrorCode::SemanticError(
+                "Virtual Column only support FUSE engine",
+            ));
+        }
 
         Ok(Plan::GenerateVirtualColumns(Box::new(
             GenerateVirtualColumnsPlan {
@@ -155,11 +168,16 @@ impl Binder {
                 };
                 paths.push_front(path);
             }
+            if paths.is_empty() {
+                return Err(ErrorCode::SemanticError(
+                    "Virtual Column should be a inner field of Variant Column",
+                ));
+            }
             if let Expr::ColumnRef { column, .. } = expr {
                 if let Ok(field) = schema.field_with_name(&column.name) {
                     if field.data_type().remove_nullable() != TableDataType::Variant {
                         return Err(ErrorCode::SemanticError(
-                            "Virtual Column only support variant data type",
+                            "Virtual Column only support Variant data type",
                         ));
                     }
                     let mut virtual_name = String::new();
