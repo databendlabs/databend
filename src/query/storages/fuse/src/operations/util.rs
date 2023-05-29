@@ -15,7 +15,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::types::NativeType;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;

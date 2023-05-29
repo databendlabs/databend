@@ -523,7 +523,7 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         on_conflict_fields: Vec<TableField>,
     ) -> Result<()> {
-        if check_duplicate_label(ctx.clone()) {
+        if check_duplicate_label(ctx.clone()).await? {
             return Ok(());
         }
         self.build_replace_pipeline(ctx, on_conflict_fields, pipeline)

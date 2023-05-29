@@ -33,7 +33,6 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
-use common_users::UserApiProvider;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
@@ -717,11 +716,6 @@ impl MutatorConflictDetector {
 mod utils {
     use std::collections::BTreeMap;
 
-    use common_meta_kvapi::kvapi::KVApi;
-    use common_meta_types::KVMeta;
-    use common_meta_types::Operation;
-    use common_meta_types::SeqV;
-    use common_meta_types::UpsertKV;
     use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 
     use super::*;
