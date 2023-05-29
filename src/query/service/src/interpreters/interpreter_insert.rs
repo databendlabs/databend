@@ -18,78 +18,41 @@ use std::io::Cursor;
 use std::ops::Not;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Instant;
 
 use aho_corasick::AhoCorasick;
-use common_ast::ast::Expr as AExpr;
 use common_ast::parser::parse_comma_separated_exprs;
-use common_ast::parser::parse_expr;
-use common_ast::parser::parser_values_with_placeholder;
 use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
-use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::infer_table_schema;
-use common_expression::types::number::NumberScalar;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
-use common_expression::BlockEntry;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
-use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
-use common_expression::Expr;
-use common_expression::Scalar;
-use common_expression::Value;
 use common_formats::FastFieldDecoderValues;
 use common_io::cursor_ext::ReadBytesExt;
 use common_io::cursor_ext::ReadCheckPointExt;
-use common_meta_app::principal::FileFormatOptionsAst;
 use common_meta_app::principal::StageFileFormatType;
-use common_meta_app::principal::StageInfo;
-use common_pipeline_core::Pipeline;
 use common_pipeline_sources::AsyncSource;
 use common_pipeline_sources::AsyncSourcer;
-use common_pipeline_transforms::processors::transforms::Transform;
-use common_sql::binder::wrap_cast;
-use common_sql::evaluator::BlockOperator;
-use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
-use common_sql::plans::FunctionCall;
 use common_sql::plans::Insert;
 use common_sql::plans::InsertInputSource;
 use common_sql::plans::Plan;
-use common_sql::plans::ScalarExpr;
 use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
 use common_sql::NameResolutionContext;
-use common_sql::ScalarBinder;
-use common_storage::StageFileInfo;
-use common_storage::StageFilesInfo;
-use common_storages_factory::Table;
-use common_storages_fuse::io::Files;
-use common_storages_stage::StageTable;
-use common_users::UserApiProvider;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
-use tracing::error;
-use tracing::info;
 
 use crate::interpreters::common::append2table;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
-use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
 use crate::schedulers::build_query_pipeline;
@@ -128,226 +91,6 @@ impl InsertInterpreter {
         let cast_needed = select_schema != DataSchema::from(output_schema.as_ref()).into();
         Ok(cast_needed)
     }
-
-    #[async_backtrace::framed]
-    async fn try_purge_files(
-        ctx: Arc<QueryContext>,
-        stage_info: &StageInfo,
-        stage_files: &[StageFileInfo],
-    ) {
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let op = StageTable::get_op(stage_info);
-        match op {
-            Ok(op) => {
-                let file_op = Files::create(table_ctx, op);
-                let files = stage_files
-                    .iter()
-                    .map(|v| v.path.clone())
-                    .collect::<Vec<_>>();
-                if let Err(e) = file_op.remove_file_in_batch(&files).await {
-                    error!("Failed to delete file: {:?}, error: {}", files, e);
-                }
-            }
-            Err(e) => {
-                error!("Failed to get stage table op, error: {}", e);
-            }
-        }
-    }
-
-    #[async_backtrace::framed]
-    async fn prepared_values(&self, values_str: &str) -> Result<(DataSchemaRef, Vec<Scalar>)> {
-        let settings = self.ctx.get_settings();
-        let sql_dialect = settings.get_sql_dialect()?;
-        let tokens = tokenize_sql(values_str)?;
-        let expr_or_placeholders = parser_values_with_placeholder(&tokens, sql_dialect)?;
-        let source_schema = self.plan.schema();
-
-        if source_schema.num_fields() != expr_or_placeholders.len() {
-            return Err(ErrorCode::SemanticError(format!(
-                "need {} fields in values, got only {}",
-                source_schema.num_fields(),
-                expr_or_placeholders.len()
-            )));
-        }
-
-        let mut attachment_fields = vec![];
-        let mut const_fields = vec![];
-        let mut exprs = vec![];
-        for (i, eo) in expr_or_placeholders.into_iter().enumerate() {
-            match eo {
-                Some(e) => {
-                    exprs.push(e);
-                    const_fields.push(source_schema.fields()[i].clone());
-                }
-                None => attachment_fields.push(source_schema.fields()[i].clone()),
-            }
-        }
-        let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
-        let mut bind_context = BindContext::new();
-        let metadata = Arc::new(RwLock::new(Metadata::default()));
-        let const_schema = Arc::new(DataSchema::new(const_fields));
-        let const_values = exprs_to_scalar(
-            exprs,
-            &const_schema,
-            self.ctx.clone(),
-            &name_resolution_ctx,
-            &mut bind_context,
-            metadata,
-        )
-        .await?;
-        Ok((Arc::new(DataSchema::new(attachment_fields)), const_values))
-    }
-
-    #[async_backtrace::framed]
-    async fn build_insert_from_stage_pipeline(
-        &self,
-        table: Arc<dyn Table>,
-        attachment: Arc<StageAttachment>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
-        let start = Instant::now();
-        let ctx = self.ctx.clone();
-        let table_ctx: Arc<dyn TableContext> = ctx.clone();
-        let source_schema = self.plan.schema();
-        let catalog_name = self.plan.catalog.clone();
-        let overwrite = self.plan.overwrite;
-
-        let (attachment_data_schema, const_columns) = if attachment.values_str.is_empty() {
-            (source_schema.clone(), vec![])
-        } else {
-            self.prepared_values(&attachment.values_str).await?
-        };
-
-        let (mut stage_info, path) = parse_stage_location(&self.ctx, &attachment.location).await?;
-
-        if let Some(ref options) = attachment.file_format_options {
-            stage_info.file_format_params = FileFormatOptionsAst {
-                options: options.clone(),
-            }
-            .try_into()?;
-        }
-        if let Some(ref options) = attachment.copy_options {
-            stage_info.copy_options.apply(options, true)?;
-        }
-
-        let attachment_table_schema = infer_table_schema(&attachment_data_schema)?;
-        let mut stage_table_info = StageTableInfo {
-            schema: attachment_table_schema,
-            stage_info,
-            files_info: StageFilesInfo {
-                path: path.to_string(),
-                files: None,
-                pattern: None,
-            },
-            files_to_copy: None,
-        };
-
-        let all_source_files = StageTable::list_files(&stage_table_info, None).await?;
-
-        info!(
-            "insert: read all stage attachment files finished: {}, elapsed:{}",
-            all_source_files.len(),
-            start.elapsed().as_secs()
-        );
-
-        stage_table_info.files_to_copy = Some(all_source_files.clone());
-        let stage_table = StageTable::try_create(stage_table_info.clone())?;
-        let read_source_plan = {
-            stage_table
-                .read_plan_with_catalog(ctx.clone(), catalog_name, None, None)
-                .await?
-        };
-
-        stage_table.read_data(table_ctx, &read_source_plan, pipeline)?;
-
-        if !const_columns.is_empty() {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                TransformAddConstColumns::try_create(
-                    ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    attachment_data_schema.clone(),
-                    source_schema.clone(),
-                    const_columns.clone(),
-                )
-            })?;
-        }
-
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            TransformResortAddOn::try_create(
-                ctx.clone(),
-                transform_input_port,
-                transform_output_port,
-                source_schema.clone(),
-                table.clone(),
-            )
-        })?;
-
-        table.append_data(ctx.clone(), pipeline, AppendMode::Copy, false)?;
-
-        let stage_info_clone = stage_table_info.stage_info.clone();
-        pipeline.set_on_finished(move |may_error| {
-            // capture out variable
-            let overwrite = overwrite;
-            let ctx = ctx.clone();
-            let table = table.clone();
-            let stage_info = stage_info_clone.clone();
-            let all_source_files = all_source_files.clone();
-
-            match may_error {
-                Some(error) => {
-                    tracing::error!("insert stage file error: {}", error);
-                    GlobalIORuntime::instance()
-                        .block_on(async move {
-                            if stage_info.copy_options.purge {
-                                info!(
-                                    "insert: try to purge files:{}, elapsed:{}",
-                                    all_source_files.len(),
-                                    start.elapsed().as_secs()
-                                );
-                                Self::try_purge_files(ctx.clone(), &stage_info, &all_source_files)
-                                    .await;
-                            }
-                            Ok(())
-                        })
-                        .unwrap_or_else(|e| {
-                            tracing::error!("insert: purge stage file error: {}", e);
-                        });
-                    Err(may_error.as_ref().unwrap().clone())
-                }
-                None => {
-                    let append_entries = ctx.consume_precommit_blocks();
-                    // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                    GlobalIORuntime::instance().block_on(async move {
-                        tracing::info!(
-                            "insert: try to commit append entries:{}, elapsed:{}",
-                            append_entries.len(),
-                            start.elapsed().as_secs()
-                        );
-
-                        let copied_files = None;
-                        table
-                            .commit_insertion(ctx.clone(), append_entries, copied_files, overwrite)
-                            .await?;
-
-                        if stage_info.copy_options.purge {
-                            info!(
-                                "insert: try to purge files:{}, elapsed:{}",
-                                all_source_files.len(),
-                                start.elapsed().as_secs()
-                            );
-                            Self::try_purge_files(ctx.clone(), &stage_info, &all_source_files)
-                                .await;
-                        }
-
-                        Ok(())
-                    })
-                }
-            }
-        });
-
-        Ok(())
-    }
 }
 
 #[async_trait::async_trait]
@@ -367,6 +110,9 @@ impl Interpreter for InsertInterpreter {
         let mut build_res = PipelineBuildResult::create();
 
         match &self.plan.source {
+            InsertInputSource::Stage(_) => {
+                unreachable!()
+            }
             InsertInputSource::Values(data) => {
                 let settings = self.ctx.get_settings();
 
@@ -431,16 +177,6 @@ impl Interpreter for InsertInterpreter {
                         },
                     )?;
                 }
-            }
-            InsertInputSource::Stage(opts) => {
-                tracing::info!("insert: from stage with options {:?}", opts);
-                self.build_insert_from_stage_pipeline(
-                    table.clone(),
-                    opts.clone(),
-                    &mut build_res.main_pipeline,
-                )
-                .await?;
-                return Ok(build_res);
             }
             InsertInputSource::SelectPlan(plan) => {
                 let table1 = table.clone();
@@ -727,15 +463,15 @@ impl ValueSource {
                 let tokens = tokenize_sql(sql)?;
                 let exprs = parse_comma_separated_exprs(&tokens[1..tokens.len()], sql_dialect)?;
 
-                let values = exprs_to_scalar(
-                    exprs,
-                    &self.schema,
-                    self.ctx.clone(),
-                    &self.name_resolution_ctx,
-                    bind_context,
-                    metadata,
-                )
-                .await?;
+                let values = bind_context
+                    .exprs_to_scalar(
+                        exprs,
+                        &self.schema,
+                        self.ctx.clone(),
+                        &self.name_resolution_ctx,
+                        metadata,
+                    )
+                    .await?;
 
                 for (col, scalar) in columns.iter_mut().zip(values) {
                     col.push(scalar.as_ref());
@@ -805,166 +541,4 @@ pub fn skip_to_next_row<R: AsRef<[u8]>>(reader: &mut Cursor<R>, mut balance: i32
         }
     }
     Ok(())
-}
-
-async fn fill_default_value(
-    binder: &mut ScalarBinder<'_>,
-    map_exprs: &mut Vec<Expr>,
-    field: &DataField,
-    schema: &DataSchema,
-) -> Result<()> {
-    if let Some(default_expr) = field.default_expr() {
-        let tokens = tokenize_sql(default_expr)?;
-        let ast = parse_expr(&tokens, Dialect::PostgreSQL)?;
-        let (mut scalar, _) = binder.bind(&ast).await?;
-        scalar = wrap_cast(&scalar, field.data_type());
-
-        let expr = scalar
-            .as_expr()?
-            .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
-        map_exprs.push(expr);
-    } else {
-        // If field data type is nullable, then we'll fill it with null.
-        if field.data_type().is_nullable() {
-            let expr = Expr::Constant {
-                span: None,
-                scalar: Scalar::Null,
-                data_type: field.data_type().clone(),
-            };
-            map_exprs.push(expr);
-        } else {
-            let data_type = field.data_type().clone();
-            let default_value = Scalar::default_value(&data_type);
-            let expr = Expr::Constant {
-                span: None,
-                scalar: default_value,
-                data_type,
-            };
-            map_exprs.push(expr);
-        }
-    }
-    Ok(())
-}
-
-async fn exprs_to_scalar(
-    exprs: Vec<AExpr>,
-    schema: &DataSchemaRef,
-    ctx: Arc<dyn TableContext>,
-    name_resolution_ctx: &NameResolutionContext,
-    bind_context: &mut BindContext,
-    metadata: MetadataRef,
-) -> Result<Vec<Scalar>> {
-    let schema_fields_len = schema.fields().len();
-    if exprs.len() != schema_fields_len {
-        return Err(ErrorCode::TableSchemaMismatch(format!(
-            "Table columns count is not match, expect {schema_fields_len}, input: {}, expr: {:?}",
-            exprs.len(),
-            exprs
-        )));
-    }
-    let mut scalar_binder = ScalarBinder::new(
-        bind_context,
-        ctx.clone(),
-        name_resolution_ctx,
-        metadata.clone(),
-        &[],
-    );
-
-    let mut map_exprs = Vec::with_capacity(exprs.len());
-    for (i, expr) in exprs.iter().enumerate() {
-        // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
-        if let AExpr::ColumnRef { column, .. } = expr {
-            if column.name.eq_ignore_ascii_case("default") {
-                let field = schema.field(i);
-                fill_default_value(&mut scalar_binder, &mut map_exprs, field, schema).await?;
-                continue;
-            }
-        }
-
-        let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
-        let field_data_type = schema.field(i).data_type();
-        scalar = if field_data_type.remove_nullable() == DataType::Variant {
-            match data_type.remove_nullable() {
-                DataType::Boolean
-                | DataType::Number(_)
-                | DataType::Decimal(_)
-                | DataType::Timestamp
-                | DataType::Date
-                | DataType::Bitmap
-                | DataType::Variant => wrap_cast(&scalar, field_data_type),
-                DataType::String => {
-                    // parse string to JSON value
-                    ScalarExpr::FunctionCall(FunctionCall {
-                        span: None,
-                        func_name: "parse_json".to_string(),
-                        params: vec![],
-                        arguments: vec![scalar],
-                    })
-                }
-                _ => {
-                    if data_type == DataType::Null && field_data_type.is_nullable() {
-                        scalar
-                    } else {
-                        return Err(ErrorCode::BadBytes(format!(
-                            "unable to cast type `{}` to type `{}`",
-                            data_type, field_data_type
-                        )));
-                    }
-                }
-            }
-        } else {
-            wrap_cast(&scalar, field_data_type)
-        };
-        let expr = scalar
-            .as_expr()?
-            .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
-        map_exprs.push(expr);
-    }
-
-    let mut operators = Vec::with_capacity(schema_fields_len);
-    operators.push(BlockOperator::Map { exprs: map_exprs });
-
-    let one_row_chunk = DataBlock::new(
-        vec![BlockEntry {
-            data_type: DataType::Number(NumberDataType::UInt8),
-            value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
-        }],
-        1,
-    );
-    let func_ctx = ctx.get_function_context()?;
-    let mut expression_transform = CompoundBlockOperator {
-        operators,
-        ctx: func_ctx,
-    };
-    let res = expression_transform.transform(one_row_chunk)?;
-    let scalars: Vec<Scalar> = res
-        .columns()
-        .iter()
-        .skip(1)
-        .map(|col| unsafe { col.value.as_ref().index_unchecked(0).to_owned() })
-        .collect();
-    Ok(scalars)
-}
-
-// TODO:(everpcpc) tmp copy from src/query/sql/src/planner/binder/copy.rs
-// move to user stage module
-async fn parse_stage_location(
-    ctx: &Arc<QueryContext>,
-    location: &str,
-) -> Result<(StageInfo, String)> {
-    let s: Vec<&str> = location.split('@').collect();
-    // @my_ext_stage/abc/
-    let names: Vec<&str> = s[1].splitn(2, '/').filter(|v| !v.is_empty()).collect();
-
-    let stage = if names[0] == "~" {
-        StageInfo::new_user_stage(&ctx.get_current_user()?.name)
-    } else {
-        UserApiProvider::instance()
-            .get_stage(&ctx.get_tenant(), names[0])
-            .await?
-    };
-
-    let path = names.get(1).unwrap_or(&"").trim_start_matches('/');
-
-    Ok((stage, path.to_string()))
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp;
+use std::sync::Arc;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
@@ -47,17 +48,23 @@ impl RulePushDownLimitAggregate {
         Self {
             id: RuleID::PushDownLimitAggregate,
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Limit,
-                }
-                .into(),
-                SExpr::create_unary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: OpAggregate,
+                        plan_type: RelOp::Limit,
                     }
                     .into(),
-                    SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
                 ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: OpAggregate,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan { plan_type: Pattern }.into(),
+                    ))),
+                )),
             )],
         }
     }
@@ -76,9 +83,12 @@ impl Rule for RulePushDownLimitAggregate {
             let mut agg_limit: Aggregate = agg.plan().clone().try_into()?;
 
             agg_limit.limit = Some(agg_limit.limit.map_or(count, |c| cmp::max(c, count)));
-            let agg = SExpr::create_unary(RelOperator::Aggregate(agg_limit), agg.child(0)?.clone());
+            let agg = SExpr::create_unary(
+                Arc::new(RelOperator::Aggregate(agg_limit)),
+                Arc::new(agg.child(0)?.clone()),
+            );
 
-            let mut result = s_expr.replace_children(vec![agg]);
+            let mut result = s_expr.replace_children(vec![Arc::new(agg)]);
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }

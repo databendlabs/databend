@@ -24,6 +24,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_meta_app::storage::StorageAzblobConfig;
+use common_meta_app::storage::StorageCosConfig;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
 #[cfg(feature = "storage-hdfs")]
@@ -71,6 +72,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?)?,
         StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?)?,
         StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?)?,
+        StorageParams::Cos(cfg) => build_operator(init_cos_operator(cfg)?)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -348,6 +350,20 @@ fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Builder> {
     builder.endpoint(&v.endpoint_url);
     builder.root(&v.root);
     builder.delegation(&v.delegation);
+
+    Ok(builder)
+}
+
+/// init_cos_operator will init an opendal COS operator with input oss config.
+fn init_cos_operator(cfg: &StorageCosConfig) -> Result<impl Builder> {
+    let mut builder = services::Cos::default();
+
+    builder
+        .endpoint(&cfg.endpoint_url)
+        .secret_id(&cfg.secret_id)
+        .secret_key(&cfg.secret_key)
+        .bucket(&cfg.bucket)
+        .root(&cfg.root);
 
     Ok(builder)
 }

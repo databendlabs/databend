@@ -180,9 +180,11 @@ pub struct QueryConfig {
     /// Disable some system load(For example system.configs) for cloud security.
     pub disable_system_table_load: bool,
 
-    /// openai
+    /// (azure) openai
     pub openai_api_key: String,
-    pub openai_api_base_url: String,
+    pub openai_api_version: String,
+    pub openai_api_chat_base_url: String,
+    pub openai_api_embedding_base_url: String,
     pub openai_api_embedding_model: String,
     pub openai_api_completion_model: String,
 }
@@ -239,8 +241,10 @@ impl Default for QueryConfig {
             internal_merge_on_read_mutation: false,
             disable_system_table_load: false,
             flight_sql_tls_server_key: "".to_string(),
-            openai_api_base_url: "https://api.openai.com/v1/".to_string(),
+            openai_api_chat_base_url: "https://api.openai.com/v1/".to_string(),
+            openai_api_embedding_base_url: "https://api.openai.com/v1/".to_string(),
             openai_api_key: "".to_string(),
+            openai_api_version: "".to_string(),
             openai_api_completion_model: "gpt-3.5-turbo".to_string(),
             openai_api_embedding_model: "text-embedding-ada-002".to_string(),
         }

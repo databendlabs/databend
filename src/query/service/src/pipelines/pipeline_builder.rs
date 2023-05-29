@@ -56,6 +56,7 @@ use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
+use common_sql::executor::IEJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
@@ -84,11 +85,14 @@ use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
+use crate::pipelines::processors::transforms::IEJoinState;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
+use crate::pipelines::processors::transforms::TransformIEJoinLeft;
+use crate::pipelines::processors::transforms::TransformIEJoinRight;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
@@ -195,7 +199,66 @@ impl PipelineBuilder {
             PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
+            PhysicalPlan::IEJoin(ie_join) => self.build_ie_join(ie_join),
         }
+    }
+
+    fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
+        let state = Arc::new(IEJoinState::new(self.ctx.clone(), ie_join));
+        self.expand_right_side_pipeline(ie_join, state.clone())?;
+        self.build_left_side(ie_join, state)
+    }
+
+    fn build_left_side(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {
+        self.build_pipeline(&ie_join.left)?;
+        let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
+        self.main_pipeline.resize(max_threads)?;
+        self.main_pipeline.add_transform(|input, output| {
+            let transform = TransformIEJoinLeft::create(input, output, state.clone());
+            if self.enable_profiling {
+                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    transform,
+                    ie_join.plan_id,
+                    self.prof_span_set.clone(),
+                )))
+            } else {
+                Ok(ProcessorPtr::create(transform))
+            }
+        })?;
+        Ok(())
+    }
+
+    fn expand_right_side_pipeline(
+        &mut self,
+        ie_join: &IEJoin,
+        state: Arc<IEJoinState>,
+    ) -> Result<()> {
+        let right_side_context = QueryContext::create_from(self.ctx.clone());
+        let right_side_builder = PipelineBuilder::create(
+            right_side_context,
+            self.enable_profiling,
+            self.prof_span_set.clone(),
+        );
+        let mut right_res = right_side_builder.finalize(&ie_join.right)?;
+        right_res.main_pipeline.add_sink(|input| {
+            let transform = Sinker::<TransformIEJoinRight>::create(
+                input,
+                TransformIEJoinRight::create(state.clone()),
+            );
+            if self.enable_profiling {
+                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    transform,
+                    ie_join.plan_id,
+                    self.prof_span_set.clone(),
+                )))
+            } else {
+                Ok(ProcessorPtr::create(transform))
+            }
+        })?;
+        self.pipelines.push(right_res.main_pipeline);
+        self.pipelines
+            .extend(right_res.sources_pipelines.into_iter());
+        Ok(())
     }
 
     fn build_join(&mut self, join: &HashJoin) -> Result<()> {

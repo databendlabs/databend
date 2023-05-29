@@ -13,7 +13,8 @@
 // limitations under the License.
 
 mod grant;
+mod stage;
 mod table;
-
 pub use grant::validate_grant_object_exists;
+pub use stage::try_purge_files;
 pub use table::append2table;

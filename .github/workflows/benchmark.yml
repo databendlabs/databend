@@ -39,8 +39,14 @@ jobs:
       source_id: ${{ steps.metadata.outputs.source_id }}
     steps:
       - uses: actions/checkout@v3
+        if: github.event_name != 'pull_request_target'
         with:
           fetch-depth: 0
+      - uses: actions/checkout@v3
+        if: github.event_name == 'pull_request_target'
+        with:
+          fetch-depth: 0
+          ref: "refs/pull/${{ github.event.number }}/merge"
       - name: Build Release
         uses: ./.github/actions/build_linux
         if: github.event_name == 'pull_request_target'
@@ -79,6 +85,11 @@ jobs:
       max-parallel: 1
     steps:
       - uses: actions/checkout@v3
+        if: github.event_name != 'pull_request_target'
+      - uses: actions/checkout@v3
+        if: github.event_name == 'pull_request_target'
+        with:
+          ref: "refs/pull/${{ github.event.number }}/merge"
       - uses: ./.github/actions/setup_bendsql
       - name: Download artifact
         run: |
@@ -183,6 +194,11 @@ jobs:
       max-parallel: 1
     steps:
       - uses: actions/checkout@v3
+        if: github.event_name != 'pull_request_target'
+      - uses: actions/checkout@v3
+        if: github.event_name == 'pull_request_target'
+        with:
+          ref: "refs/pull/${{ github.event.number }}/merge"
       - uses: ./.github/actions/setup_bendsql
       - uses: ./.github/actions/benchmark_cloud
         timeout-minutes: 60

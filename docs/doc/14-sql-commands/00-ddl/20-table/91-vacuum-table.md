@@ -1,6 +1,10 @@
 ---
 title: VACUUM TABLE
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced: v1.1.39"/>
+
 import EEFeature from '@site/src/components/EEFeature';
 
 <EEFeature featureName='VACUUM TABLE'/>

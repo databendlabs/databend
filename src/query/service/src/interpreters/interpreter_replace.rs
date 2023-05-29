@@ -25,6 +25,7 @@ use common_sql::plans::Plan;
 use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
 
+use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
@@ -65,6 +66,10 @@ impl Interpreter for ReplaceInterpreter {
         let mut pipeline = self
             .connect_input_source(self.ctx.clone(), &self.plan.source, self.plan.schema())
             .await?;
+
+        if pipeline.main_pipeline.is_empty() {
+            return Ok(pipeline);
+        }
 
         pipeline
             .main_pipeline
@@ -116,6 +121,13 @@ impl ReplaceInterpreter {
                 self.connect_query_plan_source(ctx.clone(), schema.clone(), plan)
                     .await
             }
+            InsertInputSource::Stage(plan) => match *plan.clone() {
+                Plan::Copy(copy_plan) => {
+                    let interpreter = CopyInterpreter::try_create(ctx.clone(), *copy_plan.clone())?;
+                    interpreter.execute2().await
+                }
+                _ => unreachable!("plan in InsertInputSource::Stag must be Copy"),
+            },
             _ => Err(ErrorCode::Unimplemented(
                 "input source other than literal VALUES and sub queries are NOT supported yet.",
             )),

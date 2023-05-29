@@ -170,6 +170,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             merged_segments,
             std::mem::take(&mut self.merged_statistics),
             std::mem::take(&mut self.abort_operation),
+            true,
         );
         Ok(Some(DataBlock::empty_with_meta(Box::new(meta))))
     }

@@ -93,12 +93,12 @@ impl JoinNode {
             .iter()
             .map(|child| {
                 if let Some(s_expr) = &child.s_expr {
-                    s_expr.clone()
+                    Arc::new(s_expr.clone())
                 } else {
-                    child.s_expr(join_relations)
+                    Arc::new(child.s_expr(join_relations))
                 }
             })
             .collect::<Vec<_>>();
-        SExpr::create(rel_op, children, None, None, None)
+        SExpr::create(Arc::new(rel_op), children, None, None, None)
     }
 }

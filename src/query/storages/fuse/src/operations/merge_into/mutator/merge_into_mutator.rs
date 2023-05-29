@@ -18,8 +18,11 @@ use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::MutableBitmap;
+use common_base::base::tokio::sync::OwnedSemaphorePermit;
+use common_base::base::tokio::sync::Semaphore;
 use common_base::base::ProgressValues;
 use common_base::runtime::GlobalIORuntime;
+use common_base::runtime::TrySpawn;
 use common_catalog::plan::Projection;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -57,10 +60,8 @@ use crate::operations::merge_into::OnConflictField;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 
-// Apply MergeIntoOperations to segments
-pub struct MergeIntoOperationAggregator {
+struct AggregationContext {
     segment_locations: HashMap<SegmentIndex, Location>,
-    deletion_accumulator: DeletionAccumulator,
     on_conflict_fields: Vec<OnConflictField>,
     block_reader: Arc<BlockReader>,
     data_accessor: Operator,
@@ -68,6 +69,13 @@ pub struct MergeIntoOperationAggregator {
     read_settings: ReadSettings,
     segment_reader: CompactSegmentInfoReader,
     block_builder: BlockBuilder,
+    io_request_semaphore: Arc<Semaphore>,
+}
+
+// Apply MergeIntoOperations to segments
+pub struct MergeIntoOperationAggregator {
+    deletion_accumulator: DeletionAccumulator,
+    aggregation_ctx: Arc<AggregationContext>,
 }
 
 impl MergeIntoOperationAggregator {
@@ -81,6 +89,7 @@ impl MergeIntoOperationAggregator {
         write_settings: WriteSettings,
         read_settings: ReadSettings,
         block_builder: BlockBuilder,
+        io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Self> {
         let deletion_accumulator = DeletionAccumulator::default();
         let segment_reader =
@@ -96,15 +105,18 @@ impl MergeIntoOperationAggregator {
         )?;
 
         Ok(Self {
-            segment_locations: HashMap::from_iter(segment_locations.into_iter()),
             deletion_accumulator,
-            on_conflict_fields,
-            block_reader,
-            data_accessor,
-            write_settings,
-            read_settings,
-            segment_reader,
-            block_builder,
+            aggregation_ctx: Arc::new(AggregationContext {
+                segment_locations: HashMap::from_iter(segment_locations.into_iter()),
+                on_conflict_fields,
+                block_reader,
+                data_accessor,
+                write_settings,
+                read_settings,
+                segment_reader,
+                block_builder,
+                io_request_semaphore,
+            }),
         })
     }
 }
@@ -113,12 +125,13 @@ impl MergeIntoOperationAggregator {
 impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, merge_action: MergeIntoOperation) -> Result<()> {
+        let aggregation_ctx = &self.aggregation_ctx;
         match &merge_action {
             MergeIntoOperation::Delete(DeletionByColumn {
                 columns_min_max,
                 key_hashes,
             }) => {
-                for (segment_index, (path, ver)) in &self.segment_locations {
+                for (segment_index, (path, ver)) in &aggregation_ctx.segment_locations {
                     let load_param = LoadParams {
                         location: path.clone(),
                         len_hint: None,
@@ -126,14 +139,15 @@ impl MergeIntoOperationAggregator {
                         put_cache: true,
                     };
                     // for typical configuration, segment cache is enabled, thus after the first loop, we are reading from cache
-                    let segment_info = self.segment_reader.read(&load_param).await?;
+                    let segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
                     let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
 
                     // segment level
-                    if self.overlapped(&segment_info.summary.col_stats, columns_min_max) {
+                    if aggregation_ctx.overlapped(&segment_info.summary.col_stats, columns_min_max)
+                    {
                         // block level
                         for (block_index, block_meta) in segment_info.blocks.iter().enumerate() {
-                            if self.overlapped(&block_meta.col_stats, columns_min_max) {
+                            if aggregation_ctx.overlapped(&block_meta.col_stats, columns_min_max) {
                                 self.deletion_accumulator.add_block_deletion(
                                     *segment_index,
                                     block_index,
@@ -155,14 +169,20 @@ impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn apply(&mut self) -> Result<Option<MutationLogs>> {
         let mut mutation_logs = Vec::new();
-        for (segment_idx, block_deletion) in &self.deletion_accumulator.deletions {
-            // do we need a local cache?
-            let (path, ver) = self.segment_locations.get(segment_idx).ok_or_else(|| {
-                ErrorCode::Internal(format!(
-                    "unexpected, segment (idx {}) not found, during applying mutation log",
-                    segment_idx
-                ))
-            })?;
+        let aggregation_ctx = &self.aggregation_ctx;
+        let io_runtime = GlobalIORuntime::instance();
+        let mut mutation_log_handlers = Vec::new();
+        for (segment_idx, block_deletion) in self.deletion_accumulator.deletions.drain() {
+            let (path, ver) = self
+                .aggregation_ctx
+                .segment_locations
+                .get(&segment_idx)
+                .ok_or_else(|| {
+                    ErrorCode::Internal(format!(
+                        "unexpected, segment (idx {}) not found, during applying mutation log",
+                        segment_idx
+                    ))
+                })?;
 
             let load_param = LoadParams {
                 location: path.clone(),
@@ -171,24 +191,51 @@ impl MergeIntoOperationAggregator {
                 put_cache: true,
             };
 
-            let compact_segment_info = self.segment_reader.read(&load_param).await?;
+            let compact_segment_info = aggregation_ctx.segment_reader.read(&load_param).await?;
             let segment_info: SegmentInfo = compact_segment_info.as_ref().try_into()?;
 
             for (block_index, keys) in block_deletion {
-                let block_meta = &segment_info.blocks[*block_index];
-                if let Some(segment_mutation_log) = self
-                    .apply_deletion_to_data_block(*segment_idx, *block_index, block_meta, keys)
-                    .await?
-                {
-                    mutation_logs.push(MutationLogEntry::Replacement(segment_mutation_log));
-                }
+                let permit = aggregation_ctx.acquire_task_permit().await?;
+                let block_meta = segment_info.blocks[block_index].clone();
+                let aggregation_ctx = aggregation_ctx.clone();
+                let handle = io_runtime.spawn(async_backtrace::location!().frame({
+                    async move {
+                        let mutation_log_entry = aggregation_ctx
+                            .apply_deletion_to_data_block(
+                                segment_idx,
+                                block_index,
+                                &block_meta,
+                                &keys,
+                            )
+                            .await?;
+                        drop(permit);
+                        Ok::<_, ErrorCode>(mutation_log_entry)
+                    }
+                }));
+                mutation_log_handlers.push(handle)
             }
         }
+
+        let log_entries = futures::future::try_join_all(mutation_log_handlers)
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal("unexpected, failed to join apply-deletion tasks.")
+                    .add_message_back(e.to_string())
+            })?;
+
+        for maybe_log_entry in log_entries {
+            if let Some(segment_mutation_log) = maybe_log_entry? {
+                mutation_logs.push(MutationLogEntry::Replacement(segment_mutation_log));
+            }
+        }
+
         Ok(Some(MutationLogs {
             entries: mutation_logs,
         }))
     }
+}
 
+impl AggregationContext {
     #[async_backtrace::framed]
     async fn apply_deletion_to_data_block(
         &self,
@@ -207,14 +254,36 @@ impl MergeIntoOperationAggregator {
 
         let reader = &self.block_reader;
         let on_conflict_fields = &self.on_conflict_fields;
-        // TODO optimization "prewhere"?
-        let data_block = reader
-            .read_by_meta(
+
+        let merged_io_read_result = reader
+            .read_columns_data_by_merge_io(
                 &self.read_settings,
-                block_meta,
-                &self.write_settings.storage_format,
+                &block_meta.location.0,
+                &block_meta.col_metas,
             )
             .await?;
+
+        // deserialize block data
+        // cpu intensive task, send them to dedicated thread pool
+        let data_block = {
+            let storage_format = self.write_settings.storage_format;
+            let block_meta_ptr = block_meta.clone();
+            let reader = reader.clone();
+            GlobalIORuntime::instance()
+                .spawn_blocking(move || {
+                    let column_chunks = merged_io_read_result.columns_chunks()?;
+                    reader.deserialize_chunks(
+                        block_meta_ptr.location.0.as_str(),
+                        block_meta_ptr.row_count as usize,
+                        &block_meta_ptr.compression,
+                        &block_meta_ptr.col_metas,
+                        column_chunks,
+                        &storage_format,
+                    )
+                })
+                .await?
+        };
+
         let num_rows = data_block.num_rows();
 
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
@@ -325,23 +394,46 @@ impl MergeIntoOperationAggregator {
         Ok(Some(mutation))
     }
 
+    #[async_backtrace::framed]
+    async fn acquire_task_permit(&self) -> Result<OwnedSemaphorePermit> {
+        let permit = self
+            .io_request_semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .map_err(|e| {
+                ErrorCode::Internal("unexpected, io request semaphore is closed. {}")
+                    .add_message_back(e.to_string())
+            })?;
+        Ok(permit)
+    }
+
     fn overlapped(
         &self,
         column_stats: &HashMap<ColumnId, ColumnStatistics>,
         columns_min_max: &[(Scalar, Scalar)],
     ) -> bool {
-        for (idx, field) in self.on_conflict_fields.iter().enumerate() {
-            let column_id = field.table_field.column_id();
-            let (min, max) = &columns_min_max[idx];
-            if self.overlapped_by_stats(column_stats.get(&column_id), min, max) {
-                return true;
-            }
-        }
-        false
+        Self::check_overlap(&self.on_conflict_fields, column_stats, columns_min_max)
     }
 
-    fn overlapped_by_stats(
-        &self,
+    // if any item of `column_min_max` does NOT overlap with the corresponding item of `column_stats`
+    // returns false, otherwise returns true.
+    fn check_overlap(
+        on_conflict_fields: &[OnConflictField],
+        column_stats: &HashMap<ColumnId, ColumnStatistics>,
+        columns_min_max: &[(Scalar, Scalar)],
+    ) -> bool {
+        for (idx, field) in on_conflict_fields.iter().enumerate() {
+            let column_id = field.table_field.column_id();
+            let (min, max) = &columns_min_max[idx];
+            if !Self::check_overlapped_by_stats(column_stats.get(&column_id), min, max) {
+                return false;
+            }
+        }
+        true
+    }
+
+    fn check_overlapped_by_stats(
         column_stats: Option<&ColumnStatistics>,
         key_min: &Scalar,
         key_max: &Scalar,
@@ -353,5 +445,180 @@ impl MergeIntoOperationAggregator {
         } else {
             false
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use common_expression::types::NumberDataType;
+    use common_expression::types::NumberScalar;
+    use common_expression::TableDataType;
+    use common_expression::TableField;
+
+    use super::*;
+
+    #[test]
+    fn test_check_overlap() -> Result<()> {
+        // setup :
+        //
+        // - on conflict('xx_id', 'xx_type', 'xx_time');
+        //
+        // - range index of columns
+        //   'xx_id' : [1, 10]
+        //   'xx_type' : ["a", "z"]
+        //   'xx_time' : [100, 200]
+
+        // setup schema
+        let field_type_id = TableDataType::Number(NumberDataType::UInt64);
+        let field_type_string = TableDataType::String;
+        let field_type_time = TableDataType::Number(NumberDataType::UInt32);
+
+        let xx_id = TableField::new("xx_id", field_type_id);
+        let xx_type = TableField::new("xx_type", field_type_string);
+        let xx_time = TableField::new("xx_time", field_type_time);
+
+        let schema = TableSchema::new(vec![xx_id, xx_type, xx_time]);
+
+        let fields = schema.fields();
+
+        // setup the ON CONFLICT fields
+        let on_conflict_fields = fields
+            .iter()
+            .enumerate()
+            .map(|(id, field)| OnConflictField {
+                table_field: field.clone(),
+                field_index: id,
+            })
+            .collect::<Vec<_>>();
+
+        // set up range index of columns
+
+        let range = |min: Scalar, max: Scalar| {
+            ColumnStatistics {
+                min,
+                max,
+                // the following values do not matter in this case
+                null_count: 0,
+                in_memory_size: 0,
+                distinct_of_values: None,
+            }
+        };
+
+        let column_range_indexes = HashMap::from_iter([
+            // range of xx_id [1, 10]
+            (
+                0,
+                range(
+                    Scalar::Number(NumberScalar::UInt64(1)),
+                    Scalar::Number(NumberScalar::UInt64(10)),
+                ),
+            ),
+            // range of xx_type [a, z]
+            (
+                1,
+                range(
+                    Scalar::String("a".to_string().into_bytes()),
+                    Scalar::String("z".to_string().into_bytes()),
+                ),
+            ),
+            // range of xx_time [100, 200]
+            (
+                2,
+                range(
+                    Scalar::Number(NumberScalar::UInt32(100)),
+                    Scalar::Number(NumberScalar::UInt32(200)),
+                ),
+            ),
+        ]);
+
+        // case 1:
+        //
+        // - min/max of input block
+        //
+        //  'xx_id' : [1, 9]
+        //  'xx_type' : ["b", "y"]
+        //  'xx_time' : [101, 200]
+        //
+        // - recall that the range index of columns are:
+        //
+        //   'xx_id' : [1, 10]
+        //   'xx_type' : ["a", "z"]
+        //   'xx_time' : [100, 200]
+        //
+        // - expected : overlap == true
+        //   since value of all the ON CONFLICT columns of input block overlap with range index
+
+        let input_column_min_max = [
+            // for xx_id column, overlaps
+            (
+                Scalar::Number(NumberScalar::UInt64(1)),
+                Scalar::Number(NumberScalar::UInt64(9)),
+            ),
+            // for xx_type column, overlaps
+            (
+                Scalar::String("b".to_string().into_bytes()),
+                Scalar::String("y".to_string().into_bytes()),
+            ),
+            // for xx_time column, overlaps
+            (
+                Scalar::Number(NumberScalar::UInt32(101)),
+                Scalar::Number(NumberScalar::UInt32(200)),
+            ),
+        ];
+
+        let overlap = super::AggregationContext::check_overlap(
+            &on_conflict_fields,
+            &column_range_indexes,
+            &input_column_min_max,
+        );
+
+        assert!(overlap);
+
+        // case 2:
+        //
+        // - min/max of input block
+        //
+        //  'xx_id' : [11, 12]
+        //  'xx_type' : ["b", "b"]
+        //  'xx_time' : [100, 100]
+        //
+        // - recall that the range index of columns are:
+        //
+        //   'xx_id' : [1, 10]
+        //   'xx_type' : ["a", "z"]
+        //   'xx_time' : [100, 200]
+        //
+        // - expected : overlap == false
+        //
+        //   although columns 'xx_type' and 'xx_time' do overlap, but 'xx_id' does not overlap,
+        //   so the result is NOT overlap
+
+        let input_column_min_max = [
+            // for xx_id column, NOT overlaps
+            (
+                Scalar::Number(NumberScalar::UInt64(11)),
+                Scalar::Number(NumberScalar::UInt64(12)),
+            ),
+            // for xx_type column, overlaps
+            (
+                Scalar::String("b".to_string().into_bytes()),
+                Scalar::String("b".to_string().into_bytes()),
+            ),
+            // for xx_time column, overlaps
+            (
+                Scalar::Number(NumberScalar::UInt32(100)),
+                Scalar::Number(NumberScalar::UInt32(100)),
+            ),
+        ];
+
+        let overlap = super::AggregationContext::check_overlap(
+            &on_conflict_fields,
+            &column_range_indexes,
+            &input_column_min_max,
+        );
+
+        assert!(!overlap);
+
+        Ok(())
     }
 }

@@ -71,6 +71,91 @@ SELECT sum(unique1) over (order by unique1 rows between unbounded preceding and 
 45
 45
 
+query II
+SELECT unique1, first_value(unique1) over (order by unique1 rows between 1 preceding and unbounded following) first FROM tenk1 order by unique1
+----
+0 0
+1 0
+2 1
+3 2
+4 3
+5 4
+6 5
+7 6
+8 7
+9 8
+
+query III
+SELECT four, ten, first_value(ten) OVER (PARTITION BY four ORDER BY ten rows between 1 preceding and 1 following) fv FROM tenk1 order by four, ten
+----
+0 0 0
+0 4 0
+0 8 4
+1 1 1
+1 5 1
+1 9 5
+2 2 2
+2 6 2
+3 3 3
+3 7 3
+
+query IIII
+SELECT two, four, unique1, first_value(unique1) OVER (PARTITION BY two, four ORDER BY ten, twenty rows between 1 following and unbounded following) fv FROM tenk1
+----
+0 0 0 4
+0 0 4 8
+0 0 8 NULL
+0 2 2 6
+0 2 6 NULL
+1 1 1 5
+1 1 5 9
+1 1 9 NULL
+1 3 3 7
+1 3 7 NULL
+
+
+query II
+SELECT unique1, last_value(unique1) over (order by unique1 rows between current row and unbounded following) last FROM tenk1 order by unique1
+----
+0 9
+1 9
+2 9
+3 9
+4 9
+5 9
+6 9
+7 9
+8 9
+9 9
+
+query III
+SELECT four, ten, last_value(ten) OVER (PARTITION BY four ORDER BY ten rows between current row and 1 following) lv FROM tenk1 order by four, ten
+----
+0 0 4
+0 4 8
+0 8 8
+1 1 5
+1 5 9
+1 9 9
+2 2 6
+2 6 6
+3 3 7
+3 7 7
+
+query IIII
+SELECT two, four, unique1, last_value(unique1) OVER (PARTITION BY two, four ORDER BY ten, twenty rows between unbounded preceding and 1 preceding) lv FROM tenk1
+----
+0 0 0 NULL
+0 0 4 0
+0 0 8 4
+0 2 2 NULL
+0 2 6 2
+1 1 1 NULL
+1 1 5 1
+1 1 9 5
+1 3 3 NULL
+1 3 7 3
+
 statement ok
 DROP TABLE IF EXISTS tenk1
 

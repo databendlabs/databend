@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::optimizer::SExpr;
@@ -66,11 +68,11 @@ pub fn convert_mark_to_semi_join(s_expr: &SExpr) -> Result<SExpr> {
 
     let s_join_expr = s_expr.child(0)?;
     let mut result = SExpr::create_binary(
-        join.into(),
-        s_join_expr.child(0)?.clone(),
-        s_join_expr.child(1)?.clone(),
+        Arc::new(join.into()),
+        Arc::new(s_join_expr.child(0)?.clone()),
+        Arc::new(s_join_expr.child(1)?.clone()),
     );
 
-    result = SExpr::create_unary(filter.into(), result);
+    result = SExpr::create_unary(Arc::new(filter.into()), Arc::new(result));
     Ok(result)
 }

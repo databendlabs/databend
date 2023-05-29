@@ -112,7 +112,9 @@ SELECT * EXCLUDE (id,lastname) FROM allemployees;
 ## FROM Clause
 
 ```sql
-SELECT number FROM numbers(3) AS a;
+SELECT number FROM numbers(3);
+
+---
 +--------+
 | number |
 +--------+
@@ -121,6 +123,8 @@ SELECT number FROM numbers(3) AS a;
 |      2 |
 +--------+
 ```
+
+Databend supports direct querying of data from various locations without the need to load it into a table. These locations include user stages, internal stages, external stages, object storage buckets/containers (e.g., Amazon S3, Google Cloud Storage, Microsoft Azure), and remote servers accessible via HTTPS and IPFS. You can leverage this feature within the FROM clause to efficiently query data directly from these sources. See [Querying Staged Files](../../12-load-data/00-transform/05-querying-stage.md) for details.
 
 ## AT Clause
 

@@ -56,6 +56,7 @@ use opendal::EntryMode;
 use opendal::Metakey;
 use opendal::Operator;
 use storages_common_index::RangeIndex;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 
 use super::hive_catalog::HiveCatalog;
 use super::hive_partition_pruner::HivePartitionPruner;
@@ -120,6 +121,7 @@ impl HiveTable {
                 ctx.get_function_context()?,
                 &expr,
                 self.table_info.schema(),
+                StatisticsOfColumns::default(),
             )?),
             _ => None,
         };

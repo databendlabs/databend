@@ -148,19 +148,17 @@ pub fn optimize_query(
 ) -> Result<SExpr> {
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
-    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
+    let heuristic =
+        HeuristicOptimizer::new(ctx.get_function_context()?, bind_context, metadata.clone());
     let mut result = heuristic.optimize(s_expr)?;
     if ctx.get_settings().get_enable_dphyp()? {
         let (dp_res, optimized) =
-            DPhpy::new(ctx.clone(), metadata.clone(), false).optimize(result.clone())?;
-        result = dp_res;
-        if !optimized {
-            // Callback to CascadesOptimizer
-            let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
-            result = cascades.optimize(result)?;
-        }
+            DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result))?;
+        result = (*dp_res).clone();
+        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, optimized)?;
+        result = cascades.optimize(result)?;
     } else {
-        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata)?;
+        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, false)?;
         result = cascades.optimize(result)?;
     }
     // So far, we don't have ability to execute distributed query
@@ -188,10 +186,11 @@ fn get_optimized_memo(
     metadata: MetadataRef,
     bind_context: Box<BindContext>,
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
-    let mut heuristic = HeuristicOptimizer::new(ctx.clone(), bind_context, metadata.clone());
+    let heuristic =
+        HeuristicOptimizer::new(ctx.get_function_context()?, bind_context, metadata.clone());
     let result = heuristic.optimize(s_expr)?;
 
-    let mut cascades = CascadesOptimizer::create(ctx, metadata)?;
+    let mut cascades = CascadesOptimizer::create(ctx, metadata, false)?;
     cascades.optimize(result)?;
     Ok((cascades.memo, cascades.best_cost_map))
 }

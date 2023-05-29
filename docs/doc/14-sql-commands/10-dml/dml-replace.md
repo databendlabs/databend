@@ -76,7 +76,7 @@ SELECT  * FROM Employees;
 
 ### Using STAGE
 
-In this case, the data to be inserted or updated comes from a set of parquet files staged in an [internal stage](../../15-sql-functions/112-table-functions/stage_table_function.md) called `employees_stage`:
+In this case, the data to be inserted or updated comes from a set of parquet files staged in an internal stage called `employees_stage`:
 ```sql
 -- Create a internal stage
 CREATE STAGE employees_stage;

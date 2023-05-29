@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
+use itertools::Itertools;
 
 #[test]
 fn test_partition() -> Result<()> {
@@ -36,10 +37,22 @@ fn test_partition() -> Result<()> {
                 rng.gen_range(1..number_segment)
             };
 
-            let chunks = FuseTable::partition_segments(&segments, num_partition);
-            assert_eq!(chunks.len(), num_partition);
-            for (idx, (segment_idx, _)) in chunks.clone().into_iter().flatten().enumerate() {
-                assert_eq!(idx, segment_idx)
+            let partitions = FuseTable::partition_segments(&segments, num_partition);
+            // check number of partitions are as expected
+            assert_eq!(partitions.len(), num_partition);
+
+            // check segments
+            let origin = segments.iter().enumerate();
+            let segment_of_chunks = partitions
+                .iter()
+                .flatten()
+                .sorted_by(|a, b| a.0.cmp(&b.0))
+                .collect::<Vec<_>>();
+
+            for (origin_idx, origin_location) in origin {
+                let (seg_idx, seg_location) = segment_of_chunks[origin_idx];
+                assert_eq!(origin_idx, *seg_idx);
+                assert_eq!(origin_location, seg_location);
             }
         }
     }

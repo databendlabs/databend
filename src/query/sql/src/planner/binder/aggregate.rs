@@ -15,6 +15,7 @@
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::GroupBy;
@@ -40,6 +41,8 @@ use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
 use crate::plans::WindowFunc;
@@ -164,6 +167,29 @@ impl<'a> AggregateRewriter<'a> {
                             distinct: agg.distinct,
                             params: agg.params.clone(),
                             return_type: agg.return_type.clone(),
+                        })
+                    }
+                    WindowFuncType::LagLead(ll) => {
+                        let new_arg = self.visit(&ll.arg)?;
+                        let new_default = match ll.default.clone().map(|d| self.visit(&d)) {
+                            None => None,
+                            Some(d) => Some(Box::new(d?)),
+                        };
+
+                        WindowFuncType::LagLead(LagLeadFunction {
+                            is_lag: ll.is_lag,
+                            arg: Box::new(new_arg),
+                            offset: ll.offset,
+                            default: new_default,
+                            return_type: ll.return_type.clone(),
+                        })
+                    }
+                    WindowFuncType::NthValue(func) => {
+                        let new_arg = self.visit(&func.arg)?;
+                        WindowFuncType::NthValue(NthValueFunction {
+                            n: func.n,
+                            arg: Box::new(new_arg),
+                            return_type: func.return_type.clone(),
                         })
                     }
                     func => func.clone(),
@@ -420,7 +446,7 @@ impl Binder {
             let eval_scalar = EvalScalar {
                 items: scalar_items,
             };
-            new_expr = SExpr::create_unary(eval_scalar.into(), new_expr);
+            new_expr = SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(new_expr));
         }
 
         let aggregate_plan = Aggregate {
@@ -436,7 +462,7 @@ impl Binder {
                 .map(|g| g.index)
                 .unwrap_or(0),
         };
-        new_expr = SExpr::create_unary(aggregate_plan.into(), new_expr);
+        new_expr = SExpr::create_unary(Arc::new(aggregate_plan.into()), Arc::new(new_expr));
 
         Ok(new_expr)
     }

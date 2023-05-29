@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
@@ -47,28 +49,32 @@ impl RulePushDownLimitOuterJoin {
         Self {
             id: RuleID::PushDownLimitOuterJoin,
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Limit,
-                }
-                .into(),
-                SExpr::create_binary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::Join,
+                        plan_type: RelOp::Limit,
                     }
                     .into(),
-                    SExpr::create_leaf(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ),
-                    SExpr::create_leaf(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ),
                 ),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Join,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
+                )),
             )],
         }
     }
@@ -86,18 +92,26 @@ impl Rule for RulePushDownLimitOuterJoin {
             let join: Join = child.plan().clone().try_into()?;
             match join.join_type {
                 JoinType::Left => {
-                    let mut result = s_expr.replace_children(vec![child.replace_children(vec![
-                        SExpr::create_unary(RelOperator::Limit(limit), child.child(0)?.clone()),
-                        child.child(1)?.clone(),
-                    ])]);
+                    let mut result =
+                        s_expr.replace_children(vec![Arc::new(child.replace_children(vec![
+                            Arc::new(SExpr::create_unary(
+                                Arc::new(RelOperator::Limit(limit)),
+                                Arc::new(child.child(0)?.clone()),
+                            )),
+                            Arc::new(child.child(1)?.clone()),
+                        ]))]);
                     result.set_applied_rule(&self.id);
                     state.add_result(result)
                 }
                 JoinType::Right => {
-                    let mut result = s_expr.replace_children(vec![child.replace_children(vec![
-                        child.child(0)?.clone(),
-                        SExpr::create_unary(RelOperator::Limit(limit), child.child(1)?.clone()),
-                    ])]);
+                    let mut result =
+                        s_expr.replace_children(vec![Arc::new(child.replace_children(vec![
+                            Arc::new(child.child(0)?.clone()),
+                            Arc::new(SExpr::create_unary(
+                                Arc::new(RelOperator::Limit(limit)),
+                                Arc::new(child.child(1)?.clone()),
+                            )),
+                        ]))]);
                     result.set_applied_rule(&self.id);
                     state.add_result(result)
                 }

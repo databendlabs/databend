@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
+use std::sync::Arc;
 use std::vec;
 
 use common_exception::Result;
@@ -60,19 +62,23 @@ impl RuleRightExchangeJoin {
             //    | \
             //    *  *
             patterns: vec![SExpr::create_binary(
-                PatternPlan {
-                    plan_type: RelOp::Join,
-                }
-                .into(),
-                SExpr::create_pattern_leaf(),
-                SExpr::create_binary(
+                Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Join,
                     }
                     .into(),
-                    SExpr::create_pattern_leaf(),
-                    SExpr::create_pattern_leaf(),
                 ),
+                Arc::new(SExpr::create_pattern_leaf()),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Join,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_pattern_leaf()),
+                    Arc::new(SExpr::create_pattern_leaf()),
+                )),
             )],
         }
     }
@@ -97,8 +103,8 @@ impl Rule for RuleRightExchangeJoin {
         //   t2  join4
         //      /  \
         //     t1  t3
-        let join1: Join = s_expr.plan.clone().try_into()?;
-        let join2: Join = s_expr.child(1)?.plan.clone().try_into()?;
+        let join1: Join = s_expr.plan.deref().clone().try_into()?;
+        let join2: Join = s_expr.child(1)?.plan.deref().clone().try_into()?;
         let t1 = s_expr.child(0)?;
         let t2 = s_expr.child(1)?.child(0)?;
         let t3 = s_expr.child(1)?.child(1)?;
@@ -124,9 +130,9 @@ impl Rule for RuleRightExchangeJoin {
         let t2_prop = RelExpr::with_s_expr(t2).derive_relational_prop()?;
         let t3_prop = RelExpr::with_s_expr(t3).derive_relational_prop()?;
         let join4_prop = RelExpr::with_s_expr(&SExpr::create_binary(
-            join_4.clone().into(),
-            t1.clone(),
-            t3.clone(),
+            Arc::new(join_4.clone().into()),
+            Arc::new(t1.clone()),
+            Arc::new(t3.clone()),
         ))
         .derive_relational_prop()?;
 
@@ -188,10 +194,14 @@ impl Rule for RuleRightExchangeJoin {
         }
 
         let mut result = SExpr::create(
-            join_3.into(),
+            Arc::new(join_3.into()),
             vec![
-                t2.clone(),
-                SExpr::create_binary(join_4.into(), t1.clone(), t3.clone()),
+                Arc::new(t2.clone()),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(join_4.into()),
+                    Arc::new(t1.clone()),
+                    Arc::new(t3.clone()),
+                )),
             ],
             None,
             None,

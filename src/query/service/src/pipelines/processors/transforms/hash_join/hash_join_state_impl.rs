@@ -49,7 +49,7 @@ use crate::sql::planner::plans::JoinType;
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
         let data_block_size_limit = self.ctx.get_settings().get_max_block_size()? * 16;
-        let mut buffer = self.row_space.buffer.write().unwrap();
+        let mut buffer = self.row_space.buffer.write();
         buffer.push(input);
         let buffer_row_size = buffer.iter().fold(0, |acc, x| acc + x.num_rows());
         if buffer_row_size < data_block_size_limit as usize {
@@ -88,23 +88,23 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn attach(&self) -> Result<()> {
-        let mut count = self.build_count.lock().unwrap();
+        let mut count = self.build_count.lock();
         *count += 1;
-        let mut count = self.finalize_count.lock().unwrap();
+        let mut count = self.finalize_count.lock();
         *count += 1;
         self.worker_num.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
     fn build_end(&self) -> Result<()> {
-        let mut count = self.build_count.lock().unwrap();
+        let mut count = self.build_count.lock();
         *count -= 1;
         if *count == 0 {
             // Divide the finalize phase into multiple tasks.
             self.divide_finalize_task()?;
 
             // Get the number of rows of the build side.
-            let chunks = self.row_space.chunks.read().unwrap();
+            let chunks = self.row_space.chunks.read();
             let mut row_num = 0;
             for chunk in chunks.iter() {
                 row_num += chunk.num_rows();
@@ -181,28 +181,25 @@ impl HashJoinState for JoinHashTable {
             let hashtable = unsafe { &mut *self.hash_table.get() };
             *hashtable = hashjoin_hashtable;
 
-            let mut is_built = self.is_built.lock().unwrap();
+            let mut is_built = self.is_built.lock();
             *is_built = true;
             self.built_notify.notify_waiters();
-            Ok(())
-        } else {
-            Ok(())
         }
+        Ok(())
     }
 
     fn divide_finalize_task(&self) -> Result<()> {
         {
-            let buffer = self.row_space.buffer.write().unwrap();
+            let buffer = self.row_space.buffer.write();
             if !buffer.is_empty() {
                 let data_block = DataBlock::concat(&buffer)?;
                 self.add_build_block(data_block)?;
             }
         }
 
-        let chunks = self.row_space.chunks.read().unwrap();
+        let chunks = self.row_space.chunks.read();
         let chunks_len = chunks.len();
         if chunks_len == 0 {
-            self.unfinished_task_num.store(0, Ordering::Relaxed);
             return Ok(());
         }
 
@@ -216,28 +213,15 @@ impl HashJoinState for JoinHashTable {
         let mut finalize_tasks = self.finalize_tasks.write();
         for idx in 0..task_num - 1 {
             let task = (idx * task_size, (idx + 1) * task_size);
-            finalize_tasks.push(task);
+            finalize_tasks.push_back(task);
         }
         let last_task = ((task_num - 1) * task_size, chunks_len);
-        finalize_tasks.push(last_task);
-
-        self.unfinished_task_num
-            .store(task_num as i32, Ordering::Relaxed);
+        finalize_tasks.push_back(last_task);
 
         Ok(())
     }
 
-    fn finalize(&self) -> Result<bool> {
-        // Get task
-        let task_idx = self.unfinished_task_num.fetch_sub(1, Ordering::SeqCst) - 1;
-        if task_idx < 0 {
-            return Ok(false);
-        }
-        let task = {
-            let finalize_tasks = self.finalize_tasks.read();
-            finalize_tasks[task_idx as usize]
-        };
-
+    fn finalize(&self, task: (usize, usize)) -> Result<()> {
         let entry_size = self.entry_size.load(Ordering::Relaxed);
         let mut local_raw_entry_spaces: Vec<Vec<u8>> = Vec::new();
         let hashtable = unsafe { &mut *self.hash_table.get() };
@@ -357,7 +341,7 @@ impl HashJoinState for JoinHashTable {
         }
 
         let interrupt = self.interrupt.clone();
-        let chunks = self.row_space.chunks.read().unwrap();
+        let chunks = self.row_space.chunks.read();
         let mut has_null = false;
         for chunk_index in task.0..task.1 {
             if interrupt.load(Ordering::Relaxed) {
@@ -425,63 +409,46 @@ impl HashJoinState for JoinHashTable {
         }
 
         {
-            let mut raw_entry_spaces = self.raw_entry_spaces.lock().unwrap();
+            let mut raw_entry_spaces = self.raw_entry_spaces.lock();
             raw_entry_spaces.extend(local_raw_entry_spaces);
         }
-        Ok(true)
+        Ok(())
+    }
+
+    fn task(&self) -> Option<(usize, usize)> {
+        let mut tasks = self.finalize_tasks.write();
+        tasks.pop_front()
     }
 
     fn finalize_end(&self) -> Result<()> {
-        let mut count = self.finalize_count.lock().unwrap();
+        let mut count = self.finalize_count.lock();
         *count -= 1;
         if *count == 0 {
-            let mut is_finalized = self.is_finalized.lock().unwrap();
+            let mut is_finalized = self.is_finalized.lock();
             *is_finalized = true;
             self.finalized_notify.notify_waiters();
-            Ok(())
-        } else {
-            Ok(())
         }
+        Ok(())
     }
 
     #[async_backtrace::framed]
     async fn wait_build_finish(&self) -> Result<()> {
-        let notified = {
-            let built_guard = self.is_built.lock().unwrap();
-
-            match *built_guard {
-                true => None,
-                false => Some(self.built_notify.notified()),
-            }
-        };
-
-        if let Some(notified) = notified {
-            notified.await;
+        if !*self.is_built.lock() {
+            self.built_notify.notified().await;
         }
-
         Ok(())
     }
 
     #[async_backtrace::framed]
     async fn wait_finalize_finish(&self) -> Result<()> {
-        let notified = {
-            let finalized_guard = self.is_finalized.lock().unwrap();
-
-            match *finalized_guard {
-                true => None,
-                false => Some(self.finalized_notify.notified()),
-            }
-        };
-
-        if let Some(notified) = notified {
-            notified.await;
+        if !*self.is_finalized.lock() {
+            self.finalized_notify.notified().await;
         }
-
         Ok(())
     }
 
     fn mark_join_blocks(&self) -> Result<Vec<DataBlock>> {
-        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)
@@ -571,7 +538,7 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)

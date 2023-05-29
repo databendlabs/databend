@@ -31,6 +31,7 @@ use super::ProjectSet;
 use super::RowFetch;
 use super::Sort;
 use super::TableScan;
+use crate::executor::IEJoin;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::UnionAll;
 use crate::executor::Window;
@@ -57,6 +58,7 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
+            PhysicalPlan::IEJoin(plan) => self.replace_ie_join(plan),
         }
     }
 
@@ -166,6 +168,21 @@ pub trait PhysicalPlanReplacer {
             marker_index: plan.marker_index,
             from_correlated_subquery: plan.from_correlated_subquery,
             contain_runtime_filter: plan.contain_runtime_filter,
+            stat_info: plan.stat_info.clone(),
+        }))
+    }
+
+    fn replace_ie_join(&mut self, plan: &IEJoin) -> Result<PhysicalPlan> {
+        let left = self.replace(&plan.left)?;
+        let right = self.replace(&plan.right)?;
+
+        Ok(PhysicalPlan::IEJoin(IEJoin {
+            plan_id: plan.plan_id,
+            left: Box::new(left),
+            right: Box::new(right),
+            conditions: plan.conditions.clone(),
+            other_conditions: plan.other_conditions.clone(),
+            join_type: plan.join_type.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -356,6 +373,10 @@ impl PhysicalPlan {
                 PhysicalPlan::RuntimeFilterSource(plan) => {
                     Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::IEJoin(plan) => {
+                    Self::traverse(&plan.left, pre_visit, visit, post_visit);
+                    Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);

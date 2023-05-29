@@ -76,10 +76,12 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'query'   | 'mysql_handler_port'                       | '3307'                           | ''       |
 | 'query'   | 'mysql_handler_tcp_keepalive_timeout_secs' | '120'                            | ''       |
 | 'query'   | 'num_cpus'                                 | '0'                              | ''       |
-| 'query'   | 'openai_api_base_url'                      | 'https://api.openai.com/v1/'     | ''       |
+| 'query'   | 'openai_api_chat_base_url'                 | 'https://api.openai.com/v1/'     | ''       |
 | 'query'   | 'openai_api_completion_model'              | 'gpt-3.5-turbo'                  | ''       |
+| 'query'   | 'openai_api_embedding_base_url'            | 'https://api.openai.com/v1/'     | ''       |
 | 'query'   | 'openai_api_embedding_model'               | 'text-embedding-ada-002'         | ''       |
 | 'query'   | 'openai_api_key'                           | '******'                         | ''       |
+| 'query'   | 'openai_api_version'                       | ''                               | ''       |
 | 'query'   | 'parquet_fast_read_bytes'                  | 'null'                           | ''       |
 | 'query'   | 'quota'                                    | 'null'                           | ''       |
 | 'query'   | 'rpc_tls_query_server_root_ca_cert'        | ''                               | ''       |
@@ -98,6 +100,11 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'storage' | 'azblob.container'                         | ''                               | ''       |
 | 'storage' | 'azblob.endpoint_url'                      | ''                               | ''       |
 | 'storage' | 'azblob.root'                              | ''                               | ''       |
+| 'storage' | 'cos.bucket'                               | ''                               | ''       |
+| 'storage' | 'cos.endpoint_url'                         | ''                               | ''       |
+| 'storage' | 'cos.root'                                 | ''                               | ''       |
+| 'storage' | 'cos.secret_id'                            | ''                               | ''       |
+| 'storage' | 'cos.secret_key'                           | ''                               | ''       |
 | 'storage' | 'fs.data_path'                             | '_data'                          | ''       |
 | 'storage' | 'gcs.bucket'                               | ''                               | ''       |
 | 'storage' | 'gcs.credential'                           | ''                               | ''       |
