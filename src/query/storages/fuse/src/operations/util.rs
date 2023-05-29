@@ -13,12 +13,22 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
+use common_arrow::arrow::types::NativeType;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::TableSchemaRef;
+use common_meta_kvapi::kvapi::KVApi;
+use common_meta_types::KVMeta;
+use common_meta_types::MatchSeq;
+use common_meta_types::Operation;
+use common_meta_types::SeqV;
+use common_meta_types::UpsertKV;
+use common_users::UserApiProvider;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::SingleColumnMeta;
 
@@ -72,4 +82,40 @@ pub fn column_parquet_metas(
         }
     }
     Ok(col_metas)
+}
+
+/// Checks if a duplicate label exists in the meta store.
+///
+/// # Arguments
+///
+/// * `ctx` - The table context. Must implement the `TableContext` trait and be wrapped in an `Arc`.
+///
+/// # Returns
+///
+/// Returns a `Result` containing a `bool` indicating whether specific duplicate label exists (`true`) or not (`false`).
+pub async fn check_duplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool> {
+    let duplicate_label = ctx.get_settings().get_duplicate_label().unwrap();
+    if duplicate_label.is_empty() {
+        Ok(false)
+    } else {
+        let kv_store = UserApiProvider::instance().get_meta_store_client();
+        let raw = kv_store.get_kv(&duplicate_label).await?;
+        match raw {
+            None => {
+                let expire_at = SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60 * 1000;
+                let _ = kv_store
+                    .upsert_kv(UpsertKV {
+                        key: duplicate_label,
+                        seq: MatchSeq::Any,
+                        value: Operation::Update(1_i8.to_le_bytes().to_vec()),
+                        value_meta: Some(KVMeta {
+                            expire_at: Some(expire_at),
+                        }),
+                    })
+                    .await?;
+                Ok(false)
+            }
+            Some(_) => Ok(true),
+        }
+    }
 }

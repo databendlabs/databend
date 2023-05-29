@@ -73,6 +73,7 @@ use uuid::Uuid;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
+use crate::operations::util::check_duplicate_label;
 use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
 use crate::table_functions::unwrap_tuple;
@@ -522,6 +523,9 @@ impl Table for FuseTable {
         pipeline: &mut Pipeline,
         on_conflict_fields: Vec<TableField>,
     ) -> Result<()> {
+        if check_duplicate_label(ctx.clone()) {
+            return Ok(());
+        }
         self.build_replace_pipeline(ctx, on_conflict_fields, pipeline)
             .await
     }
