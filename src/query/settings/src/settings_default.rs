@@ -310,7 +310,7 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("duplicate_label", DefaultSettingValue {
+                ("deduplicate_label", DefaultSettingValue {
                     value: UserSettingValue::String("".to_owned()),
                     desc: "Sql duplicate label for deduplication.",
                     possible_values: None,
