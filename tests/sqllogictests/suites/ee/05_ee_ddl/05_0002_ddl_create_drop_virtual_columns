@@ -27,6 +27,9 @@ DROP TABLE IF EXISTS t1
 statement ok
 CREATE TABLE t1(a int, v json) Engine = Fuse
 
+statement error 1114
+DROP VIRTUAL COLUMNS (v['k1'], v:k2, v[0]) FOR t1;
+
 statement ok
 CREATE VIRTUAL COLUMNS (v['k1'], v:k2, v[0]) FOR t1;
 
