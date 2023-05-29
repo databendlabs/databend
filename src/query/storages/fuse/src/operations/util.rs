@@ -13,21 +13,21 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::sync::Arc;
+
 
 use common_arrow::parquet::metadata::ThriftFileMetaData;
-use common_catalog::table_context::TableContext;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::TableSchemaRef;
-use common_meta_kvapi::kvapi::KVApi;
-use common_meta_types::KVMeta;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
-use common_meta_types::SeqV;
-use common_meta_types::UpsertKV;
-use common_users::UserApiProvider;
+
+
+
+
+
+
+
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::SingleColumnMeta;
 
