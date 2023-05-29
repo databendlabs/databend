@@ -214,7 +214,7 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        if check_label(ctx)? {
+        if check_label(ctx).await? {
             Ok(())
         }
         let prev = self.read_table_snapshot().await?;
@@ -717,6 +717,7 @@ impl MutatorConflictDetector {
 mod utils {
     use std::collections::BTreeMap;
 
+    use common_meta_kvapi::kvapi::api::KVApi;
     use common_meta_types::KVMeta;
     use common_meta_types::Operation;
     use common_meta_types::SeqV;

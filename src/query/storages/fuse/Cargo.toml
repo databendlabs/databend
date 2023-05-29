@@ -24,6 +24,7 @@ common-expression = { path = "../../expression" }
 common-functions = { path = "../../functions" }
 common-io = { path = "../../../common/io" }
 common-meta-app = { path = "../../../meta/app" }
+common-meta-kvapi = { path = "../../../meta/kvapi" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-pipeline-sources = { path = "../../pipeline/sources" }
