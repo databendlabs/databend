@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_exception::Span;
 use itertools::Itertools;
 
+use crate::eval_cast;
 use crate::expression::Expr;
 use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
@@ -35,6 +36,7 @@ use crate::ColumnIndex;
 use crate::ConstantFolder;
 use crate::FunctionContext;
 use crate::Scalar;
+use crate::Value;
 
 pub fn check<Index: ColumnIndex>(
     ast: &RawExpr<Index>,
@@ -72,7 +74,7 @@ pub fn check<Index: ColumnIndex>(
             args,
             params,
         } => {
-            let mut args_expr: Vec<_> = args
+            let args_expr: Vec<_> = args
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
@@ -81,33 +83,44 @@ pub fn check<Index: ColumnIndex>(
             // c:int16 = 12456 will be resolve as `to_int32(c) == to_int32(12456)`
             // This may hurt the bloom filter, we should try cast to literal as the datatype of column
             if name == "eq" && args_expr.len() == 2 {
-                match args_expr.as_mut_slice() {
-                    [e, c @ Expr::Constant { .. }] | [c @ Expr::Constant { .. }, e] => {
-                        let dest_data_type = e.data_type().remove_nullable();
-                        let source_data_type = c.data_type().remove_nullable();
+                match args_expr.as_slice() {
+                    [
+                        e,
+                        Expr::Constant {
+                            span,
+                            scalar,
+                            data_type: src_ty,
+                        },
+                    ]
+                    | [
+                        Expr::Constant {
+                            span,
+                            scalar,
+                            data_type: src_ty,
+                        },
+                        e,
+                    ] => {
+                        let src_ty = src_ty.remove_nullable();
+                        let dest_ty = e.data_type().remove_nullable();
 
-                        if dest_data_type.is_integer() && source_data_type.is_integer() {
-                            // use evaluator to cast scalar into dest_data_type
-                            let new_expr = Expr::Cast {
-                                span: *span,
-                                is_try: false,
-                                expr: Box::new(c.clone()),
-                                dest_type: dest_data_type,
-                            };
-
-                            let (new_expr, _) = ConstantFolder::fold(
-                                &new_expr,
-                                &FunctionContext::default(),
+                        if dest_ty.is_integer() && src_ty.is_integer() {
+                            if let Ok(val) = eval_cast(
+                                *span,
+                                src_ty,
+                                dest_ty,
+                                Value::Scalar(scalar.clone()),
                                 fn_registry,
-                            );
-
-                            if new_expr.as_constant().is_some() {
-                                // Note we don't respect the orders for eq function
+                            ) {
+                                let scalar = val.into_scalar().unwrap();
                                 return check_function(
                                     *span,
                                     name,
                                     params,
-                                    &[e.clone(), new_expr],
+                                    &[e.clone(), Expr::Constant {
+                                        span: *span,
+                                        data_type: scalar.as_ref().infer_data_type(),
+                                        scalar,
+                                    }],
                                     fn_registry,
                                 );
                             }

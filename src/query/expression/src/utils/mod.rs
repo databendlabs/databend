@@ -77,6 +77,41 @@ pub fn eval_function(
     Ok((evaluator.run(&expr)?, expr.data_type().clone()))
 }
 
+pub fn eval_cast(
+    span: Span,
+    src_type: DataType,
+    dest_type: DataType,
+    value: Value<AnyType>,
+    fn_registry: &FunctionRegistry,
+) -> Result<Value<AnyType>> {
+    let raw_expr = RawExpr::Cast {
+        span,
+        is_try: false,
+        expr: Box::new(RawExpr::ColumnRef {
+            span,
+            id: 0,
+            data_type: src_type.clone(),
+            display_name: "DUMMY".to_string(),
+        }),
+        dest_type,
+    };
+    let expr = crate::type_check::check(&raw_expr, fn_registry)?;
+    let num_rows = match &value {
+        Value::Scalar(_) => 1,
+        Value::Column(col) => col.len(),
+    };
+    let block = DataBlock::new(
+        vec![BlockEntry {
+            data_type: src_type,
+            value,
+        }],
+        num_rows,
+    );
+    let func_ctx = &FunctionContext::default();
+    let evaluator = Evaluator::new(&block, &func_ctx, fn_registry);
+    evaluator.run(&expr)
+}
+
 pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<Bitmap> {
     match column {
         Column::Nullable(c) => match bitmap {
