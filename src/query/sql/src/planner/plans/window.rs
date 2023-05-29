@@ -29,7 +29,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::AggregateFunction;
-use super::FirstLastFunction;
+use super::NthValueFunction;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -44,7 +44,6 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::IndexType;
-use crate::ScalarExpr;
 
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
@@ -217,10 +216,8 @@ pub enum WindowFuncType {
     Rank,
     DenseRank,
     PercentRank,
-    Lag(LagLeadFunction),
-    Lead(LagLeadFunction),
-    FirstValue(FirstLastFunction),
-    LastValue(FirstLastFunction),
+    LagLead(LagLeadFunction),
+    NthValue(NthValueFunction),
 }
 
 impl WindowFuncType {
@@ -237,39 +234,6 @@ impl WindowFuncType {
         }
     }
 
-    pub fn get_general_window_func(
-        name: &str,
-        arg: ScalarExpr,
-        offset: Option<u64>,
-        default: Option<ScalarExpr>,
-        return_type: DataType,
-    ) -> Result<WindowFuncType> {
-        match name {
-            "lag" => Ok(WindowFuncType::Lag(LagLeadFunction {
-                arg: Box::new(arg),
-                offset: offset.unwrap_or(1),
-                default: default.map(Box::new),
-                return_type: Box::new(return_type),
-            })),
-            "lead" => Ok(WindowFuncType::Lead(LagLeadFunction {
-                arg: Box::new(arg),
-                offset: offset.unwrap_or(1),
-                default: default.map(Box::new),
-                return_type: Box::new(return_type),
-            })),
-            "first_value" | "first" => Ok(WindowFuncType::FirstValue(FirstLastFunction {
-                arg: Box::new(arg),
-                return_type: Box::new(return_type),
-            })),
-            "last_value" | "last" => Ok(WindowFuncType::LastValue(FirstLastFunction {
-                arg: Box::new(arg),
-                return_type: Box::new(return_type),
-            })),
-            _ => Err(ErrorCode::UnknownFunction(format!(
-                "Unknown window function: {name}"
-            ))),
-        }
-    }
     pub fn func_name(&self) -> String {
         match self {
             WindowFuncType::Aggregate(agg) => agg.func_name.to_string(),
@@ -277,10 +241,9 @@ impl WindowFuncType {
             WindowFuncType::Rank => "rank".to_string(),
             WindowFuncType::DenseRank => "dense_rank".to_string(),
             WindowFuncType::PercentRank => "percent_rank".to_string(),
-            WindowFuncType::Lag(_) => "lag".to_string(),
-            WindowFuncType::Lead(_) => "lead".to_string(),
-            WindowFuncType::FirstValue(_) => "first_value".to_string(),
-            WindowFuncType::LastValue(_) => "last_value".to_string(),
+            WindowFuncType::LagLead(lag_lead) if lag_lead.is_lag => "lag".to_string(),
+            WindowFuncType::LagLead(_) => "lead".to_string(),
+            WindowFuncType::NthValue(_) => "nth_value".to_string(),
         }
     }
 
@@ -289,7 +252,7 @@ impl WindowFuncType {
             WindowFuncType::Aggregate(agg) => {
                 agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
             }
-            WindowFuncType::Lag(func) | WindowFuncType::Lead(func) => match &func.default {
+            WindowFuncType::LagLead(func) => match &func.default {
                 None => func.arg.used_columns(),
                 Some(d) => func
                     .arg
@@ -298,9 +261,7 @@ impl WindowFuncType {
                     .cloned()
                     .collect(),
             },
-            WindowFuncType::FirstValue(func) | WindowFuncType::LastValue(func) => {
-                func.arg.used_columns()
-            }
+            WindowFuncType::NthValue(func) => func.arg.used_columns(),
             _ => ColumnSet::new(),
         }
     }
@@ -312,10 +273,8 @@ impl WindowFuncType {
                 DataType::Number(NumberDataType::UInt64)
             }
             WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
-            WindowFuncType::Lag(lag) => *lag.return_type.clone(),
-            WindowFuncType::Lead(lead) => *lead.return_type.clone(),
-            WindowFuncType::FirstValue(first) => *first.return_type.clone(),
-            WindowFuncType::LastValue(last) => *last.return_type.clone(),
+            WindowFuncType::LagLead(lag_lead) => *lag_lead.return_type.clone(),
+            WindowFuncType::NthValue(nth_value) => *nth_value.return_type.clone(),
         }
     }
 }
