@@ -28,10 +28,10 @@ use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
+use common_ast::ast::Window;
 use common_ast::ast::WindowFrame;
 use common_ast::ast::WindowFrameBound;
 use common_ast::ast::WindowFrameUnits;
-use common_ast::ast::WindowSpec;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_catalog::catalog::CatalogManager;
@@ -76,6 +76,8 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -666,10 +668,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     let func = self.resolve_general_window_function(&name, &args).await?;
                     let window = window.as_ref().unwrap();
-                    // WindowReference already rewritten by `SelectRewriter` before.
-                    let window = window.as_window_spec().unwrap();
                     let display_name = format!("{:#}", expr);
-
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(&name) {
@@ -683,8 +682,6 @@ impl<'a> TypeChecker<'a> {
                         // aggregate window function
                         let display_name = format!("{:#}", expr);
                         let func = WindowFuncType::Aggregate(new_agg_func);
-                        // WindowReference already rewritten by `SelectRewriter` before.
-                        let window = window.as_window_spec().unwrap();
                         self.resolve_window(*span, display_name, window, func)
                             .await?
                     } else {
@@ -728,8 +725,6 @@ impl<'a> TypeChecker<'a> {
                     // aggregate window function
                     let display_name = format!("{:#}", expr);
                     let func = WindowFuncType::Aggregate(new_agg_func);
-                    // WindowReference already rewritten by `SelectRewriter` before.
-                    let window = window.as_window_spec().unwrap();
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else {
@@ -902,7 +897,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         display_name: String,
-        window: &WindowSpec,
+        window: &Window,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if self.in_window_function {
@@ -913,14 +908,31 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span));
         }
-        let mut partitions = Vec::with_capacity(window.partition_by.len());
-        for p in window.partition_by.iter() {
+
+        let spec = match window {
+            Window::WindowSpec(spec) => spec.clone(),
+            Window::WindowReference(w) => self
+                .bind_context
+                .window_definitions
+                .get(&w.window_name.name)
+                .ok_or_else(|| {
+                    ErrorCode::SyntaxException(format!(
+                        "Window definition {} not found",
+                        w.window_name.name
+                    ))
+                })?
+                .value()
+                .clone(),
+        };
+
+        let mut partitions = Vec::with_capacity(spec.partition_by.len());
+        for p in spec.partition_by.iter() {
             let box (part, _part_type) = self.resolve(p).await?;
             partitions.push(part);
         }
-        let mut order_by = Vec::with_capacity(window.order_by.len());
+        let mut order_by = Vec::with_capacity(spec.order_by.len());
 
-        for o in window.order_by.iter() {
+        for o in spec.order_by.iter() {
             let box (order, _) = self.resolve(&o.expr).await?;
             order_by.push(WindowOrderBy {
                 expr: order,
@@ -929,7 +941,7 @@ impl<'a> TypeChecker<'a> {
             })
         }
         let frame = self
-            .resolve_window_frame(span, &func, &mut order_by, window.window_frame.clone())
+            .resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())
             .await?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
@@ -1080,25 +1092,25 @@ impl<'a> TypeChecker<'a> {
                     end_bound: WindowFuncFrameBound::Following(None),
                 });
             }
-            WindowFuncType::Lag(lag) => {
+            WindowFuncType::LagLead(lag_lead) if lag_lead.is_lag => {
                 return Ok(WindowFuncFrame {
                     units: WindowFuncFrameUnits::Rows,
                     start_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
-                        NumberScalar::UInt64(lag.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                     end_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
-                        NumberScalar::UInt64(lag.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                 });
             }
-            WindowFuncType::Lead(lead) => {
+            WindowFuncType::LagLead(lag_lead) => {
                 return Ok(WindowFuncFrame {
                     units: WindowFuncFrameUnits::Rows,
                     start_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
-                        NumberScalar::UInt64(lead.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                     end_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
-                        NumberScalar::UInt64(lead.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                 });
             }
@@ -1138,9 +1150,11 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[&Expr],
     ) -> Result<WindowFuncType> {
-        if args.is_empty() {
-            return WindowFuncType::from_name(func_name);
+        // try to resolve window function without arguments first
+        if let Ok(window_func) = WindowFuncType::from_name(func_name) {
+            return Ok(window_func);
         }
+
         self.in_window_function = true;
         let mut arguments = vec![];
         let mut arg_types = vec![];
@@ -1150,14 +1164,40 @@ impl<'a> TypeChecker<'a> {
             arg_types.push(arg_type);
         }
         self.in_window_function = false;
-        debug_assert!(!arguments.is_empty());
-        debug_assert!(!arg_types.is_empty());
 
-        let offset = if arguments.len() >= 2 {
+        match func_name {
+            "lag" | "lead" => {
+                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)
+                    .await
+            }
+            "first_value" | "first" | "last_value" | "last" | "nth_value" => {
+                self.resolve_nth_value_window_function(func_name, &arguments, &arg_types)
+                    .await
+            }
+            _ => Err(ErrorCode::UnknownFunction(format!(
+                "Unknown window function: {func_name}"
+            ))),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_lag_lead_window_function(
+        &mut self,
+        func_name: &str,
+        args: &[ScalarExpr],
+        arg_types: &[DataType],
+    ) -> Result<WindowFuncType> {
+        if args.is_empty() || args.len() > 3 {
+            return Err(ErrorCode::InvalidArgument(
+                "Argument number is invalid".to_string(),
+            ));
+        }
+
+        let offset = if args.len() >= 2 {
             let off = ScalarExpr::CastExpr(CastExpr {
-                span: arguments[1].span(),
-                is_try: true,
-                argument: Box::new(arguments[1].clone()),
+                span: args[1].span(),
+                is_try: false,
+                argument: Box::new(args[1].clone()),
                 target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
             })
             .as_expr()?;
@@ -1171,11 +1211,12 @@ impl<'a> TypeChecker<'a> {
             None
         };
 
-        let default = if arguments.len() == 3 {
-            Some(arguments[2].clone())
+        let default = if args.len() == 3 {
+            Some(args[2].clone())
         } else {
             None
         };
+
         let return_type = match default {
             Some(_) => arg_types[0].clone(),
             None => arg_types[0].wrap_nullable(),
@@ -1197,13 +1238,83 @@ impl<'a> TypeChecker<'a> {
             })
             .transpose()?;
 
-        WindowFuncType::get_general_window_func(
-            func_name,
-            arguments[0].clone(),
-            offset,
-            cast_default,
-            return_type,
-        )
+        Ok(WindowFuncType::LagLead(LagLeadFunction {
+            is_lag: func_name == "lag",
+            arg: Box::new(args[0].clone()),
+            offset: offset.unwrap_or(1),
+            default: cast_default.map(Box::new),
+            return_type: Box::new(return_type),
+        }))
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_nth_value_window_function(
+        &mut self,
+        func_name: &str,
+        args: &[ScalarExpr],
+        arg_types: &[DataType],
+    ) -> Result<WindowFuncType> {
+        Ok(match func_name {
+            "first_value" | "first" => {
+                if args.len() != 1 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Argument number is invalid".to_string(),
+                    ));
+                }
+                let return_type = arg_types[0].wrap_nullable();
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: Some(1),
+                    arg: Box::new(args[0].clone()),
+                    return_type: Box::new(return_type),
+                })
+            }
+            "last_value" | "last" => {
+                if args.len() != 1 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Argument number is invalid".to_string(),
+                    ));
+                }
+                let return_type = arg_types[0].wrap_nullable();
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: None,
+                    arg: Box::new(args[0].clone()),
+                    return_type: Box::new(return_type),
+                })
+            }
+            _ => {
+                // nth_value
+                if args.len() != 2 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Argument number is invalid".to_string(),
+                    ));
+                }
+                let return_type = arg_types[0].wrap_nullable();
+                let n_expr = ScalarExpr::CastExpr(CastExpr {
+                    span: args[1].span(),
+                    is_try: false,
+                    argument: Box::new(args[1].clone()),
+                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                })
+                .as_expr()?;
+                let n = check_number::<_, u64>(
+                    n_expr.span(),
+                    &self.func_ctx,
+                    &n_expr,
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                if n == 0 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "nth_value should count from 1".to_string(),
+                    ));
+                }
+
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: Some(n),
+                    arg: Box::new(args[0].clone()),
+                    return_type: Box::new(return_type),
+                })
+            }
+        })
     }
 
     /// Resolve aggregation function call.

@@ -15,22 +15,21 @@
 use crate::optimizer::RuleID;
 use crate::optimizer::RuleSet;
 
-pub fn get_explore_rule_set(enable_bushy_join: bool) -> RuleSet {
-    if enable_bushy_join {
-        rule_set_rs_b2()
+pub fn get_explore_rule_set(optimized: bool) -> RuleSet {
+    if optimized {
+        rule_set_dphyp()
     } else {
         rule_set_rs_l1()
     }
 }
 
-/// Get rule set of join order RS-B2, which may generate bushy trees.
-/// Read paper "The Complexity of Transformation-Based Join Enumeration" for more details.
-fn rule_set_rs_b2() -> RuleSet {
+/// The join order has been optimized by dphyp, therefore we will not change the join order
+/// and only attempt to exchange the order of build and probe.
+fn rule_set_dphyp() -> RuleSet {
     RuleSet::create_with_ids(vec![
+        RuleID::CommuteJoinBaseTable,
         RuleID::CommuteJoin,
-        RuleID::LeftAssociateJoin,
-        RuleID::RightAssociateJoin,
-        RuleID::ExchangeJoin,
+        RuleID::EagerAggregation,
     ])
 }
 

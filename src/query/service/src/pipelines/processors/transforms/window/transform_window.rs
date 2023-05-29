@@ -330,7 +330,7 @@ impl<T: Number> TransformWindow<T> {
 
     // Advance the current row to the next row
     // if the current row is the last row of the current block, advance the current block and row = 0
-    fn advance_row(&mut self, mut row: RowPtr) -> RowPtr {
+    fn advance_row(&self, mut row: RowPtr) -> RowPtr {
         debug_assert!(row.block >= self.first_block);
 
         if row == self.blocks_end() {
@@ -341,6 +341,17 @@ impl<T: Number> TransformWindow<T> {
         } else {
             row.block += 1;
             row.row = 0;
+        }
+        row
+    }
+
+    /// Goback the row to the preceding one row
+    fn goback_row(&self, mut row: RowPtr) -> RowPtr {
+        if row.row != 0 {
+            row.row -= 1;
+        } else {
+            row.block -= 1;
+            row.row = self.block_rows(&row) - 1;
         }
         row
     }
@@ -489,9 +500,9 @@ impl<T: Number> TransformWindow<T> {
                 };
                 builder.push(ScalarRef::Number(NumberScalar::Float64(percent.into())));
             }
-            WindowFunctionImpl::Lag(lag) => {
-                let lag_row = if self.frame_start == self.frame_end {
-                    let default_value = match lag.default.clone() {
+            WindowFunctionImpl::LagLead(ll) => {
+                let value = if self.frame_start == self.frame_end {
+                    let default_value = match ll.default.clone() {
                         LagLeadDefault::Null => Scalar::Null,
                         LagLeadDefault::Index(col) => {
                             let block =
@@ -507,36 +518,41 @@ impl<T: Number> TransformWindow<T> {
                         .get(self.frame_start.block - self.first_block)
                         .unwrap()
                         .block;
-                    let value = &block.get_by_offset(lag.arg).value;
+                    let value = &block.get_by_offset(ll.arg).value;
                     value.index(self.frame_start.row).unwrap().to_owned()
                 };
 
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                builder.push(lag_row.as_ref());
+                builder.push(value.as_ref());
             }
-            WindowFunctionImpl::Lead(lead) => {
-                let lead_row = if self.frame_start == self.frame_end {
-                    let default_value = match lead.default.clone() {
-                        LagLeadDefault::Null => Scalar::Null,
-                        LagLeadDefault::Index(col) => {
-                            let block =
-                                &self.blocks[self.current_row.block - self.first_block].block;
-                            let value = &block.get_by_offset(col).value;
-                            value.index(self.current_row.row).unwrap().to_owned()
-                        }
-                    };
-                    default_value
+            WindowFunctionImpl::NthValue(func) => {
+                let value = if self.frame_start == self.frame_end {
+                    Scalar::Null
+                } else if let Some(mut n) = func.n {
+                    let mut cur = self.frame_start;
+                    // n is counting from 1
+                    while n > 1 && cur < self.frame_end {
+                        cur = self.advance_row(cur);
+                        n -= 1;
+                    }
+                    if cur != self.frame_end {
+                        let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                        let col = block.get_by_offset(func.arg).value.as_column().unwrap();
+                        col.index(cur.row).unwrap().to_owned()
+                    } else {
+                        // No such row
+                        Scalar::Null
+                    }
                 } else {
-                    let block = &self
-                        .blocks
-                        .get(self.frame_start.block - self.first_block)
-                        .unwrap()
-                        .block;
-                    let value = &block.get_by_offset(lead.arg).value;
-                    value.index(self.frame_start.row).unwrap().to_owned()
+                    // last_value
+                    let cur = self.goback_row(self.frame_end);
+                    debug_assert!(self.frame_start <= cur);
+                    let block = &self.blocks.get(cur.block - self.first_block).unwrap().block;
+                    let col = block.get_by_offset(func.arg).value.as_column().unwrap();
+                    col.index(cur.row).unwrap().to_owned()
                 };
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
-                builder.push(lead_row.as_ref());
+                builder.push(value.as_ref());
             }
         };
 
