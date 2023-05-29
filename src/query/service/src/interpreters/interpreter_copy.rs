@@ -17,6 +17,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
+use common_arrow::parquet::FallibleStreamingIterator;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -39,6 +40,7 @@ use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use common_storages_fuse::io::Files;
+use common_storages_fuse::operations::util::check_deduplicate_label;
 use common_storages_stage::StageTable;
 use tracing::debug;
 use tracing::error;
@@ -502,7 +504,7 @@ impl Interpreter for CopyInterpreter {
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        if check_deduplicate_label(self.ctx.clone()) {
+        if check_deduplicate_label(self.ctx.clone()).await? {
             return Ok(PipelineBuildResult::create());
         }
 
