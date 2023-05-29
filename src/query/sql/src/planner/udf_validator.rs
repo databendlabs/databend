@@ -46,8 +46,8 @@ impl UDFValidator {
         let expr_params = &self.expr_params;
         let parameters = self.parameters.iter().cloned().collect::<HashSet<_>>();
 
-        let params_not_declared: HashSet<_> = parameters.difference(expr_params).collect();
-        let params_not_used: HashSet<_> = expr_params.difference(&parameters).collect();
+        let params_not_declared: HashSet<_> = expr_params.difference(&parameters).collect();
+        let params_not_used: HashSet<_> = parameters.difference(expr_params).collect();
 
         if params_not_declared.is_empty() && params_not_used.is_empty() {
             return Ok(());
