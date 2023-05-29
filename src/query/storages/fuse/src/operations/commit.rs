@@ -213,9 +213,6 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        if check_deduplicate_label(ctx.clone()).await? {
-            return Ok(());
-        }
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
