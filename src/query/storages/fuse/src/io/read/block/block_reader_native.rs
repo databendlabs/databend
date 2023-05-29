@@ -153,6 +153,7 @@ impl BlockReader {
             results.insert(index, readers);
         }
 
+        // If virtual column file exists, read the data from the virtual columns directly.
         if let Some(ref virtual_columns_meta) = part.virtual_columns_meta {
             let virtual_loc = part.location.replace(".parquet", "_virtual.parquet");
 

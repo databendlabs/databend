@@ -147,10 +147,7 @@ impl NativeDeserializeDataTransform {
             (top_k, sorter, index)
         });
 
-        let func_ctx = ctx.get_function_context()?;
-        let mut prewhere_schema = src_schema.project(&prewhere_columns);
-
-        // add virtual columns to src_schema and prewhere_schema
+        // add virtual columns to src_schema
         let (virtual_columns, prewhere_virtual_columns) = match &plan.push_downs {
             Some(push_downs) => {
                 if let Some(virtual_columns) = &push_downs.virtual_columns {
@@ -166,17 +163,11 @@ impl NativeDeserializeDataTransform {
                 }
                 if let Some(prewhere) = &push_downs.prewhere {
                     if let Some(virtual_columns) = &prewhere.virtual_columns {
-                        let mut prewhere_fields = prewhere_schema.fields().clone();
                         for virtual_column in virtual_columns {
-                            let field = DataField::new(
-                                &virtual_column.name,
-                                DataType::from(&*virtual_column.data_type),
-                            );
-                            prewhere_fields.push(field);
                             prewhere_columns
                                 .push(src_schema.index_of(&virtual_column.name).unwrap());
                         }
-                        prewhere_schema = DataSchema::new(prewhere_fields);
+                        prewhere_columns.sort();
                     }
                     (
                         push_downs.virtual_columns.clone(),
@@ -193,11 +184,13 @@ impl NativeDeserializeDataTransform {
             .filter(|i| !prewhere_columns.contains(i))
             .collect();
 
+        let func_ctx = ctx.get_function_context()?;
+        let prewhere_schema = src_schema.project(&prewhere_columns);
+        let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
+
         let mut output_schema = plan.schema().as_ref().clone();
         output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
-
-        let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
 
         let mut column_leaves = Vec::with_capacity(block_reader.project_column_nodes.len());
         for column_node in &block_reader.project_column_nodes {
