@@ -29,15 +29,19 @@ The bitmap data type in Databend is a binary type that differs from other suppor
 ```sql
 SELECT TO_BITMAP('1,2,3')
 
-to_bitmap('1,2,3')|
-------------------+
-<bitmap binary>   |
++---------------------+
+|  to_bitmap('1,2,3') |
++---------------------+
+|  <bitmap binary>    |
++---------------------+
 
 SELECT TO_STRING(TO_BITMAP('1,2,3'))
 
-to_string(to_bitmap('1,2,3'))|
------------------------------+
-1,2,3                        |
++-------------------------------+
+| to_string(to_bitmap('1,2,3')) |
+--------------------------------+
+|            1,2,3              |
++-------------------------------+
 ```
 
 **Example**:
@@ -62,10 +66,11 @@ VALUES
 SELECT user_id, bitmap_count(page_visits) AS total_visits
 FROM user_visits
 
----
-user_id|total_visits|
--------+------------+
-      1|           4|
-      2|           3|
-      3|           4|
++--------+------------+
+|user_id |total_visits|
++--------+------------+
+|       1|           4|
+|       2|           3|
+|       3|           4|
++--------+------------+
 ```
