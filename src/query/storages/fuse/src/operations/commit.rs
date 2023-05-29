@@ -33,6 +33,7 @@ use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MatchSeq;
 use common_sql::field_default_value;
+use common_users::UserApiProvider;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
@@ -57,6 +58,7 @@ use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
 use crate::metrics::metrics_inc_commit_mutation_retry;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
+use crate::operations::commit::utils::check_label;
 use crate::operations::commit::utils::no_side_effects_in_meta_store;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
@@ -212,6 +214,9 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
+        if check_label(ctx)? {
+            Ok(())
+        }
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version(None).await?;
         let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
@@ -712,6 +717,10 @@ impl MutatorConflictDetector {
 mod utils {
     use std::collections::BTreeMap;
 
+    use common_meta_types::KVMeta;
+    use common_meta_types::Operation;
+    use common_meta_types::SeqV;
+    use common_meta_types::UpsertKV;
     use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 
     use super::*;
@@ -768,5 +777,35 @@ mod utils {
     // check if there are any fuse table legacy options
     pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
         table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    }
+
+    #[inline]
+    pub async fn check_label(ctx: Arc<dyn TableContext>) -> Result<bool> {
+        let duplicate_label = ctx.get_settings().get_duplicate_label().unwrap();
+        if duplicate_label == "" {
+            Ok(false)
+        } else {
+            let kv_store = UserApiProvider::instance().get_meta_store_client();
+            let raw = kv_store.get_kv(&duplicate_label).await?;
+            match raw {
+                None => {
+                    let expire_at = SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60 * 1000;
+                    let _ = kv_store
+                        .upsert_kv(UpsertKV {
+                            key: duplicate_label,
+                            seq: MatchSeq::Any,
+                            value: Operation::Update(1.to_le_bytes().to_vec()),
+                            value_meta: Some(KVMeta {
+                                expire_at: Some(expire_at),
+                            }),
+                        })
+                        .await?;
+                    Ok(false)
+                }
+                Some(_) => {
+                    return Ok(true);
+                }
+            }
+        }
     }
 }

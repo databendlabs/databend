@@ -357,4 +357,8 @@ impl Settings {
     pub fn set_enterprise_license(&self, val: String) -> Result<()> {
         self.set_setting("enterprise_license".to_string(), val)
     }
+
+    pub fn get_duplicate_label(&self) -> Result<String> {
+        self.try_get_string("duplicate_label")
+    }
 }
