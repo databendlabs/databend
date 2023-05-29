@@ -3,7 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-# mariadb mysql client has some bug, please use mysql offical client
+# mariadb mysql client has some bug, please use mysql official client
 # mysql --version
 # mysql  Ver 8.0.32-0ubuntu0.20.04.2 for Linux on x86_64 ((Ubuntu))
 echo "select * from (select /*+SET_VAR(timezone='Asia/Shanghai')*/ name, value value from system.settings where name in ('timezone') union all (select /*+SET_VAR(timezone='America/Los_Angeles')*/ 'x','x')) order by name desc;" |  $MYSQL_CLIENT_CONNECT
