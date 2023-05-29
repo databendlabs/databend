@@ -108,7 +108,7 @@ pub fn eval_cast(
         num_rows,
     );
     let func_ctx = &FunctionContext::default();
-    let evaluator = Evaluator::new(&block, &func_ctx, fn_registry);
+    let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
     evaluator.run(&expr)
 }
 
