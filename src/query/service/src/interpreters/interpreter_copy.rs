@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use chrono::Utc;
-use common_arrow::parquet::FallibleStreamingIterator;
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -40,7 +39,6 @@ use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
 use common_storage::StageFilesInfo;
 use common_storages_fuse::io::Files;
-use common_storages_fuse::operations::util::check_deduplicate_label;
 use common_storages_stage::StageTable;
 use tracing::debug;
 use tracing::error;
