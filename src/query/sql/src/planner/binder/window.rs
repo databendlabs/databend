@@ -325,40 +325,12 @@ impl<'a> WindowRewriter<'a> {
                 for (i, arg) in agg.args.iter().enumerate() {
                     let arg = self.visit(arg)?;
                     let name = format!("{}_arg_{}", &window_func_name, i);
-                    if let ScalarExpr::BoundColumnRef(column_ref) = &arg {
-                        replaced_args.push(column_ref.clone().into());
-                        agg_args.push(ScalarItem {
-                            index: column_ref.column.index,
-                            scalar: arg.clone(),
-                        });
-                    } else {
-                        let index = self
-                            .metadata
-                            .write()
-                            .add_derived_column(name.clone(), arg.data_type()?);
-
-                        // Generate a ColumnBinding for each argument of aggregates
-                        let column_binding = ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name: name,
-                            index,
-                            data_type: Box::new(arg.data_type()?),
-                            visibility: Visibility::Visible,
-                        };
-                        replaced_args.push(
-                            BoundColumnRef {
-                                span: arg.span(),
-                                column: column_binding.clone(),
-                            }
-                            .into(),
-                        );
-                        agg_args.push(ScalarItem {
-                            index,
-                            scalar: arg.clone(),
-                        });
-                    }
+                    let replaced_arg = self.replace_expr(&name, &arg)?;
+                    agg_args.push(ScalarItem {
+                        index: replaced_arg.column.index,
+                        scalar: arg,
+                    });
+                    replaced_args.push(replaced_arg.into());
                 }
                 WindowFuncType::Aggregate(AggregateFunction {
                     display_name: agg.display_name.clone(),
@@ -397,40 +369,12 @@ impl<'a> WindowRewriter<'a> {
         for (i, part) in window.partition_by.iter().enumerate() {
             let part = self.visit(part)?;
             let name = format!("{}_part_{}", &window_func_name, i);
-            if let ScalarExpr::BoundColumnRef(column_ref) = &part {
-                replaced_partition_items.push(column_ref.clone().into());
-                partition_by_items.push(ScalarItem {
-                    index: column_ref.column.index,
-                    scalar: part.clone(),
-                });
-            } else {
-                let index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(name.clone(), part.data_type()?);
-
-                // Generate a ColumnBinding for each argument of aggregates
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    table_index: None,
-                    column_name: name,
-                    index,
-                    data_type: Box::new(part.data_type()?),
-                    visibility: Visibility::Visible,
-                };
-                replaced_partition_items.push(
-                    BoundColumnRef {
-                        span: part.span(),
-                        column: column_binding.clone(),
-                    }
-                    .into(),
-                );
-                partition_by_items.push(ScalarItem {
-                    index,
-                    scalar: part.clone(),
-                });
-            }
+            let replaced_part = self.replace_expr(&name, &part)?;
+            partition_by_items.push(ScalarItem {
+                index: replaced_part.column.index,
+                scalar: part,
+            });
+            replaced_partition_items.push(replaced_part.into());
         }
 
         // resolve order by
@@ -438,54 +382,20 @@ impl<'a> WindowRewriter<'a> {
         for (i, order) in window.order_by.iter().enumerate() {
             let order_expr = self.visit(&order.expr)?;
             let name = format!("{}_order_{}", &window_func_name, i);
-            if let ScalarExpr::BoundColumnRef(column_ref) = &order_expr {
-                replaced_order_by_items.push(WindowOrderBy {
-                    expr: column_ref.clone().into(),
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
-                });
-                order_by_items.push(WindowOrderByInfo {
-                    order_by_item: ScalarItem {
-                        index: column_ref.column.index,
-                        scalar: order_expr.clone(),
-                    },
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
-                })
-            } else {
-                let index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(name.clone(), order_expr.data_type()?);
-
-                // Generate a ColumnBinding for each argument of aggregates
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    table_index: None,
-                    column_name: name,
-                    index,
-                    data_type: Box::new(order_expr.data_type()?),
-                    visibility: Visibility::Visible,
-                };
-                replaced_order_by_items.push(WindowOrderBy {
-                    expr: BoundColumnRef {
-                        span: order_expr.span(),
-                        column: column_binding,
-                    }
-                    .into(),
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
-                });
-                order_by_items.push(WindowOrderByInfo {
-                    order_by_item: ScalarItem {
-                        index,
-                        scalar: order_expr,
-                    },
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
-                })
-            }
+            let replaced_order = self.replace_expr(&name, &order_expr)?;
+            order_by_items.push(WindowOrderByInfo {
+                order_by_item: ScalarItem {
+                    index: replaced_order.column.index,
+                    scalar: order_expr,
+                },
+                asc: order.asc,
+                nulls_first: order.nulls_first,
+            });
+            replaced_order_by_items.push(WindowOrderBy {
+                expr: replaced_order.into(),
+                asc: order.asc,
+                nulls_first: order.nulls_first,
+            });
         }
 
         let index = self
@@ -572,6 +482,33 @@ impl<'a> WindowRewriter<'a> {
             }
         };
         Ok((new_arg, new_default))
+    }
+
+    fn replace_expr(&self, name: &str, arg: &ScalarExpr) -> Result<BoundColumnRef> {
+        if let ScalarExpr::BoundColumnRef(col) = &arg {
+            Ok(col.clone())
+        } else {
+            let ty = arg.data_type()?;
+            let index = self
+                .metadata
+                .write()
+                .add_derived_column(name.to_string(), ty.clone());
+
+            // Generate a ColumnBinding for each argument of aggregates
+            let column = ColumnBinding {
+                database_name: None,
+                table_name: None,
+                table_index: None,
+                column_name: name.to_string(),
+                index,
+                data_type: Box::new(ty),
+                visibility: Visibility::Visible,
+            };
+            Ok(BoundColumnRef {
+                span: arg.span(),
+                column,
+            })
+        }
     }
 }
 
