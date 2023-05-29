@@ -36,7 +36,6 @@ use crate::operations::merge_into::TableMutationAggregator;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
-use crate::operations::util::check_duplicate_label;
 use crate::pipelines::Pipeline;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
@@ -53,9 +52,6 @@ impl FuseTable {
         update_list: Vec<(usize, RemoteExpr<String>)>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        if check_duplicate_label(ctx.clone()).await? {
-            return Ok(());
-        }
         let snapshot_opt = self.read_table_snapshot().await?;
 
         // check if table is empty

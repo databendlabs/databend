@@ -59,7 +59,7 @@ use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::commit::utils::no_side_effects_in_meta_store;
 use crate::operations::mutation::AbortOperation;
-use crate::operations::util::check_duplicate_label;
+use crate::operations::util::check_deduplicate_label;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
 use crate::statistics;
@@ -213,7 +213,7 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        if check_duplicate_label(ctx.clone()).await? {
+        if check_deduplicate_label(ctx.clone()).await? {
             return Ok(());
         }
         let prev = self.read_table_snapshot().await?;

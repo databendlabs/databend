@@ -358,7 +358,7 @@ impl Settings {
         self.set_setting("enterprise_license".to_string(), val)
     }
 
-    pub fn get_duplicate_label(&self) -> Result<String> {
-        self.try_get_string("duplicate_label")
+    pub fn get_deduplicate_label(&self) -> Result<String> {
+        self.try_get_string("deduplicate_label")
     }
 }

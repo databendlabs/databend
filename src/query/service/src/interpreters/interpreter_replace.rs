@@ -25,6 +25,7 @@ use common_sql::plans::Plan;
 use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
 
+use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
@@ -55,6 +56,10 @@ impl Interpreter for ReplaceInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        if check_deduplicate_label(self.ctx.clone()) {
+            return Ok(PipelineBuildResult::create());
+        }
+
         self.check_on_conflicts()?;
 
         let plan = &self.plan;

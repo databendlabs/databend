@@ -50,6 +50,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::interpreters::common::append2table;
+use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
@@ -101,6 +102,9 @@ impl Interpreter for InsertInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        if check_deduplicate_label(self.ctx.clone()) {
+            return Ok(PipelineBuildResult::create());
+        }
         let plan = &self.plan;
         let table = self
             .ctx
