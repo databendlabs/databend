@@ -17,6 +17,7 @@ use std::hash::Hash;
 
 use common_ast::ast::Query;
 use common_ast::ast::TableAlias;
+use common_ast::ast::WindowSpec;
 use common_catalog::plan::InternalColumn;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -172,6 +173,8 @@ pub struct BindContext {
     /// If true, the query is planning for aggregate index.
     /// It's used to avoid infinite loop.
     pub planning_agg_index: bool,
+
+    pub window_definitions: DashMap<String, WindowSpec>,
 }
 
 #[derive(Clone, Debug)]
@@ -194,6 +197,7 @@ impl BindContext {
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            window_definitions: DashMap::new(),
         }
     }
 
@@ -210,6 +214,7 @@ impl BindContext {
             srfs: DashMap::new(),
             expr_context: ExprContext::default(),
             planning_agg_index: false,
+            window_definitions: DashMap::new(),
         }
     }
 

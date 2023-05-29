@@ -353,6 +353,8 @@ pub struct AggregateFunction {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct LagLeadFunction {
+    /// Is `lag` or `lead`.
+    pub is_lag: bool,
     pub arg: Box<ScalarExpr>,
     pub offset: u64,
     pub default: Option<Box<ScalarExpr>>,
@@ -360,7 +362,13 @@ pub struct LagLeadFunction {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct FirstLastFunction {
+pub struct NthValueFunction {
+    /// The nth row of the window frame (counting from 1).
+    ///
+    /// - Some(1): `first_value`
+    /// - Some(n): `nth_value`
+    /// - None: `last_value`
+    pub n: Option<u64>,
     pub arg: Box<ScalarExpr>,
     pub return_type: Box<DataType>,
 }

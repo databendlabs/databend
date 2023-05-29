@@ -31,6 +31,7 @@ use crate::ast::SetExpr;
 use crate::ast::SetOperator;
 use crate::ast::TableReference;
 use crate::ast::TimeTravelPoint;
+use crate::ast::WindowDefinition;
 use crate::ast::With;
 use crate::ast::CTE;
 
@@ -80,7 +81,8 @@ fn pretty_body(body: SetExpr) -> RcDoc<'static> {
         .append(pretty_from(select_stmt.from))
         .append(pretty_selection(select_stmt.selection))
         .append(pretty_group_by(select_stmt.group_by))
-        .append(pretty_having(select_stmt.having)),
+        .append(pretty_having(select_stmt.having))
+        .append(pretty_window(select_stmt.window_list)),
         SetExpr::Query(query) => parenthesized(pretty_query(*query)),
         SetExpr::SetOperation(set_operation) => pretty_body(*set_operation.left)
             .append(
@@ -264,6 +266,28 @@ fn pretty_having(having: Option<Expr>) -> RcDoc<'static> {
     } else {
         RcDoc::nil()
     }
+}
+
+fn pretty_window(window: Option<Vec<WindowDefinition>>) -> RcDoc<'static> {
+    if let Some(window) = window {
+        RcDoc::line()
+            .append(RcDoc::text("WINDOW").append(RcDoc::line().nest(NEST_FACTOR)))
+            .append(
+                interweave_comma(window.into_iter().map(pretty_window_def))
+                    .nest(NEST_FACTOR)
+                    .group(),
+            )
+    } else {
+        RcDoc::nil()
+    }
+}
+
+fn pretty_window_def(def: WindowDefinition) -> RcDoc<'static> {
+    RcDoc::text(def.name.to_string())
+        .append(RcDoc::space())
+        .append(RcDoc::text("AS ("))
+        .append(RcDoc::text(def.spec.to_string()))
+        .append(RcDoc::text(")"))
 }
 
 pub(crate) fn pretty_table(table: TableReference) -> RcDoc<'static> {
