@@ -7701,6 +7701,8 @@ COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "~",
@@ -7758,6 +7760,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter 
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "s3",
@@ -7823,6 +7826,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='htt
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "s3",
@@ -7890,6 +7894,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='htt
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "s3",
@@ -7946,6 +7951,7 @@ COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FO
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "https",
@@ -7995,6 +8001,7 @@ COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE =
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "https",
@@ -8052,6 +8059,7 @@ COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_d
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "my_stage",
@@ -8108,6 +8116,7 @@ COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter 
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: Table {
             catalog: None,
             database: None,
@@ -8170,6 +8179,7 @@ COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_d
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: Table {
             catalog: None,
             database: None,
@@ -8230,6 +8240,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='acces
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "s3",
@@ -8295,6 +8306,7 @@ COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_de
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "external_stage",
@@ -8351,6 +8363,7 @@ COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimi
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "external_stage",
@@ -8407,6 +8420,7 @@ COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_de
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "external_stage",
@@ -8464,6 +8478,7 @@ COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = ( field_delimiter 
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "fs",
