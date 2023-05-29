@@ -214,8 +214,8 @@ impl FuseTable {
         copied_files: &Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        if check_label(ctx).await? {
-            Ok(())
+        if check_label(ctx.clone()).await? {
+            return Ok(());
         }
         let prev = self.read_table_snapshot().await?;
         let prev_version = self.snapshot_format_version(None).await?;
@@ -717,7 +717,7 @@ impl MutatorConflictDetector {
 mod utils {
     use std::collections::BTreeMap;
 
-    use common_meta_kvapi::kvapi::api::KVApi;
+    use common_meta_kvapi::kvapi::KVApi;
     use common_meta_types::KVMeta;
     use common_meta_types::Operation;
     use common_meta_types::SeqV;
@@ -795,7 +795,7 @@ mod utils {
                         .upsert_kv(UpsertKV {
                             key: duplicate_label,
                             seq: MatchSeq::Any,
-                            value: Operation::Update(1.to_le_bytes().to_vec()),
+                            value: Operation::Update(1_i8.to_le_bytes().to_vec()),
                             value_meta: Some(KVMeta {
                                 expire_at: Some(expire_at),
                             }),
