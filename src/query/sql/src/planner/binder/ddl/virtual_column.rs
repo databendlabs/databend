@@ -127,9 +127,6 @@ impl Binder {
         virtual_columns: &[Expr],
         schema: TableSchemaRef,
     ) -> Result<Vec<String>> {
-        println!("\n\nvirtual_columns={:?}", virtual_columns);
-        println!("schema={:?}\n\n", schema);
-
         let mut virtual_names = Vec::with_capacity(virtual_columns.len());
         for virtual_column in virtual_columns.iter() {
             let mut expr = virtual_column;
@@ -195,7 +192,6 @@ impl Binder {
                 )));
             }
         }
-        println!("virtual_names={:?}\n\n", virtual_names);
 
         Ok(virtual_names)
     }

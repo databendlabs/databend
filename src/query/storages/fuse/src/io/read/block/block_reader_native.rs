@@ -166,8 +166,6 @@ impl BlockReader {
                     part.range(),
                 )?;
                 let virtual_index = virtual_column_meta.index + self.project_column_nodes.len();
-
-                println!("virtual_index={:?}", virtual_index);
                 results.insert(virtual_index, readers);
             }
         }

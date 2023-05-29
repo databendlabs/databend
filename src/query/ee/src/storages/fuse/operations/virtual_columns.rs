@@ -151,7 +151,7 @@ async fn materialize_virtual_columns(
     let mut virtual_fields = Vec::with_capacity(paths.len());
     let mut virtual_columns = Vec::with_capacity(paths.len());
     for (virtual_name, src_name, path) in paths {
-        let index = source_schema.index_of(&src_name).unwrap();
+        let index = source_schema.index_of(src_name).unwrap();
         let virtual_field = TableField::new(
             virtual_name.as_str(),
             TableDataType::Nullable(Box::new(TableDataType::Variant)),
