@@ -783,7 +783,7 @@ mod utils {
     #[inline]
     pub async fn check_label(ctx: Arc<dyn TableContext>) -> Result<bool> {
         let duplicate_label = ctx.get_settings().get_duplicate_label().unwrap();
-        if duplicate_label == "" {
+        if duplicate_label.is_empty() {
             Ok(false)
         } else {
             let kv_store = UserApiProvider::instance().get_meta_store_client();
@@ -803,9 +803,7 @@ mod utils {
                         .await?;
                     Ok(false)
                 }
-                Some(_) => {
-                    return Ok(true);
-                }
+                Some(_) => Ok(true),
             }
         }
     }
