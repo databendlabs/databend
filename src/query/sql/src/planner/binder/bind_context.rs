@@ -48,6 +48,7 @@ use crate::NameResolutionContext;
 pub enum ExprContext {
     SelectClause,
     WhereClause,
+    GroupClaue,
     HavingClause,
     OrderByClause,
     LimitClause,
