@@ -69,6 +69,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateVirtualColumnReply;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
@@ -245,6 +247,14 @@ impl Catalog for MutableCatalog {
         req: CreateVirtualColumnReq,
     ) -> Result<CreateVirtualColumnReply> {
         Ok(self.ctx.meta.create_virtual_column(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn update_virtual_column(
+        &self,
+        req: UpdateVirtualColumnReq,
+    ) -> Result<UpdateVirtualColumnReply> {
+        Ok(self.ctx.meta.update_virtual_column(req).await?)
     }
 
     #[async_backtrace::framed]

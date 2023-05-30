@@ -86,10 +86,7 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?
             }
-            Plan::CreateUDF(_)
-            | Plan::CreateDatabase(_)
-            | Plan::CreateIndex(_)
-            | Plan::CreateVirtualColumns(_) => {
+            Plan::CreateUDF(_) | Plan::CreateDatabase(_) | Plan::CreateIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Create])
                     .await?;
@@ -97,8 +94,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropDatabase(_)
             | Plan::UndropDatabase(_)
             | Plan::DropUDF(_)
-            | Plan::DropIndex(_)
-            | Plan::DropVirtualColumns(_) => {
+            | Plan::DropIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Drop])
                     .await?;
@@ -111,6 +107,56 @@ impl AccessChecker for PrivilegeAccess {
                         vec![UserPrivilegeType::Select],
                     )
                     .await?
+            }
+
+            // Virtual Column.
+            Plan::CreateVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Create],
+                    )
+                    .await?;
+            }
+            Plan::AlterVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Alter],
+                    )
+                    .await?;
+            }
+            Plan::DropVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Drop],
+                    )
+                    .await?;
+            }
+            Plan::GenerateVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Super],
+                    )
+                    .await?;
             }
 
             // Table.
@@ -271,18 +317,6 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::VacuumTable(plan) => {
-                session
-                    .validate_privilege(
-                        &GrantObject::Table(
-                            plan.catalog.clone(),
-                            plan.database.clone(),
-                            plan.table.clone(),
-                        ),
-                        vec![UserPrivilegeType::Super],
-                    )
-                    .await?;
-            }
-            Plan::GenerateVirtualColumns(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(

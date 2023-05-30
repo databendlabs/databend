@@ -480,6 +480,8 @@ pub trait VisitorMut: Sized {
 
     fn visit_create_virtual_columns(&mut self, _stmt: &mut CreateVirtualColumnsStmt) {}
 
+    fn visit_alter_virtual_columns(&mut self, _stmt: &mut AlterVirtualColumnsStmt) {}
+
     fn visit_drop_virtual_columns(&mut self, _stmt: &mut DropVirtualColumnsStmt) {}
 
     fn visit_generate_virtual_columns(&mut self, _stmt: &mut GenerateVirtualColumnsStmt) {}

@@ -79,6 +79,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateVirtualColumnReply;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
@@ -755,6 +757,14 @@ impl Catalog for FakedCatalog {
         &self,
         _req: CreateVirtualColumnReq,
     ) -> Result<CreateVirtualColumnReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_virtual_column(
+        &self,
+        _req: UpdateVirtualColumnReq,
+    ) -> Result<UpdateVirtualColumnReply> {
         unimplemented!()
     }
 

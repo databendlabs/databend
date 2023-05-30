@@ -52,19 +52,6 @@ pub struct VirtualColumnMeta {
     pub virtual_columns: Vec<String>,
     pub created_on: DateTime<Utc>,
     pub updated_on: Option<DateTime<Utc>>,
-    pub drop_on: Option<DateTime<Utc>>,
-}
-
-impl Default for VirtualColumnMeta {
-    fn default() -> Self {
-        VirtualColumnMeta {
-            table_id: 0,
-            virtual_columns: vec![],
-            created_on: Utc::now(),
-            updated_on: None,
-            drop_on: None,
-        }
-    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -87,18 +74,32 @@ impl Display for CreateVirtualColumnReq {
 pub struct CreateVirtualColumnReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct DropVirtualColumnReq {
+pub struct UpdateVirtualColumnReq {
     pub name_ident: VirtualColumnNameIdent,
     pub virtual_columns: Vec<String>,
 }
 
-impl Display for DropVirtualColumnReq {
+impl Display for UpdateVirtualColumnReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "drop_virtual_column ({:?}) for {}",
+            "update_virtual_column ({:?}) for {}",
             self.virtual_columns, self.name_ident
         )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct UpdateVirtualColumnReply {}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct DropVirtualColumnReq {
+    pub name_ident: VirtualColumnNameIdent,
+}
+
+impl Display for DropVirtualColumnReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "drop_virtual_column for {}", self.name_ident)
     }
 }
 

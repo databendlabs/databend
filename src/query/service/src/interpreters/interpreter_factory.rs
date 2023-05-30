@@ -234,6 +234,9 @@ impl InterpreterFactory {
             Plan::CreateVirtualColumns(create_virtual_columns) => Ok(Arc::new(
                 CreateVirtualColumnsInterpreter::try_create(ctx, *create_virtual_columns.clone())?,
             )),
+            Plan::AlterVirtualColumns(alter_virtual_columns) => Ok(Arc::new(
+                AlterVirtualColumnsInterpreter::try_create(ctx, *alter_virtual_columns.clone())?,
+            )),
             Plan::DropVirtualColumns(drop_virtual_columns) => Ok(Arc::new(
                 DropVirtualColumnsInterpreter::try_create(ctx, *drop_virtual_columns.clone())?,
             )),

@@ -36,7 +36,4 @@ message VirtualColumnMeta {
 
   // The time virtual column updated.
   optional string updated_on = 4;
-
-  // The time virtual column dropped.
-  optional string drop_on = 5;
 }

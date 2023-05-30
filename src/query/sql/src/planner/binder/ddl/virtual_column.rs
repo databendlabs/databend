@@ -14,6 +14,7 @@
 
 use std::collections::VecDeque;
 
+use common_ast::ast::AlterVirtualColumnsStmt;
 use common_ast::ast::CreateVirtualColumnsStmt;
 use common_ast::ast::DropVirtualColumnsStmt;
 use common_ast::ast::Expr;
@@ -26,6 +27,7 @@ use common_expression::TableDataType;
 use common_expression::TableSchemaRef;
 
 use crate::binder::Binder;
+use crate::plans::AlterVirtualColumnsPlan;
 use crate::plans::CreateVirtualColumnsPlan;
 use crate::plans::DropVirtualColumnsPlan;
 use crate::plans::GenerateVirtualColumnsPlan;
@@ -70,11 +72,11 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(in crate::planner::binder) async fn bind_drop_virtual_columns(
+    pub(in crate::planner::binder) async fn bind_alter_virtual_columns(
         &mut self,
-        stmt: &DropVirtualColumnsStmt,
+        stmt: &AlterVirtualColumnsStmt,
     ) -> Result<Plan> {
-        let DropVirtualColumnsStmt {
+        let AlterVirtualColumnsStmt {
             catalog,
             database,
             table,
@@ -96,11 +98,41 @@ impl Binder {
             .analyze_virtual_columns(virtual_columns, schema)
             .await?;
 
+        Ok(Plan::AlterVirtualColumns(Box::new(
+            AlterVirtualColumnsPlan {
+                catalog,
+                database,
+                table,
+                virtual_columns,
+            },
+        )))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_drop_virtual_columns(
+        &mut self,
+        stmt: &DropVirtualColumnsStmt,
+    ) -> Result<Plan> {
+        let DropVirtualColumnsStmt {
+            catalog,
+            database,
+            table,
+        } = stmt;
+
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+
+        let table_info = self.ctx.get_table(&catalog, &database, &table).await?;
+        if table_info.engine() != "FUSE" {
+            return Err(ErrorCode::SemanticError(
+                "Virtual Column only support FUSE engine",
+            ));
+        }
+
         Ok(Plan::DropVirtualColumns(Box::new(DropVirtualColumnsPlan {
             catalog,
             database,
             table,
-            virtual_columns,
         })))
     }
 

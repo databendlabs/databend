@@ -85,6 +85,9 @@ impl Plan {
             Plan::CreateVirtualColumns(create_virtual_columns) => {
                 Ok(format!("{:?}", create_virtual_columns))
             }
+            Plan::AlterVirtualColumns(alter_virtual_columns) => {
+                Ok(format!("{:?}", alter_virtual_columns))
+            }
             Plan::DropVirtualColumns(drop_virtual_columns) => {
                 Ok(format!("{:?}", drop_virtual_columns))
             }

@@ -17,9 +17,9 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_license::license_manager::get_license_manager;
-use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::VirtualColumnNameIdent;
-use common_sql::plans::DropVirtualColumnsPlan;
+use common_sql::plans::AlterVirtualColumnsPlan;
 use virtual_columns_handler::get_virtual_columns_handler;
 
 use crate::interpreters::Interpreter;
@@ -28,21 +28,21 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
 #[allow(dead_code)]
-pub struct DropVirtualColumnsInterpreter {
+pub struct AlterVirtualColumnsInterpreter {
     ctx: Arc<QueryContext>,
-    plan: DropVirtualColumnsPlan,
+    plan: AlterVirtualColumnsPlan,
 }
 
-impl DropVirtualColumnsInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: DropVirtualColumnsPlan) -> Result<Self> {
-        Ok(DropVirtualColumnsInterpreter { ctx, plan })
+impl AlterVirtualColumnsInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: AlterVirtualColumnsPlan) -> Result<Self> {
+        Ok(AlterVirtualColumnsInterpreter { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for DropVirtualColumnsInterpreter {
+impl Interpreter for AlterVirtualColumnsInterpreter {
     fn name(&self) -> &str {
-        "DropVirtualColumnsInterpreter"
+        "AlterVirtualColumnsInterpreter"
     }
 
     fn schema(&self) -> DataSchemaRef {
@@ -56,7 +56,7 @@ impl Interpreter for DropVirtualColumnsInterpreter {
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
             tenant.clone(),
-            "drop_virtual_columns".to_string(),
+            "alter_virtual_columns".to_string(),
         )?;
 
         let catalog_name = self.plan.catalog.clone();
@@ -70,13 +70,14 @@ impl Interpreter for DropVirtualColumnsInterpreter {
         let table_id = table.get_id();
         let catalog = self.ctx.get_catalog(&catalog_name)?;
 
-        let drop_virtual_column_req = DropVirtualColumnReq {
+        let update_virtual_column_req = UpdateVirtualColumnReq {
             name_ident: VirtualColumnNameIdent { tenant, table_id },
+            virtual_columns: self.plan.virtual_columns.clone(),
         };
 
         let handler = get_virtual_columns_handler();
         let _ = handler
-            .do_drop_virtual_column(catalog, drop_virtual_column_req)
+            .do_update_virtual_column(catalog, update_virtual_column_req)
             .await?;
 
         Ok(PipelineBuildResult::create())

@@ -45,10 +45,6 @@ impl FromToProto for mt::VirtualColumnMeta {
                 Some(updated_on) => Some(DateTime::<Utc>::from_pb(updated_on)?),
                 None => None,
             },
-            drop_on: match p.drop_on {
-                Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
-                None => None,
-            },
         };
         Ok(v)
     }
@@ -62,10 +58,6 @@ impl FromToProto for mt::VirtualColumnMeta {
             created_on: self.created_on.to_pb()?,
             updated_on: match self.updated_on {
                 Some(updated_on) => Some(updated_on.to_pb()?),
-                None => None,
-            },
-            drop_on: match self.drop_on {
-                Some(drop_on) => Some(drop_on.to_pb()?),
                 None => None,
             },
         };

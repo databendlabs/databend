@@ -56,6 +56,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateVirtualColumnReply;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
@@ -101,6 +103,11 @@ pub trait Catalog: DynClone + Send + Sync {
         &self,
         req: CreateVirtualColumnReq,
     ) -> Result<CreateVirtualColumnReply>;
+
+    async fn update_virtual_column(
+        &self,
+        req: UpdateVirtualColumnReq,
+    ) -> Result<UpdateVirtualColumnReply>;
 
     async fn drop_virtual_column(
         &self,

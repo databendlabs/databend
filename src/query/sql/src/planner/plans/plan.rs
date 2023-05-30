@@ -49,6 +49,7 @@ use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
+use crate::plans::AlterVirtualColumnsPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CallPlan;
 use crate::plans::CreateCatalogPlan;
@@ -188,6 +189,7 @@ pub enum Plan {
 
     // Virtual Columns
     CreateVirtualColumns(Box<CreateVirtualColumnsPlan>),
+    AlterVirtualColumns(Box<AlterVirtualColumnsPlan>),
     DropVirtualColumns(Box<DropVirtualColumnsPlan>),
     GenerateVirtualColumns(Box<GenerateVirtualColumnsPlan>),
 
@@ -312,6 +314,7 @@ impl Display for Plan {
             Plan::CreateIndex(_) => write!(f, "CreateIndex"),
             Plan::DropIndex(_) => write!(f, "DropIndex"),
             Plan::CreateVirtualColumns(_) => write!(f, "CreateVirtualColumns"),
+            Plan::AlterVirtualColumns(_) => write!(f, "AlterVirtualColumns"),
             Plan::DropVirtualColumns(_) => write!(f, "DropVirtualColumns"),
             Plan::GenerateVirtualColumns(_) => write!(f, "GenerateVirtualColumns"),
             Plan::AlterUser(_) => write!(f, "AlterUser"),

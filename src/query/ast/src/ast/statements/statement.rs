@@ -131,6 +131,7 @@ pub enum Statement {
 
     // VirtualColumns
     CreateVirtualColumns(CreateVirtualColumnsStmt),
+    AlterVirtualColumns(AlterVirtualColumnsStmt),
     DropVirtualColumns(DropVirtualColumnsStmt),
     GenerateVirtualColumns(GenerateVirtualColumnsStmt),
 
@@ -389,6 +390,7 @@ impl Display for Statement {
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateVirtualColumns(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::DropVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::GenerateVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,

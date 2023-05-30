@@ -1540,7 +1540,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
-    fn visit_drop_virtual_columns(&mut self, stmt: &'ast DropVirtualColumnsStmt) {
+    fn visit_alter_virtual_columns(&mut self, stmt: &'ast AlterVirtualColumnsStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let table_child = self.children.pop().unwrap();
 
@@ -1556,9 +1556,19 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             FormatTreeNode::with_children(virtual_columns_ctx, virtual_columns_children);
         let children = vec![table_child, virtual_columns_child];
 
-        let name = "DropVirtualColumns".to_string();
+        let name = "AlterVirtualColumns".to_string();
         let format_ctx = AstFormatContext::with_children(name, 2);
         let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_drop_virtual_columns(&mut self, stmt: &'ast DropVirtualColumnsStmt) {
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let child = self.children.pop().unwrap();
+
+        let name = "DropVirtualColumns".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
         self.children.push(node);
     }
 

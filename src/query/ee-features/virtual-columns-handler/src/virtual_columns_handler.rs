@@ -23,6 +23,8 @@ use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ListVirtualColumnsReq;
+use common_meta_app::schema::UpdateVirtualColumnReply;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::VirtualColumnMeta;
 use common_storages_fuse::FuseTable;
 
@@ -33,6 +35,12 @@ pub trait VirtualColumnsHandler: Sync + Send {
         catalog: Arc<dyn Catalog>,
         req: CreateVirtualColumnReq,
     ) -> Result<CreateVirtualColumnReply>;
+
+    async fn do_update_virtual_column(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        req: UpdateVirtualColumnReq,
+    ) -> Result<UpdateVirtualColumnReply>;
 
     async fn do_drop_virtual_column(
         &self,
@@ -70,6 +78,15 @@ impl VirtualColumnsHandlerWrapper {
         req: CreateVirtualColumnReq,
     ) -> Result<CreateVirtualColumnReply> {
         self.handler.do_create_virtual_column(catalog, req).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_update_virtual_column(
+        &self,
+        catalog: Arc<dyn Catalog>,
+        req: UpdateVirtualColumnReq,
+    ) -> Result<UpdateVirtualColumnReply> {
+        self.handler.do_update_virtual_column(catalog, req).await
     }
 
     #[async_backtrace::framed]

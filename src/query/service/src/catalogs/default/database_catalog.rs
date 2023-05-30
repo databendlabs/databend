@@ -58,6 +58,8 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateVirtualColumnReply;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnMeta;
@@ -500,6 +502,14 @@ impl Catalog for DatabaseCatalog {
         req: CreateVirtualColumnReq,
     ) -> Result<CreateVirtualColumnReply> {
         self.mutable_catalog.create_virtual_column(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn update_virtual_column(
+        &self,
+        req: UpdateVirtualColumnReq,
+    ) -> Result<UpdateVirtualColumnReply> {
+        self.mutable_catalog.update_virtual_column(req).await
     }
 
     #[async_backtrace::framed]

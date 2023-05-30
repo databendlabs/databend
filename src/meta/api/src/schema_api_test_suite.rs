@@ -73,6 +73,7 @@ use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_app::schema::VirtualColumnNameIdent;
@@ -3918,7 +3919,16 @@ impl SchemaApiTestSuite {
                 virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
             };
 
-            let _res = mt.create_virtual_column(req).await?;
+            let _res = mt.create_virtual_column(req.clone()).await?;
+
+            info!("--- create virtual column again");
+            let req = CreateVirtualColumnReq {
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+            };
+
+            let res = mt.create_virtual_column(req).await;
+            assert!(res.is_err());
         }
 
         {
@@ -3934,13 +3944,45 @@ impl SchemaApiTestSuite {
                 "variant:k1".to_string(),
                 "variant[1]".to_string()
             ]);
+
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(u64::MAX),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert!(res.is_empty())
+        }
+
+        {
+            info!("--- update virtual column");
+            let req = UpdateVirtualColumnReq {
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k2".to_string(), "variant[2]".to_string()],
+            };
+
+            let _res = mt.update_virtual_column(req).await?;
+        }
+
+        {
+            info!("--- list virtual columns after update");
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert_eq!(1, res.len());
+            assert_eq!(res[0].virtual_columns, vec![
+                "variant:k2".to_string(),
+                "variant[2]".to_string()
+            ]);
         }
 
         {
             info!("--- drop virtual column");
             let req = DropVirtualColumnReq {
                 name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant:k1".to_string()],
             };
 
             let _res = mt.drop_virtual_column(req).await?;
@@ -3954,37 +3996,18 @@ impl SchemaApiTestSuite {
             };
 
             let res = mt.list_virtual_columns(req).await?;
-            assert_eq!(1, res.len());
-            assert_eq!(res[0].virtual_columns, vec!["variant[1]".to_string()]);
-        }
-
-        {
-            info!("--- drop virtual column again");
-            let req = DropVirtualColumnReq {
-                name_ident: name_ident.clone(),
-                virtual_columns: vec!["variant[1]".to_string()],
-            };
-
-            let _res = mt.drop_virtual_column(req).await?;
-        }
-
-        {
-            info!("--- list virtual columns after drop all");
-            let req = ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: Some(table_id),
-            };
-
-            let res = mt.list_virtual_columns(req).await?;
             assert_eq!(0, res.len());
+        }
 
-            let req = ListVirtualColumnsReq {
-                tenant: tenant.to_string(),
-                table_id: Some(u64::MAX),
+        {
+            info!("--- update virtual column after drop");
+            let req = UpdateVirtualColumnReq {
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k3".to_string(), "variant[3]".to_string()],
             };
 
-            let res = mt.list_virtual_columns(req).await?;
-            assert!(res.is_empty())
+            let res = mt.update_virtual_column(req).await;
+            assert!(res.is_err());
         }
 
         Ok(())

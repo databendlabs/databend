@@ -259,6 +259,7 @@ impl<'a> Binder {
 
             // Virtual Columns
             Statement::CreateVirtualColumns(stmt) => self.bind_create_virtual_columns(stmt).await?,
+            Statement::AlterVirtualColumns(stmt) => self.bind_alter_virtual_columns(stmt).await?,
             Statement::DropVirtualColumns(stmt) => self.bind_drop_virtual_columns(stmt).await?,
             Statement::GenerateVirtualColumns(stmt) => self.bind_generate_virtual_columns(stmt).await?,
 

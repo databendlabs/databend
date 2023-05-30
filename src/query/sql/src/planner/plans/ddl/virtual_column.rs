@@ -32,11 +32,24 @@ impl CreateVirtualColumnsPlan {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DropVirtualColumnsPlan {
+pub struct AlterVirtualColumnsPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
     pub virtual_columns: Vec<String>,
+}
+
+impl AlterVirtualColumnsPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropVirtualColumnsPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
 }
 
 impl DropVirtualColumnsPlan {
