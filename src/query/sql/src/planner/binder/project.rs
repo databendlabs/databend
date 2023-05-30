@@ -245,7 +245,9 @@ impl Binder {
                         None => format!("{:#}", expr).to_lowercase(),
                     };
 
-                    prev_aliases.push((expr_name.clone(), bound_expr.clone()));
+                    if alias.is_some() {
+                        prev_aliases.push((expr_name.clone(), bound_expr.clone()));
+                    }
                     output.items.push(SelectItem {
                         select_target,
                         scalar: bound_expr,
