@@ -38,3 +38,7 @@ pub fn normalize(vec: &mut [f32]) {
     }
     vec.mapv_inplace(|x| x / norm);
 }
+
+pub fn normalize_vectors(vecs: &mut [f32], dim: usize) {
+    let _: Vec<_> = vecs.chunks_mut(dim).map(normalize).collect();
+}

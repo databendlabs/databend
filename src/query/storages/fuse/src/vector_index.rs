@@ -23,6 +23,7 @@ use common_expression::types::array::ArrayColumn;
 use common_expression::types::Float32Type;
 use common_expression::DataBlock;
 use common_vector::index::normalize;
+use common_vector::index::normalize_vectors;
 use common_vector::index::IvfFlatIndex;
 use common_vector::index::MetricType;
 use common_vector::index::VectorIndex;
@@ -92,7 +93,7 @@ impl FuseTable {
             };
             let (index_location, metric) = match metric_type {
                 MetricType::Cosine => {
-                    normalize(&mut raw_data);
+                    normalize_vectors(&mut raw_data, dimension);
                     (index_location + POST_FIX_COSINE, faiss::MetricType::L2)
                 }
             };

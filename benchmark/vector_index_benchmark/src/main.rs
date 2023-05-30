@@ -1,4 +1,5 @@
 use databend_driver::new_connection;
+use databend_driver::Connection;
 use futures_util::StreamExt;
 use prettytable::row;
 use prettytable::Cell;
@@ -22,8 +23,18 @@ async fn main() {
     table.printstd();
 }
 
+const TABLE_NAME: &str = "tttttttttttttttttttttttttttttttttttt";
+
+async fn warmup(dim: usize, k: usize, conn: &dyn Connection) {
+    let target = generate_points(1, dim);
+    let knn_sql = format!(
+        "SELECT * FROM {} ORDER BY cosine_distance(c,{:?}) LIMIT {}",
+        TABLE_NAME, target, k
+    );
+    let _ = conn.exec(&knn_sql);
+}
+
 async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
-    let table_name = "ttttttttttttttttttttttttttttttt";
     let mut row = Row::empty();
 
     row.add_cell(Cell::new(&format_num(num_points)));
@@ -39,22 +50,23 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     let dsn = "databend://root:@localhost:8000/default?sslmode=disable";
     let conn = new_connection(dsn).unwrap();
     println!("creating table");
-    conn.exec(&format!("DROP TABLE IF EXISTS {}", table_name))
+    conn.exec(&format!("DROP TABLE IF EXISTS {}", TABLE_NAME))
         .await
         .unwrap();
-    conn.exec(&format!("CREATE TABLE {} (c array(float32))", table_name))
+    conn.exec(&format!("CREATE TABLE {} (c array(float32))", TABLE_NAME))
         .await
         .unwrap();
     println!("inserting points");
-    conn.exec(&insert_array(&points, dim, table_name))
+    conn.exec(&insert_array(&points, dim, TABLE_NAME))
         .await
         .unwrap();
     println!("inserting points done");
-
+    /////////////////////////////////////////////////////////////////////////////////////////////////////
+    // warmup(dim, k, conn.as_ref()).await;
     println!("querying without index");
     let knn_sql = format!(
         "SELECT * FROM {} ORDER BY cosine_distance(c,{:?}) LIMIT {}",
-        table_name, target, k
+        TABLE_NAME, target, k
     );
     let mut exact_result = Vec::with_capacity(k);
     let start = quanta::Instant::now();
@@ -71,13 +83,15 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     let start = quanta::Instant::now();
     conn.exec(&format!(
         "create index on {} using ivfflat (c cosine) with (nlist={});",
-        table_name, nlists
+        TABLE_NAME, nlists
     ))
     .await
     .unwrap();
     let elapsed = start.elapsed();
     row.add_cell(Cell::new(&format_time(elapsed.as_nanos() as usize)));
     println!("building index done");
+    //////////////////////////////////////////////////////////////////////////////////////////////////////
+    // warmup(dim, k, conn.as_ref()).await;
     println!("querying with index");
     let mut index_result = Vec::with_capacity(k);
     let start = quanta::Instant::now();
