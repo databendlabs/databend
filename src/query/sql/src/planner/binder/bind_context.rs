@@ -289,7 +289,8 @@ impl BindContext {
             if self.expr_context.is_where_clause() || self.expr_context.is_select_clause() {
                 // In where/select clause, check bound columns first.
                 Self::search_bound_columns(bind_context, database, table, column, &mut result);
-                if !result.is_empty() {
+
+                if self.expr_context.is_where_clause() && !result.is_empty() {
                     break;
                 }
             }
