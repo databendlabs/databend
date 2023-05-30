@@ -229,7 +229,7 @@ impl Binder {
                     };
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let previouse_aliases = output
+                    let pre_aliases = output
                         .items
                         .iter()
                         .map(|item| (item.alias.clone(), item.scalar.clone()))
@@ -240,7 +240,7 @@ impl Binder {
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
-                        &previouse_aliases,
+                        &pre_aliases,
                     );
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
