@@ -27,10 +27,12 @@ use crate::optimizer::hyper_dp::query_graph::QueryGraph;
 use crate::optimizer::hyper_dp::util::intersect;
 use crate::optimizer::hyper_dp::util::union;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::RelExpr;
 use crate::optimizer::RuleFactory;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Filter;
+use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::IndexType;
@@ -41,7 +43,6 @@ const RELATION_THRESHOLD: usize = 10;
 
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
 // See the paper for more details.
-// Current, we only support inner join
 pub struct DPhpy {
     ctx: Arc<dyn TableContext>,
     metadata: MetadataRef,
@@ -68,6 +69,36 @@ impl DPhpy {
         }
     }
 
+    fn new_children(&mut self, s_expr: Arc<SExpr>) -> Result<Arc<SExpr>> {
+        // Parallel process children
+        let ctx = self.ctx.clone();
+        let metadata = self.metadata.clone();
+        let left_expr = s_expr.children()[0].clone();
+        let left_res = Thread::spawn(move || {
+            let mut dphyp = DPhpy::new(ctx, metadata);
+            (dphyp.optimize(left_expr), dphyp.table_index_map)
+        });
+        let ctx = self.ctx.clone();
+        let metadata = self.metadata.clone();
+        let right_expr = s_expr.children()[1].clone();
+        let right_res = Thread::spawn(move || {
+            let mut dphyp = DPhpy::new(ctx, metadata);
+            (dphyp.optimize(right_expr), dphyp.table_index_map)
+        });
+        let left_res = left_res.join()?;
+        let (left_expr, _) = left_res.0?;
+        let right_res = right_res.join()?;
+        let (right_expr, _) = right_res.0?;
+        let relation_idx = self.join_relations.len() as IndexType;
+        for table_index in left_res.1.keys() {
+            self.table_index_map.insert(*table_index, relation_idx);
+        }
+        for table_index in right_res.1.keys() {
+            self.table_index_map.insert(*table_index, relation_idx);
+        }
+        Ok(Arc::new(s_expr.replace_children([left_expr, right_expr])))
+    }
+
     // Traverse the s_expr and get all base relations and join conditions
     fn get_base_relations(
         &mut self,
@@ -85,15 +116,13 @@ impl DPhpy {
         if is_subquery {
             // If it's a subquery, start a new dphyp
             let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
-            let (new_s_expr, optimized) = dphyp.optimize(s_expr)?;
-            if optimized {
-                let relation_idx = self.join_relations.len() as IndexType;
-                for table_index in dphyp.table_index_map.keys() {
-                    self.table_index_map.insert(*table_index, relation_idx);
-                }
-                self.join_relations.push(JoinRelation::new(&new_s_expr));
+            let (new_s_expr, _) = dphyp.optimize(s_expr)?;
+            let relation_idx = self.join_relations.len() as IndexType;
+            for table_index in dphyp.table_index_map.keys() {
+                self.table_index_map.insert(*table_index, relation_idx);
             }
-            return Ok((new_s_expr, optimized));
+            self.join_relations.push(JoinRelation::new(&new_s_expr));
+            return Ok((new_s_expr, true));
         }
 
         match s_expr.plan.as_ref() {
@@ -141,40 +170,41 @@ impl DPhpy {
                     };
                     self.filters.insert(filter);
                 }
-                if !is_inner_join || (left_is_subquery && right_is_subquery) {
-                    // Parallel process subquery
-                    let ctx = self.ctx.clone();
-                    let metadata = self.metadata.clone();
-                    let left_expr = s_expr.children()[0].clone();
-                    let left_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(ctx, metadata);
-                        (dphyp.optimize(left_expr), dphyp.table_index_map)
-                    });
-                    let ctx = self.ctx.clone();
-                    let metadata = self.metadata.clone();
-                    let right_expr = s_expr.children()[1].clone();
-                    let right_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(ctx, metadata);
-                        (dphyp.optimize(right_expr), dphyp.table_index_map)
-                    });
-                    let left_res = left_res.join()?;
-                    let (left_expr, left_optimized) = left_res.0?;
-                    let right_res = right_res.join()?;
-                    let (right_expr, right_optimized) = right_res.0?;
-                    if left_optimized && right_optimized {
-                        let relation_idx = self.join_relations.len() as IndexType;
-                        for table_index in left_res.1.keys() {
-                            self.table_index_map.insert(*table_index, relation_idx);
-                        }
-                        for table_index in right_res.1.keys() {
-                            self.table_index_map.insert(*table_index, relation_idx);
-                        }
-                        let new_s_expr = Arc::new(s_expr.replace_children([left_expr, right_expr]));
-                        self.join_relations.push(JoinRelation::new(&new_s_expr));
-                        Ok((new_s_expr, true))
-                    } else {
-                        Ok((s_expr, false))
+                if !is_inner_join {
+                    let mut new_s_expr = self.new_children(s_expr)?;
+                    let mut join: Join = new_s_expr.plan().clone().try_into()?;
+                    let left_child = new_s_expr.child(0)?;
+                    let right_child = new_s_expr.child(1)?;
+                    let left_rel_expr = RelExpr::with_s_expr(left_child);
+                    let right_rel_expr = RelExpr::with_s_expr(right_child);
+                    let left_card = left_rel_expr.derive_cardinality()?.cardinality;
+                    let right_card = right_rel_expr.derive_cardinality()?.cardinality;
+                    if left_card < right_card {
+                        match join.join_type {
+                            JoinType::Inner
+                            | JoinType::Cross
+                            | JoinType::Left
+                            | JoinType::Right
+                            | JoinType::LeftSemi
+                            | JoinType::RightSemi
+                            | JoinType::LeftAnti
+                            | JoinType::LeftMark
+                            | JoinType::RightAnti => {
+                                // Swap the join conditions side
+                                (join.left_conditions, join.right_conditions) =
+                                    (join.right_conditions, join.left_conditions);
+                                join.join_type = join.join_type.opposite();
+                                new_s_expr = Arc::new(SExpr::create_binary(
+                                    Arc::new(join.into()),
+                                    Arc::new(right_child.clone()),
+                                    Arc::new(left_child.clone()),
+                                ));
+                            }
+                            _ => {}
+                        };
                     }
+                    self.join_relations.push(JoinRelation::new(&new_s_expr));
+                    Ok((new_s_expr, true))
                 } else {
                     let left_res = self.get_base_relations(
                         s_expr.children()[0].clone(),
@@ -195,11 +225,9 @@ impl DPhpy {
                     Ok((new_s_expr, left_res.1 && right_res.1))
                 }
             }
-
             RelOperator::ProjectSet(_)
             | RelOperator::EvalScalar(_)
             | RelOperator::Filter(_)
-            | RelOperator::Aggregate(_)
             | RelOperator::Sort(_)
             | RelOperator::Limit(_) => {
                 if join_child {
@@ -224,15 +252,30 @@ impl DPhpy {
                         false,
                         None,
                     )?;
-                    let new_s_expr = Arc::new(s_expr.replace_children([child]));
+                    let new_s_expr: Arc<SExpr> = Arc::new(s_expr.replace_children([child]));
                     Ok((new_s_expr, optimized))
                 }
             }
-            RelOperator::Exchange(_) | RelOperator::Pattern(_) => unreachable!(),
-            RelOperator::Window(_)
-            | RelOperator::UnionAll(_)
-            | RelOperator::DummyTableScan(_)
-            | RelOperator::RuntimeFilterSource(_) => Ok((s_expr, false)),
+            RelOperator::Aggregate(_) | RelOperator::Window(_) => {
+                let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
+                let (child, _) = dphyp.optimize(s_expr.children()[0].clone())?;
+                let relation_idx = self.join_relations.len() as IndexType;
+                for table_index in dphyp.table_index_map.keys() {
+                    self.table_index_map.insert(*table_index, relation_idx);
+                }
+                let new_s_expr = Arc::new(s_expr.replace_children([child]));
+                self.join_relations.push(JoinRelation::new(&new_s_expr));
+                return Ok((new_s_expr, false));
+            }
+            RelOperator::UnionAll(_) => {
+                let new_s_expr = self.new_children(s_expr)?;
+                self.join_relations.push(JoinRelation::new(&new_s_expr));
+                Ok((new_s_expr, true))
+            }
+            RelOperator::Exchange(_)
+            | RelOperator::Pattern(_)
+            | RelOperator::RuntimeFilterSource(_) => unreachable!(),
+            RelOperator::DummyTableScan(_) => Ok((s_expr, false)),
         }
     }
 
@@ -289,6 +332,9 @@ impl DPhpy {
                 }
                 continue;
             }
+        }
+        for (_, neighbors) in self.query_graph.cached_neighbors.iter_mut() {
+            neighbors.sort();
         }
         let optimized = self.solve()?;
         // Get all join relations in `relation_set_tree`
@@ -356,11 +402,10 @@ impl DPhpy {
         forbidden_nodes.extend(nodes);
 
         // Get neighbors of `nodes`
-        let mut neighbors = self.query_graph.neighbors(nodes, &forbidden_nodes)?;
+        let neighbors = self.query_graph.neighbors(nodes, &forbidden_nodes)?;
         if neighbors.is_empty() {
             return Ok(true);
         }
-        neighbors.sort();
         // Traverse all neighbors by desc
         for neighbor in neighbors.iter().rev() {
             let neighbor_relations = self

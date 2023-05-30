@@ -152,10 +152,10 @@ pub fn optimize_query(
         HeuristicOptimizer::new(ctx.get_function_context()?, bind_context, metadata.clone());
     let mut result = heuristic.optimize(s_expr)?;
     if ctx.get_settings().get_enable_dphyp()? {
-        let (dp_res, optimized) =
+        let (dp_res, _) =
             DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result))?;
         result = (*dp_res).clone();
-        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, optimized)?;
+        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, true)?;
         result = cascades.optimize(result)?;
     } else {
         let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, false)?;

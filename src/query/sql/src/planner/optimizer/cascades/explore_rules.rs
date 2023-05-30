@@ -23,12 +23,9 @@ pub fn get_explore_rule_set(optimized: bool) -> RuleSet {
     }
 }
 
-/// The join order has been optimized by dphyp, therefore we will not change the join order
-/// and only attempt to exchange the order of build and probe.
+/// The join order has been optimized by dphyp, therefore we will not change the join order.
 fn rule_set_dphyp() -> RuleSet {
     RuleSet::create_with_ids(vec![
-        RuleID::CommuteJoinBaseTable,
-        RuleID::CommuteJoin,
         RuleID::EagerAggregation,
     ])
 }
