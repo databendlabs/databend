@@ -174,7 +174,7 @@ impl BlockReader {
 
         let mut merge_io_read_res =
             Self::merge_io_read(settings, self.operator.clone(), location, ranges).await?;
-        // TODO set
+
         merge_io_read_res.cached_column_data = cached_column_data;
         merge_io_read_res.cached_column_array = cached_column_array;
         Ok(merge_io_read_res)

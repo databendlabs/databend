@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use std::sync::RwLock;
 
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -23,6 +22,7 @@ use common_expression::DataSchemaRef;
 use common_expression::KeysState;
 use common_hashtable::RowPtr;
 use common_storages_fuse::TableContext;
+use parking_lot::RwLock;
 
 use crate::sessions::QueryContext;
 
@@ -65,7 +65,7 @@ impl RowSpace {
 
         {
             // Acquire write lock in current scope
-            let mut chunks = self.chunks.write().unwrap();
+            let mut chunks = self.chunks.write();
             chunks.push(chunk);
         }
 
@@ -73,7 +73,7 @@ impl RowSpace {
     }
 
     pub fn datablocks(&self) -> Vec<DataBlock> {
-        let chunks = self.chunks.read().unwrap();
+        let chunks = self.chunks.read();
         chunks.iter().map(|c| c.data_block.clone()).collect()
     }
 

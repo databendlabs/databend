@@ -1,0 +1,49 @@
+statement ok
+DROP TABLE IF EXISTS agg_bitmap_test
+
+statement ok
+CREATE TABLE agg_bitmap_test(id Int, v Bitmap)
+
+statement ok
+INSERT INTO agg_bitmap_test(id, v) VALUES(1, to_bitmap('0, 1')), (2, to_bitmap('0, 1, 2')), (3, to_bitmap('1, 3, 4'))
+
+query I
+SELECT bitmap_and_count(to_bitmap('1, 3, 5'))
+----
+3
+
+query I
+SELECT bitmap_or_count(to_bitmap('1, 3, 5'))
+----
+3
+
+query I
+SELECT bitmap_xor_count(to_bitmap('1, 3, 5'))
+----
+3
+
+statement error
+SELECT bitmap_and_count('123')
+
+query IIII rowsort
+SELECT id, bitmap_and_count(v), bitmap_or_count(v), bitmap_xor_count(v) from agg_bitmap_test group by id
+----
+1 2 2 2
+2 3 3 3
+3 3 3 3
+
+query III
+SELECT bitmap_and_count(v), bitmap_or_count(v), bitmap_xor_count(v) from agg_bitmap_test
+----
+1 5 4
+
+statement ok
+INSERT INTO agg_bitmap_test(id, v) VALUES(4, build_bitmap([]))
+
+query III
+SELECT bitmap_and_count(v), bitmap_or_count(v), bitmap_xor_count(v) from agg_bitmap_test
+----
+0 5 4
+
+statement ok
+DROP TABLE agg_bitmap_test

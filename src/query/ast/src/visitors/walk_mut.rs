@@ -85,7 +85,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             trim_where,
         } => visitor.visit_trim(*span, expr, trim_where),
         Expr::Literal { span, lit } => visitor.visit_literal(*span, lit),
-        Expr::CountAll { span } => visitor.visit_count_all(*span),
+        Expr::CountAll { span, window } => visitor.visit_count_all(*span, window),
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
             span,
@@ -311,6 +311,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::ShowMetrics => visitor.visit_show_metrics(),
         Statement::ShowEngines => visitor.visit_show_engines(),
         Statement::ShowFunctions { limit } => visitor.visit_show_functions(limit),
+        Statement::ShowIndexes => visitor.visit_show_indexes(),
         Statement::ShowTableFunctions { limit } => visitor.visit_show_table_functions(limit),
         Statement::KillStmt {
             kill_target,
@@ -432,5 +433,8 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
             visitor.visit_show_object_grant_privileges(stmt)
         }
         Statement::ShowGrantsOfShare(stmt) => visitor.visit_show_grants_of_share(stmt),
+        Statement::CreateDatamaskPolicy(stmt) => visitor.visit_create_data_mask_policy(stmt),
+        Statement::DropDatamaskPolicy(stmt) => visitor.visit_drop_data_mask_policy(stmt),
+        Statement::DescDatamaskPolicy(stmt) => visitor.visit_desc_data_mask_policy(stmt),
     }
 }

@@ -22,6 +22,7 @@ pub mod table_read_plan;
 mod util;
 
 pub use physical_plan::*;
+pub use physical_plan_builder::IEJoinCondition;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_visitor::PhysicalPlanReplacer;
 pub use util::*;

@@ -32,6 +32,7 @@ common-sharing = { path = "../../sharing" }
 common-sql = { path = "../../sql" }
 common-storage = { path = "../../../common/storage" }
 jsonb = { workspace = true }
+table-lock = { path = "../../ee-features/table-lock" }
 
 storages-common-blocks = { path = "../common/blocks" }
 storages-common-cache = { path = "../common/cache" }
@@ -49,6 +50,7 @@ futures-util = "0.3.24"
 metrics = "0.20.1"
 opendal = { workspace = true }
 parquet-format-safe = "0.2"
+rand = "0.8.5"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10.6"

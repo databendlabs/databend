@@ -197,7 +197,11 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_literal(&mut self, _span: Span, _lit: &'ast Literal) {}
 
-    fn visit_count_all(&mut self, _span: Span) {}
+    fn visit_count_all(&mut self, _span: Span, window: &'ast Option<Window>) {
+        if let Some(window) = window {
+            self.visit_window(window);
+        }
+    }
 
     fn visit_tuple(&mut self, _span: Span, elements: &'ast [Expr]) {
         for element in elements {
@@ -365,6 +369,8 @@ pub trait Visitor<'ast>: Sized {
     fn visit_show_table_functions(&mut self, _limit: &'ast Option<ShowLimit>) {}
 
     fn visit_show_limit(&mut self, _limit: &'ast ShowLimit) {}
+
+    fn visit_show_indexes(&mut self) {}
 
     fn visit_kill(&mut self, _kill_target: &'ast KillTarget, _object_id: &'ast str) {}
 
@@ -547,6 +553,12 @@ pub trait Visitor<'ast>: Sized {
     fn visit_show_object_grant_privileges(&mut self, _stmt: &'ast ShowObjectGrantPrivilegesStmt) {}
 
     fn visit_show_grants_of_share(&mut self, _stmt: &'ast ShowGrantsOfShareStmt) {}
+
+    fn visit_create_data_mask_policy(&mut self, _stmt: &'ast CreateDatamaskPolicyStmt) {}
+
+    fn visit_drop_data_mask_policy(&mut self, _stmt: &'ast DropDatamaskPolicyStmt) {}
+
+    fn visit_desc_data_mask_policy(&mut self, _stmt: &'ast DescDatamaskPolicyStmt) {}
 
     fn visit_with(&mut self, with: &'ast With) {
         let With { ctes, .. } = with;

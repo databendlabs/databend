@@ -1,5 +1,5 @@
 ---
-title: Transforming Data During Load
+title: Transforming Data on Load
 ---
 
 Databend offers a powerful feature that enables data transformation during the loading process using the [COPY INTO](../../14-sql-commands/10-dml/dml-copy-into-table.md) command. This functionality simplifies your ETL pipeline by incorporating basic transformations, eliminating the need for temporary tables. By transforming data during loading, you can streamline your ETL process effectively. Here are practical ways to enhance data loading with this feature:

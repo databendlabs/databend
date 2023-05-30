@@ -301,3 +301,13 @@ pub fn try_create_transform_sort_merge(
         )
     }
 }
+
+pub fn sort_merge(
+    data_schema: DataSchemaRef,
+    block_size: usize,
+    sort_desc: Vec<SortColumnDescription>,
+    data_blocks: &[DataBlock],
+) -> Result<Vec<DataBlock>> {
+    let compactor = CommonCompactor::try_create(data_schema, block_size, None, sort_desc)?;
+    compactor.compact_final(data_blocks)
+}

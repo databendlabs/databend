@@ -398,6 +398,18 @@ impl InterpreterFactory {
                 ctx,
                 *p.clone(),
             )?)),
+            Plan::CreateDatamaskPolicy(p) => Ok(Arc::new(CreateDataMaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropDatamaskPolicy(p) => Ok(Arc::new(DropDataMaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescDatamaskPolicy(p) => Ok(Arc::new(DescDataMaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
         }
     }
 }

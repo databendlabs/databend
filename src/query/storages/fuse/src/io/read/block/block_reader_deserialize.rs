@@ -29,6 +29,7 @@ use super::BlockReader;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::ReadSettings;
 use crate::io::UncompressedBuffer;
+use crate::FusePartInfo;
 use crate::FuseStorageFormat;
 
 pub enum DeserializedArray<'a> {
@@ -47,15 +48,47 @@ pub struct FieldDeserializationContext<'a> {
 
 impl BlockReader {
     /// Deserialize column chunks data from parquet format to DataBlock.
-    pub fn deserialize_chunks(
+    pub fn deserialize_chunks_with_part_info(
         &self,
         part: PartInfoPtr,
         chunks: HashMap<ColumnId, DataItem>,
         storage_format: &FuseStorageFormat,
     ) -> Result<DataBlock> {
+        let part = FusePartInfo::from_part(&part)?;
+        self.deserialize_chunks(
+            &part.location,
+            part.nums_rows,
+            &part.compression,
+            &part.columns_meta,
+            chunks,
+            storage_format,
+        )
+    }
+
+    pub fn deserialize_chunks(
+        &self,
+        block_path: &str,
+        num_rows: usize,
+        compression: &Compression,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_chunks: HashMap<ColumnId, DataItem>,
+        storage_format: &FuseStorageFormat,
+    ) -> Result<DataBlock> {
         match storage_format {
-            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(part, chunks),
-            FuseStorageFormat::Native => self.deserialize_native_chunks(part, chunks),
+            FuseStorageFormat::Parquet => self.deserialize_parquet_chunks(
+                block_path,
+                num_rows,
+                compression,
+                column_metas,
+                column_chunks,
+            ),
+            FuseStorageFormat::Native => self.deserialize_native_chunks(
+                block_path,
+                num_rows,
+                compression,
+                column_metas,
+                column_chunks,
+            ),
         }
     }
 

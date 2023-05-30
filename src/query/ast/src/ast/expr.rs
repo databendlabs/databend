@@ -146,7 +146,7 @@ pub enum Expr {
     /// A literal value, such as string, number, date or NULL
     Literal { span: Span, lit: Literal },
     /// `COUNT(*)` expression
-    CountAll { span: Span },
+    CountAll { span: Span, window: Option<Window> },
     /// `(foo, bar)`
     Tuple { span: Span, exprs: Vec<Expr> },
     /// Scalar/Agg/Window function call
@@ -512,6 +512,7 @@ pub enum BinaryOperator {
     Multiply,
     Div,
     Divide,
+    IntDiv,
     Modulo,
     StringConcat,
     // `>` operator
@@ -622,7 +623,7 @@ impl Expr {
             | Expr::Substring { span, .. }
             | Expr::Trim { span, .. }
             | Expr::Literal { span, .. }
-            | Expr::CountAll { span }
+            | Expr::CountAll { span, .. }
             | Expr::Tuple { span, .. }
             | Expr::FunctionCall { span, .. }
             | Expr::Case { span, .. }
@@ -713,6 +714,9 @@ impl Display for BinaryOperator {
             }
             BinaryOperator::Divide => {
                 write!(f, "/")
+            }
+            BinaryOperator::IntDiv => {
+                write!(f, "//")
             }
             BinaryOperator::Modulo => {
                 write!(f, "%")
@@ -1157,8 +1161,11 @@ impl Display for Expr {
             Expr::Literal { lit, .. } => {
                 write!(f, "{lit}")?;
             }
-            Expr::CountAll { .. } => {
+            Expr::CountAll { window, .. } => {
                 write!(f, "COUNT(*)")?;
+                if let Some(window) = window {
+                    write!(f, " OVER ({window})")?;
+                }
             }
             Expr::Tuple { exprs, .. } => {
                 write!(f, "(")?;

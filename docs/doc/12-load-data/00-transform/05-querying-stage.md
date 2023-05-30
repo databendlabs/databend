@@ -1,14 +1,14 @@
 ---
-title: Querying Data in Staged Files
+title: Querying Staged Files
 ---
 
 Databend allows you to directly query data in the files stored in one of the following locations without loading them into a table:
 
 - User stage, internal stage, or external stage.
-- Bucket or container created in your object storage, such as Amazon S3, Google Cloud Storage, and Microsoft Azure.
-- Remote server.
+- Bucket or container created within your object storage, such as Amazon S3, Google Cloud Storage, and Microsoft Azure.
+- Remote servers accessible via HTTPS.
 
-During this process, the schema is automatically detected, just like with the [infer_schema](../../15-sql-functions/112-table-functions/infer_schema.md) function. This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
+During this process, Databend automatically detects the schema with the [INFER_SCHEMA](../../15-sql-functions/112-table-functions/infer_schema.md) function. This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
 
 :::note
 This feature is currently only available for the Parquet file format.
@@ -43,11 +43,11 @@ The file format must be one of the following:
 
 ### PATTERN
 
-A [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern string, enclosed in single quotes, specifying the file names to match. Click [here](#loading-data-with-pattern-matching) to see an example. For PCRE2 syntax, see http://www.pcre.org/current/doc/html/pcre2syntax.html.
+The PATTERN option allows you to specify a [PCRE2](https://www.pcre.org/current/doc/html/)-based regular expression pattern enclosed in single quotes to match file names. It is used to filter and select files based on the provided pattern. For example, you can use a pattern like '.*parquet' to match all file names ending with "parquet". For detailed information on the PCRE2 syntax, you can refer to the documentation available at http://www.pcre.org/current/doc/html/pcre2syntax.html.
 
 ### FILES
 
-Specifies one or a list of file names (separated by commas).
+The FILES option, on the other hand, enables you to explicitly specify one or more file names separated by commas. This option allows you to directly filter and query data from specific files within a folder. For example, if you want to query data from the Parquet files "books-2023.parquet", "books-2022.parquet", and "books-2021.parquet", you can provide these file names within the FILES option.
 
 ### Others
 
@@ -115,22 +115,41 @@ SELECT * FROM 'https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/boo
 </TabItem>
 </Tabs>
 
-### Example 2: Filtering Files with Pattern Matching
+### Example 2: Filtering Files
 
-Let's assume you have a folder containing the following Parquet files with the same schema, as well as some files of other formats. You can use the PATTERN parameter to filter all the Parquet files in the folder.
+Let's assume you have the following Parquet files with the same schema, as well as some files of other formats, stored in a bucket named *databend-toronto* on Amazon S3 in the region *us-east-2*. 
 
 ```text
-data/
-  ├── 2022-01-01.parquet
-  ├── 2022-01-02.parquet
-  ├── 2022-01-03.parquet
-  ├── 2022-01-04.parquet
-  └── 2022-01-05.parquet
+databend-toronto/
+  ├── books-2023.parquet
+  ├── books-2022.parquet
+  ├── books-2021.parquet
+  ├── books-2020.parquet
+  └── books-2019.parquet
 ```
 
-For example, you can query the "name" and "age" columns from all Parquet files in the folder:
+To query data from all Parquet files in the folder, you can use the PATTERN option:
 
 ```sql
-SELECT name, age FROM @internal_stage/data/
-(file_format => 'parquet', pattern => '.*parquet');
+SELECT * FROM 's3://databend-toronto' 
+(
+ access_key_id => '<your-access-key-id>', 
+ secret_access_key => '<your-secret-access-key>',
+ endpoint_url => 'https://databend-toronto.s3.us-east-2.amazonaws.com',
+ region => 'us-east-2', 
+ pattern => '.*parquet'
+); 
+```
+
+To query data from the Parquet files "books-2023.parquet", "books-2022.parquet", and "books-2021.parquet" in the folder, you can use the FILES option:
+
+```sql
+SELECT * FROM 's3://databend-toronto' 
+(
+ access_key_id => '<your-access-key-id>', 
+ secret_access_key => '<your-secret-access-key>',
+ endpoint_url => 'https://databend-toronto.s3.us-east-2.amazonaws.com',
+ region => 'us-east-2',
+ files => ('books-2023.parquet','books-2022.parquet','books-2021.parquet')
+); 
 ```

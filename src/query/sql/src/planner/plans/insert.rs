@@ -14,7 +14,6 @@
 
 use std::sync::Arc;
 
-use common_catalog::table_context::StageAttachment;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
@@ -35,7 +34,7 @@ pub enum InsertInputSource {
     // From cloned String and format
     Values(String),
     // From stage
-    Stage(Arc<StageAttachment>),
+    Stage(Box<Plan>),
 }
 
 #[derive(Clone)]

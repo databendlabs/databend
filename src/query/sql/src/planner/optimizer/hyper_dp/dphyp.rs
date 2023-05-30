@@ -37,7 +37,6 @@ use crate::IndexType;
 use crate::MetadataRef;
 use crate::ScalarExpr;
 
-const MOCK_NUMBER: usize = 1000;
 const RELATION_THRESHOLD: usize = 10;
 
 // The join reorder algorithm follows the paper: Dynamic Programming Strikes Back
@@ -50,63 +49,54 @@ pub struct DPhpy {
     // base table index -> index of join_relations
     table_index_map: HashMap<IndexType, IndexType>,
     dp_table: HashMap<Vec<IndexType>, JoinNode>,
-    subquery_table_index_map: HashMap<IndexType, HashMap<IndexType, IndexType>>,
     query_graph: QueryGraph,
     relation_set_tree: RelationSetTree,
     filters: HashSet<Filter>,
-    is_in_subquery: bool,
 }
 
 impl DPhpy {
-    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef, is_in_subquery: bool) -> Self {
+    pub fn new(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Self {
         Self {
             ctx,
             metadata,
             join_relations: vec![],
             table_index_map: Default::default(),
             dp_table: Default::default(),
-            subquery_table_index_map: Default::default(),
             query_graph: QueryGraph::new(),
             relation_set_tree: Default::default(),
             filters: HashSet::new(),
-            is_in_subquery,
         }
     }
 
     // Traverse the s_expr and get all base relations and join conditions
     fn get_base_relations(
         &mut self,
-        s_expr: &SExpr,
+        s_expr: Arc<SExpr>,
         join_conditions: &mut Vec<(ScalarExpr, ScalarExpr)>,
         join_child: bool,
         is_subquery: bool,
-        join_relation: Option<SExpr>,
-    ) -> Result<bool> {
+        join_relation: Option<Arc<SExpr>>,
+    ) -> Result<(Arc<SExpr>, bool)> {
         // Start to traverse and stop when meet join
         if s_expr.is_pattern() {
-            return Ok(false);
+            return Ok((s_expr, false));
         }
 
         if is_subquery {
-            if self.is_in_subquery {
-                // There is a subquery in a subquery, do not support this for now.
-                return Ok(false);
-            }
             // If it's a subquery, start a new dphyp
-            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone(), true);
-            let (res, optimized) = dphyp.optimize(s_expr.clone())?;
+            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
+            let (new_s_expr, optimized) = dphyp.optimize(s_expr)?;
             if optimized {
-                let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
-                self.subquery_table_index_map
-                    .insert(key, dphyp.table_index_map);
-                self.table_index_map
-                    .insert(key, self.join_relations.len() as IndexType);
-                self.join_relations.push(JoinRelation::new(&res));
+                let relation_idx = self.join_relations.len() as IndexType;
+                for table_index in dphyp.table_index_map.keys() {
+                    self.table_index_map.insert(*table_index, relation_idx);
+                }
+                self.join_relations.push(JoinRelation::new(&new_s_expr));
             }
-            return Ok(optimized);
+            return Ok((new_s_expr, optimized));
         }
 
-        match &s_expr.plan {
+        match s_expr.plan.as_ref() {
             RelOperator::Scan(op) => {
                 let join_relation = if let Some(relation) = join_relation {
                     // Check if relation contains filter, if exists, check if the filter in `filters`
@@ -114,23 +104,26 @@ impl DPhpy {
                     self.check_filter(&relation);
                     JoinRelation::new(&relation)
                 } else {
-                    JoinRelation::new(s_expr)
+                    JoinRelation::new(&s_expr)
                 };
                 self.table_index_map
                     .insert(op.table_index, self.join_relations.len() as IndexType);
                 self.join_relations.push(join_relation);
-                Ok(true)
+                Ok((s_expr, true))
             }
             RelOperator::Join(op) => {
-                if !matches!(op.join_type, JoinType::Inner | JoinType::Cross) {
-                    return Ok(false);
+                let mut is_inner_join = true;
+                if !matches!(op.join_type, JoinType::Inner)
+                    && !matches!(op.join_type, JoinType::Cross)
+                {
+                    is_inner_join = false;
                 }
                 let mut left_is_subquery = false;
                 let mut right_is_subquery = false;
                 // Fixme: If join's child is EvalScalar, we think it is a subquery.
                 // Check join's child is filter or scan
-                let left_op = &s_expr.children()[0].plan;
-                let right_op = &s_expr.children()[1].plan;
+                let left_op = s_expr.child(0)?.plan.as_ref();
+                let right_op = s_expr.child(1)?.plan.as_ref();
                 if matches!(left_op, RelOperator::EvalScalar(_)) {
                     left_is_subquery = true;
                 }
@@ -148,20 +141,20 @@ impl DPhpy {
                     };
                     self.filters.insert(filter);
                 }
-                if left_is_subquery && right_is_subquery {
+                if !is_inner_join || (left_is_subquery && right_is_subquery) {
                     // Parallel process subquery
                     let ctx = self.ctx.clone();
                     let metadata = self.metadata.clone();
                     let left_expr = s_expr.children()[0].clone();
                     let left_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(ctx, metadata, true);
+                        let mut dphyp = DPhpy::new(ctx, metadata);
                         (dphyp.optimize(left_expr), dphyp.table_index_map)
                     });
                     let ctx = self.ctx.clone();
                     let metadata = self.metadata.clone();
                     let right_expr = s_expr.children()[1].clone();
                     let right_res = Thread::spawn(move || {
-                        let mut dphyp = DPhpy::new(ctx, metadata, true);
+                        let mut dphyp = DPhpy::new(ctx, metadata);
                         (dphyp.optimize(right_expr), dphyp.table_index_map)
                     });
                     let left_res = left_res.join()?;
@@ -169,36 +162,37 @@ impl DPhpy {
                     let right_res = right_res.join()?;
                     let (right_expr, right_optimized) = right_res.0?;
                     if left_optimized && right_optimized {
-                        let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
-                        self.subquery_table_index_map.insert(key, left_res.1);
-                        self.table_index_map
-                            .insert(key, self.join_relations.len() as IndexType);
-                        self.join_relations.push(JoinRelation::new(&left_expr));
-                        let key = self.subquery_table_index_map.len() + MOCK_NUMBER;
-                        self.subquery_table_index_map.insert(key, right_res.1);
-                        self.table_index_map
-                            .insert(key, self.join_relations.len() as IndexType);
-                        self.join_relations.push(JoinRelation::new(&right_expr));
-                        Ok(true)
+                        let relation_idx = self.join_relations.len() as IndexType;
+                        for table_index in left_res.1.keys() {
+                            self.table_index_map.insert(*table_index, relation_idx);
+                        }
+                        for table_index in right_res.1.keys() {
+                            self.table_index_map.insert(*table_index, relation_idx);
+                        }
+                        let new_s_expr = Arc::new(s_expr.replace_children([left_expr, right_expr]));
+                        self.join_relations.push(JoinRelation::new(&new_s_expr));
+                        Ok((new_s_expr, true))
                     } else {
-                        Ok(false)
+                        Ok((s_expr, false))
                     }
                 } else {
                     let left_res = self.get_base_relations(
-                        &s_expr.children()[0],
+                        s_expr.children()[0].clone(),
                         join_conditions,
                         true,
                         left_is_subquery,
                         None,
                     )?;
                     let right_res = self.get_base_relations(
-                        &s_expr.children()[1],
+                        s_expr.children()[1].clone(),
                         join_conditions,
                         true,
                         right_is_subquery,
                         None,
                     )?;
-                    Ok(left_res && right_res)
+                    let new_s_expr: Arc<SExpr> =
+                        Arc::new(s_expr.replace_children([left_res.0, right_res.0]));
+                    Ok((new_s_expr, left_res.1 && right_res.1))
                 }
             }
 
@@ -210,42 +204,47 @@ impl DPhpy {
             | RelOperator::Limit(_) => {
                 if join_child {
                     // If plan in filter, save it
-                    if let RelOperator::Filter(op) = &s_expr.plan {
+                    if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
                         self.filters.insert(op.clone());
                     }
-                    self.get_base_relations(
-                        &s_expr.children()[0],
+                    let (child, optimized) = self.get_base_relations(
+                        s_expr.children()[0].clone(),
                         join_conditions,
                         true,
                         false,
                         Some(s_expr.clone()),
-                    )
+                    )?;
+                    let new_s_expr = Arc::new(s_expr.replace_children([child]));
+                    Ok((new_s_expr, optimized))
                 } else {
-                    self.get_base_relations(
-                        &s_expr.children()[0],
+                    let (child, optimized) = self.get_base_relations(
+                        s_expr.children()[0].clone(),
                         join_conditions,
                         false,
                         false,
                         None,
-                    )
+                    )?;
+                    let new_s_expr = Arc::new(s_expr.replace_children([child]));
+                    Ok((new_s_expr, optimized))
                 }
             }
             RelOperator::Exchange(_) | RelOperator::Pattern(_) => unreachable!(),
             RelOperator::Window(_)
             | RelOperator::UnionAll(_)
             | RelOperator::DummyTableScan(_)
-            | RelOperator::RuntimeFilterSource(_) => Ok(false),
+            | RelOperator::RuntimeFilterSource(_) => Ok((s_expr, false)),
         }
     }
 
     // The input plan tree has been optimized by heuristic optimizer
     // So filters have pushed down join and cross join has been converted to inner join as possible as we can
     // The output plan will have optimal join order theoretically
-    pub fn optimize(&mut self, s_expr: SExpr) -> Result<(SExpr, bool)> {
+    pub fn optimize(&mut self, s_expr: Arc<SExpr>) -> Result<(Arc<SExpr>, bool)> {
         // Firstly, we need to extract all join conditions and base tables
         // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
-        let res = self.get_base_relations(&s_expr, &mut join_conditions, false, false, None)?;
+        let (s_expr, res) =
+            self.get_base_relations(s_expr, &mut join_conditions, false, false, None)?;
         if !res {
             return Ok((s_expr, false));
         }
@@ -260,30 +259,11 @@ impl DPhpy {
             let mut right_relation_set = HashSet::new();
             let left_used_tables = left_condition.used_tables(self.metadata.clone())?;
             for table in left_used_tables.iter() {
-                if let Some(idx) = self.table_index_map.get(table) {
-                    left_relation_set.insert(*idx);
-                }
-                // Start to traverse `subquery_table_index_map` to find the corresponding table index
-                for (key, val) in self.subquery_table_index_map.iter() {
-                    if val.get(table).is_some() {
-                        if let Some(idx) = self.table_index_map.get(key) {
-                            left_relation_set.insert(*idx);
-                        }
-                    }
-                }
+                left_relation_set.insert(self.table_index_map[table]);
             }
             let right_used_tables = right_condition.used_tables(self.metadata.clone())?;
             for table in right_used_tables.iter() {
-                if let Some(idx) = self.table_index_map.get(table) {
-                    right_relation_set.insert(*idx);
-                }
-                for (key, val) in self.subquery_table_index_map.iter() {
-                    if val.get(table).is_some() {
-                        if let Some(idx) = self.table_index_map.get(key) {
-                            right_relation_set.insert(*idx);
-                        }
-                    }
-                }
+                right_relation_set.insert(self.table_index_map[table]);
             }
 
             if !left_relation_set.is_empty() && !right_relation_set.is_empty() {
@@ -317,13 +297,13 @@ impl DPhpy {
             .get_relation_set(&(0..self.join_relations.len()).collect())?;
         if optimized {
             if let Some(final_plan) = self.dp_table.get(&all_relations) {
-                self.join_reorder(final_plan, s_expr)
+                self.join_reorder(final_plan, &s_expr)
             } else {
                 // Maybe exist cross join, which make graph disconnected
-                Ok((s_expr.clone(), false))
+                Ok((s_expr, false))
             }
         } else {
-            Ok((s_expr.clone(), false))
+            Ok((s_expr, false))
         }
     }
 
@@ -548,18 +528,18 @@ impl DPhpy {
     }
 
     // Map join order in `JoinNode` to `SExpr`
-    fn join_reorder(&self, final_plan: &JoinNode, s_expr: SExpr) -> Result<(SExpr, bool)> {
+    fn join_reorder(&self, final_plan: &JoinNode, s_expr: &SExpr) -> Result<(Arc<SExpr>, bool)> {
         // Convert `final_plan` to `SExpr`
         let join_expr = final_plan.s_expr(&self.join_relations);
         // Find first join node in `s_expr`, then replace it with `join_expr`
-        let new_s_expr = self.replace_join_expr(&join_expr, &s_expr)?;
-        Ok((new_s_expr, true))
+        let new_s_expr = self.replace_join_expr(&join_expr, s_expr)?;
+        Ok((Arc::new(new_s_expr), true))
     }
 
     #[allow(clippy::only_used_in_recursion)]
     fn replace_join_expr(&self, join_expr: &SExpr, s_expr: &SExpr) -> Result<SExpr> {
         let mut new_s_expr = s_expr.clone();
-        match &s_expr.plan {
+        match s_expr.plan.as_ref() {
             RelOperator::Join(_) => {
                 new_s_expr.plan = join_expr.plan.clone();
                 new_s_expr.children = join_expr.children.clone();
@@ -569,29 +549,29 @@ impl DPhpy {
                     predicates.extend(filter.clone().predicates.iter().cloned())
                 }
                 new_s_expr = SExpr::create_unary(
-                    RelOperator::Filter(Filter {
+                    Arc::new(RelOperator::Filter(Filter {
                         predicates,
                         is_having: false,
-                    }),
-                    new_s_expr,
+                    })),
+                    Arc::new(new_s_expr),
                 );
                 new_s_expr = self.push_down_filter(&new_s_expr)?;
-                if let RelOperator::Filter(filter) = &new_s_expr.plan {
+                if let RelOperator::Filter(filter) = new_s_expr.plan.as_ref() {
                     if filter.predicates.is_empty() {
-                        new_s_expr = new_s_expr.children[0].clone();
+                        new_s_expr = new_s_expr.child(0)?.clone();
                     }
                 }
             }
             _ => {
                 let child_expr = self.replace_join_expr(join_expr, &s_expr.children[0])?;
-                new_s_expr.children = Arc::new(vec![child_expr]);
+                new_s_expr.children = vec![Arc::new(child_expr)];
             }
         }
         Ok(new_s_expr)
     }
 
     fn check_filter(&mut self, expr: &SExpr) {
-        if let RelOperator::Filter(filter) = &expr.plan {
+        if let RelOperator::Filter(filter) = expr.plan.as_ref() {
             if self.filters.contains(filter) {
                 self.filters.remove(filter);
             }
@@ -604,7 +584,7 @@ impl DPhpy {
     fn push_down_filter(&self, s_expr: &SExpr) -> Result<SExpr> {
         let mut optimized_children = Vec::with_capacity(s_expr.arity());
         for expr in s_expr.children() {
-            optimized_children.push(self.push_down_filter(expr)?);
+            optimized_children.push(Arc::new(self.push_down_filter(expr)?));
         }
         let optimized_expr = s_expr.replace_children(optimized_children);
         let result = self.apply_rule(&optimized_expr)?;

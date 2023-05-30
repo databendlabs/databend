@@ -78,14 +78,7 @@ impl StageTable {
         stage_info: &StageTableInfo,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
-        let op = Self::get_op(&stage_info.stage_info)?;
-        let infos = stage_info
-            .files_info
-            .list(&op, false, max_files)
-            .await?
-            .into_iter()
-            .collect::<Vec<_>>();
-        Ok(infos)
+        stage_info.list_files(max_files).await
     }
 
     fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {

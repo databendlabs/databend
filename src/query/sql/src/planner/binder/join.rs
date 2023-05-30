@@ -201,9 +201,9 @@ impl Binder {
             contain_runtime_filter: false,
         };
         Ok(SExpr::create_binary(
-            logical_join.into(),
-            left_child,
-            right_child,
+            Arc::new(logical_join.into()),
+            Arc::new(left_child),
+            Arc::new(right_child),
         ))
     }
 
@@ -247,23 +247,27 @@ impl Binder {
 
         if !left_push_down.is_empty() {
             *left_child = SExpr::create_unary(
-                Filter {
-                    predicates: left_push_down,
-                    is_having: false,
-                }
-                .into(),
-                left_child.clone(),
+                Arc::new(
+                    Filter {
+                        predicates: left_push_down,
+                        is_having: false,
+                    }
+                    .into(),
+                ),
+                Arc::new(left_child.clone()),
             );
         }
 
         if !right_push_down.is_empty() {
             *right_child = SExpr::create_unary(
-                Filter {
-                    predicates: right_push_down,
-                    is_having: false,
-                }
-                .into(),
-                right_child.clone(),
+                Arc::new(
+                    Filter {
+                        predicates: right_push_down,
+                        is_having: false,
+                    }
+                    .into(),
+                ),
+                Arc::new(right_child.clone()),
             );
         }
 

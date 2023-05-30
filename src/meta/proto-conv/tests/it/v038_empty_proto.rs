@@ -27,9 +27,9 @@ use crate::common;
 //
 // The message bytes are built from the output of `test_build_pb_buf()`
 #[test]
-fn test_decode_v7_copied_file_lock() -> anyhow::Result<()> {
+fn test_decode_v38_empty_proto() -> anyhow::Result<()> {
     let bytes: Vec<u8> = vec![160, 6, 7, 168, 6, 1];
-    let want = || mt::TableCopiedFileLock {};
+    let want = || mt::EmptyProto {};
 
     common::test_pb_from_to(func_name!(), want())?;
     common::test_load_old(func_name!(), bytes.as_slice(), 7, want())
