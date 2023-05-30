@@ -15,7 +15,6 @@
 use common_exception::Result;
 
 use crate::binder::JoinPredicate;
-use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::SExpr;

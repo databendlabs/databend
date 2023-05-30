@@ -29,7 +29,6 @@ use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ScalarExpr;

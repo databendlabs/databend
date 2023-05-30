@@ -22,11 +22,11 @@ use common_expression::DataSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::Exchange;
 use crate::executor::HashJoin;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
-use crate::optimizer::StatInfo;
 use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::TypeCheck;
@@ -38,8 +38,51 @@ impl PhysicalPlanBuilder {
         s_expr: &SExpr,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
-        let build_side = self.build(s_expr.child(1)?).await?;
-        let probe_side = self.build(s_expr.child(0)?).await?;
+        let mut probe_side = Box::new(self.build(s_expr.child(0)?).await?);
+        let mut build_side = Box::new(self.build(s_expr.child(1)?).await?);
+
+        // Unify the data types of the left and right exchange keys.
+        if let (
+            PhysicalPlan::Exchange(Exchange {
+                keys: probe_keys, ..
+            }),
+            PhysicalPlan::Exchange(Exchange {
+                keys: build_keys, ..
+            }),
+        ) = (probe_side.as_mut(), build_side.as_mut())
+        {
+            for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
+                let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
+                let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
+                let common_ty = common_super_type(
+                    probe_expr.data_type().clone(),
+                    build_expr.data_type().clone(),
+                    &BUILTIN_FUNCTIONS.default_cast_rules,
+                )
+                .ok_or_else(|| {
+                    ErrorCode::IllegalDataType(format!(
+                        "Cannot find common type for probe key {:?} and build key {:?}",
+                        &probe_expr, &build_expr
+                    ))
+                })?;
+                *probe_key = check_cast(
+                    probe_expr.span(),
+                    false,
+                    probe_expr,
+                    &common_ty,
+                    &BUILTIN_FUNCTIONS,
+                )?
+                .as_remote_expr();
+                *build_key = check_cast(
+                    build_expr.span(),
+                    false,
+                    build_expr,
+                    &common_ty,
+                    &BUILTIN_FUNCTIONS,
+                )?
+                .as_remote_expr();
+            }
+        }
 
         let build_schema = match join.join_type {
             JoinType::Left | JoinType::Full => {
@@ -143,8 +186,8 @@ impl PhysicalPlanBuilder {
 
         Ok(PhysicalPlan::HashJoin(HashJoin {
             plan_id: self.next_plan_id(),
-            build: Box::new(build_side),
-            probe: Box::new(probe_side),
+            build: build_side,
+            probe: probe_side,
             join_type: join.join_type.clone(),
             build_keys: right_join_conditions,
             probe_keys: left_join_conditions,
