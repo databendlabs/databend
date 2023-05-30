@@ -255,15 +255,6 @@ impl FuseTable {
             )?
         };
 
-        let mut new_table_meta = self.get_table_info().meta.clone();
-        // update statistics
-        new_table_meta.statistics = TableStatistics {
-            number_of_rows: new_snapshot.summary.row_count,
-            data_bytes: new_snapshot.summary.uncompressed_byte_size,
-            compressed_data_bytes: new_snapshot.summary.compressed_byte_size,
-            index_data_bytes: new_snapshot.summary.index_size,
-        };
-
         FuseTable::commit_to_meta_server(
             ctx.as_ref(),
             &self.table_info,

@@ -14,6 +14,7 @@
 
 mod analyze;
 mod append;
+mod append_transform;
 mod commit;
 mod compact;
 mod delete;
