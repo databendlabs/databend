@@ -34,3 +34,21 @@ echo "create table set_var.t(c1 timestamp)" | $MYSQL_CLIENT_CONNECT
 # Toronto and Shanghai time diff is 13 hours.
 echo "set timezone='America/Toronto'; insert /*+SET_VAR(timezone='Asia/Shanghai') */ into set_var.t values('2022-02-02 03:00:00'); select /*+SET_VAR(timezone='Asia/Shanghai') */ * from set_var.t; select * from set_var.t;" | $MYSQL_CLIENT_CONNECT
 echo "drop database set_var;" | $MYSQL_CLIENT_CONNECT
+
+# test copy into
+echo "drop table if exists test_table;" | $MYSQL_CLIENT_CONNECT
+echo "drop STAGE if exists s2;" | $MYSQL_CLIENT_CONNECT
+echo "CREATE STAGE s2;" | $MYSQL_CLIENT_CONNECT
+echo "CREATE TABLE test_table (
+    id INTEGER,
+    name VARCHAR,
+    age INT
+);" | $MYSQL_CLIENT_CONNECT
+
+echo "insert into test_table (id,name,age) values(1,'2',3), (4, '5', 6);" | $MYSQL_CLIENT_CONNECT
+
+echo "copy /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ into @s2 from test_table FILE_FORMAT = (type = CSV);" | $MYSQL_CLIENT_CONNECT
+echo "copy /*+SET_VAR(timezone='Asia/Shanghai') (storage_read_buffer_size=200)*/ into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
+echo "list @s2;" | $MYSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
+echo "drop STAGE s2;" | $MYSQL_CLIENT_CONNECT
+echo "drop table test_table;" | $MYSQL_CLIENT_CONNECT
