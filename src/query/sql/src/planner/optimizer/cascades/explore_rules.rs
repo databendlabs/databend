@@ -25,7 +25,11 @@ pub fn get_explore_rule_set(optimized: bool) -> RuleSet {
 
 /// The join order has been optimized by dphyp, therefore we will not change the join order.
 fn rule_set_dphyp() -> RuleSet {
-    RuleSet::create_with_ids(vec![RuleID::EagerAggregation])
+    RuleSet::create_with_ids(vec![
+        RuleID::EagerAggregation,
+        RuleID::CommuteJoinBaseTable,
+        RuleID::CommuteJoin,
+    ])
 }
 
 /// Get rule set of join order RS-L1, which will only generate left-deep trees.
