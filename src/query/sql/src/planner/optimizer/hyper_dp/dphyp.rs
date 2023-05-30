@@ -252,7 +252,7 @@ impl DPhpy {
                         false,
                         None,
                     )?;
-                    let new_s_expr: Arc<SExpr> = Arc::new(s_expr.replace_children([child]));
+                    let new_s_expr = Arc::new(s_expr.replace_children([child]));
                     Ok((new_s_expr, optimized))
                 }
             }
