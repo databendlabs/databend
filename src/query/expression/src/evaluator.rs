@@ -92,13 +92,6 @@ impl<'a> Evaluator<'a> {
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
     fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
-        if !(validity.is_none()
-            || validity.as_ref().unwrap().len() == self.input_columns.num_rows())
-        {
-            dbg!(&validity);
-            dbg!(&self.input_columns);
-            dbg!(&self.input_columns.num_rows());
-        }
         debug_assert!(
             validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
         );
