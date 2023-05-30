@@ -315,7 +315,7 @@ impl<'a> WindowRewriter<'a> {
             Vec::with_capacity(window.partition_by.len());
         let mut replaced_order_by_items: Vec<WindowOrderBy> =
             Vec::with_capacity(window.order_by.len());
-        let mut agg_args = vec![];
+        let mut window_args = vec![];
 
         let window_func_name = window.func.func_name();
         let func = match &window.func {
@@ -324,9 +324,9 @@ impl<'a> WindowRewriter<'a> {
                 let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(agg.args.len());
                 for (i, arg) in agg.args.iter().enumerate() {
                     let arg = self.visit(arg)?;
-                    let name = format!("{}_arg_{}", &window_func_name, i);
+                    let name = format!("{window_func_name}_arg_{i}");
                     let replaced_arg = self.replace_expr(&name, &arg)?;
-                    agg_args.push(ScalarItem {
+                    window_args.push(ScalarItem {
                         index: replaced_arg.column.index,
                         scalar: arg,
                     });
@@ -343,7 +343,7 @@ impl<'a> WindowRewriter<'a> {
             }
             WindowFuncType::LagLead(ll) => {
                 let (new_arg, new_default) =
-                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, ll)?;
+                    self.replace_lag_lead_args(&mut window_args, &window_func_name, ll)?;
 
                 WindowFuncType::LagLead(LagLeadFunction {
                     is_lag: ll.is_lag,
@@ -368,7 +368,7 @@ impl<'a> WindowRewriter<'a> {
         let mut partition_by_items = vec![];
         for (i, part) in window.partition_by.iter().enumerate() {
             let part = self.visit(part)?;
-            let name = format!("{}_part_{}", &window_func_name, i);
+            let name = format!("{window_func_name}_part_{i}");
             let replaced_part = self.replace_expr(&name, &part)?;
             partition_by_items.push(ScalarItem {
                 index: replaced_part.column.index,
@@ -381,7 +381,7 @@ impl<'a> WindowRewriter<'a> {
         let mut order_by_items = vec![];
         for (i, order) in window.order_by.iter().enumerate() {
             let order_expr = self.visit(&order.expr)?;
-            let name = format!("{}_order_{}", &window_func_name, i);
+            let name = format!("{window_func_name}_order_{i}");
             let replaced_order = self.replace_expr(&name, &order_expr)?;
             order_by_items.push(WindowOrderByInfo {
                 order_by_item: ScalarItem {
@@ -408,7 +408,7 @@ impl<'a> WindowRewriter<'a> {
             span: window.span,
             index,
             func: func.clone(),
-            arguments: agg_args,
+            arguments: window_args,
             partition_by_items,
             order_by_items,
             frame: window.frame.clone(),
@@ -436,52 +436,31 @@ impl<'a> WindowRewriter<'a> {
 
     fn replace_lag_lead_args(
         &mut self,
-        agg_args: &mut Vec<ScalarItem>,
+        window_args: &mut Vec<ScalarItem>,
         window_func_name: &String,
         f: &LagLeadFunction,
     ) -> Result<(ScalarExpr, Option<Box<ScalarExpr>>)> {
-        let new_arg = self.visit(&f.arg)?;
+        let arg = self.visit(&f.arg)?;
+        let name = format!("{window_func_name}_arg");
+        let replaced_arg = self.replace_expr(&name, &arg)?;
+        window_args.push(ScalarItem {
+            scalar: arg,
+            index: replaced_arg.column.index,
+        });
         let new_default = match &f.default {
             None => None,
             Some(d) => {
                 let d = self.visit(d)?;
-                let replaced_default = if let ScalarExpr::BoundColumnRef(column_ref) = &d {
-                    agg_args.push(ScalarItem {
-                        index: column_ref.column.index,
-                        scalar: d.clone(),
-                    });
-                    column_ref.clone().into()
-                } else {
-                    let name = format!("{}_default_value", &window_func_name);
-                    let index = self
-                        .metadata
-                        .write()
-                        .add_derived_column(name.clone(), d.data_type()?);
-
-                    let column_binding = ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        table_index: None,
-                        column_name: name,
-                        index,
-                        data_type: Box::new(d.data_type()?),
-                        visibility: Visibility::Visible,
-                    };
-                    agg_args.push(ScalarItem {
-                        index,
-                        scalar: d.clone(),
-                    });
-
-                    BoundColumnRef {
-                        span: d.span(),
-                        column: column_binding,
-                    }
-                    .into()
-                };
-                Some(Box::new(replaced_default))
+                let name = format!("{window_func_name}_default_value");
+                let replaced_default = self.replace_expr(&name, &d)?;
+                window_args.push(ScalarItem {
+                    scalar: d,
+                    index: replaced_default.column.index,
+                });
+                Some(Box::new(replaced_default.into()))
             }
         };
-        Ok((new_arg, new_default))
+        Ok((replaced_arg.into(), new_default))
     }
 
     fn replace_expr(&self, name: &str, arg: &ScalarExpr) -> Result<BoundColumnRef> {

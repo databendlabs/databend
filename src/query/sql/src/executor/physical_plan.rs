@@ -138,7 +138,7 @@ impl EvalScalar {
         for (expr, index) in self.exprs.iter() {
             let name = index.to_string();
             if let RemoteExpr::ColumnRef { id, .. } = expr {
-                if name.to_string() == fields[*id].name().as_str() {
+                if name == fields[*id].name().as_str() {
                     continue;
                 }
             }
