@@ -54,12 +54,11 @@ impl Interpreter for UnSettingInterpreter {
                 // To be compatible with some drivers
                 "sql_mode" | "autocommit" => (false, String::from("")),
                 setting => {
-                    if matches!(settings.get_setting_level(setting)?, Global) {
-                        self.ctx
-                            .get_shard_settings()
-                            .try_drop_global_setting(setting)
-                            .await?;
-                    }
+                    self.ctx
+                        .get_shard_settings()
+                        .try_drop_global_setting(setting)
+                        .await?;
+
                     let default_val = {
                         if setting == "max_memory_usage" {
                             let conf = GlobalConfig::instance();
