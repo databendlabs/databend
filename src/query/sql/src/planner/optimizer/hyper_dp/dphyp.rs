@@ -511,7 +511,11 @@ impl DPhpy {
             JoinNode {
                 join_type: JoinType::Cross,
                 leaves: Arc::new(parent_set.clone()),
-                children: Arc::new(vec![left_join, right_join]),
+                children: if left_cardinality < right_cardinality {
+                    Arc::new(vec![right_join, left_join])
+                } else {
+                    Arc::new(vec![left_join, right_join])
+                },
                 cost: left_cardinality * right_cardinality,
                 join_conditions: Arc::new(vec![]),
                 cardinality: None,
