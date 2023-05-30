@@ -354,10 +354,16 @@ impl<'a> WindowRewriter<'a> {
                 })
             }
             WindowFuncType::NthValue(func) => {
-                let new_arg = self.visit(&func.arg)?;
+                let arg = self.visit(&func.arg)?;
+                let name = format!("{window_func_name}_arg");
+                let replaced_arg = self.replace_expr(&name, &arg)?;
+                window_args.push(ScalarItem {
+                    index: replaced_arg.column.index,
+                    scalar: arg,
+                });
                 WindowFuncType::NthValue(NthValueFunction {
                     n: func.n,
-                    arg: Box::new(new_arg),
+                    arg: Box::new(replaced_arg.into()),
                     return_type: func.return_type.clone(),
                 })
             }
