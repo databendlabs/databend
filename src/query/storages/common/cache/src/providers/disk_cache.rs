@@ -195,7 +195,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         }
 
         // check eviction
-        if self.cache.size() + bytes_len > self.cache.capacity() {
+        while self.cache.size() + bytes_len > self.cache.capacity() {
             if let Some((rel_path, _)) = self.cache.pop_by_policy() {
                 let cached_item_path = self.abs_path_of_cache_key(&DiskCacheKey(rel_path));
                 fs::remove_file(&cached_item_path).unwrap_or_else(|e| {

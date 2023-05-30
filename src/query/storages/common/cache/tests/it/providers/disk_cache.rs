@@ -196,3 +196,20 @@ fn test_insert_bytes_too_large() {
         x => panic!("Unexpected result: {x:?}"),
     }
 }
+
+#[test]
+fn test_evict_until_enough_space() {
+    let f = TestFixture::new();
+    let mut c = DiskCache::new(f.tmp(), 4).unwrap();
+    c.insert_single_slice("file1", &[1; 1]).unwrap();
+    c.insert_single_slice("file2", &[2; 2]).unwrap();
+    c.insert_single_slice("file3", &[3; 1]).unwrap();
+    assert_eq!(c.size(), 4);
+
+    // insert a single slice which size bigger than file1 and less than file1 + file2
+    c.insert_single_slice("file4", &[3; 2]).unwrap();
+    assert_eq!(c.size(), 3);
+    // file1 and file2 MUST be evict
+    assert!(!c.contains_key("file1"));
+    assert!(!c.contains_key("file2"));
+}
