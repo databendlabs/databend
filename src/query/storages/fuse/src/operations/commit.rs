@@ -57,7 +57,6 @@ use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
 use crate::metrics::metrics_inc_commit_mutation_retry;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
-use crate::operations::commit::utils::no_side_effects_in_meta_store;
 use crate::operations::mutation::AbortOperation;
 use crate::operations::AppendOperationLogEntry;
 use crate::operations::TableOperationLog;
@@ -155,7 +154,7 @@ impl FuseTable {
                         Ok(())
                     };
                 }
-                Err(e) if self::utils::is_error_recoverable(&e, transient) => {
+                Err(e) if Self::is_error_recoverable(&e, transient) => {
                     match backoff.next_backoff() {
                         Some(d) => {
                             let name = tbl.table_info.name.clone();
@@ -174,7 +173,7 @@ impl FuseTable {
                         None => {
                             // Commit not fulfilled. try to abort the operations.
                             // if it is safe to do so.
-                            if no_side_effects_in_meta_store(&e) {
+                            if Self::no_side_effects_in_meta_store(&e) {
                                 // if we are sure that table state inside metastore has not been
                                 // modified by this operation, abort this operation.
                                 info!("aborting operations");
@@ -371,9 +370,48 @@ impl FuseTable {
                 .await?;
         }
 
-        // 2. prepare table meta
+        let table_statistics_location = snapshot.table_statistics_location.clone();
+        // 2. update table meta
+        let res = Self::update_table_meta(
+            ctx,
+            table_info,
+            location_generator,
+            snapshot,
+            snapshot_location,
+            copied_files,
+            operator,
+        )
+        .await;
+        if need_to_save_statistics {
+            let table_statistics_location = table_statistics_location.unwrap();
+            match &res {
+                Ok(_) => TableSnapshotStatistics::cache().put(
+                    table_statistics_location,
+                    Arc::new(table_statistics.unwrap()),
+                ),
+                Err(e) => {
+                    if Self::no_side_effects_in_meta_store(e) {
+                        let _ = operator.delete(&table_statistics_location).await;
+                    }
+                }
+            }
+        }
+        res
+    }
+
+    #[async_backtrace::framed]
+    pub async fn update_table_meta(
+        ctx: &dyn TableContext,
+        table_info: &TableInfo,
+        location_generator: &TableMetaLocationGenerator,
+        snapshot: TableSnapshot,
+        snapshot_location: String,
+        copied_files: &Option<UpsertTableCopiedFileReq>,
+        operator: &Operator,
+    ) -> Result<()> {
+        // 1. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
-        // 2.1 set new snapshot location
+        // 1.1 set new snapshot location
         new_table_meta.options.insert(
             OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
             snapshot_location.clone(),
@@ -381,7 +419,7 @@ impl FuseTable {
         // remove legacy options
         utils::remove_legacy_options(&mut new_table_meta.options);
 
-        // 2.2 setup table statistics
+        // 1.2 setup table statistics
         let stats = &snapshot.summary;
         // update statistics
         new_table_meta.statistics = TableStatistics {
@@ -391,7 +429,7 @@ impl FuseTable {
             index_data_bytes: stats.index_size,
         };
 
-        // 3. prepare the request
+        // 2. prepare the request
         let catalog = ctx.get_catalog(table_info.catalog())?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
@@ -407,13 +445,6 @@ impl FuseTable {
         let reply = catalog.update_table_meta(table_info, req).await;
         match reply {
             Ok(_) => {
-                // upsert snapshot statistics cache
-                if let Some(snapshot_statistics) = table_statistics {
-                    if let Some(location) = &snapshot.table_statistics_location {
-                        TableSnapshotStatistics::cache()
-                            .put(location.clone(), Arc::new(snapshot_statistics));
-                    }
-                }
                 TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
                 // try keep a hit file of last snapshot
                 Self::write_last_snapshot_hint(operator, location_generator, snapshot_location)
@@ -423,7 +454,7 @@ impl FuseTable {
             Err(e) => {
                 // commit snapshot to meta server failed.
                 // figure out if the un-committed snapshot is safe to be removed.
-                if no_side_effects_in_meta_store(&e) {
+                if Self::no_side_effects_in_meta_store(&e) {
                     // currently, only in this case (TableVersionMismatched),  we are SURE about
                     // that the table state insides meta store has NOT been changed.
                     info!(
@@ -431,11 +462,6 @@ impl FuseTable {
                         snapshot_location, table_info.desc, table_info.ident
                     );
                     let _ = operator.delete(&snapshot_location).await;
-                    if need_to_save_statistics {
-                        let _ = operator
-                            .delete(&snapshot.table_statistics_location.unwrap())
-                            .await;
-                    }
                 }
                 Err(e)
             }
@@ -668,6 +694,20 @@ impl FuseTable {
             Ok((new_segments, new_statistics))
         }
     }
+
+    #[inline]
+    pub fn is_error_recoverable(e: &ErrorCode, is_table_transient: bool) -> bool {
+        let code = e.code();
+        code == ErrorCode::TABLE_VERSION_MISMATCHED
+            || (is_table_transient && code == ErrorCode::STORAGE_NOT_FOUND)
+    }
+
+    #[inline]
+    pub fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
+        // currently, the only error that we know,  which indicates there are no side effects
+        // is TABLE_VERSION_MISMATCHED
+        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
+    }
 }
 
 pub enum Conflict {
@@ -740,20 +780,6 @@ mod utils {
             let _ = operator.delete(&entry.segment_location).await;
         }
         Ok(())
-    }
-
-    #[inline]
-    pub fn is_error_recoverable(e: &ErrorCode, is_table_transient: bool) -> bool {
-        let code = e.code();
-        code == ErrorCode::TABLE_VERSION_MISMATCHED
-            || (is_table_transient && code == ErrorCode::STORAGE_NOT_FOUND)
-    }
-
-    #[inline]
-    pub fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
-        // currently, the only error that we know,  which indicates there are no side effects
-        // is TABLE_VERSION_MISMATCHED
-        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
     }
 
     // check if there are any fuse table legacy options

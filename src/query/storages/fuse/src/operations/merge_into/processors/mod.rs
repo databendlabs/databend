@@ -14,8 +14,10 @@
 
 // exports components as pipeline processors
 
+mod commit;
 mod processor_broadcast;
 mod sink_commit;
+mod snapshot_generator;
 mod transform_append;
 mod transform_merge_into_mutation_aggregator;
 mod transform_mutation_aggregator;
@@ -24,6 +26,9 @@ use common_expression::FieldIndex;
 use common_expression::TableField;
 pub use processor_broadcast::*;
 pub use sink_commit::CommitSink;
+pub use snapshot_generator::AppendGenerator;
+pub use snapshot_generator::MutationGenerator;
+pub use snapshot_generator::SnapshotGenerator;
 pub use transform_append::AppendTransform;
 pub use transform_merge_into_mutation_aggregator::*;
 pub use transform_mutation_aggregator::*;

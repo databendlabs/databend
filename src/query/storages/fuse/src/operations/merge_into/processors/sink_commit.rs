@@ -22,19 +22,13 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockMetaInfoPtr;
-use common_expression::TableSchema;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
-use common_sql::field_default_value;
 use opendal::Operator;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use table_lock::TableLockHandlerWrapper;
 use table_lock::TableLockHeartbeat;
-use uuid::Uuid;
 
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -50,173 +44,10 @@ use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::statistics::merge_statistics;
-use crate::statistics::reducers::deduct_statistics;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::FuseTable;
 
 const MAX_RETRIES: u64 = 10;
-
-pub struct MutationCommit {
-    base_snapshot: Arc<TableSnapshot>,
-    merged_segments: Vec<Location>,
-    merged_statistics: Statistics,
-}
-
-impl MutationCommit {
-    fn generate_new_snapshot(
-        &self,
-        schema: TableSchema,
-        cluster_key_meta: Option<ClusterKey>,
-        previous: Option<Arc<TableSnapshot>>,
-    ) -> Result<TableSnapshot> {
-        let base_segments = &self.base_snapshot.segments;
-        let base_segments_len = self.base_snapshot.segments.len();
-        let base_statistics = &self.base_snapshot.summary;
-
-        if previous.is_none() {
-            if base_segments_len > 0 {
-                todo!();
-            }
-
-            let new_snapshot = TableSnapshot::new(
-                Uuid::new_v4(),
-                &None,
-                None,
-                schema,
-                self.merged_statistics.clone(),
-                self.merged_segments.clone(),
-                cluster_key_meta,
-                None,
-            );
-            return Ok(new_snapshot);
-        }
-
-        let previous = previous.unwrap();
-        let latest_segments = &previous.segments;
-        let latest_statistics = &previous.summary;
-        let latest_segments_len = latest_segments.len();
-
-        if latest_segments_len < base_segments_len
-            || base_segments[0..base_segments_len]
-                != latest_segments[(latest_segments_len - base_segments_len)..latest_segments_len]
-        {
-            todo!();
-        }
-
-        let append_segments =
-            latest_segments[0..(latest_segments_len - base_segments_len)].to_owned();
-        let append_statistics = deduct_statistics(latest_statistics, base_statistics);
-
-        let new_segments = append_segments
-            .iter()
-            .chain(self.merged_segments.iter())
-            .cloned()
-            .collect::<Vec<_>>();
-        let new_summary = merge_statistics(&self.merged_statistics, &append_statistics)?;
-        let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
-            &previous.timestamp,
-            Some((previous.snapshot_id, previous.format_version)),
-            schema,
-            new_summary,
-            new_segments,
-            cluster_key_meta,
-            previous.table_statistics_location.clone(),
-        );
-        Ok(new_snapshot)
-    }
-}
-
-pub struct AppendCommit {
-    ctx: Arc<dyn TableContext>,
-    merged_segments: Vec<Location>,
-    merged_statistics: Statistics,
-    copied_files: Option<UpsertTableCopiedFileReq>,
-    overwrite: bool,
-}
-
-impl AppendCommit {
-    fn generate_new_snapshot(
-        &self,
-        schema: TableSchema,
-        cluster_key_meta: Option<ClusterKey>,
-        previous: Option<Arc<TableSnapshot>>,
-    ) -> Result<TableSnapshot> {
-        let mut new_segments = self.merged_segments.clone();
-        let mut new_summary = self.merged_statistics.clone();
-        let new_snapshot = if let Some(snapshot) = &previous {
-            if !self.overwrite {
-                let mut summary = snapshot.summary.clone();
-                let mut fill_default_values = false;
-                // check if need to fill default value in statistics
-                for column_id in self.merged_statistics.col_stats.keys() {
-                    if !summary.col_stats.contains_key(column_id) {
-                        fill_default_values = true;
-                        break;
-                    }
-                }
-                if fill_default_values {
-                    let mut default_values = Vec::with_capacity(schema.num_fields());
-                    for field in schema.fields() {
-                        default_values.push(field_default_value(self.ctx.clone(), field)?);
-                    }
-                    let leaf_default_values = schema.field_leaf_default_values(&default_values);
-                    leaf_default_values
-                        .iter()
-                        .for_each(|(col_id, default_value)| {
-                            if !summary.col_stats.contains_key(col_id) {
-                                let (null_count, distinct_of_values) = if default_value.is_null() {
-                                    (summary.row_count, Some(0))
-                                } else {
-                                    (0, Some(1))
-                                };
-                                let col_stat = ColumnStatistics {
-                                    min: default_value.to_owned(),
-                                    max: default_value.to_owned(),
-                                    null_count,
-                                    in_memory_size: 0,
-                                    distinct_of_values,
-                                };
-                                summary.col_stats.insert(*col_id, col_stat);
-                            }
-                        });
-                }
-
-                new_segments = self
-                    .merged_segments
-                    .iter()
-                    .chain(snapshot.segments.iter())
-                    .cloned()
-                    .collect();
-                merge_statistics_mut(&mut new_summary, &summary)?;
-            };
-            TableSnapshot::new(
-                Uuid::new_v4(),
-                &snapshot.timestamp,
-                Some((snapshot.snapshot_id, snapshot.format_version)),
-                schema,
-                new_summary,
-                new_segments,
-                cluster_key_meta,
-                snapshot.table_statistics_location.clone(),
-            )
-        } else {
-            TableSnapshot::new(
-                Uuid::new_v4(),
-                &None,
-                None,
-                schema,
-                new_summary,
-                new_segments,
-                cluster_key_meta,
-                None,
-            )
-        };
-
-        Ok(new_snapshot)
-    }
-}
 
 enum State {
     None,
@@ -447,7 +278,6 @@ impl Processor for CommitSink {
                         .chain(self.merged_segments.iter())
                         .cloned()
                         .collect();
-                    // deduct_statistics_mut 不需要重新读出来。
                     let segments_io =
                         SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.table.schema());
                     let append_segment_infos = segments_io
