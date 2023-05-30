@@ -2628,7 +2628,6 @@ dependencies = [
  "futures-util",
  "jsonb",
  "metrics",
- "ndarray",
  "opendal",
  "parquet-format-safe",
  "rand 0.8.5",
