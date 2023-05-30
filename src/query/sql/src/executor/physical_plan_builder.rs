@@ -439,7 +439,7 @@ impl PhysicalPlanBuilder {
                 if let Some(ie_join) = ie_join {
                     return Ok(ie_join);
                 }
-                
+
                 let mut probe_side = Box::new(self.build(s_expr.child(0)?).await?);
                 let mut build_side = Box::new(self.build(s_expr.child(1)?).await?);
 

@@ -1091,7 +1091,7 @@ EvalScalar
         ├── estimated rows: 0.00
         ├── Filter(Build)
         │   ├── filters: [is_true(CAST(a.c1 (#1) AS Int64 NULL) >= 1683648000), is_true(CAST(a.c1 (#1) AS Int64 NULL) <= 1683734400)]
-        │   ├── estimated rows: 0.01
+        │   ├── estimated rows: 0.04
         │   └── TableScan
         │       ├── table: default.default.a
         │       ├── read rows: 1
@@ -1103,7 +1103,7 @@ EvalScalar
         │       └── estimated rows: 1.00
         └── Filter(Probe)
             ├── filters: [is_true(CAST(b.c1 (#3) AS Int64 NULL) >= 1683648000), is_true(CAST(b.c1 (#3) AS Int64 NULL) <= 1683734400)]
-            ├── estimated rows: 0.02
+            ├── estimated rows: 0.08
             └── TableScan
                 ├── table: default.default.b
                 ├── read rows: 2
