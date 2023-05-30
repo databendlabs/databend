@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_config::GlobalConfig;
 use common_exception::Result;
-use common_settings::ScopeLevel::Global;
 use common_sql::plans::UnSettingPlan;
 
 use crate::interpreters::Interpreter;
