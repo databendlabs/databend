@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::collections::HashSet;
 use std::fmt::Display;
 use std::sync::Arc;
 
@@ -1139,14 +1138,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 );
 
                 if succ {
-                    return Ok(CreateVirtualColumnReply {});
+                    break;
                 }
             }
         }
 
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("create_virtual_column", TXN_MAX_RETRY_TIMES),
-        )))
+        Ok(CreateVirtualColumnReply {})
     }
 
     async fn update_virtual_column(
@@ -1205,14 +1202,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 );
 
                 if succ {
-                    return Ok(UpdateVirtualColumnReply {});
+                    break;
                 }
             }
         }
 
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("update_virtual_column", TXN_MAX_RETRY_TIMES),
-        )))
+        Ok(UpdateVirtualColumnReply {})
     }
 
     async fn drop_virtual_column(
@@ -1253,20 +1248,18 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
-                    req.name_ident = debug(&virtual_column_meta),
+                    req.name_ident = debug(&req.name_ident),
                     succ = display(succ),
                     "drop_virtual_column"
                 );
 
                 if succ {
-                    return Ok(DropVirtualColumnReply {});
+                    break;
                 }
             }
         }
 
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("drop_virtual_column", TXN_MAX_RETRY_TIMES),
-        )))
+        Ok(DropVirtualColumnReply {})
     }
 
     async fn list_virtual_columns(

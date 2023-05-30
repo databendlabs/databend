@@ -95,6 +95,8 @@ pub use virtual_column::CreateVirtualColumnReq;
 pub use virtual_column::DropVirtualColumnReply;
 pub use virtual_column::DropVirtualColumnReq;
 pub use virtual_column::ListVirtualColumnsReq;
+pub use virtual_column::UpdateVirtualColumnReply;
+pub use virtual_column::UpdateVirtualColumnReq;
 pub use virtual_column::VirtualColumnMeta;
 pub use virtual_column::VirtualColumnNameIdent;
 

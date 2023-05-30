@@ -42,14 +42,12 @@ fn test_decode_v40_virtual_column() -> anyhow::Result<()> {
         let virtual_columns = vec!["v:k1:k2".to_string(), "v[1][2]".to_string()];
         let created_on = Utc.with_ymd_and_hms(2023, 3, 9, 10, 0, 0).unwrap();
         let updated_on = Some(Utc.with_ymd_and_hms(2023, 5, 29, 10, 0, 0).unwrap());
-        let drop_on = None;
 
         VirtualColumnMeta {
             table_id,
             virtual_columns,
             created_on,
             updated_on,
-            drop_on,
         }
     };
 
