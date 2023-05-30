@@ -92,6 +92,13 @@ impl<'a> Evaluator<'a> {
     /// Run an expression partially, only the rows that are valid in the validity bitmap
     /// will be evaluated, the rest will be default values and should not throw any error.
     fn partial_run(&self, expr: &Expr, validity: Option<Bitmap>) -> Result<Value<AnyType>> {
+        if !(validity.is_none()
+            || validity.as_ref().unwrap().len() == self.input_columns.num_rows())
+        {
+            dbg!(&validity);
+            dbg!(&self.input_columns);
+            dbg!(&self.input_columns.num_rows());
+        }
         debug_assert!(
             validity.is_none() || validity.as_ref().unwrap().len() == self.input_columns.num_rows()
         );
@@ -706,10 +713,13 @@ impl<'a> Evaluator<'a> {
             return Ok(None);
         }
 
-        let num_rows = match &value {
-            Value::Scalar(_) => 1,
-            Value::Column(col) => col.len(),
-        };
+        let num_rows = validity
+            .as_ref()
+            .map(|validity| validity.len())
+            .unwrap_or_else(|| match &value {
+                Value::Scalar(_) => 1,
+                Value::Column(col) => col.len(),
+            });
         let block = DataBlock::new(
             vec![BlockEntry {
                 data_type: src_type.clone(),
