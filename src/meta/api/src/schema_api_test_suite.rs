@@ -1915,6 +1915,7 @@ impl SchemaApiTestSuite {
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     copied_files: None,
+                    deduplicated_label: None,
                 })
                 .await?;
 
@@ -1935,6 +1936,7 @@ impl SchemaApiTestSuite {
                         seq: MatchSeq::Exact(table_version + 1),
                         new_table_meta: new_table_meta.clone(),
                         copied_files: None,
+                        deduplicated_label: None,
                     })
                     .await;
 
@@ -1975,6 +1977,7 @@ impl SchemaApiTestSuite {
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     copied_files: Some(upsert_source_table),
+                    deduplicated_label: None,
                 })
                 .await?;
 
@@ -2013,6 +2016,7 @@ impl SchemaApiTestSuite {
                     seq: MatchSeq::Exact(table_version),
                     new_table_meta: new_table_meta.clone(),
                     copied_files: Some(upsert_source_table),
+                    deduplicated_label: None,
                 })
                 .await?;
 
@@ -2052,6 +2056,7 @@ impl SchemaApiTestSuite {
                         seq: MatchSeq::Exact(table_version),
                         new_table_meta: new_table_meta.clone(),
                         copied_files: Some(upsert_source_table),
+                        deduplicated_label: None,
                     })
                     .await;
                 let err = result.unwrap_err();
@@ -2530,6 +2535,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta.clone(),
                 copied_files: Some(req),
+                deduplicated_label: None,
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -3257,6 +3263,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
+                deduplicated_label: None,
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -3293,6 +3300,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
+                deduplicated_label: None,
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -4467,6 +4475,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
+                deduplicated_label: None,
             };
 
             let _ = mt.update_table_meta(req).await?;
@@ -4512,6 +4521,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
+                deduplicated_label: None,
             };
 
             let result = mt.update_table_meta(req).await;
@@ -4554,6 +4564,7 @@ impl SchemaApiTestSuite {
                 seq: MatchSeq::Any,
                 new_table_meta: table_meta(created_on),
                 copied_files: Some(req),
+                deduplicated_label: None,
             };
 
             mt.update_table_meta(req).await?;
@@ -4706,6 +4717,7 @@ where MT: SchemaApi
             seq: MatchSeq::Any,
             new_table_meta: self.table_meta(),
             copied_files: Some(req),
+            deduplicated_label: None,
         };
 
         self.mt.update_table_meta(req).await?;

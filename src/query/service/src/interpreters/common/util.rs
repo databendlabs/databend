@@ -29,28 +29,15 @@ use common_users::UserApiProvider;
 ///
 /// Returns a `Result` containing a `bool` indicating whether specific duplicate label exists (`true`) or not (`false`).
 pub async fn check_deduplicate_label(ctx: Arc<dyn TableContext>) -> Result<bool> {
-    let deduplicate_label = ctx.get_settings().get_deduplicate_label().unwrap();
-    if deduplicate_label.is_empty() {
-        Ok(false)
-    } else {
-        let kv_store = UserApiProvider::instance().get_meta_store_client();
-        let raw = kv_store.get_kv(&deduplicate_label).await?;
-        match raw {
-            None => {
-                // let expire_at = SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60 * 1000;
-                // let _ = kv_store
-                //     .upsert_kv(UpsertKV {
-                //         key: duplicate_label,
-                //         seq: MatchSeq::Any,
-                //         value: Operation::Update(1_i8.to_le_bytes().to_vec()),
-                //         value_meta: Some(KVMeta {
-                //             expire_at: Some(expire_at),
-                //         }),
-                //     })
-                //     .await?;
-                Ok(false)
+    match ctx.get_settings().get_deduplicate_label()? {
+        None => Ok(false),
+        Some(deduplicate_label) => {
+            let kv_store = UserApiProvider::instance().get_meta_store_client();
+            let raw = kv_store.get_kv(&deduplicate_label).await?;
+            match raw {
+                None => Ok(false),
+                Some(_) => Ok(true),
             }
-            Some(_) => Ok(true),
         }
     }
 }

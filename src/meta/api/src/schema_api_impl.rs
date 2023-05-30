@@ -127,6 +127,7 @@ use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaNetworkError;
+use common_meta_types::SeqV;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnGetRequest;
 use common_meta_types::TxnOp;
@@ -2379,6 +2380,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 txn_req.if_then.extend(match_operations)
             }
 
+            if let Some(deduplicated_label) = &req.deduplicated_label {
+                txn_req
+                    .if_then
+                    .extend(build_upsert_table_deduplicated_label(deduplicated_label))
+            }
+
             let (succ, responses) = send_txn(self, txn_req).await?;
 
             debug!(id = debug(&tbid), succ = display(succ), "update_table_meta");
@@ -3228,6 +3235,18 @@ fn build_upsert_table_copied_file_info_conditions(
         set_update_expire_operation(&key, &file_info, &req.expire_at, &mut if_then)?;
     }
     Ok((condition, if_then))
+}
+
+fn build_upsert_table_deduplicated_label(deduplicated_label: &String) -> TxnOp {
+    let expire_at = SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60 * 1000;
+    TxnOp {
+        request: Some(Request::Put(TxnPutRequest {
+            key: deduplicated_label,
+            value: 1_i8.to_le_bytes().to_vec(),
+            prev_value: false,
+            expire_at,
+        })),
+    }
 }
 
 fn set_update_expire_operation(
