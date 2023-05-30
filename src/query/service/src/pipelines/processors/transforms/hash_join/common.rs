@@ -212,7 +212,7 @@ impl JoinHashTable {
         let func_ctx = self.ctx.get_function_context()?;
         let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
         let predicates = evaluator
-            .run_auto_type(&filter)?
+            .run(&filter)?
             .try_downcast::<BooleanType>()
             .unwrap();
 
@@ -234,7 +234,7 @@ impl JoinHashTable {
         let func_ctx = self.ctx.get_function_context()?;
         let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
 
-        let filter_vector: Value<AnyType> = evaluator.run_auto_type(filter)?;
+        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
         let filter_vector =
             filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());
 
