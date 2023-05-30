@@ -206,6 +206,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
                 });
             }
         }
+        debug_assert!(self.cache.size() <= self.cache.capacity());
 
         let cache_key = self.cache_key(key.as_ref());
         let path = self.abs_path_of_cache_key(&cache_key);
