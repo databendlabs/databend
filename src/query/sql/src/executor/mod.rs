@@ -14,6 +14,7 @@
 
 mod explain;
 mod format;
+mod physical_join;
 mod physical_plan;
 mod physical_plan_builder;
 mod physical_plan_display;
@@ -21,6 +22,10 @@ mod physical_plan_visitor;
 pub mod table_read_plan;
 mod util;
 
+pub use physical_join::hash_join;
+pub use physical_join::ie_join;
+pub use physical_join::physical_join;
+pub use physical_join::PhysicalJoinType;
 pub use physical_plan::*;
 pub use physical_plan_builder::IEJoinCondition;
 pub use physical_plan_builder::PhysicalPlanBuilder;
