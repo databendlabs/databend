@@ -205,6 +205,7 @@ impl InterpreterFactory {
                 ctx,
                 *exists_table.clone(),
             )?)),
+
             // Views
             Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(
                 ctx,

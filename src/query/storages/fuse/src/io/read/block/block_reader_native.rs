@@ -248,18 +248,4 @@ impl BlockReader {
         }
         Ok(DataBlock::new(entries, rows))
     }
-
-    pub fn build_virtual_block(&self, chunks: Vec<(usize, Box<dyn Array>)>) -> Result<DataBlock> {
-        let mut rows = 0;
-        let mut entries = Vec::with_capacity(chunks.len());
-        for (_, array) in chunks.iter() {
-            let data_type = DataType::Nullable(Box::new(DataType::Variant));
-            entries.push(BlockEntry {
-                data_type: data_type.clone(),
-                value: Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
-            });
-            rows = array.len();
-        }
-        Ok(DataBlock::new(entries, rows))
-    }
 }

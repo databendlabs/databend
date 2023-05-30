@@ -27,7 +27,6 @@ use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
-#[allow(dead_code)]
 pub struct CreateVirtualColumnsInterpreter {
     ctx: Arc<QueryContext>,
     plan: CreateVirtualColumnsPlan,
