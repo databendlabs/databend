@@ -36,6 +36,7 @@ use crate::Evaluator;
 use crate::FunctionContext;
 use crate::FunctionRegistry;
 use crate::RawExpr;
+use crate::Scalar;
 use crate::Value;
 
 /// A convenient shortcut to evaluate a scalar function.
@@ -75,6 +76,25 @@ pub fn eval_function(
     let block = DataBlock::new(cols, num_rows);
     let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
     Ok((evaluator.run(&expr)?, expr.data_type().clone()))
+}
+
+pub fn cast_scalar(
+    span: Span,
+    scalar: Scalar,
+    dest_type: DataType,
+    fn_registry: &FunctionRegistry,
+) -> Result<Scalar> {
+    let raw_expr = RawExpr::Cast {
+        span,
+        is_try: false,
+        expr: Box::new(RawExpr::Constant { span, scalar }),
+        dest_type,
+    };
+    let expr = crate::type_check::check(&raw_expr, fn_registry)?;
+    let block = DataBlock::empty();
+    let func_ctx = &FunctionContext::default();
+    let evaluator = Evaluator::new(&block, func_ctx, fn_registry);
+    Ok(evaluator.run(&expr)?.into_scalar().unwrap())
 }
 
 pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<Bitmap> {
