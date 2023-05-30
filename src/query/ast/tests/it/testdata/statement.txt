@@ -7702,7 +7702,6 @@ COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',
 Copy(
     CopyStmt {
         hints: None,
-        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "~",
