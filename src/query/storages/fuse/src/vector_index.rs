@@ -117,7 +117,7 @@ impl FuseTable {
         block_reader: Arc<BlockReader>,
         ctx: Arc<dyn TableContext>,
         limit: usize,
-        target: &[f32],
+        target: &mut [f32],
         index_type: &VectorIndex,
         metric_type: &MetricType,
     ) -> Result<Option<DataBlock>> {
@@ -127,7 +127,10 @@ impl FuseTable {
             VectorIndex::IvfFlat(_) => POST_FIX_IVF.to_string(),
         };
         let pos_fix = match metric_type {
-            MetricType::Cosine => post_fix + POST_FIX_COSINE,
+            MetricType::Cosine => {
+                normalize(target);
+                post_fix + POST_FIX_COSINE
+            }
         };
 
         // 1. get knn of each block

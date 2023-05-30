@@ -23,7 +23,7 @@ async fn main() {
 }
 
 async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
-    let table_name = "tttttttttttttttttttttttttttttt";
+    let table_name = "ttttttttttttttttttttttttttttttt";
     let mut row = Row::empty();
 
     row.add_cell(Cell::new(&format_num(num_points)));

@@ -938,31 +938,29 @@ impl Binder {
                 "wrong number of vector index parameters",
             ));
         }
-        match &paras[0] {
-            Expr::BinaryOp {
-                op: BinaryOperator::Eq,
-                left,
-                right,
-                ..
-            } => {
-                let left = left.as_ref();
-                let right = right.as_ref();
-                match (left, right) {
-                    (
-                        Expr::ColumnRef { column, .. },
-                        Expr::Literal {
-                            lit: Literal::UInt64(nlists),
-                            ..
-                        },
-                    ) if column.name == "nlist" => {
-                        return Ok(VectorIndex::IvfFlat(IvfFlatIndex {
-                            nlists: *nlists as usize,
-                        }));
-                    }
-                    _ => {}
+        if let Expr::BinaryOp {
+            op: BinaryOperator::Eq,
+            left,
+            right,
+            ..
+        } = &paras[0]
+        {
+            let left = left.as_ref();
+            let right = right.as_ref();
+            match (left, right) {
+                (
+                    Expr::ColumnRef { column, .. },
+                    Expr::Literal {
+                        lit: Literal::UInt64(nlists),
+                        ..
+                    },
+                ) if column.name == "nlist" => {
+                    return Ok(VectorIndex::IvfFlat(IvfFlatIndex {
+                        nlists: *nlists as usize,
+                    }));
                 }
+                _ => {}
             }
-            _ => {}
         }
         Err(ErrorCode::SyntaxException("wrong vector index parameters"))
     }

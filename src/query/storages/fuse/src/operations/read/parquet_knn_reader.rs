@@ -43,6 +43,7 @@ pub struct ReadParquetKnnSource {
 }
 
 impl ReadParquetKnnSource {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         table: Arc<dyn Table>,
@@ -110,7 +111,7 @@ impl Processor for ReadParquetKnnSource {
                 self.block_reader.clone(),
                 self.ctx.clone(),
                 self.limit,
-                &self.target,
+                &mut self.target,
                 &self.vector_index,
                 &self.metric,
             )
