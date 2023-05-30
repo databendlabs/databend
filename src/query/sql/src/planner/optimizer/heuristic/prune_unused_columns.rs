@@ -24,7 +24,6 @@ use crate::plans::Aggregate;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
-use crate::plans::WindowFuncType;
 use crate::ColumnEntry;
 use crate::MetadataRef;
 
@@ -196,20 +195,7 @@ impl UnusedColumnPruner {
             }
             RelOperator::Window(p) => {
                 if required.contains(&p.index) {
-                    match &p.function {
-                        WindowFuncType::Aggregate(agg) => {
-                            agg.args.iter().for_each(|item| {
-                                required.extend(item.used_columns());
-                            });
-                        }
-                        WindowFuncType::Lag(f) | WindowFuncType::Lead(f) => {
-                            required.extend(f.arg.used_columns());
-                            if let Some(default) = &f.default {
-                                required.extend(default.used_columns());
-                            }
-                        }
-                        _ => {}
-                    }
+                    required.extend(p.function.used_columns());
                     p.partition_by.iter().for_each(|item| {
                         required.insert(item.index);
                     });

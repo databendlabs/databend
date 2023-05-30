@@ -412,7 +412,7 @@ impl SubqueryRewriter {
                 let data_type = column_entry.data_type();
                 self.derived_columns.insert(
                     *correlated_column,
-                    metadata.add_derived_column(name.to_string(), data_type.wrap_nullable()),
+                    metadata.add_derived_column(name.to_string(), data_type),
                 );
             }
             let logical_get = SExpr::create_leaf(Arc::new(

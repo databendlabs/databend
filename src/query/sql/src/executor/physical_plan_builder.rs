@@ -57,6 +57,7 @@ use super::Exchange as PhysicalExchange;
 use super::Filter;
 use super::HashJoin;
 use super::Limit;
+use super::NthValueFunctionDesc;
 use super::ProjectSet;
 use super::RowFetch;
 use super::Sort;
@@ -71,7 +72,6 @@ use crate::executor::FragmentKind;
 use crate::executor::IEJoin;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
-use crate::executor::LagLeadFunctionSignature;
 use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
@@ -1264,8 +1264,8 @@ impl PhysicalPlanBuilder {
                     })
                     .collect::<Result<_>>()?,
             }),
-            WindowFuncType::Lag(lag) => {
-                let new_default = match &lag.default {
+            WindowFuncType::LagLead(lag_lead) => {
+                let new_default = match &lag_lead.default {
                     None => LagLeadDefault::Null,
                     Some(d) => match d {
                         box ScalarExpr::BoundColumnRef(col) => {
@@ -1274,62 +1274,32 @@ impl PhysicalPlanBuilder {
                         _ => unreachable!(),
                     },
                 };
-                WindowFunction::Lag(LagLeadFunctionDesc {
-                    sig: LagLeadFunctionSignature {
-                        name: "lag".to_string(),
-                        arg: lag.arg.data_type()?,
-                        offset: lag.offset,
-                        default: match lag.default.as_ref().map(|d| d.data_type()) {
-                            None => None,
-                            Some(d) => Some(d?),
-                        },
-                        return_type: *lag.return_type.clone(),
-                    },
-                    output_column: w.index,
-                    arg: if let ScalarExpr::BoundColumnRef(col) = *lag.arg.clone() {
+                WindowFunction::LagLead(LagLeadFunctionDesc {
+                    is_lag: lag_lead.is_lag,
+                    offset: lag_lead.offset,
+                    return_type: *lag_lead.return_type.clone(),
+                    arg: if let ScalarExpr::BoundColumnRef(col) = *lag_lead.arg.clone() {
                         Ok(col.column.index)
                     } else {
                         Err(ErrorCode::Internal(
-                            "Window's lag, lead function argument must be a BoundColumnRef"
-                                .to_string(),
+                            "Window's lag function argument must be a BoundColumnRef".to_string(),
                         ))
                     }?,
                     default: new_default,
                 })
             }
-            WindowFuncType::Lead(lead) => {
-                let new_default = match &lead.default {
-                    None => LagLeadDefault::Null,
-                    Some(d) => match d {
-                        box ScalarExpr::BoundColumnRef(col) => {
-                            LagLeadDefault::Index(col.column.index)
-                        }
-                        _ => unreachable!(),
-                    },
-                };
-                WindowFunction::Lead(LagLeadFunctionDesc {
-                    sig: LagLeadFunctionSignature {
-                        name: "lead".to_string(),
-                        arg: lead.arg.data_type()?,
-                        offset: lead.offset,
-                        default: match lead.default.as_ref().map(|d| d.data_type()) {
-                            None => None,
-                            Some(d) => Some(d?),
-                        },
-                        return_type: *lead.return_type.clone(),
-                    },
-                    output_column: w.index,
-                    arg: if let ScalarExpr::BoundColumnRef(col) = *lead.arg.clone() {
-                        Ok(col.column.index)
-                    } else {
-                        Err(ErrorCode::Internal(
-                            "Window's lag, lead function argument must be a BoundColumnRef"
-                                .to_string(),
-                        ))
-                    }?,
-                    default: new_default,
-                })
-            }
+
+            WindowFuncType::NthValue(func) => WindowFunction::NthValue(NthValueFunctionDesc {
+                n: func.n,
+                return_type: *func.return_type.clone(),
+                arg: if let ScalarExpr::BoundColumnRef(col) = &*func.arg {
+                    Ok(col.column.index)
+                } else {
+                    Err(ErrorCode::Internal(
+                        "Window's nth_value function argument must be a BoundColumnRef".to_string(),
+                    ))
+                }?,
+            }),
             WindowFuncType::RowNumber => WindowFunction::RowNumber,
             WindowFuncType::Rank => WindowFunction::Rank,
             WindowFuncType::DenseRank => WindowFunction::DenseRank,
@@ -1649,7 +1619,7 @@ impl PhysicalPlanBuilder {
     async fn try_ie_join(&mut self, join: &Join, s_expr: &SExpr) -> Result<Option<PhysicalPlan>> {
         if !join.left_conditions.is_empty()
             || join.non_equi_conditions.len() < 2
-            || join.join_type != JoinType::Inner
+            || !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
         {
             // Use hash join if exists equi conditions
             return Ok(None);
@@ -1667,8 +1637,7 @@ impl PhysicalPlanBuilder {
                 other_conditions.push(condition);
             }
         }
-        if ie_conditions.len() != 2 || !other_conditions.is_empty() {
-            // Todo(xudong): support other conditions
+        if ie_conditions.len() != 2 {
             return Ok(None);
         }
         // Construct IEJoin

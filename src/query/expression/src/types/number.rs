@@ -543,7 +543,11 @@ impl NumberColumnBuilder {
             (NumberColumnBuilder::NUM_TYPE(builder), NumberColumn::NUM_TYPE(other)) => {
                 builder.extend_from_slice(other);
             }
-            (this, other) => unreachable!("unable append {other:?} onto {this:?}"),
+            (this, other) => unreachable!(
+                "unable append column(data type: {:?}) into builder(data type: {:?})",
+                type_name_of(other),
+                type_name_of(this)
+            ),
         })
     }
 
@@ -596,6 +600,10 @@ fn overflow_cast_with_minmax<T: Number, U: Number>(src: T, min: U, max: U) -> Op
     // It will have errors if the src type is Inf/NaN
     let dest: U = num_traits::cast(src_clamp)?;
     Some((dest, overflowing))
+}
+
+fn type_name_of<T>(_: T) -> &'static str {
+    std::any::type_name::<T>()
 }
 
 #[macro_export]

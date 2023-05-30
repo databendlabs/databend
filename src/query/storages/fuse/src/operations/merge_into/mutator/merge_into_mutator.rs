@@ -254,13 +254,36 @@ impl AggregationContext {
 
         let reader = &self.block_reader;
         let on_conflict_fields = &self.on_conflict_fields;
-        let data_block = reader
-            .read_by_meta(
+
+        let merged_io_read_result = reader
+            .read_columns_data_by_merge_io(
                 &self.read_settings,
-                block_meta,
-                &self.write_settings.storage_format,
+                &block_meta.location.0,
+                &block_meta.col_metas,
             )
             .await?;
+
+        // deserialize block data
+        // cpu intensive task, send them to dedicated thread pool
+        let data_block = {
+            let storage_format = self.write_settings.storage_format;
+            let block_meta_ptr = block_meta.clone();
+            let reader = reader.clone();
+            GlobalIORuntime::instance()
+                .spawn_blocking(move || {
+                    let column_chunks = merged_io_read_result.columns_chunks()?;
+                    reader.deserialize_chunks(
+                        block_meta_ptr.location.0.as_str(),
+                        block_meta_ptr.row_count as usize,
+                        &block_meta_ptr.compression,
+                        &block_meta_ptr.col_metas,
+                        column_chunks,
+                        &storage_format,
+                    )
+                })
+                .await?
+        };
+
         let num_rows = data_block.num_rows();
 
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
