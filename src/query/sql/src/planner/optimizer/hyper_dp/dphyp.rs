@@ -265,7 +265,7 @@ impl DPhpy {
                 }
                 let new_s_expr = Arc::new(s_expr.replace_children([child]));
                 self.join_relations.push(JoinRelation::new(&new_s_expr));
-                return Ok((new_s_expr, false));
+                Ok((new_s_expr, false))
             }
             RelOperator::UnionAll(_) => {
                 let new_s_expr = self.new_children(s_expr)?;
