@@ -1,6 +1,13 @@
 statement ok
 set max_threads=1
 
+query III
+select number + 3 as number,  number + 5 as c, c - 2  from numbers(3);
+----
+3 5 3
+4 6 4
+5 7 5
+
 query II
 SELECT (number+1) as c1, max(number) as c2 FROM numbers_mt(10) group by number+1 having c2>1 order by c1 desc, c2 asc
 ----
@@ -35,4 +42,3 @@ SELECT t.`id` AS C, `t`.id AS C1, `id` AS C2, `t`.`id` AS C3  FROM test.t
 
 statement ok
 DROP DATABASE test
-
