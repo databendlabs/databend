@@ -1844,6 +1844,7 @@ dependencies = [
  "common-arrow",
  "common-meta-stoerr",
  "common-meta-types",
+ "faiss",
  "http",
  "opendal",
  "paste",
@@ -4171,15 +4172,16 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 [[package]]
 name = "faiss"
 version = "0.12.1-alpha.0"
-source = "git+https://github.com/datafuse-extras/faiss-rs.git?rev=e410e25a8b7a86b02533c64972190d7920ce910e#e410e25a8b7a86b02533c64972190d7920ce910e"
+source = "git+https://github.com/datafuse-extras/faiss-rs.git?rev=54d1fe56e8bd3ef74b49455b6da883c1be620c46#54d1fe56e8bd3ef74b49455b6da883c1be620c46"
 dependencies = [
+ "bytes",
  "faiss-sys",
 ]
 
 [[package]]
 name = "faiss-sys"
 version = "0.6.1"
-source = "git+https://github.com/datafuse-extras/faiss-rs.git?rev=e410e25a8b7a86b02533c64972190d7920ce910e#e410e25a8b7a86b02533c64972190d7920ce910e"
+source = "git+https://github.com/datafuse-extras/faiss-rs.git?rev=54d1fe56e8bd3ef74b49455b6da883c1be620c46#54d1fe56e8bd3ef74b49455b6da883c1be620c46"
 dependencies = [
  "cmake",
 ]

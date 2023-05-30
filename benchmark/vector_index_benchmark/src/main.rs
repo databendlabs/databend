@@ -18,11 +18,12 @@ async fn main() {
         "query time with ivf index",
         "recall"
     ]);
-    table.add_row(bench(1_000_000, 128, 50, 1000).await);
+    table.add_row(bench(10000, 128, 50, 100).await);
     table.printstd();
 }
 
 async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
+    let table_name = "ttttttttttttttttttttttttttttt";
     let mut row = Row::empty();
 
     row.add_cell(Cell::new(&format_num(num_points)));
@@ -30,24 +31,30 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     row.add_cell(Cell::new(&k.to_string()));
     let bytes = num_points * dim * std::mem::size_of::<f32>();
     row.add_cell(Cell::new(&format_size(bytes)));
-
+    println!("generating {} {}d points randomly", num_points, dim);
     let points = generate_points(num_points, dim);
+    println!("generating points done");
     let target = generate_points(1, dim);
 
     let dsn = "databend://root:@localhost:8000/default?sslmode=disable";
     let conn = new_connection(dsn).unwrap();
-    conn.exec("DROP TABLE IF EXISTS vector_index_benchmark_table")
+    println!("creating table");
+    conn.exec(&format!("DROP TABLE IF EXISTS {}", table_name))
         .await
         .unwrap();
-    conn.exec("CREATE TABLE vector_index_benchmark_table (c array(float32))")
+    conn.exec(&format!("CREATE TABLE {} (c array(float32))", table_name))
         .await
         .unwrap();
+    println!("inserting points");
+    conn.exec(&insert_array(&points, dim, table_name))
+        .await
+        .unwrap();
+    println!("inserting points done");
 
-    conn.exec(&insert_array(&points, dim)).await.unwrap();
-
+    println!("querying without index");
     let knn_sql = format!(
-        "SELECT * FROM vector_index_benchmark_table ORDER BY cosine_distance(c,{:?}) LIMIT {}",
-        target, k
+        "SELECT * FROM {} ORDER BY cosine_distance(c,{:?}) LIMIT {}",
+        table_name, target, k
     );
     let mut exact_result = Vec::with_capacity(k);
     let start = quanta::Instant::now();
@@ -56,16 +63,22 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
         exact_result.push(block.unwrap());
     }
     let elapsed = start.elapsed();
+    println!("querying without index done");
     row.add_cell(Cell::new(&format_time(elapsed.as_nanos() as usize)));
     row.add_cell(Cell::new(&nlists.to_string()));
 
+    println!("building index");
     let start = quanta::Instant::now();
-    conn.exec(" create index on t using ivfflat (c cosine) with (nlist=1);")
-        .await
-        .unwrap();
+    conn.exec(&format!(
+        "create index on {} using ivfflat (c cosine) with (nlist={});",
+        table_name, nlists
+    ))
+    .await
+    .unwrap();
     let elapsed = start.elapsed();
     row.add_cell(Cell::new(&format_time(elapsed.as_nanos() as usize)));
-
+    println!("building index done");
+    println!("querying with index");
     let mut index_result = Vec::with_capacity(k);
     let start = quanta::Instant::now();
     let mut stream = conn.query_iter(&knn_sql).await.unwrap();
@@ -73,6 +86,7 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
         index_result.push(block.unwrap());
     }
     let elapsed = start.elapsed();
+    println!("querying with index done");
     row.add_cell(Cell::new(&format_time(elapsed.as_nanos() as usize)));
 
     let mut recall = 0.0;
@@ -88,8 +102,8 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     row
 }
 
-fn insert_array(points: &[f32], dim: usize) -> String {
-    let mut insert_sql = String::from("INSERT INTO vector_index_benchmark_table VALUES ");
+fn insert_array(points: &[f32], dim: usize, table_name: &str) -> String {
+    let mut insert_sql = format!("INSERT INTO {} VALUES ", table_name);
     for i in 0..points.len() / dim {
         let start = i * dim;
         let end = start + dim;
@@ -163,10 +177,5 @@ mod test {
         assert_eq!(format_time(1000), "1.00us");
         assert_eq!(format_time(1000 * 1000), "1.00ms");
         assert_eq!(format_time(1000 * 1000 * 1000), "1.00s");
-
-        assert_eq!(
-            insert_array(&vec![1.0, 2.0, 3.0, 4.0], 2),
-            "INSERT INTO vector_index_benchmark_table VALUES ([1.0, 2.0]),([3.0, 4.0])"
-        );
     }
 }

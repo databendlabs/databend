@@ -28,86 +28,99 @@ use faiss::index::SearchResult;
 use faiss::index_factory;
 use faiss::Idx;
 use faiss::Index;
-use faiss::MetricType;
 use ndarray::ArrayViewMut;
 use storages_common_cache::LoadParams;
+use storages_common_table_meta::meta::compress;
+use storages_common_table_meta::meta::decompress;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::MetaCompression;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Versioned;
 
 use crate::io::BlockReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
-use crate::io::TableMetaLocationGenerator;
 use crate::FuseTable;
 
+const POST_FIX_IVF: &str = ".ivf";
+
+const POST_FIX_COSINE: &str = ".cosine";
+
+const COMPRESSION_TYPE: MetaCompression = MetaCompression::Zstd;
+
+pub enum IndexType {
+    IVF(IVFIndex),
+}
+
+pub struct IVFIndex {
+    nlists: usize,
+}
+
+pub enum MetricType {
+    Cosine,
+}
+
 impl FuseTable {
+    /// read all blocks of the vector column and build a vector index on each block,
+    ///
+    /// then save the index to the storage, with post fix which is defined in `POST_FIX_*`
     pub async fn create_vector_index(
         &self,
         ctx: Arc<dyn TableContext>,
         column_idx: usize,
-        nlists: u64,
+        index_type: IndexType,
+        metric_type: MetricType,
     ) -> Result<()> {
-        let projection = Projection::Columns(vec![column_idx]);
+        let block_reader =
+            self.create_block_reader(Projection::Columns(vec![column_idx]), false, ctx.clone())?;
         let read_settings = ReadSettings::from_ctx(&ctx)?;
-        let snapshot_location = self.snapshot_loc().await?.ok_or(ErrorCode::StorageOther(
-            "try to create vector index on a table without snapshot",
-        ))?;
-        let snapshot_reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
-        let params = LoadParams {
-            location: snapshot_location,
-            len_hint: None,
-            ver,
-            put_cache: true,
-        };
-        let snapshot = snapshot_reader.read(&params).await?;
-        let schema = Arc::new(snapshot.schema.clone());
-        for (seg_loc, _) in &snapshot.segments {
-            let segment_reader =
-                MetaReaders::segment_info_reader(self.get_operator(), schema.clone());
-            let params = LoadParams {
-                location: seg_loc.clone(),
-                len_hint: None,
-                ver: SegmentInfo::VERSION,
-                put_cache: true,
+        for ref block_meta in self.collect_block_metas().await? {
+            let block = block_reader
+                .read_by_meta(&read_settings, block_meta, &self.storage_format)
+                .await?;
+            let column: ArrayColumn<Float32Type> = block.columns()[0]
+                .value
+                .as_column()
+                .and_then(|column| column.as_array())
+                .and_then(|column| column.try_downcast())
+                .ok_or(ErrorCode::StorageOther(
+                    "vector index can only be created on an array(float32) column",
+                ))?;
+            let mut raw_data: Vec<f32> = column
+                .underlying_column()
+                .as_slice()
+                .iter()
+                .map(|x| x.into_inner())
+                .collect();
+
+            // TODO(SKy): this assumes our array(float32) type is fixed length, we should add a new type for fixed length array
+            let dimension = raw_data.len() / column.len();
+
+            let (desp, index_location) = match index_type {
+                IndexType::IVF(IVFIndex { nlists }) => {
+                    let desp = format!("IVF{},Flat", nlists);
+                    let index_location = block_meta.location.0.clone() + POST_FIX_IVF;
+                    (desp, index_location)
+                }
             };
-            let segment_info = segment_reader.read(&params).await?;
-            let block_metas = segment_info.block_metas()?;
-            for block_meta in &block_metas {
-                let block_reader =
-                    self.create_block_reader(projection.clone(), false, ctx.clone())?;
-                let block = block_reader
-                    .read_by_meta(&read_settings, block_meta, &self.storage_format)
-                    .await?;
-                debug_assert_eq!(block.columns().len(), 1);
-                let column = block.columns()[0]
-                    .value
-                    .as_column()
-                    .and_then(|column| column.as_array())
-                    .ok_or(ErrorCode::StorageOther(
-                        "vector index can only be created on an array column",
-                    ))?;
-                let column: ArrayColumn<Float32Type> = column.try_downcast().unwrap();
-                let len = column.len();
-                let mut raw_data: Vec<f32> = column
-                    .underlying_column()
-                    .as_slice()
-                    .iter()
-                    .map(|x| x.into_inner())
-                    .collect();
-                normalize(&mut raw_data);
-                let dimension = raw_data.len() / len;
-                let desp = format!("IVF{},Flat", nlists);
-                let mut index = index_factory(dimension as u32, desp, MetricType::L2).unwrap();
-                index.train(&raw_data).unwrap();
-                index.add(&raw_data).unwrap();
-                let index_bin = serialize(&index).unwrap();
-                let index_location = block_meta.location.0.clone() + "_ivf.index";
-                self.get_operator()
-                    .write(&index_location, index_bin)
-                    .await?;
-            }
+            let (index_location, metric) = match metric_type {
+                MetricType::Cosine => {
+                    normalize(&mut raw_data);
+                    (index_location + POST_FIX_COSINE, faiss::MetricType::L2)
+                }
+            };
+
+            let mut index = index_factory(dimension as u32, desp, metric)?;
+            index.train(&raw_data)?;
+            index.add(&raw_data)?;
+            // TODO(sky): we should add an indendpendent sql for this, like: SET ivfflat.nprobe = 10;
+            index.set_nprobe(70);
+            // TODO(sky): provide a safe interface for serialize in faiss-rs
+            let index_bin = unsafe { serialize(&index)? };
+            let index_bin = compress(&COMPRESSION_TYPE, index_bin)?;
+            self.get_operator()
+                .write(&index_location, index_bin)
+                .await?;
         }
         Ok(())
     }
@@ -118,70 +131,62 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         limit: usize,
         target: &[f32],
+        index_type: IndexType,
+        metric_type: MetricType,
     ) -> Result<Option<DataBlock>> {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
-        let snapshot_location = self.snapshot_loc().await?;
-        if snapshot_location.is_none() {
-            return Ok(None);
-        }
-        let snapshot_location = snapshot_location.unwrap();
-        let snapshot_reader = MetaReaders::table_snapshot_reader(self.get_operator());
-        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
-        let params = LoadParams {
-            location: snapshot_location,
-            len_hint: None,
-            ver,
-            put_cache: true,
+        let block_metas = self.collect_block_metas().await?;
+        let post_fix = match index_type {
+            IndexType::IVF(_) => POST_FIX_IVF.to_string(),
         };
-        let snapshot = snapshot_reader.read(&params).await?;
-        let schema = Arc::new(snapshot.schema.clone());
-        let mut search_results_snapshot = Vec::new();
-        for (seg_loc, _) in &snapshot.segments {
-            let segment_reader =
-                MetaReaders::segment_info_reader(self.get_operator(), schema.clone());
-            let params = LoadParams {
-                location: seg_loc.clone(),
-                len_hint: None,
-                ver: SegmentInfo::VERSION,
-                put_cache: true,
-            };
-            let segment_info = segment_reader.read(&params).await?;
-            let block_metas = segment_info.block_metas()?;
-            let mut search_results_segment: Vec<(Vec<Idx>, Vec<f32>, Arc<BlockMeta>)> = Vec::new();
-            for block_meta in &block_metas {
-                let index_location = block_meta.location.0.clone() + "_ivf.index";
-                let index_bin = self.get_operator().read(&index_location).await?;
-                let mut index = deserialize(&index_bin).unwrap();
-                let SearchResult { distances, labels } = index.search(target, limit).unwrap();
-                search_results_segment.push((labels, distances, block_meta.clone()));
-            }
-            search_results_snapshot.extend(search_results_segment);
+        let pos_fix = match metric_type {
+            MetricType::Cosine => post_fix + POST_FIX_COSINE,
+        };
+
+        // 1. get knn of each block
+        let mut result_per_block: Vec<(Vec<Idx>, Vec<f32>, Arc<BlockMeta>)> =
+            Vec::with_capacity(block_metas.len());
+        for ref block_meta in block_metas {
+            let index_location = block_meta.location.0.clone() + &pos_fix;
+            let index_bin = self.get_operator().read(&index_location).await?;
+            let index_bin = decompress(&COMPRESSION_TYPE, index_bin)?;
+            let mut index = deserialize(&index_bin).unwrap();
+            let SearchResult { distances, labels } = index.search(target, limit).unwrap();
+            result_per_block.push((labels, distances, block_meta.clone()));
         }
-        let merged_search_results = merge_results(&search_results_snapshot, limit);
+        // 2. merge knn results of all blocks
+        let merged_results = merge_results(&result_per_block, limit);
+        // 3. merge io requests
         let mut merged_io_results = HashMap::new();
-        for (rank, (row_id, block_meta)) in merged_search_results.iter().enumerate() {
+        for (rank, (row_id, block_meta)) in merged_results.iter().enumerate() {
             let io_result = merged_io_results
                 .entry(block_meta.clone())
                 .or_insert(Vec::new());
             io_result.push((row_id, rank));
         }
-        let mut res_rows = vec![vec![]; limit];
+        // 4. read rows
+        let mut result_rows = vec![vec![]; limit];
         for (block_meta, rows) in merged_io_results {
             let block = block_reader
                 .read_by_meta(&read_settings, &block_meta, &self.storage_format)
                 .await?;
             for (row_id, rank) in rows {
                 let row_id = row_id.get().unwrap() as usize;
-                res_rows[rank] = unsafe { block.get_row_unchecked(row_id) };
+                result_rows[rank] = unsafe { block.get_row_unchecked(row_id) };
             }
         }
-        Ok(Some(DataBlock::from_rows(res_rows)))
+        // 5. convert rows to block
+        Ok(Some(DataBlock::from_rows(result_rows)))
     }
 }
 
-fn normalize(vec: &mut [f32]) {
+pub fn normalize(vec: &mut [f32]) {
+    const DIFF: f32 = 1e-6;
     let mut vec = ArrayViewMut::from(vec);
     let norm = vec.dot(&vec).sqrt();
+    if (norm - 1.0).abs() < DIFF || (norm - 0.0).abs() < DIFF {
+        return;
+    }
     vec.mapv_inplace(|x| x / norm);
 }
 

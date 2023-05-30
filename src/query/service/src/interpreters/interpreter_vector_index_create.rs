@@ -14,7 +14,13 @@
 
 use std::sync::Arc;
 
+use aggregating_index::get_agg_index_handler;
+use chrono::Utc;
 use common_exception::Result;
+use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::IndexNameIdent;
+use common_meta_app::schema::IndexType;
 use common_sql::plans::CreateVectorIndexPlan;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
@@ -59,8 +65,26 @@ impl Interpreter for CreateVectorIndexInterpreter {
                 plan.column,
                 table.name()
             )))?;
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        table.create_vector_index(ctx, column_idx, nlists).await?;
+        let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+        fuse_table
+            .create_vector_index(ctx, column_idx, nlists)
+            .await?;
+        let catalog = self.ctx.get_catalog(&plan.catalog)?;
+        let index_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+        let tenant = self.ctx.get_tenant();
+        let create_index_req = CreateIndexReq {
+            if_not_exists: false,
+            name_ident: IndexNameIdent { tenant, index_name },
+            meta: IndexMeta {
+                table_id: table.get_id(),
+                index_type: IndexType::IVF,
+                created_on: Utc::now(),
+                drop_on: None,
+                query: String::new(),
+            },
+        };
+        let handler = get_agg_index_handler();
+        let _ = handler.do_create_index(catalog, create_index_req).await?;
         Ok(PipelineBuildResult::create())
     }
 }

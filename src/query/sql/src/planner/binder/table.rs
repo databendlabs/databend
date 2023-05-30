@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
 use std::sync::Arc;
+use std::vec;
 
 use async_recursion::async_recursion;
 use chrono::TimeZone;
@@ -164,6 +165,8 @@ impl Binder {
             } => {
                 let (catalog, database, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
+                let vector_index_name = format!("{catalog}.{database}.{table_name}");
+
                 let table_alias_name = if let Some(table_alias) = alias {
                     Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
                 } else {
@@ -219,6 +222,10 @@ impl Binder {
                     }
                 };
 
+                let indexes = self
+                    .resolve_table_indexes(tenant.as_str(), catalog.as_str(), table_meta.get_id())
+                    .await?;
+
                 // Avoid death loop
                 let mut agg_indexes = vec![];
                 if !bind_context.planning_agg_index
@@ -235,16 +242,8 @@ impl Binder {
                         )
                         .is_ok()
                     {
-                        let indexes = self
-                            .resolve_table_indexes(
-                                tenant.as_str(),
-                                catalog.as_str(),
-                                table_meta.get_id(),
-                            )
-                            .await?;
-
                         let mut s_exprs = Vec::with_capacity(indexes.len());
-                        for (index_id, _, index_meta) in indexes {
+                        for (index_id, _, index_meta) in &indexes {
                             let tokens = tokenize_sql(&index_meta.query)?;
                             let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
                             let mut new_bind_context =
@@ -253,7 +252,7 @@ impl Binder {
                             if let Statement::Query(query) = &stmt {
                                 let (s_expr, _) =
                                     self.bind_query(&mut new_bind_context, query).await?;
-                                s_exprs.push((index_id, index_meta.query.clone(), s_expr));
+                                s_exprs.push((*index_id, index_meta.query.clone(), s_expr));
                             }
                         }
                         agg_indexes.extend(s_exprs);
@@ -322,6 +321,16 @@ impl Binder {
                             self.metadata
                                 .write()
                                 .add_agg_indexes(full_table_name, agg_indexes);
+                        }
+
+                        let vector_index = indexes.iter().find(|(_, index_name, _)| {
+                            index_name.eq_ignore_ascii_case(vector_index_name.as_str())
+                        });
+
+                        if let Some(vector_index) = vector_index {
+                            self.metadata
+                                .write()
+                                .set_vector_index(vector_index.2.index_type.clone());
                         }
 
                         let (s_expr, mut bind_context) = self

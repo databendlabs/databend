@@ -21,12 +21,20 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::block_thresholds;
 use common_pipeline_core::Pipeline;
+use storages_common_cache::LoadParams;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::SegmentInfo;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
+use crate::io::MetaReaders;
+use crate::io::TableMetaLocationGenerator;
 use crate::operations::fuse_source::build_fuse_source_pipeline;
 use crate::pruning::SegmentLocation;
 use crate::FuseTable;
@@ -149,5 +157,49 @@ impl FuseTable {
             topk,
             max_io_requests,
         )
+    }
+
+    /// get newest snapshot of this table,
+    /// return None if no snapshot
+    pub async fn snapshot(&self) -> Result<Option<Arc<TableSnapshot>>> {
+        let snapshot_location = self.snapshot_loc().await?;
+        if snapshot_location.is_none() {
+            return Ok(None);
+        }
+        let snapshot_location = snapshot_location.unwrap();
+        let snapshot_reader = MetaReaders::table_snapshot_reader(self.get_operator());
+        let ver = TableMetaLocationGenerator::snapshot_version(snapshot_location.as_str());
+        let params = LoadParams {
+            location: snapshot_location,
+            len_hint: None,
+            ver,
+            put_cache: true,
+        };
+        let snapshot = snapshot_reader.read(&params).await?;
+        Ok(Some(snapshot))
+    }
+
+    /// collect all block metas of the newest snapshot
+    pub async fn collect_block_metas(&self) -> Result<Vec<Arc<BlockMeta>>> {
+        let snapshot = self.snapshot().await?;
+        if snapshot.is_none() {
+            return Ok(vec![]);
+        }
+        let snapshot = snapshot.unwrap();
+        let schema = Arc::new(snapshot.schema.clone());
+        let mut result = vec![];
+        for (seg_loc, _) in &snapshot.segments {
+            let segment_reader =
+                MetaReaders::segment_info_reader(self.get_operator(), schema.clone());
+            let params = LoadParams {
+                location: seg_loc.clone(),
+                len_hint: None,
+                ver: SegmentInfo::VERSION,
+                put_cache: true,
+            };
+            let segment_info = segment_reader.read(&params).await?;
+            result.extend(segment_info.block_metas()?);
+        }
+        Ok(result)
     }
 }

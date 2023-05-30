@@ -81,6 +81,7 @@ pub enum IndexType {
     #[default]
     AGGREGATING = 1,
     JOIN = 2,
+    IVF = 3,
 }
 
 impl Display for IndexType {
@@ -88,6 +89,7 @@ impl Display for IndexType {
         match self {
             IndexType::AGGREGATING => write!(f, "AGGREGATING"),
             IndexType::JOIN => write!(f, "JOIN"),
+            IndexType::IVF => write!(f, "IVF"),
         }
     }
 }

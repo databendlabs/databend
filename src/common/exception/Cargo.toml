@@ -10,6 +10,9 @@ edition = { workspace = true }
 doctest = false
 test = false
 
+[features]
+vector-index = ["faiss"]
+
 [dependencies] # In alphabetical order
 common-arrow = { path = "../arrow" }
 common-meta-stoerr = { path = "../../meta/stoerr" }
@@ -19,6 +22,9 @@ common-meta-types = { path = "../../meta/types" }
 # TODO: Use the version from crates.io once
 # https://github.com/brendanzab/codespan/pull/331 is released.
 codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }
+faiss = { git = "https://github.com/datafuse-extras/faiss-rs.git", rev = "54d1fe56e8bd3ef74b49455b6da883c1be620c46", features = [
+    "static",
+], optional = true }
 
 anyhow = { workspace = true }
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }

@@ -71,11 +71,6 @@ impl Processor for ReadParquetKnnSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.is_finish {
-            self.output.finish();
-            return Ok(Event::Finished);
-        }
-
         if self.output.is_finished() {
             return Ok(Event::Finished);
         }
@@ -86,6 +81,11 @@ impl Processor for ReadParquetKnnSource {
 
         if let Some(data) = self.output_data.take() {
             self.output.push_data(Ok(data));
+        }
+
+        if self.is_finish {
+            self.output.finish();
+            return Ok(Event::Finished);
         }
 
         Ok(Event::Async)

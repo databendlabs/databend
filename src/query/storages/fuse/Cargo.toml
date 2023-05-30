@@ -46,7 +46,7 @@ async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
 backoff = { version = "0.4.0", features = ["futures", "tokio"] }
 chrono = { workspace = true }
-faiss = { git = "https://github.com/datafuse-extras/faiss-rs.git", rev = "e410e25a8b7a86b02533c64972190d7920ce910e", features = [
+faiss = { git = "https://github.com/datafuse-extras/faiss-rs.git", rev = "54d1fe56e8bd3ef74b49455b6da883c1be620c46", features = [
     "static",
 ], optional = true }
 futures = "0.3.24"

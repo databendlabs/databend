@@ -28,6 +28,7 @@ mod versions;
 
 pub use compression::Compression;
 pub use current::*;
+pub use format::compress;
 pub use format::decode;
 pub use format::decompress;
 pub use format::Compression as MetaCompression;

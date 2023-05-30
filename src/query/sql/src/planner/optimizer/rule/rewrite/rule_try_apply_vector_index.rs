@@ -19,16 +19,19 @@ use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
+use crate::MetadataRef;
 use crate::ScalarExpr;
 
 pub struct RuleTryApplyVectorIndex {
     id: RuleID,
     patterns: Vec<SExpr>,
+    metadata: MetadataRef,
 }
 
 impl RuleTryApplyVectorIndex {
-    pub fn new() -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
+            metadata,
             id: RuleID::TryApplyVectorIndex,
             // Input:
             //   Limit
@@ -89,7 +92,14 @@ impl Rule for RuleTryApplyVectorIndex {
         let sort = s_expr.walk_down(1).plan().as_sort().unwrap();
         let eval_scalar = s_expr.walk_down(2).plan().as_eval_scalar().unwrap();
 
-        if limit.offset != 0 || limit.limit.is_none() || sort.items.len() != 1 || !sort.items[0].asc
+        let meta = self.metadata.read();
+        let vector_index = meta.vector_index();
+
+        if vector_index.is_none()
+            || limit.offset != 0
+            || limit.limit.is_none()
+            || sort.items.len() != 1
+            || !sort.items[0].asc
         {
             state.add_result(s_expr.clone());
             return Ok(());

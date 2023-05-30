@@ -291,3 +291,10 @@ impl Clone for ErrorCode {
         ErrorCode::create(self.code(), self.message(), None, self.backtrace()).set_span(self.span())
     }
 }
+
+#[cfg(feature = "vector-index")]
+impl From<faiss::error::Error> for ErrorCode {
+    fn from(error: faiss::error::Error) -> Self {
+        ErrorCode::from_string(error.to_string())
+    }
+}

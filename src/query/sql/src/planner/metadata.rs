@@ -27,6 +27,7 @@ use common_expression::types::DataType;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
+use common_meta_app::schema;
 use parking_lot::RwLock;
 
 use crate::optimizer::SExpr;
@@ -43,7 +44,7 @@ pub static DUMMY_COLUMN_INDEX: IndexType = IndexType::MAX;
 /// ColumnSet represents a set of columns identified by its IndexType.
 pub type ColumnSet = HashSet<IndexType>;
 
-/// A Send & Send version of [`Metadata`].
+/// A Send & Sync version of [`Metadata`].
 ///
 /// Callers can clone this ref safely and cheaply.
 pub type MetadataRef = Arc<RwLock<Metadata>>;
@@ -58,6 +59,7 @@ pub struct Metadata {
     //// Columns that are lazy materialized.
     lazy_columns: HashSet<usize>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
+    vector_index: Option<schema::IndexType>,
 }
 
 impl Metadata {
@@ -229,6 +231,14 @@ impl Metadata {
 
     pub fn get_agg_indexes(&self, table: &str) -> Option<&[(u64, String, SExpr)]> {
         self.agg_indexes.get(table).map(|v| v.as_slice())
+    }
+
+    pub fn set_vector_index(&mut self, ty: schema::IndexType) {
+        self.vector_index = Some(ty);
+    }
+
+    pub fn vector_index(&self) -> Option<&schema::IndexType> {
+        self.vector_index.as_ref()
     }
 
     pub fn add_table(

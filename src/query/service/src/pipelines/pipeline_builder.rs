@@ -403,7 +403,6 @@ impl PipelineBuilder {
                 )))
             })?;
         }
-
         Ok(())
     }
 
@@ -509,7 +508,6 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })?;
-
         Ok(())
     }
 
