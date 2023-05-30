@@ -1,0 +1,45 @@
+statement ok
+DROP DATABASE IF EXISTS db1
+
+statement ok
+CREATE DATABASE db1
+
+statement ok
+USE db1
+
+statement ok
+CREATE TABLE t1(a Int, b bool) Engine = Fuse
+
+statement ok
+INSERT /*+ SET_VAR(duplicate_label='insert-test') */ INTO t1 (a, b) VALUES(1, false)
+
+statement ok
+INSERT /*+ SET_VAR(duplicate_label='insert-test') */ INTO t1 (a, b) VALUES(1, false)
+
+query II
+select * from t1
+----
+1 0
+
+statement ok
+UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t SET a = 20 WHERE b = false;
+
+statement ok
+UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t SET a = 30 WHERE b = false;
+
+query II
+select * from t1
+----
+20 0
+
+statement ok
+replace /*+ SET_VAR(deduplicate_label='replace-test') */ into t on(a,b) values(40,false);
+
+statement ok
+replace /*+ SET_VAR(deduplicate_label='replace-test') */ into t on(a,b) values(50,false);
+
+query II
+select * from t1
+----
+40 0
+20 0
