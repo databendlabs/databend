@@ -44,7 +44,7 @@ impl<'a> RelExpr<'a> {
         Self::MExpr { expr: m_expr, memo }
     }
 
-    pub fn derive_relational_prop(&self) -> Result<RelationalProperty> {
+    pub fn derive_relational_prop(&self) -> Result<Arc<RelationalProperty>> {
         match self {
             RelExpr::SExpr { expr } => {
                 if let Some(rel_prop) = expr.rel_prop.lock().unwrap().as_ref() {
@@ -58,7 +58,7 @@ impl<'a> RelExpr<'a> {
         }
     }
 
-    pub fn derive_relational_prop_child(&self, index: usize) -> Result<RelationalProperty> {
+    pub fn derive_relational_prop_child(&self, index: usize) -> Result<Arc<RelationalProperty>> {
         match self {
             RelExpr::SExpr { expr } => {
                 let child = expr.child(index)?;
@@ -72,7 +72,7 @@ impl<'a> RelExpr<'a> {
     }
 
     // Derive cardinality and statistics
-    pub fn derive_cardinality(&self) -> Result<StatInfo> {
+    pub fn derive_cardinality(&self) -> Result<Arc<StatInfo>> {
         match self {
             RelExpr::SExpr { expr } => {
                 if let Some(stat_info) = expr.stat_info.lock().unwrap().as_ref() {
@@ -86,7 +86,7 @@ impl<'a> RelExpr<'a> {
         }
     }
 
-    pub(crate) fn derive_cardinality_child(&self, index: IndexType) -> Result<StatInfo> {
+    pub(crate) fn derive_cardinality_child(&self, index: IndexType) -> Result<Arc<StatInfo>> {
         match self {
             RelExpr::SExpr { expr } => {
                 let child = expr.child(index)?;
