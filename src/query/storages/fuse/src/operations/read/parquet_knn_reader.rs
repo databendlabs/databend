@@ -23,6 +23,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
+use common_vector::index::MetricType;
+use common_vector::index::VectorIndex;
 
 use crate::io::BlockReader;
 use crate::FuseTable;
@@ -36,6 +38,8 @@ pub struct ReadParquetKnnSource {
     block_reader: Arc<BlockReader>,
     limit: usize,
     target: Vec<f32>,
+    metric: MetricType,
+    vector_index: VectorIndex,
 }
 
 impl ReadParquetKnnSource {
@@ -46,6 +50,8 @@ impl ReadParquetKnnSource {
         block_reader: Arc<BlockReader>,
         limit: usize,
         target: Vec<f32>,
+        metric: MetricType,
+        vector_index: VectorIndex,
     ) -> ProcessorPtr {
         ProcessorPtr::create(Box::new(Self {
             is_finish: false,
@@ -56,6 +62,8 @@ impl ReadParquetKnnSource {
             block_reader,
             limit,
             target,
+            metric,
+            vector_index,
         }))
     }
 }
@@ -103,6 +111,8 @@ impl Processor for ReadParquetKnnSource {
                 self.ctx.clone(),
                 self.limit,
                 &self.target,
+                &self.vector_index,
+                &self.metric,
             )
             .await?;
         self.is_finish = true;

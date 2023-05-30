@@ -20,7 +20,6 @@ use common_exception::Result;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::Pipeline;
 use common_pipeline_core::SourcePipeBuilder;
-use ndarray::ArrayViewMut;
 
 use crate::io::BlockReader;
 use crate::operations::read::parquet_knn_reader::ReadParquetKnnSource;
@@ -52,7 +51,7 @@ fn build_fuse_knn_pipeline_parquet(
     let table = ctx.build_table_from_source_plan(plan)?;
     let pushdowns = plan.push_downs.as_ref().unwrap();
     let limit = pushdowns.limit.unwrap();
-    let mut target: Vec<_> = pushdowns
+    let target: Vec<_> = pushdowns
         .similarity
         .as_ref()
         .unwrap()
@@ -68,17 +67,21 @@ fn build_fuse_knn_pipeline_parquet(
         .iter()
         .map(|x| x.into_inner())
         .collect();
-    normalize(&mut target);
+    let metric = pushdowns.similarity.as_ref().unwrap().metric.clone();
+    let vector_index = pushdowns.similarity.as_ref().unwrap().vector_index.clone();
     source_builder.add_source(
         output.clone(),
-        ReadParquetKnnSource::create(ctx, table, output, block_reader, limit, target),
+        ReadParquetKnnSource::create(
+            ctx,
+            table,
+            output,
+            block_reader,
+            limit,
+            target,
+            metric,
+            vector_index,
+        ),
     );
     pipeline.add_pipe(source_builder.finalize());
     Ok(())
-}
-
-fn normalize(vec: &mut [f32]) {
-    let mut vec = ArrayViewMut::from(vec);
-    let norm = vec.dot(&vec).sqrt();
-    vec.mapv_inplace(|x| x / norm);
 }

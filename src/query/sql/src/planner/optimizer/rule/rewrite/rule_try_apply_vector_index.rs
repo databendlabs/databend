@@ -14,6 +14,10 @@
 
 use std::sync::Arc;
 
+use common_meta_app::schema::IndexType;
+use common_vector::index::IvfFlatIndex;
+use common_vector::index::VectorIndex;
+
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
@@ -105,6 +109,11 @@ impl Rule for RuleTryApplyVectorIndex {
             return Ok(());
         }
 
+        let vector_index = match vector_index.unwrap() {
+            IndexType::IVF => VectorIndex::IvfFlat(IvfFlatIndex { nlists: 0 }), /* TODO(Sky):Store nlist in meta */
+            _ => unreachable!(),
+        };
+
         let sort_by_idx = eval_scalar
             .items
             .iter()
@@ -117,7 +126,8 @@ impl Rule for RuleTryApplyVectorIndex {
                 let mut new_operator = new_scan.plan.as_ref().clone();
                 new_operator.as_scan_mut().unwrap().order_by = Some(sort.items.clone());
                 new_operator.as_scan_mut().unwrap().limit = Some(limit.limit.unwrap());
-                new_operator.as_scan_mut().unwrap().similarity = Some(Box::new(func.clone()));
+                new_operator.as_scan_mut().unwrap().similarity =
+                    Some(Box::new((func.clone(), vector_index)));
                 new_scan.plan = Arc::new(new_operator);
                 new_scan.set_applied_rule(&self.id);
                 state.add_result(new_scan);

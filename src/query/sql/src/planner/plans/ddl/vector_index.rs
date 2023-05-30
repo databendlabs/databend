@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_vector::index::MetricType;
+use common_vector::index::VectorIndex;
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateVectorIndexPlan {
     pub catalog: String,
     pub database: String,
     pub table: String,
     pub column: String,
-    pub nlists: Option<u64>, // used for IVF index
+    pub vector_index: VectorIndex,
+    pub metric_type: MetricType,
 }

@@ -21,7 +21,6 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::block_thresholds;
 use common_pipeline_core::Pipeline;
 use storages_common_cache::LoadParams;
 use storages_common_index::Index;

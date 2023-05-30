@@ -15,3 +15,5 @@
 mod distance;
 
 pub use distance::cosine_distance;
+
+pub mod index;

@@ -1764,6 +1764,7 @@ dependencies = [
  "common-pipeline-core",
  "common-settings",
  "common-storage",
+ "common-vector",
  "dashmap",
  "dyn-clone",
  "goldenfile",
@@ -2531,6 +2532,7 @@ dependencies = [
  "common-storages-result-cache",
  "common-storages-view",
  "common-users",
+ "common-vector",
  "ctor",
  "dashmap",
  "educe",
@@ -2620,6 +2622,7 @@ dependencies = [
  "common-sharing",
  "common-sql",
  "common-storage",
+ "common-vector",
  "faiss",
  "futures",
  "futures-util",
@@ -2961,6 +2964,7 @@ dependencies = [
  "approx",
  "common-exception",
  "ndarray",
+ "serde",
 ]
 
 [[package]]

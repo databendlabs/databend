@@ -12,6 +12,7 @@ test = false
 
 [dependencies] # In alphabetical order
 common-exception = { path = "../exception" }
+serde = { workspace = true }
 
 ndarray = "0.15.6"
 

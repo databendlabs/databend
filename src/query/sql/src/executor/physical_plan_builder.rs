@@ -24,7 +24,6 @@ use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::VectorSimilarityInfo;
-use common_catalog::plan::VectorSimilarityMetric;
 use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -46,6 +45,7 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_vector::index::MetricType;
 use itertools::Itertools;
 
 use super::cast_expr_to_non_null_boolean;
@@ -1590,9 +1590,10 @@ impl PhysicalPlanBuilder {
         let similarity = scan
             .similarity
             .as_ref()
-            .map(|func| {
+            .map(|x| {
+                let (func, vector_index) = x.as_ref();
                 let metric = match func.func_name.to_ascii_lowercase().as_str() {
-                    "cosine_distance" => Ok(VectorSimilarityMetric::Cosine),
+                    "cosine_distance" => Ok(MetricType::Cosine),
                     _ => Err(ErrorCode::BadArguments(format!(
                         "invalid similarity function: {}",
                         func.func_name
@@ -1619,6 +1620,7 @@ impl PhysicalPlanBuilder {
                     ))),
                 }?;
                 Ok(VectorSimilarityInfo {
+                    vector_index: vector_index.clone(),
                     metric,
                     column,
                     target,

@@ -21,6 +21,8 @@ use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_vector::index::MetricType;
+use common_vector::index::VectorIndex;
 
 use crate::plan::Projection;
 
@@ -69,14 +71,10 @@ pub struct PrewhereInfo {
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct VectorSimilarityInfo {
-    pub metric: VectorSimilarityMetric,
+    pub vector_index: VectorIndex,
+    pub metric: MetricType,
     pub target: Scalar,
     pub column: FieldIndex,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum VectorSimilarityMetric {
-    Cosine,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]

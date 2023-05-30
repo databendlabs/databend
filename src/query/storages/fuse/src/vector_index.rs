@@ -22,23 +22,22 @@ use common_exception::Result;
 use common_expression::types::array::ArrayColumn;
 use common_expression::types::Float32Type;
 use common_expression::DataBlock;
+use common_vector::index::normalize;
+use common_vector::index::IvfFlatIndex;
+use common_vector::index::MetricType;
+use common_vector::index::VectorIndex;
 use faiss::index::io::deserialize;
 use faiss::index::io::serialize;
 use faiss::index::SearchResult;
 use faiss::index_factory;
 use faiss::Idx;
 use faiss::Index;
-use ndarray::ArrayViewMut;
-use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::compress;
 use storages_common_table_meta::meta::decompress;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::MetaCompression;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Versioned;
 
 use crate::io::BlockReader;
-use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::FuseTable;
 
@@ -48,18 +47,6 @@ const POST_FIX_COSINE: &str = ".cosine";
 
 const COMPRESSION_TYPE: MetaCompression = MetaCompression::Zstd;
 
-pub enum IndexType {
-    IVF(IVFIndex),
-}
-
-pub struct IVFIndex {
-    nlists: usize,
-}
-
-pub enum MetricType {
-    Cosine,
-}
-
 impl FuseTable {
     /// read all blocks of the vector column and build a vector index on each block,
     ///
@@ -68,8 +55,8 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         column_idx: usize,
-        index_type: IndexType,
-        metric_type: MetricType,
+        vector_index: &VectorIndex,
+        metric_type: &MetricType,
     ) -> Result<()> {
         let block_reader =
             self.create_block_reader(Projection::Columns(vec![column_idx]), false, ctx.clone())?;
@@ -96,8 +83,8 @@ impl FuseTable {
             // TODO(SKy): this assumes our array(float32) type is fixed length, we should add a new type for fixed length array
             let dimension = raw_data.len() / column.len();
 
-            let (desp, index_location) = match index_type {
-                IndexType::IVF(IVFIndex { nlists }) => {
+            let (desp, index_location) = match vector_index {
+                VectorIndex::IvfFlat(IvfFlatIndex { nlists }) => {
                     let desp = format!("IVF{},Flat", nlists);
                     let index_location = block_meta.location.0.clone() + POST_FIX_IVF;
                     (desp, index_location)
@@ -131,13 +118,13 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         limit: usize,
         target: &[f32],
-        index_type: IndexType,
-        metric_type: MetricType,
+        index_type: &VectorIndex,
+        metric_type: &MetricType,
     ) -> Result<Option<DataBlock>> {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let block_metas = self.collect_block_metas().await?;
         let post_fix = match index_type {
-            IndexType::IVF(_) => POST_FIX_IVF.to_string(),
+            VectorIndex::IvfFlat(_) => POST_FIX_IVF.to_string(),
         };
         let pos_fix = match metric_type {
             MetricType::Cosine => post_fix + POST_FIX_COSINE,
@@ -180,23 +167,13 @@ impl FuseTable {
     }
 }
 
-pub fn normalize(vec: &mut [f32]) {
-    const DIFF: f32 = 1e-6;
-    let mut vec = ArrayViewMut::from(vec);
-    let norm = vec.dot(&vec).sqrt();
-    if (norm - 1.0).abs() < DIFF || (norm - 0.0).abs() < DIFF {
-        return;
-    }
-    vec.mapv_inplace(|x| x / norm);
-}
-
 fn merge_results(
     results: &[(Vec<Idx>, Vec<f32>, Arc<BlockMeta>)],
-    limit: usize,
+    k: usize,
 ) -> Vec<(Idx, Arc<BlockMeta>)> {
-    let mut topk = Vec::with_capacity(limit);
+    let mut topk = Vec::with_capacity(k);
     let mut start = vec![0; results.len()];
-    for _ in 0..limit {
+    for _ in 0..k {
         let mut min = 0;
         for i in 0..results.len() {
             if results[i].1[start[i]] < results[min].1[start[i]] {

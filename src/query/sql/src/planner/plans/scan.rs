@@ -20,6 +20,7 @@ use common_catalog::table::ColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_vector::index::VectorIndex;
 use itertools::Itertools;
 
 use super::FunctionCall;
@@ -77,7 +78,7 @@ pub struct Scan {
     pub limit: Option<usize>,
     pub order_by: Option<Vec<SortItem>>,
     pub prewhere: Option<Prewhere>,
-    pub similarity: Option<Box<FunctionCall>>,
+    pub similarity: Option<Box<(FunctionCall, VectorIndex)>>,
     pub agg_index: Option<AggIndexInfo>,
 
     pub statistics: Statistics,

@@ -123,6 +123,6 @@ vi-run-debug: vi-build-debug
 vi-build-release:
 	cargo build --release --bin=databend-query --features vector-index --bin=databend-meta --bin=databend-metactl --bin=open-sharing --bin=databend-query-oss --bin=databend-meta-oss
 vi-run-release: vi-build-release
-	RUST_LOG=info BUILD_PROFILE=release bash ./scripts/ci/deploy/databend-query-standalone.sh
+	BUILD_PROFILE=release bash ./scripts/ci/deploy/databend-query-standalone.sh
 
 .PHONY: setup test run build fmt lint clean docs

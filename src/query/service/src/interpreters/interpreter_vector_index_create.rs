@@ -53,7 +53,6 @@ impl Interpreter for CreateVectorIndexInterpreter {
             .ctx
             .get_table(&plan.catalog, &plan.database, &plan.table)
             .await?;
-        let nlists = plan.nlists.unwrap();
         let ctx = self.ctx.clone();
         let column_idx = table
             .schema()
@@ -67,7 +66,7 @@ impl Interpreter for CreateVectorIndexInterpreter {
             )))?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         fuse_table
-            .create_vector_index(ctx, column_idx, nlists)
+            .create_vector_index(ctx, column_idx, &plan.vector_index, &plan.metric_type)
             .await?;
         let catalog = self.ctx.get_catalog(&plan.catalog)?;
         let index_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);

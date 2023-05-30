@@ -1,4 +1,4 @@
-use common_storages_fuse::vector_index::normalize;
+use common_vector::index::normalize;
 
 #[test]
 fn test_normalize() {

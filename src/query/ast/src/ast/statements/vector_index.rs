@@ -31,11 +31,6 @@ pub struct CreateVectorIndexStmt {
     pub paras: Vec<Expr>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
-pub enum VectorIndexType {
-    IVFFLAT,
-}
-
 impl Display for CreateVectorIndexStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let index_type = match self.index_type {

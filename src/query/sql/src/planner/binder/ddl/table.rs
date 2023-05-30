@@ -46,6 +46,7 @@ use common_ast::ast::UndropTableStmt;
 use common_ast::ast::UriLocation;
 use common_ast::ast::VacuumTableStmt;
 use common_ast::parser::parse_sql;
+use common_ast::parser::token::TokenKind;
 use common_ast::parser::tokenize_sql;
 use common_ast::walk_expr_mut;
 use common_ast::Dialect;
@@ -66,6 +67,9 @@ use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use common_vector::index::IvfFlatIndex;
+use common_vector::index::MetricType;
+use common_vector::index::VectorIndex;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -907,51 +911,14 @@ impl Binder {
         &mut self,
         stmt: &CreateVectorIndexStmt,
     ) -> Result<Plan> {
-        let mut nlists = None;
-        let paras = &stmt.paras;
-        for para in paras {
-            match para {
-                Expr::BinaryOp {
-                    op: BinaryOperator::Eq,
-                    left,
-                    right,
-                    ..
-                } => {
-                    let left = left.as_ref();
-                    let right = right.as_ref();
-                    match (left, right) {
-                        (
-                            Expr::ColumnRef { column, .. },
-                            Expr::Literal {
-                                lit: Literal::UInt64(uint),
-                                ..
-                            },
-                        ) => {
-                            if column.name == "nlist" {
-                                if nlists.is_some() {
-                                    return Err(ErrorCode::SyntaxException(
-                                        "duplicate index parameters nlist",
-                                    ));
-                                }
-                                nlists = Some(*uint);
-                            } else {
-                                return Err(ErrorCode::SyntaxException("wrong parameter name"));
-                            }
-                        }
-                        _ => {
-                            return Err(ErrorCode::SyntaxException(
-                                "left side of index parameters must be identifier, right side must be value",
-                            ));
-                        }
-                    }
-                }
-                _ => {
-                    return Err(ErrorCode::SyntaxException(
-                        "index parameters must be key=value",
-                    ));
-                }
-            }
-        }
+        let vector_index = match stmt.index_type {
+            TokenKind::IVFFLAT => Self::validate_ivfflat_paras(&stmt.paras)?,
+            _ => unreachable!(),
+        };
+        let metric_type = match stmt.metric_type {
+            TokenKind::COSINE => MetricType::Cosine,
+            _ => unreachable!(),
+        };
         let (catalog, database, table) =
             self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
         let column = normalize_identifier(&stmt.column, &self.name_resolution_ctx).name;
@@ -960,8 +927,44 @@ impl Binder {
             database,
             table,
             column,
-            nlists,
+            vector_index,
+            metric_type,
         })))
+    }
+
+    fn validate_ivfflat_paras(paras: &[Expr]) -> Result<VectorIndex> {
+        if paras.len() != 1 {
+            return Err(ErrorCode::SyntaxException(
+                "wrong number of vector index parameters",
+            ));
+        }
+        match &paras[0] {
+            Expr::BinaryOp {
+                op: BinaryOperator::Eq,
+                left,
+                right,
+                ..
+            } => {
+                let left = left.as_ref();
+                let right = right.as_ref();
+                match (left, right) {
+                    (
+                        Expr::ColumnRef { column, .. },
+                        Expr::Literal {
+                            lit: Literal::UInt64(nlists),
+                            ..
+                        },
+                    ) if column.name == "nlist" => {
+                        return Ok(VectorIndex::IvfFlat(IvfFlatIndex {
+                            nlists: *nlists as usize,
+                        }));
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+        Err(ErrorCode::SyntaxException("wrong vector index parameters"))
     }
 
     #[async_backtrace::framed]
