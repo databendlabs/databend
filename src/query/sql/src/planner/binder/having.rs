@@ -46,6 +46,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
+        scalar_binder.allow_ambiguity();
         let (scalar, _) = scalar_binder.bind(having).await?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         Ok((rewriter.visit(&scalar)?, having.span()))
