@@ -434,7 +434,7 @@ version = "37.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a16b88a93ac8350f0200b1cd336a1f887315925b8dd7aa145a37b8bdbd8497a4"
 dependencies = [
- "bitflags 2.3.1",
+ "bitflags 2.2.1",
 ]
 
 [[package]]
@@ -989,9 +989,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.3.1"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6776fc96284a0bb647b615056fc496d1fe1644a7ab01829818a6d91cae888b84"
+checksum = "24a6904aef64d73cf10ab17ebace7befb918b82164785cb89907993be7f83813"
 
 [[package]]
 name = "bitmaps"
@@ -7213,9 +7213,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "440f466680e0bc98ea94af95301aab4c69d9720934baec8f46b79a69fdd87cce"
+checksum = "3555168d4cc9a83c332e1416ff00e3be36a6d78447dff472829962afbc91bb3d"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7244,6 +7244,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tracing",
  "uuid",
