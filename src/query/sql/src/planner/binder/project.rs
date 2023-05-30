@@ -182,6 +182,7 @@ impl Binder {
         input_context.set_expr_context(ExprContext::SelectClause);
 
         let mut output = SelectList::default();
+        let mut prev_aliases = Vec::new();
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName {
@@ -229,18 +230,12 @@ impl Binder {
                     };
                 }
                 SelectTarget::AliasedExpr { expr, alias } => {
-                    let pre_aliases = output
-                        .items
-                        .iter()
-                        .map(|item| (item.alias.clone(), item.scalar.clone()))
-                        .collect::<Vec<_>>();
-
                     let mut scalar_binder = ScalarBinder::new(
                         input_context,
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
-                        &pre_aliases,
+                        &prev_aliases,
                     );
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
@@ -250,6 +245,7 @@ impl Binder {
                         None => format!("{:#}", expr).to_lowercase(),
                     };
 
+                    prev_aliases.push((expr_name.clone(), bound_expr.clone()));
                     output.items.push(SelectItem {
                         select_target,
                         scalar: bound_expr,
