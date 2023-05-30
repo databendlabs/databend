@@ -18,6 +18,7 @@ use common_base::base::tokio;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_storages_fuse::io::MetaReaders;
+use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::FuseTable;
 use databend_query::test_kits::table_test_fixture::append_variant_sample_data;
 use databend_query::test_kits::table_test_fixture::TestFixture;
@@ -61,11 +62,9 @@ async fn test_fuse_do_generate_virtual_columns() -> Result<()> {
 
         let block_metas = segment_info.block_metas()?;
         for block_meta in block_metas {
-            let virtual_location = block_meta
-                .location
-                .0
-                .replace(".parquet", "_virtual.parquet");
-            assert!(dal.is_exist(&virtual_location).await?);
+            let virtual_loc =
+                TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
+            assert!(dal.is_exist(&virtual_loc).await?);
         }
     }
 

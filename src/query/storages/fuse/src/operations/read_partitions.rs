@@ -51,6 +51,7 @@ use tracing::info;
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
 use crate::fuse_part::VirtualColumnMeta;
+use crate::io::TableMetaLocationGenerator;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::FuseTable;
@@ -235,22 +236,21 @@ impl FuseTable {
         virtual_columns: &Vec<VirtualColumnInfo>,
     ) -> Result<Option<HashMap<String, VirtualColumnMeta>>> {
         // TODO: read parquet
-        let virtual_meta_loc = block_meta
-            .location
-            .0
-            .replace(".parquet", "_virtual.parquet");
+        let virtual_loc =
+            TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
+
         // Read virtual column schema from file meta
-        let virtual_columns_meta = if let Ok(virtual_meta) = dal.stat(&virtual_meta_loc).await {
+        let virtual_columns_meta = if let Ok(virtual_meta) = dal.stat(&virtual_loc).await {
             let length = virtual_meta.content_length();
             let schema_size_bytes = dal
-                .range_read(&virtual_meta_loc, length - 16..length - 8)
+                .range_read(&virtual_loc, length - 16..length - 8)
                 .await?;
             let schema_size =
                 u32::from_le_bytes(schema_size_bytes[0..4].try_into().unwrap()) as u64;
             let meta_size = u32::from_le_bytes(schema_size_bytes[4..8].try_into().unwrap()) as u64;
             let bytes = dal
                 .range_read(
-                    &virtual_meta_loc,
+                    &virtual_loc,
                     length - 16 - schema_size - meta_size..length - 16,
                 )
                 .await?;

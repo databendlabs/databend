@@ -37,6 +37,7 @@ use common_storages_fuse::io::serialize_block;
 use common_storages_fuse::io::write_data;
 use common_storages_fuse::io::MetaReaders;
 use common_storages_fuse::io::ReadSettings;
+use common_storages_fuse::io::TableMetaLocationGenerator;
 use common_storages_fuse::io::WriteSettings;
 use common_storages_fuse::FuseTable;
 use jsonb::jsonpath::parse_json_path;
@@ -118,15 +119,13 @@ pub async fn do_generate_virtual_columns(
             let block = block_reader
                 .read_by_meta(&settings, &block_meta, &storage_format)
                 .await?;
-            let virtual_location = block_meta
-                .location
-                .0
-                .replace(".parquet", "_virtual.parquet");
+            let virtual_loc =
+                TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
 
             materialize_virtual_columns(
                 operator,
                 &write_settings,
-                &virtual_location,
+                &virtual_loc,
                 &source_schema,
                 &paths,
                 block,

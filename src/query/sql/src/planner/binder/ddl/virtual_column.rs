@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use common_ast::ast::AlterVirtualColumnsStmt;
@@ -172,7 +173,7 @@ impl Binder {
         virtual_columns: &[Expr],
         schema: TableSchemaRef,
     ) -> Result<Vec<String>> {
-        let mut virtual_names = Vec::with_capacity(virtual_columns.len());
+        let mut virtual_names = HashSet::with_capacity(virtual_columns.len());
         for virtual_column in virtual_columns.iter() {
             let mut expr = virtual_column;
             let mut paths = VecDeque::new();
@@ -228,7 +229,7 @@ impl Binder {
                             _ => unreachable!(),
                         }
                     }
-                    virtual_names.push(virtual_name);
+                    virtual_names.insert(virtual_name);
                 } else {
                     return Err(ErrorCode::SemanticError(format!(
                         "Column is not exist: {:?}",
@@ -242,7 +243,9 @@ impl Binder {
                 )));
             }
         }
+        let mut virtual_columns: Vec<_> = virtual_names.into_iter().collect();
+        virtual_columns.sort();
 
-        Ok(virtual_names)
+        Ok(virtual_columns)
     }
 }
