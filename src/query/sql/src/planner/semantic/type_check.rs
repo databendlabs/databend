@@ -1828,7 +1828,7 @@ impl<'a> TypeChecker<'a> {
             projection_index: None,
             data_type: data_type.clone(),
             typ,
-            outer_columns: rel_prop.outer_columns,
+            outer_columns: rel_prop.outer_columns.clone(),
         };
 
         let data_type = subquery_expr.data_type();
