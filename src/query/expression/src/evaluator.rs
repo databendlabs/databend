@@ -85,42 +85,6 @@ impl<'a> Evaluator<'a> {
         }
     }
 
-    /// TODO(sundy/andy): refactor this if we got better idea
-    pub fn run_auto_type(&self, expr: &Expr) -> Result<Value<AnyType>> {
-        let column_refs = expr.column_refs();
-
-        let mut columns = self.input_columns.columns().to_vec();
-        for (index, datatype) in column_refs.iter() {
-            let column = &columns[*index];
-            if datatype != &column.data_type {
-                let value = self.run(&Expr::Cast {
-                    span: None,
-                    is_try: false,
-                    expr: Box::new(Expr::ColumnRef {
-                        span: None,
-                        id: *index,
-                        data_type: column.data_type.clone(),
-                        display_name: String::new(),
-                    }),
-                    dest_type: datatype.clone(),
-                })?;
-
-                columns[*index] = BlockEntry {
-                    data_type: datatype.clone(),
-                    value,
-                };
-            }
-        }
-
-        let new_blocks = DataBlock::new_with_meta(
-            columns,
-            self.input_columns.num_rows(),
-            self.input_columns.get_meta().cloned(),
-        );
-        let new_evaluator = Evaluator::new(&new_blocks, self.func_ctx, self.fn_registry);
-        new_evaluator.run(expr)
-    }
-
     pub fn run(&self, expr: &Expr) -> Result<Value<AnyType>> {
         self.partial_run(expr, None)
     }
@@ -742,10 +706,13 @@ impl<'a> Evaluator<'a> {
             return Ok(None);
         }
 
-        let num_rows = match &value {
-            Value::Scalar(_) => 1,
-            Value::Column(col) => col.len(),
-        };
+        let num_rows = validity
+            .as_ref()
+            .map(|validity| validity.len())
+            .unwrap_or_else(|| match &value {
+                Value::Scalar(_) => 1,
+                Value::Column(col) => col.len(),
+            });
         let block = DataBlock::new(
             vec![BlockEntry {
                 data_type: src_type.clone(),
@@ -921,9 +888,6 @@ pub struct ConstantFolder<'a, Index: ColumnIndex> {
     input_domains: &'a HashMap<Index, Domain>,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
-    /// Set to false to disable constant folding of column references.
-    /// This is useful when the column type is untruestworthy.
-    fold_column: bool,
 }
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
@@ -939,25 +903,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains: &input_domains,
             func_ctx,
             fn_registry,
-            fold_column: true,
-        };
-
-        folder.fold_to_stable(expr)
-    }
-
-    /// Fold a single expression whose column type is not trustworthy.
-    pub fn fold_with_untrusted_column_type(
-        expr: &Expr<Index>,
-        func_ctx: &'a FunctionContext,
-        fn_registry: &'a FunctionRegistry,
-    ) -> (Expr<Index>, Option<Domain>) {
-        let input_domains = Self::full_input_domains(expr);
-
-        let folder = ConstantFolder {
-            input_domains: &input_domains,
-            func_ctx,
-            fn_registry,
-            fold_column: false,
         };
 
         folder.fold_to_stable(expr)
@@ -975,7 +920,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains,
             func_ctx,
             fn_registry,
-            fold_column: true,
         };
 
         folder.fold_to_stable(expr)
@@ -1025,7 +969,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 id,
                 data_type,
                 ..
-            } if self.fold_column => {
+            } => {
                 let domain = &self.input_domains[id];
                 let expr = domain
                     .as_singleton()
@@ -1037,7 +981,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     .unwrap_or_else(|| expr.clone());
                 (expr, Some(domain.clone()))
             }
-            Expr::ColumnRef { .. } => (expr.clone(), None),
             Expr::Cast {
                 span,
                 is_try,

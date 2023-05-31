@@ -844,7 +844,7 @@ fn push_down_index_scan(s_expr: &SExpr, agg_info: AggIndexInfo) -> Result<SExpr>
         RelOperator::Scan(scan) => {
             let mut new_scan = scan.clone();
             new_scan.agg_index = Some(agg_info);
-            s_expr.replace_plan(new_scan.into())
+            s_expr.replace_plan(Arc::new(new_scan.into()))
         }
         _ => {
             let child = push_down_index_scan(s_expr.child(0)?, agg_info)?;

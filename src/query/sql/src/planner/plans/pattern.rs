@@ -42,7 +42,7 @@ impl Operator for PatternPlan {
     fn derive_relational_prop(
         &self,
         _rel_expr: &RelExpr,
-    ) -> common_exception::Result<RelationalProperty> {
+    ) -> common_exception::Result<Arc<RelationalProperty>> {
         Err(ErrorCode::Internal(
             "Cannot derive relational property for pattern plan",
         ))
@@ -57,7 +57,7 @@ impl Operator for PatternPlan {
         ))
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> common_exception::Result<StatInfo> {
+    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> common_exception::Result<Arc<StatInfo>> {
         Err(ErrorCode::Internal(
             "Cannot derive cardinality for pattern plan",
         ))

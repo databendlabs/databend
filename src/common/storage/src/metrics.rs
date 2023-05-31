@@ -23,11 +23,14 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use opendal::ops::*;
 use opendal::raw::oio;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
+use opendal::raw::OpAppend;
+use opendal::raw::OpList;
+use opendal::raw::OpRead;
+use opendal::raw::OpWrite;
 use opendal::raw::RpAppend;
 use opendal::raw::RpList;
 use opendal::raw::RpRead;

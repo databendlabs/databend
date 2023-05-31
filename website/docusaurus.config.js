@@ -33,7 +33,6 @@ const config = {
     customFields: {
       blogTags: ['weekly','databend']
     },
-
     presets: [
         [
             '@docusaurus/preset-classic',
@@ -98,7 +97,24 @@ const config = {
                   },
             },
         ],
-        'plugin-image-zoom'
+        'plugin-image-zoom',
+        [
+          "docusaurus-plugin-devserver",
+          {
+            devServer: {
+              proxy: {
+                "/query": {
+                  target: "https://ask.databend.rs/",
+                  // pathRewrite: { "^/query": "" },
+                  changeOrigin: true,
+                  headers: {
+                    Origin: 'https://ask.databend.rs'
+                  }
+                },
+              },
+            },
+          },
+        ]
     ],
     themeConfig:
         /** @type {import('@docusaurus/preset-classic').ThemeConfig} */

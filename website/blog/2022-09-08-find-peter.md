@@ -31,7 +31,7 @@ Databend creates and saves three snapshots for the code above. Each one holds a 
 
 ![](/img/blog/peters.png)
 
-To find them, use the system function [FUSE_SNAPSHOT](https://databend.rs/doc/reference/functions/system-functions/fuse_snapshot). The function returns everything you may need to know about the saved snapshots of a table, such as the snapshot IDs, timestamps, and locations.
+To find them, use the system function [FUSE_SNAPSHOT](https://databend.rs/doc/sql-functions/system-functions/fuse_snapshot). The function returns everything you may need to know about the saved snapshots of a table, such as the snapshot IDs, timestamps, and locations.
 
 ```sql
 select snapshot_id,previous_snapshot_id, timestamp from fuse_snapshot('default','spiderman');
@@ -46,7 +46,7 @@ select snapshot_id,previous_snapshot_id, timestamp from fuse_snapshot('default',
 +----------------------------------+----------------------------------+----------------------------+
 ```
 
-You can now query the history data with a snapshot or timestamp by including the [AT](https://databend.rs/doc/reference/sql/query-syntax/query-at) clause in the SELECT statement:
+You can now query the history data with a snapshot or timestamp by including the [AT](https://databend.rs/doc/sql-commands/query-syntax/query-at) clause in the SELECT statement:
 
 ```sql
 select * from spiderman at(snapshot=>'a2801ed9656d42c9812f2921214f0795');

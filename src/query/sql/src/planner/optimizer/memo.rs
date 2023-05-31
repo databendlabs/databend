@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,7 +38,7 @@ pub struct Memo {
 
     /// Hash table for detecting duplicated expressions.
     /// The entry is `(plan, children) -> (group_index, m_expr_index)`.
-    pub m_expr_lookup_table: HashMap<(RelOperator, Vec<IndexType>), (IndexType, IndexType)>,
+    pub m_expr_lookup_table: HashMap<(Arc<RelOperator>, Vec<IndexType>), (IndexType, IndexType)>,
 }
 
 impl Memo {
@@ -84,7 +85,7 @@ impl Memo {
 
         if let Some((group_index, _)) = self
             .m_expr_lookup_table
-            .get(&((*s_expr.plan).clone(), children_group.clone()))
+            .get(&(s_expr.plan.clone(), children_group.clone()))
         {
             // If the expression already exists, return the group index of the existing expression
             return Ok(*group_index);
@@ -126,7 +127,7 @@ impl Memo {
 
     pub fn insert_m_expr(&mut self, group_index: IndexType, m_expr: MExpr) -> Result<()> {
         self.m_expr_lookup_table.insert(
-            ((*m_expr.plan).clone(), m_expr.children.clone()),
+            (m_expr.plan.clone(), m_expr.children.clone()),
             (m_expr.group_index, m_expr.index),
         );
         self.group_mut(group_index)?.insert(m_expr)
@@ -138,7 +139,11 @@ impl Memo {
             .ok_or_else(|| ErrorCode::Internal(format!("Group index {} not found", index)))
     }
 
-    fn add_group(&mut self, relational_prop: RelationalProperty, stat_info: StatInfo) -> IndexType {
+    fn add_group(
+        &mut self,
+        relational_prop: Arc<RelationalProperty>,
+        stat_info: Arc<StatInfo>,
+    ) -> IndexType {
         let group_index = self.groups.len();
         let group = Group::create(group_index, relational_prop, stat_info);
         self.groups.push(group);
