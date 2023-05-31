@@ -164,6 +164,12 @@ pub fn register(registry: &mut FunctionRegistry) {
         |_, _| 0u8,
     );
 
+    registry.register_2_arg::<NumberType<u64>, NumberType<u64>, ArrayType<NumberType<u64>>, _, _>(
+        "range",
+        |_, _| FunctionDomain::Full,
+        |start, end, _| (start..end).collect(),
+    );
+
     registry.register_1_arg::<ArrayType<GenericType<0>>, NumberType<u64>, _, _>(
         "length",
         |_| FunctionDomain::Full,
