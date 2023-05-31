@@ -285,6 +285,10 @@ pub enum AlterTableAction {
     AddColumn {
         column: ColumnDefinition,
     },
+    ModifyColumn {
+        column: Identifier,
+        action: ModifyColumnAction,
+    },
     DropColumn {
         column: Identifier,
     },
@@ -309,6 +313,9 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::AddColumn { column } => {
                 write!(f, "ADD COLUMN {column}")
+            }
+            AlterTableAction::ModifyColumn { column, action } => {
+                write!(f, "MODIFY COLUMN {column} {action}")
             }
             AlterTableAction::DropColumn { column } => {
                 write!(f, "DROP COLUMN {column}")
@@ -600,6 +607,21 @@ impl Display for ColumnDefinition {
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT '{comment}'")?;
         }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ModifyColumnAction {
+    SetMaskingPolicy(String),
+}
+
+impl Display for ModifyColumnAction {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match &self {
+            ModifyColumnAction::SetMaskingPolicy(name) => write!(f, "SET MASKING POLICY {}", name)?,
+        }
+
         Ok(())
     }
 }

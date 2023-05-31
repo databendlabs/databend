@@ -70,8 +70,12 @@ impl Window {
         let mut used_columns = ColumnSet::new();
 
         used_columns.insert(self.index);
-
         used_columns.extend(self.function.used_columns());
+
+        for arg in self.arguments.iter() {
+            used_columns.insert(arg.index);
+            used_columns.extend(arg.scalar.used_columns())
+        }
 
         for part in self.partition_by.iter() {
             used_columns.insert(part.index);
@@ -108,7 +112,7 @@ impl Operator for Window {
         Ok(required)
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
@@ -123,16 +127,16 @@ impl Operator for Window {
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(input_prop.used_columns);
+        used_columns.extend(input_prop.used_columns.clone());
 
-        Ok(RelationalProperty {
+        Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-        })
+        }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let input_stat_info = rel_expr.derive_cardinality_child(0)?;
         let cardinality = if self.partition_by.is_empty() {
             // Scalar aggregation
@@ -164,13 +168,13 @@ impl Operator for Window {
         } else {
             None
         };
-        Ok(StatInfo {
+        Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality,
-                column_stats: input_stat_info.statistics.column_stats,
+                column_stats: input_stat_info.statistics.column_stats.clone(),
             },
-        })
+        }))
     }
 }
 

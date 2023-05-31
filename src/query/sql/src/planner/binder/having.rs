@@ -39,6 +39,7 @@ impl Binder {
         aliases: &[(String, ScalarExpr)],
         having: &Expr,
     ) -> Result<(ScalarExpr, Span)> {
+        bind_context.set_expr_context(ExprContext::HavingClause);
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),

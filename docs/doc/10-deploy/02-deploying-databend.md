@@ -278,59 +278,11 @@ curl -I  http://127.0.0.1:28101/v1/health
 
 a. Open the file `databend-query.toml` in the folder `/usr/local/databend/configs`, and replace `127.0.0.1` with `0.0.0.0` within the whole file.
 
-b. In the file `databend-query.toml`, set the parameter `type` in [storage] block to `s3` if you're using a S3 compatible object storage, or `azblob` if you're using Azure Blob storage.
+b. In the file `databend-query.toml`, set the parameter *type* in the [storage] block and configure the access credentials and endpoint URL for connecting to your object storage. 
 
-```toml
-[storage]
-# fs | s3 | azblob | gcs | obs | webhdfs
-type = "s3"
-```
-
-c. Comment out the `[storage.fs]` block first, and then uncomment the `[storage.s3]` block if you're using a S3 compatible object storage, or uncomment the `[storage.azblob]` block if you're using Azure Blob storage.
-
-```toml
-# Set a local folder to store your data.
-# Comment out this block if you're NOT using local file system as storage.
-#[storage.fs]
-#data_path = "benddata/datas"
-
-# To use S3-compatible object storage, uncomment this block and set your values.
-[storage.s3]
-bucket = "<your-bucket-name>"
-endpoint_url = "<your-endpoint>"
-access_key_id = "<your-key-id>"
-secret_access_key = "<your-account-key>"
-
-# To use Azure Blob storage, uncomment this block and set your values.
-# [storage.azblob]
-# endpoint_url = "https://<your-storage-account-name>.blob.core.windows.net"
-# container = "<your-azure-storage-container-name>"
-# account_name = "<your-storage-account-name>"
-# account_key = "<your-account-key>"
-
-# To use Google Cloud Storage, uncomment this block and set your values.
-# [storage.gcs]
-# bucket = "<your-bucket-name>"
-# credential = "<your-credential>"
-
-# To use Huawei Cloud OBS Storage, uncomment this block and set your values.
-# [storage.obs]
-# bucket = "<your-bucket-name>"
-# endpoint_url = "<your-endpoint>"
-# access_key_id = "<your-key-id>"
-# secret_access_key = "<your-account-key>"
-
-# To use WebHDFS Storage, uncomment this block and set with your values
-# [storage.webhdfs]
-# endpoint_url = "<your-endpoint>"
-# root = "<your-working-directory>"
-# delegation = "<delegation-token-for-authentication>"
-```
-
-d. Set your values in the `[storage.s3]`, `[storage.azblob]`, `[storage.gcs]`, `[storage.obs]` or `[storage.webhdfs]` block. Please note that the field `endpoint_url` refers to the service URL of your storage region and varies depending on the object storage solution you use:
+To configure your storage settings, please comment out the [storage.fs] section by adding '#' at the beginning of each line, and then uncomment the appropriate section for your object storage provider by removing the '#' symbol, and fill in the necessary values. If your desired storage provider is not listed, you can copy and paste the corresponding template below to the file and configure it accordingly.
 
 <Tabs groupId="operating-systems">
-
 
 <TabItem value="Amazon S3" label="Amazon S3">
 
@@ -365,7 +317,7 @@ type = "gcs"
 # How to create a bucket:
 # https://cloud.google.com/storage/docs/creating-buckets
 // highlight-next-line
-bucket = "databend-1.048596"
+bucket = "databend"
 
 # GCS also supports changing the endpoint URL
 # but the endpoint should be compatible with GCS's JSON API
@@ -408,29 +360,47 @@ account_key = "<your-account-key>"
 ```toml
 [storage]
 # s3
-type = "s3"
+type = "cos"
 
-[storage.s3]
-# How to create a bucket:
-# https://cloud.tencent.com/document/product/436/13309
-// highlight-next-line
-bucket = "databend-1253727613"
-
+[storage.cos]
 # You can get the URL from the bucket detail page.
+# The following is an example where the region is Beijing (ap-beijing):
 // highlight-next-line
 endpoint_url = "https://cos.ap-beijing.myqcloud.com"
 
-# How to get access_key_id and secret_access_key:
+# How to create a bucket:
+# https://cloud.tencent.com/document/product/436/13309
+// highlight-next-line
+bucket = "databend"
+
+# How to get secret_id and secret_key:
 # https://cloud.tencent.com/document/product/436/68282
 // highlight-next-line
-access_key_id = "<your-key-id>"
+secret_id = "<your-secret-id>"
 // highlight-next-line
-secret_access_key = "<your-access-key>"
+secret_key = "<your-secret-key>"
+root = "<your-root-path>"
 ```
+Tencent COS also supports loading configuration values from environment variables. This means that instead of specifying the configuration values directly in the configuration file, you can configure COS storage by setting the corresponding environment variables.
 
-:::tip
-In this example COS region is `ap-beijing`.
-:::
+To do this, you can still use the same [storage.cos] section in the configuration file, but omit the settings secret_id, secret_key, and root. Instead, set the corresponding environment variables (TENCENTCLOUD_SECRETID, TENCENTCLOUD_SECRETKEY, and USER_CODE_ROOT) with the desired values.
+
+```toml
+[storage]
+# s3
+type = "cos"
+
+[storage.cos]
+# You can get the URL from the bucket detail page.
+# The following is an example where the region is ap-beijing:
+// highlight-next-line
+endpoint_url = "https://cos.ap-beijing.myqcloud.com"
+
+# How to create a bucket:
+# https://cloud.tencent.com/document/product/436/13309
+// highlight-next-line
+bucket = "databend"
+```
 
 </TabItem>
 
@@ -591,15 +561,15 @@ root = "/analyses/databend/storage"
 </TabItem>
 </Tabs>
 
-e. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
+c. Open a terminal window and navigate to the folder `/usr/local/databend/bin`.
 
-f. Run the following command to start the Query node:
+d. Run the following command to start the Query node:
 
 ```shell
 ./databend-query -c ../configs/databend-query.toml > query.log 2>&1 &
 ```
 
-g. Run the following command to check if the Query node was started successfully:
+e. Run the following command to check if the Query node was started successfully:
 
 ```shell
 curl -I  http://127.0.0.1:8080/v1/health

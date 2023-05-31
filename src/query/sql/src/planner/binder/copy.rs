@@ -660,7 +660,8 @@ impl<'a> Binder {
         let select_list = self
             .normalize_select_list(&mut from_context, select_list)
             .await?;
-        let (scalar_items, projections) = self.analyze_projection(&from_context, &select_list)?;
+        let (scalar_items, projections) =
+            self.analyze_projection(&from_context.aggregate_info, &select_list)?;
         let s_expr =
             self.bind_projection(&mut from_context, &projections, &scalar_items, s_expr)?;
         let mut output_context = BindContext::new();
