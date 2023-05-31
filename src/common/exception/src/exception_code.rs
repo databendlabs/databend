@@ -141,6 +141,7 @@ build_exceptions! {
     EmptyShareEndpointConfig(1111),
     LicenceDenied(1112),
     UnknownDatamask(1113),
+    UnmatchColumnDataType(1114),
 
     // Data Related Errors
 

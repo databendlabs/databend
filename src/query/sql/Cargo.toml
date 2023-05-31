@@ -40,6 +40,7 @@ common-storages-parquet = { path = "../storages/parquet" }
 common-storages-result-cache = { path = "../storages/result_cache" }
 common-storages-view = { path = "../storages/view" }
 common-users = { path = "../users" }
+data-mask-feature = { path = "../ee-features/data-mask" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 
 # GitHub dependencies
