@@ -43,8 +43,10 @@ const AISearch: FC<IProps> = ({ onReturn, initialQuery}): ReactElement=> {
   }
   return (
     <div className={styles.aiSearch}>
-      <div onClick={()=> onReturn()} className={styles.topAction}>
-        <Return size={16} />Databend AI
+      <div onClick={()=> onReturn()} style={{display: 'inline-block'}}>
+        <span className={styles.topAction}>
+          <Return size={16} />Databend AI
+        </span>
       </div>
       <div className={styles.wrapCommon}>
         {
