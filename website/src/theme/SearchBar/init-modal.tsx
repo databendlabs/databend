@@ -32,6 +32,15 @@ const SearchInitModal: FC<IProps> = ({visible, onSelect, onClose, getInputValue,
       </>
     )
   }
+function ThreePoint() {
+  return (
+   <>
+    {
+      !inputValue && <span>...</span>
+    }
+   </>
+  )
+}
 useEffect(()=> {
   if (inputValue) {
     setIndecator(0);
@@ -61,6 +70,16 @@ function setValue() {
   if (index < 0 ) index = 1;
   setIndecator(index);
 }
+const items = [
+  {
+    name: 'Search the docs',
+    icon: <Book />
+  },
+  {
+    name: 'Ask Databend AI',
+    icon: <LogoSvg style={{transform: 'scale(1.3)'}} width={30} />
+  }
+]
 return (
   <CommonModal 
     onClose={onClose}
@@ -71,27 +90,29 @@ return (
       indecator >= -1  && 
       <div>
       <div className={styles.topInput}>
-        <input autoComplete='off' id={ID} onKeyDown={dealKeyDownEvent} onChange={changeInput} placeholder='Search...'></input>
+        <input autoComplete='off' id={ID} onKeyDown={dealKeyDownEvent} onChange={changeInput} placeholder='Please enter keywords for search purposes...'></input>
       </div>
       <div className={styles.content}>  
         <div className={styles.title}>Documentation</div>
         <div onMouseEnter={()=> {
           setIndecator(-1)
         }} className={styles.items}>
-          <div 
-            onClick={()=> onSelect(0)}
-            className={clsx(indecator === 0 && styles.itemActive)}>
-            <Book />
-            Search the docs
-            <InputValueShow inputValue={inputValue}/>
-          </div>
-          <div
-            onClick={()=> onSelect(1)}
-            className={clsx(indecator === 1 && styles.itemActive)}>
-            <LogoSvg style={{transform: 'scale(1.3)'}} width={30} />
-            Ask Databend AI
-            <InputValueShow inputValue={inputValue}/>
-          </div>
+          {
+            items?.map((item, index)=> {
+              return (
+                <div 
+                  key={index}
+                  onClick={()=> onSelect(index)}
+                  className={clsx(indecator === index && styles.itemActive)}>
+                  {item.icon}
+                  <span>
+                    {item.name}<ThreePoint />
+                    <InputValueShow inputValue={inputValue}/>
+                  </span>
+                </div>
+              )
+            })
+          }
         </div>
       </div>
    </div>
