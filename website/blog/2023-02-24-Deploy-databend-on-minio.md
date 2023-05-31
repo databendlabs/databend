@@ -182,12 +182,12 @@ mysql -h 127.0.0.1 -P3307 -uroot
 
 >Note that the root user can log in without a password from localhost. Databend permission management refers to the design of MySQL 8.0 and allows you to manage Databend users in the same way as MySQL 8.0 user management.
 
-ClickHouse protocol using: https://databend.rs/doc/reference/api/clickhouse-handler
+ClickHouse protocol using: https://databend.rs/doc/integrations/api/clickhouse-handler
 
 You're all set up now. Use Databend as you're with MySQL.
 
 ## Other Resources
-- Loading data to Databend: https://databend.rs/doc/load-data/
+- Loading data to Databend: https://databend.rs/doc/load-data/load/
 - Databend k8s operator: https://github.com/datafuselabs/helm-charts
 - bendsql: https://github.com/datafuselabs/bendsql
 - Databend drivers:
