@@ -43,6 +43,7 @@ use crate::tests::tls_constants::TEST_CN_NAME;
 use crate::tests::tls_constants::TEST_SERVER_CERT;
 use crate::tests::tls_constants::TEST_SERVER_KEY;
 
+/// Test http API "/cluster/nodes"
 #[async_entry::test(worker_threads = 3, init = "init_meta_ut!()", tracing_span = "debug")]
 async fn test_cluster_nodes() -> anyhow::Result<()> {
     let tc0 = MetaSrvTestContext::new(0);
@@ -51,10 +52,10 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let meta_node = MetaNode::start(&tc0.config).await?;
+    let _mn0 = MetaNode::start(&tc0.config).await?;
 
-    let meta_node1 = MetaNode::start(&tc1.config).await?;
-    let res = meta_node1
+    let mn1 = MetaNode::start(&tc1.config).await?;
+    let res = mn1
         .join_cluster(
             &tc1.config.raft_config,
             tc1.config.grpc_api_advertise_address(),
@@ -64,7 +65,7 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
 
     let cluster_router = Route::new()
         .at("/cluster/nodes", get(nodes_handler))
-        .data(meta_node1.clone());
+        .data(mn1.clone());
     let response = cluster_router
         .call(
             Request::builder()
@@ -79,8 +80,6 @@ async fn test_cluster_nodes() -> anyhow::Result<()> {
     let body = response.into_body().into_vec().await.unwrap();
     let nodes: Vec<Node> = serde_json::from_slice(&body).unwrap();
     assert_eq!(nodes.len(), 2);
-    meta_node.stop().await?;
-    meta_node1.stop().await?;
     Ok(())
 }
 
@@ -92,10 +91,10 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     tc1.config.raft_config.single = false;
     tc1.config.raft_config.join = vec![tc0.config.raft_config.raft_api_addr().await?.to_string()];
 
-    let meta_node = MetaNode::start(&tc0.config).await?;
+    let _mn0 = MetaNode::start(&tc0.config).await?;
 
-    let meta_node1 = MetaNode::start(&tc1.config).await?;
-    let _ = meta_node1
+    let mn1 = MetaNode::start(&tc1.config).await?;
+    let _ = mn1
         .join_cluster(
             &tc1.config.raft_config,
             tc1.config.grpc_api_advertise_address(),
@@ -104,7 +103,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
 
     let cluster_router = Route::new()
         .at("/cluster/status", get(status_handler))
-        .data(meta_node1.clone());
+        .data(mn1.clone());
     let response = cluster_router
         .call(
             Request::builder()
@@ -125,8 +124,7 @@ async fn test_cluster_state() -> anyhow::Result<()> {
     assert_eq!(voters.len(), 2);
     assert_eq!(non_voters.len(), 0);
     assert_ne!(leader, None);
-    meta_node.stop().await?;
-    meta_node1.stop().await?;
+
     Ok(())
 }
 
@@ -153,7 +151,7 @@ async fn test_http_service_cluster_state() -> anyhow::Result<()> {
         )
         .await?;
 
-    let mut srv = HttpService::create(tc1.config, meta_node1);
+    let mut srv = HttpService::create(tc1.config.clone(), meta_node1);
 
     // test cert is issued for "localhost"
     let state_url = || format!("https://{}:30003/v1/cluster/status", TEST_CN_NAME);

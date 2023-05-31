@@ -20,7 +20,4 @@ use serde::Serialize;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct StoredSnapshot {
     pub meta: SnapshotMeta,
-
-    /// The data of the state machine at the time of this snapshot.
-    pub data: Vec<u8>,
 }

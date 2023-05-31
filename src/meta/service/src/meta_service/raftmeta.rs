@@ -38,7 +38,6 @@ use common_meta_raft_store::ondisk::DATA_VERSION;
 use common_meta_sled_store::openraft;
 use common_meta_sled_store::openraft::storage::Adaptor;
 use common_meta_sled_store::openraft::ChangeMembers;
-use common_meta_sled_store::SledKeySpace;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::protobuf::raft_service_client::RaftServiceClient;
 use common_meta_types::protobuf::raft_service_server::RaftServiceServer;
@@ -512,12 +511,7 @@ impl MetaNode {
                 server_metrics::set_current_term(mm.current_term);
                 server_metrics::set_last_log_index(mm.last_log_index.unwrap_or_default());
                 server_metrics::set_proposals_applied(mm.last_applied.unwrap_or_default().index);
-                server_metrics::set_last_seq(
-                    meta_node
-                        .get_last_seq()
-                        .await
-                        .map_err(|e| AnyError::new(&e))?,
-                );
+                server_metrics::set_last_seq(meta_node.get_last_seq().await);
 
                 last_leader = mm.current_leader;
             }
@@ -781,20 +775,13 @@ impl MetaNode {
     ///
     ///   Only when the membership is committed, this node can be sure it is in a cluster.
     async fn is_in_cluster(&self) -> Result<Result<String, String>, MetaStorageError> {
-        let m = {
+        let membership = {
             let sm = self.sto.get_state_machine().await;
-            sm.get_membership()?
+            sm.last_membership_ref().membership().clone()
         };
-        info!("is_in_cluster: membership: {:?}", m);
+        info!("is_in_cluster: membership: {:?}", membership);
 
-        let membership = match m {
-            None => {
-                return Ok(Err(format!("node {} has empty membership", self.sto.id)));
-            }
-            Some(x) => x,
-        };
-
-        let voter_ids = membership.membership().voter_ids().collect::<BTreeSet<_>>();
+        let voter_ids = membership.voter_ids().collect::<BTreeSet<_>>();
 
         if voter_ids.contains(&self.sto.id) {
             return Ok(Ok(format!("node {} already in cluster", self.sto.id)));
@@ -868,33 +855,33 @@ impl MetaNode {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_node(&self, node_id: &NodeId) -> Result<Option<Node>, MetaStorageError> {
+    pub async fn get_node(&self, node_id: &NodeId) -> Option<Node> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let n = sm.get_node(node_id)?;
-        Ok(n)
+        let n = sm.nodes_ref().get(node_id).cloned();
+        n
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_nodes(&self) -> Result<Vec<Node>, MetaStorageError> {
+    pub async fn get_nodes(&self) -> Vec<Node> {
         // inconsistent get: from local state machine
 
         let sm = self.sto.state_machine.read().await;
-        let nodes = sm.get_nodes()?;
-        Ok(nodes)
+        let nodes = sm.nodes_ref().values().cloned().collect::<Vec<_>>();
+        nodes
     }
 
     pub async fn get_status(&self) -> Result<MetaNodeStatus, MetaError> {
         let voters = self
             .sto
             .get_nodes(|ms| ms.voter_ids().collect::<Vec<_>>())
-            .await?;
+            .await;
 
         let learners = self
             .sto
             .get_nodes(|ms| ms.learner_ids().collect::<Vec<_>>())
-            .await?;
+            .await;
 
         let endpoint = self.sto.get_node_endpoint(&self.sto.id).await?;
 
@@ -906,12 +893,12 @@ impl MetaNode {
         let metrics = self.raft.metrics().borrow().clone();
 
         let leader = if let Some(leader_id) = metrics.current_leader {
-            self.get_node(&leader_id).await?
+            self.get_node(&leader_id).await
         } else {
             None
         };
 
-        let last_seq = self.get_last_seq().await?;
+        let last_seq = self.get_last_seq().await;
 
         Ok(MetaNodeStatus {
             id: self.sto.id,
@@ -935,20 +922,18 @@ impl MetaNode {
         })
     }
 
-    pub(crate) async fn get_last_seq(&self) -> Result<u64, MetaStorageError> {
+    pub(crate) async fn get_last_seq(&self) -> u64 {
         let sm = self.sto.state_machine.read().await;
-        let last_seq = sm.sequences().get(&GenericKV::NAME.to_string())?;
-
-        Ok(last_seq.unwrap_or_default().0)
+        sm.curr_seq()
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn get_grpc_advertise_addrs(&self) -> Result<Vec<String>, MetaStorageError> {
+    pub async fn get_grpc_advertise_addrs(&self) -> Vec<String> {
         // inconsistent get: from local state machine
 
         let nodes = {
             let sm = self.sto.state_machine.read().await;
-            sm.get_nodes()?
+            sm.nodes_ref().values().cloned().collect::<Vec<_>>()
         };
 
         let endpoints: Vec<String> = nodes
@@ -962,7 +947,7 @@ impl MetaNode {
                 }
             })
             .collect();
-        Ok(endpoints)
+        endpoints
     }
 
     #[tracing::instrument(level = "debug", skip(self))]

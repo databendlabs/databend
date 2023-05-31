@@ -16,7 +16,7 @@ use std::collections::BTreeSet;
 
 use common_base::base::tokio::sync::RwLockReadGuard;
 use common_meta_kvapi::kvapi::KVApi;
-use common_meta_raft_store::state_machine::StateMachine;
+use common_meta_raft_store::sm2::sm2::SM2;
 use common_meta_sled_store::openraft::ChangeMembers;
 use common_meta_stoerr::MetaStorageError;
 use common_meta_types::AppliedState;
@@ -90,26 +90,17 @@ impl<'a> MetaLeader<'a> {
 
             ForwardRequestBody::GetKV(req) => {
                 let sm = self.get_state_machine().await;
-                let res = sm
-                    .get_kv(&req.key)
-                    .await
-                    .map_err(|meta_err| MetaDataReadError::new("get_kv", "", &meta_err))?;
+                let res = sm.kv_api().get_kv(&req.key).await.unwrap();
                 Ok(ForwardResponse::GetKV(res))
             }
             ForwardRequestBody::MGetKV(req) => {
                 let sm = self.get_state_machine().await;
-                let res = sm
-                    .mget_kv(&req.keys)
-                    .await
-                    .map_err(|meta_err| MetaDataReadError::new("mget_kv", "", &meta_err))?;
+                let res = sm.kv_api().mget_kv(&req.keys).await.unwrap();
                 Ok(ForwardResponse::MGetKV(res))
             }
             ForwardRequestBody::ListKV(req) => {
                 let sm = self.get_state_machine().await;
-                let res = sm
-                    .prefix_list_kv(&req.prefix)
-                    .await
-                    .map_err(|meta_err| MetaDataReadError::new("list_kv", "", &meta_err))?;
+                let res = sm.kv_api().prefix_list_kv(&req.prefix).await.unwrap();
                 Ok(ForwardResponse::ListKV(res))
             }
         }
@@ -229,18 +220,11 @@ impl<'a> MetaLeader<'a> {
     ///
     /// A cluster must have at least one node in it.
     async fn can_leave(&self, id: NodeId) -> Result<Result<(), String>, MetaStorageError> {
-        let m = {
+        let membership = {
             let sm = self.get_state_machine().await;
-            sm.get_membership()?
+            sm.last_membership_ref().membership().clone()
         };
-        info!("check can_leave: id: {}, membership: {:?}", id, m);
-
-        let membership = match &m {
-            None => {
-                return Ok(Err("no membership, can not leave".to_string()));
-            }
-            Some(x) => x.membership(),
-        };
+        info!("check can_leave: id: {}, membership: {:?}", id, membership);
 
         let last_config = membership.get_joint_config().last().unwrap();
 
@@ -254,7 +238,7 @@ impl<'a> MetaLeader<'a> {
         Ok(Ok(()))
     }
 
-    async fn get_state_machine(&self) -> RwLockReadGuard<'_, StateMachine> {
+    async fn get_state_machine(&self) -> RwLockReadGuard<'_, SM2> {
         self.sto.state_machine.read().await
     }
 }

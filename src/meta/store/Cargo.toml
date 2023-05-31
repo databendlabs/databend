@@ -9,7 +9,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 io-uring = ["common-meta-embedded/io-uring"]

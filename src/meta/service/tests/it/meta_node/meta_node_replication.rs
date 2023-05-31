@@ -121,7 +121,8 @@ async fn test_meta_node_snapshot_replication() -> anyhow::Result<()> {
 
     for i in 0..n_req {
         let key = format!("test_meta_node_snapshot_replication-key-{}", i);
-        let got = mn1.get_kv(&key).await?;
+        let sm = mn1.sto.get_state_machine().await;
+        let got = sm.get_kv(&key);
         match got {
             None => {
                 panic!("expect get some value for {}", key)

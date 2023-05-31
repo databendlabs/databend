@@ -35,6 +35,7 @@ echo " === export from $meta_dir"
 echo " === check backup date: $want_exported and exported: $exported"
 diff $want_exported $exported
 
+# exit 0
 
 echo " === "
 echo " === 3. Test export from running metasrv to file $grpc_exported"

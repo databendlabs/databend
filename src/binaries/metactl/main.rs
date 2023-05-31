@@ -185,11 +185,11 @@ impl Default for RaftConfig {
 /// Usage:
 /// - To dump a sled db: `$0 --raft-dir ./_your_meta_dir/`:
 ///   ```
-///   ["global-local-kvstate_machine/0",7,"sledks::Sequences","generic-kv",13]
-///   ["global-local-kvstate_machine/0",7,"sledks::Sequences","table-lookup",1]
-///   ["global-local-kvstate_machine/0",7,"sledks::Sequences","table_id",1]
-///   ["global-local-kvstate_machine/0",7,"sledks::Sequences","tables",1]
-///   ["global-local-kvstate_machine/0",8,"sledks::Databases",1,{"seq":1,"meta":null,"data":{"engine":"","engine_options":{},"options":{},"created_on":"2022-02-16T03:20:26.007286Z"}}]
+///   ["header",{"DataHeader":{"key":"header","value":{"version":"V002","upgrading":null}}}]
+///   ["raft_state",{"RaftStateKV":{"key":"Id","value":{"NodeId":1}}}]
+///   ["raft_state",{"RaftStateKV":{"key":"HardState","value":{"HardState":{"leader_id":{"term":1,"node_id":1},"committed":false}}}}]
+///   ["raft_log",{"Logs":{"key":0,"value":{"log_id":{"leader_id":{"term":0,"node_id":0},"index":0},"payload":{"Membership":{"configs":[[1]],"nodes":{"1":{}}}}}}}]
+///   ["raft_log",{"Logs":{"key":1,"value":{"log_id":{"leader_id":{"term":1,"node_id":0},"index":1},"payload":"Blank"}}}]
 ///   ```
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
