@@ -17,7 +17,7 @@ return (
           return (
             <div onClick={()=> onAskPreviewQuestion(item)} className={styles.item} key={index}>
               <LogoSvg width={26} />
-              {item}
+              <span style={{flex: 1, maxWidth: 'calc(100% - 30px)'}}>{item}</span>
             </div>
           )
         })

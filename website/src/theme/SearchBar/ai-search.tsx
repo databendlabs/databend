@@ -59,13 +59,17 @@ const AISearch: FC<IProps> = ({ onReturn, initialQuery}): ReactElement=> {
               setQuestion('');
             }} />
         }
-        <input 
-          onChange={askChange}
-          id={INPUT_ID} 
-          value={value} 
-          onKeyDown={askOnKeyDown} 
-          placeholder={isGetting ? 'Waiting on an answer...' : 'Ask Databend AI a question...' }
-          className={styles.aiInput} />
+        <div className={styles.inputWrap}>
+          <input 
+            onChange={askChange}
+            id={INPUT_ID} 
+            value={value} 
+            autoComplete='off'
+            onKeyDown={askOnKeyDown} 
+            placeholder={isGetting ? 'Waiting on an answer...' : 'Ask Databend AI a question...' }
+            className={styles.aiInput} />
+            <div onClick={()=> getResult(value)} className={styles.send}>Ask</div>
+        </div>
       </div>
     </div>
   );

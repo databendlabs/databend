@@ -27,29 +27,64 @@
   &:hover {
     background-color: var(--color-fill-0);
   }
+  @include media {
+   height: auto;
+   padding-top: 4px;
+   padding-bottom: 4px;
+  }
 }
 .wrapCommon {
   padding: 6px;
   padding-bottom: 12px;
-}
-.aiInput {
-  width: 100%;
-  box-shadow: rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.05) 0px 1px 2px 0px;
-  outline: unset;
-  border: 1px solid var(--color-border);
-  padding: 8px 16px;
-  border-radius: 6px;
-  &:focus {
-    border: 1px solid var(--color-primary);
-    box-shadow: 0px 2px 4px 0px rgba(0,0,0,0.14), 0px 0px 1px 0px rgba(0,0,0,0.16);
+  @include media {
+    position: relative;
+    height: calc(100vh - 52px);
+    padding-bottom: 60px;
   }
 }
+.inputWrap {
+  width: 100%;
+  .send {
+    display: none;
+  }
+  .aiInput {
+    width: 100%;
+    box-shadow: rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.05) 0px 1px 2px 0px;
+    outline: unset;
+    border: 1px solid var(--color-border);
+    padding: 8px 16px;
+    border-radius: 6px;
+    &:focus {
+      border: 1px solid var(--color-primary);
+      box-shadow: 0px 2px 4px 0px rgba(0,0,0,0.14), 0px 0px 1px 0px rgba(0,0,0,0.16);
+    }
+  }
+  @include media {
+    position: fixed;
+    bottom: 12px;
+    .send {
+      display: inline-block;
+      padding: 1px 8px;
+      background-color: var(--color-primary);
+      color: #fff;
+      border-radius: 6px;
+      position: absolute;
+      right: 4px;
+      top: 2px;
+    }
+    .aiInput {
+      padding-right: 50px;
+    }
+  }
+}
+
 .examleList, .chatList {
   max-height: 720px;
   overflow-y: auto;
   padding-bottom: 24px;
 }
 .chatList {
+  scroll-behavior: smooth;
   font-size: 12px;
   padding: 12px;
   padding-top: 0;
@@ -72,4 +107,10 @@
       margin-top: 4px;
     }
   }
+  @include media {
+    padding-bottom: 60px;
+  }
+}
+.error {
+  color: red;
 }
