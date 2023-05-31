@@ -119,11 +119,13 @@ jsonb = { git = "https://github.com/datafuselabs/jsonb", rev = "fe6835a" }
 
 # openraft = { version = "0.8.2", features = ["compat-07"] }
 # For debugging
-openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.3", features = ["compat-07"] }
+openraft = { git = "https://github.com/drmingdrmer/openraft", tag = "v0.8.4-alpha.8", features = ["compat-07", "tracing-log"] }
 
 # type helper
 derive_more = "0.99.17"
 lazy_static = "1.4.0"
+itertools = "0.10.5"
+more-iter = { git = "https://github.com/drmingdrmer/more-iter", tag = "v0.1.2" }
 
 # error
 anyhow = { version = "1.0.65" }
@@ -206,7 +208,7 @@ rustc-demangle = { opt-level = 3 }
 
 [profile.test]
 opt-level = 0
-debug = 0
+debug = true
 codegen-units = 16
 lto = false
 debug-assertions = true
