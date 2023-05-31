@@ -82,7 +82,6 @@ We wish everyone a Happy New Year and look forward to engaging with you.
 
 - [Blog | Databend 2022 Recap](https://databend.rs/blog/2022-12-31-databend-2022-recap)
 
-
 ### Databend 2023 Roadmap
 
 As the new year approaches, Databend is also actively planning its roadmap for 2023.
