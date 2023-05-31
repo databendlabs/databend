@@ -49,11 +49,11 @@ async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyh
     {
         let mut sm = mn1.sto.get_state_machine().await;
         let blocking_config = sm.blocking_config_mut();
-        blocking_config.dump_snapshot = Duration::from_secs(5);
+        blocking_config.write_snapshot = Duration::from_secs(5);
     }
 
     info!("--- trigger building snapshot");
-    mn1.raft.trigger_snapshot().await?;
+    mn1.raft.trigger().snapshot().await?;
 
     info!("--- Wait 500 ms for snapshot to be begin building");
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -95,11 +95,11 @@ async fn test_meta_node_serializing_snapshot_does_not_block_append_entries() -> 
     {
         let mut sm = mn1.sto.get_state_machine().await;
         let blocking_config = sm.blocking_config_mut();
-        blocking_config.serde_snapshot = Duration::from_secs(5);
+        blocking_config.compact_snapshot = Duration::from_secs(5);
     }
 
     info!("--- trigger building snapshot");
-    mn1.raft.trigger_snapshot().await?;
+    mn1.raft.trigger().snapshot().await?;
 
     info!("--- Wait 500 ms for snapshot to be begin building");
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
