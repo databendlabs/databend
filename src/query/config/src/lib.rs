@@ -33,6 +33,7 @@ mod inner;
 mod mask;
 mod obsolete;
 mod version;
+mod background_config;
 
 pub use config::CacheStorageTypeConfig;
 pub use config::Config;

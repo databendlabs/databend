@@ -72,6 +72,7 @@ mod share_from_to_protobuf_impl;
 mod stage_from_to_protobuf_impl;
 mod table_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;
+mod background_task_from_to_protobuf_impl;
 mod util;
 
 pub use from_to_protobuf::FromToProto;

@@ -51,6 +51,7 @@ use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
+use crate::background_config::BackgroundConfig;
 
 use super::inner;
 use super::inner::CatalogConfig as InnerCatalogConfig;
@@ -119,6 +120,10 @@ pub struct Config {
     // cache configs
     #[clap(flatten)]
     pub cache: CacheConfig,
+
+    // background configs
+    #[clap(flatten)]
+    pub background: BackgroundConfig,
 
     /// external catalog config.
     ///
@@ -2127,6 +2132,7 @@ mod cache_config_converters {
                     .map(|(k, v)| (k, v.into()))
                     .collect(),
                 cache: inner.cache.into(),
+                background: inner.background.into(),
             }
         }
     }
@@ -2159,6 +2165,7 @@ mod cache_config_converters {
                 local: self.local.try_into()?,
                 catalogs,
                 cache: self.cache.try_into()?,
+                background: self.background.try_into()?,
             })
         }
     }

@@ -797,6 +797,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "background-service"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "chrono",
+ "common-base",
+ "common-catalog",
+ "common-config",
+ "common-exception",
+ "common-storages-fuse",
+ "databend-query",
+]
+
+[[package]]
 name = "backoff"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

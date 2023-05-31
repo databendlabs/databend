@@ -93,7 +93,7 @@ pub async fn init_services(conf: &InnerConfig) -> Result<()> {
     GlobalServices::init(conf.clone()).await
 }
 
-pub async fn start_services(conf: &InnerConfig) -> Result<()> {
+async fn precheck_services(conf: &InnerConfig) -> Result<()> {
     if conf.query.max_memory_limit_enabled {
         let size = conf.query.max_server_memory_usage as i64;
         info!("Set memory limit: {}", size);
@@ -125,6 +125,15 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
     #[cfg(not(target_os = "macos"))]
     check_max_open_files();
+    Ok(())
+}
+
+async fn start_background_service(conf: &InnerConfig) -> Result<()> {
+    Ok(())
+}
+
+pub async fn start_services(conf: &InnerConfig) -> Result<()> {
+    precheck_services(conf).await?;
 
     let mut shutdown_handle = ShutdownHandle::create()?;
 
