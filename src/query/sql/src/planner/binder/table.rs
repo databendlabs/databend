@@ -94,12 +94,12 @@ use crate::VirtualColumn;
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_one_table(
+    pub async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &SelectStmt,
+        select_list: &Vec<SelectTarget>,
     ) -> Result<(SExpr, BindContext)> {
-        for select_target in &stmt.select_list {
+        for select_target in select_list {
             if let SelectTarget::QualifiedName {
                 qualified: names, ..
             } = select_target
@@ -585,7 +585,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_table_reference(
+    pub async fn bind_table_reference(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,

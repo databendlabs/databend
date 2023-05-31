@@ -49,6 +49,7 @@ pub mod stream;
 pub mod table_functions;
 pub mod test_kits;
 
+mod frame;
 mod global_services;
 
 pub use common_sql as sql;
