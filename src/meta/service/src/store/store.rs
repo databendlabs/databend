@@ -13,13 +13,14 @@
 // limitations under the License.
 
 use std::fmt::Debug;
-use std::io::Cursor;
 use std::ops::Deref;
 use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_meta_raft_store::config::RaftConfig;
+use common_meta_raft_store::ondisk::DATA_VERSION;
+use common_meta_raft_store::sm_v002::snapshot_store::SnapshotStoreV002;
 use common_meta_raft_store::state_machine::StoredSnapshot;
 use common_meta_sled_store::openraft::ErrorSubject;
 use common_meta_sled_store::openraft::ErrorVerb;
@@ -84,6 +85,64 @@ impl Deref for RaftStore {
 
 #[async_trait]
 impl RaftLogReader<TypeConfig> for RaftStore {
+    #[minitrace::trace]
+    async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send + Sync>(
+        &mut self,
+        range: RB,
+    ) -> Result<Vec<Entry>, StorageError> {
+        debug!(
+            "try_get_log_entries: self.id={}, range: {:?}",
+            self.id, range
+        );
+
+        match self
+            .log
+            .range_values(range)
+            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
+        {
+            Ok(entries) => return Ok(entries),
+            Err(err) => {
+                raft_metrics::storage::incr_raft_storage_fail("try_get_log_entries", false);
+                Err(err)
+            }
+        }
+    }
+}
+
+#[async_trait]
+impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
+    #[minitrace::trace]
+    async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
+        self.do_build_snapshot().await
+    }
+}
+
+#[async_trait]
+impl RaftStorage<TypeConfig> for RaftStore {
+    type LogReader = RaftStore;
+    type SnapshotBuilder = RaftStore;
+
+    async fn get_log_reader(&mut self) -> Self::LogReader {
+        self.clone()
+    }
+
+    async fn get_snapshot_builder(&mut self) -> Self::SnapshotBuilder {
+        self.clone()
+    }
+
+    async fn save_committed(&mut self, committed: Option<LogId>) -> Result<(), StorageError> {
+        self.raft_state
+            .save_committed(committed)
+            .await
+            .map_to_sto_err(ErrorSubject::Store, ErrorVerb::Write)
+    }
+
+    async fn read_committed(&mut self) -> Result<Option<LogId>, StorageError> {
+        self.raft_state
+            .read_committed()
+            .map_to_sto_err(ErrorSubject::Store, ErrorVerb::Read)
+    }
+
     async fn get_log_state(&mut self) -> Result<LogState<TypeConfig>, StorageError> {
         let last_purged_log_id = match self
             .log
@@ -124,48 +183,6 @@ impl RaftLogReader<TypeConfig> for RaftStore {
             last_purged_log_id,
             last_log_id,
         })
-    }
-
-    #[minitrace::trace]
-    async fn try_get_log_entries<RB: RangeBounds<u64> + Clone + Debug + Send + Sync>(
-        &mut self,
-        range: RB,
-    ) -> Result<Vec<Entry>, StorageError> {
-        debug!(id = self.id; "try_get_log_entries: range: {:?}", range);
-
-        match self
-            .log
-            .range_values(range)
-            .map_to_sto_err(ErrorSubject::Logs, ErrorVerb::Read)
-        {
-            Ok(entries) => return Ok(entries),
-            Err(err) => {
-                raft_metrics::storage::incr_raft_storage_fail("try_get_log_entries", false);
-                Err(err)
-            }
-        }
-    }
-}
-
-#[async_trait]
-impl RaftSnapshotBuilder<TypeConfig> for RaftStore {
-    #[minitrace::trace]
-    async fn build_snapshot(&mut self) -> Result<Snapshot, StorageError> {
-        self.do_build_snapshot().await
-    }
-}
-
-#[async_trait]
-impl RaftStorage<TypeConfig> for RaftStore {
-    type LogReader = RaftStore;
-    type SnapshotBuilder = RaftStore;
-
-    async fn get_log_reader(&mut self) -> Self::LogReader {
-        self.clone()
-    }
-
-    async fn get_snapshot_builder(&mut self) -> Self::SnapshotBuilder {
-        self.clone()
     }
 
     #[minitrace::trace]
@@ -269,30 +286,23 @@ impl RaftStorage<TypeConfig> for RaftStore {
             info!("apply_to_state_machine: {}", ent.log_id);
         }
 
-        let mut res = Vec::with_capacity(entries.len());
+        let mut sm = self.state_machine.write().await;
+        let res = sm.apply_entries(entries);
 
-        let sm = self.state_machine.write().await;
-        for entry in entries {
-            let r = match sm
-                .apply(entry)
-                .await
-                .map_to_sto_err(ErrorSubject::Apply(entry.log_id), ErrorVerb::Write)
-            {
-                Err(err) => {
-                    raft_metrics::storage::incr_raft_storage_fail("apply_to_state_machine", true);
-                    return Err(err);
-                }
-                Ok(r) => r,
-            };
-            res.push(r);
-        }
         Ok(res)
     }
 
     #[minitrace::trace]
     async fn begin_receiving_snapshot(&mut self) -> Result<Box<SnapshotData>, StorageError> {
         server_metrics::incr_applying_snapshot(1);
-        Ok(Box::new(Cursor::new(Vec::new())))
+
+        let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
+
+        let temp = snapshot_store.new_temp().await.map_err(|e| {
+            StorageError::from_io_error(ErrorSubject::Snapshot(None), ErrorVerb::Write, e)
+        })?;
+
+        Ok(Box::new(temp))
     }
 
     #[minitrace::trace]
@@ -301,24 +311,41 @@ impl RaftStorage<TypeConfig> for RaftStore {
         meta: &SnapshotMeta,
         snapshot: Box<SnapshotData>,
     ) -> Result<(), StorageError> {
-        // TODO(xp): disallow installing a snapshot with smaller last_applied.
+        let data_size = snapshot.data_size().await.map_err(|e| {
+            StorageError::from_io_error(
+                ErrorSubject::Snapshot(Some(meta.signature())),
+                ErrorVerb::Read,
+                e,
+            )
+        })?;
 
         info!(
             id = self.id,
-            snapshot_size = snapshot.get_ref().len();
+            snapshot_size = data_size;
             "decoding snapshot for installation"
         );
         server_metrics::incr_applying_snapshot(-1);
 
-        let new_snapshot = StoredSnapshot {
-            meta: meta.clone(),
-            data: snapshot.into_inner(),
-        };
+        assert!(snapshot.is_temp());
+
+        let snapshot_store = SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
+
+        let d = snapshot_store
+            .commit_received(snapshot, meta)
+            .await
+            .map_err(|e| {
+                e.with_context(format_args!(
+                    "commit received snapshot: {:?}",
+                    meta.signature()
+                ))
+            })?;
+
+        let d = Box::new(d);
 
         info!("snapshot meta: {:?}", meta);
 
         // Replace state machine with the new one
-        let res = self.do_install_snapshot(&new_snapshot.data).await;
+        let res = self.do_install_snapshot(d).await;
         match res {
             Ok(_) => {}
             Err(e) => {
@@ -328,6 +355,7 @@ impl RaftStorage<TypeConfig> for RaftStore {
         };
 
         // Update current snapshot.
+        let new_snapshot = StoredSnapshot { meta: meta.clone() };
         {
             let mut current_snapshot = self.current_snapshot.write().await;
             *current_snapshot = Some(new_snapshot);
@@ -338,12 +366,22 @@ impl RaftStorage<TypeConfig> for RaftStore {
     #[minitrace::trace]
     async fn get_current_snapshot(&mut self) -> Result<Option<Snapshot>, StorageError> {
         info!(id = self.id; "get snapshot start");
-        let snap = match &*self.current_snapshot.read().await {
+        let p = self.current_snapshot.read().await;
+
+        let snap = match &*p {
             Some(snapshot) => {
-                let data = snapshot.data.clone();
+                let meta = &snapshot.meta;
+
+                let snapshot_store =
+                    SnapshotStoreV002::new(DATA_VERSION, self.inner.config.clone());
+                let d = snapshot_store
+                    .new_reader(&meta.snapshot_id)
+                    .await
+                    .map_err(|e| e.with_meta("get snapshot", meta))?;
+
                 Ok(Some(Snapshot {
-                    meta: snapshot.meta.clone(),
-                    snapshot: Box::new(Cursor::new(data)),
+                    meta: meta.clone(),
+                    snapshot: Box::new(d),
                 }))
             }
             None => Ok(None),
@@ -373,33 +411,13 @@ impl RaftStorage<TypeConfig> for RaftStore {
         &mut self,
     ) -> Result<(Option<LogId>, StoredMembership), StorageError> {
         let sm = self.state_machine.read().await;
-        let last_applied = match sm
-            .get_last_applied()
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
-        {
-            Err(err) => {
-                raft_metrics::storage::incr_raft_storage_fail("last_applied_state", false);
-                return Err(err);
-            }
-            Ok(r) => r,
-        };
-        let last_membership = match sm
-            .get_membership()
-            .map_to_sto_err(ErrorSubject::StateMachine, ErrorVerb::Read)
-        {
-            Err(err) => {
-                raft_metrics::storage::incr_raft_storage_fail("last_applied_state", false);
-                return Err(err);
-            }
-            Ok(r) => r,
-        };
+        let last_applied = *sm.last_applied_ref();
+        let last_membership = sm.last_membership_ref().clone();
 
         debug!(
             "last_applied_state: applied: {:?}, membership: {:?}",
             last_applied, last_membership
         );
-
-        let last_membership = last_membership.unwrap_or_default();
 
         Ok((last_applied, last_membership))
     }

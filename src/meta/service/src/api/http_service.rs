@@ -63,12 +63,12 @@ impl HttpService {
                 get(super::http::v1::ctrl::trigger_snapshot),
             )
             .at(
-                "/v1/ctrl/block_dump_snapshot",
-                get(super::http::v1::ctrl::block_dump_snapshot),
+                "/v1/ctrl/block_write_snapshot",
+                get(super::http::v1::ctrl::block_write_snapshot),
             )
             .at(
-                "/v1/ctrl/block_serde_snapshot",
-                get(super::http::v1::ctrl::block_serde_snapshot),
+                "/v1/ctrl/block_compact_snapshot",
+                get(super::http::v1::ctrl::block_compact_snapshot),
             )
             .at(
                 "/v1/cluster/nodes",
