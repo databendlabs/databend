@@ -82,6 +82,21 @@ impl VersionInfo {
             "Add data version V0",
         )
     }
+
+    const fn v001() -> Self {
+        Self::new(
+            "869cc74a2ca3d31d76c18314752d729d45580c15",
+            "2023-05-18",
+            new_semver(1, 1, 40),
+            "Get rid of compat, use only openraft v08 data types",
+        )
+    }
+
+    // TODO: enable this when V002 is merged.
+    #[allow(dead_code)]
+    const fn v002() -> Self {
+        Self::new("", "2023-xx-xx", new_semver(0, 0, 0), "TODO")
+    }
 }
 
 lazy_static::lazy_static! {
@@ -90,8 +105,9 @@ lazy_static::lazy_static! {
 
         btreemap! {
             DataVersion::V0 => VersionInfo::v0(),
-            // TODO: enable this when V001 is merged.
-            // DataVersion::V001 => VersionInfo::v001() ,
+            DataVersion::V001 => VersionInfo::v001() ,
+            // TODO: enable this when V002 is merged.
+            // DataVersion::V002 => VersionInfo::v002() ,
         }
 
     };

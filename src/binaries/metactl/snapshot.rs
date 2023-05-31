@@ -90,62 +90,77 @@ pub async fn import_data(config: &Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-// return the max log id
-fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
-    let db = get_sled_db();
-    let mut trees = BTreeMap::new();
-    let mut n = 0;
-    let mut max_log_id: Option<LogId> = None;
-
+/// Import from lines of exported data and Return the max log id that is found.
+fn import_lines<B: BufRead + 'static>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
     #[allow(clippy::useless_conversion)]
-    let mut it = lines.into_iter();
+    let mut it = lines.into_iter().peekable();
+    let first = it
+        .peek()
+        .ok_or_else(|| anyhow::anyhow!("no data to import"))?;
+
+    let first_line = match first {
+        Ok(l) => l,
+        Err(e) => {
+            return Err(anyhow::anyhow!("{}", e));
+        }
+    };
 
     // First line is the data header that containing version.
-    {
-        let first_line = it
-            .next()
-            .ok_or_else(|| anyhow::anyhow!("no data to import"))??;
+    let version = read_version(first_line)?;
 
-        let (tree_name, kv_entry): (String, RaftStoreEntryCompat) =
-            serde_json::from_str(&first_line)?;
-
-        let kv_entry = kv_entry.upgrade();
-
-        let version = if tree_name == TREE_HEADER {
-            // There is a explicit header.
-            if let RaftStoreEntry::DataHeader { key, value } = &kv_entry {
-                assert_eq!(key, "header", "The key can only be 'header'");
-                value.version
-            } else {
-                unreachable!("The header tree can only contain DataHeader");
-            }
-        } else {
-            // Without header, the data version is V0 by default.
-            DataVersion::V0
-        };
-
-        if !DATA_VERSION.is_compatible(version) {
-            return Err(anyhow!(
-                "invalid data version: {:?}, This program version is {:?}; The latest compatible program version is: {:?}",
-                version,
-                DATA_VERSION,
-                version.max_compatible_working_version(),
-            ));
-        }
-
-        let (k, v) = RaftStoreEntry::serialize(&kv_entry)?;
-
-        let tree = db.open_tree(&tree_name)?;
-        tree.insert(k, v)?;
-        tree.flush()?;
+    if !DATA_VERSION.is_compatible(version) {
+        return Err(anyhow!(
+            "invalid data version: {:?}, This program version is {:?}; The latest compatible program version is: {:?}",
+            version,
+            DATA_VERSION,
+            version.max_compatible_working_version(),
+        ));
     }
 
-    for line in it {
+    match version {
+        DataVersion::V0 | DataVersion::V001 => import_v0_v001(it),
+        DataVersion::V002 => {
+            todo!()
+        }
+    }
+}
+
+fn read_version(first_line: &str) -> anyhow::Result<DataVersion> {
+    let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(first_line)?;
+
+    let kv_entry = kv_entry.upgrade();
+
+    let version = if tree_name == TREE_HEADER {
+        // There is a explicit header.
+        if let RaftStoreEntry::DataHeader { key, value } = &kv_entry {
+            assert_eq!(key, "header", "The key can only be 'header'");
+            value.version
+        } else {
+            unreachable!("The header tree can only contain DataHeader");
+        }
+    } else {
+        // Without header, the data version is V0 by default.
+        DataVersion::V0
+    };
+
+    Ok(version)
+}
+
+/// Import serialized lines for `DataVersion::V0` and `DataVersion::V001`
+///
+/// While importing, the max log id is also returned.
+fn import_v0_v001(
+    lines: impl IntoIterator<Item = Result<String, io::Error>>,
+) -> anyhow::Result<Option<LogId>> {
+    let db = get_sled_db();
+    let mut n = 0;
+    let mut max_log_id: Option<LogId> = None;
+    let mut trees = BTreeMap::new();
+
+    for line in lines {
         let l = line?;
         let (tree_name, kv_entry): (String, RaftStoreEntryCompat) = serde_json::from_str(&l)?;
         let kv_entry = kv_entry.upgrade();
-
-        // eprintln!("line: {}", l);
 
         if !trees.contains_key(&tree_name) {
             let tree = db.open_tree(&tree_name)?;
@@ -160,16 +175,10 @@ fn import_lines<B: BufRead>(lines: Lines<B>) -> anyhow::Result<Option<LogId>> {
         n += 1;
 
         if let RaftStoreEntry::Logs { key: _, value } = kv_entry {
-            match max_log_id {
-                Some(log_id) => {
-                    if value.log_id > log_id {
-                        max_log_id = Some(value.log_id);
-                    }
-                }
-                None => max_log_id = Some(value.log_id),
-            };
+            max_log_id = std::cmp::max(max_log_id, Some(value.log_id));
         };
     }
+
     for tree in trees.values() {
         tree.flush()?;
     }

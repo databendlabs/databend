@@ -300,7 +300,7 @@ async fn register_node(meta_node: &Arc<MetaNode>, conf: &Config) -> Result<(), a
         );
         println!();
 
-        if meta_node.get_node(&leader_id).await?.is_none() {
+        if meta_node.get_node(&leader_id).await.is_none() {
             warn!("Leader node is not replicated to local store, wait and try again");
             sleep(Duration::from_millis(500)).await
         }

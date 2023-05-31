@@ -11,7 +11,7 @@ edition = { workspace = true }
 
 [lib]
 doctest = false
-test = false
+test = true
 
 [features]
 enable-histogram = ["common-metrics/enable-histogram"]
