@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 
+use super::AggregateInfo;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
 use crate::binder::ExprContext;
@@ -48,12 +49,11 @@ use crate::WindowChecker;
 impl Binder {
     pub(super) fn analyze_projection(
         &mut self,
-        bind_context: &BindContext,
+        agg_info: &AggregateInfo,
         select_list: &SelectList,
     ) -> Result<(HashMap<IndexType, ScalarItem>, Vec<ColumnBinding>)> {
         let mut columns = Vec::with_capacity(select_list.items.len());
         let mut scalars = HashMap::new();
-        let agg_info = &bind_context.aggregate_info;
         for item in select_list.items.iter() {
             // This item is a grouping sets item, its data type should be nullable.
             let is_grouping_sets_item = agg_info.grouping_id_column.is_some()

@@ -22,6 +22,7 @@ use common_ast::ast::OrderByExpr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::ExprContext;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::window::WindowRewriter;
@@ -66,6 +67,7 @@ impl Binder {
         order_by: &[OrderByExpr],
         distinct: bool,
     ) -> Result<OrderItems> {
+        bind_context.set_expr_context(ExprContext::OrderByClause);
         // null is the largest value in databend, smallest in hive
         // TODO: rewrite after https://github.com/jorgecarleitao/arrow2/pull/1286 is merged
         let default_nulls_first = !self
