@@ -23,7 +23,7 @@ async fn main() {
     table.printstd();
 }
 
-const TABLE_NAME: &str = "tttttttttttttttttttttttttttttttttttt";
+const TABLE_NAME: &str = "ttttttttttttttttttttttttttttttttttttt";
 
 async fn warmup(dim: usize, k: usize, conn: &dyn Connection) {
     let target = generate_points(1, dim);
