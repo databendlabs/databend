@@ -34,6 +34,9 @@ mod share_api_keys;
 mod share_api_test_suite;
 pub(crate) mod testing;
 pub(crate) mod util;
+mod background_task_api;
+mod background_task_api_keys;
+mod background_task_api_impl;
 
 pub use data_mask_api::DatamaskApi;
 pub use id::Id;

@@ -12,17 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod background_task;
-
-pub use background_task::BackgroundTaskId;
-pub use background_task::BackgroundTaskInfo;
-pub use background_task::CompactionStats;
-pub use background_task::VacuumStats;
-pub use background_task::BackgroundTaskType;
-pub use background_task::BackgroundTaskState;
-
-pub use background_task::GetBackgroundTaskReq;
-pub use background_task::GetBackgroundTaskReply;
-pub use background_task::UpdateBackgroundTaskReply;
-pub use background_task::UpdateBackgroundTaskReq;
-pub use background_task::ListBackgroundTasksReq;
+pub(crate) const ID_GEN_BACKGROUND_TASK: &str = "background_task";
