@@ -1077,9 +1077,9 @@ mod tests {
             let res = TableCopiedFileNameIdent::from_str_key(&key);
             assert!(res.is_err());
             let err = res.unwrap_err();
-            assert_eq!(err, kvapi::KeyError::AtleastSegments {
+            assert_eq!(err, kvapi::KeyError::WrongNumberOfSegments {
                 expect: 3,
-                actual: 2,
+                got: key,
             });
         }
 
