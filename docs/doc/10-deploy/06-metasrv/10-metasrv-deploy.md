@@ -1,45 +1,19 @@
 ---
-title: Deploy a Databend Meta Service Cluster
-sidebar_label: Deploy a Meta Service Cluster
+title: Deploying a Databend Cluster
+sidebar_label: Deploying a Databend Cluster
 description: 
-  How to deploy Databend Meta Service Cluster
+  Deploying a Databend Cluster
 ---
 
-:::tip
+Databend recommends cluster deployment with at least three meta nodes and one query node for production environments. If you want to know what a Databend cluster deployment is, see [Understanding Deployment Modes](../00-understanding-deployment-modes.md) to get yourself familiar with the concept. This topic will guide you through practically deploying a Databend cluster with the following data plan:
 
-Expected deployment time: **5 minutes ⏱**
+| Meta Node# 	| IP Address    	| Leader Node? 	|
+|------------	|---------------	|--------------	|
+| 1          	| 192.168.1.100 	| Yes          	|
+| 2          	| 192.168.1.101 	| No           	|
+| 3          	| 192.168.1.102 	| No           	|
 
-:::
-
-`databend-meta` is a global service for the metadata(such as user, table schema etc.).
-It can be a single process service for testing,
-or a cluster of 3 or 5 nodes for production use.
-
-`databend-meta` has to be deployed before booting up a `databend-query` cluster.
-
-```text
-                               .~~~~~~~~~~~~~~~~.
-                               !   MySQL        !
-                               !   ClickHouse   !
-                               !   REST API     !
- .------.                      '~~~~~~~~~~~~~~~~'
- | meta |                               ^
- '------'                               |
-    ^                                   v
-    |                          .----------------.
- .------.                      |                |
- | meta |<-------------------->| databend-query |
- '------'                      |                |
-    |                          '----------------'
-    v                                   ^
- .------.                               !
- | meta |                               v
- '------'                      .~~~~~~~~~~~~~~~~.
-                               !                !
-                               !     AWS S3     !
-                               !                !
-                               '~~~~~~~~~~~~~~~~'
-```
+For this data plan, you'll deploy a leader meta node with two follower nodes, which forms a meta cluster, then you'll deploy a query cluster which can include two or more nodes as you need.
 
 ## 1. Download
 
