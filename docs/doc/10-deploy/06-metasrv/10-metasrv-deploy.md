@@ -5,196 +5,152 @@ description:
   Deploying a Databend Cluster
 ---
 
-Databend recommends cluster deployment with at least three meta nodes and one query node for production environments. If you want to know what a Databend cluster deployment is, see [Understanding Deployment Modes](../00-understanding-deployment-modes.md) to get yourself familiar with the concept. This topic will guide you through practically deploying a Databend cluster with the following data plan:
-
-| Meta Node# 	| IP Address    	| Leader Node? 	|
-|------------	|---------------	|--------------	|
-| 1          	| 192.168.1.100 	| Yes          	|
-| 2          	| 192.168.1.101 	| No           	|
-| 3          	| 192.168.1.102 	| No           	|
-
-For this data plan, you'll deploy a leader meta node with two follower nodes, which forms a meta cluster, then you'll deploy a query cluster which can include two or more nodes as you need.
-
-## 1. Download
-
-You can find the latest binaries on the [github release](https://github.com/datafuselabs/databend/releases) page or [build from source](../../90-contributing/02-building-from-source.md).
-
-```shell
-mkdir databend && cd databend
-```
-
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-<Tabs groupId="operating-systems">
-<TabItem value="linux" label="Linux">
+Databend recommends deploying a cluster with a minimum of three meta nodes and one query node for production environments. To gain a better understanding of Databend cluster deployment, see [Understanding Deployment Modes](../00-understanding-deployment-modes.md), which will familiarize you with the concept. This topic aims to provide a practical guide for deploying a Databend cluster.
 
-```shell
-curl -LJO https://github.com/datafuselabs/databend/releases/download/v0.7.32-nightly/databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
-```
+## Before You Begin
 
-</TabItem>
-</Tabs>
+Before you start, make sure you have completed the following preparations:
 
-<Tabs groupId="operating-systems">
-<TabItem value="linux" label="Linux">
+- Plan your deployment. This document is based on the following cluster deployment plan, which involves setting up a meta cluster comprising three meta nodes and a query cluster consisting of two query nodes:
 
-```shell
-tar xzvf databend-v0.7.32-nightly-x86_64-unknown-linux-musl.tar.gz
-```
+| Node #  	| IP Address    	| Leader Meta Node? 	| Tenant ID 	| Query Cluster ID 	|
+|---------	|---------------	|-------------------	|-----------	|------------------	|
+| Meta-1  	| 192.168.1.100 	| Yes               	| -         	| -                	|
+| Meta-2  	| 192.168.1.101 	| No                	| -         	| -                	|
+| Meta-3  	| 192.168.1.102 	| No                	| -         	| -                	|
+| Query-1 	| 192.168.1.10  	| -                 	| default   	| default          	|
+| Query-2 	| 192.168.1.20  	| -                 	| default   	| default          	|
 
-You can find two executable files:
+- [Download](https://databend.rs/download) and extract the Databend package onto each of your prepared servers according to your deployment plan.
 
-```shell
-ls
-# databend-meta databend-query
-```
+## Step 1: Deploy Meta Cluster
 
-</TabItem>
-</Tabs>
+1. Configure the file **databend-meta.toml** in each meta node. Please note the following when configuring each node:
 
-## 2. Deploy databend-meta
+    - Ensure that the **id** parameter in each node is set to a unique value.
 
-:::tip
+    - Set the **single** parameter to *true* for the leader meta node.
 
-Standalone mode should **NEVER** be used in production.
-But do not worry. Anytime when needed, a standalone `databend-meta` can be extended to a cluster of 3 or 5 nodes with [Cluster management API](20-metasrv-add-remove-node.md).
+    - For follower meta nodes, comment out the **single** parameter using the # symbol, then add a **join** setting and provide an array of the IP addresses of the other meta nodes as its value.
 
-:::
+<Tabs>
+  <TabItem value="Meta-1" label="Meta-1" default>
 
-### 2.1 Standalone mode
-
-#### 2.1.1 Create databend-meta.toml
-
-```shell title="databend-meta.toml"
-log_dir = "metadata/_logs"
-admin_api_address = "127.0.0.1:28101"
-grpc_api_address = "127.0.0.1:9101"
+```toml title="databend-meta.toml"
+log_dir                 = "/var/log/databend"
+admin_api_address       = "0.0.0.0:28101"
+grpc_api_address        = "0.0.0.0:9191"
+# databend-query fetch this address to update its databend-meta endpoints list,
+# in case databend-meta cluster changes.
+grpc_api_advertise_host = "192.168.1.100"
 
 [raft_config]
-id = 1
-single = true
-raft_dir = "metadata/datas"
-```
+id            = 1
+raft_dir      = "/var/lib/databend/raft"
+raft_api_port = 28103
 
-#### 2.1.2 Start the databend-meta
+# Assign raft_{listen|advertise}_host in test config.
+# This allows you to catch a bug in unit tests when something goes wrong in raft meta nodes communication.
+raft_listen_host = "192.168.1.100"
+raft_advertise_host = "192.168.1.100"
+
+# Start up mode: single node cluster
+single        = true
+```
+  </TabItem>
+  <TabItem value="Meta-2" label="Meta-2">
+
+```toml title="databend-meta.toml"
+log_dir                 = "/var/log/databend"
+admin_api_address       = "0.0.0.0:28101"
+grpc_api_address        = "0.0.0.0:9191"
+# databend-query fetch this address to update its databend-meta endpoints list,
+# in case databend-meta cluster changes.
+grpc_api_advertise_host = "192.168.1.101"
+
+[raft_config]
+id            = 2
+raft_dir      = "/var/lib/databend/raft"
+raft_api_port = 28103
+
+# Assign raft_{listen|advertise}_host in test config.
+# This allows you to catch a bug in unit tests when something goes wrong in raft meta nodes communication.
+raft_listen_host = "192.168.1.101"
+raft_advertise_host = "192.168.1.101"
+
+# Start up mode: single node cluster
+# single        = true
+join            =["192.168.1.100:28103","192.168.1.102:28103"]
+```
+  </TabItem>
+  <TabItem value="Meta-3" label="Meta-3">
+
+```toml title="databend-meta.toml"
+log_dir                 = "/var/log/databend"
+admin_api_address       = "0.0.0.0:28101"
+grpc_api_address        = "0.0.0.0:9191"
+# databend-query fetch this address to update its databend-meta endpoints list,
+# in case databend-meta cluster changes.
+grpc_api_advertise_host = "192.168.1.102"
+
+[raft_config]
+id            = 3
+raft_dir      = "/var/lib/databend/raft"
+raft_api_port = 28103
+
+# Assign raft_{listen|advertise}_host in test config.
+# This allows you to catch a bug in unit tests when something goes wrong in raft meta nodes communication.
+raft_listen_host = "192.168.1.102"
+raft_advertise_host = "192.168.1.102"
+
+# Start up mode: single node cluster
+# single        = true
+join            =["192.168.1.100:28103","192.168.1.101:28103"]
+```
+  </TabItem>
+</Tabs>
+
+2. To start the meta nodes, run the following script on each node: Start the leader node (Meta-1) first, followed by the follower nodes in sequence.
 
 ```shell
 ./databend-meta -c ./databend-meta.toml > meta.log 2>&1 &
 ```
 
-#### 2.1.3 Check databend-meta
+3. Once all the meta nodes have started, you can use the following curl command to check the nodes in the cluster:
 
 ```shell
-curl -I  http://127.0.0.1:28101/v1/health
+curl 192.168.1.100:28102/v1/cluster/nodes
 ```
 
-Check the response is `HTTP/1.1 200 OK`.
+## Step 2: Deploy Query Cluster
 
-### 2.2 Cluster mode
+1. Configure the file **databend-query.toml** in each query node. The following list only includes the parameters you need to set in each query node to reflect the deployment plan outlined in this document.
 
-In this chapter we will deploy a `databend-meta` cluster with 3 nodes.
+    - Set the tenant ID and cluster ID according to the deployment plan.
 
-First we are going to start up the first node in **single** mode, to form a
-single node cluster.
-Then join the other two nodes to the cluster to finally form a 3-nodes cluster.
+    - Set the **endpoints** parameter to an array of the IP addresses of the meta nodes.
 
-:::tip
+```toml title="databend-query.toml"
+...
 
-One of the 3 nodes will be elected to be a **leader** which serves write and read
-API.
-Other nodes are **follower**, and will redirect requests to the leader.
-Thus a `databend-query` can be configured to connect to any of the nodes in a
-cluster.
+tenant_id = "default"
+cluster_id = "default"
 
-:::
+...
 
-#### 2.2.1 Create databend-meta-1.toml
-
-```shell title="databend-meta-1.toml"
-log_dir            = "metadata/_logs1"
-admin_api_address  = "0.0.0.0:28101"
-grpc_api_address   = "0.0.0.0:9191"
-
-[raft_config]
-id                  = 1
-raft_dir            = "metadata/datas1"
-raft_api_port       = 28103
-raft_listen_host    = "127.0.0.1"
-raft_advertise_host = "localhost"
+[meta]
+# It is a list of `grpc_api_advertise_host:<grpc-api-port>` of databend-meta config
+endpoints = ["192.168.1.100:9191","192.168.1.101:9191","192.168.1.102:9191"]
+...
 ```
 
-- `admin_api_address` is the service for retrieving cluster status.
-- `grpc_api_address` is the service for applications to write or read metadata.
+2. For each query node, you also need to configure the object storage in the file **databend-query.toml**. For detailed instructions, see [Deploying a Query Node](../02-deploying-databend.md#deploying-a-query-node).
 
-- `raft_config.id` is the globally unique id for this node; it is a `u64`.
-- `raft_config.raft_dir` is the local dir to store metadata, including raft log
-    and state machine etc.
-
-- `raft_config.raft_api_port`,`raft_config.raft_listen_host` and `raft_config.raft_advertise_host`
-  defines the service for internal raft communication.  Application should never touch this port.
-
-  `raft_listen_host` is the host the internal raft server listens on.
-  `raft_advertise_host` is the host the internal raft client to connect to.
-
-- `single` tells the node to initialize a single node cluster if it is not
-    initialized. Otherwise, this arg is just ignored.
-
-For more information about config, see [Configuration](15-metasrv-config.md)
-
-#### 2.2.2 Start the databend-meta node-1
+3. Run the following script on each query node to start them:
 
 ```shell
-./databend-meta -c ./databend-meta-1.toml > meta1.log 2>&1 &
-```
-
-#### 2.2.3 Check databend-meta node-1
-
-```shell
-curl -I  http://127.0.0.1:28101/v1/health
-```
-
-Check the response is `HTTP/1.1 200 OK`.
-
-#### 2.2.4 Create config files for other 2 nodes
-
-The config for other nodes are similar, except the `single` should be replaced
-with `join`, and the `id` has to be different.
-
-```shell title="databend-meta-2.toml"
-log_dir            = "metadata/_logs2"
-admin_api_address  = "0.0.0.0:28201"
-grpc_api_address   = "0.0.0.0:28202"
-
-[raft_config]
-id                  = 2
-raft_dir            = "metadata/datas2"
-raft_api_port       = 28203
-raft_listen_host    = "127.0.0.1"
-raft_advertise_host = "localhost"
-join                = ["localhost:28103"]
-```
-
-```shell title="databend-meta-3.toml"
-log_dir            = "metadata/_logs3"
-admin_api_address  = "0.0.0.0:28301"
-grpc_api_address   = "0.0.0.0:28302"
-
-[raft_config]
-id                  = 3
-raft_dir            = "metadata/datas3"
-raft_api_port       = 28303
-raft_listen_host    = "127.0.0.1"
-raft_advertise_host = "localhost"
-join                = ["localhost:28103"]
-```
-
-The arg `join` specifies a list of raft addresses(`<raft_advertise_host>:<raft_api_port>`) of nodes in the existing cluster it wants to
-be joined to.
-
-#### 2.2.5 Start other nodes
-
-```shell
-./databend-meta -c ./databend-meta-2.toml > meta2.log 2>&1 &
-./databend-meta -c ./databend-meta-3.toml > meta3.log 2>&1 &
+./databend-query -c ../configs/databend-query.toml > query.log 2>&1 &
 ```
