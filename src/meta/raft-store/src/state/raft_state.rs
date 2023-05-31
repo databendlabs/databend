@@ -18,6 +18,7 @@ use common_meta_sled_store::sled;
 use common_meta_sled_store::AsKeySpace;
 use common_meta_sled_store::SledTree;
 use common_meta_stoerr::MetaStorageError;
+use common_meta_types::LogId;
 use common_meta_types::MetaStartupError;
 use common_meta_types::NodeId;
 use common_meta_types::Vote;
@@ -118,6 +119,27 @@ impl RaftState {
     #[minitrace::trace]
     async fn init(&self) -> Result<(), MetaStorageError> {
         self.set_node_id(self.id).await
+    }
+
+    pub async fn save_committed(&self, committed: Option<LogId>) -> Result<(), MetaStorageError> {
+        let state = self.state();
+        state
+            .insert(
+                &RaftStateKey::Committed,
+                &RaftStateValue::Committed(committed),
+            )
+            .await?;
+        Ok(())
+    }
+
+    pub fn read_committed(&self) -> Result<Option<LogId>, MetaStorageError> {
+        let state = self.state();
+        let committed = state.get(&RaftStateKey::Committed)?;
+        if let Some(c) = committed {
+            Ok(Option::<LogId>::from(c))
+        } else {
+            Ok(None)
+        }
     }
 
     pub async fn save_vote(&self, vote: &Vote) -> Result<(), MetaStorageError> {
