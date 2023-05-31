@@ -47,16 +47,23 @@ const ChatList: FC<IProps> = ({ question, onGetResultDone, onGetting }): ReactEl
         onGetResultDone(result);
         scrollToBottom()
       } else {
-        setList(pre=> ([
-          ...pre,
-          {type: 'ERROR', message: 'Oops! Something went wrong'}
-        ]));
-        onGetResultDone('ERROR');
-        scrollToBottom(true)
+        dealError();
       }
-    } finally {
+    }
+    catch {
+      dealError();
+    } 
+    finally {
       getting(false);
     }
+  }
+  function dealError() {
+    setList(pre=> ([
+      ...pre,
+      {type: 'ERROR', message: 'Oops! Something went wrong'}
+    ]));
+    onGetResultDone('ERROR');
+    scrollToBottom(true)
   }
   function getting(tag: boolean) {
     setIsGetting(tag);
