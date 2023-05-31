@@ -36,7 +36,7 @@ Databend brought many new features and improvements in 2022 to help customers wi
 
 As a data warehouse inspired by and benchmarking itself against Snowflake and Clickhouse, Databend fully took advantage of "Cloud Native" to bring you a new design and implementation without breaking the balance between performance and maintainability:
 
-- Added support for [Stage](https://databend.rs/doc/sql-commands/ddl/stage/) and [Data Sharing](https://databend.rs/doc/sql-commands/ddl/share/), helping users manage their data life cycle with more options.
+- Added support for [Stage](https://databend.rs/doc/reference/sql/ddl/stage/) and [Data Sharing](https://databend.rs/doc/sql-commands/ddl/share/), helping users manage their data life cycle with more options.
 - Introduced a [new planner](https://databend.rs/blog/new-planner) with user-friendly error prompts and efficient optimization techniques for the execution plan.
 - [Redesigned the type system](https://github.com/datafuselabs/databend/discussions/5438) to support type checking and type-safe downward casting.
 - Enhanced the new processor framework: It can now work in both Pull and Push modes.

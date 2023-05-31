@@ -18,7 +18,7 @@ use common_exception::Result;
 use common_license::license_manager::get_license_manager;
 use common_sql::plans::DropDatamaskPolicyPlan;
 use common_users::UserApiProvider;
-use data_mask::get_datamask_handler;
+use data_mask_feature::get_datamask_handler;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -52,7 +52,9 @@ impl Interpreter for DropDataMaskInterpreter {
         )?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let handler = get_datamask_handler();
-        handler.drop_data_mask(meta_api, self.plan.clone()).await?;
+        handler
+            .drop_data_mask(meta_api, self.plan.clone().into())
+            .await?;
 
         Ok(PipelineBuildResult::create())
     }

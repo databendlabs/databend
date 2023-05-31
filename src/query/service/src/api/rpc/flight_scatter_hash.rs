@@ -120,7 +120,7 @@ impl FlightScatter for OneHashKeyFlightScatter {
         let evaluator = Evaluator::new(&data_block, &self.func_ctx, &BUILTIN_FUNCTIONS);
         let num = data_block.num_rows();
 
-        let indices = evaluator.run_auto_type(&self.indices_scalar).unwrap();
+        let indices = evaluator.run(&self.indices_scalar).unwrap();
         let indices = get_hash_values(&indices, num)?;
         let data_blocks = DataBlock::scatter(&data_block, &indices, self.scatter_size)?;
 
@@ -141,7 +141,7 @@ impl FlightScatter for HashFlightScatter {
         let indices = if !self.hash_key.is_empty() {
             let mut hash_keys = vec![];
             for expr in &self.hash_key {
-                let indices = evaluator.run_auto_type(expr).unwrap();
+                let indices = evaluator.run(expr).unwrap();
                 let indices = get_hash_values(&indices, num)?;
                 hash_keys.push(indices)
             }

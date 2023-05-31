@@ -438,6 +438,47 @@ sales	1	3
 sales	3	4
 sales	4	NULL
 
+query III
+SELECT depname, empno,
+	nth_value(NULL, 2) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+ORDER BY 1, 2
+----
+develop	7	NULL
+develop	8	NULL
+develop	9	NULL
+develop	10	NULL
+develop	11	NULL
+personnel	2	NULL
+personnel	5	NULL
+sales	1	NULL
+sales	3	NULL
+sales	4	NULL
+
+# Where the first parameter is a constant
+query III
+SELECT depname, empno,
+	nth_value(-1, 2) OVER (
+		PARTITION BY depname ORDER BY empno ASC
+		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
+		) fv
+FROM empsalary
+ORDER BY 1, 2
+----
+develop	7	-1
+develop	8	-1
+develop	9	-1
+develop	10	-1
+develop	11	NULL
+personnel	2	-1
+personnel	5	NULL
+sales	1	-1
+sales	3	-1
+sales	4	NULL
+
 statement ok
 DROP VIEW IF EXISTS empno_nulls
 
@@ -481,6 +522,7 @@ SELECT depname, empno,
 		ROWS BETWEEN CURRENT ROW AND UNBOUNDED FOLLOWING
 		) fv
 FROM empsalary
+
 
 # min/max/avg
 query TIIR
