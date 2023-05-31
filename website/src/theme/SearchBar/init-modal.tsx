@@ -1,5 +1,5 @@
 // Copyright 2023 DatabendLabs.
-import React, { FC, ReactElement, useEffect, useState } from 'react';
+import React, { FC, ReactElement, useEffect, useRef, useState } from 'react';
 import styles from './init-modal.module.scss';
 import CommonModal from '@site/src/components/BaseComponents/CommonModal';
 import { Book } from '@site/src/components/Icons';
@@ -13,6 +13,7 @@ interface IProps {
 }
 const SearchInitModal: FC<IProps> = ({visible, onSelect, onClose, getInputValue, ...props}): ReactElement=> {
   const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef(null);
   const [indecator, setIndecator] = useState<number>(-1);
   const ID = 'POPUP_BANNER_DOC_SEARCH'
   function changeInput(e) {
@@ -46,6 +47,9 @@ useEffect(()=> {
     setIndecator(0);
   }
 }, [inputValue]);
+useEffect(()=> {
+  inputRef?.current?.focus();
+}, [visible]);
 function dealKeyDownEvent(e) {
   const code = e.keyCode || e.which;
   const isTarget = (e.target as HTMLInputElement).id === ID;
@@ -56,7 +60,7 @@ function dealKeyDownEvent(e) {
     }
     if (code === 13) { // enter
       if (e.target.value === '') {
-        onSelect(0);
+        onSelect(indecator === -1 ? 0 : indecator);
         getInputValue('');
         return;
       }
@@ -86,11 +90,9 @@ return (
     visible={visible}
     width={766} 
     className={styles.modalWrap} {...props}>
-    {
-      indecator >= -1  && 
-      <div>
+    <div>
       <div className={styles.topInput}>
-        <input autoComplete='off' id={ID} onKeyDown={dealKeyDownEvent} onChange={changeInput} placeholder='Please enter keywords for search purposes...'></input>
+        <input ref={inputRef} autoComplete='off' id={ID} onKeyDown={dealKeyDownEvent} onChange={changeInput} placeholder='Please enter keywords for search purposes...'></input>
       </div>
       <div className={styles.content}>  
         <div className={styles.title}>Documentation</div>
@@ -115,8 +117,7 @@ return (
           }
         </div>
       </div>
-   </div>
-    }
+    </div>
   </CommonModal>
 );
 };

@@ -4,7 +4,6 @@ import styles from './ai.module.scss';
 import React from 'react';
 import Avatar from '@site/src/components/Icons/Avatar';
 import { getAnswers } from '@site/src/api';
-import Logo from '@site/static/img/logo/logo-no-text.svg'
 import LogoSvg from '@site/src/components/BaseComponents/Logo';
 import clsx from 'clsx';
 import AskDatabendMarkdown from '@site/src/components/BaseComponents/Markdown';
