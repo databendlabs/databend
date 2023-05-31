@@ -1,0 +1,74 @@
+.aiSearch {
+  width: 100%;
+}
+.topAction {
+  padding: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  color: var(--color-text-1);
+}
+.exampleTitle {
+  padding-bottom: 4px;
+  padding-left: 10px;
+  color: var(--color-text-2);
+}
+.item {
+  border-radius: 6px;
+  padding-left: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  font-size: .875rem;
+  color: var(--color-text-1);
+  &:hover {
+    background-color: var(--color-fill-0);
+  }
+}
+.wrapCommon {
+  padding: 6px;
+  padding-bottom: 12px;
+}
+.aiInput {
+  width: 100%;
+  box-shadow: rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0) 0px 0px 0px 0px, rgba(0, 0, 0, 0.05) 0px 1px 2px 0px;
+  outline: unset;
+  border: 1px solid var(--color-border);
+  padding: 8px 16px;
+  border-radius: 6px;
+  &:focus {
+    border: 1px solid var(--color-primary);
+    box-shadow: 0px 2px 4px 0px rgba(0,0,0,0.14), 0px 0px 1px 0px rgba(0,0,0,0.16);
+  }
+}
+.examleList, .chatList {
+  max-height: 720px;
+  overflow-y: auto;
+  padding-bottom: 24px;
+}
+.chatList {
+  font-size: 12px;
+  padding: 12px;
+  padding-top: 0;
+  display: flex;
+  flex-direction: column;
+  color: var(--color-text-1);
+  gap: 20px;
+  .chatItem {
+    pre {
+      padding: 6px;
+      margin-bottom: 12px;
+    }
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+  }
+  .chatItemAnswer {
+    svg {
+      margin-top: 4px;
+    }
+  }
+}

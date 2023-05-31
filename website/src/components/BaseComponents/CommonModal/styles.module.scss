@@ -1,0 +1,24 @@
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--docsearch-container-background);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  height: 100%;
+  transition: opacity 0.3s ease;
+}
+
+.modalContent {
+  margin: 60px auto auto;
+  background-color: var(--color-bg-1);
+  width: 100%;
+  border-radius: 8px;
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  border-radius: 6px;
+  box-shadow: var(--docsearch-modal-shadow);
+}
