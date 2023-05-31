@@ -12,6 +12,13 @@ echo "INSERT /*+ SET_VAR(duplicate_label='insert-test') */ INTO t1 (a, b) VALUES
 echo "INSERT /*+ SET_VAR(duplicate_label='insert-test') */ INTO t1 (a, b) VALUES(1, false)" | $MYSQL_CLIENT_CONNECT
 echo "select * from t1" | $MYSQL_CLIENT_CONNECT
 
+echo "CREATE STAGE s0;" | $MYSQL_CLIENT_CONNECT
+echo "copy into /*+SET_VAR(duplicate_label='copy-test')*/ @s0 from (select * from t1);" | $MYSQL_CLINEENRT_CONNECT
+echo "select * from @s0;" | $MYSQL_CLINEENRT_CONNECT
+echo "CREATE STAGE s1;" | $MYSQL_CLINEENRT_CONNECT
+echo "copy into /*+SET_VAR(duplicate_label='copy-test')*/ @s1 from (select * from t1);" | $MYSQL_CLINEENRT_CONNECT
+echo "select * from @s0;" | $MYSQL_CLINEENRT_CONNECT
+
 echo "UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t SET a = 20 WHERE b = false;" | $MYSQL_CLIENT_CONNECT
 echo "UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t SET a = 30 WHERE b = false;" | $MYSQL_CLIENT_CONNECT
 echo "select * from t1" | $MYSQL_CLIENT_CONNECT
