@@ -187,7 +187,7 @@ impl Rule for RuleFoldConstant {
             _ => unreachable!(),
         }
         if &new_plan != s_expr.plan() {
-            state.add_result(s_expr.replace_plan(new_plan));
+            state.add_result(s_expr.replace_plan(Arc::new(new_plan)));
         }
         Ok(())
     }
