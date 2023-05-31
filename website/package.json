@@ -5,11 +5,11 @@
   "scripts": {
     "docusaurus": "docusaurus",
     "remark": "remark",
-    "remark:docs:once": "npm run remark -- --quiet --frail ../docs",
+    "remark:docs:once": "npm run remark -- --quiet --frail ../docs/doc",
     "remark:blog:once": "npm run remark -- --quiet --frail ./blog",
     "dev": "npm run start",
     "start": "docusaurus start",
-    "build": "npm run remark:docs:once && npm run remark:blog:once && docusaurus build",
+    "build": "docusaurus build",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",
