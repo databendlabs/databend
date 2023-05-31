@@ -42,7 +42,6 @@ use common_meta_app::app_error::UnknownIndex;
 use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::VirtualColumnAlreadyExists;
-use common_meta_app::app_error::VirtualColumnNotFound;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
 use common_meta_app::schema::CountTablesKey;
@@ -174,6 +173,7 @@ use crate::util::deserialize_u64;
 use crate::util::get_index_metas_by_ids;
 use crate::util::get_table_by_id_or_err;
 use crate::util::get_table_names_by_ids;
+use crate::util::get_virtual_column_by_id_or_err;
 use crate::util::list_tables_from_share_db;
 use crate::util::list_tables_from_unshare_db;
 use crate::util::mget_pb_values;
@@ -1119,12 +1119,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             // Create virtual column by inserting this record:
             // (tenant, table_id) -> virtual_column_meta
             {
-                let if_then = vec![
-                    txn_op_put(&req.name_ident, serialize_struct(&virtual_column_meta)?), /* (tenant, table_id) -> virtual_column_meta */
-                ];
+                let condition = vec![txn_cond_seq(&req.name_ident, Eq, 0)];
+                let if_then = vec![txn_op_put(
+                    &req.name_ident,
+                    serialize_struct(&virtual_column_meta)?,
+                )];
 
                 let txn_req = TxnRequest {
-                    condition: vec![],
+                    condition,
                     if_then,
                     else_then: vec![],
                 };
@@ -1157,38 +1159,27 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
-                get_pb_value(self, &req.name_ident).await?;
-
-            if old_virtual_column_opt.is_none() {
-                return Err(KVAppError::AppError(AppError::VirtualColumnNotFound(
-                    VirtualColumnNotFound::new(
-                        req.name_ident.table_id,
-                        format!(
-                            "update virtual column with tenant: {} table_id: {}",
-                            req.name_ident.tenant, req.name_ident.table_id
-                        ),
-                    ),
-                )));
-            }
-            let old_virtual_column = old_virtual_column_opt.unwrap();
+            let (seq, old_virtual_column_meta) =
+                get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await?;
 
             let virtual_column_meta = VirtualColumnMeta {
                 table_id: req.name_ident.table_id,
                 virtual_columns: req.virtual_columns.clone(),
-                created_on: old_virtual_column.created_on,
+                created_on: old_virtual_column_meta.created_on,
                 updated_on: Some(Utc::now()),
             };
 
             // Update virtual column by inserting this record:
             // (tenant, table_id) -> virtual_column_meta
             {
-                let if_then = vec![
-                    txn_op_put(&req.name_ident, serialize_struct(&virtual_column_meta)?), /* (tenant, table_id) -> virtual_column_meta */
-                ];
+                let condition = vec![txn_cond_seq(&req.name_ident, Eq, seq)];
+                let if_then = vec![txn_op_put(
+                    &req.name_ident,
+                    serialize_struct(&virtual_column_meta)?,
+                )];
 
                 let txn_req = TxnRequest {
-                    condition: vec![],
+                    condition,
                     if_then,
                     else_then: vec![],
                 };
@@ -1221,30 +1212,19 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let (_, old_virtual_column_opt): (_, Option<VirtualColumnMeta>) =
-                get_pb_value(self, &req.name_ident).await?;
-
-            if old_virtual_column_opt.is_none() {
-                return Err(KVAppError::AppError(AppError::VirtualColumnNotFound(
-                    VirtualColumnNotFound::new(
-                        req.name_ident.table_id,
-                        format!(
-                            "drop virtual column with tenant: {} table_id: {}",
-                            req.name_ident.tenant, req.name_ident.table_id
-                        ),
-                    ),
-                )));
-            }
+            let (seq, _) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await?;
 
             // Drop virtual column by deleting this record:
             // (tenant, table_id) -> virtual_column_meta
-            let txn_req = TxnRequest {
-                condition: vec![],
-                if_then: vec![txn_op_del(&req.name_ident)],
-                else_then: vec![],
-            };
-
             {
+                let condition = vec![txn_cond_seq(&req.name_ident, Eq, seq)];
+                let if_then = vec![txn_op_del(&req.name_ident)];
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
                 let (succ, _responses) = send_txn(self, txn_req).await?;
 
                 debug!(
