@@ -38,7 +38,7 @@ impl UserApiProvider {
     pub async fn drop_setting(&self, tenant: &str, name: &str) -> Result<()> {
         let setting_api_provider = self.get_setting_api_client(tenant)?;
         setting_api_provider
-            .drop_setting(name, MatchSeq::GE(1))
+            .try_drop_setting(name, MatchSeq::GE(1))
             .await
     }
 }
