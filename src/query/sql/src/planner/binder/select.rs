@@ -173,7 +173,7 @@ impl Binder {
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
         let (mut scalar_items, projections) =
-            self.analyze_projection(&from_context, &select_list)?;
+            self.analyze_projection(&from_context.aggregate_info, &select_list)?;
 
         let having = if let Some(having) = &stmt.having {
             Some(
