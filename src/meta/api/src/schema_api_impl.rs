@@ -1212,15 +1212,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         loop {
             trials.next().unwrap()?;
 
-            let (seq, _) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await?;
+            let (_, _) = get_virtual_column_by_id_or_err(self, &req.name_ident, ctx).await?;
 
             // Drop virtual column by deleting this record:
             // (tenant, table_id) -> virtual_column_meta
             {
-                let condition = vec![txn_cond_seq(&req.name_ident, Eq, seq)];
                 let if_then = vec![txn_op_del(&req.name_ident)];
                 let txn_req = TxnRequest {
-                    condition,
+                    condition: vec![],
                     if_then,
                     else_then: vec![],
                 };
