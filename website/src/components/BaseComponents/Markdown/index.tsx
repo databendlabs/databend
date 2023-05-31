@@ -2,12 +2,11 @@ import { FC, ReactElement, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import copy from 'copy-to-clipboard';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-// cb coldarkDark okaidia tomorrow xonokai darcula
 import { okaidia } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkGfm from 'remark-gfm';
 import styles from './styles.module.scss';
 import React from 'react';
-import RightSvg from '../../Icons/right';
+import RightSvg from '../../Icons/Right';
 
 interface IProps {
   textContent: string

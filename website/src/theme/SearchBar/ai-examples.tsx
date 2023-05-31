@@ -11,7 +11,7 @@ const AIExamples: FC<IProps> = ({ onAskPreviewQuestion }): ReactElement=> {
 return (
   <div>
     <div className={styles.exampleTitle}>Examples</div>
-    <div className={styles.examleList}>
+    <div className={styles.exampleList}>
       {
         questions?.map((item, index)=> {
           return (
