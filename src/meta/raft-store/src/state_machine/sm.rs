@@ -117,7 +117,7 @@ pub struct StateMachine {
 
 /// A key-value pair in a snapshot is a vec of two `Vec<u8>`.
 pub type SnapshotKeyValue = Vec<Vec<u8>>;
-type DeleteByPrefixKeyMap = BTreeMap<TxnDeleteByPrefixRequest, Vec<(String, SeqV)>>;
+pub(crate) type DeleteByPrefixKeyMap = BTreeMap<TxnDeleteByPrefixRequest, Vec<(String, SeqV)>>;
 
 /// Snapshot data for serialization and for transport.
 #[derive(Serialize, Deserialize, Debug, Default, Clone)]
@@ -140,8 +140,8 @@ impl SerializableSnapshot {
 /// Configuration of what operation to block for testing purpose.
 #[derive(Debug, Clone, Default)]
 pub struct BlockingConfig {
-    pub dump_snapshot: Duration,
-    pub serde_snapshot: Duration,
+    pub write_snapshot: Duration,
+    pub compact_snapshot: Duration,
 }
 
 impl StateMachine {
@@ -243,7 +243,7 @@ impl StateMachine {
         let snap = SerializableSnapshot { kvs };
 
         if cfg!(debug_assertions) {
-            let sl = self.blocking_config().dump_snapshot;
+            let sl = self.blocking_config().write_snapshot;
             if !sl.is_zero() {
                 warn!("start    build snapshot sleep 1000s");
                 std::thread::sleep(sl);

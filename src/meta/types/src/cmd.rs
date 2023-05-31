@@ -144,6 +144,20 @@ impl UpsertKV {
             value_meta: None,
         }
     }
+
+    pub fn with_expire_sec(self, expire_at_sec: u64) -> Self {
+        self.with(KVMeta {
+            expire_at: Some(expire_at_sec),
+        })
+    }
+
+    pub fn get_expire_at_ms(&self) -> Option<u64> {
+        if let Some(meta) = &self.value_meta {
+            meta.expire_at.map(|x| x * 1000)
+        } else {
+            None
+        }
+    }
 }
 
 impl With<MatchSeq> for UpsertKV {
