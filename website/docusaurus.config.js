@@ -6,7 +6,9 @@ const TwitterSvg =
 
 const lightCodeTheme = require('prism-react-renderer/themes/oceanicNext');
 const darkCodeTheme = require('prism-react-renderer/themes/dracula');
-
+const { site_env } = process.env;
+const isProduction = site_env === 'production';
+const ASKBEND_URL = 'https://ask.databend.rs';
 /** @type {import('@docusaurus/types').Config} */
 const config = {
     title: 'Databend',
@@ -31,7 +33,8 @@ const config = {
     },
 
     customFields: {
-      blogTags: ['weekly','databend']
+      blogTags: ['weekly','databend'],
+      askBendUrl: isProduction ? ASKBEND_URL : ''
     },
     presets: [
         [
@@ -104,11 +107,11 @@ const config = {
             devServer: {
               proxy: {
                 "/query": {
-                  target: "https://ask.databend.rs/",
+                  target: ASKBEND_URL,
                   // pathRewrite: { "^/query": "" },
                   changeOrigin: true,
                   headers: {
-                    Origin: 'https://ask.databend.rs'
+                    Origin: ASKBEND_URL
                   }
                 },
               },

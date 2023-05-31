@@ -1,6 +1,8 @@
 import axios from 'axios';
+import docusaurusConfig from '@generated/docusaurus.config';
 export function getAnswers(question: string) {
-  return axios.post('/query', {
+  const { customFields: { askBendUrl } = {} } = docusaurusConfig;
+  return axios.post(`${askBendUrl}/query`, {
     query: question
   });
 }
