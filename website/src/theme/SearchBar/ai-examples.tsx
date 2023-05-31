@@ -1,6 +1,5 @@
 // Copyright 2023 DatabendLabs.
-import React from 'react';
-import { FC, ReactElement } from 'react';
+import React, { FC, ReactElement } from 'react';
 import styles from './ai.module.scss';
 import questions from './preview-question.js';
 import LogoSvg from '@site/src/components/BaseComponents/Logo';

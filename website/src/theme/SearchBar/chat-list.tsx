@@ -1,7 +1,6 @@
 // Copyright 2023 DatabendLabs.
-import { FC, ReactElement, useEffect, useRef, useState } from 'react';
+import React, { FC, ReactElement, useEffect, useRef, useState } from 'react';
 import styles from './ai.module.scss';
-import React from 'react';
 import Avatar from '@site/src/components/Icons/Avatar';
 import { getAnswers } from '@site/src/api';
 import LogoSvg from '@site/src/components/BaseComponents/Logo';

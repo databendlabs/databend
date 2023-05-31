@@ -1,21 +1,24 @@
 // Copyright 2023 DatabendLabs.
-import { FC, ReactElement, useEffect } from 'react';
+import React, { FC, ReactElement, useEffect, useRef } from 'react';
 import styles from './ai.module.scss';
-import React from 'react';
 import Return from '@site/src/components/Icons/Return';
 import AIExamples from './ai-examples';
 import ChatList from './chat-list';
-import { useSafeState } from 'ahooks';
+import { useMount, useSafeState } from 'ahooks';
 interface IProps {
   onReturn: ()=> void;
   initialQuery: string;
 }
 const AISearch: FC<IProps> = ({ onReturn, initialQuery}): ReactElement=> {
   const INPUT_ID = 'SEARCH_INPUT_AI_ASK_INPUT_ID';
+  const inputRef = useRef(null);
   const [question, setQuestion] = useSafeState('');
   const [value, setValue] = useSafeState('');
   const [isExample, setIsExample] = useSafeState(true);
   const [isGetting, setIsGetting] = useSafeState(false);
+  useMount(()=> {
+    inputRef?.current?.focus()
+  });
   useEffect(()=> {
     if (initialQuery) {
       getResult(initialQuery);
@@ -61,6 +64,7 @@ const AISearch: FC<IProps> = ({ onReturn, initialQuery}): ReactElement=> {
         }
         <div className={styles.inputWrap}>
           <input 
+            ref={inputRef}
             onChange={askChange}
             id={INPUT_ID} 
             value={value} 
