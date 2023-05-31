@@ -34,10 +34,10 @@ explain select * from t_nullable_prune where a is not null
 ----
 EvalScalar
 ├── expressions: [t_nullable_prune.a (#0)]
-├── estimated rows: 0.60
+├── estimated rows: 1.20
 └── Filter
     ├── filters: [is_not_null(t_nullable_prune.a (#0))]
-    ├── estimated rows: 0.60
+    ├── estimated rows: 1.20
     └── TableScan
         ├── table: default.default.t_nullable_prune
         ├── read rows: 3
@@ -53,10 +53,10 @@ explain select * from t_nullable_prune where a is null
 ----
 EvalScalar
 ├── expressions: [t_nullable_prune.a (#0)]
-├── estimated rows: 5.40
+├── estimated rows: 4.80
 └── Filter
     ├── filters: [NOT is_not_null(t_nullable_prune.a (#0))]
-    ├── estimated rows: 5.40
+    ├── estimated rows: 4.80
     └── TableScan
         ├── table: default.default.t_nullable_prune
         ├── read rows: 3

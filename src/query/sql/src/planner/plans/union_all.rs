@@ -51,19 +51,19 @@ impl Operator for UnionAll {
         RelOp::UnionAll
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
 
         // Derive output columns
-        let mut output_columns = left_prop.output_columns;
+        let mut output_columns = left_prop.output_columns.clone();
         output_columns = output_columns
             .union(&right_prop.output_columns)
             .cloned()
             .collect();
 
         // Derive outer columns
-        let mut outer_columns = left_prop.outer_columns;
+        let mut outer_columns = left_prop.outer_columns.clone();
         outer_columns = outer_columns
             .union(&right_prop.outer_columns)
             .cloned()
@@ -71,14 +71,14 @@ impl Operator for UnionAll {
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(left_prop.used_columns);
-        used_columns.extend(right_prop.used_columns);
+        used_columns.extend(left_prop.used_columns.clone());
+        used_columns.extend(right_prop.used_columns.clone());
 
-        Ok(RelationalProperty {
+        Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-        })
+        }))
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
@@ -88,7 +88,7 @@ impl Operator for UnionAll {
         })
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
         let cardinality = left_stat_info.cardinality + right_stat_info.cardinality;
@@ -104,13 +104,13 @@ impl Operator for UnionAll {
                         .map(|right_cardinality| left_cardinality + right_cardinality)
                 });
 
-        Ok(StatInfo {
+        Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: Default::default(),
             },
-        })
+        }))
     }
 
     fn compute_required_prop_child(

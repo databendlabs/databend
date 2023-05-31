@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::optimizer::group::Group;
@@ -35,14 +36,9 @@ impl PatternExtractor {
         }
 
         if pattern.is_pattern() {
-            // Pattern operator is `Pattern`, we can return current operator.
-            return Ok(vec![SExpr::create(
-                m_expr.plan.clone(),
-                vec![],
-                Some(m_expr.group_index),
-                Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
-                Some(memo.group(m_expr.group_index)?.stat_info.clone()),
-            )]);
+            // Expand the pattern node to a complete `SExpr`.
+            let child = Self::expand_pattern(memo, m_expr)?;
+            return Ok(vec![child]);
         }
 
         let pattern_children = pattern.children();
@@ -137,5 +133,28 @@ impl PatternExtractor {
         }
 
         Ok(results)
+    }
+
+    /// Expand a `Pattern` node to an arbitrary `SExpr` with `m_expr` as the root.
+    /// Since we don't care about the actual content of the `Pattern` node, we will
+    /// choose the first `MExpr` in each group to construct the `SExpr`.
+    fn expand_pattern(memo: &Memo, m_expr: &MExpr) -> Result<SExpr> {
+        let mut children = Vec::with_capacity(m_expr.arity());
+        for child in m_expr.children.iter() {
+            let child_group = memo.group(*child)?;
+            let child_m_expr = child_group
+                .m_exprs
+                .get(0)
+                .ok_or_else(|| ErrorCode::Internal(format!("No MExpr in group {child}")))?;
+            children.push(Arc::new(Self::expand_pattern(memo, child_m_expr)?));
+        }
+
+        Ok(SExpr::create(
+            m_expr.plan.clone(),
+            children,
+            Some(m_expr.group_index),
+            Some(memo.group(m_expr.group_index)?.relational_prop.clone()),
+            Some(memo.group(m_expr.group_index)?.stat_info.clone()),
+        ))
     }
 }

@@ -83,13 +83,13 @@ explain select t.number from t, t1 where t.number > 1 and 1 < t1.number
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 0.10
+├── estimated rows: 0.40
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 0.10
+    ├── estimated rows: 0.40
     ├── TableScan(Build)
     │   ├── table: default.default.t
     │   ├── read rows: 0
@@ -98,7 +98,7 @@ EvalScalar
     │   ├── partitions scanned: 0
     │   ├── pruning stats: [segments: <range pruning: 1 to 0>, blocks: <range pruning: 0 to 0, bloom pruning: 0 to 0>]
     │   ├── push downs: [filters: [t.number (#0) > 1], limit: NONE]
-    │   └── estimated rows: 0.10
+    │   └── estimated rows: 0.20
     └── TableScan(Probe)
         ├── table: default.default.t1
         ├── read rows: 10
@@ -108,17 +108,17 @@ EvalScalar
         ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
         ├── push downs: [filters: [1 < t1.number (#1)], limit: NONE]
         ├── output columns: []
-        └── estimated rows: 1.00
+        └── estimated rows: 2.00
 
 query T
 explain select t.number from t, t1 where t.number + t1.number = 1
 ----
 EvalScalar
 ├── expressions: [t.number (#0)]
-├── estimated rows: 1.00
+├── estimated rows: 2.00
 └── Filter
     ├── filters: [t.number (#0) + t1.number (#1) = 1]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 2.00
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []

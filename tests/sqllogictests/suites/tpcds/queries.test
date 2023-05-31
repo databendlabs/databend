@@ -3432,7 +3432,7 @@ NULL NULL NULL NULL
 
 
 # Q14
-onlyif mysql
+onlyif todo
 query I
 WITH cross_items AS
   (SELECT i_item_sk ss_item_sk

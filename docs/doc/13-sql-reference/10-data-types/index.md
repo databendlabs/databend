@@ -25,7 +25,8 @@ Databend is capable of handling both general and semi-structured data types.
 
 | Data Type                              | Alias | Sample                           | Description                                                                       |
 |----------------------------------------|-------|----------------------------------|-----------------------------------------------------------------------------------|
-| [ARRAY](./40-data-type-array-types.md) | N/A   | `[1, 2, 3, 4]`                   | A collection of values of the same data type, accessed by their index.            |
-| [TUPLE](./41-data-type-tuple-types.md) | N/A   | `('2023-02-14','Valentine Day')` | An ordered collection of values of different data types, accessed by their index. |
-| [MAP](./42-data-type-map.md)           | N/A   | `{"a":1, "b":2, "c":3}`          | A set of key-value pairs where each key is unique and maps to a value.            |                             |
-| [VARIANT](./43-data-type-variant.md)   | JSON  | `[1,{"a":1,"b":{"c":2}}]`        | Collection of elements of different data types, including `ARRAY` and `OBJECT`.   |
+| [ARRAY](./40-data-type-array-types.md) | N/A   | [1, 2, 3, 4]                   | A collection of values of the same data type, accessed by their index.            |
+| [TUPLE](./41-data-type-tuple-types.md) | N/A   | ('2023-02-14','Valentine Day') | An ordered collection of values of different data types, accessed by their index. |
+| [MAP](./42-data-type-map.md)           | N/A   | {"a":1, "b":2, "c":3}          | A set of key-value pairs where each key is unique and maps to a value.            |                             |
+| [VARIANT](./43-data-type-variant.md)   | JSON  | [1,{"a":1,"b":{"c":2}}]        | Collection of elements of different data types, including `ARRAY` and `OBJECT`.   |
+| [BITMAP](44-data-type-bitmap.md)   | N/A  | 0101010101        | A binary data type used to represent a set of values, where each bit represents the presence or absence of a value.   |

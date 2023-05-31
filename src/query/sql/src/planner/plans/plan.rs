@@ -29,6 +29,7 @@ use super::DescDatamaskPolicyPlan;
 use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
+use super::ModifyTableColumnPlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
@@ -158,6 +159,7 @@ pub enum Plan {
     RenameTable(Box<RenameTablePlan>),
     AddTableColumn(Box<AddTableColumnPlan>),
     DropTableColumn(Box<DropTableColumnPlan>),
+    ModifyTableColumn(Box<ModifyTableColumnPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable(Box<ReclusterTablePlan>),
@@ -289,6 +291,7 @@ impl Display for Plan {
             Plan::UndropTable(_) => write!(f, "UndropTable"),
             Plan::RenameTable(_) => write!(f, "RenameTable"),
             Plan::AddTableColumn(_) => write!(f, "AddTableColumn"),
+            Plan::ModifyTableColumn(_) => write!(f, "ModifyTableColumn"),
             Plan::DropTableColumn(_) => write!(f, "DropTableColumn"),
             Plan::AlterTableClusterKey(_) => write!(f, "AlterTableClusterKey"),
             Plan::DropTableClusterKey(_) => write!(f, "DropTableClusterKey"),

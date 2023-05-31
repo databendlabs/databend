@@ -338,6 +338,24 @@ SELECT number FROM numbers(100000) ORDER BY number LIMIT 2 OFFSET 10;
 +--------+
 ```
 
+For optimizing query performance with large result sets, you can enable the *lazy_topn_threshold* option. This option is specifically designed for queries that involve an ORDER BY clause and a LIMIT clause. When enabled, the optimization is activated for queries where the specified LIMIT number is smaller than the threshold value you set. 
+
+<details>
+  <summary>How it works</summary>
+    <div>The optimization improves performance for queries with an ORDER BY clause and a LIMIT clause. When enabled and the LIMIT number in the query is smaller than the specified threshold, only the columns involved in the ORDER BY clause are retrieved and sorted, instead of the entire result set.</div><br/><div>After the system retrieves and sorts the columns involved in the ORDER BY clause, it applies the LIMIT constraint to select the desired number of rows from the sorted result set. The system then returns the limited set of rows as the query result. This approach reduces resource usage by fetching and sorting only the necessary columns, and it further optimizes query execution by limiting the processed rows to the required subset.</div>
+</details>
+
+```sql
+MySQL [(none)]> SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
+Empty set (0.897 sec)
+
+MySQL [(none)]> set lazy_topn_threshold=100;
+Query OK, 0 rows affected (0.004 sec)
+
+MySQL [(none)]> SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
+Empty set (0.300 sec)
+```
+
 ## OFFSET Clause
 
 ```sql
