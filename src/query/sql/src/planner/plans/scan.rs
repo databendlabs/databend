@@ -22,7 +22,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use itertools::Itertools;
 
-use super::ScalarItem;
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
@@ -57,7 +56,7 @@ pub struct Prewhere {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AggIndexInfo {
     pub index_id: u64,
-    pub selection: Vec<ScalarItem>,
+    pub selection: Vec<ScalarExpr>,
     pub predicates: Vec<ScalarExpr>,
 }
 
@@ -148,12 +147,12 @@ impl Operator for Scan {
         RelOp::Scan
     }
 
-    fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<RelationalProperty> {
-        Ok(RelationalProperty {
+    fn derive_relational_prop(&self, _rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        Ok(Arc::new(RelationalProperty {
             output_columns: self.columns.clone(),
             outer_columns: Default::default(),
             used_columns: self.used_columns(),
-        })
+        }))
     }
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
@@ -162,7 +161,7 @@ impl Operator for Scan {
         })
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let used_columns = self.used_columns();
 
         let num_rows = self
@@ -239,13 +238,13 @@ impl Operator for Scan {
         } else {
             None
         };
-        Ok(StatInfo {
+        Ok(Arc::new(StatInfo {
             cardinality,
             statistics: OpStatistics {
                 precise_cardinality,
                 column_stats,
             },
-        })
+        }))
     }
 
     // Won't be invoked at all, since `PhysicalScan` is leaf node

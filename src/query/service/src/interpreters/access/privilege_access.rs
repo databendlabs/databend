@@ -413,35 +413,13 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Copy(plan) => match plan.as_ref() {
-                CopyPlan::IntoTable {
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    ..
-                } => {
+                CopyPlan::IntoTable(plan) => {
                     session
                         .validate_privilege(
                             &GrantObject::Table(
-                                catalog_name.to_string(),
-                                database_name.to_string(),
-                                table_name.to_string(),
-                            ),
-                            vec![UserPrivilegeType::Insert],
-                        )
-                        .await?;
-                }
-                CopyPlan::IntoTableWithTransform {
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    ..
-                } => {
-                    session
-                        .validate_privilege(
-                            &GrantObject::Table(
-                                catalog_name.to_string(),
-                                database_name.to_string(),
-                                table_name.to_string(),
+                                plan.catalog_name.to_string(),
+                                plan.database_name.to_string(),
+                                plan.table_name.to_string(),
                             ),
                             vec![UserPrivilegeType::Insert],
                         )
@@ -475,12 +453,20 @@ impl AccessChecker for PrivilegeAccess {
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;
             }
+            Plan::CreateDatamaskPolicy(_) | Plan::DropDatamaskPolicy(_) => {
+                session
+                    .validate_privilege(&GrantObject::Global, vec![
+                        UserPrivilegeType::CreateDataMask,
+                    ])
+                    .await?;
+            }
             // Note: No need to check privileges
             Plan::Presign(_) => {}
             Plan::ExplainAst { .. } => {}
             Plan::ExplainSyntax { .. } => {}
             // just used in clickhouse-sqlalchemy, no need to check
             Plan::ExistsTable(_) => {}
+            Plan::DescDatamaskPolicy(_) => {}
         }
 
         Ok(())

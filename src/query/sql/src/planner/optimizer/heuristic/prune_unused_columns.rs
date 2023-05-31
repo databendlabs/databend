@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -22,7 +24,6 @@ use crate::plans::Aggregate;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
-use crate::plans::WindowFuncType;
 use crate::ColumnEntry;
 use crate::MetadataRef;
 
@@ -84,9 +85,9 @@ impl UnusedColumnPruner {
                     used = used.union(&pw.prewhere_columns).cloned().collect();
                 }
 
-                Ok(SExpr::create_leaf(RelOperator::Scan(
+                Ok(SExpr::create_leaf(Arc::new(RelOperator::Scan(
                     p.prune_columns(used, prewhere),
-                )))
+                ))))
             }
             RelOperator::Join(p) => {
                 // Include columns referenced in left conditions
@@ -103,15 +104,15 @@ impl UnusedColumnPruner {
                 });
 
                 Ok(SExpr::create_binary(
-                    RelOperator::Join(p.clone()),
-                    self.keep_required_columns(
+                    Arc::new(RelOperator::Join(p.clone())),
+                    Arc::new(self.keep_required_columns(
                         expr.child(0)?,
                         left.union(&others).cloned().collect(),
-                    )?,
-                    self.keep_required_columns(
+                    )?),
+                    Arc::new(self.keep_required_columns(
                         expr.child(1)?,
                         right.union(&others).cloned().collect(),
-                    )?,
+                    )?),
                 ))
             }
 
@@ -119,10 +120,10 @@ impl UnusedColumnPruner {
                 let mut used = vec![];
                 if contains_project_set(expr) {
                     return Ok(SExpr::create_unary(
-                        RelOperator::EvalScalar(EvalScalar {
+                        Arc::new(RelOperator::EvalScalar(EvalScalar {
                             items: p.items.clone(),
-                        }),
-                        expr.child(0)?.clone(),
+                        })),
+                        Arc::new(expr.child(0)?.clone()),
                     ));
                 }
                 // Only keep columns needed by parent plan.
@@ -140,8 +141,8 @@ impl UnusedColumnPruner {
                     self.keep_required_columns(expr.child(0)?, required)
                 } else {
                     Ok(SExpr::create_unary(
-                        RelOperator::EvalScalar(EvalScalar { items: used }),
-                        self.keep_required_columns(expr.child(0)?, required)?,
+                        Arc::new(RelOperator::EvalScalar(EvalScalar { items: used })),
+                        Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                     ))
                 }
             }
@@ -150,8 +151,8 @@ impl UnusedColumnPruner {
                     acc.union(&v.used_columns()).cloned().collect()
                 });
                 Ok(SExpr::create_unary(
-                    RelOperator::Filter(p.clone()),
-                    self.keep_required_columns(expr.child(0)?, used)?,
+                    Arc::new(RelOperator::Filter(p.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, used)?),
                 ))
             }
             RelOperator::Aggregate(p) => {
@@ -174,12 +175,12 @@ impl UnusedColumnPruner {
                 // If the aggregate is empty, we remove the aggregate operator and replace it with
                 // a DummyTableScan which returns exactly one row.
                 if p.group_items.is_empty() && used.is_empty() {
-                    Ok(SExpr::create_leaf(RelOperator::DummyTableScan(
+                    Ok(SExpr::create_leaf(Arc::new(RelOperator::DummyTableScan(
                         DummyTableScan,
-                    )))
+                    ))))
                 } else {
                     Ok(SExpr::create_unary(
-                        RelOperator::Aggregate(Aggregate {
+                        Arc::new(RelOperator::Aggregate(Aggregate {
                             group_items: p.group_items.clone(),
                             aggregate_functions: used,
                             from_distinct: p.from_distinct,
@@ -187,18 +188,14 @@ impl UnusedColumnPruner {
                             limit: p.limit,
                             grouping_id_index: p.grouping_id_index,
                             grouping_sets: p.grouping_sets.clone(),
-                        }),
-                        self.keep_required_columns(expr.child(0)?, required)?,
+                        })),
+                        Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                     ))
                 }
             }
             RelOperator::Window(p) => {
                 if required.contains(&p.index) {
-                    if let WindowFuncType::Aggregate(agg) = &p.function {
-                        agg.args.iter().for_each(|item| {
-                            required.extend(item.used_columns());
-                        });
-                    }
+                    required.extend(p.function.used_columns());
                     p.partition_by.iter().for_each(|item| {
                         required.insert(item.index);
                     });
@@ -208,8 +205,8 @@ impl UnusedColumnPruner {
                 }
 
                 Ok(SExpr::create_unary(
-                    RelOperator::Window(p.clone()),
-                    self.keep_required_columns(expr.child(0)?, required)?,
+                    Arc::new(RelOperator::Window(p.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }
             RelOperator::Sort(p) => {
@@ -217,13 +214,13 @@ impl UnusedColumnPruner {
                     required.insert(s.index);
                 });
                 Ok(SExpr::create_unary(
-                    RelOperator::Sort(p.clone()),
-                    self.keep_required_columns(expr.child(0)?, required)?,
+                    Arc::new(RelOperator::Sort(p.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }
             RelOperator::Limit(p) => Ok(SExpr::create_unary(
-                RelOperator::Limit(p.clone()),
-                self.keep_required_columns(expr.child(0)?, required)?,
+                Arc::new(RelOperator::Limit(p.clone())),
+                Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
             )),
 
             RelOperator::UnionAll(p) => {
@@ -236,9 +233,9 @@ impl UnusedColumnPruner {
                     acc
                 });
                 Ok(SExpr::create_binary(
-                    RelOperator::UnionAll(p.clone()),
-                    self.keep_required_columns(expr.child(0)?, left_used)?,
-                    self.keep_required_columns(expr.child(1)?, right_used)?,
+                    Arc::new(RelOperator::UnionAll(p.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, left_used)?),
+                    Arc::new(self.keep_required_columns(expr.child(1)?, right_used)?),
                 ))
             }
 
@@ -250,8 +247,8 @@ impl UnusedColumnPruner {
                 }
 
                 Ok(SExpr::create_unary(
-                    RelOperator::ProjectSet(op.clone()),
-                    self.keep_required_columns(expr.child(0)?, required)?,
+                    Arc::new(RelOperator::ProjectSet(op.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }
 

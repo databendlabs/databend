@@ -22,8 +22,11 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
+use super::data_mask::CreateDatamaskPolicyPlan;
 use super::CreateIndexPlan;
 use super::CreateShareEndpointPlan;
+use super::DescDatamaskPolicyPlan;
+use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::VacuumTablePlan;
@@ -232,6 +235,11 @@ pub enum Plan {
     ShowShares(Box<ShowSharesPlan>),
     ShowObjectGrantPrivileges(Box<ShowObjectGrantPrivilegesPlan>),
     ShowGrantTenantsOfShare(Box<ShowGrantTenantsOfSharePlan>),
+
+    // Data mask
+    CreateDatamaskPolicy(Box<CreateDatamaskPolicyPlan>),
+    DropDatamaskPolicy(Box<DropDatamaskPolicyPlan>),
+    DescDatamaskPolicy(Box<DescDatamaskPolicyPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -240,6 +248,7 @@ pub enum RewriteKind {
     ShowMetrics,
     ShowProcessList,
     ShowEngines,
+    ShowIndexes,
 
     ShowCatalogs,
     ShowDatabases,
@@ -339,6 +348,15 @@ impl Display for Plan {
             Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
             Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
             Plan::RevertTable(..) => write!(f, "RevertTable"),
+            Plan::CreateDatamaskPolicy(..) => {
+                write!(f, "Create Data Mask Policy")
+            }
+            Plan::DropDatamaskPolicy(..) => {
+                write!(f, "Drop Data Mask Policy")
+            }
+            Plan::DescDatamaskPolicy(..) => {
+                write!(f, "Desc Data Mask Policy")
+            }
         }
     }
 }
@@ -379,7 +397,9 @@ impl Plan {
             Plan::DescShare(plan) => plan.schema(),
             Plan::ShowShares(plan) => plan.schema(),
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
-
+            Plan::CreateDatamaskPolicy(plan) => plan.schema(),
+            Plan::DropDatamaskPolicy(plan) => plan.schema(),
+            Plan::DescDatamaskPolicy(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -409,6 +429,7 @@ impl Plan {
                 | Plan::ShowGrants(_)
                 | Plan::Presign(_)
                 | Plan::VacuumTable(_)
+                | Plan::DescDatamaskPolicy(_)
         )
     }
 }

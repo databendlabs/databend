@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -37,7 +38,7 @@ pub struct Memo {
 
     /// Hash table for detecting duplicated expressions.
     /// The entry is `(plan, children) -> (group_index, m_expr_index)`.
-    pub m_expr_lookup_table: HashMap<(RelOperator, Vec<IndexType>), (IndexType, IndexType)>,
+    pub m_expr_lookup_table: HashMap<(Arc<RelOperator>, Vec<IndexType>), (IndexType, IndexType)>,
 }
 
 impl Memo {
@@ -78,7 +79,7 @@ impl Memo {
         let mut children_group = vec![];
         for expr in s_expr.children() {
             // Insert children expressions recursively and collect their group indices
-            let group = self.insert(None, expr.clone())?;
+            let group = self.insert(None, (**expr).clone())?;
             children_group.push(group);
         }
 
@@ -138,7 +139,11 @@ impl Memo {
             .ok_or_else(|| ErrorCode::Internal(format!("Group index {} not found", index)))
     }
 
-    fn add_group(&mut self, relational_prop: RelationalProperty, stat_info: StatInfo) -> IndexType {
+    fn add_group(
+        &mut self,
+        relational_prop: Arc<RelationalProperty>,
+        stat_info: Arc<StatInfo>,
+    ) -> IndexType {
         let group_index = self.groups.len();
         let group = Group::create(group_index, relational_prop, stat_info);
         self.groups.push(group);

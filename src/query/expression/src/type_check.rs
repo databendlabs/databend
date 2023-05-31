@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_exception::Span;
 use itertools::Itertools;
 
+use crate::cast_scalar;
 use crate::expression::Expr;
 use crate::expression::RawExpr;
 use crate::function::FunctionRegistry;
@@ -76,6 +77,53 @@ pub fn check<Index: ColumnIndex>(
                 .iter()
                 .map(|arg| check(arg, fn_registry))
                 .try_collect()?;
+
+            // https://github.com/datafuselabs/databend/issues/11541
+            // c:int16 = 12456 will be resolve as `to_int32(c) == to_int32(12456)`
+            // This may hurt the bloom filter, we should try cast to literal as the datatype of column
+            if name == "eq" && args_expr.len() == 2 {
+                match args_expr.as_slice() {
+                    [
+                        e,
+                        Expr::Constant {
+                            span,
+                            scalar,
+                            data_type: src_ty,
+                        },
+                    ]
+                    | [
+                        Expr::Constant {
+                            span,
+                            scalar,
+                            data_type: src_ty,
+                        },
+                        e,
+                    ] => {
+                        let src_ty = src_ty.remove_nullable();
+                        let dest_ty = e.data_type().remove_nullable();
+
+                        if dest_ty.is_integer() && src_ty.is_integer() {
+                            if let Ok(scalar) =
+                                cast_scalar(*span, scalar.clone(), dest_ty, fn_registry)
+                            {
+                                return check_function(
+                                    *span,
+                                    name,
+                                    params,
+                                    &[e.clone(), Expr::Constant {
+                                        span: *span,
+                                        data_type: scalar.as_ref().infer_data_type(),
+                                        scalar,
+                                    }],
+                                    fn_registry,
+                                );
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
             check_function(*span, name, params, &args_expr, fn_registry)
         }
     }

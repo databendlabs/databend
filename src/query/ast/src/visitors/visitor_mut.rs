@@ -193,7 +193,28 @@ pub trait VisitorMut: Sized {
 
     fn visit_literal(&mut self, _span: Span, _lit: &mut Literal) {}
 
-    fn visit_count_all(&mut self, _span: Span) {}
+    fn visit_count_all(&mut self, _span: Span, window: &mut Option<Window>) {
+        if let Some(window) = window {
+            match window {
+                Window::WindowReference(reference) => {
+                    self.visit_identifier(&mut reference.window_name);
+                }
+                Window::WindowSpec(spec) => {
+                    spec.partition_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, expr));
+                    spec.order_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, &mut expr.expr));
+
+                    if let Some(frame) = &mut spec.window_frame {
+                        self.visit_frame_bound(&mut frame.start_bound);
+                        self.visit_frame_bound(&mut frame.end_bound);
+                    }
+                }
+            }
+        }
+    }
 
     fn visit_tuple(&mut self, _span: Span, elements: &mut [Expr]) {
         for elem in elements.iter_mut() {
@@ -356,6 +377,8 @@ pub trait VisitorMut: Sized {
     fn visit_show_engines(&mut self) {}
 
     fn visit_show_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
+
+    fn visit_show_indexes(&mut self) {}
 
     fn visit_show_table_functions(&mut self, _limit: &mut Option<ShowLimit>) {}
 
@@ -544,6 +567,12 @@ pub trait VisitorMut: Sized {
     fn visit_show_object_grant_privileges(&mut self, _stmt: &mut ShowObjectGrantPrivilegesStmt) {}
 
     fn visit_show_grants_of_share(&mut self, _stmt: &mut ShowGrantsOfShareStmt) {}
+
+    fn visit_create_data_mask_policy(&mut self, _stmt: &mut CreateDatamaskPolicyStmt) {}
+
+    fn visit_drop_data_mask_policy(&mut self, _stmt: &mut DropDatamaskPolicyStmt) {}
+
+    fn visit_desc_data_mask_policy(&mut self, _stmt: &mut DescDatamaskPolicyStmt) {}
 
     fn visit_with(&mut self, with: &mut With) {
         let With { ctes, .. } = with;

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod data_mask;
 pub mod expr;
 #[allow(clippy::module_inception)]
 mod parser;

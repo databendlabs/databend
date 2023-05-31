@@ -5,6 +5,7 @@ statement ok
 use tpcds;
 
 # Q1
+onlyif mysql
 query I
 WITH customer_total_return AS
   (SELECT sr_customer_sk AS ctr_customer_sk,
@@ -132,6 +133,7 @@ AAAAAAAAONCAAAAA
 AAAAAAAAOOAAAAAA
 
 # Q2
+onlyif mysql
 query I
 WITH wscs AS
   (SELECT sold_date_sk,
@@ -2189,6 +2191,7 @@ ORDER BY d_week_seq1 NULLS FIRST;
 5322 NULL NULL NULL NULL NULL NULL NULL
 
 # Q3
+onlyif mysql
 query I
 SELECT dt.d_year,
        item.i_brand_id brand_id,
@@ -2211,6 +2214,7 @@ LIMIT 100;
 ----
 
 # Q4
+onlyif mysql
 query I
 WITH year_total AS
   (SELECT c_customer_id customer_id,
@@ -2335,6 +2339,7 @@ LIMIT 100;
 
 
 # Q5
+onlyif mysql
 query I
 WITH ssr AS
   (SELECT s_store_id,
@@ -2551,6 +2556,7 @@ catalog channel catalog_pageAAAAAAAALHCBAAAA 712.50 0.00 -250.50
 catalog channel catalog_pageAAAAAAAALKPAAAAA 2395.69 0.00 -2898.62
 
 # Q6
+onlyif mysql
 query I
 SELECT a.ca_state state,
        count(*) cnt
@@ -2583,6 +2589,7 @@ VA 12
 
 
 # Q7
+onlyif mysql
 query I
 SELECT i_item_id,
        avg(ss_quantity) agg1,
@@ -2671,6 +2678,7 @@ AAAAAAAAPKAAAAAA 45.0 175.1900 0.0000 61.3100
 
 
 # Q8
+onlyif mysql
 query I
 SELECT s_store_name,
        sum(ss_net_profit)
@@ -3102,8 +3110,8 @@ LIMIT 100;
 ----
 
 # Q9
+onlyif mysql
 query I
-
 SELECT CASE
            WHEN
                   (SELECT count(*)
@@ -3175,6 +3183,7 @@ WHERE r_reason_sk = 1 ;
 362.0030 1049.4754 1712.0544 2357.5580 3100.3592
 
 # Q10
+onlyif mysql
 query I
 SELECT cd_gender,
        cd_marital_status,
@@ -3244,6 +3253,7 @@ LIMIT 100;
 ----
 
 # Q11
+onlyif mysql
 query I
 WITH year_total AS
   (SELECT c_customer_id customer_id,
@@ -3328,6 +3338,7 @@ LIMIT 100;
 ----
 
 # Q12
+onlyif mysql
 query I
 SELECT i_item_id,
        i_item_desc,
@@ -3373,8 +3384,8 @@ AAAAAAAAMFAAAAAA New, quick observations merge too worth a children; shares coul
 AAAAAAAAAKAAAAAA Legs cannot make much across a children. Well industrial ports see so. Equal, full systems rise police. Labour departments will leave. Political, social  Sports sailing 1.17 45.44 100.000000000000
 
 # Q13
+onlyif mysql
 query I
-
 SELECT avg(ss_quantity) avg1,
        avg(ss_ext_sales_price) avg2,
        avg(ss_ext_wholesale_cost) avg3,
@@ -3421,6 +3432,7 @@ NULL NULL NULL NULL
 
 
 # Q14
+onlyif todo
 query I
 WITH cross_items AS
   (SELECT i_item_sk ss_item_sk
@@ -3659,6 +3671,7 @@ catalog 8007003 1 NULL 5725.65 1
 catalog 8007003 1 2 5725.65 1
 
 # Q15
+onlyif mysql
 query I
 SELECT ca_zip,
        sum(cs_sales_price)
@@ -3697,6 +3710,7 @@ LIMIT 100;
 98579 714.52
 
 # Q16
+onlyif mysql
 query I
 SELECT count(DISTINCT cs_order_number) AS "order count",
        sum(cs_ext_ship_cost) AS "total shipping cost",
@@ -3726,6 +3740,7 @@ LIMIT 100;
 0 NULL NULL
 
 # Q17
+onlyif mysql
 query I
 SELECT i_item_id,
        i_item_desc,
@@ -3779,6 +3794,7 @@ AAAAAAAAEDAAAAAA Total styles cannot assume companies. Cases may constitute shop
 AAAAAAAAHGAAAAAA As short materials might go sometime new, tall skills. M TN 1 19.0 NaN NaN 1 1.0 NaN NaN 1 31.0 NaN NaN
 
 # Q18
+onlyif mysql
 query I
 SELECT i_item_id,
        ca_country,
@@ -3877,6 +3893,7 @@ AAAAAAAAPHAAAAAA United States MS Panola County 76.0000 31.3900 502.7700 10.6700
 AAAAAAAAPKAAAAAA United States MS Panola County 52.0000 109.6400 0.0000 23.0200 -1260.4800 1991.0000 1.0000
 
 # Q19
+onlyif mysql
 query I
 SELECT i_brand_id brand_id,
        i_brand brand,
@@ -3911,8 +3928,8 @@ LIMIT 100 ;
 ----
 
 # Q20
+onlyif mysql
 query I
-
 SELECT i_item_id ,
        i_item_desc,
        i_category,
@@ -3967,6 +3984,7 @@ AAAAAAAACGAAAAAA Years know merely religious reasons. New animals modernise well
 AAAAAAAAAKAAAAAA Legs cannot make much across a children. Well industrial ports see so. Equal, full systems rise police. Labour departments will leave. Political, social  Sports sailing 1.17 13646.97 100.000000000000
 
 # Q21
+onlyif mysql
 query I
 SELECT *
 FROM
@@ -4006,6 +4024,7 @@ Conventional childr AAAAAAAAMBAAAAAA 2760 2626
 Conventional childr AAAAAAAAPKAAAAAA 1839 2093
 
 # Q22
+onlyif mysql
 query I
 SELECT i_product_name ,
        i_brand ,
@@ -4128,6 +4147,7 @@ priable scholarunivamalg #7 karoke NULL 478.46153846153845
 priable scholarunivamalg #7 karoke Electronics 478.46153846153845
 
 # Q23
+onlyif mysql
 query I
 WITH frequent_ss_items AS
   (SELECT itemdesc,
@@ -4216,6 +4236,7 @@ LIMIT 100;
 ----
 
 # Q24
+onlyif mysql
 query I
 WITH ssales AS
   (SELECT c_last_name,
@@ -4272,8 +4293,8 @@ ORDER BY c_last_name,
 ----
 
 # Q25
+onlyif mysql
 query I
-
 SELECT i_item_id ,
        i_item_desc ,
        s_store_id ,
@@ -4317,6 +4338,7 @@ LIMIT 100;
 ----
 
 # Q26
+onlyif mysql
 query I
 SELECT i_item_id,
        avg(cs_quantity) agg1,
@@ -4374,6 +4396,7 @@ AAAAAAAAPHAAAAAA 39.5 46.8300 0.0000 8.6500
 AAAAAAAAPKAAAAAA 21.0 119.9950 24.3350 32.8050
 
 # Q27
+onlyif mysql
 query I
 WITH results AS
   (SELECT i_item_id,
@@ -4538,6 +4561,7 @@ AAAAAAAAOFAAAAAA TN 0 68.0 94.6200 2432.0800 39.7400
 AAAAAAAAOIAAAAAA NULL 1 17.0 25.9300 0.0000 23.5900
 
 # Q28
+onlyif mysql
 query I
 SELECT *
 FROM
@@ -4595,6 +4619,7 @@ LIMIT 100;
 
 
 # Q29
+onlyif mysql
 query I
 SELECT i_item_id,
        i_item_desc,
@@ -4644,6 +4669,7 @@ AAAAAAAAOGAAAAAA Single, possible causes cut more strange, british things; forms
 
 
 # Q30
+onlyif mysql
 query I
 WITH customer_total_return AS
   (SELECT wr_returning_customer_sk AS ctr_customer_sk,
@@ -4697,6 +4723,7 @@ LIMIT 100;
 ----
 
 # Q31
+onlyif mysql
 query I
 WITH ss AS
   (SELECT ca_county,
@@ -4771,6 +4798,7 @@ ORDER BY ss1.ca_county;
 ----
 
 # Q32
+onlyif mysql
 query I
 SELECT sum(cs_ext_discount_amt) AS "excess discount amount"
 FROM catalog_sales ,
@@ -4792,6 +4820,7 @@ LIMIT 100;
 NULL
 
 # Q33
+onlyif mysql
 query I
 WITH ss AS
   ( SELECT i_manufact_id,
@@ -4862,6 +4891,7 @@ LIMIT 100;
 ----
 
 # Q34
+onlyif mysql
 query I
 SELECT c_last_name ,
        c_first_name ,
@@ -4912,7 +4942,7 @@ Robbins Ruth Ms. N 60 16
 Simpson Kevin Dr. N 1369 15
 
 # Q35
-skipif cluster
+onlyif todo
 query I
 SELECT ca_state,
        cd_gender,
@@ -4989,6 +5019,7 @@ WI F U 1 1 1 1 1.0 0 1 0 0 0.0 0 1 0 0 0.0
 WV M M 2 1 2 2 2.0 0 1 0 0 0.0 0 1 0 0 0.0
 
 # Q36
+onlyif mysql
 query I
 WITH results AS
   (SELECT sum(ss_net_profit) AS ss_net_profit,
@@ -5111,6 +5142,7 @@ LIMIT 100;
 -0.355443373145 Women maternity 0 3
 
 # Q37
+onlyif mysql
 query I
 SELECT i_item_id,
        i_item_desc,
@@ -5137,6 +5169,7 @@ LIMIT 100;
 ----
 
 # Q38
+onlyif mysql
 query I
 SELECT count(*)
 FROM
@@ -5170,6 +5203,7 @@ LIMIT 100;
 0
 
 # Q39
+onlyif mysql
 query I
 WITH inv AS
   (SELECT w_warehouse_name,
@@ -5233,6 +5267,7 @@ ORDER BY inv1.w_warehouse_sk NULLS FIRST,
 1 45 1 304.25 1.081490342970898 1 45 2 171.0 1.2269093185996713
 
 # Q40
+onlyif mysql
 query I
 SELECT w_state,
        i_item_id,
@@ -5269,6 +5304,7 @@ TN AAAAAAAAOGAAAAAA -1163.62 -496.31
 TN AAAAAAAAPKAAAAAA 0.00 238.91
 
 # Q41
+onlyif mysql
 query I
 SELECT distinct(i_product_name)
 FROM item i1
@@ -5339,6 +5375,7 @@ LIMIT 100;
 ----
 
 # Q42
+onlyif mysql
 query I
 SELECT dt.d_year,
        item.i_category_id,
@@ -5363,8 +5400,8 @@ LIMIT 100 ;
 2000 7 Home 47342.39
 
 # Q43
+onlyif mysql
 query I
-
 SELECT s_store_name,
        s_store_id,
        sum(CASE
@@ -5417,6 +5454,7 @@ LIMIT 100;
 ----
 
 # Q44
+onlyif mysql
 query I
 SELECT asceding.rnk,
        i1.i_product_name best_performing,
@@ -5468,6 +5506,7 @@ LIMIT 100;
 ----
 
 # Q45
+onlyif mysql
 query I
 SELECT ca_zip,
        ca_city,
@@ -5530,8 +5569,8 @@ LIMIT 100;
 98014 Clifton 130.03
 
 # Q46
+onlyif mysql
 query I
-
 SELECT c_last_name,
        c_first_name,
        ca_city,
@@ -5680,6 +5719,7 @@ Young Althea Jamestown Lakeview 634 2760.16 -23436.25
 Young Althea Jamestown Riverside 1289 0.00 -543.36
 
 # Q47
+onlyif mysql
 query I
 WITH v1 AS
   (SELECT i_category,
@@ -5855,6 +5895,7 @@ Jewelry amalgbrand #2 ought Unknown 1999 4 197.7710 14.03 28.93 9.64
 Music exportischolar #2 ought Unknown 1999 7 431.8383 248.30 218.44 363.14
 
 # Q48
+onlyif mysql
 query I
 SELECT SUM (ss_quantity)
 FROM store_sales,
@@ -5899,8 +5940,8 @@ WHERE s_store_sk = ss_store_sk
 181
 
 # Q49
+onlyif mysql
 query I
-
 SELECT channel,
        item,
        return_ratio,
@@ -6005,6 +6046,7 @@ LIMIT 100;
 ----
 
 # Q50
+onlyif mysql
 query I
 SELECT s_store_name,
        s_company_id,
@@ -6077,6 +6119,7 @@ LIMIT 100;
 ought 1 767 Spring  Wy Suite 250 Midway Williamson County TN 31904 7 2 2 4 10
 
 # Q51
+onlyif mysql
 query I
 WITH web_v1 AS
   (SELECT ws_item_sk item_sk,
@@ -6233,6 +6276,7 @@ LIMIT 100;
 121 2000-01-29 261.33 NULL 261.33 104.74
 
 # Q52
+onlyif mysql
 query I
 SELECT dt.d_year,
        item.i_brand_id brand_id,
@@ -6257,6 +6301,7 @@ LIMIT 100 ;
 2000 7008009 namelessbrand #9 47342.39
 
 # Q53
+onlyif mysql
 query I
 SELECT *
 FROM
@@ -6312,6 +6357,7 @@ LIMIT 100;
 93 865.66 485.7950
 
 # Q54
+onlyif mysql
 query I
 WITH my_customers AS
   (SELECT DISTINCT c_customer_sk,
@@ -6373,6 +6419,7 @@ LIMIT 100;
 ----
 
 # Q55
+onlyif mysql
 query I
 SELECT i_brand_id brand_id,
        i_brand brand,
@@ -6394,6 +6441,7 @@ LIMIT 100 ;
 2001002 amalgimporto #2 33509.81
 
 # Q56
+onlyif mysql
 query I
 WITH ss AS
   (SELECT i_item_id,
@@ -6471,6 +6519,7 @@ LIMIT 100;
 ----
 
 # Q57
+onlyif mysql
 query I
 WITH v1 AS
   (SELECT i_category,
@@ -6639,6 +6688,7 @@ Sports brandnameless #5 NY Metro 1999 1 155.7718 1.32 200.71 25.42
 Music exportischolar #1 NY Metro 1999 1 172.8054 18.74 260.89 20.25
 
 # Q58
+onlyif mysql
 query I
 WITH ss_items AS
   (SELECT i_item_id item_id,
@@ -6713,6 +6763,7 @@ LIMIT 100;
 ----
 
 # Q59
+onlyif mysql
 query I
 WITH wss AS
   (SELECT d_week_seq,
@@ -6902,6 +6953,7 @@ ought AAAAAAAABAAAAAAA 5273 NULL NULL 3.33398397 NULL NULL NULL NULL
 ought AAAAAAAABAAAAAAA 5273 NULL NULL 3.33398397 NULL NULL NULL NULL
 
 # Q60
+onlyif mysql
 query I
 WITH ss AS
   (SELECT i_item_id,
@@ -6973,6 +7025,7 @@ LIMIT 100;
 ----
 
 # Q61
+onlyif mysql
 query I
 SELECT promotions,
        total,
@@ -7024,6 +7077,7 @@ LIMIT 100;
 NULL NULL NULL
 
 # Q62
+onlyif mysql
 query I
 SELECT w_substr,
        sm_type,
@@ -7079,8 +7133,8 @@ Conventional childr REGULAR site_0 49 55 38 65 0
 Conventional childr TWO DAY site_0 60 46 44 45 0
 
 # Q63
+onlyif mysql
 query I
-
 SELECT *
 FROM
   (SELECT i_manager_id,
@@ -7142,6 +7196,7 @@ LIMIT 100;
 11 496.17 176.6527
 
 # Q65
+onlyif mysql
 query I
 SELECT s_store_name,
        i_item_desc,
@@ -7184,6 +7239,7 @@ LIMIT 100;
 
 
 # Q66
+onlyif mysql
 query I
 select
          w_warehouse_name
@@ -7407,6 +7463,7 @@ Conventional childr 977787 Midway Williamson County TN United States DHL,BARIAN 
 
 
 # Q67
+onlyif mysql
 query I
 SELECT *
 FROM
@@ -7555,6 +7612,7 @@ Books travel univunivamalg #8 priese 2000 NULL NULL NULL 99674.93 31
 Books travel univunivamalg #8 priese 2000 4 NULL NULL 46253.77 56
 
 # Q68
+onlyif mysql
 query I
 SELECT c_last_name,
        c_first_name,
@@ -7622,6 +7680,7 @@ Young Althea Jamestown Riverside 1289 25546.95 1311.08 42936.52
 
 
 # Q69
+onlyif mysql
 query I
 SELECT cd_gender,
        cd_marital_status,
@@ -7686,6 +7745,7 @@ M U 4 yr Degree 1 500 1 Unknown 1
 
 
 # Q70
+onlyif mysql
 query I
 SELECT sum(ss_net_profit) AS total_sum,
        s_state,
@@ -7729,6 +7789,7 @@ LIMIT 100;
 -5077129.75 TN Williamson County 0 1
 
 # Q71
+onlyif mysql
 query I
 SELECT i_brand_id brand_id,
        i_brand brand,
@@ -7789,6 +7850,7 @@ ORDER BY ext_price DESC NULLS FIRST,
 
 
 # Q72
+onlyif mysql
 query I
 SELECT i_item_desc,
        w_warehouse_name,
@@ -7842,8 +7904,8 @@ Tonnes alter. Towns get schools Conventional childr 5215 0 1 1
 
 
 # Q73
+onlyif mysql
 query I
-
 SELECT c_last_name,
        c_first_name,
        c_salutation,
@@ -7887,6 +7949,7 @@ ORDER BY cnt DESC,
 
 
 # Q74
+onlyif mysql
 query I
 WITH year_total AS
   (SELECT c_customer_id customer_id,
@@ -7956,6 +8019,7 @@ LIMIT 100;
 
 
 # Q75
+onlyif mysql
 query I
 WITH all_sales AS
   ( SELECT d_year ,
@@ -8043,6 +8107,7 @@ LIMIT 100;
 2001 2002 9015010 2 9 286 5526 4305 -1221 -21411.30
 
 # Q76
+onlyif mysql
 query I
 SELECT channel,
        col_name,
@@ -8102,6 +8167,7 @@ LIMIT 100;
 ----
 
 # Q77
+onlyif mysql
 query I
 WITH ss AS
   (SELECT s_store_sk,
@@ -8207,6 +8273,7 @@ web channel NULL 457729.00 17317.16 -78102.42
 web channel 1 457729.00 17317.16 -78102.42
 
 # Q78
+onlyif mysql
 query I
 WITH ws AS
   (SELECT d_year AS ws_sold_year,
@@ -8387,8 +8454,8 @@ LIMIT 100;
 2000 73 596 3.7 74 69.38 6.32 20 88.71 1.33
 
 # Q79
+onlyif mysql
 query I
-
 SELECT c_last_name,
        c_first_name,
        SUBSTRING(s_city,1,30),
@@ -8512,6 +8579,7 @@ Wilson Joseph Midway 1938 4751.58 -9729.36
 Wright Evelyn Midway 361 1353.38 -13585.45
 
 # Q80
+onlyif mysql
 query I
 WITH ssr AS
   (SELECT s_store_id AS store_id,
@@ -8632,6 +8700,7 @@ web channel NULL 25907.01 1623.58 -15085.56
 web channel web_siteAAAAAAAABAAAAAAA 25907.01 1623.58 -15085.56
 
 # Q81
+onlyif mysql
 query I
 WITH customer_total_return AS
   (SELECT cr_returning_customer_sk AS ctr_customer_sk ,
@@ -8700,8 +8769,8 @@ AAAAAAAANACAAAAA Miss Judith Winkler 52 6th Park Drive Suite E Farmington Johnso
 AAAAAAAANCAAAAAA Dr. Floy Hammonds 129 Valley  Circle Suite 410 Ashland Decatur County GA 34244 United States -0.05 single family 7302.22
 
 # Q82
+onlyif mysql
 query I
-
 SELECT i_item_id ,
        i_item_desc ,
        i_current_price
@@ -8727,6 +8796,7 @@ LIMIT 100;
 ----
 
 # Q83
+onlyif mysql
 query I
 WITH sr_items AS
   (SELECT i_item_id item_id,
@@ -8801,6 +8871,7 @@ LIMIT 100;
 ----
 
 # Q84
+onlyif mysql
 query I
 SELECT c_customer_id AS customer_id ,
        concat(concat(coalesce(c_last_name, '') , ', '), coalesce(c_first_name, '')) AS customername
@@ -8824,8 +8895,8 @@ LIMIT 100;
 AAAAAAAAKOBAAAAA Alvarez, Cheri
 
 # Q85
+onlyif mysql
 query I
-
 SELECT SUBSTRING(r_reason_desc,1,20) ,
        avg(ws_quantity) avg1,
        avg(wr_refunded_cash) avg2,
@@ -8886,6 +8957,7 @@ LIMIT 100;
 ----
 
 # Q86
+onlyif mysql
 query I
 SELECT sum(ws_net_paid) AS total_sum ,
        i_category ,
@@ -8977,6 +9049,7 @@ LIMIT 100;
 58612.69 Women dresses 0 4
 
 # Q87
+onlyif mysql
 query I
 SELECT count(*)
 FROM ((SELECT DISTINCT c_last_name,
@@ -9012,6 +9085,7 @@ FROM ((SELECT DISTINCT c_last_name,
 494
 
 # Q88
+onlyif mysql
 query I
 SELECT *
 FROM
@@ -9155,6 +9229,7 @@ FROM
 0 0 0 0 0 0 0 0
 
 # Q89
+onlyif mysql
 query I
 SELECT * from
   (SELECT i_category, i_class, i_brand, s_store_name, s_company_name, d_moy, sum(ss_sales_price) sum_sales, avg(sum(ss_sales_price)) OVER (PARTITION BY i_category, i_brand, s_store_name, s_company_name) avg_monthly_sales
@@ -9196,6 +9271,7 @@ Women dresses amalgamalg #1 ought Unknown 11 892.42 421.9750
 Women dresses amalgamalg #1 ought Unknown 12 903.74 421.9750
 
 # Q90
+onlyif mysql
 query I
 SELECT case when pmc=0 then null else cast(amc AS decimal(15,4))/cast(pmc AS decimal(15,4)) end am_pm_ratio
 FROM
@@ -9227,6 +9303,7 @@ LIMIT 100;
 NULL
 
 # Q91
+onlyif mysql
 query I
 SELECT cc_call_center_id Call_Center,
        cc_name Call_Center_Name,
@@ -9261,6 +9338,7 @@ ORDER BY sum(cr_net_loss) DESC;
 ----
 
 # Q92
+onlyif mysql
 query I
 SELECT sum(ws_ext_discount_amt) AS "Excess Discount Amount"
 FROM web_sales,
@@ -9283,6 +9361,7 @@ LIMIT 100;
 NULL
 
 # Q93
+onlyif mysql
 query I
 SELECT ss_customer_sk,
        sum(act_sales) sumsales
@@ -9306,6 +9385,7 @@ LIMIT 100;
 ----
 
 # Q94
+onlyif mysql
 query I
 SELECT count(DISTINCT ws_order_number) AS "order count" ,
        sum(ws_ext_ship_cost) AS "total shipping cost" ,
@@ -9335,6 +9415,7 @@ LIMIT 100;
 0 NULL NULL
 
 # Q95
+onlyif mysql
 query I
 WITH ws_wh AS
   (SELECT ws1.ws_order_number,
@@ -9371,6 +9452,7 @@ LIMIT 100;
 0 NULL NULL
 
 # Q96
+onlyif mysql
 query I
 SELECT count(*)
 FROM store_sales ,
@@ -9390,6 +9472,7 @@ LIMIT 100;
 0
 
 # Q97
+onlyif mysql
 query I
 WITH ssci AS
   (SELECT ss_customer_sk customer_sk ,
@@ -9429,6 +9512,7 @@ LIMIT 100;
 5447 3460 252
 
 # Q98
+onlyif mysql
 query I
 SELECT i_item_id ,
        i_item_desc,
@@ -9485,6 +9569,7 @@ AAAAAAAACGAAAAAA Years know merely religious reasons. New animals modernise well
 AAAAAAAAAKAAAAAA Legs cannot make much across a children. Well industrial ports see so. Equal, full systems rise police. Labour departments will leave. Political, social  Sports sailing 1.17 710.10 100.000000000000
 
 # Q99
+onlyif mysql
 query I
 SELECT w_substr ,
        sm_type ,

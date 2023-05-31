@@ -43,6 +43,22 @@ impl DatabaseAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("DatamaskAlreadyExists: `{name}` while `{context}`")]
+pub struct DatamaskAlreadyExists {
+    name: String,
+    context: String,
+}
+
+impl DatamaskAlreadyExists {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("CreateDatabaseWithDropTime: `{db_name}` with drop_on")]
 pub struct CreateDatabaseWithDropTime {
     db_name: String,
@@ -231,6 +247,22 @@ impl UnknownDatabase {
     pub fn new(db_name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             db_name: db_name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownDatamask: `{name}` while `{context}`")]
+pub struct UnknownDatamask {
+    name: String,
+    context: String,
+}
+
+impl UnknownDatamask {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
             context: context.into(),
         }
     }
@@ -709,6 +741,12 @@ pub enum AppError {
 
     #[error(transparent)]
     DropIndexWithDropTime(#[from] DropIndexWithDropTime),
+
+    #[error(transparent)]
+    DatamaskAlreadyExists(#[from] DatamaskAlreadyExists),
+
+    #[error(transparent)]
+    UnknownDatamask(#[from] UnknownDatamask),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -746,6 +784,7 @@ impl AppErrorMessage for UnknownTableId {}
 impl AppErrorMessage for UnknownDatabaseId {}
 
 impl AppErrorMessage for TableVersionMismatched {}
+
 impl AppErrorMessage for DuplicatedUpsertFiles {}
 
 impl AppErrorMessage for TableAlreadyExists {
@@ -934,6 +973,18 @@ impl AppErrorMessage for DropIndexWithDropTime {
     }
 }
 
+impl AppErrorMessage for DatamaskAlreadyExists {
+    fn message(&self) -> String {
+        format!("Datamask '{}' already exists", self.name)
+    }
+}
+
+impl AppErrorMessage for UnknownDatamask {
+    fn message(&self) -> String {
+        format!("Datamask '{}' does not exists", self.name)
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1001,6 +1052,8 @@ impl From<AppError> for ErrorCode {
             AppError::IndexAlreadyExists(err) => ErrorCode::IndexAlreadyExists(err.message()),
             AppError::UnknownIndex(err) => ErrorCode::UnknownIndex(err.message()),
             AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
+            AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
+            AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
         }
     }
 }

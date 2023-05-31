@@ -21,7 +21,6 @@ use common_arrow::arrow::chunk::Chunk;
 use common_arrow::arrow::datatypes::Field;
 use common_arrow::native::read::batch_read::batch_read_array;
 use common_arrow::parquet::metadata::ColumnDescriptor;
-use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
@@ -35,7 +34,6 @@ use storages_common_table_meta::meta::Compression;
 
 use super::block_reader_deserialize::DeserializedArray;
 use super::block_reader_deserialize::FieldDeserializationContext;
-use crate::fuse_part::FusePartInfo;
 use crate::io::read::block::block_reader_merge_io::DataItem;
 use crate::io::BlockReader;
 use crate::io::UncompressedBuffer;
@@ -45,22 +43,24 @@ impl BlockReader {
     /// Deserialize column chunks data from native format to DataBlock.
     pub(super) fn deserialize_native_chunks(
         &self,
-        part: PartInfoPtr,
-        chunks: HashMap<ColumnId, DataItem>,
+        block_path: &str,
+        num_rows: usize,
+        compression: &Compression,
+        column_metas: &HashMap<ColumnId, ColumnMeta>,
+        column_chunks: HashMap<ColumnId, DataItem>,
     ) -> Result<DataBlock> {
-        let part = FusePartInfo::from_part(&part)?;
         let start = Instant::now();
 
-        if chunks.is_empty() {
-            return self.build_default_values_block(part.nums_rows);
+        if column_chunks.is_empty() {
+            return self.build_default_values_block(num_rows);
         }
 
         let deserialized_res = self.deserialize_native_chunks_with_buffer(
-            &part.location,
-            part.nums_rows,
-            &part.compression,
-            &part.columns_meta,
-            chunks,
+            block_path,
+            num_rows,
+            compression,
+            column_metas,
+            column_chunks,
             None,
         );
 

@@ -33,6 +33,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::IEJoinCondition;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
@@ -299,6 +300,8 @@ pub enum WindowFunction {
     Rank,
     DenseRank,
     PercentRank,
+    LagLead(LagLeadFunctionDesc),
+    NthValue(NthValueFunctionDesc),
 }
 
 impl WindowFunction {
@@ -309,6 +312,8 @@ impl WindowFunction {
                 Ok(DataType::Number(NumberDataType::UInt64))
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
+            WindowFunction::LagLead(f) => Ok(f.return_type.clone()),
+            WindowFunction::NthValue(f) => Ok(f.return_type.clone()),
         }
     }
 }
@@ -321,6 +326,9 @@ impl Display for WindowFunction {
             WindowFunction::Rank => write!(f, "rank"),
             WindowFunction::DenseRank => write!(f, "dense_rank"),
             WindowFunction::PercentRank => write!(f, "percent_rank"),
+            WindowFunction::LagLead(lag_lead) if lag_lead.is_lag => write!(f, "lag"),
+            WindowFunction::LagLead(_) => write!(f, "lead"),
+            WindowFunction::NthValue(_) => write!(f, "nth_value"),
         }
     }
 }
@@ -523,6 +531,33 @@ impl HashJoin {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct IEJoin {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    /// Only used for display.
+    pub plan_id: u32,
+    pub left: Box<PhysicalPlan>,
+    pub right: Box<PhysicalPlan>,
+    /// The first two conditions: (>, >=, <, <=)
+    /// Condition's left/right side only contains one table's column
+    pub conditions: Vec<IEJoinCondition>,
+    /// The other conditions
+    pub other_conditions: Vec<RemoteExpr>,
+    /// Now only support inner join, will support left/right join later
+    pub join_type: JoinType,
+
+    /// Only used for explain
+    pub stat_info: Option<PlanStatsInfo>,
+}
+
+impl IEJoin {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let mut fields = self.left.output_schema()?.fields().clone();
+        fields.extend(self.right.output_schema()?.fields().clone());
+        Ok(DataSchemaRefExt::create(fields))
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Exchange {
     pub input: Box<PhysicalPlan>,
     pub kind: FragmentKind,
@@ -660,6 +695,7 @@ pub enum PhysicalPlan {
     Limit(Limit),
     RowFetch(RowFetch),
     HashJoin(HashJoin),
+    IEJoin(IEJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
     RuntimeFilterSource(RuntimeFilterSource),
@@ -702,6 +738,7 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
+            PhysicalPlan::IEJoin(plan) => plan.output_schema(),
         }
     }
 
@@ -726,6 +763,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
+            PhysicalPlan::IEJoin(_) => "IEJoin".to_string(),
         }
     }
 
@@ -759,6 +797,9 @@ impl PhysicalPlan {
                 std::iter::once(plan.left_side.as_ref())
                     .chain(std::iter::once(plan.right_side.as_ref())),
             ),
+            PhysicalPlan::IEJoin(plan) => Box::new(
+                std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
+            ),
         }
     }
 
@@ -781,6 +822,7 @@ impl PhysicalPlan {
             | PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
+            | PhysicalPlan::IEJoin(_)
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_) => None,
@@ -794,6 +836,28 @@ pub struct AggregateFunctionDesc {
     pub output_column: IndexType,
     pub args: Vec<usize>,
     pub arg_indices: Vec<IndexType>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum LagLeadDefault {
+    Null,
+    Index(IndexType),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct LagLeadFunctionDesc {
+    pub is_lag: bool,
+    pub offset: u64,
+    pub arg: usize,
+    pub return_type: DataType,
+    pub default: LagLeadDefault,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct NthValueFunctionDesc {
+    pub n: Option<u64>,
+    pub arg: usize,
+    pub return_type: DataType,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]

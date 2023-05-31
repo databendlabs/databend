@@ -24,7 +24,7 @@ use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransfo
 use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
 pub use crate::operations::merge_into::mutator::merge_into_mutator::MergeIntoOperationAggregator;
 
-/// Takes multiple [MergeIntoOperation]s in, ang aggregate them.
+/// Takes multiple [MergeIntoOperation]s in, and aggregate them.
 /// Applies them to segments(and data blocks belong to this Aggregator) in the `final` stage.
 /// Outputs [MutationLogs] logs(to be committed).
 #[async_trait::async_trait]

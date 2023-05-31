@@ -25,6 +25,7 @@ use common_functions::aggregates::get_layout_offsets;
 use common_functions::aggregates::AggregateFunction;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::aggregates::StateAddr;
+use common_sql::executor::LagLeadDefault;
 use common_sql::executor::WindowFunction;
 
 use crate::pipelines::processors::transforms::group_by::Area;
@@ -36,6 +37,8 @@ pub enum WindowFunctionInfo {
     Rank,
     DenseRank,
     PercentRank,
+    LagLead(WindowFuncLagLeadImpl),
+    NthValue(WindowFuncNthValueImpl),
 }
 
 pub struct WindowFuncAggImpl {
@@ -87,12 +90,28 @@ impl Drop for WindowFuncAggImpl {
     }
 }
 
+#[derive(Clone)]
+pub struct WindowFuncLagLeadImpl {
+    pub arg: usize,
+    pub default: LagLeadDefault,
+    pub return_type: DataType,
+}
+
+#[derive(Clone)]
+pub struct WindowFuncNthValueImpl {
+    pub n: Option<u64>,
+    pub arg: usize,
+    pub return_type: DataType,
+}
+
 pub enum WindowFunctionImpl {
     Aggregate(WindowFuncAggImpl),
     RowNumber,
     Rank,
     DenseRank,
     PercentRank,
+    LagLead(WindowFuncLagLeadImpl),
+    NthValue(WindowFuncNthValueImpl),
 }
 
 impl WindowFunctionInfo {
@@ -118,6 +137,29 @@ impl WindowFunctionInfo {
             WindowFunction::Rank => Self::Rank,
             WindowFunction::DenseRank => Self::DenseRank,
             WindowFunction::PercentRank => Self::PercentRank,
+            WindowFunction::LagLead(ll) => {
+                let new_arg = schema.index_of(&ll.arg.to_string())?;
+                let new_default = match &ll.default {
+                    LagLeadDefault::Null => LagLeadDefault::Null,
+                    LagLeadDefault::Index(i) => {
+                        let offset = schema.index_of(&i.to_string())?;
+                        LagLeadDefault::Index(offset)
+                    }
+                };
+                Self::LagLead(WindowFuncLagLeadImpl {
+                    arg: new_arg,
+                    default: new_default,
+                    return_type: ll.return_type.clone(),
+                })
+            }
+            WindowFunction::NthValue(func) => {
+                let new_arg = schema.index_of(&func.arg.to_string())?;
+                Self::NthValue(WindowFuncNthValueImpl {
+                    n: func.n,
+                    arg: new_arg,
+                    return_type: func.return_type.clone(),
+                })
+            }
         })
     }
 }
@@ -144,6 +186,8 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::Rank => Self::Rank,
             WindowFunctionInfo::DenseRank => Self::DenseRank,
             WindowFunctionInfo::PercentRank => Self::PercentRank,
+            WindowFunctionInfo::LagLead(ll) => Self::LagLead(ll),
+            WindowFunctionInfo::NthValue(func) => Self::NthValue(func),
         })
     }
 
@@ -154,6 +198,8 @@ impl WindowFunctionImpl {
                 DataType::Number(NumberDataType::UInt64)
             }
             Self::PercentRank => DataType::Number(NumberDataType::Float64),
+            Self::LagLead(f) => f.return_type.clone(),
+            Self::NthValue(f) => f.return_type.clone(),
         })
     }
 

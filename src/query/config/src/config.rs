@@ -28,6 +28,7 @@ use common_exception::Result;
 use common_meta_app::principal::AuthInfo;
 use common_meta_app::principal::AuthType;
 use common_meta_app::storage::StorageAzblobConfig as InnerStorageAzblobConfig;
+use common_meta_app::storage::StorageCosConfig as InnerStorageCosConfig;
 use common_meta_app::storage::StorageFsConfig as InnerStorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig as InnerStorageGcsConfig;
 use common_meta_app::storage::StorageHdfsConfig as InnerStorageHdfsConfig;
@@ -253,6 +254,10 @@ pub struct StorageConfig {
     // WebHDFS storage backend config
     #[clap(flatten)]
     pub webhdfs: WebhdfsStorageConfig,
+
+    // COS storage backend config
+    #[clap(flatten)]
+    pub cos: CosStorageConfig,
 }
 
 impl Default for StorageConfig {
@@ -279,6 +284,7 @@ impl From<InnerStorageConfig> for StorageConfig {
             hdfs: Default::default(),
             obs: Default::default(),
             webhdfs: Default::default(),
+            cos: Default::default(),
         };
 
         match inner.params {
@@ -318,6 +324,10 @@ impl From<InnerStorageConfig> for StorageConfig {
                 cfg.storage_type = "webhdfs".to_string();
                 cfg.webhdfs = v.into()
             }
+            StorageParams::Cos(v) => {
+                cfg.storage_type = "cos".to_string();
+                cfg.cos = v.into()
+            }
             v => unreachable!("{v:?} should not be used as storage backend"),
         }
 
@@ -344,6 +354,7 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
                     "obs" => StorageParams::Obs(self.obs.try_into()?),
                     "oss" => StorageParams::Oss(self.oss.try_into()?),
                     "webhdfs" => StorageParams::Webhdfs(self.webhdfs.try_into()?),
+                    "cos" => StorageParams::Cos(self.cos.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported storage type")),
                 }
             },
@@ -1094,6 +1105,83 @@ impl TryFrom<WebhdfsStorageConfig> for InnerStorageWebhdfsConfig {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[serde(default)]
+pub struct CosStorageConfig {
+    /// Access key for COS storage
+    #[clap(long = "storage-cos-secret-id", default_value_t)]
+    #[serde(rename = "secret_id")]
+    pub cos_secret_id: String,
+
+    /// Secret key for COS storage
+    #[clap(long = "storage-cos-secret-key", default_value_t)]
+    #[serde(rename = "secret_key")]
+    pub cos_secret_key: String,
+
+    /// Bucket for COS
+    #[clap(long = "storage-cos-bucket", default_value_t)]
+    #[serde(rename = "bucket")]
+    pub cos_bucket: String,
+
+    /// Endpoint URL for COS
+    #[clap(long = "storage-cos-endpoint-url", default_value_t)]
+    #[serde(rename = "endpoint_url")]
+    pub cos_endpoint_url: String,
+
+    /// # TODO(xuanwo)
+    ///
+    /// Clap doesn't allow us to use root directly.
+    #[clap(long = "storage-cos-root", default_value_t)]
+    #[serde(rename = "root")]
+    pub cos_root: String,
+}
+
+impl Default for CosStorageConfig {
+    fn default() -> Self {
+        InnerStorageCosConfig::default().into()
+    }
+}
+
+impl Debug for CosStorageConfig {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut ds = f.debug_struct("CosStorageConfig");
+
+        ds.field("bucket", &self.cos_bucket);
+        ds.field("endpoint_url", &self.cos_endpoint_url);
+        ds.field("root", &self.cos_root);
+        ds.field("secret_id", &mask_string(&self.cos_secret_id, 3));
+        ds.field("secret_key", &mask_string(&self.cos_secret_key, 3));
+
+        ds.finish()
+    }
+}
+
+impl From<InnerStorageCosConfig> for CosStorageConfig {
+    fn from(v: InnerStorageCosConfig) -> Self {
+        Self {
+            cos_secret_id: v.secret_id,
+            cos_secret_key: v.secret_key,
+            cos_bucket: v.bucket,
+            cos_endpoint_url: v.endpoint_url,
+            cos_root: v.root,
+        }
+    }
+}
+
+impl TryFrom<CosStorageConfig> for InnerStorageCosConfig {
+    type Error = ErrorCode;
+
+    fn try_from(value: CosStorageConfig) -> Result<Self, Self::Error> {
+        Ok(InnerStorageCosConfig {
+            secret_id: value.cos_secret_id,
+            secret_key: value.cos_secret_key,
+            bucket: value.cos_bucket,
+            endpoint_url: value.cos_endpoint_url,
+            root: value.cos_root,
+        })
+    }
+}
+
 /// Query config group.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default, deny_unknown_fields)]
@@ -1320,12 +1408,21 @@ pub struct QueryConfig {
     #[clap(long)]
     pub disable_system_table_load: bool,
 
+    /// chat base url.
     #[clap(long, default_value = "https://api.openai.com/v1/")]
-    pub openai_api_base_url: String,
+    pub openai_api_chat_base_url: String,
+
+    /// embedding base url.
+    #[clap(long, default_value = "https://api.openai.com/v1/")]
+    pub openai_api_embedding_base_url: String,
 
     // This will not show in system.configs, put it to mask.rs.
     #[clap(long, default_value = "")]
     pub openai_api_key: String,
+
+    // For azure openai.
+    #[clap(long, default_value = "")]
+    pub openai_api_version: String,
 
     /// https://platform.openai.com/docs/models/embeddings
     #[clap(long, default_value = "text-embedding-ada-002")]
@@ -1398,10 +1495,12 @@ impl TryInto<InnerQueryConfig> for QueryConfig {
             internal_enable_sandbox_tenant: self.internal_enable_sandbox_tenant,
             internal_merge_on_read_mutation: self.internal_merge_on_read_mutation,
             disable_system_table_load: self.disable_system_table_load,
-            openai_api_base_url: self.openai_api_base_url,
+            openai_api_chat_base_url: self.openai_api_chat_base_url,
+            openai_api_embedding_base_url: self.openai_api_embedding_base_url,
             openai_api_key: self.openai_api_key,
             openai_api_completion_model: self.openai_api_completion_model,
             openai_api_embedding_model: self.openai_api_embedding_model,
+            openai_api_version: self.openai_api_version,
         })
     }
 }
@@ -1477,8 +1576,10 @@ impl From<InnerQueryConfig> for QueryConfig {
             table_cache_bloom_index_filter_count: None,
             table_cache_bloom_index_data_bytes: None,
             disable_system_table_load: inner.disable_system_table_load,
-            openai_api_base_url: inner.openai_api_base_url,
+            openai_api_chat_base_url: inner.openai_api_chat_base_url,
+            openai_api_embedding_base_url: inner.openai_api_embedding_base_url,
             openai_api_key: inner.openai_api_key,
+            openai_api_version: inner.openai_api_version,
             openai_api_completion_model: inner.openai_api_completion_model,
             openai_api_embedding_model: inner.openai_api_embedding_model,
         }

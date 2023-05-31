@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::types::NumberScalar;
 use common_expression::Scalar;
@@ -44,16 +46,18 @@ impl RuleFoldCountAggregate {
             //  \
             //   *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Aggregate,
-                }
-                .into(),
-                SExpr::create_leaf(
+                Arc::new(
+                    PatternPlan {
+                        plan_type: RelOp::Aggregate,
+                    }
+                    .into(),
+                ),
+                Arc::new(SExpr::create_leaf(Arc::new(
                     PatternPlan {
                         plan_type: RelOp::Pattern,
                     }
                     .into(),
-                ),
+                ))),
             )],
         }
     }
@@ -84,8 +88,8 @@ impl Rule for RuleFoldCountAggregate {
 
         if let (true, column_stats, Some(table_card)) = (
             is_simple_count,
-            input_stat_info.statistics.column_stats,
-            input_stat_info.statistics.precise_cardinality,
+            &input_stat_info.statistics.column_stats,
+            &input_stat_info.statistics.precise_cardinality,
         ) {
             let mut scalars = agg.aggregate_functions;
             for item in scalars.iter_mut() {
@@ -93,7 +97,7 @@ impl Rule for RuleFoldCountAggregate {
                     if agg_func.args.is_empty() {
                         item.scalar = ScalarExpr::ConstantExpr(ConstantExpr {
                             span: item.scalar.span(),
-                            value: Scalar::Number(NumberScalar::UInt64(table_card)),
+                            value: Scalar::Number(NumberScalar::UInt64(*table_card)),
                         });
                     } else if let ScalarExpr::BoundColumnRef(col) = &agg_func.args[0] {
                         if let Some(card) = column_stats.get(&col.column.index) {
@@ -116,8 +120,8 @@ impl Rule for RuleFoldCountAggregate {
             let eval_scalar = EvalScalar { items: scalars };
             let dummy_table_scan = DummyTableScan;
             state.add_result(SExpr::create_unary(
-                eval_scalar.into(),
-                SExpr::create_leaf(dummy_table_scan.into()),
+                Arc::new(eval_scalar.into()),
+                Arc::new(SExpr::create_leaf(Arc::new(dummy_table_scan.into()))),
             ));
         }
         Ok(())

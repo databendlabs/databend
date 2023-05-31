@@ -146,7 +146,7 @@ impl Operator for Aggregate {
         Ok(required)
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
@@ -167,18 +167,18 @@ impl Operator for Aggregate {
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(input_prop.used_columns);
+        used_columns.extend(input_prop.used_columns.clone());
 
-        Ok(RelationalProperty {
+        Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-        })
+        }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
-        let (cardinality, mut statistics) = (stat_info.cardinality, stat_info.statistics);
+        let (cardinality, mut statistics) = (stat_info.cardinality, stat_info.statistics.clone());
         let cardinality = if self.group_items.is_empty() {
             // Scalar aggregation
             1.0
@@ -221,12 +221,12 @@ impl Operator for Aggregate {
         } else {
             None
         };
-        Ok(StatInfo {
+        Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality,
                 column_stats: statistics.column_stats,
             },
-        })
+        }))
     }
 }

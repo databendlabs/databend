@@ -2597,6 +2597,7 @@ Query(
                             span: Some(
                                 19..27,
                             ),
+                            window: None,
                         },
                         alias: None,
                     },
@@ -10548,6 +10549,97 @@ Query(
         limit: [],
         offset: None,
         ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN ('ANALYST') THEN VAL ELSE '*********'END comment = 'this is a masking policy'
+---------- Output ---------
+CREATE MASKING POLICY email_mask AS (val STRING) RETURN STRING -> CASE WHEN current_role() IN('ANALYST') THEN VAL ELSE '*********' END COMMENT = 'this is a masking policy'
+---------- AST ------------
+CreateDatamaskPolicy(
+    CreateDatamaskPolicyStmt {
+        if_not_exists: false,
+        name: "email_mask",
+        policy: DataMaskPolicy {
+            args: [
+                DataMaskArg {
+                    arg_name: "val",
+                    arg_type: String,
+                },
+            ],
+            return_type: String,
+            body: Case {
+                span: Some(
+                    66..134,
+                ),
+                operand: None,
+                conditions: [
+                    InList {
+                        span: Some(
+                            91..105,
+                        ),
+                        expr: FunctionCall {
+                            span: Some(
+                                76..90,
+                            ),
+                            distinct: false,
+                            name: Identifier {
+                                name: "current_role",
+                                quote: None,
+                                span: Some(
+                                    76..88,
+                                ),
+                            },
+                            args: [],
+                            params: [],
+                            window: None,
+                        },
+                        list: [
+                            Literal {
+                                span: Some(
+                                    95..104,
+                                ),
+                                lit: String(
+                                    "ANALYST",
+                                ),
+                            },
+                        ],
+                        not: false,
+                    },
+                ],
+                results: [
+                    ColumnRef {
+                        span: Some(
+                            111..114,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "VAL",
+                            quote: None,
+                            span: Some(
+                                111..114,
+                            ),
+                        },
+                    },
+                ],
+                else_result: Some(
+                    Literal {
+                        span: Some(
+                            120..131,
+                        ),
+                        lit: String(
+                            "*********",
+                        ),
+                    },
+                ),
+            },
+            comment: Some(
+                "this is a masking policy",
+            ),
+        },
     },
 )
 

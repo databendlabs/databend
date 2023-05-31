@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
 use crate::optimizer::RuleID;
@@ -57,23 +59,31 @@ impl RulePushDownFilterAggregate {
         Self {
             id: RuleID::PushDownFilterAggregate,
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_unary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::Aggregate,
+                        plan_type: RelOp::Filter,
                     }
                     .into(),
-                    SExpr::create_unary(
+                ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Aggregate,
                         }
                         .into(),
-                        SExpr::create_leaf(PatternPlan { plan_type: Pattern }.into()),
                     ),
-                ),
+                    Arc::new(SExpr::create_unary(
+                        Arc::new(
+                            PatternPlan {
+                                plan_type: RelOp::Aggregate,
+                            }
+                            .into(),
+                        ),
+                        Arc::new(SExpr::create_leaf(Arc::new(
+                            PatternPlan { plan_type: Pattern }.into(),
+                        ))),
+                    )),
+                )),
             )],
         }
     }
@@ -117,18 +127,18 @@ impl Rule for RulePushDownFilterAggregate {
                     result = s_expr.clone();
                 } else {
                     let filter_push_down_expr = SExpr::create_unary(
-                        RelOperator::Filter(Filter {
+                        Arc::new(RelOperator::Filter(Filter {
                             predicates: push_predicates,
                             is_having: false,
-                        }),
-                        agg_child.child(0)?.clone(),
+                        })),
+                        Arc::new(agg_child.child(0)?.clone()),
                     );
                     let agg_with_filter_push_down_expr = SExpr::create_unary(
-                        RelOperator::Aggregate(agg_parent_plan),
-                        SExpr::create_unary(
-                            RelOperator::Aggregate(agg_child_plan),
-                            filter_push_down_expr,
-                        ),
+                        Arc::new(RelOperator::Aggregate(agg_parent_plan)),
+                        Arc::new(SExpr::create_unary(
+                            Arc::new(RelOperator::Aggregate(agg_child_plan)),
+                            Arc::new(filter_push_down_expr),
+                        )),
                     );
                     // All filters are pushed down.
                     if remaining_predicates.is_empty() {
@@ -136,11 +146,11 @@ impl Rule for RulePushDownFilterAggregate {
                     } else {
                         // Partial filter can be pushed down.
                         result = SExpr::create_unary(
-                            RelOperator::Filter(Filter {
+                            Arc::new(RelOperator::Filter(Filter {
                                 predicates: remaining_predicates,
                                 is_having: true,
-                            }),
-                            agg_with_filter_push_down_expr,
+                            })),
+                            Arc::new(agg_with_filter_push_down_expr),
                         );
                     }
                 }

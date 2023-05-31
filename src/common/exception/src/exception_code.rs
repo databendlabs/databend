@@ -140,6 +140,7 @@ build_exceptions! {
     TableWithInternalColumnName(1110),
     EmptyShareEndpointConfig(1111),
     LicenceDenied(1112),
+    UnknownDatamask(1113),
 
     // Data Related Errors
 
@@ -190,6 +191,8 @@ build_exceptions! {
     TableNotWritable(2012),
     TableHistoricalDataNotFound(2013),
     DuplicatedUpsertFiles(2014),
+    TableAlreadyLocked(2015),
+    TableLockExpired(2016),
 
     // User api error codes.
     UnknownUser(2201),
@@ -224,6 +227,8 @@ build_exceptions! {
     /// - not exists.
     /// - and without `IF EXISTS`
     CatalogNotFound(2320),
+    /// data mask error codes
+    DatamaskAlreadyExists(2321),
 
 
     // Cluster error codes.

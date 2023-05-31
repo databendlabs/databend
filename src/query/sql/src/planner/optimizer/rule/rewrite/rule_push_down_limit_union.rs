@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp;
+use std::sync::Arc;
 
 use common_exception::Result;
 
@@ -40,28 +41,32 @@ impl RulePushDownLimitUnion {
             //     /  \
             //   ...   ...
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Limit,
-                }
-                .into(),
-                SExpr::create_binary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::UnionAll,
+                        plan_type: RelOp::Limit,
                     }
                     .into(),
-                    SExpr::create_leaf(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ),
-                    SExpr::create_leaf(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ),
                 ),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::UnionAll,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
+                )),
             )],
         }
     }
@@ -94,13 +99,21 @@ impl Rule for RulePushDownLimitUnion {
         let mut union_right_child = union_s_expr.child(1)?.clone();
 
         // Add limit to union children
-        union_left_child = SExpr::create_unary(new_limit.clone().into(), union_left_child);
-        union_right_child = SExpr::create_unary(new_limit.into(), union_right_child);
+        union_left_child = SExpr::create_unary(
+            Arc::new(new_limit.clone().into()),
+            Arc::new(union_left_child),
+        );
+        union_right_child =
+            SExpr::create_unary(Arc::new(new_limit.into()), Arc::new(union_right_child));
 
-        let mut result = SExpr::create_binary(union.into(), union_left_child, union_right_child);
+        let mut result = SExpr::create_binary(
+            Arc::new(union.into()),
+            Arc::new(union_left_child),
+            Arc::new(union_right_child),
+        );
 
         // Add original limit to top
-        result = s_expr.replace_children(vec![result]);
+        result = s_expr.replace_children(vec![Arc::new(result)]);
         result.set_applied_rule(&self.id);
         state.add_result(result);
 

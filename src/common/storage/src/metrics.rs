@@ -23,11 +23,15 @@ use std::time::Instant;
 
 use async_trait::async_trait;
 use bytes::Bytes;
-use opendal::ops::*;
 use opendal::raw::oio;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
+use opendal::raw::OpAppend;
+use opendal::raw::OpList;
+use opendal::raw::OpRead;
+use opendal::raw::OpWrite;
+use opendal::raw::RpAppend;
 use opendal::raw::RpList;
 use opendal::raw::RpRead;
 use opendal::raw::RpWrite;
@@ -170,6 +174,7 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
     type BlockingWriter = StorageMetricsWrapper<A::BlockingWriter>;
     type Pager = A::Pager;
     type BlockingPager = A::BlockingPager;
+    type Appender = A::Appender;
 
     fn inner(&self) -> &Self::Inner {
         &self.inner
@@ -210,6 +215,10 @@ impl<A: Accessor> LayeredAccessor for StorageMetricsAccessor<A> {
 
     fn blocking_list(&self, path: &str, args: OpList) -> Result<(RpList, Self::BlockingPager)> {
         self.inner.blocking_list(path, args)
+    }
+
+    async fn append(&self, path: &str, args: OpAppend) -> Result<(RpAppend, Self::Appender)> {
+        self.inner.append(path, args).await
     }
 }
 

@@ -32,12 +32,19 @@ use common_base::base::tokio::time;
 use common_base::runtime::TrackedFuture;
 use futures::ready;
 use futures::Future;
-use opendal::ops::*;
 use opendal::raw::oio;
 use opendal::raw::oio::ReadExt;
 use opendal::raw::Accessor;
 use opendal::raw::Layer;
 use opendal::raw::LayeredAccessor;
+use opendal::raw::OpAppend;
+use opendal::raw::OpCreateDir;
+use opendal::raw::OpDelete;
+use opendal::raw::OpList;
+use opendal::raw::OpRead;
+use opendal::raw::OpStat;
+use opendal::raw::OpWrite;
+use opendal::raw::RpAppend;
 use opendal::raw::RpCreateDir;
 use opendal::raw::RpDelete;
 use opendal::raw::RpList;
@@ -100,6 +107,7 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
     type BlockingWriter = A::BlockingWriter;
     type Pager = A::Pager;
     type BlockingPager = A::BlockingPager;
+    type Appender = A::Appender;
 
     fn inner(&self) -> &Self::Inner {
         &self.inner
@@ -179,6 +187,15 @@ impl<A: Accessor> LayeredAccessor for RuntimeAccessor<A> {
         let op = self.inner.clone();
         let path = path.to_string();
         let future = async move { op.list(&path, args).await };
+        let future = TrackedFuture::create(future);
+        self.runtime.spawn(future).await.expect("join must success")
+    }
+
+    #[async_backtrace::framed]
+    async fn append(&self, path: &str, args: OpAppend) -> Result<(RpAppend, Self::Appender)> {
+        let op = self.inner.clone();
+        let path = path.to_string();
+        let future = async move { op.append(&path, args).await };
         let future = TrackedFuture::create(future);
         self.runtime.spawn(future).await.expect("join must success")
     }

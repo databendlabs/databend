@@ -41,6 +41,7 @@ use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
+use crate::executor::IEJoin;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::Window;
 use crate::planner::MetadataRef;
@@ -146,6 +147,7 @@ fn to_format_tree(
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
+        PhysicalPlan::IEJoin(plan) => ie_join_to_format_tree(plan, metadata, prof_span_set),
     }
 }
 
@@ -188,6 +190,12 @@ fn table_scan_to_format_tree(
         })
     });
 
+    let agg_index = plan
+        .source
+        .push_downs
+        .as_ref()
+        .and_then(|extras| extras.agg_index.as_ref());
+
     let mut children = vec![FormatTreeNode::new(format!("table: {table_name}"))];
 
     // Part stats.
@@ -204,6 +212,36 @@ fn table_scan_to_format_tree(
         }
     };
     children.push(FormatTreeNode::new(push_downs));
+    // Aggregating index
+    if let Some(agg_index) = agg_index {
+        let metadata = metadata.read();
+        let (_, agg_index_sql, _) = metadata
+            .get_agg_indexes(&table_name)
+            .unwrap()
+            .iter()
+            .find(|(index, _, _)| *index == agg_index.index_id)
+            .unwrap();
+
+        children.push(FormatTreeNode::new(format!(
+            "aggregating index: [{agg_index_sql}]"
+        )));
+
+        let agg_sel = agg_index
+            .selection
+            .iter()
+            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .join(", ");
+        let agg_filter = agg_index
+            .filter
+            .as_ref()
+            .map(|f| f.as_expr(&BUILTIN_FUNCTIONS).sql_display());
+        let text = if let Some(f) = agg_filter {
+            format!("rewritten query: [selection: [{agg_sel}], filter: {f}]")
+        } else {
+            format!("rewritten query: [selection: [{agg_sel}]]")
+        };
+        children.push(FormatTreeNode::new(text));
+    }
 
     let output_columns = plan.source.output_schema.fields();
 
@@ -634,6 +672,67 @@ fn row_fetch_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "RowFetch".to_string(),
+        children,
+    ))
+}
+
+fn ie_join_to_format_tree(
+    plan: &IEJoin,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let ie_join_conditions = plan
+        .conditions
+        .iter()
+        .map(|condition| {
+            let left = condition
+                .left_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .sql_display();
+            let right = condition
+                .right_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .sql_display();
+            format!("{left} {:?} {right}", condition.operator)
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let other_conditions = plan
+        .other_conditions
+        .iter()
+        .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut left_child = to_format_tree(&plan.left, metadata, prof_span_set)?;
+    let mut right_child = to_format_tree(&plan.right, metadata, prof_span_set)?;
+
+    left_child.payload = format!("{}(Left)", left_child.payload);
+    right_child.payload = format!("{}(Right)", right_child.payload);
+
+    let mut children = vec![
+        FormatTreeNode::new(format!("join type: {}", plan.join_type)),
+        FormatTreeNode::new(format!("ie_join conditions: [{ie_join_conditions}]")),
+        FormatTreeNode::new(format!("other conditions: [{other_conditions}]")),
+    ];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(left_child);
+    children.push(right_child);
+
+    Ok(FormatTreeNode::with_children(
+        "IEJoin".to_string(),
         children,
     ))
 }

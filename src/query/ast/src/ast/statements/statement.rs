@@ -54,6 +54,7 @@ pub enum Statement {
     ShowTableFunctions {
         limit: Option<ShowLimit>,
     },
+    ShowIndexes,
 
     KillStmt {
         kill_target: KillTarget,
@@ -215,6 +216,11 @@ pub enum Statement {
     ShowShares(ShowSharesStmt),
     ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt),
     ShowGrantsOfShare(ShowGrantsOfShareStmt),
+
+    // data mask
+    CreateDatamaskPolicy(CreateDatamaskPolicyStmt),
+    DropDatamaskPolicy(DropDatamaskPolicyStmt),
+    DescDatamaskPolicy(DescDatamaskPolicyStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -299,6 +305,7 @@ impl Display for Statement {
             Statement::ShowProcessList => write!(f, "SHOW PROCESSLIST")?,
             Statement::ShowMetrics => write!(f, "SHOW METRICS")?,
             Statement::ShowEngines => write!(f, "SHOW ENGINES")?,
+            Statement::ShowIndexes => write!(f, "SHOW INDEXES")?,
             Statement::ShowFunctions { limit } => {
                 write!(f, "SHOW FUNCTIONS")?;
                 if let Some(limit) = limit {
@@ -516,6 +523,9 @@ impl Display for Statement {
             Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
             Statement::ShowObjectGrantPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::ShowGrantsOfShare(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DescDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }
