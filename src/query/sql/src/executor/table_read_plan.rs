@@ -15,7 +15,11 @@
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use common_ast::parser::parse_expr;
+use common_ast::parser::tokenize_sql;
+use common_ast::Dialect;
 use common_base::base::ProgressValues;
+use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
 use common_catalog::plan::PartStatistics;
@@ -28,6 +32,21 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
+use common_license::license_manager::get_license_manager;
+use common_settings::Settings;
+use common_users::UserApiProvider;
+use data_mask_feature::get_datamask_handler;
+use parking_lot::RwLock;
+
+use crate::plans::BoundColumnRef;
+use crate::resolve_type_name_by_str;
+use crate::BindContext;
+use crate::ColumnBinding;
+use crate::Metadata;
+use crate::NameResolutionContext;
+use crate::ScalarExpr;
+use crate::TypeChecker;
+use crate::Visibility;
 
 #[async_trait::async_trait]
 pub trait ToReadDataSourcePlan {
@@ -129,6 +148,85 @@ impl ToReadDataSourcePlan for dyn Table {
             }
             output_schema = Arc::new(schema);
         }
+
+        let data_mask_policy = if let DataSourceInfo::TableSource(table_info) = &source_info {
+            let table_meta = &table_info.meta;
+            let tenant = ctx.get_tenant();
+
+            if let Some(column_mask_policy) = &table_meta.column_mask_policy {
+                let license_manager = get_license_manager();
+                let ret = license_manager.manager.check_enterprise_enabled(
+                    &ctx.get_settings(),
+                    tenant.clone(),
+                    "data_mask".to_string(),
+                );
+                if ret.is_err() {
+                    None
+                } else {
+                    let mut mask_policy_map = BTreeMap::new();
+                    let meta_api = UserApiProvider::instance().get_meta_store_client();
+                    let handler = get_datamask_handler();
+                    for (i, field) in output_schema.fields().iter().enumerate() {
+                        if let Some(mask_policy) = column_mask_policy.get(field.name()) {
+                            let policy = handler
+                                .get_data_mask(
+                                    meta_api.clone(),
+                                    tenant.clone(),
+                                    mask_policy.clone(),
+                                )
+                                .await?;
+
+                            let args = &policy.args;
+                            let mut aliases = Vec::with_capacity(args.len());
+                            for (i, (arg_name, arg_type)) in args.iter().enumerate() {
+                                let table_data_type = resolve_type_name_by_str(arg_type.as_str())?;
+                                let data_type = (&table_data_type).into();
+                                let bound_column = BoundColumnRef {
+                                    span: None,
+                                    column: ColumnBinding {
+                                        database_name: None,
+                                        table_name: None,
+                                        table_index: None,
+                                        column_name: arg_name.to_string(),
+                                        index: i,
+                                        data_type: Box::new(data_type),
+                                        visibility: Visibility::Visible,
+                                    },
+                                };
+                                let scalar_expr = ScalarExpr::BoundColumnRef(bound_column);
+                                aliases.push((arg_name.clone(), scalar_expr));
+                            }
+
+                            let body = &policy.body;
+                            let tokens = tokenize_sql(body)?;
+                            let ast_expr = parse_expr(&tokens, Dialect::PostgreSQL)?;
+                            let mut bind_context = BindContext::new();
+                            let settings = Settings::create("".to_string());
+                            let name_resolution_ctx =
+                                NameResolutionContext::try_from(settings.as_ref())?;
+                            let metadata = Arc::new(RwLock::new(Metadata::default()));
+                            let mut type_checker = TypeChecker::new(
+                                &mut bind_context,
+                                ctx.clone(),
+                                &name_resolution_ctx,
+                                metadata,
+                                &aliases,
+                                false,
+                            );
+
+                            let scalar = type_checker.resolve(&ast_expr).await?;
+                            let expr = scalar.0.as_expr()?.project_column_ref(|col| col.index);
+                            mask_policy_map.insert(i, expr.as_remote_expr());
+                        }
+                    }
+                    Some(mask_policy_map)
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         // TODO pass in catalog name
 
         Ok(DataSourcePlan {
@@ -141,6 +239,7 @@ impl ToReadDataSourcePlan for dyn Table {
             tbl_args: self.table_args(),
             push_downs,
             query_internal_columns: internal_columns.is_some(),
+            data_mask_policy,
         })
     }
 }

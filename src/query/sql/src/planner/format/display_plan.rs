@@ -58,6 +58,9 @@ impl Plan {
             Plan::DescribeTable(describe_table) => Ok(format!("{:?}", describe_table)),
             Plan::RenameTable(rename_table) => Ok(format!("{:?}", rename_table)),
             Plan::AddTableColumn(add_table_column) => Ok(format!("{:?}", add_table_column)),
+            Plan::ModifyTableColumn(modify_table_column) => {
+                Ok(format!("{:?}", modify_table_column))
+            }
             Plan::DropTableColumn(drop_table_column) => Ok(format!("{:?}", drop_table_column)),
             Plan::AlterTableClusterKey(alter_table_cluster_key) => {
                 Ok(format!("{:?}", alter_table_cluster_key))

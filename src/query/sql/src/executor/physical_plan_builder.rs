@@ -439,9 +439,52 @@ impl PhysicalPlanBuilder {
                 if let Some(ie_join) = ie_join {
                     return Ok(ie_join);
                 }
-                // build hash join
-                let build_side = self.build(s_expr.child(1)?).await?;
-                let probe_side = self.build(s_expr.child(0)?).await?;
+
+                let mut probe_side = Box::new(self.build(s_expr.child(0)?).await?);
+                let mut build_side = Box::new(self.build(s_expr.child(1)?).await?);
+
+                // Unify the data types of the left and right exchange keys.
+                if let (
+                    PhysicalPlan::Exchange(PhysicalExchange {
+                        keys: probe_keys, ..
+                    }),
+                    PhysicalPlan::Exchange(PhysicalExchange {
+                        keys: build_keys, ..
+                    }),
+                ) = (probe_side.as_mut(), build_side.as_mut())
+                {
+                    for (probe_key, build_key) in probe_keys.iter_mut().zip(build_keys.iter_mut()) {
+                        let probe_expr = probe_key.as_expr(&BUILTIN_FUNCTIONS);
+                        let build_expr = build_key.as_expr(&BUILTIN_FUNCTIONS);
+                        let common_ty = common_super_type(
+                            probe_expr.data_type().clone(),
+                            build_expr.data_type().clone(),
+                            &BUILTIN_FUNCTIONS.default_cast_rules,
+                        )
+                        .ok_or_else(|| {
+                            ErrorCode::IllegalDataType(format!(
+                                "Cannot find common type for probe key {:?} and build key {:?}",
+                                &probe_expr, &build_expr
+                            ))
+                        })?;
+                        *probe_key = check_cast(
+                            probe_expr.span(),
+                            false,
+                            probe_expr,
+                            &common_ty,
+                            &BUILTIN_FUNCTIONS,
+                        )?
+                        .as_remote_expr();
+                        *build_key = check_cast(
+                            build_expr.span(),
+                            false,
+                            build_expr,
+                            &common_ty,
+                            &BUILTIN_FUNCTIONS,
+                        )?
+                        .as_remote_expr();
+                    }
+                }
 
                 let build_schema = match join.join_type {
                     JoinType::Left | JoinType::Full => {
@@ -549,8 +592,8 @@ impl PhysicalPlanBuilder {
 
                 Ok(PhysicalPlan::HashJoin(HashJoin {
                     plan_id: self.next_plan_id(),
-                    build: Box::new(build_side),
-                    probe: Box::new(probe_side),
+                    build: build_side,
+                    probe: probe_side,
                     join_type: join.join_type.clone(),
                     build_keys: right_join_conditions,
                     probe_keys: left_join_conditions,
@@ -1051,25 +1094,44 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .zip(op.right_runtime_filters.iter())
                 {
-                    left_runtime_filters.insert(
-                        left.0.clone(),
-                        left.1
-                            .resolve_and_check(left_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                left_schema.index_of(&index.to_string()).unwrap()
-                            })
-                            .as_remote_expr(),
-                    );
-                    right_runtime_filters.insert(
-                        right.0.clone(),
-                        right
-                            .1
-                            .resolve_and_check(right_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                right_schema.index_of(&index.to_string()).unwrap()
-                            })
-                            .as_remote_expr(),
-                    );
+                    let left_expr = left
+                        .1
+                        .resolve_and_check(left_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            left_schema.index_of(&index.to_string()).unwrap()
+                        });
+                    let right_expr = right
+                        .1
+                        .resolve_and_check(right_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            right_schema.index_of(&index.to_string()).unwrap()
+                        });
+
+                    let common_ty = common_super_type(left_expr.data_type().clone(), right_expr.data_type().clone(), &BUILTIN_FUNCTIONS.default_cast_rules)
+                        .ok_or_else(|| ErrorCode::SemanticError(format!("RuntimeFilter's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}", left.0, left_expr.data_type(), right.0, right_expr.data_type())))?;
+
+                    let left_expr = type_check::check_cast(
+                        left_expr.span(),
+                        false,
+                        left_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    let right_expr = type_check::check_cast(
+                        right_expr.span(),
+                        false,
+                        right_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+
+                    let (left_expr, _) =
+                        ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let (right_expr, _) =
+                        ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+                    left_runtime_filters.insert(left.0.clone(), left_expr.as_remote_expr());
+                    right_runtime_filters.insert(right.0.clone(), right_expr.as_remote_expr());
                 }
                 Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
                     plan_id: self.next_plan_id(),

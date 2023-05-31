@@ -112,6 +112,8 @@ message TableMeta {
   optional string part_prefix = 27;
 
   repeated uint64 shared_by = 28; 
+
+  map<string, string> column_mask_policy = 29;
 }
 
 // Save table name id list history.
