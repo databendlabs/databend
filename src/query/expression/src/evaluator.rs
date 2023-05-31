@@ -706,10 +706,13 @@ impl<'a> Evaluator<'a> {
             return Ok(None);
         }
 
-        let num_rows = match &value {
-            Value::Scalar(_) => 1,
-            Value::Column(col) => col.len(),
-        };
+        let num_rows = validity
+            .as_ref()
+            .map(|validity| validity.len())
+            .unwrap_or_else(|| match &value {
+                Value::Scalar(_) => 1,
+                Value::Column(col) => col.len(),
+            });
         let block = DataBlock::new(
             vec![BlockEntry {
                 data_type: src_type.clone(),
@@ -885,9 +888,6 @@ pub struct ConstantFolder<'a, Index: ColumnIndex> {
     input_domains: &'a HashMap<Index, Domain>,
     func_ctx: &'a FunctionContext,
     fn_registry: &'a FunctionRegistry,
-    /// Set to false to disable constant folding of column references.
-    /// This is useful when the column type is untruestworthy.
-    fold_column: bool,
 }
 
 impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
@@ -903,25 +903,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains: &input_domains,
             func_ctx,
             fn_registry,
-            fold_column: true,
-        };
-
-        folder.fold_to_stable(expr)
-    }
-
-    /// Fold a single expression whose column type is not trustworthy.
-    pub fn fold_with_untrusted_column_type(
-        expr: &Expr<Index>,
-        func_ctx: &'a FunctionContext,
-        fn_registry: &'a FunctionRegistry,
-    ) -> (Expr<Index>, Option<Domain>) {
-        let input_domains = Self::full_input_domains(expr);
-
-        let folder = ConstantFolder {
-            input_domains: &input_domains,
-            func_ctx,
-            fn_registry,
-            fold_column: false,
         };
 
         folder.fold_to_stable(expr)
@@ -939,7 +920,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
             input_domains,
             func_ctx,
             fn_registry,
-            fold_column: true,
         };
 
         folder.fold_to_stable(expr)
@@ -989,7 +969,7 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                 id,
                 data_type,
                 ..
-            } if self.fold_column => {
+            } => {
                 let domain = &self.input_domains[id];
                 let expr = domain
                     .as_singleton()
@@ -1001,7 +981,6 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     .unwrap_or_else(|| expr.clone());
                 (expr, Some(domain.clone()))
             }
-            Expr::ColumnRef { .. } => (expr.clone(), None),
             Expr::Cast {
                 span,
                 is_try,

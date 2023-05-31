@@ -28,6 +28,7 @@ use common_expression::types::NumberDataType;
 use itertools::Itertools;
 
 use super::prune_by_children;
+use super::ExprContext;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
@@ -379,6 +380,7 @@ impl Binder {
             }
         }
 
+        bind_context.set_expr_context(ExprContext::GroupClaue);
         match group_by {
             GroupBy::Normal(exprs) => {
                 self.resolve_group_items(

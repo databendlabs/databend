@@ -2532,6 +2532,7 @@ dependencies = [
  "common-users",
  "ctor",
  "dashmap",
+ "data-mask-feature",
  "educe",
  "enum-as-inner",
  "globiter",
@@ -3446,7 +3447,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 
 [[package]]
-name = "data-mask"
+name = "data-mask-feature"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -3454,7 +3455,6 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-meta-store",
- "common-sql",
 ]
 
 [[package]]
@@ -3626,7 +3626,7 @@ dependencies = [
  "criterion",
  "ctor",
  "dashmap",
- "data-mask",
+ "data-mask-feature",
  "ethnum",
  "futures",
  "futures-util",
@@ -4005,11 +4005,10 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-settings",
- "common-sql",
  "common-storages-fuse",
  "common-users",
  "dashmap",
- "data-mask",
+ "data-mask-feature",
  "databend-query",
  "futures-util",
  "jwt-simple",
