@@ -31,10 +31,12 @@ impl VisitorMut for AggregateRewriter {
                 distinct,
                 name,
                 args,
+                window,
                 ..
             } if !*distinct
                 && args.len() == 1
-                && name.name.to_ascii_lowercase().to_lowercase() == "sum" =>
+                && name.name.to_ascii_lowercase().to_lowercase() == "sum"
+                && window.is_none() =>
             {
                 match &args[0] {
                     Expr::BinaryOp {

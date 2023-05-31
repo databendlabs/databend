@@ -70,8 +70,12 @@ impl Window {
         let mut used_columns = ColumnSet::new();
 
         used_columns.insert(self.index);
-
         used_columns.extend(self.function.used_columns());
+
+        for arg in self.arguments.iter() {
+            used_columns.insert(arg.index);
+            used_columns.extend(arg.scalar.used_columns())
+        }
 
         for part in self.partition_by.iter() {
             used_columns.insert(part.index);

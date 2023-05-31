@@ -1217,27 +1217,20 @@ impl<'a> TypeChecker<'a> {
             None => arg_types[0].wrap_nullable(),
         };
 
-        let cast_default = default
-            .map(|d| match d.clone() {
-                ScalarExpr::BoundColumnRef(_)
-                | ScalarExpr::CastExpr(_)
-                | ScalarExpr::ConstantExpr(_) => Ok(ScalarExpr::CastExpr(CastExpr {
-                    span: d.span(),
-                    is_try: true,
-                    argument: Box::new(d),
-                    target_type: Box::new(return_type.clone()),
-                })),
-                _ => Err(ErrorCode::SemanticError(
-                    "default value just support literal value and column, or ignore it",
-                )),
-            })
-            .transpose()?;
+        let cast_default = default.map(|d| {
+            Box::new(ScalarExpr::CastExpr(CastExpr {
+                span: d.span(),
+                is_try: true,
+                argument: Box::new(d),
+                target_type: Box::new(return_type.clone()),
+            }))
+        });
 
         Ok(WindowFuncType::LagLead(LagLeadFunction {
             is_lag: func_name == "lag",
             arg: Box::new(args[0].clone()),
             offset: offset.unwrap_or(1),
-            default: cast_default.map(Box::new),
+            default: cast_default,
             return_type: Box::new(return_type),
         }))
     }

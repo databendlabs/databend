@@ -159,9 +159,7 @@ impl UnusedColumnPruner {
                 let mut used = vec![];
                 for item in &p.aggregate_functions {
                     if required.contains(&item.index) {
-                        for c in item.scalar.used_columns() {
-                            required.insert(c);
-                        }
+                        required.extend(item.scalar.used_columns());
                         used.push(item.clone());
                     }
                 }
@@ -195,12 +193,16 @@ impl UnusedColumnPruner {
             }
             RelOperator::Window(p) => {
                 if required.contains(&p.index) {
-                    required.extend(p.function.used_columns());
+                    // The scalar items in window function is not replaced yet.
+                    // The will be replaced in physical plan builder.
+                    p.arguments.iter().for_each(|item| {
+                        required.extend(item.scalar.used_columns());
+                    });
                     p.partition_by.iter().for_each(|item| {
-                        required.insert(item.index);
+                        required.extend(item.scalar.used_columns());
                     });
                     p.order_by.iter().for_each(|item| {
-                        required.insert(item.order_by_item.index);
+                        required.extend(item.order_by_item.scalar.used_columns());
                     });
                 }
 
