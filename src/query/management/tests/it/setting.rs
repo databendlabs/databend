@@ -86,7 +86,7 @@ async fn test_set_setting() -> Result<()> {
 
     // Drop setting.
     {
-        mgr.drop_setting("max_threads", MatchSeq::GE(1)).await?;
+        mgr.try_drop_setting("max_threads", MatchSeq::GE(1)).await?;
     }
 
     // Get settings.
@@ -103,8 +103,10 @@ async fn test_set_setting() -> Result<()> {
 
     // Drop setting not exists.
     {
-        let res = mgr.drop_setting("max_threads_not", MatchSeq::GE(1)).await;
-        assert!(res.is_err());
+        let res = mgr
+            .try_drop_setting("max_threads_not", MatchSeq::GE(1))
+            .await;
+        assert!(res.is_ok());
     }
 
     Ok(())
