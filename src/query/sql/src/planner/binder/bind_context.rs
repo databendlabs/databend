@@ -60,6 +60,12 @@ pub enum ExprContext {
     Unknown,
 }
 
+impl ExprContext {
+    pub fn prefer_resolve_alias(&self) -> bool {
+        !matches!(self, ExprContext::SelectClause | ExprContext::WhereClause)
+    }
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum Visibility {
     // Default for a column
@@ -280,23 +286,11 @@ impl BindContext {
         column: &str,
         span: Span,
         available_aliases: &[(String, ScalarExpr)],
-        allow_ambiguous: bool,
     ) -> Result<NameResolutionResult> {
         let mut result = vec![];
 
-        let mut bind_context: &BindContext = self;
         // Lookup parent context to resolve outer reference.
-        loop {
-            if self.expr_context.is_where_clause() || self.expr_context.is_select_clause() {
-                // In where/select clause, check bound columns first.
-                Self::search_bound_columns(bind_context, database, table, column, &mut result);
-
-                if self.expr_context.is_where_clause() && !result.is_empty() {
-                    break;
-                }
-            }
-
-            // TODO(leiysky): use `Identifier` for alias instead of raw string
+        if self.expr_context.prefer_resolve_alias() {
             for (alias, scalar) in available_aliases {
                 if database.is_none() && table.is_none() && column == alias {
                     result.push(NameResolutionResult::Alias {
@@ -306,17 +300,58 @@ impl BindContext {
                 }
             }
 
-            // We will lookup alias first. If there are matched aliases, we will skip
-            // looking up `BindContext` to avoid ambiguity.
+            self.search_bound_columns_recursively(database, table, column, &mut result);
+        } else {
+            self.search_bound_columns_recursively(database, table, column, &mut result);
+
+            for (alias, scalar) in available_aliases {
+                if database.is_none() && table.is_none() && column == alias {
+                    result.push(NameResolutionResult::Alias {
+                        alias: alias.clone(),
+                        scalar: scalar.clone(),
+                    });
+                }
+            }
+        }
+
+        if result.is_empty() {
+            Err(ErrorCode::SemanticError(format!("column {column} doesn't exist")).set_span(span))
+        } else {
+            Ok(result.remove(0))
+        }
+    }
+
+    pub fn search_bound_columns_recursively(
+        &self,
+        database: Option<&str>,
+        table: Option<&str>,
+        column: &str,
+        result: &mut Vec<NameResolutionResult>,
+    ) {
+        let mut bind_context: &BindContext = self;
+
+        loop {
+            for column_binding in bind_context.columns.iter() {
+                if Self::match_column_binding(database, table, column, column_binding) {
+                    result.push(NameResolutionResult::Column(column_binding.clone()));
+                }
+            }
             if !result.is_empty() {
-                break;
+                return;
             }
 
-            if !self.expr_context.is_where_clause() {
-                Self::search_bound_columns(bind_context, database, table, column, &mut result);
-                if !result.is_empty() {
-                    break;
-                }
+            // look up internal column
+            if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(column) {
+                let column_binding = InternalColumnBinding {
+                    database_name: database.map(|n| n.to_owned()),
+                    table_name: table.map(|n| n.to_owned()),
+                    index: bind_context.columns.len(),
+                    internal_column,
+                };
+                result.push(NameResolutionResult::InternalColumn(column_binding));
+            }
+            if !result.is_empty() {
+                return;
             }
 
             if let Some(ref parent) = bind_context.parent {
@@ -324,45 +359,6 @@ impl BindContext {
             } else {
                 break;
             }
-        }
-
-        if result.is_empty() {
-            Err(ErrorCode::SemanticError(format!("column {column} doesn't exist")).set_span(span))
-        } else if result.len() > 1 && !allow_ambiguous {
-            Err(ErrorCode::SemanticError(format!(
-                "column {column} reference is ambiguous, got {result:?}"
-            ))
-            .set_span(span))
-        } else {
-            Ok(result.remove(0))
-        }
-    }
-
-    pub fn search_bound_columns(
-        bind_context: &BindContext,
-        database: Option<&str>,
-        table: Option<&str>,
-        column: &str,
-        result: &mut Vec<NameResolutionResult>,
-    ) {
-        for column_binding in bind_context.columns.iter() {
-            if Self::match_column_binding(database, table, column, column_binding) {
-                result.push(NameResolutionResult::Column(column_binding.clone()));
-            }
-        }
-        if !result.is_empty() {
-            return;
-        }
-
-        // look up internal column
-        if let Some(internal_column) = INTERNAL_COLUMN_FACTORY.get_internal_column(column) {
-            let column_binding = InternalColumnBinding {
-                database_name: database.map(|n| n.to_owned()),
-                table_name: table.map(|n| n.to_owned()),
-                index: bind_context.columns.len(),
-                internal_column,
-            };
-            result.push(NameResolutionResult::InternalColumn(column_binding));
         }
     }
 

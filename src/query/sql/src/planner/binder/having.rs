@@ -39,6 +39,7 @@ impl Binder {
         aliases: &[(String, ScalarExpr)],
         having: &Expr,
     ) -> Result<(ScalarExpr, Span)> {
+        bind_context.set_expr_context(ExprContext::HavingClause);
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -46,7 +47,6 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
-        scalar_binder.allow_ambiguity();
         let (scalar, _) = scalar_binder.bind(having).await?;
         let mut rewriter = AggregateRewriter::new(bind_context, self.metadata.clone());
         Ok((rewriter.visit(&scalar)?, having.span()))
