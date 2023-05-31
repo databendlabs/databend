@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
@@ -52,12 +53,12 @@ impl Operator for ProjectSet {
     fn derive_relational_prop(
         &self,
         rel_expr: &RelExpr,
-    ) -> common_exception::Result<RelationalProperty> {
-        let mut child_prop = rel_expr.derive_relational_prop_child(0)?;
+    ) -> common_exception::Result<Arc<RelationalProperty>> {
+        let mut child_prop = rel_expr.derive_relational_prop_child(0)?.as_ref().clone();
         for srf in &self.srfs {
             child_prop.output_columns.insert(srf.index);
         }
-        Ok(child_prop)
+        Ok(Arc::new(child_prop))
     }
 
     fn derive_physical_prop(
@@ -67,11 +68,11 @@ impl Operator for ProjectSet {
         rel_expr.derive_physical_prop_child(0)
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> common_exception::Result<StatInfo> {
-        let mut input_stat = rel_expr.derive_cardinality_child(0)?;
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> common_exception::Result<Arc<StatInfo>> {
+        let mut input_stat = rel_expr.derive_cardinality_child(0)?.deref().clone();
         // ProjectSet is set-returning functions, precise_cardinality set None
         input_stat.statistics.precise_cardinality = None;
-        Ok(input_stat)
+        Ok(Arc::new(input_stat))
     }
 
     fn compute_required_prop_child(

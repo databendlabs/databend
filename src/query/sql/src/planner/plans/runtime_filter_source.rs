@@ -69,33 +69,33 @@ impl Operator for RuntimeFilterSource {
         RelOp::RuntimeFilterSource
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         // Derive output columns
         let output_columns = left_prop.output_columns.clone();
         // Derive outer columns
-        let outer_columns = left_prop.outer_columns;
+        let outer_columns = left_prop.outer_columns.clone();
 
-        Ok(RelationalProperty {
+        Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns: self.used_columns()?,
-        })
+        }))
     }
 
     fn derive_physical_prop(&self, _rel_expr: &RelExpr) -> Result<PhysicalProperty> {
         todo!()
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
-        Ok(StatInfo {
+        Ok(Arc::new(StatInfo {
             cardinality: stat_info.cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
-                column_stats: stat_info.statistics.column_stats,
+                column_stats: stat_info.statistics.column_stats.clone(),
             },
-        })
+        }))
     }
 
     fn compute_required_prop_child(

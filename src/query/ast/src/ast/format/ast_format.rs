@@ -1344,6 +1344,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
+            AlterTableAction::ModifyColumn { column, action: _ } => {
+                let action_name = format!("Action ModifyColumn column {}", column);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
             AlterTableAction::DropColumn { column } => {
                 let action_name = format!("Action Drop column {}", column);
                 let action_format_ctx = AstFormatContext::new(action_name);

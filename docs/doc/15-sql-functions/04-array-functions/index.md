@@ -9,6 +9,7 @@ SQL Array Functions and Usage.
 |--------------------------------------|----------------------------------------------------------------------------------------------|---------------------------------------|--------------------------|
 | **GET(array, index)**                | Returns an element from the array by index (1-based)                                         | **GET([1, 2], 2)**                    | 2                        |
 | **LENGTH(array)**                    | Returns the length of the array                                                              | **LENGTH([1, 2])**                    | 2                        |
+| **RANGE(start, end)**                    | Returns an array collected by [start, end)                                                     | **RANGE(1, 3)**                    | [1, 2]                        |
 | **ARRAY_CONCAT(array1, array2)**     | Concats two arrays                                                                           | **ARRAY_CONCAT([1, 2], [3, 4]**       | [1,2,3,4]                |
 | **ARRAY_CONTAINS(array, item)**      | Checks if the array contains a specific element                                              | **ARRAY_CONTAINS([1, 2], 1)**         | 1                        |
 | **ARRAY_INDEXOF(array, item)**       | Returns the index(1-based) of an element if the array contains the element                   | **ARRAY_INDEXOF([1, 2, 9], 9)**       | 3                        |

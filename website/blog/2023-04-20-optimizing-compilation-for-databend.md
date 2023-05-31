@@ -18,7 +18,7 @@ Compiling a medium to large Rust program is not a breeze due to the accumulation
 
 The Databend team encountered similar challenges in compiling the product from hundreds of thousands of lines of code and in developing Docker-based build tools to enhance the developers/CI workflow. This article outlines the measures taken by the team to address the compilation challenges. If you're interested, check out these earlier posts to get a general idea of how we compile Databend:
 
-- [Building Databend](​https://databend.rs/doc/contributing/building-from-source)
+- [Building Databend](https://databend.rs/doc/contributing/building-from-source)
 - [Optimizing Databend Binary Builds with Profile-guided Optimization](https://databend.rs/blog/profile-guided-optimization)
 
 ## Observability

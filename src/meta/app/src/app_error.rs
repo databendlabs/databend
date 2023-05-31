@@ -285,6 +285,28 @@ impl UnknownDatabaseId {
 }
 
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnmatchColumnDataType: `{name}`:`{data_type}` while `{context}`")]
+pub struct UnmatchColumnDataType {
+    name: String,
+    data_type: String,
+    context: String,
+}
+
+impl UnmatchColumnDataType {
+    pub fn new(
+        name: impl Into<String>,
+        data_type: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            data_type: data_type.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownTable: `{table_name}` while `{context}`")]
 pub struct UnknownTable {
     table_name: String,
@@ -781,10 +803,13 @@ pub enum AppError {
     UnknownDatamask(#[from] UnknownDatamask),
 
     #[error(transparent)]
-    VirtualColumnAlreadyExists(#[from] VirtualColumnAlreadyExists),
+    UnmatchColumnDataType(#[from] UnmatchColumnDataType),
 
     #[error(transparent)]
     VirtualColumnNotFound(#[from] VirtualColumnNotFound),
+
+    #[error(transparent)]
+    VirtualColumnAlreadyExists(#[from] VirtualColumnAlreadyExists),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -1023,11 +1048,11 @@ impl AppErrorMessage for UnknownDatamask {
     }
 }
 
-impl AppErrorMessage for VirtualColumnAlreadyExists {
+impl AppErrorMessage for UnmatchColumnDataType {
     fn message(&self) -> String {
         format!(
-            "Virtual Column for table '{}' already exists",
-            self.table_id
+            "Column '{}' data type {} does not match",
+            self.name, self.data_type
         )
     }
 }
@@ -1035,6 +1060,15 @@ impl AppErrorMessage for VirtualColumnAlreadyExists {
 impl AppErrorMessage for VirtualColumnNotFound {
     fn message(&self) -> String {
         format!("Virtual Column for table '{}' not found", self.table_id)
+    }
+}
+
+impl AppErrorMessage for VirtualColumnAlreadyExists {
+    fn message(&self) -> String {
+        format!(
+            "Virtual Column for table '{}' already exists",
+            self.table_id
+        )
     }
 }
 
@@ -1107,10 +1141,11 @@ impl From<AppError> for ErrorCode {
             AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
+            AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
+            AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),
             AppError::VirtualColumnAlreadyExists(err) => {
                 ErrorCode::VirtualColumnAlreadyExists(err.message())
             }
-            AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),
         }
     }
 }

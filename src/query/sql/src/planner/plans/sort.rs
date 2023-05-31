@@ -61,11 +61,11 @@ impl Operator for Sort {
         Ok(required)
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         rel_expr.derive_relational_prop_child(0)
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
     }
 }

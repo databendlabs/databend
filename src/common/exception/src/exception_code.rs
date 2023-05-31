@@ -141,8 +141,9 @@ build_exceptions! {
     EmptyShareEndpointConfig(1111),
     LicenceDenied(1112),
     UnknownDatamask(1113),
-    VirtualColumnNotFound(1114),
-    VirtualColumnAlreadyExists(1115),
+    UnmatchColumnDataType(1114),
+    VirtualColumnNotFound(1115),
+    VirtualColumnAlreadyExists(1116),
 
     // Data Related Errors
 

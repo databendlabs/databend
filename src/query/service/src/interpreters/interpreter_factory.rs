@@ -175,6 +175,9 @@ impl InterpreterFactory {
             Plan::AddTableColumn(add_table_column) => Ok(Arc::new(
                 AddTableColumnInterpreter::try_create(ctx, *add_table_column.clone())?,
             )),
+            Plan::ModifyTableColumn(modify_table_column) => Ok(Arc::new(
+                ModifyTableColumnInterpreter::try_create(ctx, *modify_table_column.clone())?,
+            )),
             Plan::DropTableColumn(drop_table_column) => Ok(Arc::new(
                 DropTableColumnInterpreter::try_create(ctx, *drop_table_column.clone())?,
             )),

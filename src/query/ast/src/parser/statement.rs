@@ -1793,6 +1793,15 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, column)| AlterTableAction::AddColumn { column },
     );
+    let modify_column = map(
+        rule! {
+            MODIFY ~ COLUMN ~ #ident ~ SET ~ MASKING ~ POLICY ~ #ident
+        },
+        |(_, _, column, _, _, _, mask_name)| AlterTableAction::ModifyColumn {
+            column,
+            action: ModifyColumnAction::SetMaskingPolicy(mask_name.to_string()),
+        },
+    );
     let drop_column = map(
         rule! {
             DROP ~ COLUMN ~ #ident
@@ -1834,6 +1843,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         #rename_table
         | #add_column
         | #drop_column
+        | #modify_column
         | #alter_table_cluster_key
         | #drop_table_cluster_key
         | #recluster_table

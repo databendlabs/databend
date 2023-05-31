@@ -177,6 +177,7 @@ fn test_statement() {
         r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;"#,
         r#"ALTER TABLE t ADD COLUMN a float default 101 COMMENT 'hello';"#,
         r#"ALTER TABLE t DROP COLUMN b;"#,
+        r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,

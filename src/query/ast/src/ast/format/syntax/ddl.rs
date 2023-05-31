@@ -157,6 +157,10 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
         AlterTableAction::AddColumn { column } => RcDoc::line()
             .append(RcDoc::text("ADD COLUMN "))
             .append(RcDoc::text(column.to_string())),
+        AlterTableAction::ModifyColumn { column, action } => RcDoc::line()
+            .append(RcDoc::text("MODIFY COLUMN "))
+            .append(RcDoc::text(column.to_string()))
+            .append(RcDoc::text(format!(" {}", action))),
         AlterTableAction::DropColumn { column } => RcDoc::line()
             .append(RcDoc::text("DROP COLUMN "))
             .append(RcDoc::text(column.to_string())),
