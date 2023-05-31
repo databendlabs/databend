@@ -112,30 +112,6 @@ where F: SnapshotGenerator + Send + 'static
         })))
     }
 
-    fn set_backoff(&mut self) {
-        // The initial retry delay in millisecond. By default,  it is 5 ms.
-        let init_delay = OCC_DEFAULT_BACKOFF_INIT_DELAY_MS;
-
-        // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
-        // By default, it is 20 seconds.
-        let max_delay = OCC_DEFAULT_BACKOFF_MAX_DELAY_MS;
-
-        // The maximum elapsed time after the occ starts, beyond which there will be no more retries.
-        // By default, it is 2 minutes
-        let max_elapsed = OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS;
-
-        // TODO(xuanwo): move to backon instead.
-        //
-        // To simplify the settings, using fixed common values for randomization_factor and multiplier
-        self.backoff = ExponentialBackoffBuilder::new()
-            .with_initial_interval(init_delay)
-            .with_max_interval(max_delay)
-            .with_randomization_factor(0.5)
-            .with_multiplier(2.0)
-            .with_max_elapsed_time(Some(max_elapsed))
-            .build();
-    }
-
     fn read_meta(&mut self) -> Result<Event> {
         let input_meta = self
             .input
@@ -154,7 +130,7 @@ where F: SnapshotGenerator + Send + 'static
         self.snapshot_gen.set_merged_summary(meta.summary.clone());
         self.abort_operation = meta.abort_operation.clone();
 
-        self.set_backoff();
+        self.backoff = FuseTable::set_backoff();
 
         if meta.need_lock {
             self.state = State::TryLock;
