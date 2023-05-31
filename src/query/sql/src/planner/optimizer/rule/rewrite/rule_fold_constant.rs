@@ -224,13 +224,13 @@ impl Rule for RuleFoldConstant {
             }
             RelOperator::Window(window) => {
                 for arg in window.arguments.iter_mut() {
-                    arg.scalar = self.fold_constant(&arg.scalar)?;
+                    self.fold_constant(&mut arg.scalar)?;
                 }
                 for part in window.partition_by.iter_mut() {
-                    part.scalar = self.fold_constant(&part.scalar)?;
+                    self.fold_constant(&mut part.scalar)?;
                 }
                 for o in window.order_by.iter_mut() {
-                    o.order_by_item.scalar = self.fold_constant(&o.order_by_item.scalar)?;
+                    self.fold_constant(&mut o.order_by_item.scalar)?;
                 }
             }
             _ => unreachable!(),

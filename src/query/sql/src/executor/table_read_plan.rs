@@ -211,7 +211,6 @@ impl ToReadDataSourcePlan for dyn Table {
                                 &name_resolution_ctx,
                                 metadata,
                                 &aliases,
-                                false,
                             );
 
                             let scalar = type_checker.resolve(&ast_expr).await?;
