@@ -98,7 +98,7 @@ Here are some noteworthy items recorded here, perhaps you can find something tha
 - Databend will participate in OSPP 2023 projects: [OSPP2023 - Databend](https://summer-ospp.ac.cn/org/orgdetail/646b9834-3923-4e74-b98b-90afec341705?lang=en).
 - Check out [Docs | Developing with Databend using Rust](https://databend.rs/doc/develop/rust) for Rust application development with `databend-driver`.
 - Learn to manage and query databases with ease using BendSQL, a powerful command-line tool for Databend. Check out [Docs | BendSQL](https://databend.rs/doc/integrations/access-tool/bendsql) now!
-- Check out [Docs | Loading from a Stage](https://databend.rs/doc/load-data/stage) and [Docs | Loading from a Bucket](https://databend.rs/doc/load-data/s3) to learn more about loading data from stages and object storage buckets.
+- Check out [Docs | Loading from a Stage](https://databend.rs/doc/load-data/load/stage) and [Docs | Loading from a Bucket](https://databend.rs/doc/load-data/load/s3) to learn more about loading data from stages and object storage buckets.
 - Introduced `table-meta-inspector`, a command-line tool for decoding new table metadata in Databend.
 
 ## What's Up Next

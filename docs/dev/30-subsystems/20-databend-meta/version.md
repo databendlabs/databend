@@ -37,5 +37,5 @@ Protocol related crates are(this list may not be exhausted if new types are intr
 - `src/meta/types`: defines the rust types for metadata.
 
 
-[Compatibility]: https://databend.rs/doc/manage/upgrade/compatibility
+[Compatibility]: https://databend.rs/doc/deploy/upgrade/compatibility
 
