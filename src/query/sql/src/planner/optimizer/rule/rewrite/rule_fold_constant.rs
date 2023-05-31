@@ -12,21 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::ConstantFolder;
+use common_expression::Expr;
 use common_expression::FunctionContext;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::ConstantExpr;
 use crate::plans::Exchange;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
+use crate::TypeCheck;
 
 pub struct RuleFoldConstant {
     id: RuleID,
@@ -129,15 +133,32 @@ impl RuleFoldConstant {
         }
     }
 
-    fn fold_constant(&self, scalar: &ScalarExpr) -> Result<ScalarExpr> {
-        let expr = scalar.as_expr()?;
-        let (new_expr, _) = ConstantFolder::fold_with_untrusted_column_type(
-            &expr,
-            &self.func_ctx,
-            &BUILTIN_FUNCTIONS,
-        );
-        let new_scalar = ScalarExpr::from_expr(&new_expr)?;
-        Ok(new_scalar)
+    fn fold_constant(&self, scalar: &mut ScalarExpr) -> Result<()> {
+        if scalar.used_columns().is_empty() {
+            let expr = scalar.resolve_and_check(&HashMap::new())?;
+            let (new_expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+            if let Expr::Constant {
+                span,
+                scalar: value,
+                ..
+            } = new_expr
+            {
+                *scalar = ScalarExpr::ConstantExpr(ConstantExpr { span, value });
+                return Ok(());
+            };
+        }
+
+        match scalar {
+            ScalarExpr::FunctionCall(func) => {
+                for arg in func.arguments.iter_mut() {
+                    self.fold_constant(arg)?
+                }
+            }
+            ScalarExpr::CastExpr(cast) => self.fold_constant(&mut cast.argument)?,
+            _ => (),
+        }
+
+        Ok(())
     }
 }
 
@@ -155,33 +176,33 @@ impl Rule for RuleFoldConstant {
         match &mut new_plan {
             RelOperator::EvalScalar(eval_scalar) => {
                 for scalar in eval_scalar.items.iter_mut() {
-                    scalar.scalar = self.fold_constant(&scalar.scalar)?;
+                    self.fold_constant(&mut scalar.scalar)?;
                 }
             }
             RelOperator::Filter(filter) => {
                 for predicate in filter.predicates.iter_mut() {
-                    *predicate = self.fold_constant(predicate)?;
+                    self.fold_constant(predicate)?;
                 }
             }
             RelOperator::ProjectSet(project_set) => {
                 for srf in project_set.srfs.iter_mut() {
-                    srf.scalar = self.fold_constant(&srf.scalar)?;
+                    self.fold_constant(&mut srf.scalar)?;
                 }
             }
             RelOperator::Exchange(Exchange::Hash(scalars)) => {
                 for scalar in scalars.iter_mut() {
-                    *scalar = self.fold_constant(scalar)?;
+                    self.fold_constant(scalar)?;
                 }
             }
             RelOperator::Join(join) => {
                 for cond in join.left_conditions.iter_mut() {
-                    *cond = self.fold_constant(cond)?;
+                    self.fold_constant(cond)?;
                 }
                 for cond in join.right_conditions.iter_mut() {
-                    *cond = self.fold_constant(cond)?;
+                    self.fold_constant(cond)?;
                 }
                 for cond in join.non_equi_conditions.iter_mut() {
-                    *cond = self.fold_constant(cond)?;
+                    self.fold_constant(cond)?;
                 }
             }
             _ => unreachable!(),
