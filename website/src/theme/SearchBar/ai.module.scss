@@ -115,3 +115,16 @@
 .error {
   color: red;
 }
+[data-theme='dark'] {
+  .chatList {
+    .chatItem {
+      pre {
+        margin-bottom: 12px;
+        margin-top: 12px;
+        >div>div{
+          background: unset!important;
+        }
+      }
+    }
+  }
+}
