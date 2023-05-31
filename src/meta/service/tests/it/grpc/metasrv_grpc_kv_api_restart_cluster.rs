@@ -23,8 +23,6 @@ use common_meta_client::ClientHandle;
 use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
 use databend_meta::init_meta_ut;
 use tracing::info;
 
@@ -138,25 +136,11 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
         for (i, tc) in tcs.iter().enumerate() {
             let k = make_key(tc, key_suffix);
             if i == 0 {
-                let res = client
-                    .upsert_kv(UpsertKVReq {
-                        key: k.clone(),
-                        seq: MatchSeq::GE(0),
-                        value: Operation::Update(k.clone().into_bytes()),
-                        value_meta: None,
-                    })
-                    .await?;
+                let res = client.upsert_kv(UpsertKVReq::update(&k, &b(&k))).await?;
                 info!("--- upsert res: {:?}", res);
             } else {
                 let client = tc.grpc_client().await.unwrap();
-                let res = client
-                    .upsert_kv(UpsertKVReq {
-                        key: k.clone(),
-                        seq: MatchSeq::GE(0),
-                        value: Operation::Update(k.clone().into_bytes()),
-                        value_meta: None,
-                    })
-                    .await?;
+                let res = client.upsert_kv(UpsertKVReq::update(&k, &b(&k))).await?;
                 info!("--- upsert res: {:?}", res);
             }
 
@@ -228,7 +212,7 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
     let res = client.get_kv(&k).await?;
     let res = res.unwrap();
 
-    assert_eq!(k.into_bytes(), res.data);
+    assert_eq!(b(k), res.data);
 
     Ok(())
 }

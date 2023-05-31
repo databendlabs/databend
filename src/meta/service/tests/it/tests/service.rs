@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fs;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -102,6 +103,19 @@ pub struct MetaSrvTestContext {
     pub grpc_srv: Option<Box<GrpcServer>>,
 }
 
+impl Drop for MetaSrvTestContext {
+    fn drop(&mut self) {
+        let raft_dir = &self.config.raft_config.raft_dir;
+        let res = fs::remove_dir_all(raft_dir);
+        if let Err(e) = res {
+            warn!(
+                "Drop MetaSrvTestContext: can not remove raft dir {:?}, {:?}",
+                raft_dir, e
+            );
+        }
+    }
+}
+
 impl MetaSrvTestContext {
     /// Create a new Config for test, with unique port assigned
     pub fn new(id: u64) -> MetaSrvTestContext {
@@ -118,6 +132,9 @@ impl MetaSrvTestContext {
         config.raft_config.id = id;
 
         config.raft_config.config_id = config_id.to_string();
+
+        // Use a unique dir for each test case.
+        config.raft_config.raft_dir = format!("{}-{}", config.raft_config.raft_dir, config_id);
 
         // By default, create a meta node instead of open an existent one.
         config.raft_config.single = true;

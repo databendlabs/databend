@@ -283,9 +283,7 @@ impl MetaService for MetaServiceImpl {
         let _guard = RequestInFlight::guard();
 
         let meta_node = &self.meta_node;
-        let members = meta_node.get_grpc_advertise_addrs().await.map_err(|e| {
-            Status::internal(format!("Cannot get metasrv member list, error: {:?}", e))
-        })?;
+        let members = meta_node.get_grpc_advertise_addrs().await;
 
         let resp = MemberListReply { data: members };
         network_metrics::incr_sent_bytes(resp.encoded_len() as u64);
