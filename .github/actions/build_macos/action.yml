@@ -20,13 +20,22 @@ runs:
       run: |
         bash ./scripts/setup/dev_setup.sh -yb
         rustup target add ${{ inputs.target }}
-        echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
 
     - name: Cross setup
       if: inputs.target == 'aarch64-apple-darwin'
       shell: bash
       run: |
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+
+    - name: Setup sccache
+      uses: mozilla-actions/sccache-action@v0.0.3
+
+    - name: Setup build env
+      shell: bash
+      run: |
+        echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
+        echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+        echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
     - name: Build Debug for all artifacts
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
