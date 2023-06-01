@@ -15,6 +15,7 @@ env:
 
 jobs:
   build:
+    name: build_${{ matrix.target }}_hive
     runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
