@@ -157,7 +157,7 @@ impl RuleFoldConstant {
     }
 
     fn fold_constant(&self, scalar: &mut ScalarExpr) -> Result<()> {
-        if scalar.used_columns().is_empty() && !scalar.as_constant_expr().is_some() {
+        if scalar.used_columns().is_empty() && scalar.as_constant_expr().is_none() {
             let expr = scalar.resolve_and_check(&HashMap::new())?;
             let (new_expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
             if let Expr::Constant {
