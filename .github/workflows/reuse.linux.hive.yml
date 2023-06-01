@@ -15,8 +15,12 @@ env:
 
 jobs:
   build:
-    name: build_${{ matrix.target }}_hive
+    name: build_${{ matrix.arch }}_${{ matrix.libc }}
     runs-on: [self-hosted, X64, Linux, 8c16g]
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, libc: gnu }
     steps:
       - uses: actions/checkout@v3
         with:
@@ -25,7 +29,7 @@ jobs:
       - uses: ./.github/actions/build_linux
         timeout-minutes: 30
         with:
-          target: x86_64-unknown-linux-gnu
+          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           features: hive
           artifacts: meta,query
 
