@@ -103,6 +103,7 @@ storages-common-index = { path = "../storages/common/index" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
+virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
 
 # GitHub dependencies
 

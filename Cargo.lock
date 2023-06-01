@@ -3688,6 +3688,7 @@ dependencies = [
  "url",
  "uuid",
  "vacuum-handler",
+ "virtual-columns-handler",
  "walkdir",
  "wiremock",
 ]
@@ -3994,11 +3995,14 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
+ "common-arrow",
  "common-base",
  "common-building",
  "common-catalog",
  "common-config",
  "common-exception",
+ "common-expression",
+ "common-io",
  "common-license",
  "common-meta-api",
  "common-meta-app",
@@ -4012,12 +4016,15 @@ dependencies = [
  "data-mask-feature",
  "databend-query",
  "futures-util",
+ "jsonb",
  "jwt-simple",
+ "opendal",
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",
  "tracing",
  "vacuum-handler",
+ "virtual-columns-handler",
 ]
 
 [[package]]
@@ -10906,6 +10913,19 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "virtual-columns-handler"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
+ "common-storages-fuse",
+]
 
 [[package]]
 name = "virtue"

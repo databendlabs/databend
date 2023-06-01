@@ -49,16 +49,21 @@ use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::CreateVirtualColumnReply;
+use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropVirtualColumnReply;
+use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -74,8 +79,11 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateVirtualColumnReply;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
@@ -741,6 +749,38 @@ impl Catalog for FakedCatalog {
 
     #[async_backtrace::framed]
     async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn create_virtual_column(
+        &self,
+        _req: CreateVirtualColumnReq,
+    ) -> Result<CreateVirtualColumnReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_virtual_column(
+        &self,
+        _req: UpdateVirtualColumnReq,
+    ) -> Result<UpdateVirtualColumnReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_virtual_column(
+        &self,
+        _req: DropVirtualColumnReq,
+    ) -> Result<DropVirtualColumnReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_virtual_columns(
+        &self,
+        _req: ListVirtualColumnsReq,
+    ) -> Result<Vec<VirtualColumnMeta>> {
         unimplemented!()
     }
 

@@ -158,6 +158,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                 &None,
                 &column_nodes,
                 None,
+                None,
                 &self.projection,
             );
 

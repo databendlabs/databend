@@ -24,7 +24,6 @@ use common_storages_fuse::io::SnapshotsIO;
 use storages_common_table_meta::meta::Location;
 use tracing::info;
 
-#[allow(clippy::too_many_arguments)]
 #[async_backtrace::framed]
 pub async fn get_snapshot_referenced_segments<T>(
     snapshots_io: &SnapshotsIO,

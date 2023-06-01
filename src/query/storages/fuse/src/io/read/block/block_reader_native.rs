@@ -35,6 +35,7 @@ use storages_common_table_meta::meta::ColumnMeta;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
+use crate::io::TableMetaLocationGenerator;
 use crate::metrics::metrics_inc_remote_io_read_bytes;
 use crate::metrics::metrics_inc_remote_io_read_milliseconds;
 use crate::metrics::metrics_inc_remote_io_read_parts;
@@ -151,6 +152,25 @@ impl BlockReader {
             let readers =
                 Self::sync_read_native_column(op.clone(), &part.location, metas, part.range())?;
             results.insert(index, readers);
+        }
+
+        // If virtual column file exists, read the data from the virtual columns directly.
+        if let Some(ref virtual_columns_meta) = part.virtual_columns_meta {
+            let virtual_loc =
+                TableMetaLocationGenerator::gen_virtual_block_location(&part.location);
+
+            for (_, virtual_column_meta) in virtual_columns_meta.iter() {
+                let metas = vec![virtual_column_meta.meta.clone()];
+
+                let readers = Self::sync_read_native_column(
+                    self.operator.clone(),
+                    &virtual_loc,
+                    metas,
+                    part.range(),
+                )?;
+                let virtual_index = virtual_column_meta.index + self.project_column_nodes.len();
+                results.insert(virtual_index, readers);
+            }
         }
 
         Ok(results)

@@ -650,6 +650,38 @@ impl DropIndexWithDropTime {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("VirtualColumnAlreadyExists: `{table_id}` while `{context}`")]
+pub struct VirtualColumnAlreadyExists {
+    table_id: u64,
+    context: String,
+}
+
+impl VirtualColumnAlreadyExists {
+    pub fn new(table_id: impl Into<u64>, context: impl Into<String>) -> Self {
+        Self {
+            table_id: table_id.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("VirtualColumnNotFound: `{table_id}` while `{context}`")]
+pub struct VirtualColumnNotFound {
+    table_id: u64,
+    context: String,
+}
+
+impl VirtualColumnNotFound {
+    pub fn new(table_id: impl Into<u64>, context: impl Into<String>) -> Self {
+        Self {
+            table_id: table_id.into(),
+            context: context.into(),
+        }
+    }
+}
+
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -772,6 +804,12 @@ pub enum AppError {
 
     #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
+
+    #[error(transparent)]
+    VirtualColumnNotFound(#[from] VirtualColumnNotFound),
+
+    #[error(transparent)]
+    VirtualColumnAlreadyExists(#[from] VirtualColumnAlreadyExists),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -1019,6 +1057,21 @@ impl AppErrorMessage for UnmatchColumnDataType {
     }
 }
 
+impl AppErrorMessage for VirtualColumnNotFound {
+    fn message(&self) -> String {
+        format!("Virtual Column for table '{}' not found", self.table_id)
+    }
+}
+
+impl AppErrorMessage for VirtualColumnAlreadyExists {
+    fn message(&self) -> String {
+        format!(
+            "Virtual Column for table '{}' already exists",
+            self.table_id
+        )
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1089,6 +1142,10 @@ impl From<AppError> for ErrorCode {
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
+            AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),
+            AppError::VirtualColumnAlreadyExists(err) => {
+                ErrorCode::VirtualColumnAlreadyExists(err.message())
+            }
         }
     }
 }
