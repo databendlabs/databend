@@ -1020,12 +1020,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let copy_into = map(
         rule! {
             COPY
+            ~ #hint?
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
             ~ ( #copy_option )*
         },
-        |(_, _, dst, _, src, opts)| {
+        |(_, opt_hints, _, dst, _, src, opts)| {
             let mut copy_stmt = CopyStmt {
+                hints: opt_hints,
                 src,
                 dst,
                 files: Default::default(),

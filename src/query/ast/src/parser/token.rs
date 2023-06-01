@@ -86,6 +86,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                             | TokenKind::REPLACE
                             | TokenKind::UPDATE
                             | TokenKind::DELETE
+                            | TokenKind::COPY
                     )
                 ) && kind == TokenKind::HintPrefix
                 {

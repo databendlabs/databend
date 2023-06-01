@@ -149,7 +149,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 30
+        timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
@@ -162,7 +162,7 @@ jobs:
 
   sqllogic_standalone_with_native:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
-    runs-on: [self-hosted, X64, Linux, 8c16g]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     strategy:
       matrix:
@@ -178,7 +178,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 30
+        timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
@@ -192,7 +192,7 @@ jobs:
   sqllogic_standalone_ee:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [ self-hosted, X64, Linux, 4c8g ]
-    if: github.repository == github.event.pull_request.head.repo.full_name
+    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
     needs: build
     strategy:
       matrix:
@@ -205,7 +205,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
-        timeout-minutes: 30
+        timeout-minutes: 15
         env:
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
         with:
@@ -236,7 +236,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 30
+        timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
@@ -248,7 +248,7 @@ jobs:
 
   sqllogic_cluster_large:
     name: sqllogic_cluster_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 8c16g]
+    runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     strategy:
       matrix:
@@ -260,7 +260,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 30
+        timeout-minutes: 20
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
@@ -276,7 +276,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_linux
-        timeout-minutes: 20
+        timeout-minutes: 10
 
   test_stateless_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g]
@@ -284,7 +284,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
-        timeout-minutes: 30
+        timeout-minutes: 10
 
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
@@ -292,7 +292,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
-        timeout-minutes: 20
+        timeout-minutes: 10
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -319,7 +319,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
-        timeout-minutes: 20
+        timeout-minutes: 10
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -346,12 +346,12 @@ jobs:
 
   test_ee_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
-    if: github.repository == github.event.pull_request.head.repo.full_name
+    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_ee_standalone_linux
-        timeout-minutes: 20
+        timeout-minutes: 10
         env:
           DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
       - name: Upload failure
