@@ -1,10 +1,16 @@
-name: Dev Linux
+name: Linux
 
 on:
   workflow_call:
+    inputs:
+      build_profile:
+        description: 'Build profile, debug or release'
+        type: string
+        required: true
+        default: 'debug'
 
 env:
-  BUILD_PROFILE: debug
+  BUILD_PROFILE: ${{ github.event.inputs.build_profile }}
   RUNNER_PROVIDER: aws
 
 jobs:

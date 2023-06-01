@@ -1,0 +1,30 @@
+name: Dev
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+    branches:
+      - main
+    paths-ignore:
+      - "docs/**"
+      - "website/**"
+      - "**.md"
+      - "docker/**"
+      - "scripts/setup/**"
+      - ".devcontainer/**"
+  merge_group:
+    types:
+      - checks_requested
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    uses: ./.github/workflows/linux.yml
+    with:
+      build_profile: debug
