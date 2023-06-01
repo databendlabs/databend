@@ -192,7 +192,7 @@ jobs:
   sqllogic_standalone_ee:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [ self-hosted, X64, Linux, 4c8g ]
-    if: github.event_name != 'pull_request' || github.repository == github.event.pull_request.head.repo.full_name
+    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
     needs: build
     strategy:
       matrix:
@@ -346,7 +346,7 @@ jobs:
 
   test_ee_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
-    if: github.event_name != 'pull_request' || github.repository == github.event.pull_request.head.repo.full_name
+    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
     needs: build
     steps:
       - uses: actions/checkout@v3
