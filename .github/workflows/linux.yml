@@ -10,7 +10,7 @@ on:
         default: 'debug'
 
 env:
-  BUILD_PROFILE: ${{ github.event.inputs.build_profile }}
+  BUILD_PROFILE: ${{ inputs.build_profile }}
   RUNNER_PROVIDER: aws
 
 jobs:
