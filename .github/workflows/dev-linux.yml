@@ -174,7 +174,7 @@ jobs:
 
   sqllogic_standalone_with_native:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
-    runs-on: [self-hosted, X64, Linux, 4c8g]
+    runs-on: [self-hosted, X64, Linux, 8c16g]
     needs: build
     strategy:
       matrix:
