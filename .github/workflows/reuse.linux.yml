@@ -144,7 +144,6 @@ jobs:
           - "crdb"
           - "duckdb"
           - "tpch"
-          - "tpcds"
         handlers:
           - "mysql,http,clickhouse"
     steps:
@@ -170,6 +169,7 @@ jobs:
         dirs:
           - "base"
           - "ydb"
+          - "tpcds"
         format:
           - "parquet"
           - "native"
