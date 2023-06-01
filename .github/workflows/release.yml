@@ -115,7 +115,7 @@ jobs:
           TEST_HANDLERS: http
         run: |
           mkdir -p target/release
-          cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,query,sqllogictests} ./target/release/
+          cp ./target/${{ steps.target.outputs.target }}/release/databend-{meta,metactl,query,sqllogictests} ./target/release/
           bash ./scripts/ci/ci-run-sqllogic-tests.sh base
       - name: Pack binaries
         run: |
