@@ -1,0 +1,44 @@
+name: Linux Hive
+
+on:
+  workflow_call:
+    inputs:
+      build_profile:
+        description: 'Build profile, debug or release'
+        type: string
+        required: true
+        default: 'debug'
+
+env:
+  BUILD_PROFILE: ${{ inputs.build_profile }}
+  RUNNER_PROVIDER: aws
+
+jobs:
+  build:
+    name: build_hive_${{ matrix.arch }}_${{ matrix.libc }}
+    runs-on: [self-hosted, X64, Linux, 8c16g]
+    strategy:
+      matrix:
+        include:
+          - { arch: x86_64, libc: gnu }
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          # fetch all tags, metasrv and metaclient need tag as its version.
+          fetch-depth: 0
+      - uses: ./.github/actions/build_linux
+        timeout-minutes: 30
+        with:
+          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          features: hive
+          artifacts: meta,query
+
+  test_stateful_hive_standalone:
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_stateful_hive_standalone
+        timeout-minutes: 10
+        with:
+          target: x86_64-unknown-linux-gnu
