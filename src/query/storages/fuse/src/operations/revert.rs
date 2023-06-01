@@ -52,6 +52,7 @@ impl FuseTable {
             seq: MatchSeq::Exact(base_version),
             new_table_meta: table_meta_to_be_committed,
             copied_files: None,
+            deduplicated_label: None,
         };
 
         // 4. let's roll

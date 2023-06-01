@@ -67,6 +67,7 @@ jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
 aggregating-index = { path = "../ee-features/aggregating-index" }
 common-license = { path = "../../common/license" }
+common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-metrics = { path = "../../common/metrics" }

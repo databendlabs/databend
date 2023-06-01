@@ -410,6 +410,7 @@ impl FuseTable {
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             copied_files: copied_files.clone(),
+            deduplicated_label: ctx.get_settings().get_deduplicate_label()?,
         };
 
         // 3. let's roll

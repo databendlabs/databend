@@ -3596,6 +3596,7 @@ dependencies = [
  "common-meta-api",
  "common-meta-app",
  "common-meta-embedded",
+ "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
