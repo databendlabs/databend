@@ -24,20 +24,14 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # linux:
-  #   uses: ./.github/workflows/reuse.linux.yml
-  #   secrets: inherit
-  #   with:
-  #     build_profile: debug
+  linux:
+    uses: ./.github/workflows/reuse.linux.yml
+    secrets: inherit
+    with:
+      build_profile: debug
 
-  # linux_hive:
-  #   uses: ./.github/workflows/reuse.linux.hive.yml
-  #   secrets: inherit
-  #   with:
-  #     build_profile: debug
-
-  macos:
-    uses: ./.github/workflows/reuse.macos.yml
+  linux_hive:
+    uses: ./.github/workflows/reuse.linux.hive.yml
     secrets: inherit
     with:
       build_profile: debug
