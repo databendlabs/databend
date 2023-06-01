@@ -15,6 +15,9 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Setup sccache
+      uses: mozilla-actions/sccache-action@v0.0.3
+
     - name: Rust setup
       shell: bash
       run: |
@@ -26,9 +29,6 @@ runs:
       shell: bash
       run: |
         echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
-
-    - name: Setup sccache
-      uses: mozilla-actions/sccache-action@v0.0.3
 
     - name: Setup build env
       shell: bash
