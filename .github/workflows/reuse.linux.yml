@@ -189,7 +189,7 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
 
-  ee_sqllogic_standalone:
+  sqllogic_standalone_ee:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [ self-hosted, X64, Linux, 4c8g ]
     if: github.repository == github.event.pull_request.head.repo.full_name
