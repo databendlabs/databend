@@ -15,7 +15,7 @@ env:
 
 jobs:
   build:
-    name: build_${{ matrix.arch }}_${{ matrix.libc }}_hive
+    name: build_hive_${{ matrix.arch }}_${{ matrix.libc }}
     runs-on: [self-hosted, X64, Linux, 8c16g]
     strategy:
       matrix:
