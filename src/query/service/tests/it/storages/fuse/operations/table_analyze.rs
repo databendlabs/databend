@@ -141,7 +141,7 @@ async fn test_table_update_analyze_statistics() -> Result<()> {
         };
         let compact_segment = segment_reader.read(&param).await?;
         let segment_info = SegmentInfo::try_from(compact_segment.as_ref())?;
-        merge_statistics_mut(&mut segment_summary, &segment_info.summary)?;
+        merge_statistics_mut(&mut segment_summary, &segment_info.summary);
     }
 
     // analyze

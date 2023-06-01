@@ -18,9 +18,13 @@ pub mod mutation_meta;
 mod mutator;
 mod processors;
 
+pub use mutator::MutationAccumulator;
+pub use processors::AppendGenerator;
 pub use processors::AppendTransform;
 pub use processors::BroadcastProcessor;
 pub use processors::CommitSink;
 pub use processors::MergeIntoOperationAggregator;
+pub use processors::MutationGenerator;
 pub use processors::OnConflictField;
+pub use processors::SnapshotGenerator;
 pub use processors::TableMutationAggregator;

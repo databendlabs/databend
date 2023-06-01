@@ -35,7 +35,6 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
@@ -232,7 +231,6 @@ impl Table for MemoryTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _: AppendMode,
-        _: bool,
     ) -> Result<()> {
         pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(ContextSink::create(
@@ -241,29 +239,28 @@ impl Table for MemoryTable {
             )))
         })
     }
-
-    #[async_backtrace::framed]
-    async fn commit_insertion(
-        &self,
-        _: Arc<dyn TableContext>,
-        operations: Vec<DataBlock>,
-        _copied_files: Option<UpsertTableCopiedFileReq>,
-        overwrite: bool,
-    ) -> Result<()> {
-        let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
-
-        self.data_metrics.inc_write_bytes(written_bytes);
-
-        if overwrite {
-            let mut blocks = self.blocks.write();
-            blocks.clear();
-        }
-        let mut blocks = self.blocks.write();
-        for block in operations {
-            blocks.push(block);
-        }
-        Ok(())
-    }
+    // #[async_backtrace::framed]
+    // async fn commit_insertion(
+    // &self,
+    // _: Arc<dyn TableContext>,
+    // operations: Vec<DataBlock>,
+    // _copied_files: Option<UpsertTableCopiedFileReq>,
+    // overwrite: bool,
+    // ) -> Result<()> {
+    // let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
+    //
+    // self.data_metrics.inc_write_bytes(written_bytes);
+    //
+    // if overwrite {
+    // let mut blocks = self.blocks.write();
+    // blocks.clear();
+    // }
+    // let mut blocks = self.blocks.write();
+    // for block in operations {
+    // blocks.push(block);
+    // }
+    // Ok(())
+    // }
 
     #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {

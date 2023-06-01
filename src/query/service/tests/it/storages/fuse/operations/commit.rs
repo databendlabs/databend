@@ -16,7 +16,9 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
+use backoff::backoff::Backoff;
 use common_base::base::tokio;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -27,12 +29,12 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
+use common_catalog::table::TableExt;
 use common_catalog::table_context::ProcessInfo;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
@@ -82,25 +84,19 @@ use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
-use common_storages_fuse::io::SegmentWriter;
-use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::operations::AppendOperationLogEntry;
-use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::block_writer::BlockWriter;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
-use rand::thread_rng;
-use rand::Rng;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
+use uuid::Uuid;
 use walkdir::WalkDir;
-
-use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -217,20 +213,26 @@ async fn test_abort_on_error() -> Result<()> {
             let table = fixture.latest_default_table().await?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-            let overwrite = false;
-            let log = vec![AppendOperationLogEntry {
-                segment_location: "do not care".to_string(),
-                segment_info: Arc::new(SegmentInfo::new(vec![], Statistics::default())),
-            }];
+            let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
+            let new_snapshot = TableSnapshot::new(
+                Uuid::new_v4(),
+                &None,
+                None,
+                table.schema().as_ref().clone(),
+                Statistics::default(),
+                new_segments,
+                None,
+                None,
+            );
 
             let faked_catalog = FakedCatalog {
                 cat: catalog,
                 error_injection: self.update_meta_error.clone(),
             };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
-            let r = fuse_table
-                .commit_with_max_retry_elapsed(ctx, log, None, self.max_retry_time, overwrite)
-                .await;
+            let r =
+                commit_with_max_retry_elapsed(fuse_table, ctx, new_snapshot, self.max_retry_time)
+                    .await;
             if self.update_meta_error.is_some() {
                 assert_eq!(
                     r.unwrap_err().code(),
@@ -320,46 +322,62 @@ async fn test_abort_on_error() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test(flavor = "multi_thread")]
-async fn test_merge_segments() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
+#[async_backtrace::framed]
+async fn commit_with_max_retry_elapsed(
+    fuse: &FuseTable,
+    ctx: Arc<dyn TableContext>,
+    snapshot: TableSnapshot,
+    max_retry_elapsed: Option<Duration>,
+) -> Result<()> {
+    let mut tbl = fuse;
+    let mut latest: Arc<dyn Table>;
 
-    let operator = ctx.get_data_operator()?.operator();
-    let data_accessor = operator.clone();
-    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
-    let block_writer = BlockWriter::new(&data_accessor, &location_gen);
-    let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
+    let mut retry_times = 0;
 
-    let mut rand = thread_rng();
-    let number_of_segments: usize = rand.gen_range(1..10);
-    let mut block_number_of_segments = Vec::with_capacity(number_of_segments);
-    let mut rows_per_blocks = Vec::with_capacity(number_of_segments);
-    for _ in 0..number_of_segments {
-        block_number_of_segments.push(rand.gen_range(10..30));
-        rows_per_blocks.push(rand.gen_range(1..8));
+    let mut backoff = FuseTable::set_backoff(max_retry_elapsed);
+
+    let transient = tbl.transient();
+    loop {
+        match FuseTable::commit_to_meta_server(
+            ctx.as_ref(),
+            tbl.get_table_info(),
+            tbl.meta_location_generator(),
+            snapshot.clone(),
+            None,
+            &None,
+            tbl.get_operator_ref(),
+        )
+        .await
+        {
+            Ok(_) => {
+                break Ok(());
+            }
+            Err(e) if FuseTable::is_error_recoverable(&e, transient) => {
+                match backoff.next_backoff() {
+                    Some(d) => {
+                        common_base::base::tokio::time::sleep(d).await;
+                        latest = tbl.refresh(ctx.as_ref()).await?;
+                        tbl = FuseTable::try_from_table(latest.as_ref())?;
+                        retry_times += 1;
+                        continue;
+                    }
+                    None => {
+                        break Err(ErrorCode::OCCRetryFailure(format!(
+                            "can not fulfill the tx after retries({} times, {} ms), aborted.",
+                            retry_times,
+                            Instant::now()
+                                .duration_since(backoff.start_time)
+                                .as_millis(),
+                        )));
+                    }
+                }
+            }
+
+            Err(e) => {
+                break Err(e);
+            }
+        }
     }
-
-    let threshold = BlockThresholds {
-        max_rows_per_block: 5,
-        min_rows_per_block: 4,
-        max_bytes_per_block: 1024,
-    };
-
-    let (locations, block_metas, segment_infos) = CompactSegmentTestFixture::gen_segments(
-        &block_writer,
-        &segment_writer,
-        &block_number_of_segments,
-        &rows_per_blocks,
-        threshold,
-    )
-    .await?;
-
-    let expect = reduce_block_metas(&block_metas, threshold)?;
-    let iter = locations.iter().zip(segment_infos.iter());
-    let (_, results) = FuseTable::merge_segments(iter)?;
-    assert_eq!(expect, results);
-    Ok(())
 }
 
 struct CtxDelegation {

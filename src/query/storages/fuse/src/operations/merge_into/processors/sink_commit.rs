@@ -14,81 +14,85 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
 
+use backoff::backoff::Backoff;
+use backoff::ExponentialBackoff;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
-use common_expression::BlockMetaInfoPtr;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use opendal::Operator;
-use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
 use table_lock::TableLockHandlerWrapper;
 use table_lock::TableLockHeartbeat;
 
-use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
-use crate::metrics::metrics_inc_commit_mutation_retry;
+use crate::metrics::metrics_inc_commit_aborts;
 use crate::metrics::metrics_inc_commit_mutation_success;
-use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
-use crate::operations::commit::Conflict;
-use crate::operations::commit::MutatorConflictDetector;
 use crate::operations::merge_into::mutation_meta::CommitMeta;
+use crate::operations::merge_into::processors::SnapshotGenerator;
 use crate::operations::mutation::AbortOperation;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
-use crate::statistics::reducers::merge_statistics_mut;
 use crate::FuseTable;
-
-const MAX_RETRIES: u64 = 10;
 
 enum State {
     None,
-    ReadMeta(BlockMetaInfoPtr),
-    TryCommit(TableSnapshot),
-    TryLock(TableSnapshot),
+    TryLock,
     RefreshTable,
-    DetectConflict(Arc<TableSnapshot>),
-    MergeSegments(Vec<Location>),
+    GenerateSnapshot {
+        previous: Option<Arc<TableSnapshot>>,
+        cluster_key_meta: Option<ClusterKey>,
+    },
+    TryCommit {
+        data: Vec<u8>,
+        snapshot: TableSnapshot,
+    },
     AbortOperation,
     Finish,
 }
 
 // Gathers all the segments and commits to the meta server.
-pub struct CommitSink {
+pub struct CommitSink<F: SnapshotGenerator> {
     state: State,
+
+    input: Arc<InputPort>,
 
     ctx: Arc<dyn TableContext>,
     dal: Operator,
     location_gen: TableMetaLocationGenerator,
 
     table: Arc<dyn Table>,
-    base_snapshot: Arc<TableSnapshot>,
-    // locations all the merged segments.
-    merged_segments: Vec<Location>,
-    // summarised statistics of all the merged segments.
-    merged_statistics: Statistics,
+    copied_files: Option<UpsertTableCopiedFileReq>,
+    snapshot_gen: F,
+    transient: bool,
+    retries: u64,
+    max_retry_elapsed: Option<Duration>,
+    backoff: ExponentialBackoff,
+
     abort_operation: AbortOperation,
     heartbeat: TableLockHeartbeat,
-
-    retries: u64,
-
-    input: Arc<InputPort>,
 }
 
-impl CommitSink {
+impl<F> CommitSink<F>
+where F: SnapshotGenerator + Send + 'static
+{
     pub fn try_create(
         table: &FuseTable,
         ctx: Arc<dyn TableContext>,
-        base_snapshot: Arc<TableSnapshot>,
+        copied_files: Option<UpsertTableCopiedFileReq>,
+        snapshot_gen: F,
         input: Arc<InputPort>,
+        max_retry_elapsed: Option<Duration>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
@@ -96,19 +100,58 @@ impl CommitSink {
             dal: table.get_operator(),
             location_gen: table.meta_location_generator.clone(),
             table: Arc::new(table.clone()),
-            base_snapshot,
-            merged_segments: vec![],
-            merged_statistics: Statistics::default(),
+            copied_files,
+            snapshot_gen,
             abort_operation: AbortOperation::default(),
             heartbeat: TableLockHeartbeat::default(),
+            transient: table.transient(),
+            backoff: ExponentialBackoff::default(),
             retries: 0,
+            max_retry_elapsed,
             input,
         })))
+    }
+
+    fn read_meta(&mut self) -> Result<Event> {
+        {
+            let status = "begin commit";
+            self.ctx.set_status_info(status);
+            tracing::info!(status);
+        }
+
+        let input_meta = self
+            .input
+            .pull_data()
+            .unwrap()?
+            .get_meta()
+            .cloned()
+            .ok_or(ErrorCode::Internal("No block meta. It's a bug"))?;
+
+        self.input.finish();
+
+        let meta = CommitMeta::downcast_ref_from(&input_meta)
+            .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?;
+
+        self.snapshot_gen.set_merged_segments(meta.segments.clone());
+        self.snapshot_gen.set_merged_summary(meta.summary.clone());
+        self.abort_operation = meta.abort_operation.clone();
+
+        self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
+
+        if meta.need_lock {
+            self.state = State::TryLock;
+        } else {
+            self.state = State::RefreshTable;
+        }
+
+        Ok(Event::Async)
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for CommitSink {
+impl<F> Processor for CommitSink<F>
+where F: SnapshotGenerator + Send + 'static
+{
     fn name(&self) -> String {
         "MutationSink".to_string()
     }
@@ -118,17 +161,13 @@ impl Processor for CommitSink {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(&self.state, State::DetectConflict(_)) {
+        if matches!(&self.state, State::GenerateSnapshot { .. }) {
             return Ok(Event::Sync);
         }
 
         if matches!(
             &self.state,
-            State::MergeSegments(_)
-                | State::TryCommit(_)
-                | State::TryLock(_)
-                | State::RefreshTable
-                | State::AbortOperation
+            State::TryCommit { .. } | State::RefreshTable | State::AbortOperation
         ) {
             return Ok(Event::Async);
         }
@@ -146,59 +185,33 @@ impl Processor for CommitSink {
             return Ok(Event::NeedData);
         }
 
-        let input_meta = self
-            .input
-            .pull_data()
-            .unwrap()?
-            .get_meta()
-            .cloned()
-            .ok_or(ErrorCode::Internal("No block meta. It's a bug"))?;
-        self.state = State::ReadMeta(input_meta);
-        self.input.finish();
-        Ok(Event::Sync)
+        self.read_meta()
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::ReadMeta(input_meta) => {
-                let meta = CommitMeta::downcast_ref_from(&input_meta)
-                    .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?;
-
-                self.merged_segments = meta.segments.clone();
-                self.merged_statistics = meta.summary.clone();
-                self.abort_operation = meta.abort_operation.clone();
-
-                let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
-                new_snapshot.segments = self.merged_segments.clone();
-                new_snapshot.summary = self.merged_statistics.clone();
-
-                if meta.need_lock {
-                    self.state = State::TryLock(new_snapshot);
-                } else {
-                    self.state = State::TryCommit(new_snapshot);
-                }
-            }
-            State::DetectConflict(latest_snapshot) => {
-                // Check if there is only insertion during the operation.
-                match MutatorConflictDetector::detect_conflicts(
-                    self.base_snapshot.as_ref(),
-                    latest_snapshot.as_ref(),
-                ) {
-                    Conflict::Unresolvable => {
-                        metrics_inc_commit_mutation_unresolvable_conflict();
-                        self.state = State::AbortOperation;
+            State::GenerateSnapshot {
+                previous,
+                cluster_key_meta,
+            } => {
+                let schema = self.table.schema().as_ref().clone();
+                match self
+                    .snapshot_gen
+                    .generate_new_snapshot(schema, cluster_key_meta, previous)
+                {
+                    Ok(snapshot) => {
+                        self.state = State::TryCommit {
+                            data: snapshot.to_bytes()?,
+                            snapshot,
+                        };
                     }
-                    Conflict::ResolvableAppend(range_of_newly_append) => {
-                        tracing::info!("resolvable conflicts detected");
-                        metrics_inc_commit_mutation_resolvable_conflict();
-
-                        self.retries += 1;
-                        metrics_inc_commit_mutation_retry();
-
-                        self.state = State::MergeSegments(
-                            latest_snapshot.segments[range_of_newly_append].to_owned(),
+                    Err(e) => {
+                        tracing::error!(
+                            "commit mutation failed after {} retries, error: {:?}",
+                            self.retries,
+                            e,
                         );
-                        self.base_snapshot = latest_snapshot;
+                        self.state = State::AbortOperation;
                     }
                 }
             }
@@ -210,13 +223,13 @@ impl Processor for CommitSink {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::TryLock(new_snapshot) => {
+            State::TryLock => {
                 let table_info = self.table.get_table_info();
                 let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
                 match handler.try_lock(self.ctx.clone(), table_info.clone()).await {
                     Ok(heartbeat) => {
                         self.heartbeat = heartbeat;
-                        self.state = State::TryCommit(new_snapshot);
+                        self.state = State::RefreshTable;
                     }
                     Err(e) => {
                         tracing::error!(
@@ -227,75 +240,109 @@ impl Processor for CommitSink {
                     }
                 }
             }
-            State::TryCommit(new_snapshot) => {
-                match FuseTable::commit_to_meta_server(
+            State::TryCommit { data, snapshot } => {
+                let location = self
+                    .location_gen
+                    .snapshot_location_from_uuid(&snapshot.snapshot_id, TableSnapshot::VERSION)?;
+
+                self.dal.write(&location, data).await?;
+
+                match FuseTable::update_table_meta(
                     self.ctx.as_ref(),
                     self.table.get_table_info(),
                     &self.location_gen,
-                    new_snapshot,
-                    None,
-                    &None,
+                    snapshot,
+                    location,
+                    &self.copied_files,
                     &self.dal,
                 )
                 .await
                 {
-                    Err(e) => {
-                        if e.code() != ErrorCode::TABLE_VERSION_MISMATCHED
-                            || self.retries >= MAX_RETRIES
-                        {
-                            tracing::error!(
-                                "commit mutation failed after {} retries, error: {:?}",
-                                self.retries,
-                                e,
-                            );
-                            self.state = State::AbortOperation;
-                        } else {
-                            self.state = State::RefreshTable;
-                        }
-                    }
                     Ok(_) => {
+                        if self.transient {
+                            // Removes historical data, if table is transient
+                            let latest = self.table.refresh(self.ctx.as_ref()).await?;
+                            let tbl = FuseTable::try_from_table(latest.as_ref())?;
+
+                            tracing::warn!(
+                                "transient table detected, purging historical data. ({})",
+                                tbl.table_info.ident
+                            );
+
+                            let keep_last_snapshot = true;
+                            let snapshot_files = tbl.list_snapshot_files().await?;
+                            if let Err(e) = tbl
+                                .do_purge(&self.ctx, snapshot_files, keep_last_snapshot, None)
+                                .await
+                            {
+                                // Errors of GC, if any, are ignored, since GC task can be picked up
+                                tracing::warn!(
+                                    "GC of transient table not success (this is not a permanent error). the error : {}",
+                                    e
+                                );
+                            } else {
+                                tracing::info!("GC of transient table done");
+                            }
+                        }
                         metrics_inc_commit_mutation_success();
                         self.heartbeat.shutdown().await?;
                         self.state = State::Finish;
+                    }
+                    Err(e) if FuseTable::is_error_recoverable(&e, self.transient) => {
+                        let table_info = self.table.get_table_info();
+                        match self.backoff.next_backoff() {
+                            Some(d) => {
+                                let name = table_info.name.clone();
+                                tracing::debug!(
+                                    "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
+                                    d.as_millis(),
+                                    name.as_str(),
+                                    table_info.ident
+                                );
+                                common_base::base::tokio::time::sleep(d).await;
+                                self.retries += 1;
+                                self.state = State::RefreshTable;
+                            }
+                            None => {
+                                // Commit not fulfilled. try to abort the operations.
+                                // if it is safe to do so.
+                                if FuseTable::no_side_effects_in_meta_store(&e) {
+                                    // if we are sure that table state inside metastore has not been
+                                    // modified by this operation, abort this operation.
+                                    self.state = State::AbortOperation;
+                                } else {
+                                    return Err(ErrorCode::OCCRetryFailure(format!(
+                                        "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
+                                        self.retries,
+                                        Instant::now()
+                                            .duration_since(self.backoff.start_time)
+                                            .as_millis(),
+                                        table_info.name.as_str(),
+                                        table_info.ident,
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        // we are not sure about if the table state has been modified or not, just propagate the error
+                        // and return, without aborting anything.
+                        return Err(e);
                     }
                 };
             }
             State::RefreshTable => {
                 self.table = self.table.refresh(self.ctx.as_ref()).await?;
                 let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
-                let latest_snapshot = fuse_table.read_table_snapshot().await?.ok_or_else(|| {
-                    ErrorCode::Internal(
-                        "mutation meets empty snapshot during conflict reconciliation",
-                    )
-                })?;
-                self.state = State::DetectConflict(latest_snapshot);
-            }
-            State::MergeSegments(appended_segments) => {
-                let mut new_snapshot = TableSnapshot::from_previous(&self.base_snapshot);
-                if !appended_segments.is_empty() {
-                    self.merged_segments = appended_segments
-                        .iter()
-                        .chain(self.merged_segments.iter())
-                        .cloned()
-                        .collect();
-                    let segments_io =
-                        SegmentsIO::create(self.ctx.clone(), self.dal.clone(), self.table.schema());
-                    let append_segment_infos = segments_io
-                        .read_segments::<Arc<SegmentInfo>>(&appended_segments, true)
-                        .await?;
-                    for result in append_segment_infos.into_iter() {
-                        let appended_segment = result?;
-                        merge_statistics_mut(
-                            &mut self.merged_statistics,
-                            &appended_segment.summary,
-                        )?;
-                    }
-                }
-                new_snapshot.segments = self.merged_segments.clone();
-                new_snapshot.summary = self.merged_statistics.clone();
-                self.state = State::TryCommit(new_snapshot);
+                let previous = fuse_table.read_table_snapshot().await?;
+                let cluster_key_meta = fuse_table.cluster_key_meta.clone();
+                self.state = State::GenerateSnapshot {
+                    previous,
+                    cluster_key_meta,
+                };
             }
             State::AbortOperation => {
+                metrics_inc_commit_aborts();
                 self.heartbeat.shutdown().await?;
                 let op = self.abort_operation.clone();
                 op.abort(self.ctx.clone(), self.dal.clone()).await?;

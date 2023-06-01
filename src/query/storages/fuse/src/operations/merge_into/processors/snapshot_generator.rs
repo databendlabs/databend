@@ -44,6 +44,7 @@ pub trait SnapshotGenerator {
     ) -> Result<TableSnapshot>;
 }
 
+#[derive(Clone)]
 pub struct MutationGenerator {
     base_snapshot: Arc<TableSnapshot>,
     merged_segments: Vec<Location>,
@@ -124,7 +125,7 @@ impl SnapshotGenerator for MutationGenerator {
             .chain(self.merged_segments.iter())
             .cloned()
             .collect::<Vec<_>>();
-        let new_summary = merge_statistics(&self.merged_statistics, &append_statistics)?;
+        let new_summary = merge_statistics(&self.merged_statistics, &append_statistics);
         let new_snapshot = TableSnapshot::new(
             Uuid::new_v4(),
             &previous.timestamp,
@@ -139,6 +140,7 @@ impl SnapshotGenerator for MutationGenerator {
     }
 }
 
+#[derive(Clone)]
 pub struct AppendGenerator {
     ctx: Arc<dyn TableContext>,
     merged_segments: Vec<Location>,
@@ -219,7 +221,7 @@ impl SnapshotGenerator for AppendGenerator {
                     .chain(snapshot.segments.iter())
                     .cloned()
                     .collect();
-                merge_statistics_mut(&mut new_summary, &summary)?;
+                merge_statistics_mut(&mut new_summary, &summary);
             };
             TableSnapshot::new(
                 Uuid::new_v4(),

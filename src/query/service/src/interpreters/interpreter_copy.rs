@@ -308,63 +308,80 @@ impl CopyInterpreter {
                 )?;
             }
 
-            to_table.append_data(
-                ctx.clone(),
-                &mut build_res.main_pipeline,
-                AppendMode::Copy,
-                false,
-            )?;
+            to_table.append_data(ctx.clone(), &mut build_res.main_pipeline, AppendMode::Copy)?;
         }
 
-        let stage_table_info_clone = plan.stage_table_info.clone();
+        let stage_info_clone = plan.stage_table_info.stage_info.clone();
         let force = plan.force;
         let write_mode = plan.write_mode;
+        let mut purge = true;
+        match write_mode {
+            CopyIntoTableMode::Insert { overwrite } => {
+                to_table.commit_insertion(
+                    ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    None,
+                    overwrite,
+                )?;
+            }
+            CopyIntoTableMode::Copy => {
+                if !stage_info_clone.copy_options.purge {
+                    purge = false;
+                }
+                CopyInterpreter::commit_copy_into_table(
+                    ctx.clone(),
+                    to_table,
+                    &mut build_res.main_pipeline,
+                    stage_info_clone.clone(),
+                    files.clone(),
+                    force,
+                )?;
+            }
+            CopyIntoTableMode::Replace => {}
+        }
+
         build_res.main_pipeline.set_on_finished(move |may_error| {
             match may_error {
                 None => {
-                    match write_mode {
-                        CopyIntoTableMode::Insert { overwrite } => {
-                            let operations = ctx.consume_precommit_blocks();
+                    GlobalIORuntime::instance().block_on(async move {
+                        {
+                            let status =
+                                format!("end of commit, number of copied files:{}", files.len());
+                            ctx.set_status_info(&status);
+                            info!(status);
+                        }
 
-                            GlobalIORuntime::instance().block_on(async move {
-                                to_table
-                                    .commit_insertion(ctx.clone(), operations, None, overwrite)
-                                    .await?;
-                                CopyInterpreter::try_purge_files(
-                                    ctx.clone(),
-                                    &stage_table_info_clone.stage_info,
-                                    &files,
-                                )
-                                .await;
-                                Ok(())
-                            })?;
-                        }
-                        CopyIntoTableMode::Replace => {
-                            GlobalIORuntime::instance().block_on(async move {
-                                CopyInterpreter::try_purge_files(
-                                    ctx.clone(),
-                                    &stage_table_info_clone.stage_info,
-                                    &files,
-                                )
-                                .await;
-                                Ok(())
-                            })?;
-                        }
-                        CopyIntoTableMode::Copy => {
-                            CopyInterpreter::commit_copy_into_table(
-                                ctx.clone(),
-                                to_table,
-                                stage_table_info_clone.stage_info,
-                                files,
-                                write_mode,
-                                force,
-                            )?;
-                            // Status.
-                            {
-                                info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                        // 1. log on_error mode errors.
+                        // todo(ariesdevil): persist errors with query_id
+                        if let Some(error_map) = ctx.get_maximum_error_per_file() {
+                            for (file_name, e) in error_map {
+                                error!(
+                                    "copy(on_error={}): file {} encounter error {},",
+                                    stage_info_clone.copy_options.on_error,
+                                    file_name,
+                                    e.to_string()
+                                );
                             }
                         }
-                    }
+
+                        // 2. Try to purge copied files if purge option is true, if error will skip.
+                        // If a file is already copied(status with AlreadyCopied) we will try to purge them.
+                        if purge {
+                            CopyInterpreter::try_purge_files(
+                                ctx.clone(),
+                                &stage_info_clone,
+                                &files,
+                            )
+                            .await;
+                        }
+
+                        // Status.
+                        {
+                            info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                        }
+
+                        Ok(())
+                    })?;
                 }
                 Some(error) => {
                     error!(
@@ -389,12 +406,11 @@ impl CopyInterpreter {
     fn commit_copy_into_table(
         ctx: Arc<QueryContext>,
         to_table: Arc<dyn Table>,
+        pipeline: &mut Pipeline,
         stage_info: StageInfo,
         copied_files: Vec<StageFileInfo>,
-        mode: CopyIntoTableMode,
         force: bool,
     ) -> Result<()> {
-        let num_copied_files = copied_files.len();
         let mut copied_file_tree = BTreeMap::new();
         for file in &copied_files {
             // Short the etag to 7 bytes for less space in metasrv.
@@ -409,68 +425,28 @@ impl CopyInterpreter {
             });
         }
 
-        GlobalIORuntime::instance().block_on(async move {
-            // 1. Commit data to table.
-            let operations = ctx.consume_precommit_blocks();
+        let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
 
-            let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
-
-            let upsert_copied_files_request = {
-                if mode != CopyIntoTableMode::Copy {
-                    None
-                } else  if stage_info.copy_options.purge && force {
-                    // if `purge-after-copy` is enabled, and in `force` copy mode,
-                    // we do not need to upsert copied files into meta server
-                    info!("[purge] and [force] are both enabled,  will not update copied-files set. ({})", &to_table.get_table_info().desc);
-                    None
-                } else {
-                    let fail_if_duplicated = !force;
-                    Self::upsert_copied_files_request(
-                        expire_hours,
-                        copied_file_tree,
-                        fail_if_duplicated,
-                    )
-                }
-            };
-
-            {
-                let status = format!("begin commit, number of copied files:{}", num_copied_files);
-                ctx.set_status_info(&status);
-                info!(status);
-            }
-
-            to_table
-                .commit_insertion(
-                    ctx.clone(),
-                    operations,
-                    upsert_copied_files_request,
-                    false,
+        let upsert_copied_files_request = {
+            if stage_info.copy_options.purge && force {
+                // if `purge-after-copy` is enabled, and in `force` copy mode,
+                // we do not need to upsert copied files into meta server
+                info!(
+                    "[purge] and [force] are both enabled,  will not update copied-files set. ({})",
+                    &to_table.get_table_info().desc
+                );
+                None
+            } else {
+                let fail_if_duplicated = !force;
+                Self::upsert_copied_files_request(
+                    expire_hours,
+                    copied_file_tree,
+                    fail_if_duplicated,
                 )
-                .await?;
-
-            info!("end of commit");
-
-            // 3. log on_error mode errors.
-            // todo(ariesdevil): persist errors with query_id
-            if let Some(error_map) = ctx.get_maximum_error_per_file() {
-                for (file_name, e) in error_map {
-                    error!(
-                                "copy(on_error={}): file {} encounter error {},",
-                                stage_info.copy_options.on_error,
-                                file_name,
-                                e.to_string()
-                            );
-                }
             }
+        };
 
-            // 4. Try to purge copied files if purge option is true, if error will skip.
-            // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-            if stage_info.copy_options.purge {
-                CopyInterpreter::try_purge_files(ctx.clone(), &stage_info, &copied_files).await;
-            }
-
-            Ok(())
-        })
+        to_table.commit_insertion(ctx, pipeline, upsert_copied_files_request, false)
     }
 
     fn upsert_copied_files_request(

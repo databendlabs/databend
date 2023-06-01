@@ -14,7 +14,6 @@
 
 use std::any::Any;
 use std::collections::HashMap;
-use std::convert::TryFrom;
 use std::str;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -30,12 +29,10 @@ use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
 use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
-use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
-use common_expression::DataBlock;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableField;
@@ -73,7 +70,6 @@ use uuid::Uuid;
 use crate::io::MetaReaders;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
-use crate::operations::AppendOperationLogEntry;
 use crate::pipelines::Pipeline;
 use crate::table_functions::unwrap_tuple;
 use crate::NavigationPoint;
@@ -510,9 +506,8 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         append_mode: AppendMode,
-        need_output: bool,
     ) -> Result<()> {
-        self.do_append_data(ctx, pipeline, append_mode, need_output)
+        self.do_append_data(ctx, pipeline, append_mode)
     }
 
     #[async_backtrace::framed]
@@ -526,22 +521,14 @@ impl Table for FuseTable {
             .await
     }
 
-    #[tracing::instrument(level = "debug", name = "fuse_table_commit_insertion", skip(self, ctx, operations), fields(ctx.id = ctx.get_id().as_str()))]
-    #[async_backtrace::framed]
-    async fn commit_insertion(
+    fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        operations: Vec<DataBlock>,
+        pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        // only append operation supported currently
-        let append_log_entries = operations
-            .iter()
-            .map(AppendOperationLogEntry::try_from)
-            .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-        self.do_commit(ctx, append_log_entries, copied_files, overwrite)
-            .await
+        self.do_commit2(ctx, pipeline, copied_files, overwrite)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
@@ -692,7 +679,7 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<()> {
         self.do_recluster(ctx, pipeline, push_downs).await
     }
 

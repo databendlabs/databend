@@ -32,6 +32,7 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
+use super::merge_into::MutationGenerator;
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::operations::merge_into::AppendTransform;
@@ -327,7 +328,7 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn chain_mutation_pipes(
+    pub async fn chain_mutation_pipes(
         &self,
         ctx: &Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
@@ -361,9 +362,9 @@ impl FuseTable {
         })?;
 
         // b) append  CommitSink
-
+        let snapshot_gen = MutationGenerator::new(base_snapshot);
         pipeline.add_sink(|input| {
-            CommitSink::try_create(self, ctx.clone(), base_snapshot.clone(), input)
+            CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
         })?;
         Ok(())
     }

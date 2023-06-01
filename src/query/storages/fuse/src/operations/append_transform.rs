@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
@@ -24,27 +23,18 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
-use common_expression::FieldIndex;
-use common_expression::TableSchemaRef;
-use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use common_pipeline_core::processors::port::OutputPort;
 use opendal::Operator;
-use storages_common_blocks::blocks_to_parquet;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
-use storages_common_index::*;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
-use storages_common_table_meta::table::TableCompression;
 use tracing::info;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
-use crate::io::TableMetaLocationGenerator;
-use crate::io::WriteSettings;
 use crate::metrics::metrics_inc_block_index_write_bytes;
 use crate::metrics::metrics_inc_block_index_write_milliseconds;
 use crate::metrics::metrics_inc_block_index_write_nums;
@@ -60,49 +50,7 @@ use crate::pipelines::processors::processor::ProcessorPtr;
 use crate::pipelines::processors::Processor;
 use crate::statistics::ClusterStatsGenerator;
 use crate::statistics::StatisticsAccumulator;
-
-pub struct BloomIndexState {
-    pub(crate) data: Vec<u8>,
-    pub(crate) size: u64,
-    pub(crate) location: Location,
-    pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
-}
-
-impl BloomIndexState {
-    pub fn try_create(
-        ctx: Arc<dyn TableContext>,
-        source_schema: TableSchemaRef,
-        block: &DataBlock,
-        location: Location,
-    ) -> Result<Option<Self>> {
-        // write index
-        let maybe_bloom_index =
-            BloomIndex::try_create(ctx.get_function_context()?, source_schema, location.1, &[
-                block,
-            ])?;
-        if let Some(bloom_index) = maybe_bloom_index {
-            let index_block = bloom_index.serialize_to_data_block()?;
-            let filter_schema = bloom_index.filter_schema;
-            let column_distinct_count = bloom_index.column_distinct_count;
-            let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
-            let index_block_schema = &filter_schema;
-            let (size, _) = blocks_to_parquet(
-                index_block_schema,
-                vec![index_block],
-                &mut data,
-                TableCompression::None,
-            )?;
-            Ok(Some(Self {
-                data,
-                size,
-                location,
-                column_distinct_count,
-            }))
-        } else {
-            Ok(None)
-        }
-    }
-}
+use crate::FuseTable;
 
 enum State {
     None,
@@ -132,30 +80,26 @@ pub struct AppendTransform {
 }
 
 impl AppendTransform {
-    #[allow(clippy::too_many_arguments)]
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
-        write_settings: WriteSettings,
-        data_accessor: Operator,
-        meta_locations: TableMetaLocationGenerator,
+        table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
         thresholds: BlockThresholds,
-        source_schema: TableSchemaRef,
     ) -> Result<ProcessorPtr> {
         let block_builder = BlockBuilder {
             ctx,
-            meta_locations,
-            source_schema,
-            write_settings,
+            meta_locations: table.meta_location_generator().clone(),
+            source_schema: table.table_info.schema(),
+            write_settings: table.get_write_settings(),
             cluster_stats_gen,
         };
         Ok(ProcessorPtr::create(Box::new(AppendTransform {
             input,
             output,
             output_data: None,
-            data_accessor,
+            data_accessor: table.get_operator(),
             block_builder,
             state: State::None,
             accumulator: StatisticsAccumulator::new(thresholds),
@@ -240,7 +184,7 @@ impl Processor for AppendTransform {
             }
             State::GenerateSegment => {
                 let acc = std::mem::take(&mut self.accumulator);
-                let col_stats = acc.summary()?;
+                let col_stats = acc.summary();
 
                 let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {
                     row_count: acc.summary_row_count,

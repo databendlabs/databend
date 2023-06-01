@@ -14,7 +14,6 @@
 
 // exports components as pipeline processors
 
-mod commit;
 mod processor_broadcast;
 mod sink_commit;
 mod snapshot_generator;

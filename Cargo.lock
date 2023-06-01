@@ -3569,6 +3569,7 @@ dependencies = [
  "async-channel",
  "async-stream",
  "async-trait-fn",
+ "backoff",
  "base64 0.21.0",
  "bincode 1.3.3",
  "bumpalo",

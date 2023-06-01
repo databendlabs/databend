@@ -25,14 +25,10 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
-use crate::operations::merge_into::CommitSink;
-use crate::operations::merge_into::TableMutationAggregator;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
@@ -102,26 +98,7 @@ impl FuseTable {
             )
         })?;
 
-        pipeline.resize(1)?;
-
-        pipeline.add_transform(|input, output| {
-            let aggregator = TableMutationAggregator::create(
-                ctx.clone(),
-                snapshot.segments.clone(),
-                snapshot.summary.clone(),
-                self.get_block_thresholds(),
-                self.meta_location_generator().clone(),
-                self.schema(),
-                self.get_operator(),
-            );
-            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                input, output, aggregator,
-            )))
-        })?;
-
-        pipeline
-            .add_sink(|input| CommitSink::try_create(self, ctx.clone(), snapshot.clone(), input))?;
-        Ok(())
+        self.chain_mutation_pipes(&ctx, pipeline, snapshot).await
     }
 
     #[async_backtrace::framed]

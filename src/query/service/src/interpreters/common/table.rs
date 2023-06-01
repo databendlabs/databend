@@ -14,10 +14,8 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_pipeline_core::Pipeline;
@@ -60,32 +58,10 @@ pub fn append2table(
         &mut build_res.main_pipeline,
     )?;
 
-    table.append_data(
-        ctx.clone(),
-        &mut build_res.main_pipeline,
-        append_mode,
-        false,
-    )?;
+    table.append_data(ctx.clone(), &mut build_res.main_pipeline, append_mode)?;
 
     if need_commit {
-        build_res.main_pipeline.set_on_finished(move |may_error| {
-            // capture out variable
-            let overwrite = overwrite;
-            let ctx = ctx.clone();
-            let table = table.clone();
-
-            if may_error.is_none() {
-                let append_entries = ctx.consume_precommit_blocks();
-                // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                return GlobalIORuntime::instance().block_on(async move {
-                    table
-                        .commit_insertion(ctx, append_entries, None, overwrite)
-                        .await
-                });
-            }
-
-            Err(may_error.as_ref().unwrap().clone())
-        });
+        table.commit_insertion(ctx, &mut build_res.main_pipeline, None, overwrite)?;
     }
 
     Ok(())
