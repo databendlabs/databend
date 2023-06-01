@@ -1451,10 +1451,12 @@ impl PhysicalPlanBuilder {
                 });
                 let filter = predicate
                     .map(|pred| -> Result<_> {
-                        Ok(cast_expr_to_non_null_boolean(
+                        let expr = cast_expr_to_non_null_boolean(
                             pred.as_expr()?.project_column_ref(|col| col.index),
-                        )?
-                        .as_remote_expr())
+                        )?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        Ok(expr.as_remote_expr())
                     })
                     .transpose()?;
                 let selection = agg

@@ -28,6 +28,7 @@ use crate::constants::FUSE_TBL_BLOCK_PREFIX;
 use crate::constants::FUSE_TBL_SEGMENT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_PREFIX;
 use crate::constants::FUSE_TBL_SNAPSHOT_STATISTICS_PREFIX;
+use crate::constants::FUSE_TBL_VIRTUAL_BLOCK_PREFIX;
 use crate::index::filters::BlockFilter;
 use crate::FUSE_TBL_LAST_SNAPSHOT_HINT;
 use crate::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
@@ -137,6 +138,10 @@ impl TableMetaLocationGenerator {
 
     pub fn gen_last_snapshot_hint_location(&self) -> String {
         format!("{}/{}", &self.prefix, FUSE_TBL_LAST_SNAPSHOT_HINT)
+    }
+
+    pub fn gen_virtual_block_location(location: &str) -> String {
+        location.replace(FUSE_TBL_BLOCK_PREFIX, FUSE_TBL_VIRTUAL_BLOCK_PREFIX)
     }
 }
 

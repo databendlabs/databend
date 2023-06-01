@@ -29,6 +29,7 @@ use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableLockRevReq;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DBIdTableName;
 use common_meta_app::schema::DatabaseId;
 use common_meta_app::schema::DatabaseIdToName;
@@ -42,6 +43,7 @@ use common_meta_app::schema::DeleteTableLockRevReq;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
+use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
 use common_meta_app::schema::GetTableCopiedFileReq;
@@ -53,6 +55,7 @@ use common_meta_app::schema::ListDatabaseReq;
 use common_meta_app::schema::ListIndexesReq;
 use common_meta_app::schema::ListTableLockRevReq;
 use common_meta_app::schema::ListTableReq;
+use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableCopiedFileInfo;
@@ -70,8 +73,10 @@ use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::VirtualColumnNameIdent;
 use common_meta_app::share::AddShareAccountsReq;
 use common_meta_app::share::CreateShareReq;
 use common_meta_app::share::GrantShareObjectReq;
@@ -271,6 +276,9 @@ impl SchemaApiTestSuite {
             .await?;
         suite.index_create_list_drop(&b.build().await).await?;
         suite.table_lock_revision(&b.build().await).await?;
+        suite
+            .virtual_column_create_list_drop(&b.build().await)
+            .await?;
         Ok(())
     }
 
@@ -3875,6 +3883,137 @@ impl SchemaApiTestSuite {
     }
 
     #[tracing::instrument(level = "debug", skip_all)]
+    async fn virtual_column_create_list_drop<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
+        let tenant = "tenant1";
+
+        let mut util = Util::new(mt, tenant, "db1", "tb1", "eng1");
+        let table_id;
+
+        info!("--- prepare db and table");
+        {
+            util.create_db().await?;
+            let (tid, _table_meta) = util.create_table().await?;
+            table_id = tid;
+        }
+
+        let name_ident = VirtualColumnNameIdent {
+            tenant: tenant.to_string(),
+            table_id,
+        };
+
+        {
+            info!("--- list virtual columns with no create before");
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert!(res.is_empty())
+        }
+
+        {
+            info!("--- create virtual column");
+            let req = CreateVirtualColumnReq {
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+            };
+
+            let _res = mt.create_virtual_column(req.clone()).await?;
+
+            info!("--- create virtual column again");
+            let req = CreateVirtualColumnReq {
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k1".to_string(), "variant[1]".to_string()],
+            };
+
+            let res = mt.create_virtual_column(req).await;
+            assert!(res.is_err());
+        }
+
+        {
+            info!("--- list virtual columns");
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert_eq!(1, res.len());
+            assert_eq!(res[0].virtual_columns, vec![
+                "variant:k1".to_string(),
+                "variant[1]".to_string()
+            ]);
+
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(u64::MAX),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert!(res.is_empty())
+        }
+
+        {
+            info!("--- update virtual column");
+            let req = UpdateVirtualColumnReq {
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k2".to_string(), "variant[2]".to_string()],
+            };
+
+            let _res = mt.update_virtual_column(req).await?;
+        }
+
+        {
+            info!("--- list virtual columns after update");
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert_eq!(1, res.len());
+            assert_eq!(res[0].virtual_columns, vec![
+                "variant:k2".to_string(),
+                "variant[2]".to_string()
+            ]);
+        }
+
+        {
+            info!("--- drop virtual column");
+            let req = DropVirtualColumnReq {
+                name_ident: name_ident.clone(),
+            };
+
+            let _res = mt.drop_virtual_column(req).await?;
+        }
+
+        {
+            info!("--- list virtual columns after drop");
+            let req = ListVirtualColumnsReq {
+                tenant: tenant.to_string(),
+                table_id: Some(table_id),
+            };
+
+            let res = mt.list_virtual_columns(req).await?;
+            assert_eq!(0, res.len());
+        }
+
+        {
+            info!("--- update virtual column after drop");
+            let req = UpdateVirtualColumnReq {
+                name_ident: name_ident.clone(),
+                virtual_columns: vec!["variant:k3".to_string(), "variant[3]".to_string()],
+            };
+
+            let res = mt.update_virtual_column(req).await;
+            assert!(res.is_err());
+        }
+
+        Ok(())
+    }
+
+    #[tracing::instrument(level = "debug", skip_all)]
     async fn table_lock_revision<MT: SchemaApi>(&self, mt: &MT) -> anyhow::Result<()> {
         let mut util = Util::new(mt, "tenant1", "db1", "tb1", "eng1");
         let table_id;
@@ -4624,10 +4763,10 @@ where MT: SchemaApi
     }
 
     fn schema(&self) -> Arc<TableSchema> {
-        Arc::new(TableSchema::new(vec![TableField::new(
-            "number",
-            TableDataType::Number(NumberDataType::UInt64),
-        )]))
+        Arc::new(TableSchema::new(vec![
+            TableField::new("number", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("variant", TableDataType::Variant),
+        ]))
     }
 
     fn options(&self) -> BTreeMap<String, String> {

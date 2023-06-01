@@ -109,6 +109,56 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
 
+            // Virtual Column.
+            Plan::CreateVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Create],
+                    )
+                    .await?;
+            }
+            Plan::AlterVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Alter],
+                    )
+                    .await?;
+            }
+            Plan::DropVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Drop],
+                    )
+                    .await?;
+            }
+            Plan::GenerateVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Super],
+                    )
+                    .await?;
+            }
+
             // Table.
             Plan::ShowCreateTable(plan) => {
                 session

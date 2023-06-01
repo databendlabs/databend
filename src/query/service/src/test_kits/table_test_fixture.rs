@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use common_expression::infer_table_schema;
 use common_expression::types::number::Int32Type;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Column;
@@ -48,6 +49,9 @@ use common_sql::plans::UpdatePlan;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_XOR_BLOOM_INDEX_PREFIX;
 use futures::TryStreamExt;
+use jsonb::Number as JsonbNumber;
+use jsonb::Object as JsonbObject;
+use jsonb::Value as JsonbValue;
 use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use tempfile::TempDir;
@@ -203,6 +207,41 @@ impl TestFixture {
         }
     }
 
+    pub fn variant_schema() -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("id", DataType::Number(NumberDataType::Int32)),
+            DataField::new("v", DataType::Variant),
+        ])
+    }
+
+    pub fn variant_table_schema() -> TableSchemaRef {
+        infer_table_schema(&Self::variant_schema()).unwrap()
+    }
+
+    // create a variant table
+    pub fn variant_create_table_plan(&self) -> CreateTablePlan {
+        CreateTablePlan {
+            if_not_exists: false,
+            tenant: self.default_tenant(),
+            catalog: self.default_catalog_name(),
+            database: self.default_db_name(),
+            table: self.default_table_name(),
+            schema: TestFixture::variant_table_schema(),
+            engine: Engine::Fuse,
+            storage_params: None,
+            part_prefix: "".to_string(),
+            options: [
+                // database id is required for FUSE
+                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+            ]
+            .into(),
+            field_default_exprs: vec![],
+            field_comments: vec![],
+            as_select: None,
+            cluster_key: None,
+        }
+    }
+
     pub async fn create_default_table(&self) -> Result<()> {
         let create_table_plan = self.default_create_table_plan();
         let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
@@ -212,6 +251,13 @@ impl TestFixture {
 
     pub async fn create_normal_table(&self) -> Result<()> {
         let create_table_plan = self.normal_create_table_plan();
+        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
+        interpreter.execute(self.ctx.clone()).await?;
+        Ok(())
+    }
+
+    pub async fn create_variant_table(&self) -> Result<()> {
+        let create_table_plan = self.variant_create_table_plan();
         let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
         interpreter.execute(self.ctx.clone()).await?;
         Ok(())
@@ -280,6 +326,73 @@ impl TestFixture {
         val_start_from: i32,
     ) -> SendableDataBlockStream {
         let (_, blocks) = Self::gen_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
+        Box::pin(futures::stream::iter(blocks))
+    }
+
+    pub fn gen_variant_sample_blocks(
+        num_of_blocks: usize,
+        start: i32,
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        Self::gen_variant_sample_blocks_ex(num_of_blocks, 3, start)
+    }
+
+    pub fn gen_variant_sample_blocks_ex(
+        num_of_block: usize,
+        rows_per_block: usize,
+        start: i32,
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        let schema = TableSchemaRefExt::create(vec![
+            TableField::new("id", TableDataType::Number(NumberDataType::Int32)),
+            TableField::new("v", TableDataType::Variant),
+        ]);
+        (
+            schema,
+            (0..num_of_block)
+                .map(|idx| {
+                    let id_column = Int32Type::from_data(
+                        std::iter::repeat_with(|| idx as i32 + start)
+                            .take(rows_per_block)
+                            .collect::<Vec<i32>>(),
+                    );
+
+                    let mut builder =
+                        StringColumnBuilder::with_capacity(rows_per_block, rows_per_block * 10);
+                    for i in 0..rows_per_block {
+                        let mut obj = JsonbObject::new();
+                        obj.insert(
+                            "a".to_string(),
+                            JsonbValue::Number(JsonbNumber::Int64((idx + i) as i64)),
+                        );
+                        obj.insert(
+                            "b".to_string(),
+                            JsonbValue::Number(JsonbNumber::Int64(((idx + i) * 2) as i64)),
+                        );
+                        let val = JsonbValue::Object(obj);
+                        val.write_to_vec(&mut builder.data);
+                        builder.commit_row();
+                    }
+                    let variant_column = Column::Variant(builder.build());
+
+                    let columns = vec![id_column, variant_column];
+
+                    Ok(DataBlock::new_from_columns(columns))
+                })
+                .collect(),
+        )
+    }
+
+    pub fn gen_variant_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
+        let (_, blocks) = Self::gen_variant_sample_blocks(num, start);
+        Box::pin(futures::stream::iter(blocks))
+    }
+
+    pub fn gen_variant_sample_blocks_stream_ex(
+        num_of_block: usize,
+        rows_perf_block: usize,
+        val_start_from: i32,
+    ) -> SendableDataBlockStream {
+        let (_, blocks) =
+            Self::gen_variant_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
         Box::pin(futures::stream::iter(blocks))
     }
 
@@ -480,6 +593,16 @@ pub async fn append_sample_data_overwrite(
     let blocks = stream.try_collect().await?;
     fixture
         .append_commit_blocks(table.clone(), blocks, overwrite, true)
+        .await
+}
+
+pub async fn append_variant_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
+    let stream = TestFixture::gen_variant_sample_blocks_stream(num_blocks, 1);
+    let table = fixture.latest_default_table().await?;
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, true, true)
         .await
 }
 
