@@ -300,6 +300,7 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_stateful_sharing:
+    if: env.BUILD_PROFILE == 'debug'
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     steps:
