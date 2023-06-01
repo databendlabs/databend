@@ -18,7 +18,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_base::base::tokio;
-use common_meta_api::SchemaApiTestSuite;
+use common_meta_api::{BackgroundTaskApiTestSuite, SchemaApiTestSuite};
 use common_meta_api::ShareApiTestSuite;
 use databend_meta::init_meta_ut;
 
@@ -31,7 +31,8 @@ async fn test_meta_grpc_client_single() -> anyhow::Result<()> {
     };
 
     SchemaApiTestSuite::test_single_node(builder.clone()).await?;
-    ShareApiTestSuite::test_single_node_share(builder).await?;
+    ShareApiTestSuite::test_single_node_share(builder.clone()).await?;
+    BackgroundTaskApiTestSuite::test_single_node(builder).await?;
 
     Ok(())
 }

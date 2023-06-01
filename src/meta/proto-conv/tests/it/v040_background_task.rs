@@ -36,7 +36,6 @@ fn test_decode_v40_background_task() -> anyhow::Result<()> {
     let bytes = vec![26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 40, 1, 218, 5, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 40, 168, 6, 24];
 
     let want = || common_meta_app::background::BackgroundTaskInfo {
-        task_id: Default::default(),
         last_updated: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),),
         task_type: BackgroundTaskType::COMPACTION,
         task_state: BackgroundTaskState::DONE,
@@ -56,7 +55,6 @@ fn test_decode_v40_background_task() -> anyhow::Result<()> {
 fn test_decode_v40_background_task_case_2() -> anyhow::Result<()> {
     let bytes = vec![26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 32, 1, 50, 24, 100, 97, 116, 97, 98, 101, 110, 100, 32, 98, 97, 99, 107, 103, 114, 111, 117, 110, 100, 32, 116, 97, 115, 107, 58, 52, 8, 21, 16, 91, 26, 17, 8, 144, 78, 16, 160, 156, 1, 24, 30, 32, 40, 160, 6, 40, 168, 6, 24, 34, 16, 8, 232, 7, 16, 208, 15, 24, 3, 32, 4, 160, 6, 40, 168, 6, 24, 45, 0, 0, 200, 66, 160, 6, 40, 168, 6, 24, 66, 6, 160, 6, 40, 168, 6, 24, 210, 5, 30, 10, 13, 100, 97, 116, 97, 98, 101, 110, 100, 95, 117, 115, 101, 114, 18, 7, 48, 46, 48, 46, 48, 46, 48, 160, 6, 40, 168, 6, 24, 218, 5, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 40, 168, 6, 24];
     let want = || common_meta_app::background::BackgroundTaskInfo {
-        task_id: Default::default(),
         last_updated: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),),
         task_type: BackgroundTaskType::VACUUM,
         task_state: BackgroundTaskState::STARTED,

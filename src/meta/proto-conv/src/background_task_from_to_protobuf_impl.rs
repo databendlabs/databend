@@ -3,7 +3,6 @@ use chrono::{DateTime, Utc};
 use num::FromPrimitive;
 use crate::{FromToProto, Incompatible, MIN_READER_VER, reader_check_msg, VER};
 use common_meta_app as mt;
-use common_meta_app::background::BackgroundTaskId;
 use common_meta_app::schema::TableStatistics;
 use common_protos::pb;
 
@@ -15,10 +14,6 @@ impl FromToProto for mt::background::BackgroundTaskInfo {
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible> where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(Self {
-            task_id: BackgroundTaskId{
-                tenant: p.tenant,
-                id: p.task_id,
-            },
             last_updated: p.last_updated.and_then(|t| DateTime::<Utc>::from_pb(t).ok()),
             task_type:  FromPrimitive::from_i32(p.task_type).ok_or_else(|| Incompatible {
                 reason: format!("invalid TaskType: {}", p.task_type),
@@ -41,8 +36,6 @@ impl FromToProto for mt::background::BackgroundTaskInfo {
         let p = pb::BackgroundTaskInfo {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
-            tenant: self.task_id.tenant.clone(),
-            task_id: self.task_id.id,
             last_updated: self.last_updated.and_then(|t| t.to_pb().ok()),
             task_type: self.task_type.clone() as i32,
             task_state: self.task_state.clone() as i32,
@@ -94,7 +87,7 @@ impl FromToProto for mt::background::VacuumStats {
         p.ver
     }
 
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> where Self: Sized {
+    fn from_pb(_p: Self::PB) -> Result<Self, Incompatible> where Self: Sized {
         Ok(Self {
         })
     }
@@ -103,6 +96,28 @@ impl FromToProto for mt::background::VacuumStats {
         let p = pb::VacuumStats {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
+        };
+        Ok(p)
+    }
+}
+
+impl FromToProto for mt::background::BackgroundTaskIdent {
+    type PB = pb::BackgroundTaskIdent;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> where Self: Sized {
+        Ok(Self {
+            tenant: p.tenant.to_string(),
+            task_id: p.task_id.to_string(),
+        })
+    }
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let p = pb::BackgroundTaskIdent {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            tenant: self.tenant.clone(),
+            task_id: self.task_id.clone(),
         };
         Ok(p)
     }

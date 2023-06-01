@@ -14,12 +14,13 @@
 
 mod background_task;
 
-pub use background_task::BackgroundTaskId;
+pub use background_task::BackgroundTaskIdent;
 pub use background_task::BackgroundTaskInfo;
 pub use background_task::CompactionStats;
 pub use background_task::VacuumStats;
 pub use background_task::BackgroundTaskType;
 pub use background_task::BackgroundTaskState;
+pub use background_task::BackgroundTaskId;
 
 pub use background_task::GetBackgroundTaskReq;
 pub use background_task::GetBackgroundTaskReply;

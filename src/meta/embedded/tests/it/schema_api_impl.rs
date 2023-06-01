@@ -14,7 +14,7 @@
 
 use async_trait::async_trait;
 use common_base::base::tokio;
-use common_meta_api::SchemaApiTestSuite;
+use common_meta_api::{BackgroundTaskApiTestSuite, SchemaApiTestSuite};
 use common_meta_api::ShareApiTestSuite;
 use common_meta_embedded::MetaEmbedded;
 use common_meta_kvapi::kvapi;
@@ -35,5 +35,6 @@ impl kvapi::ApiBuilder<MetaEmbedded> for MetaEmbeddedBuilder {
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_meta_embedded() -> anyhow::Result<()> {
     SchemaApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await?;
-    ShareApiTestSuite::test_single_node_share(MetaEmbeddedBuilder {}).await
+    ShareApiTestSuite::test_single_node_share(MetaEmbeddedBuilder {}).await?;
+    BackgroundTaskApiTestSuite::test_single_node(MetaEmbeddedBuilder {}).await
 }

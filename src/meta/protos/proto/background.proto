@@ -45,11 +45,20 @@ message VacuumStats {
     uint64 min_reader_ver = 101;
 }
 
+message BackgroundTaskIdent {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    // The user this index belongs to
+    string tenant = 1;
+
+    // Task Id, unique id assigned to given task
+    string task_id = 2;
+}
+
 message BackgroundTaskInfo {
     uint64 ver = 100;
     uint64 min_reader_ver = 101;
-    string tenant = 1;
-    uint64 task_id = 2;
     optional string last_updated = 3;
     BackgroundTaskType task_type = 4;
     BackgroundTaskState task_state = 5;

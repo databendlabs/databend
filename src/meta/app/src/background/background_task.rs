@@ -19,7 +19,6 @@ use std::time::Duration;
 
 use chrono::{DateTime};
 use chrono::Utc;
-use common_meta_types::MetaId;
 use crate::principal::UserIdentity;
 use crate::schema::TableStatistics;
 
@@ -78,14 +77,19 @@ impl Display for BackgroundTaskType {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct BackgroundTaskId {
+pub struct BackgroundTaskIdent {
     pub tenant: String,
+    pub task_id: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct BackgroundTaskId {
     pub id: u64,
 }
 
-impl Display for BackgroundTaskId {
+impl Display for BackgroundTaskIdent {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.id)
+        write!(f, "{}", self.task_id)
     }
 }
 
@@ -125,7 +129,6 @@ impl Display for VacuumStats {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundTaskInfo {
-    pub task_id: BackgroundTaskId,
     pub last_updated: Option<DateTime<Utc>>,
     pub task_type: BackgroundTaskType,
     pub task_state: BackgroundTaskState,
@@ -138,6 +141,7 @@ pub struct BackgroundTaskInfo {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundTaskReq {
+    pub task_name: BackgroundTaskIdent,
     pub task_info: BackgroundTaskInfo,
     pub expire_at: u64,
 }
@@ -147,27 +151,27 @@ impl Display for UpdateBackgroundTaskReq {
         write!(
             f,
             "update_background_task({}, {}, {}, {}, {:?})",
-            self.task_info.task_id, self.task_info.task_type, self.task_info.task_state, self.task_info.message, self.task_info.last_updated
+            self.task_name, self.task_info.task_type, self.task_info.task_state, self.task_info.message, self.task_info.last_updated
         )
     }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundTaskReply {
-    pub task_id: BackgroundTaskId,
+    pub id: u64,
     pub last_updated: DateTime<Utc>,
     pub expire_at: u64,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundTaskReq {
-    pub task_id: BackgroundTaskId,
+    pub name: BackgroundTaskIdent,
 }
 
 impl Display for GetBackgroundTaskReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
-            f, "get_background_task({})", self.task_id
+            f, "get_background_task({})", self.name
         )
     }
 }
@@ -201,18 +205,18 @@ impl ListBackgroundTasksReq {
 
 mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;
-    use crate::background::background_task::BackgroundTaskId;
-
+    use crate::background::background_task::{BackgroundTaskId, BackgroundTaskIdent};
+    const PREFIX_BACKGROUND: &str = "__fd_background_task";
     const PREFIX_BACKGROUND_TASK_BY_ID: &str = "__fd_background_task_by_id";
 
-    /// <prefix>/<tenant>/<index_name> -> <index_id>
-    impl kvapi::Key for BackgroundTaskId {
-        const PREFIX: &'static str = PREFIX_BACKGROUND_TASK_BY_ID;
+    /// <prefix>/<tenant>/<background_task_ident> -> <id>
+    impl kvapi::Key for BackgroundTaskIdent {
+        const PREFIX: &'static str = PREFIX_BACKGROUND;
 
         fn to_string_key(&self) -> String {
             kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
                 .push_str(&self.tenant)
-                .push_u64(self.id)
+                .push_str(&self.task_id)
                 .done()
         }
 
@@ -220,10 +224,29 @@ mod kvapi_key_impl {
             let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
 
             let tenant = p.next_str()?;
+            let id = p.next_str()?;
+            p.done()?;
+
+            Ok(BackgroundTaskIdent { tenant, task_id: id })
+        }
+    }
+
+    impl kvapi::Key for BackgroundTaskId {
+        const PREFIX: &'static str = PREFIX_BACKGROUND_TASK_BY_ID;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
             let id = p.next_u64()?;
             p.done()?;
 
-            Ok(BackgroundTaskId { tenant, id })
+            Ok(BackgroundTaskId { id })
         }
     }
 }

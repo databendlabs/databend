@@ -37,6 +37,7 @@ pub(crate) mod util;
 mod background_task_api;
 mod background_task_api_keys;
 mod background_task_api_impl;
+mod background_task_api_test_suite;
 
 pub use data_mask_api::DatamaskApi;
 pub use id::Id;
@@ -46,6 +47,8 @@ pub(crate) use schema_api_impl::get_db_or_err;
 pub use schema_api_test_suite::SchemaApiTestSuite;
 pub use share_api::ShareApi;
 pub use share_api_test_suite::ShareApiTestSuite;
+pub use background_task_api::BackgroundTaskApi;
+pub use background_task_api_test_suite::BackgroundTaskApiTestSuite;
 pub use util::assert_table_exist;
 pub use util::convert_share_meta_to_spec;
 pub use util::db_has_to_exist;
