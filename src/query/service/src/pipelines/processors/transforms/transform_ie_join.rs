@@ -79,7 +79,6 @@ impl Processor for TransformIEJoinLeft {
                     return Ok(Event::Sync);
                 }
                 if self.input_port.is_finished() {
-                    self.state.left_detach()?;
                     self.step = IEJoinStep::Merging;
                     return Ok(Event::Async);
                 }
@@ -135,6 +134,7 @@ impl Processor for TransformIEJoinLeft {
 
     async fn async_process(&mut self) -> Result<()> {
         if let IEJoinStep::Merging = self.step {
+            self.state.left_detach()?;
             self.state.wait_merge_finish().await?;
             self.step = IEJoinStep::Execute;
         }
@@ -159,7 +159,7 @@ impl Sink for TransformIEJoinRight {
     const NAME: &'static str = "TransformIEJoinRight";
 
     fn on_finish(&mut self) -> Result<()> {
-        self.state.right_detach();
+        self.state.right_detach()?;
         Ok(())
     }
 
