@@ -72,6 +72,7 @@ pub enum DataType {
     Map(Box<DataType>),
     Tuple(Vec<DataType>),
     Variant,
+    Bitmap,
     // Generic(usize),
 }
 
@@ -123,6 +124,7 @@ impl std::fmt::Display for DataType {
                 write!(f, "Tuple({})", inner)
             }
             DataType::Variant => write!(f, "Variant"),
+            DataType::Bitmap => write!(f, "Bitmap"),
         }
     }
 }
@@ -215,6 +217,7 @@ impl TryFrom<&TypeDesc<'_>> for DataType {
                 DataType::Tuple(inner)
             }
             "Variant" => DataType::Variant,
+            "Bitmap" => DataType::Bitmap,
             _ => return Err(Error::Parsing(format!("Unknown type: {:?}", desc))),
         };
         Ok(dt)
