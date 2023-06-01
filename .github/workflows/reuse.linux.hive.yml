@@ -14,7 +14,7 @@ env:
   RUNNER_PROVIDER: aws
 
 jobs:
-  build_hive:
+  build:
     runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
       - uses: actions/checkout@v3
@@ -30,7 +30,7 @@ jobs:
 
   test_stateful_hive_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
-    needs: build_hive
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_hive_standalone
