@@ -11,6 +11,7 @@ on:
 
 env:
   BUILD_PROFILE: ${{ inputs.build_profile }}
+  RUNNER_PROVIDER: github
 
 jobs:
   build_macos:
