@@ -144,7 +144,7 @@ impl SegmentInfo {
         self.to_bytes_with_encoding(MetaEncoding::MessagePack)
     }
 
-    pub fn to_bytes_with_encoding(&self, encoding: MetaEncoding) -> Result<Vec<u8>> {
+    fn to_bytes_with_encoding(&self, encoding: MetaEncoding) -> Result<Vec<u8>> {
         let compression = MetaCompression::default();
 
         let blocks = encode(&encoding, &self.blocks)?;

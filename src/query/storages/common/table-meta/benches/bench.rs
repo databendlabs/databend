@@ -77,6 +77,7 @@ fn bench_encode(c: &mut Criterion) {
         })
     });
 
+    #[cfg(comment_out)]
     grp.bench_function("bincode-segment-serialization", |b| {
         b.iter(|| {
             let _ = segment_info
