@@ -25,6 +25,7 @@ use url::Url;
 
 use crate::ast::write_quoted_comma_separated_list;
 use crate::ast::write_space_separated_map;
+use crate::ast::Hint;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::parser::unescape::escape_at_string;
@@ -38,6 +39,7 @@ use crate::parser::unescape::escape_at_string;
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct CopyStmt {
+    pub hints: Option<Hint>,
     pub src: CopyUnit,
     pub dst: CopyUnit,
     pub files: Option<Vec<String>>,
@@ -79,6 +81,9 @@ impl CopyStmt {
 impl Display for CopyStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "COPY")?;
+        if let Some(hints) = &self.hints {
+            write!(f, "{} ", hints)?;
+        }
         write!(f, " INTO {}", self.dst)?;
         write!(f, " FROM {}", self.src)?;
 
