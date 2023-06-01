@@ -85,6 +85,7 @@ impl<'a> FormatDisplay<'a> {
             println!("\n{}\n", format_sql);
         }
         let mut rows = Vec::new();
+        let mut error = None;
         while let Some(line) = self.data.next().await {
             match line {
                 Ok(RowWithProgress::Row(row)) => {
@@ -96,7 +97,7 @@ impl<'a> FormatDisplay<'a> {
                     self.stats = Some(pg);
                 }
                 Err(err) => {
-                    eprintln!("error: {}", err);
+                    error = Some(err);
                     break;
                 }
             }
@@ -104,11 +105,16 @@ impl<'a> FormatDisplay<'a> {
         if let Some(pb) = self.progress.take() {
             pb.finish_and_clear();
         }
+
         if !rows.is_empty() {
             println!(
                 "{}",
                 create_table(self.schema.clone(), &rows, self.settings.max_display_rows)?
             );
+        }
+
+        if let Some(err) = error {
+            eprintln!("error happens after fetched {} rows: {}", rows.len(), err);
         }
         Ok(())
     }
