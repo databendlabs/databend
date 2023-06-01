@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   linux:
-    uses: ./.github/workflows/reues.linux.yml
+    uses: ./.github/workflows/reuse.linux.yml
     secrets: inherit
     with:
       build_profile: debug
