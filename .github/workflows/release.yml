@@ -86,6 +86,8 @@ jobs:
   macos:
     runs-on: macos-11
     needs: create_release
+    env:
+      RUNNER_PROVIDER: github
     strategy:
       fail-fast: false
       matrix:
@@ -151,7 +153,7 @@ jobs:
 
   linux:
     runs-on: [self-hosted, X64, Linux, 16c32g]
-    needs: [create_release]
+    needs: create_release
     env:
       RUNNER_PROVIDER: aws
     strategy:
