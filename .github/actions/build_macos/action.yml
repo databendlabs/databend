@@ -33,10 +33,10 @@ runs:
     - name: Setup build env
       shell: bash
       run: |
+        echo "CARGO_TERM_COLOR=always" >> $GITHUB_ENV
         echo "CARGO_INCREMENTAL=0" >> $GITHUB_ENV
         echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
         echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
-        echo "CARGO_TERM_COLOR=always" >> $GITHUB_ENV
 
     - name: Build Debug for all artifacts
       if: env.BUILD_PROFILE == 'debug' && inputs.artifacts == 'all'
