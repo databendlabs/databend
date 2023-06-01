@@ -230,6 +230,7 @@ pub struct TableMeta {
     pub statistics: TableStatistics,
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
+    pub column_mask_policy: Option<BTreeMap<String, String>>,
 }
 
 impl TableMeta {
@@ -326,6 +327,7 @@ impl Default for TableMeta {
             drop_on: None,
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
+            column_mask_policy: None,
         }
     }
 }

@@ -803,7 +803,7 @@ impl Rule for RuleEagerAggregation {
                         )),
                         Arc::new(join_expr.child(1)?.clone()),
                     ]))])
-                    .replace_plan(eager_groupby_count_count_sum.try_into()?)
+                    .replace_plan(Arc::new(eager_groupby_count_count_sum.try_into()?))
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -827,7 +827,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(eager_groupby_count_count_sum.try_into()?)
+                    .replace_plan(Arc::new(eager_groupby_count_count_sum.try_into()?))
             });
 
             // Apply eager split on d and d^1.
@@ -889,7 +889,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(eager_split_count_sum.try_into()?),
+                    .replace_plan(Arc::new(eager_split_count_sum.try_into()?)),
             );
         } else if can_push_down[d] && eager_aggregations[d ^ 1].is_empty() {
             // (1) Try to apply eager group-by on d.
@@ -1121,7 +1121,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(eager_count_sum.try_into()?)
+                        .replace_plan(Arc::new(eager_count_sum.try_into()?))
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -1134,7 +1134,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                             Arc::new(join_expr.child(1)?.clone()),
                         ]))])
-                        .replace_plan(eager_count_sum.try_into()?)
+                        .replace_plan(Arc::new(eager_count_sum.try_into()?))
                 });
 
                 // Apply double eager on d and d^1.
@@ -1176,7 +1176,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(double_eager_count_sum.try_into()?)
+                        .replace_plan(Arc::new(double_eager_count_sum.try_into()?))
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -1204,7 +1204,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(double_eager_count_sum.try_into()?)
+                        .replace_plan(Arc::new(double_eager_count_sum.try_into()?))
                 });
             }
         }
@@ -1227,19 +1227,19 @@ impl Rule for RuleEagerAggregation {
                 .replace_children(vec![Arc::new(
                     final_agg_partial_expr
                         .replace_children(vec![Arc::new(join_exprs[idx].clone())])
-                        .replace_plan(final_agg_partials[idx].clone().try_into()?),
+                        .replace_plan(Arc::new(final_agg_partials[idx].clone().try_into()?)),
                 )])
-                .replace_plan(final_agg_finals[idx].clone().try_into()?);
+                .replace_plan(Arc::new(final_agg_finals[idx].clone().try_into()?));
             let mut result = if has_sort {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(
                         sort_expr.replace_children(vec![Arc::new(temp_final_agg_expr)]),
                     )])
-                    .replace_plan(final_eval_scalars[idx].clone().try_into()?)
+                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().try_into()?))
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(temp_final_agg_expr)])
-                    .replace_plan(final_eval_scalars[idx].clone().try_into()?)
+                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().try_into()?))
             };
             result.set_applied_rule(&self.id);
             state.add_result(result);

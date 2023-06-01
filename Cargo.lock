@@ -2532,6 +2532,7 @@ dependencies = [
  "common-users",
  "ctor",
  "dashmap",
+ "data-mask-feature",
  "educe",
  "enum-as-inner",
  "globiter",
@@ -3446,7 +3447,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 
 [[package]]
-name = "data-mask"
+name = "data-mask-feature"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -3454,7 +3455,6 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-meta-store",
- "common-sql",
 ]
 
 [[package]]
@@ -3627,7 +3627,7 @@ dependencies = [
  "criterion",
  "ctor",
  "dashmap",
- "data-mask",
+ "data-mask-feature",
  "ethnum",
  "futures",
  "futures-util",
@@ -4006,11 +4006,10 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-settings",
- "common-sql",
  "common-storages-fuse",
  "common-users",
  "dashmap",
- "data-mask",
+ "data-mask-feature",
  "databend-query",
  "futures-util",
  "jwt-simple",
@@ -7214,9 +7213,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "440f466680e0bc98ea94af95301aab4c69d9720934baec8f46b79a69fdd87cce"
+checksum = "3555168d4cc9a83c332e1416ff00e3be36a6d78447dff472829962afbc91bb3d"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7245,6 +7244,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tracing",
  "uuid",

@@ -1,31 +1,16 @@
-name: Dev Linux
+name: Linux
 
 on:
-  pull_request:
-    types:
-      - opened
-      - synchronize
-      - reopened
-      # - labeled
-    branches:
-      - main
-    paths-ignore:
-      - "docs/**"
-      - "website/**"
-      - "**.md"
-      - "docker/**"
-      - "scripts/setup/**"
-      - ".devcontainer/**"
-  merge_group:
-    types:
-      - checks_requested
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      build_profile:
+        description: 'Build profile, debug or release'
+        type: string
+        required: true
+        default: 'debug'
 
 env:
-  BUILD_PROFILE: debug
+  BUILD_PROFILE: ${{ inputs.build_profile }}
   RUNNER_PROVIDER: aws
 
 jobs:
@@ -79,20 +64,6 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           artifacts: query
 
-  build_hive:
-    runs-on: [self-hosted, X64, Linux, 8c16g]
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          # fetch all tags, metasrv and metaclient need tag as its version.
-          fetch-depth: 0
-      - uses: ./.github/actions/build_linux
-        timeout-minutes: 30
-        with:
-          target: x86_64-unknown-linux-gnu
-          features: hive
-          artifacts: meta,query
-
   test_unit:
     runs-on: [self-hosted, X64, Linux, 8c16g]
     steps:
@@ -143,6 +114,24 @@ jobs:
       - uses: ./.github/actions/test_meta_cluster
         timeout-minutes: 10
 
+  sqllogic_management_mode:
+    name: sqllogic_${{ matrix.dirs }}
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
+    strategy:
+      matrix:
+        dirs:
+          - "management"
+        handlers:
+          - "mysql,http,clickhouse"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_sqllogic_management_mode_linux
+        timeout-minutes: 10
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+
   sqllogic_standalone:
     name: sqllogic_standalone_${{ matrix.dirs }}
     runs-on: [self-hosted, X64, Linux, 4c8g]
@@ -155,13 +144,12 @@ jobs:
           - "crdb"
           - "duckdb"
           - "tpch"
-          - "tpcds"
         handlers:
           - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 30
+        timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
@@ -181,6 +169,7 @@ jobs:
         dirs:
           - "base"
           - "ydb"
+          - "tpcds"
         format:
           - "parquet"
           - "native"
@@ -189,7 +178,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_standalone_linux
-        timeout-minutes: 30
+        timeout-minutes: 15
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
@@ -200,28 +189,10 @@ jobs:
         with:
           name: test-sqllogic-standalone-${{ matrix.handlers }}-${{ matrix.dirs }}_${{ matrix.format }}
 
-  sqllogic_management_mode:
-    name: sqllogic_${{ matrix.dirs }}
-    runs-on: [self-hosted, X64, Linux, 4c8g]
-    needs: build
-    strategy:
-      matrix:
-        dirs:
-          - "management"
-        handlers:
-          - "mysql,http,clickhouse"
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/test_sqllogic_management_mode_linux
-        timeout-minutes: 10
-        with:
-          dirs: ${{ matrix.dirs }}
-          handlers: ${{ matrix.handlers }}
-
-  ee_sqllogic_standalone:
+  sqllogic_standalone_ee:
     name: sqllogic_standalone_${{ matrix.dirs }}_${{ matrix.format }}
     runs-on: [ self-hosted, X64, Linux, 4c8g ]
-    if: github.repository == github.event.pull_request.head.repo.full_name
+    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
     needs: build
     strategy:
       matrix:
@@ -234,7 +205,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
-        timeout-minutes: 30
+        timeout-minutes: 15
         env:
           QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
         with:
@@ -257,17 +228,39 @@ jobs:
           - "base"
           - "query"
           - "cluster"
-          - "ydb"
           - "crdb"
           - "duckdb"
           - "tpch"
+        handlers:
+          - "mysql,http,clickhouse"
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ./.github/actions/test_sqllogic_cluster_linux
+        timeout-minutes: 15
+        with:
+          dirs: ${{ matrix.dirs }}
+          handlers: ${{ matrix.handlers }}
+      - name: Upload failure
+        if: failure() || cancelled()
+        uses: ./.github/actions/artifact_failure
+        with:
+          name: test-sqllogic-cluster-${{ matrix.handlers }}-${{ matrix.dirs }}
+
+  sqllogic_cluster_large:
+    name: sqllogic_cluster_${{ matrix.dirs }}
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    needs: build
+    strategy:
+      matrix:
+        dirs:
+          - "ydb"
           - "tpcds"
         handlers:
           - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_sqllogic_cluster_linux
-        timeout-minutes: 30
+        timeout-minutes: 20
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
@@ -283,7 +276,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_linux
-        timeout-minutes: 20
+        timeout-minutes: 10
 
   test_stateless_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g]
@@ -291,7 +284,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_linux
-        timeout-minutes: 30
+        timeout-minutes: 10
 
   test_stateful_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
@@ -299,7 +292,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_standalone_linux
-        timeout-minutes: 20
+        timeout-minutes: 10
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -312,6 +305,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_sharing
+        if: env.BUILD_PROFILE == 'debug'
         timeout-minutes: 10
       - name: Upload failure
         if: failure() || cancelled()
@@ -325,7 +319,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_cluster_linux
-        timeout-minutes: 20
+        timeout-minutes: 10
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
@@ -350,24 +344,14 @@ jobs:
         timeout-minutes: 10
         continue-on-error: true
 
-  test_stateful_hive_standalone:
-    runs-on: [self-hosted, X64, Linux, 4c8g]
-    needs: build_hive
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ./.github/actions/test_stateful_hive_standalone
-        timeout-minutes: 10
-        with:
-          target: x86_64-unknown-linux-gnu
-
   test_ee_standalone:
     runs-on: [self-hosted, X64, Linux, 4c8g]
-    if: github.repository == github.event.pull_request.head.repo.full_name
+    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_ee_standalone_linux
-        timeout-minutes: 20
+        timeout-minutes: 10
         env:
           DATABEND_ENTERPRISE_LICENSE: ${{ secrets.DATABEND_ENTERPRISE_LICENSE }}
       - name: Upload failure

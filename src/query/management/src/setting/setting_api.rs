@@ -28,5 +28,5 @@ pub trait SettingApi: Sync + Send {
     async fn get_setting(&self, name: &str, seq: MatchSeq) -> Result<SeqV<UserSetting>>;
 
     // Drop the setting by name.
-    async fn drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()>;
+    async fn try_drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()>;
 }

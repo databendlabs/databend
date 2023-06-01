@@ -59,7 +59,7 @@ June 23|643.0
 
 Databend supports all aggregate functions as aggregate window functions.
 
-- [Doc | (draft) Aggregate Window Functions](https://databend.rs/doc/sql-functions/window-functions/aggregate-window-functions)
+- [Doc | Window Functions](https://databend.rs/doc/sql-functions/window-functions/)
 - [PR #10700 | feat(window): initial impl window function](https://github.com/datafuselabs/databend/pull/10700).
 
 ### Suggest Function Name on Typos

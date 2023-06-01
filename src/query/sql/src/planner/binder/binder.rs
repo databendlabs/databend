@@ -108,7 +108,6 @@ impl<'a> Binder {
             &self.name_resolution_ctx,
             self.metadata.clone(),
             &[],
-            false,
         );
         let mut hint_settings: HashMap<String, String> = HashMap::new();
         for hint in &hints.hints_list {
@@ -186,7 +185,14 @@ impl<'a> Binder {
                 self.bind_show_table_functions(bind_context, limit).await?
             }
 
-            Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
+            Statement::Copy(stmt) => {
+                if let Some(hints) = &stmt.hints {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                        warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                    }
+                }
+                self.bind_copy(bind_context, stmt).await?
+            },
 
             Statement::ShowMetrics => {
                 self.bind_rewrite_to_query(

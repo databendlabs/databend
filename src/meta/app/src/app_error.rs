@@ -285,6 +285,28 @@ impl UnknownDatabaseId {
 }
 
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnmatchColumnDataType: `{name}`:`{data_type}` while `{context}`")]
+pub struct UnmatchColumnDataType {
+    name: String,
+    data_type: String,
+    context: String,
+}
+
+impl UnmatchColumnDataType {
+    pub fn new(
+        name: impl Into<String>,
+        data_type: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            data_type: data_type.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownTable: `{table_name}` while `{context}`")]
 pub struct UnknownTable {
     table_name: String,
@@ -747,6 +769,9 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownDatamask(#[from] UnknownDatamask),
+
+    #[error(transparent)]
+    UnmatchColumnDataType(#[from] UnmatchColumnDataType),
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -985,6 +1010,15 @@ impl AppErrorMessage for UnknownDatamask {
     }
 }
 
+impl AppErrorMessage for UnmatchColumnDataType {
+    fn message(&self) -> String {
+        format!(
+            "Column '{}' data type {} does not match",
+            self.name, self.data_type
+        )
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1054,6 +1088,7 @@ impl From<AppError> for ErrorCode {
             AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
+            AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
         }
     }
 }

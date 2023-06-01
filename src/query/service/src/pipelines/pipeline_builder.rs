@@ -472,12 +472,13 @@ impl PipelineBuilder {
     fn build_eval_scalar(&mut self, eval_scalar: &EvalScalar) -> Result<()> {
         self.build_pipeline(&eval_scalar.input)?;
 
+        let input_schema = eval_scalar.input.output_schema()?;
         let exprs = eval_scalar
             .exprs
             .iter()
             .filter(|(scalar, idx)| {
                 if let RemoteExpr::ColumnRef { id, .. } = scalar {
-                    return idx != id;
+                    return idx.to_string() != input_schema.field(*id).name().as_str();
                 }
                 true
             })
@@ -488,7 +489,7 @@ impl PipelineBuilder {
 
         let func_ctx = self.ctx.get_function_context()?;
 
-        let num_input_columns = eval_scalar.input.output_schema()?.num_fields();
+        let num_input_columns = input_schema.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::create(

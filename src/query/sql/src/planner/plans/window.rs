@@ -29,6 +29,7 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use super::AggregateFunction;
+use super::NthValueFunction;
 use crate::binder::WindowOrderByInfo;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::Distribution;
@@ -43,7 +44,6 @@ use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::IndexType;
-use crate::ScalarExpr;
 
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
@@ -70,23 +70,11 @@ impl Window {
         let mut used_columns = ColumnSet::new();
 
         used_columns.insert(self.index);
+        used_columns.extend(self.function.used_columns());
 
-        match &self.function {
-            WindowFuncType::Aggregate(agg) => {
-                for scalar in &agg.args {
-                    used_columns = used_columns
-                        .union(&scalar.used_columns())
-                        .cloned()
-                        .collect();
-                }
-            }
-            WindowFuncType::Lag(f) | WindowFuncType::Lead(f) => {
-                used_columns.extend(f.arg.used_columns());
-                if let Some(default) = &f.default {
-                    used_columns.extend(default.used_columns());
-                }
-            }
-            _ => {}
+        for arg in self.arguments.iter() {
+            used_columns.insert(arg.index);
+            used_columns.extend(arg.scalar.used_columns())
         }
 
         for part in self.partition_by.iter() {
@@ -124,7 +112,7 @@ impl Operator for Window {
         Ok(required)
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
@@ -139,16 +127,16 @@ impl Operator for Window {
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(input_prop.used_columns);
+        used_columns.extend(input_prop.used_columns.clone());
 
-        Ok(RelationalProperty {
+        Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-        })
+        }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let input_stat_info = rel_expr.derive_cardinality_child(0)?;
         let cardinality = if self.partition_by.is_empty() {
             // Scalar aggregation
@@ -180,13 +168,13 @@ impl Operator for Window {
         } else {
             None
         };
-        Ok(StatInfo {
+        Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality,
-                column_stats: input_stat_info.statistics.column_stats,
+                column_stats: input_stat_info.statistics.column_stats.clone(),
             },
-        })
+        }))
     }
 }
 
@@ -232,8 +220,8 @@ pub enum WindowFuncType {
     Rank,
     DenseRank,
     PercentRank,
-    Lag(LagLeadFunction),
-    Lead(LagLeadFunction),
+    LagLead(LagLeadFunction),
+    NthValue(NthValueFunction),
 }
 
 impl WindowFuncType {
@@ -250,31 +238,6 @@ impl WindowFuncType {
         }
     }
 
-    pub fn get_general_window_func(
-        name: &str,
-        arg: ScalarExpr,
-        offset: Option<u64>,
-        default: Option<ScalarExpr>,
-        return_type: DataType,
-    ) -> Result<WindowFuncType> {
-        match name {
-            "lag" => Ok(WindowFuncType::Lag(LagLeadFunction {
-                arg: Box::new(arg),
-                offset: offset.unwrap_or(1),
-                default: default.map(Box::new),
-                return_type: Box::new(return_type),
-            })),
-            "lead" => Ok(WindowFuncType::Lead(LagLeadFunction {
-                arg: Box::new(arg),
-                offset: offset.unwrap_or(1),
-                default: default.map(Box::new),
-                return_type: Box::new(return_type),
-            })),
-            _ => Err(ErrorCode::UnknownFunction(format!(
-                "Unknown window function: {name}"
-            ))),
-        }
-    }
     pub fn func_name(&self) -> String {
         match self {
             WindowFuncType::Aggregate(agg) => agg.func_name.to_string(),
@@ -282,8 +245,9 @@ impl WindowFuncType {
             WindowFuncType::Rank => "rank".to_string(),
             WindowFuncType::DenseRank => "dense_rank".to_string(),
             WindowFuncType::PercentRank => "percent_rank".to_string(),
-            WindowFuncType::Lag(_) => "lag".to_string(),
-            WindowFuncType::Lead(_) => "lead".to_string(),
+            WindowFuncType::LagLead(lag_lead) if lag_lead.is_lag => "lag".to_string(),
+            WindowFuncType::LagLead(_) => "lead".to_string(),
+            WindowFuncType::NthValue(_) => "nth_value".to_string(),
         }
     }
 
@@ -292,24 +256,16 @@ impl WindowFuncType {
             WindowFuncType::Aggregate(agg) => {
                 agg.args.iter().flat_map(|arg| arg.used_columns()).collect()
             }
-            WindowFuncType::Lag(lag) => match &lag.default {
-                None => lag.arg.used_columns(),
-                Some(d) => lag
+            WindowFuncType::LagLead(func) => match &func.default {
+                None => func.arg.used_columns(),
+                Some(d) => func
                     .arg
                     .used_columns()
                     .union(&d.used_columns())
                     .cloned()
                     .collect(),
             },
-            WindowFuncType::Lead(lead) => match &lead.default {
-                None => lead.arg.used_columns(),
-                Some(d) => lead
-                    .arg
-                    .used_columns()
-                    .union(&d.used_columns())
-                    .cloned()
-                    .collect(),
-            },
+            WindowFuncType::NthValue(func) => func.arg.used_columns(),
             _ => ColumnSet::new(),
         }
     }
@@ -321,8 +277,8 @@ impl WindowFuncType {
                 DataType::Number(NumberDataType::UInt64)
             }
             WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
-            WindowFuncType::Lag(lag) => *lag.return_type.clone(),
-            WindowFuncType::Lead(lead) => *lead.return_type.clone(),
+            WindowFuncType::LagLead(lag_lead) => *lag_lead.return_type.clone(),
+            WindowFuncType::NthValue(nth_value) => *nth_value.return_type.clone(),
         }
     }
 }
