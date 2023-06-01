@@ -3239,7 +3239,7 @@ fn build_upsert_table_copied_file_info_conditions(
 }
 
 fn build_upsert_table_deduplicated_label(deduplicated_label: String) -> TxnOp {
-    let expire_at = Some(SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60 * 1000);
+    let expire_at = Some(SeqV::<()>::now_ms() / 1000 + 24 * 60 * 60);
     TxnOp {
         request: Some(Request::Put(TxnPutRequest {
             key: deduplicated_label,
