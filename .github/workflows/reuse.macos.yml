@@ -16,7 +16,7 @@ env:
 jobs:
   build:
     name: build_${{ matrix.target }}
-    runs-on: macos-latest
+    runs-on: macos-11
     strategy:
       matrix:
         target:
@@ -32,14 +32,14 @@ jobs:
           target: ${{ matrix.target }}
 
   test_stateless_standalone_macos:
-    runs-on: macos-latest
+    runs-on: macos-11
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_macos
 
   test_stateless_cluster_macos:
-    runs-on: macos-latest
+    runs-on: macos-11
     needs: build
     steps:
       - uses: actions/checkout@v3
@@ -47,7 +47,7 @@ jobs:
         timeout-minutes: 30
 
   sqllogic_standalone_macos:
-    runs-on: macos-latest
+    runs-on: macos-11
     needs: build
     strategy:
       matrix:
