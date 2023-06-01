@@ -35,9 +35,3 @@ jobs:
     secrets: inherit
     with:
       build_profile: debug
-
-  macos:
-    uses: ./.github/workflows/reuse.macos.yml
-    secrets: inherit
-    with:
-      build_profile: release
