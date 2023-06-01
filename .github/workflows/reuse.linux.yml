@@ -300,12 +300,12 @@ jobs:
           name: test-stateful-standalone-linux
 
   test_stateful_sharing:
-    if: env.BUILD_PROFILE == 'debug'
     runs-on: [self-hosted, X64, Linux, 4c8g]
     needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateful_sharing
+        if: env.BUILD_PROFILE == 'debug'
         timeout-minutes: 10
       - name: Upload failure
         if: failure() || cancelled()
