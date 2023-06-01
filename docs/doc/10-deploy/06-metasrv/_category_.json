@@ -1,7 +1,7 @@
 {
-  "label": "Managing Meta Service Clusters",
+  "label": "Cluster Deployments",
   "link": {
     "type": "generated-index",
-    "slug": "/operations/metasrv"
+    "slug": "/operations/cluster"
   }
 }

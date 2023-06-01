@@ -136,12 +136,12 @@ impl EvalScalar {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
         for (expr, index) in self.exprs.iter() {
+            let name = index.to_string();
             if let RemoteExpr::ColumnRef { id, .. } = expr {
-                if index == id {
+                if name == fields[*id].name().as_str() {
                     continue;
                 }
             }
-            let name = index.to_string();
             let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
             fields.push(DataField::new(&name, data_type));
         }

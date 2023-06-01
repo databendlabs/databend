@@ -21,7 +21,7 @@ jobs:
             const { data: runs } = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              workflow_id: "dev-linux.yml",
+              workflow_id: "dev.yml",
             });
             for (const run of runs.workflow_runs) {
               if (run.status === "completed") {
