@@ -21,6 +21,7 @@ jobs:
       matrix:
         arch:
           - x86_64
+          - aarch64
     steps:
       - uses: actions/checkout@v3
         with:
