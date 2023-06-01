@@ -8,7 +8,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 100000;
   height: 100%;
   transition: opacity 0.3s ease;
   @include media {
