@@ -225,7 +225,7 @@ jobs:
 
   hive:
     runs-on: [self-hosted, X64, Linux, 16c32g]
-    needs: [create_release]
+    needs: create_release
     env:
       RUNNER_PROVIDER: aws
     strategy:
@@ -292,7 +292,7 @@ jobs:
 
   testsuites:
     runs-on: ubuntu-latest
-    needs: [create_release]
+    needs: create_release
     steps:
       - name: Checkout
         uses: actions/checkout@v3
