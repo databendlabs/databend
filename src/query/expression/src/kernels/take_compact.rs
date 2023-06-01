@@ -98,7 +98,7 @@ impl Column {
                 BooleanType::upcast_column(Self::take_bool_types(bm, indices, row_num))
             }
             Column::String(column) => {
-                StringType::upcast_column(Self::take_string_types(column, indices, row_num))
+                Self::take_compact_arg_types::<StringType>(column, indices, row_num)
             }
             Column::Timestamp(column) => {
                 let builder = Self::take_primitive_types(column, indices, row_num);
@@ -152,7 +152,7 @@ impl Column {
                 )
             }
             Column::Bitmap(column) => {
-                BitmapType::upcast_column(Self::take_string_types(column, indices, row_num))
+                Self::take_compact_arg_types::<BitmapType>(column, indices, row_num)
             }
             Column::Nullable(c) => {
                 let column = c.column.take_compacted_indices(indices, row_num);
@@ -174,7 +174,7 @@ impl Column {
                 Column::Tuple(fields)
             }
             Column::Variant(column) => {
-                VariantType::upcast_column(Self::take_string_types(column, indices, row_num))
+                Self::take_compact_arg_types::<VariantType>(column, indices, row_num)
             }
         }
     }
@@ -265,114 +265,6 @@ impl Column {
         builder
     }
 
-    pub fn take_string_types<'a>(
-        col: &'a StringColumn,
-        indices: &[(u32, u32)],
-        row_num: usize,
-    ) -> StringColumn {
-        // Each item in the `indices` consists of an `index` and a `cnt`, the sum
-        // of the `cnt` must be equal to the `row_num`.
-        debug_assert_eq!(
-            indices.iter().fold(0, |acc, &(_, x)| acc + x as usize),
-            row_num
-        );
-
-        let mut data_capacity: u64 = 0;
-        let mut res_offsets: Vec<u64> = Vec::with_capacity(row_num + 1);
-        res_offsets.push(0);
-        for (index, cnt) in indices {
-            // # Safety
-            // the out-of-bounds `index` for `col` in indices is *[undefined behavior]*
-            let col = unsafe { col.index_unchecked(*index as usize) };
-            for _ in 0..*cnt {
-                data_capacity += col.len() as u64;
-                res_offsets.push(data_capacity);
-            }
-        }
-
-        let mut res_data: Vec<u8> = Vec::with_capacity(data_capacity as usize);
-        let res_data_ptr = res_data.as_mut_ptr();
-
-        let col_data_ptr = col.data.as_ptr();
-        let col_offset = &col.offsets;
-
-        let mut offset = 0;
-        let mut remain;
-        for (index, cnt) in indices {
-            let len =
-                col_offset[*index as usize + 1] as usize - col_offset[*index as usize] as usize;
-            if *cnt == 1 {
-                // # Safety
-                // offset + len <= data_capacity
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        col_data_ptr.add(col_offset[*index as usize] as usize),
-                        res_data_ptr.add(offset),
-                        len,
-                    )
-                };
-                offset += len;
-                continue;
-            }
-
-            // Using the doubling method to copy the max segment memory.
-            // [___________] => [x__________] => [xx_________] => [xxxx_______] => [xxxxxxxx___]
-            let base_offset = offset;
-            // # Safety
-            // base_offset + len <= data_capacity
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    col_data_ptr.add(col_offset[*index as usize] as usize),
-                    res_data_ptr.add(base_offset),
-                    len,
-                )
-            };
-            remain = *cnt as usize;
-            // Since cnt > 0, then 31 - cnt.leading_zeros() >= 0.
-            let max_bit_num = 1 << (31 - cnt.leading_zeros());
-            let max_segment = max_bit_num * len;
-            let mut cur_segment = len;
-            while cur_segment < max_segment {
-                unsafe {
-                    // # Safety
-                    // offset + 2 * cur_segment <= data_capacity
-                    std::ptr::copy_nonoverlapping(
-                        res_data_ptr.add(base_offset),
-                        res_data_ptr.add(base_offset + cur_segment),
-                        cur_segment,
-                    )
-                };
-                cur_segment <<= 1;
-            }
-            remain -= max_bit_num;
-            offset += max_segment;
-
-            if remain > 0 {
-                // Copy the remaining memory directly.
-                // [xxxxxxxxxx____] => [xxxxxxxxxxxxxx]
-                //  ^^^^ ---> ^^^^
-                // # Safety
-                // max_segment > remain * len and offset + remain * len <= data_capacity
-                unsafe {
-                    std::ptr::copy_nonoverlapping(
-                        res_data_ptr.add(base_offset),
-                        res_data_ptr.add(offset),
-                        remain * len,
-                    )
-                };
-                offset += remain * len;
-            }
-        }
-        // # Safety
-        // `offset` is equal to `data_capacity`
-        unsafe { res_data.set_len(offset) };
-
-        StringColumn {
-            data: res_data.into(),
-            offsets: res_offsets.into(),
-        }
-    }
-
     pub fn take_bool_types(col: &Bitmap, indices: &[(u32, u32)], row_num: usize) -> Bitmap {
         // Each item in the `indices` consists of an `index` and a `cnt`, the sum
         // of the `cnt` must be equal to the `row_num`.
@@ -390,6 +282,25 @@ impl Column {
             }
         }
         BooleanType::build_column(col_builder)
+    }
+
+    fn take_compact_arg_types<T: ArgType>(
+        col: &T::Column,
+        indices: &[(u32, u32)],
+        row_num: usize,
+    ) -> Column {
+        let mut builder = T::create_builder(row_num, &[]);
+        for (index, cnt) in indices {
+            for _ in 0..*cnt {
+                T::push_item(
+                    &mut builder,
+                    // # Safety
+                    // the out-of-bounds `index` for `col` in indices is *[undefined behavior]*
+                    unsafe { T::index_column_unchecked(col, *index as usize) },
+                );
+            }
+        }
+        T::upcast_column(T::build_column(builder))
     }
 
     pub fn take_scalar_types<T: ValueType>(
