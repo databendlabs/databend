@@ -23,6 +23,7 @@ use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::Scalar;
 use educe::Educe;
+use enum_as_inner::EnumAsInner;
 use itertools::Itertools;
 
 use super::WindowFuncFrame;
@@ -33,7 +34,7 @@ use crate::optimizer::SExpr;
 use crate::IndexType;
 use crate::MetadataRef;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, EnumAsInner)]
 pub enum ScalarExpr {
     BoundColumnRef(BoundColumnRef),
     ConstantExpr(ConstantExpr),
