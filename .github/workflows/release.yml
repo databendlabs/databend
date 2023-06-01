@@ -100,9 +100,6 @@ jobs:
       - name: Get target
         id: target
         run: echo 'target=${{ matrix.arch }}-apple-darwin' >> $GITHUB_OUTPUT
-      - name: Rust setup
-        run: |
-          bash ./scripts/setup/dev_setup.sh -yb
       - name: Install coreutils for macOS sha256sum
         run: brew install coreutils
       - name: Build Release
@@ -111,9 +108,6 @@ jobs:
           target: ${{ steps.target.outputs.target }}
           artifacts: sqllogictests,metactl,meta,query
           upload: false
-      - name: Build Binary
-        run: |
-          cargo build --release --target=${{ steps.target.outputs.target }}
       - name: Basic Sqllogic Test
         if: matrix.arch == 'x86_64'
         shell: bash
