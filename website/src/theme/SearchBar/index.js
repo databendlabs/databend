@@ -60,6 +60,8 @@ function DocSearch({contextualSearch, externalUrlRegex, ...props}) {
   useEffect(()=> {
     if (selected === 0) {
       insertCustomDom()
+    } else {
+      resetOverflow()
     }
   }, [selected]);
   const importDocSearchModalIfNeeded = useCallback(() => {
@@ -87,6 +89,7 @@ function DocSearch({contextualSearch, externalUrlRegex, ...props}) {
   }, [importDocSearchModalIfNeeded, setIsOpen]);
   const onClose = useCallback(() => {
     setIsOpen(false);
+    resetOverflow()
     searchContainer.current?.remove();
   }, [setIsOpen]);
   const onInput = useCallback(
@@ -161,6 +164,17 @@ function DocSearch({contextualSearch, externalUrlRegex, ...props}) {
       }
     }
   }
+  function resetStatus() {
+    setSelected(-1);
+    setIsOpen(false);
+    resetOverflow()
+  }
+  function resetOverflow() {
+    const bodyClassList = document.body.classList;
+    if (bodyClassList.contains('DocSearch--active')) {
+      bodyClassList.remove('DocSearch--active');
+    }
+  }
   return (
     <>
       <Head>
@@ -213,16 +227,14 @@ function DocSearch({contextualSearch, externalUrlRegex, ...props}) {
         <SearchInitModal 
           getInputValue={(value)=> setInitialQuery(value)}
           onClose={()=> {
-            setSelected(-1);
-            setIsOpen(false);
+            resetStatus()
           }}
           onSelect={(selected)=> setSelected(selected)} 
           visible={isOpen}/>
       }
       <AIModal 
         onClose={()=> {
-          setSelected(-1);
-          setIsOpen(false);
+          resetStatus();
         }}
         initialQuery={initialQuery}
         visible={selected === 1} 
