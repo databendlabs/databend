@@ -14,7 +14,8 @@ env:
   RUNNER_PROVIDER: github
 
 jobs:
-  build_macos:
+  build:
+    name: build_${{ matrix.target }}
     runs-on: macos-latest
     strategy:
       matrix:
@@ -32,14 +33,14 @@ jobs:
 
   test_stateless_standalone_macos:
     runs-on: macos-latest
-    needs: build_macos
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_standalone_macos
 
   test_stateless_cluster_macos:
-    runs-on: macos-11
-    needs: build_macos
+    runs-on: macos-latest
+    needs: build
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/test_stateless_cluster_macos
@@ -47,7 +48,7 @@ jobs:
 
   sqllogic_standalone_macos:
     runs-on: macos-latest
-    needs: build_macos
+    needs: build
     strategy:
       matrix:
         dirs:
