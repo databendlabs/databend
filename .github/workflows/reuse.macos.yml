@@ -15,13 +15,12 @@ env:
 
 jobs:
   build:
-    name: build_${{ matrix.target }}
+    name: build_${{ matrix.arch }}
     runs-on: macos-11
     strategy:
       matrix:
-        target:
-          - x86_64-apple-darwin
-          - aarch64-apple-darwin
+        arch:
+          - x86_64
     steps:
       - uses: actions/checkout@v3
         with:
@@ -29,7 +28,7 @@ jobs:
           fetch-depth: 0
       - uses: ./.github/actions/build_macos
         with:
-          target: ${{ matrix.target }}
+          target: ${{ matrix.arch }}-apple-darwin
 
   test_stateless_standalone_macos:
     runs-on: macos-11
