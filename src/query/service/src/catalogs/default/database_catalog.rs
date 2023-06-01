@@ -28,16 +28,21 @@ use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::CreateVirtualColumnReply;
+use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropVirtualColumnReply;
+use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -53,8 +58,11 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateVirtualColumnReply;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use tracing::info;
 
@@ -484,6 +492,40 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         self.mutable_catalog.list_indexes(req).await
+    }
+
+    // Virtual column
+
+    #[async_backtrace::framed]
+    async fn create_virtual_column(
+        &self,
+        req: CreateVirtualColumnReq,
+    ) -> Result<CreateVirtualColumnReply> {
+        self.mutable_catalog.create_virtual_column(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn update_virtual_column(
+        &self,
+        req: UpdateVirtualColumnReq,
+    ) -> Result<UpdateVirtualColumnReply> {
+        self.mutable_catalog.update_virtual_column(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_virtual_column(
+        &self,
+        req: DropVirtualColumnReq,
+    ) -> Result<DropVirtualColumnReply> {
+        self.mutable_catalog.drop_virtual_column(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn list_virtual_columns(
+        &self,
+        req: ListVirtualColumnsReq,
+    ) -> Result<Vec<VirtualColumnMeta>> {
+        self.mutable_catalog.list_virtual_columns(req).await
     }
 
     fn get_table_function(

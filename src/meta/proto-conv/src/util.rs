@@ -69,6 +69,8 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (37, "2023-05-05: Add: index.proto", ),
     (38, "2023-05-19: Rename: table.proto/TableCopiedFileLock to EmptyProto", ),
     (39, "2023-05-22: Add: data_mask.proto", ),
+    (40, "2023-05-26: Add: TableMeta add column_mask_policy field", ),
+    (41, "2023-05-29: Add: virtual_column.proto", ),
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

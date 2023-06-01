@@ -434,7 +434,7 @@ version = "37.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a16b88a93ac8350f0200b1cd336a1f887315925b8dd7aa145a37b8bdbd8497a4"
 dependencies = [
- "bitflags 2.3.1",
+ "bitflags 2.2.1",
 ]
 
 [[package]]
@@ -989,9 +989,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.3.1"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6776fc96284a0bb647b615056fc496d1fe1644a7ab01829818a6d91cae888b84"
+checksum = "24a6904aef64d73cf10ab17ebace7befb918b82164785cb89907993be7f83813"
 
 [[package]]
 name = "bitmaps"
@@ -2532,6 +2532,7 @@ dependencies = [
  "common-users",
  "ctor",
  "dashmap",
+ "data-mask-feature",
  "educe",
  "enum-as-inner",
  "globiter",
@@ -3446,7 +3447,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23d8666cb01533c39dde32bcbab8e227b4ed6679b2c925eba05feabea39508fb"
 
 [[package]]
-name = "data-mask"
+name = "data-mask-feature"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -3454,7 +3455,6 @@ dependencies = [
  "common-exception",
  "common-meta-app",
  "common-meta-store",
- "common-sql",
 ]
 
 [[package]]
@@ -3597,6 +3597,7 @@ dependencies = [
  "common-meta-api",
  "common-meta-app",
  "common-meta-embedded",
+ "common-meta-kvapi",
  "common-meta-store",
  "common-meta-types",
  "common-metrics",
@@ -3627,7 +3628,7 @@ dependencies = [
  "criterion",
  "ctor",
  "dashmap",
- "data-mask",
+ "data-mask-feature",
  "ethnum",
  "futures",
  "futures-util",
@@ -3688,6 +3689,7 @@ dependencies = [
  "url",
  "uuid",
  "vacuum-handler",
+ "virtual-columns-handler",
  "walkdir",
  "wiremock",
 ]
@@ -3994,11 +3996,14 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
+ "common-arrow",
  "common-base",
  "common-building",
  "common-catalog",
  "common-config",
  "common-exception",
+ "common-expression",
+ "common-io",
  "common-license",
  "common-meta-api",
  "common-meta-app",
@@ -4006,19 +4011,21 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-settings",
- "common-sql",
  "common-storages-fuse",
  "common-users",
  "dashmap",
- "data-mask",
+ "data-mask-feature",
  "databend-query",
  "futures-util",
+ "jsonb",
  "jwt-simple",
+ "opendal",
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",
  "tracing",
  "vacuum-handler",
+ "virtual-columns-handler",
 ]
 
 [[package]]
@@ -7214,9 +7221,9 @@ dependencies = [
 
 [[package]]
 name = "opendal"
-version = "0.35.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "440f466680e0bc98ea94af95301aab4c69d9720934baec8f46b79a69fdd87cce"
+checksum = "3555168d4cc9a83c332e1416ff00e3be36a6d78447dff472829962afbc91bb3d"
 dependencies = [
  "anyhow",
  "async-compat",
@@ -7245,6 +7252,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tracing",
  "uuid",
@@ -10906,6 +10914,19 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "virtual-columns-handler"
+version = "0.1.0"
+dependencies = [
+ "async-backtrace",
+ "async-trait",
+ "common-base",
+ "common-catalog",
+ "common-exception",
+ "common-meta-app",
+ "common-storages-fuse",
+]
 
 [[package]]
 name = "virtue"

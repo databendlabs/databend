@@ -68,12 +68,12 @@ impl Operator for Filter {
         Ok(required.clone())
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
-        let output_columns = input_prop.output_columns;
+        let output_columns = input_prop.output_columns.clone();
 
         // Derive outer columns
-        let mut outer_columns = input_prop.outer_columns;
+        let mut outer_columns = input_prop.outer_columns.clone();
         for scalar in self.predicates.iter() {
             let used_columns = scalar.used_columns();
             let outer = used_columns
@@ -86,18 +86,19 @@ impl Operator for Filter {
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(input_prop.used_columns);
+        used_columns.extend(input_prop.used_columns.clone());
 
-        Ok(RelationalProperty {
+        Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-        })
+        }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
-        let (input_cardinality, mut statistics) = (stat_info.cardinality, stat_info.statistics);
+        let (input_cardinality, mut statistics) =
+            (stat_info.cardinality, stat_info.statistics.clone());
         // Derive cardinality
         let mut sb = SelectivityEstimator::new(&mut statistics, HashSet::new());
         let mut selectivity = MAX_SELECTIVITY;
@@ -121,12 +122,12 @@ impl Operator for Filter {
             }
             statistics.column_stats
         };
-        Ok(StatInfo {
+        Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
             },
-        })
+        }))
     }
 }

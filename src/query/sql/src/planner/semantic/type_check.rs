@@ -120,8 +120,6 @@ pub struct TypeChecker<'a> {
     // true if current expr is inside an window function.
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
-
-    allow_ambiguous: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -131,7 +129,6 @@ impl<'a> TypeChecker<'a> {
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
-        allow_ambiguous: bool,
     ) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
         Self {
@@ -143,7 +140,6 @@ impl<'a> TypeChecker<'a> {
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
-            allow_ambiguous,
         }
     }
 
@@ -191,7 +187,6 @@ impl<'a> TypeChecker<'a> {
                     column.as_str(),
                     ident.span,
                     self.aliases,
-                    self.allow_ambiguous,
                 )?;
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
@@ -1222,27 +1217,20 @@ impl<'a> TypeChecker<'a> {
             None => arg_types[0].wrap_nullable(),
         };
 
-        let cast_default = default
-            .map(|d| match d.clone() {
-                ScalarExpr::BoundColumnRef(_)
-                | ScalarExpr::CastExpr(_)
-                | ScalarExpr::ConstantExpr(_) => Ok(ScalarExpr::CastExpr(CastExpr {
-                    span: d.span(),
-                    is_try: true,
-                    argument: Box::new(d),
-                    target_type: Box::new(return_type.clone()),
-                })),
-                _ => Err(ErrorCode::SemanticError(
-                    "default value just support literal value and column, or ignore it",
-                )),
-            })
-            .transpose()?;
+        let cast_default = default.map(|d| {
+            Box::new(ScalarExpr::CastExpr(CastExpr {
+                span: d.span(),
+                is_try: true,
+                argument: Box::new(d),
+                target_type: Box::new(return_type.clone()),
+            }))
+        });
 
         Ok(WindowFuncType::LagLead(LagLeadFunction {
             is_lag: func_name == "lag",
             arg: Box::new(args[0].clone()),
             offset: offset.unwrap_or(1),
-            default: cast_default.map(Box::new),
+            default: cast_default,
             return_type: Box::new(return_type),
         }))
     }
@@ -1828,7 +1816,7 @@ impl<'a> TypeChecker<'a> {
             projection_index: None,
             data_type: data_type.clone(),
             typ,
-            outer_columns: rel_prop.outer_columns,
+            outer_columns: rel_prop.outer_columns.clone(),
         };
 
         let data_type = subquery_expr.data_type();
@@ -2612,7 +2600,6 @@ impl<'a> TypeChecker<'a> {
             inner_column_name.as_str(),
             span,
             self.aliases,
-            self.allow_ambiguous,
         ) {
             Ok(result) => {
                 let (scalar, data_type) = match result {
@@ -2669,25 +2656,23 @@ impl<'a> TypeChecker<'a> {
         }
 
         let mut name = String::new();
-        name.push('_');
         name.push_str(&column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
         while let Some((_, path)) = paths.pop_front() {
-            name.push('[');
             let json_path = match path {
                 Literal::UInt64(idx) => {
+                    name.push('[');
                     name.push_str(&idx.to_string());
+                    name.push(']');
                     Scalar::Number(NumberScalar::UInt64(idx))
                 }
                 Literal::String(field) => {
-                    name.push('\'');
+                    name.push(':');
                     name.push_str(field.as_ref());
-                    name.push('\'');
                     Scalar::String(field.into_bytes())
                 }
                 _ => unreachable!(),
             };
-            name.push(']');
             json_paths.push(json_path);
         }
 

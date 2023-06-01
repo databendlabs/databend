@@ -221,7 +221,7 @@ query T
 explain select a, v['a'][0], v['b'] from t_json
 ----
 EvalScalar
-├── expressions: [t_json.a (#0), t_json._v['a'][0] (#2), t_json._v['b'] (#3)]
+├── expressions: [t_json.a (#0), t_json.v:a[0] (#2), t_json.v:b (#3)]
 ├── estimated rows: 1.00
 └── TableScan
     ├── table: default.default.t_json
@@ -230,7 +230,7 @@ EvalScalar
     ├── partitions total: 1
     ├── partitions scanned: 1
     ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-    ├── push downs: [filters: [], limit: NONE, virtual_columns: [_v['a'][0], _v['b']]]
+    ├── push downs: [filters: [], limit: NONE, virtual_columns: [v:a[0], v:b]]
     └── estimated rows: 1.00
 
 statement ok

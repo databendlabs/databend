@@ -67,6 +67,7 @@ jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
 aggregating-index = { path = "../ee-features/aggregating-index" }
 common-license = { path = "../../common/license" }
+common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-metrics = { path = "../../common/metrics" }
@@ -94,7 +95,7 @@ common-storages-system = { path = "../storages/system" }
 common-storages-view = { path = "../storages/view" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
-data-mask = { path = "../ee-features/data-mask" }
+data-mask-feature = { path = "../ee-features/data-mask" }
 storages-common-blocks = { path = "../storages/common/blocks" }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-cache-manager = { path = "../storages/common/cache-manager" }
@@ -102,6 +103,7 @@ storages-common-index = { path = "../storages/common/index" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
+virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
 
 # GitHub dependencies
 

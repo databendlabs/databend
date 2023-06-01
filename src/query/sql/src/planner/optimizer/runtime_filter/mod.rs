@@ -67,7 +67,7 @@ fn wrap_runtime_filter_source(
     );
     let mut join: Join = s_expr.plan().clone().try_into()?;
     join.contain_runtime_filter = true;
-    let s_expr = s_expr.replace_plan(RelOperator::Join(join));
+    let s_expr = s_expr.replace_plan(Arc::new(RelOperator::Join(join)));
     Ok(s_expr.replace_children(vec![Arc::new(probe_side), Arc::new(build_side)]))
 }
 

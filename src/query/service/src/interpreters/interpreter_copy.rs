@@ -45,6 +45,7 @@ use tracing::error;
 use tracing::info;
 
 use crate::interpreters::common::append2table;
+use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
@@ -477,6 +478,10 @@ impl Interpreter for CopyInterpreter {
     #[tracing::instrument(level = "debug", name = "copy_interpreter_execute_v2", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        if check_deduplicate_label(self.ctx.clone()).await? {
+            return Ok(PipelineBuildResult::create());
+        }
+
         match &self.plan {
             CopyPlan::IntoTable(plan) => self.build_copy_into_table_pipeline(plan).await,
 

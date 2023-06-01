@@ -6847,6 +6847,48 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;
+---------- Output ---------
+ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: ModifyColumn {
+            column: Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    28..29,
+                ),
+            },
+            action: SetMaskingPolicy(
+                "mask",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a;
 ---------- Output ---------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a
@@ -7701,6 +7743,7 @@ COPY INTO mytable FROM @~/mybucket/data.csv FILE_FORMAT = ( field_delimiter = ',
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "~",
@@ -7758,6 +7801,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' FILE_FORMAT = ( field_delimiter 
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "s3",
@@ -7823,6 +7867,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='htt
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "s3",
@@ -7890,6 +7935,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( endpoint_url='htt
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "s3",
@@ -7946,6 +7992,7 @@ COPY INTO mytable FROM 'https://127.0.0.1:9900/' SINGLE = false PURGE = false FO
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "https",
@@ -7995,6 +8042,7 @@ COPY INTO mytable FROM 'https://127.0.0.1/' SINGLE = false PURGE = false FORCE =
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "https",
@@ -8052,6 +8100,7 @@ COPY INTO mytable FROM @my_stage/ FILE_FORMAT = ( field_delimiter = ',' record_d
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "my_stage",
@@ -8108,6 +8157,7 @@ COPY INTO 's3://mybucket/data.csv' FROM mytable FILE_FORMAT = ( field_delimiter 
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: Table {
             catalog: None,
             database: None,
@@ -8170,6 +8220,7 @@ COPY INTO @my_stage/ FROM mytable FILE_FORMAT = ( field_delimiter = ',' record_d
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: Table {
             catalog: None,
             database: None,
@@ -8230,6 +8281,7 @@ COPY INTO mytable FROM 's3://mybucket/data.csv' CONNECTION = ( aws_key_id='acces
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "s3",
@@ -8295,6 +8347,7 @@ COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_de
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "external_stage",
@@ -8351,6 +8404,7 @@ COPY INTO mytable FROM @external_stage/path/to/dir/ FILE_FORMAT = ( field_delimi
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "external_stage",
@@ -8407,6 +8461,7 @@ COPY INTO mytable FROM @external_stage/path/to/file.csv FILE_FORMAT = ( field_de
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: StageLocation(
             StageLocation {
                 name: "external_stage",
@@ -8464,6 +8519,7 @@ COPY INTO mytable FROM 'fs:///path/to/data.csv' FILE_FORMAT = ( field_delimiter 
 ---------- AST ------------
 Copy(
     CopyStmt {
+        hints: None,
         src: UriLocation(
             UriLocation {
                 protocol: "fs",
@@ -10638,6 +10694,266 @@ CreateDatamaskPolicy(
             },
             comment: Some(
                 "this is a masking policy",
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+CREATE VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
+---------- Output ---------
+CREATE VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
+---------- AST ------------
+CreateVirtualColumns(
+    CreateVirtualColumnsStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                52..53,
+            ),
+        },
+        virtual_columns: [
+            MapAccess {
+                span: Some(
+                    31..37,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        25..31,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            24..25,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                24..25,
+                            ),
+                        },
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                26..30,
+                            ),
+                            lit: String(
+                                "k1",
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            32..36,
+                        ),
+                        lit: String(
+                            "k2",
+                        ),
+                    },
+                },
+            },
+            MapAccess {
+                span: Some(
+                    43..46,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        40..43,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            39..40,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                39..40,
+                            ),
+                        },
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                41..42,
+                            ),
+                            lit: UInt64(
+                                0,
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            44..45,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
+ALTER VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
+---------- Output ---------
+ALTER VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t
+---------- AST ------------
+AlterVirtualColumns(
+    AlterVirtualColumnsStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                51..52,
+            ),
+        },
+        virtual_columns: [
+            MapAccess {
+                span: Some(
+                    30..36,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        24..30,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            23..24,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                23..24,
+                            ),
+                        },
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                25..29,
+                            ),
+                            lit: String(
+                                "k1",
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            31..35,
+                        ),
+                        lit: String(
+                            "k2",
+                        ),
+                    },
+                },
+            },
+            MapAccess {
+                span: Some(
+                    42..45,
+                ),
+                expr: MapAccess {
+                    span: Some(
+                        39..42,
+                    ),
+                    expr: ColumnRef {
+                        span: Some(
+                            38..39,
+                        ),
+                        database: None,
+                        table: None,
+                        column: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                38..39,
+                            ),
+                        },
+                    },
+                    accessor: Bracket {
+                        key: Literal {
+                            span: Some(
+                                40..41,
+                            ),
+                            lit: UInt64(
+                                0,
+                            ),
+                        },
+                    },
+                },
+                accessor: Bracket {
+                    key: Literal {
+                        span: Some(
+                            43..44,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
+                },
+            },
+        ],
+    },
+)
+
+
+---------- Input ----------
+DROP VIRTUAL COLUMNS FOR t
+---------- Output ---------
+DROP VIRTUAL COLUMNS FOR t
+---------- AST ------------
+DropVirtualColumns(
+    DropVirtualColumnsStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                25..26,
+            ),
+        },
+    },
+)
+
+
+---------- Input ----------
+GENERATE VIRTUAL COLUMNS FOR t
+---------- Output ---------
+GENERATE VIRTUAL COLUMNS FOR t
+---------- AST ------------
+GenerateVirtualColumns(
+    GenerateVirtualColumnsStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                29..30,
             ),
         },
     },

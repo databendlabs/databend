@@ -80,8 +80,8 @@ pub struct IEJoinState {
     // Pipeline event related
     partition_finished: RwLock<bool>,
     finished_notify: Arc<Notify>,
-    left_sinker_count: AtomicU64,
-    right_sinker_count: AtomicU64,
+    left_sinker_count: RwLock<usize>,
+    right_sinker_count: RwLock<usize>,
     // Task that need to be executed, pair.0 is left table block, pair.1 is right table block
     tasks: RwLock<Vec<(usize, usize)>>,
     // Row index offset for left/right
@@ -173,8 +173,8 @@ impl IEJoinState {
             other_conditions: ie_join.other_conditions.clone(),
             partition_finished: RwLock::new(false),
             finished_notify: Arc::new(Default::default()),
-            left_sinker_count: AtomicU64::new(0),
-            right_sinker_count: AtomicU64::new(0),
+            left_sinker_count: Default::default(),
+            right_sinker_count: Default::default(),
             tasks: RwLock::new(vec![]),
             row_offset: Default::default(),
             finished_tasks: AtomicU64::new(0),
@@ -525,33 +525,29 @@ impl IEJoinState {
 
 impl IEJoinState {
     pub fn left_attach(&self) {
-        self.left_sinker_count
-            .fetch_add(1, atomic::Ordering::SeqCst);
+        let mut left_sinker_count = self.left_sinker_count.write();
+        *left_sinker_count += 1;
     }
 
     pub fn left_detach(&self) -> Result<()> {
-        self.left_sinker_count
-            .fetch_sub(1, atomic::Ordering::SeqCst);
-        if self.left_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
-            loop {
-                if self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
-                    // Left and right both finish sink
-                    // Partition left/right table
-                    self.partition()?;
-                    // Set partition finished
-                    let mut partition_finished = self.partition_finished.write();
-                    *partition_finished = true;
-                    self.finished_notify.notify_waiters();
-                    break;
-                }
-            }
+        let right_sinker_count = self.right_sinker_count.read();
+        let mut left_sinker_count = self.left_sinker_count.write();
+        *left_sinker_count -= 1;
+        if *left_sinker_count == 0 && *right_sinker_count == 0 {
+            // Left and right both finish sink
+            // Partition left/right table
+            self.partition()?;
+            // Set partition finished
+            let mut partition_finished = self.partition_finished.write();
+            *partition_finished = true;
+            self.finished_notify.notify_waiters();
         }
         Ok(())
     }
 
     pub fn right_attach(&self) {
-        self.right_sinker_count
-            .fetch_add(1, atomic::Ordering::SeqCst);
+        let mut right_sinker_count = self.right_sinker_count.write();
+        *right_sinker_count += 1;
     }
 
     pub fn task_id(&self) -> Option<usize> {
@@ -562,9 +558,20 @@ impl IEJoinState {
         Some(task_id as usize)
     }
 
-    pub fn right_detach(&self) {
-        self.right_sinker_count
-            .fetch_sub(1, atomic::Ordering::SeqCst);
+    pub fn right_detach(&self) -> Result<()> {
+        let mut right_sinker_count = self.right_sinker_count.write();
+        *right_sinker_count -= 1;
+        let left_sinker_count = self.left_sinker_count.read();
+        if *right_sinker_count == 0 && *left_sinker_count == 0 {
+            // Left and right both finish sink
+            // Partition left/right table
+            self.partition()?;
+            // Set partition finished
+            let mut partition_finished = self.partition_finished.write();
+            *partition_finished = true;
+            self.finished_notify.notify_waiters();
+        }
+        Ok(())
     }
 
     pub(crate) async fn wait_merge_finish(&self) -> Result<()> {

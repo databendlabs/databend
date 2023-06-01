@@ -24,6 +24,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 
+use super::AggregateInfo;
 use crate::binder::select::SelectItem;
 use crate::binder::select::SelectList;
 use crate::binder::ExprContext;
@@ -48,12 +49,11 @@ use crate::WindowChecker;
 impl Binder {
     pub(super) fn analyze_projection(
         &mut self,
-        bind_context: &BindContext,
+        agg_info: &AggregateInfo,
         select_list: &SelectList,
     ) -> Result<(HashMap<IndexType, ScalarItem>, Vec<ColumnBinding>)> {
         let mut columns = Vec::with_capacity(select_list.items.len());
         let mut scalars = HashMap::new();
-        let agg_info = &bind_context.aggregate_info;
         for item in select_list.items.iter() {
             // This item is a grouping sets item, its data type should be nullable.
             let is_grouping_sets_item = agg_info.grouping_id_column.is_some()
@@ -182,6 +182,7 @@ impl Binder {
         input_context.set_expr_context(ExprContext::SelectClause);
 
         let mut output = SelectList::default();
+        let mut prev_aliases = Vec::new();
         for select_target in select_list {
             match select_target {
                 SelectTarget::QualifiedName {
@@ -234,7 +235,7 @@ impl Binder {
                         self.ctx.clone(),
                         &self.name_resolution_ctx,
                         self.metadata.clone(),
-                        &[],
+                        &prev_aliases,
                     );
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
@@ -244,6 +245,9 @@ impl Binder {
                         None => format!("{:#}", expr).to_lowercase(),
                     };
 
+                    if alias.is_some() {
+                        prev_aliases.push((expr_name.clone(), bound_expr.clone()));
+                    }
                     output.items.push(SelectItem {
                         select_target,
                         scalar: bound_expr,
