@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(box_into_inner)]
+mod block_meta;
+mod statistics;
+mod table_schema;
 
-pub mod meta;
-pub mod readers;
-pub mod table;
+pub use block_meta::*;
+pub use statistics::*;
+pub use table_schema::*;

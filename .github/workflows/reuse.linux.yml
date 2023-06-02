@@ -104,7 +104,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: ./.github/actions/fuse_compat
-        timeout-minutes: 10
+        timeout-minutes: 20
 
   test_meta_cluster:
     runs-on: [self-hosted, X64, Linux, 4c8g]

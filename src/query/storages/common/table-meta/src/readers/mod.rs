@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(box_into_inner)]
+pub mod segment_reader;
+pub mod snapshot_reader;
+mod versioned_reader;
 
-pub mod meta;
-pub mod readers;
-pub mod table;
+pub use versioned_reader::VersionedReader;

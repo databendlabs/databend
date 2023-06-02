@@ -78,20 +78,20 @@ fn uninit_column_id() -> ColumnId {
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct TableSchema {
-    pub(crate) fields: Vec<TableField>,
-    pub(crate) metadata: BTreeMap<String, String>,
+    pub fields: Vec<TableField>,
+    pub metadata: BTreeMap<String, String>,
     // next column id that assign to TableField.column_id
     #[serde(default = "uninit_column_id")]
-    pub(crate) next_column_id: ColumnId,
+    pub next_column_id: ColumnId,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct TableField {
-    name: String,
-    default_expr: Option<String>,
-    data_type: TableDataType,
+    pub name: String,
+    pub default_expr: Option<String>,
+    pub data_type: TableDataType,
     #[serde(default = "uninit_column_id")]
-    column_id: ColumnId,
+    pub column_id: ColumnId,
 }
 
 /// DataType with more information that is only available for table field, e.g, the

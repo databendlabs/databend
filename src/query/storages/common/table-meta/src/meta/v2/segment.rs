@@ -266,3 +266,15 @@ impl BlockMeta {
         }
     }
 }
+
+impl From<(v1::SegmentInfo, &[TableField])> for SegmentInfo {
+    fn from((v, fields): (v1::SegmentInfo, &[TableField])) -> Self {
+        SegmentInfo::from_v1(v, fields)
+    }
+}
+
+impl From<(v0::SegmentInfo, &[TableField])> for SegmentInfo {
+    fn from((v, fields): (v0::SegmentInfo, &[TableField])) -> Self {
+        SegmentInfo::from_v0(v, fields)
+    }
+}
