@@ -45,13 +45,6 @@ fn bench_encode(c: &mut Criterion) {
         })
     });
 
-    #[cfg(with_pot)]
-    grp.bench_function("pot-encode-summary", |b| {
-        b.iter(|| {
-            let _ = pot::to_vec(black_box(&segment_info.summary)).unwrap();
-        })
-    });
-
     grp.bench_function("msg-pack-encode-summary", |b| {
         b.iter(|| {
             let _ = rmp_serde::to_vec_named(black_box(&segment_info.summary)).unwrap();
@@ -64,33 +57,16 @@ fn bench_encode(c: &mut Criterion) {
         })
     });
 
-    #[cfg(with_pot)]
-    grp.bench_function("pot-encode-block-metas", |b| {
-        b.iter(|| {
-            let _ = pot::to_vec(black_box(&segment_info.blocks)).unwrap();
-        })
-    });
-
     grp.bench_function("msg-pack-encode-block-metas", |b| {
         b.iter(|| {
             let _ = rmp_serde::to_vec_named(black_box(&segment_info.blocks)).unwrap();
         })
     });
 
-    #[cfg(comment_out)]
     grp.bench_function("bincode-segment-serialization", |b| {
         b.iter(|| {
             let _ = segment_info
-                .to_bytes_with_encoding(MetaEncoding::Bincode)
-                .unwrap();
-        })
-    });
-
-    #[cfg(with_pot)]
-    grp.bench_function("pot-segment-serialization", |b| {
-        b.iter(|| {
-            let _ = segment_info
-                .to_bytes_with_encoding(MetaEncoding::Pot)
+                .bench_to_bytes_with_encoding(MetaEncoding::Bincode)
                 .unwrap();
         })
     });
@@ -104,11 +80,6 @@ fn bench_decode(c: &mut Criterion) {
     let bincode_summary_bytes = bincode::serialize(black_box(&segment_info.summary)).unwrap();
     let bincode_block_meta_bytes = bincode::serialize(black_box(&segment_info.blocks)).unwrap();
 
-    #[cfg(with_pot)]
-    let pot_summary_bytes = pot::to_vec(black_box(&segment_info.summary)).unwrap();
-    #[cfg(with_pot)]
-    let pot_blocks_meta_bytes = pot::to_vec(black_box(&segment_info.blocks)).unwrap();
-
     let msgpack_summary_bytes = rmp_serde::to_vec_named(black_box(&segment_info.summary)).unwrap();
     let msgpack_blocks_meta_bytes =
         rmp_serde::to_vec_named(black_box(&segment_info.blocks)).unwrap();
@@ -116,13 +87,6 @@ fn bench_decode(c: &mut Criterion) {
     grp.bench_function("bincode-decode-summary", |b| {
         b.iter(|| {
             let _: Statistics = bincode::deserialize(black_box(&bincode_summary_bytes)).unwrap();
-        })
-    });
-
-    #[cfg(with_pot)]
-    grp.bench_function("pot-decode-summary", |b| {
-        b.iter(|| {
-            let _: Statistics = pot::from_slice(black_box(&pot_summary_bytes)).unwrap();
         })
     });
 
@@ -139,14 +103,6 @@ fn bench_decode(c: &mut Criterion) {
         })
     });
 
-    #[cfg(with_pot)]
-    grp.bench_function("pot-decode-block-metas", |b| {
-        b.iter(|| {
-            let _: Vec<Arc<BlockMeta>> =
-                pot::from_slice(black_box(&pot_blocks_meta_bytes)).unwrap();
-        })
-    });
-
     grp.bench_function("msg-pack-decode-block-metas", |b| {
         b.iter(|| {
             let _: Vec<Arc<BlockMeta>> =
@@ -154,27 +110,16 @@ fn bench_decode(c: &mut Criterion) {
         })
     });
 
-    #[cfg(with_pot)]
-    let segment_pot_bytes = segment_info
-        .to_bytes_with_encoding(MetaEncoding::Pot)
-        .unwrap();
     let segment_bincode_bytes = segment_info
-        .to_bytes_with_encoding(MetaEncoding::Bincode)
+        .bench_to_bytes_with_encoding(MetaEncoding::Bincode)
         .unwrap();
     let segment_msgpack_bytes = segment_info
-        .to_bytes_with_encoding(MetaEncoding::MessagePack)
+        .bench_to_bytes_with_encoding(MetaEncoding::MessagePack)
         .unwrap();
 
     grp.bench_function("bincode-segment-deserialization", |b| {
         b.iter(|| {
             let _ = SegmentInfo::from_slice(&segment_bincode_bytes).unwrap();
-        })
-    });
-
-    #[cfg(with_pot)]
-    grp.bench_function("pot-segment-deserialization", |b| {
-        b.iter(|| {
-            let _ = SegmentInfo::from_slice(&segment_pot_bytes).unwrap();
         })
     });
 
@@ -186,17 +131,6 @@ fn bench_decode(c: &mut Criterion) {
 
     println!("----------------------------------");
     println!("segment_bincode_bytes: {}", segment_bincode_bytes.len());
-
-    #[cfg(with_pot)]
-    println!("segment_pot_bytes: {}", segment_pot_bytes.len());
-    println!("segment_msgpack_bytes: {}", segment_msgpack_bytes.len());
-
-    #[cfg(with_pot)]
-    println!(
-        "segment_pot_bytes / segment_bincode_bytes: {}",
-        segment_pot_bytes.len() as f64 / segment_bincode_bytes.len() as f64
-    );
-
     println!(
         "segment_msgpack_bytes / segment_bincode_bytes: {}",
         segment_msgpack_bytes.len() as f64 / segment_bincode_bytes.len() as f64

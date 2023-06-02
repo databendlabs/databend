@@ -124,16 +124,6 @@ impl TryFrom<u8> for MetaEncoding {
     }
 }
 
-impl MetaEncoding {
-    pub fn as_str(&self) -> &str {
-        match self {
-            MetaEncoding::Bincode => "bincode",
-            MetaEncoding::MessagePack => "messagepack",
-            MetaEncoding::Json => "json",
-        }
-    }
-}
-
 pub fn encode<T: Serialize>(encoding: &MetaEncoding, data: &T) -> Result<Vec<u8>> {
     match encoding {
         MetaEncoding::Bincode => {

@@ -74,11 +74,6 @@ impl SegmentInfo {
         self.blocks.iter().map(|v| v.block_size).sum()
     }
 
-    #[inline]
-    pub fn encoding() -> MetaEncoding {
-        MetaEncoding::MessagePack
-    }
-
     // Encode self.blocks as RawBlockMeta.
     fn block_raw_bytes(&self) -> Result<RawBlockMeta> {
         let encoding = MetaEncoding::MessagePack;
@@ -281,5 +276,12 @@ impl TryFrom<&SegmentInfo> for CompactSegmentInfo {
             summary: value.summary.clone(),
             raw_block_metas: bytes,
         })
+    }
+}
+
+#[cfg(feature = "dev")]
+impl SegmentInfo {
+    pub fn bench_to_bytes_with_encoding(&self, encoding: MetaEncoding) -> Result<Vec<u8>> {
+        self.to_bytes_with_encoding(encoding)
     }
 }

@@ -39,3 +39,4 @@ dev = ["snap"]
 [[bench]]
 name = "bench"
 harness = false
+required-features = ["dev"]

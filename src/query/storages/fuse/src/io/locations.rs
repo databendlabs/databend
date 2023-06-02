@@ -97,12 +97,11 @@ impl TableMetaLocationGenerator {
     pub fn gen_segment_info_location(&self) -> String {
         let segment_uuid = Uuid::new_v4().simple().to_string();
         format!(
-            "{}/{}/{}_v{}.{}",
+            "{}/{}/{}_v{}.mpk",
             &self.prefix,
             FUSE_TBL_SEGMENT_PREFIX,
             segment_uuid,
             SegmentInfo::VERSION,
-            SegmentInfo::encoding().as_str()
         )
     }
 
