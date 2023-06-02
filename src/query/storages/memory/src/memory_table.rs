@@ -35,10 +35,14 @@ use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sinks::ContextSink;
+use common_pipeline_sinks::Sink;
+use common_pipeline_sinks::Sinker;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 use common_storage::StorageMetrics;
@@ -56,6 +60,7 @@ pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
     Lazy::new(|| Arc::new(Default::default()));
 
+#[derive(Clone)]
 pub struct MemoryTable {
     table_info: TableInfo,
     blocks: Arc<RwLock<Vec<DataBlock>>>,
@@ -228,39 +233,30 @@ impl Table for MemoryTable {
 
     fn append_data(
         &self,
-        ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
+        _ctx: Arc<dyn TableContext>,
+        _pipeline: &mut Pipeline,
         _: AppendMode,
     ) -> Result<()> {
+        Ok(())
+    }
+
+    fn commit_insertion(
+        &self,
+        _ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        _copied_files: Option<UpsertTableCopiedFileReq>,
+        overwrite: bool,
+    ) -> Result<()> {
+        pipeline.resize(1)?;
+
         pipeline.add_sink(|input| {
-            Ok(ProcessorPtr::create(ContextSink::create(
+            Ok(ProcessorPtr::create(MemoryTableSink::create(
                 input,
-                ctx.clone(),
+                Arc::new(self.clone()),
+                overwrite,
             )))
         })
     }
-    // #[async_backtrace::framed]
-    // async fn commit_insertion(
-    // &self,
-    // _: Arc<dyn TableContext>,
-    // operations: Vec<DataBlock>,
-    // _copied_files: Option<UpsertTableCopiedFileReq>,
-    // overwrite: bool,
-    // ) -> Result<()> {
-    // let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
-    //
-    // self.data_metrics.inc_write_bytes(written_bytes);
-    //
-    // if overwrite {
-    // let mut blocks = self.blocks.write();
-    // blocks.clear();
-    // }
-    // let mut blocks = self.blocks.write();
-    // for block in operations {
-    // blocks.push(block);
-    // }
-    // Ok(())
-    // }
 
     #[async_backtrace::framed]
     async fn truncate(&self, _ctx: Arc<dyn TableContext>, _: bool) -> Result<()> {
@@ -356,5 +352,47 @@ impl SyncSource for MemoryTableSource {
             None => Ok(None),
             Some(data_block) => self.projection(data_block),
         }
+    }
+}
+
+struct MemoryTableSink {
+    table: Arc<MemoryTable>,
+    operations: Vec<DataBlock>,
+    overwrite: bool,
+}
+
+impl MemoryTableSink {
+    pub fn create(
+        input: Arc<InputPort>,
+        table: Arc<MemoryTable>,
+        overwrite: bool,
+    ) -> Box<dyn Processor> {
+        Sinker::create(input, MemoryTableSink {
+            table,
+            operations: vec![],
+            overwrite,
+        })
+    }
+}
+
+impl Sink for MemoryTableSink {
+    const NAME: &'static str = "MemoryTableSink";
+
+    fn consume(&mut self, block: DataBlock) -> Result<()> {
+        self.table.data_metrics.inc_write_bytes(block.memory_size());
+        Ok(())
+    }
+
+    fn on_finish(&mut self) -> Result<()> {
+        let mut blocks = self.table.blocks.write();
+        if self.overwrite {
+            blocks.clear();
+        }
+
+        let operations = std::mem::take(&mut self.operations);
+        for block in operations {
+            blocks.push(block);
+        }
+        Ok(())
     }
 }

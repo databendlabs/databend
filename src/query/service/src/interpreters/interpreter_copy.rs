@@ -50,7 +50,6 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -133,8 +132,8 @@ impl CopyInterpreter {
             table,
             data_schema,
             &mut build_res,
+            None,
             false,
-            true,
             AppendMode::Normal,
         )?;
         Ok(build_res)
@@ -258,12 +257,10 @@ impl CopyInterpreter {
             .await?;
             (build_res, plan.required_source_schema.clone(), files)
         };
-        let table_data_schema = Arc::new(to_table.schema().into());
 
         debug!("source schema:{:?}", source_schema);
         debug!("required source schema:{:?}", plan.required_source_schema);
         debug!("required values schema:{:?}", plan.required_values_schema);
-        debug!("table_data_schema:{:?}", table_data_schema);
 
         if source_schema != plan.required_source_schema {
             // only parquet need cast
@@ -291,51 +288,41 @@ impl CopyInterpreter {
             )?;
         }
 
-        if matches!(
-            plan.write_mode,
-            CopyIntoTableMode::Insert { .. } | CopyIntoTableMode::Copy
-        ) {
-            if plan.required_values_schema != table_data_schema {
-                build_res.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        TransformResortAddOn::try_create(
-                            ctx.clone(),
-                            transform_input_port,
-                            transform_output_port,
-                            plan.required_values_schema.clone(),
-                            to_table.clone(),
-                        )
-                    },
-                )?;
-            }
-
-            to_table.append_data(ctx.clone(), &mut build_res.main_pipeline, AppendMode::Copy)?;
-        }
-
         let stage_info_clone = plan.stage_table_info.stage_info.clone();
         let force = plan.force;
         let write_mode = plan.write_mode;
         let mut purge = true;
         match write_mode {
             CopyIntoTableMode::Insert { overwrite } => {
-                to_table.commit_insertion(
+                append2table(
                     ctx.clone(),
-                    &mut build_res.main_pipeline,
+                    to_table,
+                    plan.required_values_schema.clone(),
+                    &mut build_res,
                     None,
                     overwrite,
+                    AppendMode::Copy,
                 )?;
             }
             CopyIntoTableMode::Copy => {
                 if !stage_info_clone.copy_options.purge {
                     purge = false;
                 }
-                CopyInterpreter::commit_copy_into_table(
+                let copied_files = CopyInterpreter::upsert_copied_files_request(
                     ctx.clone(),
-                    to_table,
-                    &mut build_res.main_pipeline,
+                    to_table.clone(),
                     stage_info_clone.clone(),
                     files.clone(),
                     force,
+                )?;
+                append2table(
+                    ctx.clone(),
+                    to_table,
+                    plan.required_values_schema.clone(),
+                    &mut build_res,
+                    copied_files,
+                    false,
+                    AppendMode::Copy,
                 )?;
             }
             CopyIntoTableMode::Replace => {}
@@ -398,20 +385,14 @@ impl CopyInterpreter {
         Ok(build_res)
     }
 
-    /// Pipeline finish.
-    /// 1. commit the data.
-    /// 2. update the NeedCopy file into to meta.
-    /// 3. log on_error mode errors.
-    /// 4. purge the copied files.
     #[allow(clippy::too_many_arguments)]
-    fn commit_copy_into_table(
+    fn upsert_copied_files_request(
         ctx: Arc<QueryContext>,
         to_table: Arc<dyn Table>,
-        pipeline: &mut Pipeline,
         stage_info: StageInfo,
         copied_files: Vec<StageFileInfo>,
         force: bool,
-    ) -> Result<()> {
+    ) -> Result<Option<UpsertTableCopiedFileReq>> {
         let mut copied_file_tree = BTreeMap::new();
         for file in &copied_files {
             // Short the etag to 7 bytes for less space in metasrv.
@@ -437,35 +418,21 @@ impl CopyInterpreter {
                     &to_table.get_table_info().desc
                 );
                 None
+            } else if copied_file_tree.is_empty() {
+                None
             } else {
-                let fail_if_duplicated = !force;
-                Self::upsert_copied_files_request(
-                    expire_hours,
-                    copied_file_tree,
-                    fail_if_duplicated,
-                )
+                tracing::debug!("upsert_copied_files_info: {:?}", copied_file_tree);
+                let expire_at = expire_hours * 60 * 60 + Utc::now().timestamp() as u64;
+                let req = UpsertTableCopiedFileReq {
+                    file_info: copied_file_tree,
+                    expire_at: Some(expire_at),
+                    fail_if_duplicated: !force,
+                };
+                Some(req)
             }
         };
 
-        to_table.commit_insertion(ctx, pipeline, upsert_copied_files_request, false)
-    }
-
-    fn upsert_copied_files_request(
-        expire_hours: u64,
-        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
-        fail_if_duplicated: bool,
-    ) -> Option<UpsertTableCopiedFileReq> {
-        if copy_stage_files.is_empty() {
-            return None;
-        }
-        tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
-        let expire_at = expire_hours * 60 * 60 + Utc::now().timestamp() as u64;
-        let req = UpsertTableCopiedFileReq {
-            file_info: copy_stage_files,
-            expire_at: Some(expire_at),
-            fail_if_duplicated,
-        };
-        Some(req)
+        Ok(upsert_copied_files_request)
     }
 }
 

@@ -18,51 +18,40 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
-use common_pipeline_core::Pipeline;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
-
-fn fill_missing_columns(
-    ctx: Arc<QueryContext>,
-    source_schema: &DataSchemaRef,
-    table: Arc<dyn Table>,
-    pipeline: &mut Pipeline,
-) -> Result<()> {
-    pipeline.add_transform(|transform_input_port, transform_output_port| {
-        TransformResortAddOn::try_create(
-            ctx.clone(),
-            transform_input_port,
-            transform_output_port,
-            source_schema.clone(),
-            table.clone(),
-        )
-    })?;
-    Ok(())
-}
 
 pub fn append2table(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
     build_res: &mut PipelineBuildResult,
+    copied_files: Option<UpsertTableCopiedFileReq>,
     overwrite: bool,
-    need_commit: bool,
     append_mode: AppendMode,
 ) -> Result<()> {
-    fill_missing_columns(
-        ctx.clone(),
-        &source_schema,
-        table.clone(),
-        &mut build_res.main_pipeline,
-    )?;
+    let table_data_schema = Arc::new(table.schema().into());
+
+    if source_schema != table_data_schema {
+        build_res
+            .main_pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformResortAddOn::try_create(
+                    ctx.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    source_schema.clone(),
+                    table.clone(),
+                )
+            })?;
+    }
 
     table.append_data(ctx.clone(), &mut build_res.main_pipeline, append_mode)?;
 
-    if need_commit {
-        table.commit_insertion(ctx, &mut build_res.main_pipeline, None, overwrite)?;
-    }
+    table.commit_insertion(ctx, &mut build_res.main_pipeline, copied_files, overwrite)?;
 
     Ok(())
 }

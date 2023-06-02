@@ -254,8 +254,8 @@ impl Interpreter for InsertInterpreter {
             table.clone(),
             plan.schema(),
             &mut build_res,
+            None,
             self.plan.overwrite,
-            true,
             append_mode,
         )?;
 
