@@ -108,7 +108,7 @@ virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
 # GitHub dependencies
 
 # Crates.io dependencies
-aho-corasick = { version = "0.7.20" }
+aho-corasick = { version = "1.0.1" }
 arrow-array = { version = "37.0.0" }
 arrow-flight = { version = "37.0.0", features = ["flight-sql-experimental", "tls"] }
 arrow-ipc = { version = "37.0.0" }

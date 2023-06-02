@@ -31,7 +31,7 @@ fn test_positions() -> Result<()> {
     ];
 
     let patterns = &["'", "\\"];
-    let ac = AhoCorasick::new(patterns);
+    let ac = AhoCorasick::new(patterns).unwrap();
     for (data, expect) in cases {
         let mut positions = VecDeque::new();
         for mat in ac.find_iter(&data) {
@@ -47,7 +47,7 @@ fn test_positions() -> Result<()> {
 fn test_fast_read_text() -> Result<()> {
     let data = r#"'abc','d\'ef','g\\\'hi'"#.to_string();
     let patterns = &["'", "\\"];
-    let ac = AhoCorasick::new(patterns);
+    let ac = AhoCorasick::new(patterns).unwrap();
     let mut positions = VecDeque::new();
     for mat in ac.find_iter(&data) {
         let pos = mat.start();
