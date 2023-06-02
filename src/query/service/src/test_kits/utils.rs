@@ -37,13 +37,13 @@ use common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use futures_util::TryStreamExt;
 use opendal::Operator;
 use serde::Serialize;
+use storages_common_table_meta::meta::testing::SegmentInfoV2;
+use storages_common_table_meta::meta::testing::TableSnapshotV2;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SegmentInfoV2;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::TableSnapshotV2;
 use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 

@@ -44,7 +44,7 @@ pub use self::bitmap::BitmapType;
 pub use self::boolean::BooleanType;
 pub use self::date::DateType;
 pub use self::decimal::DecimalDataType;
-use self::decimal::DecimalSize;
+pub use self::decimal::DecimalSize;
 pub use self::empty_array::EmptyArrayType;
 pub use self::empty_map::EmptyMapType;
 pub use self::generic::GenericType;

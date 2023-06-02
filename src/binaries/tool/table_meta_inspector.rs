@@ -57,8 +57,8 @@ pub struct InspectorConfig {
 
 fn convert_input_data(data: Vec<u8>, config: &InspectorConfig) -> Result<Vec<u8>> {
     match config.meta_type.as_str() {
-        "sg" | "segment" => Ok(serde_json::to_vec(&SegmentInfo::from_bytes(data)?)?),
-        "ss" | "snapshot" => Ok(serde_json::to_vec(&TableSnapshot::from_bytes(data)?)?),
+        "sg" | "segment" => Ok(serde_json::to_vec(&SegmentInfo::from_slice(&data)?)?),
+        "ss" | "snapshot" => Ok(serde_json::to_vec(&TableSnapshot::from_slice(&data)?)?),
         _ => Err(format!(
             "Unsupported type: {}, only support ss/snapshot or sg/segment",
             config.meta_type

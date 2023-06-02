@@ -12,9 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(box_into_inner)]
+mod segment;
+mod snapshot;
 
-pub mod meta;
-pub mod readers;
-pub mod table;
+pub use segment::CompactSegmentInfo;
+pub use segment::SegmentInfo;
+pub use snapshot::TableSnapshot;
+pub use snapshot::TableSnapshotLite;

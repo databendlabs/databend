@@ -3662,6 +3662,7 @@ dependencies = [
  "rand 0.8.5",
  "regex",
  "reqwest",
+ "rmp-serde",
  "scopeguard",
  "serde",
  "serde_json",
@@ -3777,6 +3778,17 @@ dependencies = [
  "const-oid",
  "pem-rfc7468 0.7.0",
  "zeroize",
+]
+
+[[package]]
+name = "derive-where"
+version = "1.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bc1955a640c4464859ae700fbe48e666da6fdce99ce5fe1acd08dd295889d10"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.15",
 ]
 
 [[package]]
@@ -7885,6 +7897,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "26f6a7b87c2e435a3241addceeeff740ff8b7e76b74c13bf9acb17fa454ea00b"
 
 [[package]]
+name = "pot"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ec1c1010060295c3405ce19ea911ede48967e96ed2ad9034b74f56f1ef0aaf2"
+dependencies = [
+ "byteorder",
+ "bytes",
+ "derive-where",
+ "half 2.2.1",
+ "serde",
+ "thiserror",
+]
+
+[[package]]
 name = "pprof"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9792,6 +9818,8 @@ dependencies = [
 name = "storages-common-table-meta"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
+ "async-trait-fn",
  "bincode 1.3.3",
  "chrono",
  "common-arrow",
@@ -9800,8 +9828,13 @@ dependencies = [
  "common-exception",
  "common-expression",
  "common-io",
+ "common-storages-fuse",
+ "criterion",
  "enum-as-inner",
+ "futures",
+ "futures-util",
  "once_cell",
+ "pot",
  "rmp-serde",
  "serde",
  "serde_json",
