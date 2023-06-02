@@ -29,7 +29,7 @@ conn.exec(sql_insert).await.unwrap();
 
 ```rust
 let row = conn.query_row("SELECT * FROM books;").await.unwrap();
-let (title,author,date): (String,String,i32) = row.try_into().unwrap();
+let (title,author,date): (String,String,i32) = row.unwrap().try_into().unwrap();
 println!("{} {} {}", title, author, date);
 ```
 
