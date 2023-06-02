@@ -281,7 +281,7 @@ impl Processor for AppendTransform {
                 segment,
             } => {
                 self.data_accessor.write(&location, data).await?;
-                info!("fuse sink wrote down segment {} ", location);
+                info!("fuse append wrote down segment {} ", location);
 
                 self.state = State::PreCommitSegment { location, segment };
             }

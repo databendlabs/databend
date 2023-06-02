@@ -90,7 +90,7 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
         // Refresh status
         {
             let status = format!(
-                "mutation: run tasks:{}, cost:{} sec",
+                "run tasks:{}, cost:{} sec",
                 self.finished_tasks,
                 self.start_time.elapsed().as_secs()
             );

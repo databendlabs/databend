@@ -67,7 +67,7 @@ const MAX_RETRIES: u64 = 10;
 
 impl FuseTable {
     #[async_backtrace::framed]
-    pub fn do_commit2(
+    pub fn do_commit(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,

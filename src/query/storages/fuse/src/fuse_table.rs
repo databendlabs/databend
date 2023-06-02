@@ -528,7 +528,7 @@ impl Table for FuseTable {
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        self.do_commit2(ctx, pipeline, copied_files, overwrite)
+        self.do_commit(ctx, pipeline, copied_files, overwrite)
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_truncate", skip(self, ctx), fields(ctx.id = ctx.get_id().as_str()))]
