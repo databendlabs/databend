@@ -7196,7 +7196,7 @@ LIMIT 100;
 11 496.17 176.6527
 
 # Q64
-skipif cluster
+onlyif mysql
 query I
 WITH cs_ui AS
   (SELECT cs_item_sk,
