@@ -71,6 +71,7 @@ const META_CHANGE_LOG: &[(u64, &str)] = &[
     (39, "2023-05-22: Add: data_mask.proto", ),
     (40, "2023-05-26: Add: TableMeta add column_mask_policy field", ),
     (41, "2023-05-29: Add: virtual_column.proto", ),
+    (42,"2023-06-03: Add allow_anonymous in S3 Config",)
     // Dear developer:
     //      If you're gonna add a new metadata version, you'll have to add a test for it.
     //      You could just copy an existing test file(e.g., `../tests/it/v024_table_meta.rs`)

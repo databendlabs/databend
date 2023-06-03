@@ -248,6 +248,11 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder.enable_virtual_host_style();
     }
 
+    // Enable allow anonymous
+    if cfg.allow_anonymous {
+        builder.allow_anonymous();
+    }
+
     let http_builder = {
         let mut builder = reqwest::ClientBuilder::new();
 
