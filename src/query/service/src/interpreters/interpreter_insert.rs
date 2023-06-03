@@ -55,7 +55,8 @@ use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
-use crate::schedulers::build_query_pipeline;
+use crate::schedulers::build_distributed_pipeline;
+use crate::schedulers::build_local_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -198,7 +199,7 @@ impl Interpreter for InsertInterpreter {
                 };
 
                 let catalog = self.plan.catalog.clone();
-                let insert_select_plan = match select_plan {
+                let mut build_res = match select_plan {
                     PhysicalPlan::Exchange(ref mut exchange) => {
                         // insert can be dispatched to different nodes
                         let input = exchange.input.clone();
@@ -213,24 +214,24 @@ impl Interpreter for InsertInterpreter {
                                 cast_needed: self.check_schema_cast(plan)?,
                             },
                         )));
-                        select_plan
+                        build_distributed_pipeline(&self.ctx, &select_plan).await?
                     }
                     other_plan => {
                         // insert should wait until all nodes finished
-                        PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
-                            input: Box::new(other_plan),
-                            catalog,
-                            table_info: table1.get_table_info().clone(),
-                            select_schema: plan.schema(),
-                            select_column_bindings,
-                            insert_schema: self.plan.schema(),
-                            cast_needed: self.check_schema_cast(plan)?,
-                        }))
+                        let plan = PhysicalPlan::DistributedInsertSelect(Box::new(
+                            DistributedInsertSelect {
+                                input: Box::new(other_plan),
+                                catalog,
+                                table_info: table1.get_table_info().clone(),
+                                select_schema: plan.schema(),
+                                select_column_bindings,
+                                insert_schema: self.plan.schema(),
+                                cast_needed: self.check_schema_cast(plan)?,
+                            },
+                        ));
+                        build_local_pipeline(&self.ctx, &plan, false).await?
                     }
                 };
-
-                let mut build_res =
-                    build_query_pipeline(&self.ctx, &[], &insert_select_plan, false, false).await?;
 
                 table.commit_insertion(
                     self.ctx.clone(),
