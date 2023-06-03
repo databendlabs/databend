@@ -754,6 +754,16 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let drop_vector_index = map(
+        rule! {DROP ~ VECTOR ~ INDEX ~ ( IF ~ EXISTS )? ~ #ident},
+        |(_, _, _, opt_if_exists, index)| {
+            Statement::DropVectorIndex(DropVectorIndexStmt {
+                if_exists: opt_if_exists.is_some(),
+                index,
+            })
+        },
+    );
+
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
@@ -1382,6 +1392,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         // vector index
         rule!(
             #create_vector_index: "`CREATE INDEX ON <table_name> USING index_type ( <column_name>,metric_type) WITH(paras)`"
+            | #drop_vector_index: "`DROP VECTOR INDEX ON <table_name>`"
         ),
     ));
 

@@ -120,8 +120,9 @@ pub enum Statement {
     ExistsTable(ExistsTableStmt),
     // Columns
     ShowColumns(ShowColumnsStmt),
-    // Indexes
+    // vector indexes
     CreateVectorIndex(CreateVectorIndexStmt),
+    DropVectorIndex(DropVectorIndexStmt),
 
     // Views
     CreateView(CreateViewStmt),
@@ -527,6 +528,7 @@ impl Display for Statement {
             Statement::ShowObjectGrantPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::ShowGrantsOfShare(stmt) => write!(f, "{stmt}")?,
             Statement::CreateVectorIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::DropVectorIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DropDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
             Statement::DescDatamaskPolicy(stmt) => write!(f, "{stmt}")?,

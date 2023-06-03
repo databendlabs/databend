@@ -210,6 +210,9 @@ impl InterpreterFactory {
             Plan::CreateVectorIndex(create_index) => Ok(Arc::new(
                 CreateVectorIndexInterpreter::try_create(ctx, *create_index.clone())?,
             )),
+            Plan::DropVectorIndex(drop_index) => Ok(Arc::new(
+                DropVectorIndexInterpreter::try_create(ctx, *drop_index.clone())?,
+            )),
 
             // Views
             Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(

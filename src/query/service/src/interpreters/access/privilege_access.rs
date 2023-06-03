@@ -94,7 +94,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::DropDatabase(_)
             | Plan::UndropDatabase(_)
             | Plan::DropUDF(_)
-            | Plan::DropIndex(_) => {
+            | Plan::DropIndex(_)
+            |Plan::DropVectorIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Drop])
                     .await?;

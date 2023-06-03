@@ -98,6 +98,7 @@ mod interpreter_user_udf_drop;
 mod interpreter_vector_index_create;
 #[cfg(not(feature = "vector-index"))]
 mod interpreter_vector_index_create_empty;
+mod interpreter_vector_index_drop;
 mod interpreter_view_alter;
 mod interpreter_view_create;
 mod interpreter_view_drop;
@@ -177,6 +178,7 @@ pub use interpreter_user_udf_drop::DropUserUDFInterpreter;
 pub use interpreter_vector_index_create::CreateVectorIndexInterpreter;
 #[cfg(not(feature = "vector-index"))]
 pub use interpreter_vector_index_create_empty::CreateVectorIndexInterpreter;
+pub use interpreter_vector_index_drop::DropVectorIndexInterpreter;
 pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;

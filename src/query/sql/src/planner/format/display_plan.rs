@@ -72,8 +72,9 @@ impl Plan {
             Plan::AnalyzeTable(analyze_table) => Ok(format!("{:?}", analyze_table)),
             Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 
-            // Create index
+            // Vector Indexes
             Plan::CreateVectorIndex(create_index) => Ok(format!("{:?}", create_index)),
+            Plan::DropVectorIndex(drop_index) => Ok(format!("{:?}", drop_index)),
 
             // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),

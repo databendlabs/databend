@@ -23,7 +23,7 @@ async fn main() {
     table.printstd();
 }
 
-const TABLE_NAME: &str = "ttttttttttttttttttttttttttttttttttttt";
+const TABLE_NAME: &str = "ttttttttttttttttttttttttttttttttttttttt";
 
 async fn warmup(dim: usize, k: usize, conn: &dyn Connection) {
     let target = generate_points(1, dim);
@@ -44,6 +44,7 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     row.add_cell(Cell::new(&format_size(bytes)));
     println!("generating {} {}d points randomly", num_points, dim);
     let points = generate_points(num_points, dim);
+    let words = generate_string(num_points, 20);
     println!("generating points done");
     let target = generate_points(1, dim);
 
@@ -53,11 +54,14 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     conn.exec(&format!("DROP TABLE IF EXISTS {}", TABLE_NAME))
         .await
         .unwrap();
-    conn.exec(&format!("CREATE TABLE {} (c array(float32))", TABLE_NAME))
-        .await
-        .unwrap();
+    conn.exec(&format!(
+        "CREATE TABLE {} (word varchar,c array(float32))",
+        TABLE_NAME
+    ))
+    .await
+    .unwrap();
     println!("inserting points");
-    conn.exec(&insert_array(&points, dim, TABLE_NAME))
+    conn.exec(&insert(&points, &words, dim, TABLE_NAME))
         .await
         .unwrap();
     println!("inserting points done");
@@ -65,7 +69,7 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     // warmup(dim, k, conn.as_ref()).await;
     println!("querying without index");
     let knn_sql = format!(
-        "SELECT * FROM {} ORDER BY cosine_distance(c,{:?}) LIMIT {}",
+        "SELECT word FROM {} ORDER BY cosine_distance(c,{:?}) LIMIT {}",
         TABLE_NAME, target, k
     );
     let mut exact_result = Vec::with_capacity(k);
@@ -116,13 +120,13 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     row
 }
 
-fn insert_array(points: &[f32], dim: usize, table_name: &str) -> String {
+fn insert(points: &[f32], words: &[String], dim: usize, table_name: &str) -> String {
     let mut insert_sql = format!("INSERT INTO {} VALUES ", table_name);
     for i in 0..points.len() / dim {
         let start = i * dim;
         let end = start + dim;
         let point = &points[start..end];
-        insert_sql.push_str(&format!("({:?})", point));
+        insert_sql.push_str(&format!("('{}',{:?})", words[i], points));
         if i != points.len() / dim - 1 {
             insert_sql.push(',');
         }
@@ -168,6 +172,18 @@ fn generate_points(n: usize, d: usize) -> Vec<f32> {
         points.push(rand::random::<f32>());
     }
     points
+}
+
+fn generate_string(n: usize, len: usize) -> Vec<String> {
+    let mut strings = Vec::new();
+    for _ in 0..n {
+        let mut string = String::new();
+        for _ in 0..len {
+            string.push(rand::random::<char>());
+        }
+        strings.push(string);
+    }
+    strings
 }
 
 #[cfg(test)]

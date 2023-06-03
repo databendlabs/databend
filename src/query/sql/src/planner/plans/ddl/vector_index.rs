@@ -24,3 +24,9 @@ pub struct CreateVectorIndexPlan {
     pub vector_index: VectorIndex,
     pub metric_type: MetricType,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct DropVectorIndexPlan {
+    pub if_exists: bool,
+    pub index: String,
+}

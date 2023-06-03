@@ -30,6 +30,7 @@ use super::DescDatamaskPolicyPlan;
 use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
+use super::DropVectorIndexPlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
@@ -171,6 +172,7 @@ pub enum Plan {
 
     // vector index
     CreateVectorIndex(Box<CreateVectorIndexPlan>),
+    DropVectorIndex(Box<DropVectorIndexPlan>),
 
     // Insert
     Insert(Box<Insert>),
@@ -362,6 +364,7 @@ impl Display for Plan {
                 write!(f, "Desc Data Mask Policy")
             }
             Plan::CreateVectorIndex(_) => write!(f, "CreateVectorIndex"),
+            Plan::DropVectorIndex(_) => write!(f, "DropVectorIndex"),
         }
     }
 }

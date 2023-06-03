@@ -52,3 +52,21 @@ impl Display for CreateVectorIndexStmt {
         )
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct DropVectorIndexStmt {
+    pub if_exists: bool,
+    pub index: Identifier,
+}
+
+impl Display for DropVectorIndexStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DROP Vector INDEX")?;
+        if self.if_exists {
+            write!(f, " IF EXISTS")?;
+        }
+
+        write!(f, " {index}", index = self.index)?;
+        Ok(())
+    }
+}

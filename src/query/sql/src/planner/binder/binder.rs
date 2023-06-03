@@ -248,8 +248,9 @@ impl<'a> Binder {
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
-            // index
+            // vector indexes
             Statement::CreateVectorIndex(stmt) => self.bind_create_vector_index(stmt).await?,
+            Statement::DropVectorIndex(stmt) => self.bind_drop_vector_index(stmt).await?,
 
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,

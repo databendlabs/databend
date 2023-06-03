@@ -430,6 +430,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_create_vector_index(&mut self, _stmt: &'ast CreateVectorIndexStmt) {}
 
+    fn visit_drop_vector_index(&mut self, _stmt: &'ast DropVectorIndexStmt) {}
+
     fn visit_create_table_source(&mut self, _source: &'ast CreateTableSource) {}
 
     fn visit_column_definition(&mut self, _column_definition: &'ast ColumnDefinition) {}

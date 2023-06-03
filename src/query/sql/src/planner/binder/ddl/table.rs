@@ -27,6 +27,7 @@ use common_ast::ast::CreateTableStmt;
 use common_ast::ast::CreateVectorIndexStmt;
 use common_ast::ast::DescribeTableStmt;
 use common_ast::ast::DropTableStmt;
+use common_ast::ast::DropVectorIndexStmt;
 use common_ast::ast::Engine;
 use common_ast::ast::ExistsTableStmt;
 use common_ast::ast::Expr;
@@ -96,6 +97,7 @@ use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
 use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
+use crate::plans::DropVectorIndexPlan;
 use crate::plans::ExistsTablePlan;
 use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
@@ -930,6 +932,20 @@ impl Binder {
             vector_index,
             metric_type,
         })))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_drop_vector_index(
+        &mut self,
+        stmt: &DropVectorIndexStmt,
+    ) -> Result<Plan> {
+        let DropVectorIndexStmt { if_exists, index } = stmt;
+
+        let plan = DropVectorIndexPlan {
+            if_exists: *if_exists,
+            index: index.to_string(),
+        };
+        Ok(Plan::DropVectorIndex(Box::new(plan)))
     }
 
     fn validate_ivfflat_paras(paras: &[Expr]) -> Result<VectorIndex> {

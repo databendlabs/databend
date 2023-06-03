@@ -909,6 +909,8 @@ pub enum TokenKind {
     VARCHAR,
     #[token("VARIANT", ignore(ascii_case))]
     VARIANT,
+    #[token("VECTOR", ignore(ascii_case))]
+    VECTOR,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
     #[token("WEEK", ignore(ascii_case))]
