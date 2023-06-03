@@ -47,6 +47,7 @@ use crate::FuseTable;
 
 enum State {
     None,
+    FillDefault,
     TryLock,
     RefreshTable,
     GenerateSnapshot {
@@ -141,7 +142,7 @@ where F: SnapshotGenerator + Send + 'static
         if meta.need_lock {
             self.state = State::TryLock;
         } else {
-            self.state = State::RefreshTable;
+            self.state = State::FillDefault;
         }
 
         Ok(Event::Async)
@@ -167,7 +168,10 @@ where F: SnapshotGenerator + Send + 'static
 
         if matches!(
             &self.state,
-            State::TryCommit { .. } | State::RefreshTable | State::AbortOperation
+            State::FillDefault
+                | State::TryCommit { .. }
+                | State::RefreshTable
+                | State::AbortOperation
         ) {
             return Ok(Event::Async);
         }
@@ -223,13 +227,28 @@ where F: SnapshotGenerator + Send + 'static
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
+            State::FillDefault => {
+                let schema = self.table.schema().as_ref().clone();
+
+                let fuse_table = FuseTable::try_from_table(self.table.as_ref())?.to_owned();
+                let previous = fuse_table.read_table_snapshot().await?;
+
+                self.snapshot_gen
+                    .fill_default_values(schema, &previous)
+                    .await?;
+
+                self.state = State::GenerateSnapshot {
+                    previous,
+                    cluster_key_meta: fuse_table.cluster_key_meta.clone(),
+                };
+            }
             State::TryLock => {
                 let table_info = self.table.get_table_info();
                 let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
                 match handler.try_lock(self.ctx.clone(), table_info.clone()).await {
                     Ok(heartbeat) => {
                         self.heartbeat = heartbeat;
-                        self.state = State::RefreshTable;
+                        self.state = State::FillDefault;
                     }
                     Err(e) => {
                         tracing::error!(

@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ColumnId;
+use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::field_default_value;
 use storages_common_table_meta::meta::ClusterKey;
@@ -31,10 +34,19 @@ use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
 use crate::statistics::reducers::merge_statistics_mut;
 
+#[async_trait::async_trait]
 pub trait SnapshotGenerator {
     fn set_merged_segments(&mut self, segments: Vec<Location>);
 
     fn set_merged_summary(&mut self, summary: Statistics);
+
+    async fn fill_default_values(
+        &mut self,
+        _schema: TableSchema,
+        _snapshot: &Option<Arc<TableSnapshot>>,
+    ) -> Result<()> {
+        Ok(())
+    }
 
     fn generate_new_snapshot(
         &self,
@@ -145,6 +157,7 @@ pub struct AppendGenerator {
     ctx: Arc<dyn TableContext>,
     merged_segments: Vec<Location>,
     merged_statistics: Statistics,
+    leaf_default_values: HashMap<ColumnId, Scalar>,
 
     overwrite: bool,
 }
@@ -155,11 +168,25 @@ impl AppendGenerator {
             ctx,
             merged_segments: vec![],
             merged_statistics: Statistics::default(),
+            leaf_default_values: HashMap::new(),
             overwrite,
         }
     }
+
+    fn check_fill_default(&self, summary: &Statistics) -> bool {
+        let mut fill_default_values = false;
+        // check if need to fill default value in statistics
+        for column_id in self.merged_statistics.col_stats.keys() {
+            if !summary.col_stats.contains_key(column_id) {
+                fill_default_values = true;
+                break;
+            }
+        }
+        fill_default_values
+    }
 }
 
+#[async_trait::async_trait]
 impl SnapshotGenerator for AppendGenerator {
     fn set_merged_segments(&mut self, segments: Vec<Location>) {
         self.merged_segments = segments;
@@ -167,6 +194,23 @@ impl SnapshotGenerator for AppendGenerator {
 
     fn set_merged_summary(&mut self, summary: Statistics) {
         self.merged_statistics = summary;
+    }
+
+    async fn fill_default_values(
+        &mut self,
+        schema: TableSchema,
+        previous: &Option<Arc<TableSnapshot>>,
+    ) -> Result<()> {
+        if let Some(snapshot) = previous {
+            if !self.overwrite && self.check_fill_default(&snapshot.summary) {
+                let mut default_values = Vec::with_capacity(schema.num_fields());
+                for field in schema.fields() {
+                    default_values.push(field_default_value(self.ctx.clone(), field)?);
+                }
+                self.leaf_default_values = schema.field_leaf_default_values(&default_values);
+            }
+        }
+        Ok(())
     }
 
     fn generate_new_snapshot(
@@ -180,21 +224,8 @@ impl SnapshotGenerator for AppendGenerator {
         let new_snapshot = if let Some(snapshot) = &previous {
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
-                let mut fill_default_values = false;
-                // check if need to fill default value in statistics
-                for column_id in self.merged_statistics.col_stats.keys() {
-                    if !summary.col_stats.contains_key(column_id) {
-                        fill_default_values = true;
-                        break;
-                    }
-                }
-                if fill_default_values {
-                    let mut default_values = Vec::with_capacity(schema.num_fields());
-                    for field in schema.fields() {
-                        default_values.push(field_default_value(self.ctx.clone(), field)?);
-                    }
-                    let leaf_default_values = schema.field_leaf_default_values(&default_values);
-                    leaf_default_values
+                if self.check_fill_default(&summary) {
+                    self.leaf_default_values
                         .iter()
                         .for_each(|(col_id, default_value)| {
                             if !summary.col_stats.contains_key(col_id) {
@@ -222,7 +253,7 @@ impl SnapshotGenerator for AppendGenerator {
                     .cloned()
                     .collect();
                 merge_statistics_mut(&mut new_summary, &summary);
-            };
+            }
             TableSnapshot::new(
                 Uuid::new_v4(),
                 &snapshot.timestamp,
