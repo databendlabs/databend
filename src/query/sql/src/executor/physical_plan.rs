@@ -368,6 +368,9 @@ pub struct Sort {
     // limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
 
+    // If the sort plan is after the exchange plan
+    pub after_exchange: bool,
+
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
