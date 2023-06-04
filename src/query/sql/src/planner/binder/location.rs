@@ -154,6 +154,22 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
     }
     .to_string();
 
+    let allow_anonymous = {
+        if let Some(s) = l.connection.get("allow_anonymous") {
+            s
+        } else {
+            "false"
+        }
+    }
+    .to_string()
+    .parse()
+    .map_err(|err| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            anyhow!("value for allow_anonymous is invalid: {err:?}"),
+        )
+    })?;
+
     let sp = StorageParams::S3(StorageS3Config {
         endpoint_url: secure_omission(endpoint),
         region,
@@ -169,6 +185,7 @@ fn parse_s3_params(l: &mut UriLocation, root: String) -> Result<StorageParams> {
         enable_virtual_host_style,
         role_arn,
         external_id,
+        allow_anonymous,
     });
 
     l.connection.check()?;
