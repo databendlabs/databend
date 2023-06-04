@@ -68,7 +68,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Interactive Documents Powered by Askbend
 
-Do you remember [AskBend](https://databend.rs/)? It is a Knowledge Base Search and Completion project created and maintained by the Databend team, combining the simplicity of Databend with the magic of OpenAI.
+Do you remember [AskBend](https://github.com/datafuselabs/askbend)? It is a Knowledge Base Search and Completion project created and maintained by the Databend team, combining the simplicity of Databend with the magic of OpenAI.
 
 Now, we have integrated it into the official website of Databend, providing an interactive experience for document queries.
 
@@ -90,7 +90,7 @@ We have also made these improvements to Databend that we hope you will find help
 - Added support for deduplication of insertion/mutation/update based on tags.
 - Added optimization hint support for COPY INTO.
 - Read *[Docs | Deploying a Databend Cluster](https://databend.rs/doc/deploy/metasrv/metasrv-deploy)* to learn about the tips when manually deploying a Databend cluster.
-- Read *[Docs | Data Types - BITMAP](https://databend.rs/doc/sql-reference/data-types/data-type-bitmap)* and *[Docs | Bitmap Functions](https://databend.rs/doc/sql-functions/bitmap-functions/) to understand the usage of the BITMAP data type in Databend.
+- Read *[Docs | Data Types - BITMAP](https://databend.rs/doc/sql-reference/data-types/data-type-bitmap)* and *[Docs | Bitmap Functions](https://databend.rs/doc/sql-functions/bitmap-functions/)* to understand the usage of the BITMAP data type in Databend.
 
 ## What's Up Next
 
