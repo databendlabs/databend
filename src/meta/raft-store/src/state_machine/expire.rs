@@ -45,9 +45,16 @@ pub struct ExpireKey {
 }
 
 /// The value of an expiration index is the record key.
-#[derive(Default, Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct ExpireValue {
+    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(default)]
+    pub seq: u64,
     pub key: String,
+}
+
+fn is_zero(v: &u64) -> bool {
+    *v == 0
 }
 
 impl SledSerde for ExpireValue {
@@ -55,6 +62,15 @@ impl SledSerde for ExpireValue {
     where Self: Sized {
         let s = serde_json::from_slice(v.as_ref())?;
         Ok(s)
+    }
+}
+
+impl ExpireValue {
+    pub fn new(key: impl ToString, seq: u64) -> Self {
+        Self {
+            key: key.to_string(),
+            seq,
+        }
     }
 }
 
@@ -98,6 +114,7 @@ mod tests {
     use common_meta_sled_store::SledOrderedSerde;
 
     use crate::state_machine::ExpireKey;
+    use crate::state_machine::ExpireValue;
 
     #[test]
     fn test_expire_key_serde() -> anyhow::Result<()> {
@@ -122,6 +139,37 @@ mod tests {
         let ms = 1666670258202;
         let k = ExpireKey::new(ms, 1000);
         assert_eq!("2022-10-25-03-57-38=1000", format!("{}", k));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_expire_value_serde() -> anyhow::Result<()> {
+        {
+            let v = ExpireValue {
+                seq: 0,
+                key: "a".to_string(),
+            };
+            let s = serde_json::to_string(&v)?;
+            let want = r#"{"key":"a"}"#;
+            assert_eq!(want, s);
+
+            let got = serde_json::from_str::<ExpireValue>(want)?;
+            assert_eq!(v, got);
+        }
+
+        {
+            let v = ExpireValue {
+                seq: 5,
+                key: "a".to_string(),
+            };
+            let s = serde_json::to_string(&v)?;
+            let want = r#"{"seq":5,"key":"a"}"#;
+            assert_eq!(want, s);
+
+            let got = serde_json::from_str::<ExpireValue>(want)?;
+            assert_eq!(v, got);
+        }
 
         Ok(())
     }
