@@ -31,7 +31,8 @@ use super::ProjectSet;
 use super::RowFetch;
 use super::Sort;
 use super::TableScan;
-use crate::executor::{RangeJoin, RuntimeFilterSource};
+use crate::executor::RangeJoin;
+use crate::executor::RuntimeFilterSource;
 use crate::executor::UnionAll;
 use crate::executor::Window;
 

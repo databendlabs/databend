@@ -124,9 +124,7 @@ impl Processor for TransformRangeJoinLeft {
                 let task_id = self.state.task_id();
                 if let Some(task_id) = task_id {
                     let res = match self.state.ie_join_state {
-                        Some(ref ie_join_state) => {
-                             self.state.ie_join(task_id)?
-                        }
+                        Some(ref _ie_join_state) => self.state.ie_join(task_id)?,
                         None => {
                             todo!()
                         }

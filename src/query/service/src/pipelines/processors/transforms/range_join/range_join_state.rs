@@ -18,18 +18,13 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
-use common_expression::{BlockEntry, Column, ColumnBuilder, DataBlock, DataSchemaRefExt, Evaluator, FunctionContext, ScalarRef, Value, ValueRef};
+use common_expression::DataBlock;
 use common_expression::RemoteExpr;
 use common_sql::executor::RangeJoin;
 use common_sql::executor::RangeJoinCondition;
 use common_sql::executor::RangeJoinType;
 use common_sql::plans::JoinType;
 use parking_lot::RwLock;
-use common_arrow::arrow::bitmap::MutableBitmap;
-use common_catalog::table_context::TableContext;
-use common_expression::types::{DataType, NumberColumnBuilder, NumberDataType, NumberScalar, UInt64Type, ValueType};
-use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_transforms::processors::transforms::sort_merge;
 
 use crate::pipelines::processors::transforms::range_join::ie_join_state::IEJoinState;
 use crate::pipelines::processors::transforms::range_join::merge_join_state::MergeJoinState;
@@ -112,7 +107,7 @@ impl RangeJoinState {
         if *left_sinker_count == 0 && *right_sinker_count == 0 {
             // Left and right both finish sink
             // Partition left/right table
-            if let Some(ie_join_state) = &self.ie_join_state {
+            if let Some(_ie_join_state) = &self.ie_join_state {
                 self.ie_join_partition()?;
             } else {
                 todo!()
@@ -145,7 +140,7 @@ impl RangeJoinState {
         if *right_sinker_count == 0 && *left_sinker_count == 0 {
             // Left and right both finish sink
             // Partition left/right table
-            if let Some(ie_join_state) = &self.ie_join_state {
+            if let Some(_ie_join_state) = &self.ie_join_state {
                 self.ie_join_partition()?;
             } else {
                 todo!()
@@ -164,8 +159,4 @@ impl RangeJoinState {
         }
         Ok(())
     }
-
-
-
 }
-

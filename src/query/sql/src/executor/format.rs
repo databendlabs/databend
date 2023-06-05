@@ -37,10 +37,12 @@ use super::TableScan;
 use super::UnionAll;
 use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::{DistributedInsertSelect, RangeJoin, RangeJoinType};
+use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
+use crate::executor::RangeJoin;
+use crate::executor::RangeJoinType;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::Window;
 use crate::planner::MetadataRef;
@@ -732,8 +734,8 @@ fn range_join_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         match plan.range_join_type {
-            RangeJoinType::IEJoin => {"IEJoin".to_string()}
-            RangeJoinType::Merge => {"MergeJoin".to_string()}
+            RangeJoinType::IEJoin => "IEJoin".to_string(),
+            RangeJoinType::Merge => "MergeJoin".to_string(),
         },
         children,
     ))

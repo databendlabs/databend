@@ -12,12 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::atomic;
-use std::sync::atomic::AtomicU64;
-use std::sync::Arc;
-
 use common_arrow::arrow::bitmap::MutableBitmap;
-use common_base::base::tokio::sync::Notify;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -35,7 +30,6 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
-use common_expression::RemoteExpr;
 use common_expression::ScalarRef;
 use common_expression::SortColumnDescription;
 use common_expression::Value;
@@ -43,14 +37,12 @@ use common_expression::ValueRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_transforms::processors::transforms::sort_merge;
 use common_sql::executor::RangeJoin;
-use common_sql::executor::RangeJoinCondition;
 use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::range_join::ie_join_util::filter_block;
 use crate::pipelines::processors::transforms::range_join::ie_join_util::order_match;
 use crate::pipelines::processors::transforms::range_join::ie_join_util::probe_l1;
 use crate::pipelines::processors::transforms::range_join::RangeJoinState;
-use crate::sessions::QueryContext;
 
 pub(crate) struct IEJoinState {
     l1_data_type: DataType,
@@ -155,27 +147,26 @@ impl IEJoinState {
             .value
             .convert_to_full_column(&self.l1_data_type, right_len);
         // If `left_l1_column` and `right_l1_column` have intersection && `left_l2_column` and `right_l2_column` have intersection, return true
-        let (left_l1_min, left_l1_max, right_l1_min, right_l1_max) =
-            match self.l1_order {
-                true => {
-                    // l1 is asc
-                    (
-                        left_l1_column.index(0).unwrap(),
-                        left_l1_column.index(left_len - 1).unwrap(),
-                        right_l1_column.index(0).unwrap(),
-                        right_l1_column.index(right_len - 1).unwrap(),
-                    )
-                }
-                false => {
-                    // l1 is desc
-                    (
-                        left_l1_column.index(left_len - 1).unwrap(),
-                        left_l1_column.index(0).unwrap(),
-                        right_l1_column.index(right_len - 1).unwrap(),
-                        right_l1_column.index(0).unwrap(),
-                    )
-                }
-            };
+        let (left_l1_min, left_l1_max, right_l1_min, right_l1_max) = match self.l1_order {
+            true => {
+                // l1 is asc
+                (
+                    left_l1_column.index(0).unwrap(),
+                    left_l1_column.index(left_len - 1).unwrap(),
+                    right_l1_column.index(0).unwrap(),
+                    right_l1_column.index(right_len - 1).unwrap(),
+                )
+            }
+            false => {
+                // l1 is desc
+                (
+                    left_l1_column.index(left_len - 1).unwrap(),
+                    left_l1_column.index(0).unwrap(),
+                    right_l1_column.index(right_len - 1).unwrap(),
+                    right_l1_column.index(0).unwrap(),
+                )
+            }
+        };
         match self.l1_order {
             true => {
                 // if l1_order is asc, then op1 is < / <=
