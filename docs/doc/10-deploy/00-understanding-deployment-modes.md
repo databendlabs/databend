@@ -1,80 +1,85 @@
 ---
-title: Understanding Deployment Modes
-sidebar_label: Understanding Deployment Modes
+title: Understanding Databend Deployments
+sidebar_label: Understanding Databend Deployments
 description:
   Describes Databend deployment modes
 ---
 
-## Understanding Deployment Modes
+## Databend Node Types
 
-A Databend deployment includes two types of node, Meta and Query. The Meta node stores various types of metadata (such as database, table, cluster, and transaction) and manages user information (including authorization and authentication). The Query node takes care of queries.
+In a Databend deployment, two types of nodes are utilized: Meta and Query.
 
-When deploying Databend, you specify a deployment mode, standalone, or cluster. A standalone Databend allows for one Meta node and one Query node, and a Databend cluster can include multiple Meta(databend-meta) to archive high availability and Query(databend-query) nodes to enhance the computing capability.
+The Meta node is responsible for storing and managing various types of metadata. This includes information related to databases, tables, and clusters. Additionally, the Meta node handles user information, such as authorization and authentication. It serves as a central repository for managing and organizing metadata and user-related data.
 
-### Supported Object Storage Solutions
-Databend supports for self-hosted and cloud object storage solutions. Prepare your own object storage before deploying Databend. The following is a list of supported object storage solutions:
+On the other hand, the Query node is dedicated to processing queries. It is responsible for executing user queries, retrieving data from the underlying storage, and returning the results to the user. The Query node handles the computational aspect of Databend, ensuring efficient and accurate query processing.
 
-- AWS S3 Compatible Services:
-  - Amazon S3
-  - MinIO
-  - Ceph
-  - Wasabi
-  - SeaweedFS
-  - Tencent COS
-  - Alibaba OSS
-  - QingCloud QingStor
-- Azure Blob Storage
-- Google Cloud Storage
-- Huawei Cloud OBS
+Please note that, when we mention "nodes," it refers to individual servers that host and run specific components of the Databend system. Each node, such as a Meta node or a Query node, usually serves a distinct purpose in processing data and executing queries.
 
-## Standalone Deployment
-This topic describes the standalone deployment architecture and environments.
+## Deployment Modes
 
-### Deployment Architecture
-When you deploy Databend in standalone mode, you host a Meta node and a Query node on the same machine or separately. For more information about how to deploy Databend in standalone mode with various object storage solutions, see [Deploying a Standalone Databend](./02-deploying-databend.md).
+Databend deployment provides two modes: standalone and cluster, each with different application scenarios and node configurations. 
+
+### Standalone Deployment
+
+In standalone mode, a standard configuration consists of a single Meta node and a single Query node. This minimal setup is suitable for testing purposes or small-scale deployments. However, it is important to note that standalone mode is not recommended for production environments due to its limited scalability and the absence of high availability features.
 
 <img src="/img/deploy/deploy-standalone-arch.png"/>
 
-### Supported Environments
-You can deploy both the Meta and Query nodes on-premises server or in the cloud. Databend can be deployed on most public cloud platforms. This includes:
-- Amazon EC2
-- Azure VMs
-- Tencent Cloud
-- Alibaba Cloud
+In a Standalone Databend Deployment, it is possible to host both the Meta and Query nodes on a single server. The following topics in the documentation assist you in setting up and deploying a standalone Databend:
 
-The following list provides recommended hardware specifications for the server running a Databend node in standalone mode:
-- CPU: 16-core or above
-- Memory: 32 GB or above
-- Hard Disk: 200 to 600 GB, SSD
-- Network Interface Card: 10 Gbps or above
+- [Deploying a Standalone Databend](02-deploying-databend.md)
+- [Local and Docker Deployments](05-deploying-local.md)
 
-## Cluster Deployment
-This topic describes the cluster deployment architecture and environments.
+### Cluster Deployment
 
-### Deployment Architecture
-When you deploy Databend in cluster mode, you set up multiple Meta and Query nodes, and host each node on separate machine.
+Cluster mode is designed for larger-scale deployments and provides enhanced capabilities. In a Databend cluster, it is recommended to have a minimum of three Meta nodes, forming a Meta cluster to ensure high availability and fault tolerance. For production purposes, Databend recommends having a Meta cluster consisting of three to five Meta nodes.
 
-:::note
-Please note that you must have a minimum of three Meta nodes in a cluster for High Availability to work.
-:::
+In a Databend cluster, multiple Query nodes can be deployed, and it is possible to create a more powerful Query cluster by grouping specific Query nodes together (using Cluster IDs) for different query performance requirements. A Databend cluster has the capacity to accommodate multiple Query clusters. By default, Databend leverages computational concurrency to its maximum potential, allowing a single SQL query to utilize all available CPU cores within a single Query node. However, when utilizing a Query cluster, Databend takes advantage of concurrent scheduling and executes computations across the entire cluster. This approach maximizes system performance and provides enhanced computational capabilities.
 
 <img src="/img/deploy/deploy-cluster-arch.png"/>
 
-When you deploy Databend in cluster mode, you launch up a Meta node first, and then set up and start the other Meta nodes to join the first one. After all the Meta nodes are started successfully, start the Query nodes one by one. Each Query node automatically registers to the Meta nodes after startup to form a cluster.
+#### Query Cluster Size
 
-<img src="/img/deploy/deploy-clustering.png"/>
+Databend does not have a specific best practice or recommended number of nodes for a Query cluster. The number of nodes in a Query cluster can vary based on your specific requirements and workload.
 
-### Supported Environments
-You can deploy the Databend nodes to your on-premises servers or in the cloud. Databend can be deployed on most public cloud platforms. This includes:
-- Amazon EC2
-- Azure VMs
-- Tencent Cloud
-- Alibaba Cloud
+The primary goal of a Query cluster is to ensure that the query processing speed meets your needs and provides optimal performance. The number of nodes in the cluster can be adjusted accordingly to achieve the desired query performance and throughput.
 
-The following list provides recommended hardware specifications for the server running a Databend node in cluster mode:
-- CPU: 16-core or above
-- Memory: 32 GB or above
-- Hard Disk
-  - Meta node: 200 to 600 GB, SSD
-  - Query node: 100 to 200 GB, SSD
-- Network Interface Card: 10 Gbps or above
+#### Tenant Management
+
+A tenant refers to an entity or organization that utilizes the services or resources provided by a system. In Databend, a tenant is associated with a unique tenant ID, which serves as an identifier to differentiate and manage their data, users, and resources within Databend. 
+
+In the case of a query cluster, when a SQL request is received by a query node, the computational workload is efficiently distributed among query nodes that share the same tenant ID and cluster ID. Please note that query nodes with the same tenant ID but different cluster IDs provide a mechanism for workload isolation while still sharing the same data and user lists.
+
+![Alt text](../../public/img/deploy/tenantid.PNG)
+
+## Deployment Environments
+
+This topic provides information on the recommended hardware specifications for Databend nodes and the supported object storage platforms.
+
+### Hardware Recommendations
+
+Databend nodes can be deployed either on-premises servers or in the cloud. Databend is compatible with various public cloud platforms, such as Amazon EC2, Azure VMs, Tencent Cloud, and Alibaba Cloud. The table below outlines the recommended hardware specifications for servers running Databend nodes:
+
+| Hardware Specification  	| Standalone Mode  	| Cluster Mode (Meta Node) 	| Cluster Mode (Query Node) 	|
+|-------------------------	|------------------	|--------------------------	|---------------------------	|
+| CPU                     	| 16-core or above 	| 16-core or above         	| 16-core or above          	|
+| Memory                  	| 32 GB or above   	| 32 GB or above           	| 32 GB or above            	|
+| Hard Disk (SSD)         	| 200-600 GB       	| 200-600 GB               	| 100-200 GB                	|
+| Network Interface Card  	| 10 Gbps or above 	| 10 Gbps or above         	| 10 Gbps or above          	|
+
+### Supported Object Storage
+
+Databend supports for self-hosted and cloud object storage solutions. Prepare your own object storage before deploying Databend. The following is a list of supported object storage solutions:
+
+- Amazon S3
+- Azure Blob Storage
+- Google Cloud Storage
+- MinIO
+- Ceph
+- Wasabi
+- SeaweedFS
+- Cloudflare R2
+- Tencent COS
+- Alibaba OSS
+- QingCloud QingStor
+- Huawei Cloud OBS
