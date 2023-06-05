@@ -124,7 +124,6 @@ async fn test_query() -> Result<()> {
             "select * from test1",
         ];
         for case in cases {
-            dbg!(case);
             writeln!(file, "---------- Input ----------").unwrap();
             writeln!(file, "{}", case).unwrap();
             writeln!(file, "---------- Output ---------").unwrap();

@@ -18,6 +18,8 @@ use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::TableSchemaRef;
 use common_meta_store::MetaStore;
@@ -184,7 +186,17 @@ impl Interpreter for SelectInterpreter {
     }
 
     fn schema(&self) -> DataSchemaRef {
-        self.physical_plan.output_schema().unwrap()
+        // Rename columns from index to name
+        let fields = self
+            .physical_plan
+            .output_schema()
+            .unwrap()
+            .fields()
+            .iter()
+            .zip(&self.bind_context.columns)
+            .map(|(f, c)| DataField::new(&c.column_name, f.data_type().clone()))
+            .collect();
+        Arc::new(DataSchema::new(fields))
     }
 
     /// This method will create a new pipeline
