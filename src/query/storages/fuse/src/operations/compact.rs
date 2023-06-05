@@ -27,11 +27,11 @@ use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactAggregator;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
+use crate::operations::MutationGenerator;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
 use crate::TableContext;
-use crate::TableMutator;
 use crate::DEFAULT_BLOCK_PER_SEGMENT;
 use crate::FUSE_OPT_KEY_BLOCK_PER_SEGMENT;
 
@@ -178,13 +178,9 @@ impl FuseTable {
             )))
         })?;
 
+        let snapshot_gen = MutationGenerator::new(mutator.compact_params.base_snapshot);
         pipeline.add_sink(|input| {
-            CommitSink::try_create(
-                self,
-                ctx.clone(),
-                mutator.compact_params.base_snapshot.clone(),
-                input,
-            )
+            CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
         })?;
 
         Ok(())

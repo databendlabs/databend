@@ -21,60 +21,34 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
-use opendal::Operator;
 use storages_common_table_meta::meta::BlockMeta;
-use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::Versioned;
 
-use crate::io::TableMetaLocationGenerator;
-use crate::operations::mutation::BaseMutator;
-use crate::operations::AppendOperationLogEntry;
-use crate::sessions::TableContext;
-use crate::statistics::merge_statistics;
-use crate::FuseTable;
-use crate::Table;
-use crate::TableMutator;
+use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
+use crate::operations::merge_into::mutation_meta::MutationLogEntry;
+use crate::operations::merge_into::mutation_meta::MutationLogs;
+use crate::operations::merge_into::mutation_meta::Replacement;
+use crate::operations::merge_into::mutation_meta::ReplacementLogEntry;
 
 static MAX_BLOCK_COUNT: usize = 50;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
-    base_mutator: BaseMutator,
-    blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
     selected_blocks: Vec<Arc<BlockMeta>>,
     level: i32,
     threshold: f64,
+    mutation_logs: MutationLogs,
+    block_thresholds: BlockThresholds,
 }
 
 impl ReclusterMutator {
-    pub fn try_create(
-        ctx: Arc<dyn TableContext>,
-        location_generator: TableMetaLocationGenerator,
-        base_snapshot: Arc<TableSnapshot>,
-        threshold: f64,
-        thresholds: BlockThresholds,
-        blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>>,
-        data_accessor: Operator,
-    ) -> Result<Self> {
-        let base_mutator = BaseMutator::try_create(
-            ctx,
-            data_accessor,
-            location_generator,
-            base_snapshot,
-            thresholds,
-        )?;
+    pub fn try_create(threshold: f64, block_thresholds: BlockThresholds) -> Result<Self> {
         Ok(Self {
-            base_mutator,
-            blocks_map,
             selected_blocks: Vec::new(),
             level: 0,
             threshold,
+            block_thresholds,
+            mutation_logs: Default::default(),
         })
-    }
-
-    pub fn partitions_total(&self) -> usize {
-        self.base_mutator.base_snapshot.summary.block_count as usize
     }
 
     pub fn selected_blocks(&self) -> Vec<Arc<BlockMeta>> {
@@ -84,13 +58,16 @@ impl ReclusterMutator {
     pub fn level(&self) -> i32 {
         self.level
     }
-}
 
-#[async_trait::async_trait]
-impl TableMutator for ReclusterMutator {
+    pub fn mutation_logs(&self) -> MutationLogs {
+        self.mutation_logs.clone()
+    }
+
     #[async_backtrace::framed]
-    async fn target_select(&mut self) -> Result<bool> {
-        let blocks_map = self.blocks_map.clone();
+    pub async fn target_select(
+        &mut self,
+        blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>>,
+    ) -> Result<bool> {
         for (level, block_metas) in blocks_map.into_iter() {
             if block_metas.len() <= 1 {
                 continue;
@@ -116,15 +93,19 @@ impl TableMutator for ReclusterMutator {
 
             // If the statistics of blocks are too small, just merge them into one block.
             if self
-                .base_mutator
-                .thresholds
+                .block_thresholds
                 .check_for_recluster(total_rows as usize, total_bytes as usize)
             {
                 self.selected_blocks = block_metas
                     .into_iter()
-                    .map(|(seg_idx, block_meta)| {
-                        self.base_mutator
-                            .add_mutation(seg_idx, block_meta.location.clone(), None);
+                    .map(|(block_idx, block_meta)| {
+                        let entry = ReplacementLogEntry {
+                            index: block_idx,
+                            op: Replacement::Deleted,
+                        };
+                        self.mutation_logs
+                            .entries
+                            .push(MutationLogEntry::Replacement(entry));
                         block_meta
                     })
                     .collect::<Vec<_>>();
@@ -193,9 +174,14 @@ impl TableMutator for ReclusterMutator {
                 .iter()
                 .take(MAX_BLOCK_COUNT)
                 .map(|idx| {
-                    let (seg_idx, block_meta) = block_metas[*idx].clone();
-                    self.base_mutator
-                        .add_mutation(seg_idx, block_meta.location.clone(), None);
+                    let (block_idx, block_meta) = block_metas[*idx].clone();
+                    let entry = ReplacementLogEntry {
+                        index: block_idx,
+                        op: Replacement::Deleted,
+                    };
+                    self.mutation_logs
+                        .entries
+                        .push(MutationLogEntry::Replacement(entry));
                     block_meta
                 })
                 .collect::<Vec<_>>();
@@ -204,46 +190,5 @@ impl TableMutator for ReclusterMutator {
         }
 
         Ok(false)
-    }
-
-    #[async_backtrace::framed]
-    async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()> {
-        let ctx = &self.base_mutator.ctx;
-        let (mut segments, mut summary, mut abort_operation) =
-            self.base_mutator.generate_segments().await?;
-
-        let append_entries = ctx.consume_precommit_blocks();
-        let append_log_entries = append_entries
-            .iter()
-            .map(AppendOperationLogEntry::try_from)
-            .collect::<Result<Vec<AppendOperationLogEntry>>>()?;
-
-        let (merged_segments, merged_summary) =
-            FuseTable::merge_append_operations(&append_log_entries)?;
-
-        for entry in append_log_entries {
-            for block in &entry.segment_info.blocks {
-                abort_operation.add_block(block);
-            }
-            abort_operation.add_segment(entry.segment_location);
-        }
-
-        segments.extend(
-            merged_segments
-                .into_iter()
-                .map(|loc| (loc, SegmentInfo::VERSION)),
-        );
-        summary = merge_statistics(&summary, &merged_summary)?;
-
-        let table = FuseTable::try_from_table(table.as_ref())?;
-        table
-            .commit_mutation(
-                ctx,
-                self.base_mutator.base_snapshot,
-                segments,
-                summary,
-                abort_operation,
-            )
-            .await
     }
 }

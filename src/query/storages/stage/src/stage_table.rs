@@ -32,10 +32,8 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_expression::DataBlock;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
@@ -196,7 +194,6 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _: AppendMode,
-        _: bool,
     ) -> Result<()> {
         let single = self.table_info.stage_info.copy_options.single;
         let op = StageTable::get_op(&self.table_info.stage_info)?;
@@ -236,18 +233,6 @@ impl Table for StageTable {
                 gid,
             )
         })
-    }
-
-    // TODO use tmp file_name & rename to have atomic commit
-    #[async_backtrace::framed]
-    async fn commit_insertion(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _operations: Vec<DataBlock>,
-        _copied_files: Option<UpsertTableCopiedFileReq>,
-        _overwrite: bool,
-    ) -> Result<()> {
-        Ok(())
     }
 
     // Truncate the stage file.

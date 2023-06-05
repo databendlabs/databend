@@ -33,7 +33,6 @@ use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::FuseTable;
 use crate::TableContext;
-use crate::TableMutator;
 
 #[derive(Default)]
 pub struct SegmentCompactionState {
@@ -72,12 +71,9 @@ impl SegmentCompactMutator {
     fn has_compaction(&self) -> bool {
         !self.compaction.new_segment_paths.is_empty()
     }
-}
 
-#[async_trait::async_trait]
-impl TableMutator for SegmentCompactMutator {
     #[async_backtrace::framed]
-    async fn target_select(&mut self) -> Result<bool> {
+    pub async fn target_select(&mut self) -> Result<bool> {
         let select_begin = Instant::now();
 
         let mut base_segment_locations = self.compact_params.base_snapshot.segments.clone();
@@ -122,14 +118,14 @@ impl TableMutator for SegmentCompactMutator {
     }
 
     #[async_backtrace::framed]
-    async fn try_commit(self: Box<Self>, table: Arc<dyn Table>) -> Result<()> {
+    pub async fn try_commit(&self, table: Arc<dyn Table>) -> Result<()> {
         if !self.has_compaction() {
             // defensive checking
             return Ok(());
         }
 
         let abort_action = AbortOperation {
-            segments: self.compaction.new_segment_paths,
+            segments: self.compaction.new_segment_paths.clone(),
             ..Default::default()
         };
 
@@ -143,8 +139,8 @@ impl TableMutator for SegmentCompactMutator {
         let res = fuse_table
             .commit_mutation(
                 &self.ctx,
-                self.compact_params.base_snapshot,
-                self.compaction.segments_locations,
+                self.compact_params.base_snapshot.clone(),
+                &self.compaction.segments_locations,
                 statistics,
                 abort_action,
             )
@@ -324,7 +320,7 @@ impl<'a> SegmentCompactor<'a> {
 
         self.compacted_state.num_fragments_compacted += fragments.len();
         for (segment, _location) in fragments {
-            merge_statistics_mut(&mut new_statistics, &segment.summary)?;
+            merge_statistics_mut(&mut new_statistics, &segment.summary);
             blocks.append(&mut segment.blocks.clone());
         }
 

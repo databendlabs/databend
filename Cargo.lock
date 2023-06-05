@@ -2355,7 +2355,6 @@ dependencies = [
  "async-channel",
  "async-trait-fn",
  "common-base",
- "common-catalog",
  "common-exception",
  "common-expression",
  "common-pipeline-core",
@@ -2708,6 +2707,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "common-base",
  "common-building",
  "common-catalog",
  "common-exception",
