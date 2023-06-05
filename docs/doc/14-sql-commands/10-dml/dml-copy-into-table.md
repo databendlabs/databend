@@ -207,6 +207,7 @@ copyOptions ::=
   [ FORCE = <bool> ]
   [ DISABLE_VARIANT_CHECK = <bool> ]
   [ ON_ERROR = { continue | abort } ]
+  [ MAX_FILES = <num> ]
 ```
 
 | Parameter             | Description                                                                                                                                             | Required |
@@ -216,6 +217,7 @@ copyOptions ::=
 | FORCE                 | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.       | Optional |
 | DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                           | Optional |
 | ON_ERROR              | Provides options to handle a file containing errors. Select `continue` to skip the file and continue, or `abort` (default) to abort the load operation. | Optional |
+| MAX_FILES             | Sets the maximum number of files to load. Defaults to `0` meaning no limits.                                                                             | Optional |
 
 :::info
 The parameter ON_ERROR currently does not work for parquet files.
