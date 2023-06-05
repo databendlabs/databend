@@ -713,6 +713,7 @@ impl Binder {
                     data_type,
                     leaf_index,
                     table_index,
+                    column_position,
                     ..
                 }) => {
                     let column_binding = ColumnBinding {
@@ -720,6 +721,7 @@ impl Binder {
                         table_name: Some(table.name().to_string()),
                         table_index: Some(*table_index),
                         column_name: column_name.clone(),
+                        column_position: *column_position,
                         index: *column_index,
                         data_type: Box::new(DataType::from(data_type)),
                         visibility: if path_indices.is_some() {

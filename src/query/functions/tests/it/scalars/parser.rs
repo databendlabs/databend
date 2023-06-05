@@ -101,8 +101,8 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
         } => {
             let col_id = columns
                 .iter()
-                .position(|(col_name, _)| *col_name == column.name)
-                .unwrap_or_else(|| panic!("expected column {}", column.name));
+                .position(|(col_name, _)| *col_name == column.name())
+                .unwrap_or_else(|| panic!("expected column {}", column.name()));
             RawExpr::ColumnRef {
                 span,
                 id: col_id,

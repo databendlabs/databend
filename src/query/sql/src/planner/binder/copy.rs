@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use common_ast::ast::ColumnID as AstColumnID;
 use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyUnit;
 use common_ast::ast::Expr;
@@ -374,11 +375,11 @@ impl<'a> Binder {
                         span: None,
                         database: None,
                         table: None,
-                        column: Identifier {
+                        column: AstColumnID::Name(Identifier {
                             name: f.name().to_string(),
                             quote: None,
                             span: None,
-                        },
+                        }),
                     }),
                     alias: None,
                 })

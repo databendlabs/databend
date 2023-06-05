@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::vec;
 
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::IntervalKind as ASTIntervalKind;
@@ -180,14 +181,27 @@ impl<'a> TypeChecker<'a> {
                 let table = table
                     .as_ref()
                     .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
-                let column = normalize_identifier(ident, self.name_resolution_ctx).name;
-                let result = self.bind_context.resolve_name(
-                    database.as_deref(),
-                    table.as_deref(),
-                    column.as_str(),
-                    ident.span,
-                    self.aliases,
-                )?;
+                let result = match ident {
+                    ColumnID::Name(ident) => {
+                        let column = normalize_identifier(ident, self.name_resolution_ctx).name;
+                        self.bind_context.resolve_name(
+                            database.as_deref(),
+                            table.as_deref(),
+                            column.as_str(),
+                            ident.span,
+                            self.aliases,
+                        )?
+                    }
+                    ColumnID::Position(pos) => {
+                        self.bind_context.search_column_position_recursively(
+                            pos.span,
+                            database.as_deref(),
+                            table.as_deref(),
+                            pos.pos,
+                        )?
+                    }
+                };
+
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
                         let data_type = *column.data_type.clone();
@@ -2406,7 +2420,7 @@ impl<'a> TypeChecker<'a> {
         let udf_expr = self
             .clone_expr_with_replacement(&expr, &|nest_expr| {
                 if let Expr::ColumnRef { column, .. } = nest_expr {
-                    if let Some(arg) = args_map.get(&column.name) {
+                    if let Some(arg) = args_map.get(&column.name().to_string()) {
                         return Ok(Some(arg.clone()));
                     }
                 }
@@ -2705,6 +2719,7 @@ impl<'a> TypeChecker<'a> {
         let virtual_column = ColumnBinding {
             database_name: column.database_name.clone(),
             table_name: column.table_name.clone(),
+            column_position: None,
             table_index: Some(table_index),
             column_name: name,
             index,

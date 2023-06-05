@@ -56,6 +56,7 @@ impl UpdatePlan {
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: "_predicate".to_string(),
                 index: schema.num_fields(),

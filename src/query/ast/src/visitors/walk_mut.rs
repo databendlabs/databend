@@ -140,6 +140,10 @@ pub fn walk_identifier_mut<V: VisitorMut>(visitor: &mut V, ident: &mut Identifie
     visitor.visit_identifier(ident);
 }
 
+pub fn walk_column_id_mut<V: VisitorMut>(visitor: &mut V, ident: &mut ColumnID) {
+    visitor.visit_column_id(ident);
+}
+
 pub fn walk_query_mut<V: VisitorMut>(visitor: &mut V, query: &mut Query) {
     let Query {
         with,
@@ -201,7 +205,7 @@ pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut Selec
             }
             if let Some(cols) = exclude {
                 for ident in cols {
-                    visitor.visit_identifier(ident);
+                    visitor.visit_column_id(ident);
                 }
             }
         }

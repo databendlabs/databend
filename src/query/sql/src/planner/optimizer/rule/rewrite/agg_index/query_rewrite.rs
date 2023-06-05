@@ -318,6 +318,7 @@ impl<'a> Range<'a> {
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: format!("index_col_{index}"),
                 index,
@@ -758,6 +759,7 @@ fn try_create_column_binding(
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: format!("index_col_{index}"),
                 index: *index,

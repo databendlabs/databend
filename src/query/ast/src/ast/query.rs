@@ -19,6 +19,7 @@ use common_exception::Span;
 
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
+use crate::ast::ColumnID;
 use crate::ast::Expr;
 use crate::ast::FileLocation;
 use crate::ast::Hint;
@@ -146,7 +147,7 @@ pub enum SelectTarget {
     // For simplicity, wildcard is involved.
     QualifiedName {
         qualified: QualifiedName,
-        exclude: Option<Vec<Identifier>>,
+        exclude: Option<Vec<ColumnID>>,
     },
 }
 
@@ -160,7 +161,7 @@ impl SelectTarget {
         }
     }
 
-    pub fn exclude(&mut self, exclude: Vec<Identifier>) {
+    pub fn exclude(&mut self, exclude: Vec<ColumnID>) {
         match self {
             SelectTarget::AliasedExpr { .. } => unreachable!(),
             SelectTarget::QualifiedName { exclude: e, .. } => {
