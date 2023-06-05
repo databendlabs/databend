@@ -8,7 +8,7 @@ description:
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
-Databend recommends deploying a cluster with a minimum of three meta nodes and one query node for production environments. To gain a better understanding of Databend cluster deployment, see [Understanding Deployment Modes](../00-understanding-deployment-modes.md), which will familiarize you with the concept. This topic aims to provide a practical guide for deploying a Databend cluster.
+Databend recommends deploying a cluster with a minimum of three meta nodes and one query node for production environments. To gain a better understanding of Databend cluster deployment, see [Understanding Databend Deployments](../00-understanding-deployment-modes.md), which will familiarize you with the concept. This topic aims to provide a practical guide for deploying a Databend cluster.
 
 ## Before You Begin
 

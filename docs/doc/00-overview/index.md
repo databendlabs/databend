@@ -45,7 +45,7 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="Object Storage" label="Object Storage">
 
-- Supports various object storage platforms. Click [here](../10-deploy/00-understanding-deployment-modes.md#supported-object-storage-solutions) to see a full list of supported platforms.
+- Supports various object storage platforms. Click [here](../10-deploy/00-understanding-deployment-modes.md#supported-object-storage) to see a full list of supported platforms.
 - Allows instant elasticity, enabling users to scale up or down based on their application needs.
 
 </TabItem>
