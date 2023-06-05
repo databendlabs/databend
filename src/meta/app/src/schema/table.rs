@@ -202,11 +202,9 @@ pub struct TableStatistics {
     pub index_data_bytes: u64,
 
     /// number of segments
-    /// for meta versions before 43, this field is None
     pub number_of_segments: Option<u64>,
 
     /// number of blocks
-    /// for meta versions before 43, this field is None
     pub number_of_blocks: Option<u64>,
 }
 

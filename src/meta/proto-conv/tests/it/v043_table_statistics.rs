@@ -25,7 +25,7 @@ use crate::common;
 //
 // The message bytes are built from the output of `proto_conv::test_build_pb_buf()`
 #[test]
-fn test_decode_v42_s3_stage_new_field() -> anyhow::Result<()> {
+fn test_decode_v43_table_statistics() -> anyhow::Result<()> {
     let bytes_table_statistics_v43 = [
         8, 100, 16, 200, 1, 24, 15, 32, 20, 40, 1, 48, 2, 160, 6, 43, 168, 6, 24,
     ];
