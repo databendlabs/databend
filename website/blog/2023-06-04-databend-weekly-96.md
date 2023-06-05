@@ -38,7 +38,7 @@ Stay connected with the latest news about Databend.
 
 ### Virtual Column
 
-One way to optimize querying JSON internal fields is to create virtual columns for these fields using `CREATE VIRTUAL COLCUM`. After creating the virtual columns, we can generate them using `GENERATE VIRTUAL COLUMN` function. Once these steps are completed, we can directly access data in the JSON internal fields through their corresponding virtual columns.
+One of the ways to optimize querying JSON internal fields is to create and generate virtual columns for these fields with the `CREATE VIRTUAL COLCUM` and `GENERATE VIRTUAL COLUMN` functions. This enables direct queries against the JSON internal fields through their corresponding virtual columns.
 
 Databend now supports a series of syntax for creating, dropping, generating and altering virtual columns. Here is a simple example:
 
@@ -68,7 +68,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Interactive Documents Powered by Askbend
 
-Do you remember [AskBend](https://github.com/datafuselabs/askbend)? It is a Knowledge Base Search and Completion project created and maintained by the Databend team, combining the simplicity of Databend with the magic of OpenAI.
+Do you remember [AskBend](https://github.com/datafuselabs/askbend)? AskBend is a Rust project that spices up Databend by incorporating the power of OpenAI for a SQL-based knowledge base created from markdown files.
 
 Now, we have integrated it into the official website of Databend, providing an interactive experience for document queries.
 
@@ -87,7 +87,7 @@ We have also made these improvements to Databend that we hope you will find help
 
 - Added expression support to Windows function.
 - Added range function & aliases in select list
-- Added support for deduplication of insertion/mutation/update based on tags.
+- Added support for deduplication of insertion/mutation/update based on label.
 - Added optimization hint support for COPY INTO.
 - Read *[Docs | Deploying a Databend Cluster](https://databend.rs/doc/deploy/metasrv/metasrv-deploy)* to learn about the tips when manually deploying a Databend cluster.
 - Read *[Docs | Data Types - BITMAP](https://databend.rs/doc/sql-reference/data-types/data-type-bitmap)* and *[Docs | Bitmap Functions](https://databend.rs/doc/sql-functions/bitmap-functions/)* to understand the usage of the BITMAP data type in Databend.
@@ -96,13 +96,13 @@ We have also made these improvements to Databend that we hope you will find help
 
 We're always open to cutting-edge technologies and innovative ideas. You're more than welcome to join the community and bring them to Databend.
 
-### Use Loser Tree to Optimize Sorting Algorithm
+### Optimize Sorting Algorithm with Loser Tree
 
 Currently, Databend's sorting algorithm uses MergeSort based on a heap. 
 
-There are three main algorithms for multiple merging: heap sort, winner tree, and loser tree. In all three algorithms, each heap adjustment of the heap sorting requires comparison with the left and right child nodes. The number of comparisons is 2logN while the comparison times for winner tree and loser tree adjustments are logN.
+There are three main algorithms for multiple merging: heap sort, winner tree, and loser tree. For all of them, each heap adjustment of the heap sorting requires comparison with the left and right child nodes. The number of comparisons is 2logN while the comparison times for winner tree and loser tree adjustments are logN.
 
-The difference between them is that the winner tree needs to compare with sibling nodes and update the parent node whereas the loser tree only needs to compare with the parent node resulting in fewer memory access times.
+The contrast lies in how the two trees operate. In a winner tree, each node must be compared with its sibling nodes and then update the parent node. On the other hand, in a loser tree, a node only requires comparison with the parent node, which leads to fewer instances of memory access.
 
 [Issue #11604 | Feature: Update sort algorithm using Loser Tree](https://github.com/datafuselabs/databend/issues/11604)
 
