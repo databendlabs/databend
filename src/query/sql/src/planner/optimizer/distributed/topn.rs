@@ -99,7 +99,11 @@ impl TopNPushDownOptimizer {
 
         let mut sort: Sort = sort_sexpr.plan().clone().try_into()?;
 
-        debug_assert!(sort.limit.is_some());
+        if sort.limit.is_none() {
+            // It could be a ORDER BY ... OFFSET ... clause. (No LIMIT)
+            return Ok(s_expr.clone());
+        }
+
         debug_assert!(exchange_sexpr.children.len() == 1);
 
         let child = exchange_sexpr.child(0)?.clone();
