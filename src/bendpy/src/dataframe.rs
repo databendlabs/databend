@@ -62,13 +62,13 @@ impl PyDataFrame {
         let blocks = wait_for_future(py, self.df_collect());
         Ok(PyDataBlocks {
             blocks: blocks.unwrap(),
-            schema: self.df.schema(),
+            schema: wait_for_future(py, self.df.schema(self.ctx.clone())).unwrap(),
         })
     }
 
-    pub fn schema(&self) -> PySchema {
+    pub fn schema(&self, py: Python) -> PySchema {
         PySchema {
-            schema: self.df.schema(),
+            schema: wait_for_future(py, self.df.schema(self.ctx.clone())).unwrap(),
         }
     }
 
@@ -78,7 +78,11 @@ impl PyDataFrame {
             .into_iter()
             .map(|block| {
                 block
-                    .to_record_batch(self.df.schema().as_ref())
+                    .to_record_batch(
+                        wait_for_future(py, self.df.schema(self.ctx.clone()))
+                            .unwrap()
+                            .as_ref(),
+                    )
                     .unwrap()
                     .to_pyarrow(py)
             })
@@ -89,7 +93,11 @@ impl PyDataFrame {
     /// Collect the batches and pass to Arrow Table
     pub fn to_arrow_table(&self, py: Python) -> PyResult<PyObject> {
         let batches = self.to_py_arrow(py)?.to_object(py);
-        let schema = ArrowSchema::from(self.df.schema().as_ref());
+        let schema = ArrowSchema::from(
+            wait_for_future(py, self.df.schema(self.ctx.clone()))
+                .unwrap()
+                .as_ref(),
+        );
         let schema = PyArrowType(schema);
         let schema = schema.into_py(py);
 

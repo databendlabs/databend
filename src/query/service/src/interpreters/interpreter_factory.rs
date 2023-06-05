@@ -59,23 +59,27 @@ impl InterpreterFactory {
             error!("Access.denied(v2): {:?}", e);
             e
         })?;
-        Self::get_inner(ctx, plan)
+        Self::get_inner(ctx, plan).await
     }
 
     /// This is used for handlers to get the schema of the plan.
     /// Some plan may miss the schema and return empty plan such as `CallPlan`
     /// So we need to map the plan into to `Interpreter` and get the right schema.
-    pub fn get_schema(ctx: Arc<QueryContext>, plan: &Plan) -> DataSchemaRef {
-        let schema = plan.schema();
+    #[async_backtrace::framed]
+    pub async fn get_schema(ctx: Arc<QueryContext>, plan: &Plan) -> Result<DataSchemaRef> {
+        let schema = plan.schema(ctx.clone()).await?;
+
         if schema.num_fields() == 0 {
-            let executor = Self::get_inner(ctx, plan);
-            executor.map(|e| e.schema()).unwrap_or(schema)
-        } else {
-            schema
+            if let Ok(executor) = Self::get_inner(ctx, plan).await {
+                return Ok(executor.schema());
+            }
         }
+
+        Ok(schema)
     }
 
-    pub fn get_inner(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
+    #[async_backtrace::framed]
+    pub async fn get_inner(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
         match plan {
             Plan::Query {
                 s_expr,
@@ -84,14 +88,17 @@ impl InterpreterFactory {
                 ignore_result,
                 formatted_ast,
                 ..
-            } => Ok(Arc::new(SelectInterpreter::try_create(
-                ctx,
-                *bind_context.clone(),
-                *s_expr.clone(),
-                metadata.clone(),
-                formatted_ast.clone(),
-                *ignore_result,
-            )?)),
+            } => Ok(Arc::new(
+                SelectInterpreter::try_create(
+                    ctx,
+                    *bind_context.clone(),
+                    *s_expr.clone(),
+                    metadata.clone(),
+                    formatted_ast.clone(),
+                    *ignore_result,
+                )
+                .await?,
+            )),
             Plan::Explain { kind, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),

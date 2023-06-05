@@ -26,6 +26,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchema;
+use common_expression::DataSchemaRef;
 use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use common_sql::Planner;
@@ -72,14 +73,16 @@ impl FlightSqlServiceImpl {
         &self,
         session: &Arc<Session>,
         query: &str,
-    ) -> Result<(Plan, PlanExtras)> {
+    ) -> Result<(Plan, PlanExtras, DataSchemaRef)> {
         let context = session
             .create_query_context()
             .await
             .map_err(|e| status!("Could not create_query_context", e))?;
 
         let mut planner = Planner::new(context.clone());
-        planner.plan_sql(query).await
+        let (plan, extra) = planner.plan_sql(query).await?;
+        let schema = plan.schema(context).await?;
+        Ok((plan, extra, schema))
     }
 
     #[async_backtrace::framed]

@@ -126,7 +126,11 @@ pub async fn streaming_load(
         .map_err(InternalServerError)?;
     context.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
 
-    let schema = plan.schema();
+    let schema = plan
+        .schema(context.clone())
+        .await
+        .map_err(|err| err.display_with_sql(insert_sql))
+        .map_err(InternalServerError)?;
     match &mut plan {
         Plan::Insert(insert) => match &mut insert.source {
             InsertInputSource::StreamingWithFileFormat(params, start, input_context_ref) => {

@@ -18,6 +18,7 @@ use std::sync::Arc;
 use common_exception::Result;
 use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::decimal::DecimalSize;
+use common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use common_expression::types::DecimalDataType;
 use common_expression::types::NumberScalar;
 use common_expression::ConstantFolder;
@@ -241,22 +242,24 @@ impl RuleFoldConstant {
     fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
         if size.scale == 0 {
             if decimal.is_positive() && decimal <= i256::from(u64::MAX) {
-                return Self::shrink_u64(decimal.try_into().unwrap());
+                return Self::shrink_u64(decimal.as_u64());
             } else if decimal <= i256::from(i64::MAX) && decimal >= i256::from(i64::MIN) {
-                return Self::shrink_i64(decimal.try_into().unwrap());
+                return Self::shrink_i64(decimal.as_i64());
             }
         }
 
-        let valid_bits = 256 - decimal.leading_zeros();
+        let valid_bits = 256 - decimal.saturating_abs().leading_zeros();
         let log10_2 = std::f64::consts::LOG10_2;
         let precision_f64 = (valid_bits as f64) * log10_2;
-        let precision = precision_f64.ceil() as u8;
+        let precision = (precision_f64.ceil() as u8)
+            .clamp(1, MAX_DECIMAL256_PRECISION)
+            .max(size.scale);
         let size = DecimalSize { precision, ..size };
         let decimal_ty = DecimalDataType::from_size(size).unwrap();
 
         match decimal_ty {
             DecimalDataType::Decimal128(size) => {
-                Scalar::Decimal(DecimalScalar::Decimal128(decimal.try_into().unwrap(), size))
+                Scalar::Decimal(DecimalScalar::Decimal128(decimal.as_i128(), size))
             }
             DecimalDataType::Decimal256(size) => {
                 Scalar::Decimal(DecimalScalar::Decimal256(decimal, size))

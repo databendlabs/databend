@@ -303,7 +303,11 @@ pub async fn clickhouse_handler_post(
         .await
         .map_err(|err| err.display_with_sql(&sql))
         .map_err(BadRequest)?;
-    let schema = plan.schema();
+    let schema = plan
+        .schema(ctx.clone())
+        .await
+        .map_err(|err| err.display_with_sql(&sql))
+        .map_err(BadRequest)?;
     ctx.attach_query_str(plan.to_string(), extras.statement.to_mask_sql());
     let mut handle = None;
     if let Plan::Insert(insert) = &mut plan {

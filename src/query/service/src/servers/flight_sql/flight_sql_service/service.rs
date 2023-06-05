@@ -212,7 +212,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         tracing::info!("get_flight_info_prepared_statement with handle={handle}");
 
         let handle_plan_ref = self.statements.get(&handle).unwrap();
-        let schema = handle_plan_ref.value().0.schema().as_ref().into();
+        let schema = handle_plan_ref.value().2.as_ref().into();
         let loc = Location {
             uri: "grpc+tcp://127.0.0.1".to_string(),
         };
@@ -489,7 +489,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let query = ticket.query;
         tracing::info!("do_put_statement_update with query = {query}");
 
-        let (plan, plan_extras) = self
+        let (plan, plan_extras, _) = self
             .plan_sql(&session, &query)
             .await
             .map_err(|e| status!("Error getting result schema", e))?;
@@ -557,7 +557,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
         let session = self.get_session(&request)?;
         let sql = query.query.clone();
         let handle = Uuid::new_v4();
-        let plan = self
+        let (plan, extra, schema) = self
             .plan_sql(&session, &sql)
             .await
             .map_err(|e| status!("Error getting result schema", e))?;
@@ -566,18 +566,19 @@ impl FlightSqlService for FlightSqlServiceImpl {
             query.query
         );
         // JDBC client use call put when schema.fields == 0
-        let data_schema = if plan.0.has_result_set() {
-            plan.0.schema()
+        let schema = if plan.has_result_set() {
+            schema
         } else {
             Arc::new(DataSchema::empty())
         };
+        let arrow_schema = (&*schema).into();
         tracing::info!(
-            "do_action_create_prepared_statement with handler={handle}, query={:?}, return schema={data_schema:?}",
+            "do_action_create_prepared_statement with handler={handle}, query={:?}, return schema={schema:?}",
             query.query
         );
-        let schema = (&*data_schema).into();
-        self.statements.insert(handle, plan);
-        let message = SchemaAsIpc::new(&schema, &IpcWriteOptions::default())
+        self.statements
+            .insert(handle, (plan, extra, schema));
+        let message = SchemaAsIpc::new(&arrow_schema, &IpcWriteOptions::default())
             .try_into()
             .map_err(|e| status!("Unable to serialize schema", e))?;
         let IpcMessage(schema_bytes) = message;

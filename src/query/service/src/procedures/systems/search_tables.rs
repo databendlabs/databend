@@ -73,7 +73,8 @@ impl OneBlockProcedure for SearchTablesProcedure {
                 metadata,
                 None,
                 false,
-            )?;
+            )
+            .await?;
             interpreter.execute(ctx.clone()).await
         } else {
             return Err(ErrorCode::Internal("search tables build query error"));

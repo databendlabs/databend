@@ -25,6 +25,7 @@ use std::sync::Arc;
 
 use arrow_flight::FlightData;
 use catalog::CatalogInfoProvider;
+use common_expression::DataSchemaRef;
 use common_sql::plans::Plan;
 use common_sql::PlanExtras;
 use dashmap::DashMap;
@@ -51,7 +52,7 @@ type DoGetStream = Pin<Box<dyn Stream<Item = Result<FlightData, Status>> + Send 
 
 pub struct FlightSqlServiceImpl {
     pub sessions: Mutex<ExpiringMap<String, Arc<Session>>>,
-    statements: Arc<DashMap<Uuid, (Plan, PlanExtras)>>,
+    statements: Arc<DashMap<Uuid, (Plan, PlanExtras, DataSchemaRef)>>,
 }
 
 /// in current official JDBC driver, Statement is based on PreparedStatement too, so we impl it first.

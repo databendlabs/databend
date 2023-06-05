@@ -16,6 +16,8 @@ use std::fmt::Display;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
+use common_catalog::table_context::TableContext;
+use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -31,6 +33,7 @@ use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::ModifyTableColumnPlan;
 use super::VacuumTablePlan;
+use crate::executor::PhysicalPlanBuilder;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
 use crate::plans::insert::Insert;
@@ -367,14 +370,15 @@ impl Display for Plan {
 impl Plan {
     /// Notice: This is incomplete and should be only used when you know it must has schema (Plan::Query | Plan::Insert ...).
     /// If you want to get the real schema from plan use `InterpreterFactory::get_schema()` instead
-    pub fn schema(&self) -> DataSchemaRef {
-        match self {
+    pub async fn schema(&self, ctx: Arc<dyn TableContext>) -> Result<DataSchemaRef> {
+        let schema = match self {
             Plan::Query {
-                s_expr: _,
-                metadata: _,
-                bind_context,
-                ..
-            } => bind_context.output_schema(),
+                s_expr, metadata, ..
+            } => {
+                let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
+                let physical_plan = builder.build(s_expr).await?;
+                physical_plan.output_schema()?
+            }
             Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])
             }
@@ -407,7 +411,9 @@ impl Plan {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
             }
-        }
+        };
+
+        Ok(schema)
     }
 
     pub fn has_result_set(&self) -> bool {

@@ -74,9 +74,10 @@ impl InsertInterpreter {
         }))
     }
 
-    fn check_schema_cast(&self, plan: &Plan) -> Result<bool> {
+    #[async_backtrace::framed]
+    async fn check_schema_cast(&self, plan: &Plan) -> Result<bool> {
         let output_schema = &self.plan.schema;
-        let select_schema = plan.schema();
+        let select_schema = plan.schema(self.ctx.clone()).await?;
 
         // validate schema
         if select_schema.fields().len() != output_schema.fields().len() {
@@ -204,10 +205,10 @@ impl Interpreter for InsertInterpreter {
                                 input,
                                 catalog,
                                 table_info: table1.get_table_info().clone(),
-                                select_schema: plan.schema(),
+                                select_schema: plan.schema(self.ctx.clone()).await?,
                                 select_column_bindings,
                                 insert_schema: self.plan.schema(),
-                                cast_needed: self.check_schema_cast(plan)?,
+                                cast_needed: self.check_schema_cast(plan).await?,
                             },
                         )));
                         select_plan
@@ -218,10 +219,10 @@ impl Interpreter for InsertInterpreter {
                             input: Box::new(other_plan),
                             catalog,
                             table_info: table1.get_table_info().clone(),
-                            select_schema: plan.schema(),
+                            select_schema: plan.schema(self.ctx.clone()).await?,
                             select_column_bindings,
                             insert_schema: self.plan.schema(),
-                            cast_needed: self.check_schema_cast(plan)?,
+                            cast_needed: self.check_schema_cast(plan).await?,
                         }))
                     }
                 };

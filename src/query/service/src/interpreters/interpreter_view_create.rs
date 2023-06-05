@@ -93,10 +93,11 @@ impl Interpreter for CreateViewInterpreter {
         let subquery = if self.plan.column_names.is_empty() {
             self.plan.subquery.clone()
         } else {
-            if plan.schema().fields().len() != self.plan.column_names.len() {
+            let schema = plan.schema(self.ctx.clone()).await?;
+            if schema.fields().len() != self.plan.column_names.len() {
                 return Err(ErrorCode::BadDataArrayLength(format!(
                     "column name length mismatch, expect {}, got {}",
-                    plan.schema().fields().len(),
+                    schema.fields().len(),
                     self.plan.column_names.len(),
                 )));
             }

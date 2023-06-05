@@ -44,10 +44,10 @@ use crate::sql::executor::PhysicalPlanBuilder;
 use crate::sql::optimizer::SExpr;
 use crate::sql::BindContext;
 
-/// Interpret SQL query with ne&w SQL planner
+/// Interpret SQL query with new SQL planner
 pub struct SelectInterpreter {
     ctx: Arc<QueryContext>,
-    s_expr: SExpr,
+    physical_plan: PhysicalPlan,
     bind_context: BindContext,
     metadata: MetadataRef,
     formatted_ast: Option<String>,
@@ -55,7 +55,8 @@ pub struct SelectInterpreter {
 }
 
 impl SelectInterpreter {
-    pub fn try_create(
+    #[async_backtrace::framed]
+    pub async fn try_create(
         ctx: Arc<QueryContext>,
         bind_context: BindContext,
         s_expr: SExpr,
@@ -63,9 +64,12 @@ impl SelectInterpreter {
         formatted_ast: Option<String>,
         ignore_result: bool,
     ) -> Result<Self> {
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx.clone());
+        let physical_plan = builder.build(&s_expr).await?;
+
         Ok(SelectInterpreter {
             ctx,
-            s_expr,
+            physical_plan,
             bind_context,
             metadata,
             formatted_ast,
@@ -73,19 +77,12 @@ impl SelectInterpreter {
         })
     }
 
-    #[inline]
     #[async_backtrace::framed]
-    pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
-        builder.build(&self.s_expr).await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn build_pipeline(&self, physical_plan: PhysicalPlan) -> Result<PipelineBuildResult> {
+    pub async fn build_pipeline(&self) -> Result<PipelineBuildResult> {
         build_query_pipeline(
             &self.ctx,
             &self.bind_context.columns,
-            &physical_plan,
+            &self.physical_plan,
             self.ignore_result,
             false,
         )
@@ -187,7 +184,7 @@ impl Interpreter for SelectInterpreter {
     }
 
     fn schema(&self) -> DataSchemaRef {
-        self.bind_context.output_schema()
+        self.physical_plan.output_schema().unwrap()
     }
 
     /// This method will create a new pipeline
@@ -195,8 +192,6 @@ impl Interpreter for SelectInterpreter {
     #[tracing::instrument(level = "debug", name = "select_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // 0. Need to build physical plan first to get the partitions.
-        let physical_plan = self.build_physical_plan().await?;
         if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
             let key = gen_result_cache_key(self.formatted_ast.as_ref().unwrap());
             // 1. Try to get result from cache.
@@ -219,7 +214,7 @@ impl Interpreter for SelectInterpreter {
                     self.ctx
                         .set_query_id_result_cache(self.ctx.get_id(), meta_key);
                 }
-                return self.build_pipeline(physical_plan).await;
+                return self.build_pipeline().await;
             }
 
             let cache_reader = ResultCacheReader::create(
@@ -241,7 +236,7 @@ impl Interpreter for SelectInterpreter {
                     return PipelineBuildResult::from_blocks(blocks);
                 }
                 Ok(None) => {
-                    let mut build_res = self.build_pipeline(physical_plan).await?;
+                    let mut build_res = self.build_pipeline().await?;
                     // 2.2 If not found result in cache, add pipelines to write the result to cache.
                     let schema = infer_table_schema(&self.schema())?;
                     self.add_result_cache(&key, schema, &mut build_res.main_pipeline, kv_store)?;
@@ -254,6 +249,6 @@ impl Interpreter for SelectInterpreter {
             }
         }
         // Not use query cache.
-        self.build_pipeline(physical_plan).await
+        self.build_pipeline().await
     }
 }

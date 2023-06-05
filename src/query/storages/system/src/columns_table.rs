@@ -200,7 +200,7 @@ impl ColumnsTable {
                     if let Some(query) = table.options().get(QUERY) {
                         let mut planner = Planner::new(ctx.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
-                        let schema = infer_table_schema(&plan.schema())?;
+                        let schema = infer_table_schema(&plan.schema(ctx.clone()).await?)?;
                         schema.fields().clone()
                     } else {
                         return Err(ErrorCode::Internal(

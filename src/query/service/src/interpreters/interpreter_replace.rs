@@ -183,13 +183,14 @@ impl ReplaceInterpreter {
             metadata.clone(),
             formatted_ast.clone(),
             false,
-        )?;
+        )
+        .await?;
 
         let mut build_res = select_interpreter.execute2().await?;
 
-        let select_schema = query_plan.schema();
+        let select_schema = query_plan.schema(self.ctx.clone()).await?;
         let target_schema = self_schema;
-        if self.check_schema_cast(query_plan)? {
+        if self.check_schema_cast(query_plan).await? {
             let func_ctx = ctx.get_function_context()?;
             build_res.main_pipeline.add_transform(
                 |transform_input_port, transform_output_port| {
@@ -208,9 +209,10 @@ impl ReplaceInterpreter {
     }
 
     // TODO duplicated
-    fn check_schema_cast(&self, plan: &Plan) -> Result<bool> {
+    #[async_backtrace::framed]
+    async fn check_schema_cast(&self, plan: &Plan) -> Result<bool> {
         let output_schema = &self.plan.schema;
-        let select_schema = plan.schema();
+        let select_schema = plan.schema(self.ctx.clone()).await?;
 
         // validate schema
         if select_schema.fields().len() < output_schema.fields().len() {

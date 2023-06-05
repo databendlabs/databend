@@ -87,7 +87,8 @@ impl CopyInterpreter {
             metadata.clone(),
             formatted_ast.clone(),
             false,
-        )?;
+        )
+        .await?;
 
         // Building data schema from bind_context columns
         // TODO(leiyskey): Extract the following logic as new API of BindContext.
@@ -102,8 +103,7 @@ impl CopyInterpreter {
             })
             .collect();
         let data_schema = DataSchemaRefExt::create(fields);
-        let plan = select_interpreter.build_physical_plan().await?;
-        let build_res = select_interpreter.build_pipeline(plan).await?;
+        let build_res = select_interpreter.build_pipeline().await?;
         Ok((build_res, data_schema))
     }
 
