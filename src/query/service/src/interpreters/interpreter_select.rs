@@ -186,16 +186,25 @@ impl Interpreter for SelectInterpreter {
     }
 
     fn schema(&self) -> DataSchemaRef {
+        let schema = self.physical_plan.output_schema().unwrap();
+
         // Rename columns from index to name
         let fields = self
-            .physical_plan
-            .output_schema()
-            .unwrap()
-            .fields()
+            .bind_context
+            .columns
             .iter()
-            .zip(&self.bind_context.columns)
-            .map(|(f, c)| DataField::new(&c.column_name, f.data_type().clone()))
+            .map(|c| {
+                DataField::new(
+                    &c.column_name,
+                    schema
+                        .field_with_name(&c.index.to_string())
+                        .unwrap()
+                        .data_type()
+                        .clone(),
+                )
+            })
             .collect();
+
         DataSchemaRefExt::create(fields)
     }
 

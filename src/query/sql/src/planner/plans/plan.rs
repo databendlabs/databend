@@ -397,11 +397,19 @@ impl Plan {
                 let schema = physical_plan.output_schema()?;
 
                 // Rename columns from index to name
-                let fields = schema
-                    .fields()
+                let fields = bind_context
+                    .columns
                     .iter()
-                    .zip(&bind_context.columns)
-                    .map(|(f, c)| DataField::new(&c.column_name, f.data_type().clone()))
+                    .map(|c| {
+                        DataField::new(
+                            &c.column_name,
+                            schema
+                                .field_with_name(&c.index.to_string())
+                                .unwrap()
+                                .data_type()
+                                .clone(),
+                        )
+                    })
                     .collect();
 
                 DataSchemaRefExt::create(fields)

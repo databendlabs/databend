@@ -31,13 +31,13 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'collation_catalog'             | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'collation_name'                | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'collation_schema'              | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'column_comment'                | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'column_default'                | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'column_key'                    | 'information_schema' | 'columns'             | 'UInt8'            | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
+| 'column_comment'                | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'column_default'                | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'column_key'                    | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'column_name'                   | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'column_name'                   | 'information_schema' | 'key_column_usage'    | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'column_name'                   | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'column_type'                   | 'information_schema' | 'columns'             | 'Nullable(UInt8)'  | 'TINYINT UNSIGNED'  | ''       | ''       | 'YES'    | ''       |
+| 'column_type'                   | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'columns'                       | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'command'                       | 'system'             | 'processes'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'comment'                       | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -48,7 +48,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'constraint_schema'             | 'information_schema' | 'key_column_usage'    | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'copy_options'                  | 'system'             | 'stages'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'cpu_usage'                     | 'system'             | 'query_log'           | 'UInt32'           | 'INT UNSIGNED'      | ''       | ''       | 'NO'     | ''       |
-| 'create_time'                   | 'information_schema' | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'create_time'                   | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                    | 'system'             | 'indexes'             | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                    | 'system'             | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                    | 'system'             | 'tables_with_history' | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -56,11 +56,11 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'current_database'              | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'data_compressed_size'          | 'system'             | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_compressed_size'          | 'system'             | 'tables_with_history' | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'data_length'                   | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'data_length'                   | 'information_schema' | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_read_bytes'               | 'system'             | 'processes'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'data_size'                     | 'system'             | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_size'                     | 'system'             | 'tables_with_history' | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
-| 'data_type'                     | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'data_type'                     | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'data_type'                     | 'system'             | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'data_write_bytes'              | 'system'             | 'processes'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'database'                      | 'system'             | 'clustering_history'  | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -71,7 +71,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'database_id'                   | 'system'             | 'databases'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'databases'                     | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'datetime_precision'            | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'default'                       | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'default'                       | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'default'                       | 'system'             | 'settings'            | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'default_character_set_catalog' | 'information_schema' | 'schemata'            | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'default_character_set_name'    | 'information_schema' | 'schemata'            | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
@@ -104,6 +104,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'example'                       | 'system'             | 'functions'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'exception_code'                | 'system'             | 'query_log'           | 'Int32'            | 'INT'               | ''       | ''       | 'NO'     | ''       |
 | 'exception_text'                | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'extra'                         | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'extra'                         | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'extra_info'                    | 'system'             | 'processes'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'file_format_options'           | 'system'             | 'stages'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -114,7 +115,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'hostname'                      | 'system'             | 'users'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'id'                            | 'system'             | 'processes'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'index_comment'                 | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'index_length'                  | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'index_length'                  | 'information_schema' | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'index_name'                    | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'index_schema'                  | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'index_size'                    | 'system'             | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
@@ -124,7 +125,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'is_aggregate'                  | 'system'             | 'functions'           | 'Boolean'          | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_builtin'                    | 'system'             | 'functions'           | 'Boolean'          | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_insertable_into'            | 'information_schema' | 'views'               | 'Boolean'          | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
-| 'is_nullable'                   | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'is_nullable'                   | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_nullable'                   | 'system'             | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_transient'                  | 'system'             | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_transient'                  | 'system'             | 'tables_with_history' | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -162,7 +163,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'name'                          | 'system'             | 'tables_with_history' | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'name'                          | 'system'             | 'users'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'non_unique'                    | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'nullable'                      | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'nullable'                      | 'information_schema' | 'columns'             | 'Nullable(UInt8)'  | 'TINYINT UNSIGNED'  | ''       | ''       | 'YES'    | ''       |
 | 'nullable'                      | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'num_items'                     | 'system'             | 'caches'              | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'num_rows'                      | 'system'             | 'query_cache'         | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
@@ -172,7 +173,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'numeric_precision'             | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'numeric_precision_radix'       | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'numeric_scale'                 | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'ordinal_position'              | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'ordinal_position'              | 'information_schema' | 'columns'             | 'UInt8'            | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
 | 'ordinal_position'              | 'information_schema' | 'key_column_usage'    | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'packed'                        | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'partitions_sha'                | 'system'             | 'query_cache'         | 'Array(String)'    | 'ARRAY(STRING)'     | ''       | ''       | 'NO'     | ''       |
@@ -203,12 +204,13 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'scan_progress_read_rows'       | 'system'             | 'processes'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'scan_rows'                     | 'system'             | 'query_log'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'schema_name'                   | 'information_schema' | 'schemata'            | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
-| 'schema_owner'                  | 'information_schema' | 'schemata'            | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
+| 'schema_owner'                  | 'information_schema' | 'schemata'            | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'seq_in_index'                  | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'server_version'                | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'session_settings'              | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'size'                          | 'system'             | 'caches'              | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'sql'                           | 'system'             | 'query_cache'         | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'sql_path'                      | 'information_schema' | 'schemata'            | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'sql_user'                      | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'sql_user_privileges'           | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'sql_user_quota'                | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -227,6 +229,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'table_catalog'                 | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'table_catalog'                 | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_catalog'                 | 'information_schema' | 'views'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'table_comment'                 | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_id'                      | 'system'             | 'tables'              | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'table_id'                      | 'system'             | 'tables_with_history' | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'table_name'                    | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -237,7 +240,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'table_schema'                  | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_schema'                  | 'information_schema' | 'key_column_usage'    | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'table_schema'                  | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'table_schema'                  | 'information_schema' | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'table_schema'                  | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_schema'                  | 'information_schema' | 'views'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_type'                    | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'tables'                        | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
