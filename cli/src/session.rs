@@ -383,6 +383,7 @@ impl From<&str> for QueryKind {
             Some(Ok(t)) => match t.kind {
                 TokenKind::EXPLAIN => QueryKind::Explain,
                 TokenKind::ALTER
+                | TokenKind::DELETE
                 | TokenKind::UPDATE
                 | TokenKind::INSERT
                 | TokenKind::CREATE
