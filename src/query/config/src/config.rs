@@ -612,6 +612,10 @@ pub struct S3StorageConfig {
     #[clap(long = "storage-s3-external-id", default_value_t)]
     #[serde(rename = "external_id")]
     pub s3_external_id: String,
+
+    #[clap(long = "storage-s3-allow-anonymous", default_value_t)]
+    #[serde(rename = "allow_anonymous")]
+    pub s3_allow_anonymous: bool,
 }
 
 impl Default for S3StorageConfig {
@@ -636,6 +640,7 @@ impl Debug for S3StorageConfig {
                 &mask_string(&self.secret_access_key, 3),
             )
             .field("master_key", &mask_string(&self.master_key, 3))
+            .field("allow_anonymous", &self.s3_allow_anonymous)
             .finish()
     }
 }
@@ -654,6 +659,7 @@ impl From<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: inner.enable_virtual_host_style,
             s3_role_arn: inner.role_arn,
             s3_external_id: inner.external_id,
+            s3_allow_anonymous: inner.allow_anonymous,
         }
     }
 }
@@ -675,6 +681,7 @@ impl TryInto<InnerStorageS3Config> for S3StorageConfig {
             enable_virtual_host_style: self.enable_virtual_host_style,
             role_arn: self.s3_role_arn,
             external_id: self.s3_external_id,
+            allow_anonymous: self.s3_allow_anonymous,
         })
     }
 }

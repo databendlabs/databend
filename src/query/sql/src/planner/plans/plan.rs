@@ -53,6 +53,7 @@ use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
+use crate::plans::AlterVirtualColumnsPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CallPlan;
 use crate::plans::CreateCatalogPlan;
@@ -64,6 +65,7 @@ use crate::plans::CreateTablePlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
+use crate::plans::CreateVirtualColumnsPlan;
 use crate::plans::DeletePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropCatalogPlan;
@@ -77,7 +79,9 @@ use crate::plans::DropTablePlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
+use crate::plans::DropVirtualColumnsPlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::GenerateVirtualColumnsPlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::KillPlan;
@@ -187,6 +191,12 @@ pub enum Plan {
     // Indexes
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
+
+    // Virtual Columns
+    CreateVirtualColumns(Box<CreateVirtualColumnsPlan>),
+    AlterVirtualColumns(Box<AlterVirtualColumnsPlan>),
+    DropVirtualColumns(Box<DropVirtualColumnsPlan>),
+    GenerateVirtualColumns(Box<GenerateVirtualColumnsPlan>),
 
     // Account
     AlterUser(Box<AlterUserPlan>),
@@ -309,6 +319,10 @@ impl Display for Plan {
             Plan::DropView(_) => write!(f, "DropView"),
             Plan::CreateIndex(_) => write!(f, "CreateIndex"),
             Plan::DropIndex(_) => write!(f, "DropIndex"),
+            Plan::CreateVirtualColumns(_) => write!(f, "CreateVirtualColumns"),
+            Plan::AlterVirtualColumns(_) => write!(f, "AlterVirtualColumns"),
+            Plan::DropVirtualColumns(_) => write!(f, "DropVirtualColumns"),
+            Plan::GenerateVirtualColumns(_) => write!(f, "GenerateVirtualColumns"),
             Plan::AlterUser(_) => write!(f, "AlterUser"),
             Plan::CreateUser(_) => write!(f, "CreateUser"),
             Plan::DropUser(_) => write!(f, "DropUser"),

@@ -1523,6 +1523,69 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_create_virtual_columns(&mut self, stmt: &'ast CreateVirtualColumnsStmt) {
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let table_child = self.children.pop().unwrap();
+
+        let mut virtual_columns_children = Vec::with_capacity(stmt.virtual_columns.len());
+        for virtual_column in stmt.virtual_columns.iter() {
+            self.visit_expr(virtual_column);
+            virtual_columns_children.push(self.children.pop().unwrap());
+        }
+        let virtual_columns_name = "VirtualColumns".to_string();
+        let virtual_columns_ctx =
+            AstFormatContext::with_children(virtual_columns_name, virtual_columns_children.len());
+        let virtual_columns_child =
+            FormatTreeNode::with_children(virtual_columns_ctx, virtual_columns_children);
+        let children = vec![table_child, virtual_columns_child];
+
+        let name = "CreateVirtualColumns".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 2);
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_alter_virtual_columns(&mut self, stmt: &'ast AlterVirtualColumnsStmt) {
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let table_child = self.children.pop().unwrap();
+
+        let mut virtual_columns_children = Vec::with_capacity(stmt.virtual_columns.len());
+        for virtual_column in stmt.virtual_columns.iter() {
+            self.visit_expr(virtual_column);
+            virtual_columns_children.push(self.children.pop().unwrap());
+        }
+        let virtual_columns_name = "VirtualColumns".to_string();
+        let virtual_columns_ctx =
+            AstFormatContext::with_children(virtual_columns_name, virtual_columns_children.len());
+        let virtual_columns_child =
+            FormatTreeNode::with_children(virtual_columns_ctx, virtual_columns_children);
+        let children = vec![table_child, virtual_columns_child];
+
+        let name = "AlterVirtualColumns".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 2);
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
+    fn visit_drop_virtual_columns(&mut self, stmt: &'ast DropVirtualColumnsStmt) {
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let child = self.children.pop().unwrap();
+
+        let name = "DropVirtualColumns".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_generate_virtual_columns(&mut self, stmt: &'ast GenerateVirtualColumnsStmt) {
+        self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
+        let child = self.children.pop().unwrap();
+        let name = "GenerateVirtualColumns".to_string();
+        let format_ctx = AstFormatContext::with_children(name, 1);
+        let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
     fn visit_show_users(&mut self) {
         let name = "ShowUsers".to_string();
         let format_ctx = AstFormatContext::new(name);

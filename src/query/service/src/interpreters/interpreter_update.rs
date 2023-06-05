@@ -19,6 +19,7 @@ use common_exception::Result;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use table_lock::TableLockHandlerWrapper;
 
+use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -48,6 +49,10 @@ impl Interpreter for UpdateInterpreter {
     #[tracing::instrument(level = "debug", name = "update_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        if check_deduplicate_label(self.ctx.clone()).await? {
+            return Ok(PipelineBuildResult::create());
+        }
+
         let catalog_name = self.plan.catalog.as_str();
         let db_name = self.plan.database.as_str();
         let tbl_name = self.plan.table.as_str();

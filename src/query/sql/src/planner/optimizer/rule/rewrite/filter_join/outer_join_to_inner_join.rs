@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "z3-prove")]
 use std::sync::Arc;
 
 use common_exception::Result;

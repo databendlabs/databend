@@ -104,6 +104,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta,
                 copied_files: None,
+                deduplicated_label: None,
             };
 
             let res = catalog.update_table_meta(table_info, req).await?;

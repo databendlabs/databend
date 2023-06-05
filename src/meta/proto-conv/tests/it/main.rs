@@ -45,3 +45,5 @@ mod v037_index_meta;
 mod v038_empty_proto;
 mod v039_data_mask;
 mod v040_table_meta;
+mod v041_virtual_column;
+mod v042_s3_stage_new_field;

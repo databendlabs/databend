@@ -433,16 +433,34 @@ impl HashJoinState for JoinHashTable {
 
     #[async_backtrace::framed]
     async fn wait_build_finish(&self) -> Result<()> {
-        if !*self.is_built.lock() {
-            self.built_notify.notified().await;
+        let notified = {
+            let built_guard = self.is_built.lock();
+
+            match *built_guard {
+                true => None,
+                false => Some(self.built_notify.notified()),
+            }
+        };
+
+        if let Some(notified) = notified {
+            notified.await;
         }
         Ok(())
     }
 
     #[async_backtrace::framed]
     async fn wait_finalize_finish(&self) -> Result<()> {
-        if !*self.is_finalized.lock() {
-            self.finalized_notify.notified().await;
+        let notified = {
+            let finalized_guard = self.is_finalized.lock();
+
+            match *finalized_guard {
+                true => None,
+                false => Some(self.finalized_notify.notified()),
+            }
+        };
+
+        if let Some(notified) = notified {
+            notified.await;
         }
         Ok(())
     }

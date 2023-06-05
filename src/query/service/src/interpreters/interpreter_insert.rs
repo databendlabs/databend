@@ -46,10 +46,12 @@ use common_sql::BindContext;
 use common_sql::Metadata;
 use common_sql::MetadataRef;
 use common_sql::NameResolutionContext;
+use once_cell::sync::Lazy;
 use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use crate::interpreters::common::append2table;
+use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
@@ -58,6 +60,11 @@ use crate::pipelines::SourcePipeBuilder;
 use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
+
+// Pre-generate the positions of `(`, `'` and `\`
+static PATTERNS: &[&str] = &["(", "'", "\\"];
+
+static INSERT_TOKEN_FINDER: Lazy<AhoCorasick> = Lazy::new(|| AhoCorasick::new(PATTERNS).unwrap());
 
 pub struct InsertInterpreter {
     ctx: Arc<QueryContext>,
@@ -102,6 +109,9 @@ impl Interpreter for InsertInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        if check_deduplicate_label(self.ctx.clone()).await? {
+            return Ok(PipelineBuildResult::create());
+        }
         let plan = &self.plan;
         let table = self
             .ctx
@@ -305,14 +315,11 @@ impl AsyncSource for ValueSource {
             return Ok(None);
         }
 
-        // Pre-generate the positions of `(`, `'` and `\`
-        let patterns = &["(", "'", "\\"];
-        let ac = AhoCorasick::new(patterns);
         // Use the number of '(' to estimate the number of rows
         let mut estimated_rows = 0;
         let mut positions = VecDeque::new();
-        for mat in ac.find_iter(&self.data) {
-            if mat.pattern() == 0 {
+        for mat in INSERT_TOKEN_FINDER.find_iter(&self.data) {
+            if mat.pattern() == 0.into() {
                 estimated_rows += 1;
                 continue;
             }

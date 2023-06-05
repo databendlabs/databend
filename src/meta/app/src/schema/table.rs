@@ -570,6 +570,7 @@ pub struct UpdateTableMetaReq {
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
     pub copied_files: Option<UpsertTableCopiedFileReq>,
+    pub deduplicated_label: Option<String>,
 }
 
 impl UpsertTableOptionReq {

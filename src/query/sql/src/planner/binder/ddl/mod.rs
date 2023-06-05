@@ -23,3 +23,4 @@ mod share;
 mod stage;
 mod table;
 mod view;
+mod virtual_column;

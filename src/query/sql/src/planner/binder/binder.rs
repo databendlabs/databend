@@ -185,7 +185,14 @@ impl<'a> Binder {
                 self.bind_show_table_functions(bind_context, limit).await?
             }
 
-            Statement::Copy(stmt) => self.bind_copy(bind_context, stmt).await?,
+            Statement::Copy(stmt) => {
+                if let Some(hints) = &stmt.hints {
+                    if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
+                        warn!("In Copy resolve optimize hints {:?} failed, err: {:?}", hints, e);
+                    }
+                }
+                self.bind_copy(bind_context, stmt).await?
+            },
 
             Statement::ShowMetrics => {
                 self.bind_rewrite_to_query(
@@ -255,6 +262,12 @@ impl<'a> Binder {
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
             Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
+
+            // Virtual Columns
+            Statement::CreateVirtualColumns(stmt) => self.bind_create_virtual_columns(stmt).await?,
+            Statement::AlterVirtualColumns(stmt) => self.bind_alter_virtual_columns(stmt).await?,
+            Statement::DropVirtualColumns(stmt) => self.bind_drop_virtual_columns(stmt).await?,
+            Statement::GenerateVirtualColumns(stmt) => self.bind_generate_virtual_columns(stmt).await?,
 
             // Users
             Statement::CreateUser(stmt) => self.bind_create_user(stmt).await?,
