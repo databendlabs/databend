@@ -44,7 +44,7 @@ impl PhysicalPlanBuilder {
         let left_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
         let right_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
 
-        debug_assert!(range_conditions.len() > 0);
+        debug_assert!(!range_conditions.is_empty());
 
         let range_join_type = if range_conditions.len() >= 2 {
             // Contain more than 2 ie conditions, use ie join

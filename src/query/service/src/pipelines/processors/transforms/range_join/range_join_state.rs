@@ -18,18 +18,22 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
-use common_expression::{ColumnBuilder, DataBlock, Evaluator, FunctionContext, ScalarRef};
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::types::NumberScalar;
+use common_expression::ColumnBuilder;
+use common_expression::DataBlock;
+use common_expression::Evaluator;
+use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
+use common_expression::ScalarRef;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::RangeJoin;
 use common_sql::executor::RangeJoinCondition;
 use common_sql::executor::RangeJoinType;
-use common_sql::plans::JoinType;
-use parking_lot::RwLock;
-use common_expression::types::{DataType, NumberDataType, NumberScalar};
-use common_functions::BUILTIN_FUNCTIONS;
+use parking_lot::{Mutex, RwLock};
 
 use crate::pipelines::processors::transforms::range_join::ie_join_state::IEJoinState;
-use crate::pipelines::processors::transforms::range_join::merge_join_state::MergeJoinState;
 use crate::sessions::QueryContext;
 
 pub struct RangeJoinState {
@@ -41,10 +45,10 @@ pub struct RangeJoinState {
     // For iejoin, it's L1: sort by the first join key
     pub(crate) left_sorted_blocks: RwLock<Vec<DataBlock>>,
     pub(crate) conditions: Vec<RangeJoinCondition>,
-    pub(crate) join_type: JoinType,
+    // pub(crate) join_type: JoinType,
     pub(crate) other_conditions: Vec<RemoteExpr>,
     // Pipeline event related
-    pub(crate) partition_finished: RwLock<bool>,
+    pub(crate) partition_finished: Mutex<bool>,
     pub(crate) finished_notify: Arc<Notify>,
     pub(crate) left_sinker_count: RwLock<usize>,
     pub(crate) right_sinker_count: RwLock<usize>,
@@ -55,36 +59,33 @@ pub struct RangeJoinState {
     pub(crate) finished_tasks: AtomicU64,
     // IEJoin state
     pub(crate) ie_join_state: Option<IEJoinState>,
-    // MergeJoin state
-    pub(crate) merge_join_state: Option<MergeJoinState>,
 }
 
 impl RangeJoinState {
     pub fn new(ctx: Arc<QueryContext>, range_join: &RangeJoin) -> Self {
-        match range_join.range_join_type {
-            RangeJoinType::IEJoin => {
-                let ie_join_state = IEJoinState::new(range_join);
-                Self {
-                    ctx,
-                    left_table: RwLock::new(vec![]),
-                    right_table: RwLock::new(vec![]),
-                    right_sorted_blocks: Default::default(),
-                    left_sorted_blocks: Default::default(),
-                    conditions: range_join.conditions.clone(),
-                    join_type: range_join.join_type.clone(),
-                    other_conditions: range_join.other_conditions.clone(),
-                    partition_finished: RwLock::new(false),
-                    finished_notify: Arc::new(Notify::new()),
-                    left_sinker_count: RwLock::new(0),
-                    right_sinker_count: RwLock::new(0),
-                    tasks: RwLock::new(vec![]),
-                    row_offset: RwLock::new(vec![]),
-                    finished_tasks: AtomicU64::new(0),
-                    ie_join_state: Some(ie_join_state),
-                    merge_join_state: None,
-                }
-            }
-            RangeJoinType::Merge => todo!(),
+        let ie_join_state = if matches!(range_join.range_join_type, RangeJoinType::IEJoin) {
+            Some(IEJoinState::new(range_join))
+        } else {
+            None
+        };
+
+        Self {
+            ctx,
+            left_table: RwLock::new(vec![]),
+            right_table: RwLock::new(vec![]),
+            right_sorted_blocks: Default::default(),
+            left_sorted_blocks: Default::default(),
+            conditions: range_join.conditions.clone(),
+            // join_type: range_join.join_type.clone(),
+            other_conditions: range_join.other_conditions.clone(),
+            partition_finished: Mutex::new(false),
+            finished_notify: Arc::new(Notify::new()),
+            left_sinker_count: RwLock::new(0),
+            right_sinker_count: RwLock::new(0),
+            tasks: RwLock::new(vec![]),
+            row_offset: RwLock::new(vec![]),
+            finished_tasks: AtomicU64::new(0),
+            ie_join_state,
         }
     }
 
@@ -116,7 +117,7 @@ impl RangeJoinState {
             // Partition left/right table
             self.partition()?;
             // Set partition finished
-            let mut partition_finished = self.partition_finished.write();
+            let mut partition_finished = self.partition_finished.lock();
             *partition_finished = true;
             self.finished_notify.notify_waiters();
         }
@@ -145,7 +146,7 @@ impl RangeJoinState {
             // Partition left/right table
             self.partition()?;
             // Set partition finished
-            let mut partition_finished = self.partition_finished.write();
+            let mut partition_finished = self.partition_finished.lock();
             *partition_finished = true;
             self.finished_notify.notify_waiters();
         }
@@ -153,8 +154,17 @@ impl RangeJoinState {
     }
 
     pub(crate) async fn wait_merge_finish(&self) -> Result<()> {
-        if !*self.partition_finished.read() {
-            self.finished_notify.notified().await;
+        let notified = {
+            let partition_finished = self.partition_finished.lock();
+
+            match *partition_finished {
+                true => None,
+                false => Some(self.finished_notify.notified()),
+            }
+        };
+
+        if let Some(notified) = notified {
+            notified.await;
         }
         Ok(())
     }

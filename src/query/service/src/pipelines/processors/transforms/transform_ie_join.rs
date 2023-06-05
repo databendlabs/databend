@@ -125,9 +125,7 @@ impl Processor for TransformRangeJoinLeft {
                 if let Some(task_id) = task_id {
                     let res = match self.state.ie_join_state {
                         Some(ref _ie_join_state) => self.state.ie_join(task_id)?,
-                        None => {
-                            todo!()
-                        }
+                        None => self.state.merge_join(task_id)?,
                     };
                     if !res.is_empty() {
                         self.output_data_blocks.push_back(res);

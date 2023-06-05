@@ -318,5 +318,19 @@ select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) a
 5
 5
 
+query I
+select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) as l, (select * from orders order by o_orderkey limit 5000) as o where l.l_orderkey > o.o_orderkey order by l_orderkey limit 10;
+----
+2
+3
+3
+3
+3
+3
+3
+3
+3
+3
+
 statement ok
 set max_block_size = 65536;
