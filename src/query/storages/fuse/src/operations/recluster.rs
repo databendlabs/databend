@@ -37,9 +37,9 @@ use storages_common_table_meta::meta::BlockMeta;
 
 use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
 use crate::operations::merge_into::CommitSink;
-use crate::operations::merge_into::MutationGenerator;
 use crate::operations::merge_into::TableMutationAggregator;
 use crate::operations::AppendTransform;
+use crate::operations::MutationGenerator;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;

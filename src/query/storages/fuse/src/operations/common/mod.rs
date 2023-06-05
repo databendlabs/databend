@@ -12,16 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// This is an ongoing refactor of table mutations:
-/// which will eventually unify the mutation operation, mutation log, commit action
-pub mod mutation_meta;
-mod mutator;
-mod processors;
+mod snapshot_generator;
 
-pub use mutator::MutationAccumulator;
-pub use processors::AppendTransform;
-pub use processors::BroadcastProcessor;
-pub use processors::CommitSink;
-pub use processors::MergeIntoOperationAggregator;
-pub use processors::OnConflictField;
-pub use processors::TableMutationAggregator;
+pub use snapshot_generator::AppendGenerator;
+pub use snapshot_generator::MutationGenerator;
+pub use snapshot_generator::SnapshotGenerator;

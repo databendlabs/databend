@@ -16,6 +16,7 @@ mod analyze;
 mod append;
 mod append_transform;
 mod commit;
+mod common;
 mod compact;
 mod delete;
 mod gc;
@@ -37,6 +38,9 @@ mod revert;
 pub mod util;
 
 pub use append_transform::AppendTransform;
+pub use common::AppendGenerator;
+pub use common::MutationGenerator;
+pub use common::SnapshotGenerator;
 pub use compact::CompactOptions;
 pub use merge_into::mutation_meta::BlockMetaIndex;
 pub use mutation::BlockCompactMutator;

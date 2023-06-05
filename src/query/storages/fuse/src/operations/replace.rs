@@ -32,7 +32,6 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
-use super::merge_into::MutationGenerator;
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::operations::merge_into::AppendTransform;
@@ -43,6 +42,7 @@ use crate::operations::merge_into::OnConflictField;
 use crate::operations::merge_into::TableMutationAggregator;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::processor_replace_into::ReplaceIntoProcessor;
+use crate::operations::MutationGenerator;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 

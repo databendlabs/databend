@@ -72,23 +72,6 @@ impl ClusterStatsGenerator {
         self.block_thresholds
     }
 
-    pub fn gen_cluster_stats(
-        &self,
-        data_block: DataBlock,
-        origin_stats: Option<ClusterStatistics>,
-    ) -> Result<(Option<ClusterStatistics>, DataBlock)> {
-        if self.cluster_key_index.is_empty() {
-            return Ok((None, data_block));
-        }
-
-        if origin_stats.is_none() {
-            self.gen_stats_for_append(data_block)
-        } else {
-            let cluster_stats = self.gen_with_origin_stats(&data_block, origin_stats)?;
-            Ok((cluster_stats, data_block))
-        }
-    }
-
     // This can be used in block append.
     // The input block contains the cluster key block.
     pub fn gen_stats_for_append(
