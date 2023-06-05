@@ -18,6 +18,8 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -242,7 +244,7 @@ impl Table for MemoryTable {
 
     fn commit_insertion(
         &self,
-        _ctx: Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
@@ -252,6 +254,7 @@ impl Table for MemoryTable {
         pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(MemoryTableSink::create(
                 input,
+                ctx.clone(),
                 Arc::new(self.clone()),
                 overwrite,
             )))
@@ -357,6 +360,7 @@ impl SyncSource for MemoryTableSource {
 
 struct MemoryTableSink {
     table: Arc<MemoryTable>,
+    write_progress: Arc<Progress>,
     operations: Vec<DataBlock>,
     overwrite: bool,
 }
@@ -364,11 +368,13 @@ struct MemoryTableSink {
 impl MemoryTableSink {
     pub fn create(
         input: Arc<InputPort>,
+        ctx: Arc<dyn TableContext>,
         table: Arc<MemoryTable>,
         overwrite: bool,
     ) -> Box<dyn Processor> {
         Sinker::create(input, MemoryTableSink {
             table,
+            write_progress: ctx.get_write_progress(),
             operations: vec![],
             overwrite,
         })
@@ -379,20 +385,27 @@ impl Sink for MemoryTableSink {
     const NAME: &'static str = "MemoryTableSink";
 
     fn consume(&mut self, block: DataBlock) -> Result<()> {
-        self.table.data_metrics.inc_write_bytes(block.memory_size());
+        self.operations.push(block);
         Ok(())
     }
 
     fn on_finish(&mut self) -> Result<()> {
+        let operations = std::mem::take(&mut self.operations);
+
+        let bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
+        let rows: usize = operations.iter().map(|b| b.num_rows()).sum();
+        let progress_values = ProgressValues { rows, bytes };
+        self.write_progress.incr(&progress_values);
+        self.table.data_metrics.inc_write_bytes(bytes);
+
         let mut blocks = self.table.blocks.write();
         if self.overwrite {
             blocks.clear();
         }
-
-        let operations = std::mem::take(&mut self.operations);
         for block in operations {
             blocks.push(block);
         }
+
         Ok(())
     }
 }
