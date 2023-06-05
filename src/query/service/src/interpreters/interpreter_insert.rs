@@ -205,7 +205,8 @@ impl Interpreter for InsertInterpreter {
                 };
 
                 let catalog = self.plan.catalog.clone();
-                let mut build_res = match select_plan {
+
+                let insert_select_plan = match select_plan {
                     PhysicalPlan::Exchange(ref mut exchange) => {
                         // insert can be dispatched to different nodes
                         let input = exchange.input.clone();
@@ -220,24 +221,27 @@ impl Interpreter for InsertInterpreter {
                                 cast_needed: self.check_schema_cast(plan)?,
                             },
                         )));
-                        build_distributed_pipeline(&self.ctx, &select_plan).await?
+                        select_plan
                     }
                     other_plan => {
                         // insert should wait until all nodes finished
-                        let plan = PhysicalPlan::DistributedInsertSelect(Box::new(
-                            DistributedInsertSelect {
-                                input: Box::new(other_plan),
-                                catalog,
-                                table_info: table1.get_table_info().clone(),
-                                select_schema: plan.schema(),
-                                select_column_bindings,
-                                insert_schema: self.plan.schema(),
-                                cast_needed: self.check_schema_cast(plan)?,
-                            },
-                        ));
-                        build_local_pipeline(&self.ctx, &plan, false).await?
+                        PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+                            input: Box::new(other_plan),
+                            catalog,
+                            table_info: table1.get_table_info().clone(),
+                            select_schema: plan.schema(),
+                            select_column_bindings,
+                            insert_schema: self.plan.schema(),
+                            cast_needed: self.check_schema_cast(plan)?,
+                        }))
                     }
                 };
+
+                let mut build_res = if !insert_select_plan.is_distributed_plan() {
+                    build_local_pipeline(&self.ctx, &insert_select_plan, false).await
+                } else {
+                    build_distributed_pipeline(&self.ctx, &insert_select_plan).await
+                }?;
 
                 table.commit_insertion(
                     self.ctx.clone(),
