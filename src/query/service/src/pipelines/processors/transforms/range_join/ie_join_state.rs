@@ -42,55 +42,33 @@ use common_expression::Value;
 use common_expression::ValueRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_transforms::processors::transforms::sort_merge;
-use common_sql::executor::IEJoin;
-use common_sql::executor::IEJoinCondition;
+use common_sql::executor::RangeJoin;
+use common_sql::executor::RangeJoinCondition;
 use parking_lot::RwLock;
 
-use crate::pipelines::processors::transforms::ie_join::ie_join_util::filter_block;
-use crate::pipelines::processors::transforms::ie_join::ie_join_util::order_match;
-use crate::pipelines::processors::transforms::ie_join::ie_join_util::probe_l1;
+use crate::pipelines::processors::transforms::range_join::ie_join_util::filter_block;
+use crate::pipelines::processors::transforms::range_join::ie_join_util::order_match;
+use crate::pipelines::processors::transforms::range_join::ie_join_util::probe_l1;
+use crate::pipelines::processors::transforms::range_join::RangeJoinState;
 use crate::sessions::QueryContext;
 
-struct IEConditionState {
+pub(crate) struct IEJoinState {
     l1_data_type: DataType,
     // Sort description for L1
-    l1_sort_descriptions: Vec<SortColumnDescription>,
+    pub(crate) l1_sort_descriptions: Vec<SortColumnDescription>,
     // Sort description for L2
-    l2_sort_descriptions: Vec<SortColumnDescription>,
+    pub(crate) l2_sort_descriptions: Vec<SortColumnDescription>,
     // true is asc
     l1_order: bool,
-}
-
-pub struct IEJoinState {
-    ctx: Arc<QueryContext>,
-    ie_condition_state: IEConditionState,
-    right_sorted_blocks: RwLock<Vec<DataBlock>>,
+    pub(crate) right_sorted_blocks: RwLock<Vec<DataBlock>>,
     // L1: sort by the first join key
-    l1_sorted_blocks: RwLock<Vec<DataBlock>>,
+    pub(crate) l1_sorted_blocks: RwLock<Vec<DataBlock>>,
     // data schema of sorted blocks
-    data_schema: DataSchemaRef,
-    // The origin data for left/right table
-    left_table: RwLock<Vec<DataBlock>>,
-    right_table: RwLock<Vec<DataBlock>>,
-    // IEJoin related
-    // Currently only support inner join
-    // join_type: JoinType,
-    conditions: Vec<IEJoinCondition>,
-    other_conditions: Vec<RemoteExpr>,
-    // Pipeline event related
-    partition_finished: RwLock<bool>,
-    finished_notify: Arc<Notify>,
-    left_sinker_count: RwLock<usize>,
-    right_sinker_count: RwLock<usize>,
-    // Task that need to be executed, pair.0 is left table block, pair.1 is right table block
-    tasks: RwLock<Vec<(usize, usize)>>,
-    // Row index offset for left/right
-    row_offset: RwLock<Vec<(usize, usize)>>,
-    finished_tasks: AtomicU64,
+    pub(crate) data_schema: DataSchemaRef,
 }
 
 impl IEJoinState {
-    pub fn new(ctx: Arc<QueryContext>, ie_join: &IEJoin) -> Self {
+    pub(crate) fn new(ie_join: &RangeJoin) -> Self {
         let mut fields = Vec::with_capacity(4);
         let l1_data_type = ie_join.conditions[0]
             .left_expr
@@ -157,50 +135,68 @@ impl IEJoinState {
         ];
 
         IEJoinState {
-            ctx,
-            ie_condition_state: IEConditionState {
-                l1_data_type,
-                l1_sort_descriptions,
-                l2_sort_descriptions,
-                l1_order,
-            },
+            l1_data_type,
+            l1_sort_descriptions,
+            l2_sort_descriptions,
+            l1_order,
             right_sorted_blocks: Default::default(),
             l1_sorted_blocks: Default::default(),
             data_schema: DataSchemaRefExt::create(fields),
-            left_table: RwLock::new(Vec::new()),
-            right_table: RwLock::new(Vec::new()),
-            conditions: ie_join.conditions.clone(),
-            other_conditions: ie_join.other_conditions.clone(),
-            partition_finished: RwLock::new(false),
-            finished_notify: Arc::new(Default::default()),
-            left_sinker_count: Default::default(),
-            right_sinker_count: Default::default(),
-            tasks: RwLock::new(vec![]),
-            row_offset: Default::default(),
-            finished_tasks: AtomicU64::new(0),
         }
     }
 
-    pub fn sink_right(&self, block: DataBlock) -> Result<()> {
-        // Sink block to right table
-        let mut right_table = self.right_table.write();
-        right_table.push(block);
-        Ok(())
+    fn intersection(&self, left_block: &DataBlock, right_block: &DataBlock) -> bool {
+        let left_len = left_block.num_rows();
+        let right_len = right_block.num_rows();
+        let left_l1_column = left_block.columns()[0]
+            .value
+            .convert_to_full_column(&self.l1_data_type, left_len);
+        let right_l1_column = right_block.columns()[0]
+            .value
+            .convert_to_full_column(&self.l1_data_type, right_len);
+        // If `left_l1_column` and `right_l1_column` have intersection && `left_l2_column` and `right_l2_column` have intersection, return true
+        let (left_l1_min, left_l1_max, right_l1_min, right_l1_max) =
+            match self.l1_order {
+                true => {
+                    // l1 is asc
+                    (
+                        left_l1_column.index(0).unwrap(),
+                        left_l1_column.index(left_len - 1).unwrap(),
+                        right_l1_column.index(0).unwrap(),
+                        right_l1_column.index(right_len - 1).unwrap(),
+                    )
+                }
+                false => {
+                    // l1 is desc
+                    (
+                        left_l1_column.index(left_len - 1).unwrap(),
+                        left_l1_column.index(0).unwrap(),
+                        right_l1_column.index(right_len - 1).unwrap(),
+                        right_l1_column.index(0).unwrap(),
+                    )
+                }
+            };
+        match self.l1_order {
+            true => {
+                // if l1_order is asc, then op1 is < / <=
+                left_l1_min <= right_l1_max
+            }
+            false => {
+                // If l1_order is desc, then op is > / >=
+                right_l1_min <= left_l1_max
+            }
+        }
     }
+}
 
-    pub fn sink_left(&self, block: DataBlock) -> Result<()> {
-        // Sink block to left table
-        let mut left_table = self.left_table.write();
-        left_table.push(block);
-        Ok(())
-    }
-
-    pub fn partition(&self) -> Result<()> {
+impl RangeJoinState {
+    pub(crate) fn ie_join_partition(&self) -> Result<()> {
         let left_table = self.left_table.read();
         let right_table = self.right_table.read();
 
-        let mut l1_sorted_blocks = self.l1_sorted_blocks.write();
-        let mut right_sorted_blocks = self.right_sorted_blocks.write();
+        let ie_join_state = self.ie_join_state.as_ref().unwrap();
+        let mut l1_sorted_blocks = ie_join_state.l1_sorted_blocks.write();
+        let mut right_sorted_blocks = ie_join_state.right_sorted_blocks.write();
 
         let mut current_rows = 0;
         for left_block in left_table.iter() {
@@ -282,31 +278,32 @@ impl IEJoinState {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
-        let l1_sorted_blocks = self.l1_sorted_blocks.read();
-        let right_sorted_blocks = self.right_sorted_blocks.read();
+        let ie_join_state = self.ie_join_state.as_ref().unwrap();
+        let l1_sorted_blocks = ie_join_state.l1_sorted_blocks.read();
+        let right_sorted_blocks = ie_join_state.right_sorted_blocks.read();
         let l1_sorted_block = DataBlock::sort(
             &l1_sorted_blocks[left_idx],
-            &self.ie_condition_state.l1_sort_descriptions,
+            &ie_join_state.l1_sort_descriptions,
             None,
         )?;
         let right_block = DataBlock::sort(
             &right_sorted_blocks[right_idx],
-            &self.ie_condition_state.l1_sort_descriptions,
+            &ie_join_state.l1_sort_descriptions,
             None,
         )?;
-        if !self.intersection(&l1_sorted_block, &right_block) {
+        if !ie_join_state.intersection(&l1_sorted_block, &right_block) {
             return Ok(DataBlock::empty());
         }
         let mut l1_sorted_blocks = vec![l1_sorted_block, right_block];
 
         let data_schema = DataSchemaRefExt::create(
-            self.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
+            ie_join_state.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
         );
 
         l1_sorted_blocks = sort_merge(
             data_schema,
             block_size,
-            self.ie_condition_state.l1_sort_descriptions.clone(),
+            ie_join_state.l1_sort_descriptions.clone(),
             &l1_sorted_blocks,
         )?;
 
@@ -344,14 +341,14 @@ impl IEJoinState {
         for block in l1_sorted_blocks.iter() {
             l2_sorted_blocks.push(DataBlock::sort(
                 block,
-                &self.ie_condition_state.l2_sort_descriptions,
+                &ie_join_state.l2_sort_descriptions,
                 None,
             )?);
         }
         merged_blocks = DataBlock::concat(&sort_merge(
-            self.data_schema.clone(),
+            ie_join_state.data_schema.clone(),
             block_size,
-            self.ie_condition_state.l2_sort_descriptions.clone(),
+            ie_join_state.l2_sort_descriptions.clone(),
             &l2_sorted_blocks,
         )?)?;
 
@@ -384,10 +381,10 @@ impl IEJoinState {
         drop(l2_sorted_blocks);
         drop(l1_sorted_blocks);
 
-        self.finalize(l1, l2, l1_index_column, &p_array, bit_array, task_id)
+        self.ie_join_finalize(l1, l2, l1_index_column, &p_array, bit_array, task_id)
     }
 
-    pub fn finalize(
+    pub fn ie_join_finalize(
         &self,
         l1: &Column,
         l2: &Column,
@@ -477,107 +474,5 @@ impl IEJoinState {
             left_result_block = filter_block(left_result_block, filter)?;
         }
         Ok(left_result_block)
-    }
-
-    fn intersection(&self, left_block: &DataBlock, right_block: &DataBlock) -> bool {
-        let left_len = left_block.num_rows();
-        let right_len = right_block.num_rows();
-        let left_l1_column = left_block.columns()[0]
-            .value
-            .convert_to_full_column(&self.ie_condition_state.l1_data_type, left_len);
-        let right_l1_column = right_block.columns()[0]
-            .value
-            .convert_to_full_column(&self.ie_condition_state.l1_data_type, right_len);
-        // If `left_l1_column` and `right_l1_column` have intersection && `left_l2_column` and `right_l2_column` have intersection, return true
-        let (left_l1_min, left_l1_max, right_l1_min, right_l1_max) =
-            match self.ie_condition_state.l1_order {
-                true => {
-                    // l1 is asc
-                    (
-                        left_l1_column.index(0).unwrap(),
-                        left_l1_column.index(left_len - 1).unwrap(),
-                        right_l1_column.index(0).unwrap(),
-                        right_l1_column.index(right_len - 1).unwrap(),
-                    )
-                }
-                false => {
-                    // l1 is desc
-                    (
-                        left_l1_column.index(left_len - 1).unwrap(),
-                        left_l1_column.index(0).unwrap(),
-                        right_l1_column.index(right_len - 1).unwrap(),
-                        right_l1_column.index(0).unwrap(),
-                    )
-                }
-            };
-        match self.ie_condition_state.l1_order {
-            true => {
-                // if l1_order is asc, then op1 is < / <=
-                left_l1_min <= right_l1_max
-            }
-            false => {
-                // If l1_order is desc, then op is > / >=
-                right_l1_min <= left_l1_max
-            }
-        }
-    }
-}
-
-impl IEJoinState {
-    pub fn left_attach(&self) {
-        let mut left_sinker_count = self.left_sinker_count.write();
-        *left_sinker_count += 1;
-    }
-
-    pub fn left_detach(&self) -> Result<()> {
-        let right_sinker_count = self.right_sinker_count.read();
-        let mut left_sinker_count = self.left_sinker_count.write();
-        *left_sinker_count -= 1;
-        if *left_sinker_count == 0 && *right_sinker_count == 0 {
-            // Left and right both finish sink
-            // Partition left/right table
-            self.partition()?;
-            // Set partition finished
-            let mut partition_finished = self.partition_finished.write();
-            *partition_finished = true;
-            self.finished_notify.notify_waiters();
-        }
-        Ok(())
-    }
-
-    pub fn right_attach(&self) {
-        let mut right_sinker_count = self.right_sinker_count.write();
-        *right_sinker_count += 1;
-    }
-
-    pub fn task_id(&self) -> Option<usize> {
-        let task_id = self.finished_tasks.fetch_add(1, atomic::Ordering::SeqCst);
-        if task_id >= self.tasks.read().len() as u64 {
-            return None;
-        }
-        Some(task_id as usize)
-    }
-
-    pub fn right_detach(&self) -> Result<()> {
-        let mut right_sinker_count = self.right_sinker_count.write();
-        *right_sinker_count -= 1;
-        let left_sinker_count = self.left_sinker_count.read();
-        if *right_sinker_count == 0 && *left_sinker_count == 0 {
-            // Left and right both finish sink
-            // Partition left/right table
-            self.partition()?;
-            // Set partition finished
-            let mut partition_finished = self.partition_finished.write();
-            *partition_finished = true;
-            self.finished_notify.notify_waiters();
-        }
-        Ok(())
-    }
-
-    pub(crate) async fn wait_merge_finish(&self) -> Result<()> {
-        if !*self.partition_finished.read() {
-            self.finished_notify.notified().await;
-        }
-        Ok(())
     }
 }

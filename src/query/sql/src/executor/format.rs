@@ -37,11 +37,10 @@ use super::TableScan;
 use super::UnionAll;
 use super::WindowFunction;
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::DistributedInsertSelect;
+use crate::executor::{DistributedInsertSelect, RangeJoin, RangeJoinType};
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
-use crate::executor::IEJoin;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::Window;
 use crate::planner::MetadataRef;
@@ -147,7 +146,7 @@ fn to_format_tree(
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
-        PhysicalPlan::IEJoin(plan) => ie_join_to_format_tree(plan, metadata, prof_span_set),
+        PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, prof_span_set),
     }
 }
 
@@ -676,12 +675,12 @@ fn row_fetch_to_format_tree(
     ))
 }
 
-fn ie_join_to_format_tree(
-    plan: &IEJoin,
+fn range_join_to_format_tree(
+    plan: &RangeJoin,
     metadata: &MetadataRef,
     prof_span_set: &ProfSpanSetRef,
 ) -> Result<FormatTreeNode<String>> {
-    let ie_join_conditions = plan
+    let range_join_conditions = plan
         .conditions
         .iter()
         .map(|condition| {
@@ -712,7 +711,7 @@ fn ie_join_to_format_tree(
 
     let mut children = vec![
         FormatTreeNode::new(format!("join type: {}", plan.join_type)),
-        FormatTreeNode::new(format!("ie_join conditions: [{ie_join_conditions}]")),
+        FormatTreeNode::new(format!("range join conditions: [{range_join_conditions}]")),
         FormatTreeNode::new(format!("other conditions: [{other_conditions}]")),
     ];
 
@@ -732,7 +731,10 @@ fn ie_join_to_format_tree(
     children.push(right_child);
 
     Ok(FormatTreeNode::with_children(
-        "IEJoin".to_string(),
+        match plan.range_join_type {
+            RangeJoinType::IEJoin => {"IEJoin".to_string()}
+            RangeJoinType::Merge => {"MergeJoin".to_string()}
+        },
         children,
     ))
 }
