@@ -576,8 +576,7 @@ impl FlightSqlService for FlightSqlServiceImpl {
             "do_action_create_prepared_statement with handler={handle}, query={:?}, return schema={schema:?}",
             query.query
         );
-        self.statements
-            .insert(handle, (plan, extra, schema));
+        self.statements.insert(handle, (plan, extra, schema));
         let message = SchemaAsIpc::new(&arrow_schema, &IpcWriteOptions::default())
             .try_into()
             .map_err(|e| status!("Unable to serialize schema", e))?;
