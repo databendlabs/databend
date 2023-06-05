@@ -602,14 +602,6 @@ impl TableContext for CtxDelegation {
         self.ctx.get_data_operator()
     }
 
-    fn push_precommit_block(&self, _block: DataBlock) {
-        todo!()
-    }
-
-    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        todo!()
-    }
-
     async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
         todo!()
     }
