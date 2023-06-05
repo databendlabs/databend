@@ -14,5 +14,6 @@
 
 #[allow(clippy::module_inception)]
 mod distributed;
+mod topn;
 
 pub use distributed::optimize_distributed_query;
