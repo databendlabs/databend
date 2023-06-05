@@ -387,11 +387,24 @@ impl Plan {
     pub async fn schema(&self, ctx: Arc<dyn TableContext>) -> Result<DataSchemaRef> {
         let schema = match self {
             Plan::Query {
-                s_expr, metadata, ..
+                s_expr,
+                metadata,
+                bind_context,
+                ..
             } => {
                 let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
                 let physical_plan = builder.build(s_expr).await?;
-                physical_plan.output_schema()?
+                let schema = physical_plan.output_schema()?;
+
+                // Rename columns from index to name
+                let fields = schema
+                    .fields()
+                    .iter()
+                    .zip(&bind_context.columns)
+                    .map(|(f, c)| DataField::new(&c.column_name, f.data_type().clone()))
+                    .collect();
+
+                DataSchemaRefExt::create(fields)
             }
             Plan::Explain { .. } | Plan::ExplainAst { .. } | Plan::ExplainSyntax { .. } => {
                 DataSchemaRefExt::create(vec![DataField::new("explain", DataType::String)])

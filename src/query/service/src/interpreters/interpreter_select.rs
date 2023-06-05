@@ -19,8 +19,8 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::TableSchemaRef;
 use common_meta_store::MetaStore;
 use common_pipeline_core::pipe::Pipe;
@@ -196,7 +196,7 @@ impl Interpreter for SelectInterpreter {
             .zip(&self.bind_context.columns)
             .map(|(f, c)| DataField::new(&c.column_name, f.data_type().clone()))
             .collect();
-        Arc::new(DataSchema::new(fields))
+        DataSchemaRefExt::create(fields)
     }
 
     /// This method will create a new pipeline
