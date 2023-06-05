@@ -42,7 +42,9 @@ SELECT number FROM numbers(3);
 +--------+
 ```
 
-You can also alias a column to make the column name more readable and understandable in the result:
+### AS Keyword 
+
+In Databend, you can use the AS keyword to assign an alias to a column. This allows you to provide a more descriptive and easily understandable name for the column in both the SQL statement and the query result:
 
 - Databend suggests avoiding special characters as much as possible when creating column aliases. However, if special characters are necessary in some cases, the alias should be enclosed in backticks, like this: SELECT price AS \`$CA\` FROM ...
 
@@ -68,9 +70,46 @@ SELECT number AS `Total` FROM numbers(3);
 +--------+
 ```
 
-## EXCLUDE Parameter
+If you alias a column in the SELECT clause, you can use the alias in the WHERE, GROUP BY, and HAVING clauses:
 
-Excludes one or more columns by their names from the result. The parameter is usually used in conjunction with `SELECT * ...` to exclude a few columns from the result instead of retrieving them all.
+```sql
+SELECT number * 2 AS a FROM numbers(3) WHERE (a + 1) % 3 = 0;
++--------+
+|    a   |
++--------+
+|    2   |
++--------+
+
+SELECT MAX(number) AS b, number % 3 AS c FROM numbers(100) GROUP BY c HAVING b > 8;
++----+---+
+| b  | c |
++----+---+
+| 99 | 0 |
+| 97 | 1 |
+| 98 | 2 |
++----+---+
+
+```
+
+If you assign an alias to a column and the alias name is the same as the column name, the WHERE and GROUP BY clauses will recognize the alias as the column name. However, the HAVING clause will recognize the alias as the alias itself.
+
+```sql
+SELECT number * 2 AS number FROM numbers(3)
+WHERE (number + 1) % 3 = 0
+GROUP BY number
+HAVING number > 5;
+
++--------+
+| number |
++--------+
+|     10 |
+|     16 |
++--------+
+```
+
+### EXCLUDE Keyword
+
+Excludes one or more columns by their names from the result. The keyword is usually used in conjunction with `SELECT * ...` to exclude a few columns from the result instead of retrieving them all.
 
 ```sql
 SELECT * FROM allemployees ORDER BY id;
@@ -81,7 +120,7 @@ SELECT * FROM allemployees ORDER BY id;
 | 1  | Ryan      | Tory     | M      |
 | 2  | Oliver    | Green    | M      |
 | 3  | Noah      | Shuster  | M      |
-| 4  | Lily      | McMeant   | F      |
+| 4  | Lily      | McMeant   | F     |
 | 5  | Macy      | Lee      | F      |
 
 -- Exclude the column "id" from the result
@@ -93,7 +132,7 @@ SELECT * EXCLUDE id FROM allemployees;
 | Noah      | Shuster  | M      |
 | Ryan      | Tory     | M      |
 | Oliver    | Green    | M      |
-| Lily      | McMeant   | F      |
+| Lily      | McMeant   | F     |
 | Macy      | Lee      | F      |
 
 -- Exclude the columns "id" and "lastname" from the result
@@ -138,28 +177,6 @@ SELECT number FROM numbers(3) WHERE number > 1;
 | number |
 +--------+
 |      2 |
-+--------+
-```
-
-If you alias a column in the SELECT clause, you can use the alias in the WHERE clause:
-
-```sql
-SELECT number * 2 AS a FROM numbers(3) WHERE (a + 1) % 3 = 0
-+--------+
-|    a   |
-+--------+
-|      2 |
-+--------+
-```
-
-If the alias and the column name are the same, the WHERE clause will recognize the alias as the column name:
-
-```sql
-SELECT number * 2 AS number FROM numbers(3) WHERE (number + 1) % 3 = 0
-+--------+
-| number |
-+--------+
-|      4 |
 +--------+
 ```
 
