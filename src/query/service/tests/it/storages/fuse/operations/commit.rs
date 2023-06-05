@@ -15,10 +15,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
-use std::time::Instant;
 
-use backoff::backoff::Backoff;
 use common_base::base::tokio;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
@@ -29,7 +26,6 @@ use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::table::Table;
-use common_catalog::table::TableExt;
 use common_catalog::table_context::ProcessInfo;
 use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
@@ -201,13 +197,12 @@ async fn test_last_snapshot_hint() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_abort_on_error() -> Result<()> {
+async fn test_commit_to_meta_server() -> Result<()> {
     struct Case {
         update_meta_error: Option<ErrorCode>,
         expected_error: Option<ErrorCode>,
         expected_snapshot_left: usize,
         case_name: &'static str,
-        max_retry_time: Option<Duration>,
     }
 
     impl Case {
@@ -237,9 +232,17 @@ async fn test_abort_on_error() -> Result<()> {
                 error_injection: self.update_meta_error.clone(),
             };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
-            let r =
-                commit_with_max_retry_elapsed(fuse_table, ctx, new_snapshot, self.max_retry_time)
-                    .await;
+            let r = FuseTable::commit_to_meta_server(
+                ctx.as_ref(),
+                fuse_table.get_table_info(),
+                fuse_table.meta_location_generator(),
+                new_snapshot,
+                None,
+                &None,
+                fuse_table.get_operator_ref(),
+            )
+            .await;
+
             if self.update_meta_error.is_some() {
                 assert_eq!(
                     r.unwrap_err().code(),
@@ -285,7 +288,6 @@ async fn test_abort_on_error() -> Result<()> {
             expected_error: injected_error,
             expected_snapshot_left,
             case_name: "normal, not meta store error",
-            max_retry_time: None,
         };
         case.run().await?;
     }
@@ -301,90 +303,11 @@ async fn test_abort_on_error() -> Result<()> {
             expected_error: injected_error,
             expected_snapshot_left,
             case_name: "meta store error which may have side effects",
-            max_retry_time: None,
-        };
-        case.run().await?;
-    }
-
-    {
-        let injected_error = Some(ErrorCode::TableVersionMismatched(
-            "does not matter".to_owned(),
-        ));
-        // if commit failed and end up with TableVersionMismatched error,
-        // an OCCRetryFailure is expected to be popped up
-        let expected_error = Some(ErrorCode::OCCRetryFailure("not matter".to_owned()));
-        // error may have no side effects, expect no snapshot, the operation be reverted
-        let expected_snapshot_left = 0;
-        let case = Case {
-            update_meta_error: injected_error,
-            expected_error,
-            expected_snapshot_left,
-            case_name: "table version mismatch err",
-            // shrink the test time usage
-            max_retry_time: Some(Duration::from_millis(100)),
         };
         case.run().await?;
     }
 
     Ok(())
-}
-
-#[async_backtrace::framed]
-async fn commit_with_max_retry_elapsed(
-    fuse: &FuseTable,
-    ctx: Arc<dyn TableContext>,
-    snapshot: TableSnapshot,
-    max_retry_elapsed: Option<Duration>,
-) -> Result<()> {
-    let mut tbl = fuse;
-    let mut latest: Arc<dyn Table>;
-
-    let mut retry_times = 0;
-
-    let mut backoff = FuseTable::set_backoff(max_retry_elapsed);
-
-    let transient = tbl.transient();
-    loop {
-        match FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            tbl.get_table_info(),
-            tbl.meta_location_generator(),
-            snapshot.clone(),
-            None,
-            &None,
-            tbl.get_operator_ref(),
-        )
-        .await
-        {
-            Ok(_) => {
-                break Ok(());
-            }
-            Err(e) if FuseTable::is_error_recoverable(&e, transient) => {
-                match backoff.next_backoff() {
-                    Some(d) => {
-                        common_base::base::tokio::time::sleep(d).await;
-                        latest = tbl.refresh(ctx.as_ref()).await?;
-                        tbl = FuseTable::try_from_table(latest.as_ref())?;
-                        retry_times += 1;
-                        continue;
-                    }
-                    None => {
-                        break Err(ErrorCode::OCCRetryFailure(format!(
-                            "can not fulfill the tx after retries({} times, {} ms), aborted.",
-                            retry_times,
-                            Instant::now()
-                                .duration_since(backoff.start_time)
-                                .as_millis(),
-                        )));
-                    }
-                }
-            }
-
-            Err(e) => {
-                break Err(e);
-            }
-        }
-    }
 }
 
 struct CtxDelegation {
