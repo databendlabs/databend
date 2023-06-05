@@ -29,7 +29,10 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use uuid::Uuid;
 
+use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
+use crate::operations::commit::Conflict;
+use crate::operations::commit::MutatorConflictDetector;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
 use crate::statistics::reducers::merge_statistics_mut;
@@ -88,67 +91,45 @@ impl SnapshotGenerator for MutationGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
     ) -> Result<TableSnapshot> {
-        let base_segments = &self.base_snapshot.segments;
-        let base_segments_len = self.base_snapshot.segments.len();
-        let base_statistics = &self.base_snapshot.summary;
+        let previous =
+            previous.unwrap_or_else(|| Arc::new(TableSnapshot::new_empty_snapshot(schema.clone())));
 
-        if previous.is_none() {
-            if base_segments_len > 0 {
+        match MutatorConflictDetector::detect_conflicts(
+            self.base_snapshot.as_ref(),
+            previous.as_ref(),
+        ) {
+            Conflict::Unresolvable => {
                 metrics_inc_commit_mutation_unresolvable_conflict();
-                return Err(ErrorCode::StorageOther(
+                Err(ErrorCode::StorageOther(
                     "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                ));
+                ))
             }
+            Conflict::ResolvableAppend(range_of_newly_append) => {
+                tracing::info!("resolvable conflicts detected");
+                metrics_inc_commit_mutation_resolvable_conflict();
+                let append_segments = &previous.segments[range_of_newly_append];
+                let append_statistics =
+                    deduct_statistics(&previous.summary, &self.base_snapshot.summary);
 
-            let new_snapshot = TableSnapshot::new(
-                Uuid::new_v4(),
-                &None,
-                None,
-                schema,
-                self.merged_statistics.clone(),
-                self.merged_segments.clone(),
-                cluster_key_meta,
-                None,
-            );
-            return Ok(new_snapshot);
+                let new_segments = append_segments
+                    .iter()
+                    .chain(self.merged_segments.iter())
+                    .cloned()
+                    .collect::<Vec<_>>();
+                let new_summary = merge_statistics(&self.merged_statistics, &append_statistics);
+                let new_snapshot = TableSnapshot::new(
+                    Uuid::new_v4(),
+                    &previous.timestamp,
+                    Some((previous.snapshot_id, previous.format_version)),
+                    schema,
+                    new_summary,
+                    new_segments,
+                    cluster_key_meta,
+                    previous.table_statistics_location.clone(),
+                );
+                Ok(new_snapshot)
+            }
         }
-
-        let previous = previous.unwrap();
-        let latest_segments = &previous.segments;
-        let latest_statistics = &previous.summary;
-        let latest_segments_len = latest_segments.len();
-
-        if latest_segments_len < base_segments_len
-            || base_segments[0..base_segments_len]
-                != latest_segments[(latest_segments_len - base_segments_len)..latest_segments_len]
-        {
-            metrics_inc_commit_mutation_unresolvable_conflict();
-            return Err(ErrorCode::StorageOther(
-                "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-            ));
-        }
-
-        let append_segments =
-            latest_segments[0..(latest_segments_len - base_segments_len)].to_owned();
-        let append_statistics = deduct_statistics(latest_statistics, base_statistics);
-
-        let new_segments = append_segments
-            .iter()
-            .chain(self.merged_segments.iter())
-            .cloned()
-            .collect::<Vec<_>>();
-        let new_summary = merge_statistics(&self.merged_statistics, &append_statistics);
-        let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
-            &previous.timestamp,
-            Some((previous.snapshot_id, previous.format_version)),
-            schema,
-            new_summary,
-            new_segments,
-            cluster_key_meta,
-            previous.table_statistics_location.clone(),
-        );
-        Ok(new_snapshot)
     }
 }
 
@@ -219,9 +200,17 @@ impl SnapshotGenerator for AppendGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
     ) -> Result<TableSnapshot> {
+        let mut prev_timestamp = None;
+        let mut prev_snapshot_id = None;
+        let mut table_statistics_location = None;
         let mut new_segments = self.merged_segments.clone();
         let mut new_summary = self.merged_statistics.clone();
-        let new_snapshot = if let Some(snapshot) = &previous {
+
+        if let Some(snapshot) = &previous {
+            prev_timestamp = snapshot.timestamp;
+            prev_snapshot_id = Some((snapshot.snapshot_id, snapshot.format_version));
+            table_statistics_location = snapshot.table_statistics_location.clone();
+
             if !self.overwrite {
                 let mut summary = snapshot.summary.clone();
                 if self.check_fill_default(&summary) {
@@ -254,29 +243,17 @@ impl SnapshotGenerator for AppendGenerator {
                     .collect();
                 merge_statistics_mut(&mut new_summary, &summary);
             }
-            TableSnapshot::new(
-                Uuid::new_v4(),
-                &snapshot.timestamp,
-                Some((snapshot.snapshot_id, snapshot.format_version)),
-                schema,
-                new_summary,
-                new_segments,
-                cluster_key_meta,
-                snapshot.table_statistics_location.clone(),
-            )
-        } else {
-            TableSnapshot::new(
-                Uuid::new_v4(),
-                &None,
-                None,
-                schema,
-                new_summary,
-                new_segments,
-                cluster_key_meta,
-                None,
-            )
-        };
+        }
 
-        Ok(new_snapshot)
+        Ok(TableSnapshot::new(
+            Uuid::new_v4(),
+            &prev_timestamp,
+            prev_snapshot_id,
+            schema,
+            new_summary,
+            new_segments,
+            cluster_key_meta,
+            table_statistics_location,
+        ))
     }
 }

@@ -91,15 +91,9 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
 }
 
 pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Statistics {
-    Statistics {
-        row_count: l.row_count + r.row_count,
-        block_count: l.block_count + r.block_count,
-        perfect_block_count: l.perfect_block_count + r.perfect_block_count,
-        uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
-        compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
-        index_size: l.index_size + r.index_size,
-        col_stats: reduce_block_statistics(&[&l.col_stats, &r.col_stats]),
-    }
+    let mut new = l.clone();
+    merge_statistics_mut(&mut new, r);
+    new
 }
 
 pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) {
@@ -112,36 +106,14 @@ pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
 }
 
-// Deduct statistics, only be used for calculate snapshot summary during update/delete/replace.
+// Deduct statistics, only be used for calculate snapshot summary.
 pub fn deduct_statistics(l: &Statistics, r: &Statistics) -> Statistics {
-    let mut col_stats = HashMap::with_capacity(l.col_stats.len());
-    for (id, l_stats) in &l.col_stats {
-        if let Some(r_stats) = r.col_stats.get(id) {
-            // The MinMax of a column cannot be recalculated by the right statistics,
-            // so we skip deduct the MinMax statistics here.
-            let new_stats = ColumnStatistics {
-                min: l_stats.min.clone(),
-                max: l_stats.max.clone(),
-                null_count: l_stats.null_count - r_stats.null_count,
-                in_memory_size: l_stats.in_memory_size - r_stats.in_memory_size,
-                distinct_of_values: None,
-            };
-            col_stats.insert(*id, new_stats);
-        }
-    }
-
-    Statistics {
-        row_count: l.row_count - r.row_count,
-        block_count: l.block_count - r.block_count,
-        perfect_block_count: l.perfect_block_count - r.perfect_block_count,
-        uncompressed_byte_size: l.uncompressed_byte_size - r.uncompressed_byte_size,
-        compressed_byte_size: l.compressed_byte_size - r.compressed_byte_size,
-        index_size: l.index_size - r.index_size,
-        col_stats,
-    }
+    let mut new = l.clone();
+    deduct_statistics_mut(&mut new, r);
+    new
 }
 
-// Deduct statistics, only be used for calculate snapshot summary during update/delete/replace.
+// Deduct statistics, only be used for calculate snapshot summary.
 pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.row_count -= r.row_count;
     l.block_count -= r.block_count;
