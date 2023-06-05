@@ -52,9 +52,6 @@ pub(crate) struct IEJoinState {
     pub(crate) l2_sort_descriptions: Vec<SortColumnDescription>,
     // true is asc
     l1_order: bool,
-    pub(crate) right_sorted_blocks: RwLock<Vec<DataBlock>>,
-    // L1: sort by the first join key
-    pub(crate) l1_sorted_blocks: RwLock<Vec<DataBlock>>,
     // data schema of sorted blocks
     pub(crate) data_schema: DataSchemaRef,
 }
@@ -131,8 +128,6 @@ impl IEJoinState {
             l1_sort_descriptions,
             l2_sort_descriptions,
             l1_order,
-            right_sorted_blocks: Default::default(),
-            l1_sorted_blocks: Default::default(),
             data_schema: DataSchemaRefExt::create(fields),
         }
     }
@@ -181,99 +176,15 @@ impl IEJoinState {
 }
 
 impl RangeJoinState {
-    pub(crate) fn ie_join_partition(&self) -> Result<()> {
-        let left_table = self.left_table.read();
-        let right_table = self.right_table.read();
-
-        let ie_join_state = self.ie_join_state.as_ref().unwrap();
-        let mut l1_sorted_blocks = ie_join_state.l1_sorted_blocks.write();
-        let mut right_sorted_blocks = ie_join_state.right_sorted_blocks.write();
-
-        let mut current_rows = 0;
-        for left_block in left_table.iter() {
-            // Generate keys block by join keys
-            // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
-            // We can get the key blocks by evaluating the join keys expressions on the block
-            let mut columns = Vec::with_capacity(3);
-            // Append join keys columns
-            for condition in self.conditions.iter() {
-                let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(left_block, &func_ctx, &BUILTIN_FUNCTIONS);
-                let expr = condition.left_expr.as_expr(&BUILTIN_FUNCTIONS);
-                let column = evaluator
-                    .run(&expr)?
-                    .convert_to_full_column(expr.data_type(), left_block.num_rows());
-                columns.push(column);
-            }
-            // Generate idx column from current_rows to current_rows + block.num_rows()
-            let mut column_builder = ColumnBuilder::with_capacity(
-                &DataType::Number(NumberDataType::Int64),
-                left_block.num_rows(),
-            );
-            for idx in current_rows..(current_rows + left_block.num_rows()) {
-                column_builder.push(ScalarRef::Number(NumberScalar::Int64((idx + 1) as i64)));
-            }
-            columns.push(column_builder.build());
-            let keys_block = DataBlock::new_from_columns(columns);
-            l1_sorted_blocks.push(keys_block);
-            current_rows += left_block.num_rows();
-        }
-
-        current_rows = 0;
-        for right_block in right_table.iter() {
-            // Generate keys block by join keys
-            // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
-            // We can get the key blocks by evaluating the join keys expressions on the block
-            let mut columns = Vec::with_capacity(3);
-            // Append join keys columns
-            for condition in self.conditions.iter() {
-                let func_ctx = FunctionContext::default();
-                let evaluator = Evaluator::new(right_block, &func_ctx, &BUILTIN_FUNCTIONS);
-                let expr = condition.right_expr.as_expr(&BUILTIN_FUNCTIONS);
-                let column = evaluator
-                    .run(&expr)?
-                    .convert_to_full_column(expr.data_type(), right_block.num_rows());
-                columns.push(column);
-            }
-            // Generate idx column from current_rows to current_rows + block.num_rows()
-            let mut column_builder = ColumnBuilder::with_capacity(
-                &DataType::Number(NumberDataType::Int64),
-                right_block.num_rows(),
-            );
-            for idx in current_rows..(current_rows + right_block.num_rows()) {
-                column_builder.push(ScalarRef::Number(NumberScalar::Int64(-(idx as i64 + 1))));
-            }
-            columns.push(column_builder.build());
-            let keys_block = DataBlock::new_from_columns(columns);
-            right_sorted_blocks.push(keys_block);
-            current_rows += right_block.num_rows();
-        }
-        // Add tasks
-        let mut row_offset = self.row_offset.write();
-        let mut left_offset = 0;
-        let mut right_offset = 0;
-        let mut tasks = self.tasks.write();
-        for (left_idx, left_block) in l1_sorted_blocks.iter().enumerate() {
-            for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
-                row_offset.push((left_offset, right_offset));
-                tasks.push((left_idx, right_idx));
-                right_offset += right_block.num_rows();
-            }
-            right_offset = 0;
-            left_offset += left_block.num_rows();
-        }
-        Ok(())
-    }
-
     pub fn ie_join(&self, task_id: usize) -> Result<DataBlock> {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let tasks = self.tasks.read();
         let (left_idx, right_idx) = tasks[task_id];
         let ie_join_state = self.ie_join_state.as_ref().unwrap();
-        let l1_sorted_blocks = ie_join_state.l1_sorted_blocks.read();
-        let right_sorted_blocks = ie_join_state.right_sorted_blocks.read();
+        let left_sorted_blocks = self.left_sorted_blocks.read();
+        let right_sorted_blocks = self.right_sorted_blocks.read();
         let l1_sorted_block = DataBlock::sort(
-            &l1_sorted_blocks[left_idx],
+            &left_sorted_blocks[left_idx],
             &ie_join_state.l1_sort_descriptions,
             None,
         )?;
@@ -285,22 +196,22 @@ impl RangeJoinState {
         if !ie_join_state.intersection(&l1_sorted_block, &right_block) {
             return Ok(DataBlock::empty());
         }
-        let mut l1_sorted_blocks = vec![l1_sorted_block, right_block];
+        let mut left_sorted_blocks = vec![l1_sorted_block, right_block];
 
         let data_schema = DataSchemaRefExt::create(
             ie_join_state.data_schema.fields().as_slice()[0..self.conditions.len() + 1].to_vec(),
         );
 
-        l1_sorted_blocks = sort_merge(
+        left_sorted_blocks = sort_merge(
             data_schema,
             block_size,
             ie_join_state.l1_sort_descriptions.clone(),
-            &l1_sorted_blocks,
+            &left_sorted_blocks,
         )?;
 
-        // Add a column at the end of `l1_sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
+        // Add a column at the end of `left_sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
         let mut count: usize = 0;
-        for block in l1_sorted_blocks.iter_mut() {
+        for block in left_sorted_blocks.iter_mut() {
             // Generate column with value [1..block.size()]
             let mut column_builder =
                 NumberColumnBuilder::with_capacity(&NumberDataType::UInt64, block.num_rows());
@@ -313,8 +224,8 @@ impl RangeJoinState {
             ));
             count += block.num_rows();
         }
-        // Merge `l1_sorted_blocks` to one block
-        let mut merged_blocks = DataBlock::concat(&l1_sorted_blocks)?;
+        // Merge `left_sorted_blocks` to one block
+        let mut merged_blocks = DataBlock::concat(&left_sorted_blocks)?;
         // extract the second column
         let l1 = &merged_blocks.columns()[0].value.convert_to_full_column(
             self.conditions[0]
@@ -328,8 +239,8 @@ impl RangeJoinState {
             merged_blocks.num_rows(),
         );
 
-        let mut l2_sorted_blocks = Vec::with_capacity(l1_sorted_blocks.len());
-        for block in l1_sorted_blocks.iter() {
+        let mut l2_sorted_blocks = Vec::with_capacity(left_sorted_blocks.len());
+        for block in left_sorted_blocks.iter() {
             l2_sorted_blocks.push(DataBlock::sort(
                 block,
                 &ie_join_state.l2_sort_descriptions,
@@ -370,7 +281,7 @@ impl RangeJoinState {
         );
 
         drop(l2_sorted_blocks);
-        drop(l1_sorted_blocks);
+        drop(left_sorted_blocks);
 
         self.ie_join_finalize(l1, l2, l1_index_column, &p_array, bit_array, task_id)
     }

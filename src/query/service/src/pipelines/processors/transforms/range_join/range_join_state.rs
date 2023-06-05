@@ -18,13 +18,15 @@ use std::sync::Arc;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
-use common_expression::DataBlock;
+use common_expression::{ColumnBuilder, DataBlock, Evaluator, FunctionContext, ScalarRef};
 use common_expression::RemoteExpr;
 use common_sql::executor::RangeJoin;
 use common_sql::executor::RangeJoinCondition;
 use common_sql::executor::RangeJoinType;
 use common_sql::plans::JoinType;
 use parking_lot::RwLock;
+use common_expression::types::{DataType, NumberDataType, NumberScalar};
+use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::pipelines::processors::transforms::range_join::ie_join_state::IEJoinState;
 use crate::pipelines::processors::transforms::range_join::merge_join_state::MergeJoinState;
@@ -35,6 +37,9 @@ pub struct RangeJoinState {
     // The origin data for left/right table
     pub(crate) left_table: RwLock<Vec<DataBlock>>,
     pub(crate) right_table: RwLock<Vec<DataBlock>>,
+    pub(crate) right_sorted_blocks: RwLock<Vec<DataBlock>>,
+    // For iejoin, it's L1: sort by the first join key
+    pub(crate) left_sorted_blocks: RwLock<Vec<DataBlock>>,
     pub(crate) conditions: Vec<RangeJoinCondition>,
     pub(crate) join_type: JoinType,
     pub(crate) other_conditions: Vec<RemoteExpr>,
@@ -63,6 +68,8 @@ impl RangeJoinState {
                     ctx,
                     left_table: RwLock::new(vec![]),
                     right_table: RwLock::new(vec![]),
+                    right_sorted_blocks: Default::default(),
+                    left_sorted_blocks: Default::default(),
                     conditions: range_join.conditions.clone(),
                     join_type: range_join.join_type.clone(),
                     other_conditions: range_join.other_conditions.clone(),
@@ -107,11 +114,7 @@ impl RangeJoinState {
         if *left_sinker_count == 0 && *right_sinker_count == 0 {
             // Left and right both finish sink
             // Partition left/right table
-            if let Some(_ie_join_state) = &self.ie_join_state {
-                self.ie_join_partition()?;
-            } else {
-                todo!()
-            }
+            self.partition()?;
             // Set partition finished
             let mut partition_finished = self.partition_finished.write();
             *partition_finished = true;
@@ -140,11 +143,7 @@ impl RangeJoinState {
         if *right_sinker_count == 0 && *left_sinker_count == 0 {
             // Left and right both finish sink
             // Partition left/right table
-            if let Some(_ie_join_state) = &self.ie_join_state {
-                self.ie_join_partition()?;
-            } else {
-                todo!()
-            }
+            self.partition()?;
             // Set partition finished
             let mut partition_finished = self.partition_finished.write();
             *partition_finished = true;
@@ -156,6 +155,89 @@ impl RangeJoinState {
     pub(crate) async fn wait_merge_finish(&self) -> Result<()> {
         if !*self.partition_finished.read() {
             self.finished_notify.notified().await;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn partition(&self) -> Result<()> {
+        let left_table = self.left_table.read();
+        let right_table = self.right_table.read();
+
+        let mut left_sorted_blocks = self.left_sorted_blocks.write();
+        let mut right_sorted_blocks = self.right_sorted_blocks.write();
+
+        let mut current_rows = 0;
+        for left_block in left_table.iter() {
+            // Generate keys block by join keys
+            // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
+            // We can get the key blocks by evaluating the join keys expressions on the block
+            let mut columns = Vec::with_capacity(3);
+            // Append join keys columns
+            for condition in self.conditions.iter() {
+                let func_ctx = FunctionContext::default();
+                let evaluator = Evaluator::new(left_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let expr = condition.left_expr.as_expr(&BUILTIN_FUNCTIONS);
+                let column = evaluator
+                    .run(&expr)?
+                    .convert_to_full_column(expr.data_type(), left_block.num_rows());
+                columns.push(column);
+            }
+            // Generate idx column from current_rows to current_rows + block.num_rows()
+            let mut column_builder = ColumnBuilder::with_capacity(
+                &DataType::Number(NumberDataType::Int64),
+                left_block.num_rows(),
+            );
+            for idx in current_rows..(current_rows + left_block.num_rows()) {
+                column_builder.push(ScalarRef::Number(NumberScalar::Int64((idx + 1) as i64)));
+            }
+            columns.push(column_builder.build());
+            let keys_block = DataBlock::new_from_columns(columns);
+            left_sorted_blocks.push(keys_block);
+            current_rows += left_block.num_rows();
+        }
+
+        current_rows = 0;
+        for right_block in right_table.iter() {
+            // Generate keys block by join keys
+            // For example, if join keys are [t1.a + t2.b, t1.c], then key blocks will contain two columns: [t1.a + t2.b, t1.c]
+            // We can get the key blocks by evaluating the join keys expressions on the block
+            let mut columns = Vec::with_capacity(3);
+            // Append join keys columns
+            for condition in self.conditions.iter() {
+                let func_ctx = FunctionContext::default();
+                let evaluator = Evaluator::new(right_block, &func_ctx, &BUILTIN_FUNCTIONS);
+                let expr = condition.right_expr.as_expr(&BUILTIN_FUNCTIONS);
+                let column = evaluator
+                    .run(&expr)?
+                    .convert_to_full_column(expr.data_type(), right_block.num_rows());
+                columns.push(column);
+            }
+            // Generate idx column from current_rows to current_rows + block.num_rows()
+            let mut column_builder = ColumnBuilder::with_capacity(
+                &DataType::Number(NumberDataType::Int64),
+                right_block.num_rows(),
+            );
+            for idx in current_rows..(current_rows + right_block.num_rows()) {
+                column_builder.push(ScalarRef::Number(NumberScalar::Int64(-(idx as i64 + 1))));
+            }
+            columns.push(column_builder.build());
+            let keys_block = DataBlock::new_from_columns(columns);
+            right_sorted_blocks.push(keys_block);
+            current_rows += right_block.num_rows();
+        }
+        // Add tasks
+        let mut row_offset = self.row_offset.write();
+        let mut left_offset = 0;
+        let mut right_offset = 0;
+        let mut tasks = self.tasks.write();
+        for (left_idx, left_block) in left_sorted_blocks.iter().enumerate() {
+            for (right_idx, right_block) in right_sorted_blocks.iter().enumerate() {
+                row_offset.push((left_offset, right_offset));
+                tasks.push((left_idx, right_idx));
+                right_offset += right_block.num_rows();
+            }
+            right_offset = 0;
+            left_offset += left_block.num_rows();
         }
         Ok(())
     }
