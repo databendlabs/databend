@@ -323,7 +323,7 @@ impl BindContext {
         }
     }
 
-    pub fn search_column_position_recursively(
+    pub fn search_column_position(
         &self,
         span: Span,
         database: Option<&str>,
@@ -331,28 +331,17 @@ impl BindContext {
         column: usize,
     ) -> Result<NameResolutionResult> {
         let mut result = vec![];
-        let mut bind_context: &BindContext = self;
 
-        loop {
-            for column_binding in bind_context.columns.iter() {
-                if let Some(position) = column_binding.column_position {
-                    if column == position
-                        && Self::match_column_binding_by_position(database, table, column_binding)
-                    {
-                        result.push(NameResolutionResult::Column(column_binding.clone()));
-                    }
+        for column_binding in self.columns.iter() {
+            if let Some(position) = column_binding.column_position {
+                if column == position
+                    && Self::match_column_binding_by_position(database, table, column_binding)
+                {
+                    result.push(NameResolutionResult::Column(column_binding.clone()));
                 }
             }
-            if !result.is_empty() {
-                break;
-            }
-
-            if let Some(ref parent) = bind_context.parent {
-                bind_context = parent;
-            } else {
-                break;
-            }
         }
+
         if result.is_empty() {
             Err(
                 ErrorCode::SemanticError(format!("column position {column} doesn't exist"))

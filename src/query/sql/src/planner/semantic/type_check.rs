@@ -192,14 +192,12 @@ impl<'a> TypeChecker<'a> {
                             self.aliases,
                         )?
                     }
-                    ColumnID::Position(pos) => {
-                        self.bind_context.search_column_position_recursively(
-                            pos.span,
-                            database.as_deref(),
-                            table.as_deref(),
-                            pos.pos,
-                        )?
-                    }
+                    ColumnID::Position(pos) => self.bind_context.search_column_position(
+                        pos.span,
+                        database.as_deref(),
+                        table.as_deref(),
+                        pos.pos,
+                    )?,
                 };
 
                 let (scalar, data_type) = match result {
