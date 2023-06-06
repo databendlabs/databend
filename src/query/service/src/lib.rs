@@ -38,6 +38,7 @@ pub mod auth;
 pub mod catalogs;
 pub mod clusters;
 pub mod databases;
+pub mod frame;
 pub mod interpreters;
 pub mod metrics;
 pub mod pipelines;
@@ -49,7 +50,6 @@ pub mod stream;
 pub mod table_functions;
 pub mod test_kits;
 
-mod frame;
 mod global_services;
 
 pub use common_sql as sql;
