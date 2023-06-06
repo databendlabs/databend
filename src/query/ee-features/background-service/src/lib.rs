@@ -14,3 +14,4 @@
 
 pub mod background_service;
 pub use background_service::get_background_service_handler;
+pub use background_service::BackgroundServiceHandler;

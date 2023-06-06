@@ -12,35 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::background_service::configs::JobConfig;
-use crate::background_service::job::Job;
+use std::sync::Arc;
+use databend_query::sessions::{Session, SessionManager, SessionType};
 use common_exception::Result;
+use databend_query::status;
 
-#[derive(Clone)]
-struct CompactionJob {
-    config: JobConfig,
-}
-
-#[async_trait]
-impl Job for CompactionJob {
-    async fn run(&self) {
-        do_compaction_job().await?;
-    }
-
-    fn get_config(&self) -> &JobConfig {
-        &self.config
-    }
-}
-
-//Service
-// optimize table limit
-// vacuum
-impl CompactionJob {
-    pub fn new(config: JobConfig) -> Self {
-        Self { config }
-    }
-
-    async fn do_compaction_job() -> Result<()> {
-        Ok(())
-    }
+pub async fn create_session() -> Result<Arc<Session>> {
+    let session = SessionManager::instance()
+        .create_session(SessionType::FlightSQL)
+        .await
+        .map_err(|e| status!("Could not create session for background_service", e))?;
+    Ok(session)
 }

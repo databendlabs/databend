@@ -24,7 +24,7 @@ use databend_query::servers::Server;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {
-    async fn create_service(&self, conf: &common_config::Config) -> Result<Box<dyn Server>>;
+    async fn create_service(&self, conf: &common_config::InnerConfig) -> Result<Box<dyn Server>>;
 }
 
 pub struct BackgroundServiceHandlerWrapper {
@@ -38,7 +38,7 @@ impl BackgroundServiceHandlerWrapper {
 
     #[async_backtrace::framed]
     pub async fn create(
-        &self, conf: &common_config::Config
+        &self, conf: &common_config::InnerConfig
     ) -> Result<Box<dyn Server>> {
         self.handler
             .create_service(conf)

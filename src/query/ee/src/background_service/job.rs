@@ -41,13 +41,6 @@ use async_trait::async_trait;
 #[async_trait]
 pub trait Job: JobClone {
     /// Runs the job
-    ///
-    /// This is an async function, so if you plan to do long-running, blocking operations, you
-    /// should spawn them on [Tokio's Blocking Threadpool](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html).
-    ///
-    /// You need the `blocking` feature to be active, for this to work.
-    ///
-    /// Otherwise, you might block the scheduler threads, slowing down your whole application.
     async fn run(&self);
     /// Exposes the configuration of the job
     fn get_config(&self) -> &JobConfig;

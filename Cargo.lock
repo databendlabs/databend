@@ -4007,6 +4007,7 @@ dependencies = [
  "aggregating-index",
  "async-backtrace",
  "async-trait",
+ "background-service",
  "chrono",
  "common-base",
  "common-building",

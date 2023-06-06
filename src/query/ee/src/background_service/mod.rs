@@ -17,3 +17,6 @@ mod configs;
 mod job;
 mod job_scheduler;
 mod compaction_job;
+mod session;
+
+pub use background_service_handler::RealBackgroundService;

@@ -13,21 +13,13 @@
 // limitations under the License.
 
 use std::time::Duration;
-
-#[derive(Clone, Default)]
-pub enum JobMode {
-    // only run filtered tasks once
-    #[default]
-    OneShot = 0,
-    // run filtered tasks on given interval
-    Interval = 1,
-}
+use common_meta_app::background::BackgroundJobType;
 
 #[derive(Default, Clone)]
 pub struct JobConfig {
     pub job_name: String,
     pub interval: Option<Duration>,
-    pub mode: JobMode,
+    pub job_type: BackgroundJobType,
 }
 
 #[derive(Clone)]
