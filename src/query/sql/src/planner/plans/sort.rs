@@ -31,6 +31,9 @@ use crate::IndexType;
 pub struct Sort {
     pub items: Vec<SortItem>,
     pub limit: Option<usize>,
+
+    /// If the sort plan is after the exchange plan.
+    pub after_exchange: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
