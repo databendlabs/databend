@@ -17,6 +17,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 
+use backoff::backoff::Backoff;
 use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
 use common_catalog::table::Table;
@@ -64,7 +65,6 @@ use crate::FuseTable;
 const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
 const OCC_DEFAULT_BACKOFF_MAX_DELAY_MS: Duration = Duration::from_millis(20 * 1000);
 const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 * 1000);
-const MAX_RETRIES: u64 = 10;
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -276,8 +276,10 @@ impl FuseTable {
         base_segments: &[Location],
         base_summary: Statistics,
         abort_operation: AbortOperation,
+        max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
+        let mut backoff = Self::set_backoff(max_retry_elapsed);
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
@@ -295,7 +297,7 @@ impl FuseTable {
             info!(status);
         }
 
-        while retries < MAX_RETRIES {
+        loop {
             let mut snapshot_tobe_committed =
                 TableSnapshot::from_previous(latest_snapshot.as_ref());
 
@@ -324,69 +326,84 @@ impl FuseTable {
             .await
             {
                 Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
-                    latest_table_ref = self.refresh(ctx.as_ref()).await?;
-                    let latest_fuse_table = FuseTable::try_from_table(latest_table_ref.as_ref())?;
-                    latest_snapshot =
-                        latest_fuse_table
-                            .read_table_snapshot()
-                            .await?
-                            .ok_or_else(|| {
-                                ErrorCode::Internal(
-                                    "mutation meets empty snapshot during conflict reconciliation",
-                                )
-                            })?;
-                    latest_table_info = &latest_fuse_table.table_info;
+                    match backoff.next_backoff() {
+                        Some(d) => {
+                            let name = self.table_info.name.clone();
+                            tracing::debug!(
+                                "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
+                                d.as_millis(),
+                                name.as_str(),
+                                self.table_info.ident
+                            );
 
-                    // Check if there is only insertion during the operation.
-                    match MutatorConflictDetector::detect_conflicts(
-                        base_snapshot.as_ref(),
-                        latest_snapshot.as_ref(),
-                    ) {
-                        Conflict::Unresolvable => {
+                            latest_table_ref = self.refresh(ctx.as_ref()).await?;
+                            let latest_fuse_table =
+                                FuseTable::try_from_table(latest_table_ref.as_ref())?;
+                            latest_snapshot =
+                                latest_fuse_table
+                                    .read_table_snapshot()
+                                    .await?
+                                    .ok_or_else(|| {
+                                        ErrorCode::Internal(
+                                            "mutation meets empty snapshot during conflict reconciliation",
+                                        )
+                                    })?;
+                            latest_table_info = &latest_fuse_table.table_info;
+
+                            // Check if there is only insertion during the operation.
+                            match MutatorConflictDetector::detect_conflicts(
+                                base_snapshot.as_ref(),
+                                latest_snapshot.as_ref(),
+                            ) {
+                                Conflict::Unresolvable => {
+                                    abort_operation
+                                        .abort(ctx.clone(), self.operator.clone())
+                                        .await?;
+                                    metrics_inc_commit_mutation_unresolvable_conflict();
+                                    break Err(ErrorCode::StorageOther(
+                                        "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                                    ));
+                                }
+                                Conflict::ResolvableAppend(range_of_newly_append) => {
+                                    info!("resolvable conflicts detected");
+                                    metrics_inc_commit_mutation_resolvable_conflict();
+                                    concurrently_appended_segment_locations =
+                                        &latest_snapshot.segments[range_of_newly_append];
+                                }
+                            }
+
+                            retries += 1;
+                            metrics_inc_commit_mutation_retry();
+                            continue;
+                        }
+                        None => {
+                            // Commit not fulfilled. try to abort the operations.
+                            //
+                            // Note that, here the last error we have seen is TableVersionMismatched,
+                            // otherwise we should have been returned, thus it is safe to abort the operation here.
                             abort_operation
                                 .abort(ctx.clone(), self.operator.clone())
                                 .await?;
-                            metrics_inc_commit_mutation_unresolvable_conflict();
-                            return Err(ErrorCode::StorageOther(
-                                "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                            ));
-                        }
-                        Conflict::ResolvableAppend(range_of_newly_append) => {
-                            info!("resolvable conflicts detected");
-                            metrics_inc_commit_mutation_resolvable_conflict();
-                            concurrently_appended_segment_locations =
-                                &latest_snapshot.segments[range_of_newly_append];
+                            break Err(ErrorCode::StorageOther(format!(
+                                "commit mutation failed after {} retries",
+                                retries
+                            )));
                         }
                     }
-
-                    retries += 1;
-                    metrics_inc_commit_mutation_retry();
                 }
                 Err(e) => {
                     // we are not sure about if the table state has been modified or not, just propagate the error
                     // and return, without aborting anything.
-                    return Err(e);
+                    break Err(e);
                 }
                 Ok(_) => {
-                    return {
+                    break {
                         metrics_inc_commit_mutation_success();
                         Ok(())
                     };
                 }
             }
         }
-
-        // Commit not fulfilled. try to abort the operations.
-        //
-        // Note that, here the last error we have seen is TableVersionMismatched,
-        // otherwise we should have been returned, thus it is safe to abort the operation here.
-        abort_operation
-            .abort(ctx.clone(), self.operator.clone())
-            .await?;
-        Err(ErrorCode::StorageOther(format!(
-            "commit mutation failed after {} retries",
-            retries
-        )))
     }
 
     #[async_backtrace::framed]

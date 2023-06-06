@@ -143,6 +143,7 @@ impl SegmentCompactMutator {
                 &self.compaction.segments_locations,
                 statistics,
                 abort_action,
+                None,
             )
             .await;
         heartbeat.shutdown().await?;
