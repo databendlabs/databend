@@ -350,17 +350,17 @@ SELECT ANY(CAST(2.34 AS DECIMAL(76, 2)))
 2.34
 
 query TTTT
-select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(13,2) a , 3.1::Decimal(8,3) b);
+select typeof(3::Decimal(13,2)+3.1::Decimal(8,3)), typeof(3::Decimal(13,2)-3.1::Decimal(8,3)), typeof(3::Decimal(13,2)*3.1::Decimal(8,3)), typeof(3::Decimal(13,2)/3.1::Decimal(8,3));
 ----
 DECIMAL(15, 3) DECIMAL(15, 3) DECIMAL(21, 5) DECIMAL(22, 8)
 
 query TTTT
-select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(76,2) a , 3.1::Decimal(76,3) b);
+select typeof(3::Decimal(76,2)+3.1::Decimal(76,3)), typeof(3::Decimal(76,2)-3.1::Decimal(76,3)), typeof(3::Decimal(76,2)*3.1::Decimal(76,3)), typeof(3::Decimal(76,2)/3.1::Decimal(76,3));
 ----
 DECIMAL(76, 3) DECIMAL(76, 3) DECIMAL(76, 5) DECIMAL(76, 8)
 
 query TTTT
-select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(39,2) a , 3.1::Decimal(39,3) b);
+select typeof(3::Decimal(39,2)+3.1::Decimal(39,3)), typeof(3::Decimal(39,2)-3.1::Decimal(39,3)), typeof(3::Decimal(39,2)*3.1::Decimal(39,3)), typeof(3::Decimal(39,2)/3.1::Decimal(39,3));
 ----
 DECIMAL(41, 3) DECIMAL(41, 3) DECIMAL(76, 5) DECIMAL(48, 8)
 

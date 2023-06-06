@@ -36,8 +36,6 @@ pub trait Rule {
     }
 }
 
-// If add a new rule, please add it to the operator's corresponding `transformation_candidate_rules`
-// Such as `PushDownFilterAggregate` is related to `Filter` operator.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, FromPrimitive, ToPrimitive)]
 pub enum RuleID {
     // Rewrite rules

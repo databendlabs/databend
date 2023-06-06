@@ -212,11 +212,11 @@ impl RuleFoldConstant {
     }
 
     fn shrink_u64(num: u64) -> Scalar {
-        if num < u8::MAX as u64 {
+        if num <= u8::MAX as u64 {
             Scalar::Number(NumberScalar::UInt8(num as u8))
-        } else if num < u16::MAX as u64 {
+        } else if num <= u16::MAX as u64 {
             Scalar::Number(NumberScalar::UInt16(num as u16))
-        } else if num < u32::MAX as u64 {
+        } else if num <= u32::MAX as u64 {
             Scalar::Number(NumberScalar::UInt32(num as u32))
         } else {
             Scalar::Number(NumberScalar::UInt64(num))
@@ -224,15 +224,15 @@ impl RuleFoldConstant {
     }
 
     fn shrink_i64(num: i64) -> Scalar {
-        if num > 0 {
+        if num >= 0 {
             return Self::shrink_u64(num as u64);
         }
 
-        if num < i8::MAX as i64 && num > i8::MIN as i64 {
+        if num <= i8::MAX as i64 && num >= i8::MIN as i64 {
             Scalar::Number(NumberScalar::Int8(num as i8))
-        } else if num < i16::MAX as i64 && num > i16::MIN as i64 {
+        } else if num <= i16::MAX as i64 && num >= i16::MIN as i64 {
             Scalar::Number(NumberScalar::Int16(num as i16))
-        } else if num < i32::MAX as i64 && num > i32::MIN as i64 {
+        } else if num <= i32::MAX as i64 && num >= i32::MIN as i64 {
             Scalar::Number(NumberScalar::Int32(num as i32))
         } else {
             Scalar::Number(NumberScalar::Int64(num))
