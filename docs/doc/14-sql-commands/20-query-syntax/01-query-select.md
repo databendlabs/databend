@@ -70,15 +70,15 @@ SELECT number AS `Total` FROM numbers(3);
 +--------+
 ```
 
-If you alias a column in the SELECT clause, you can use the alias in the WHERE, GROUP BY, and HAVING clauses:
+If you alias a column in the SELECT clause, you can refer to the alias in the WHERE, GROUP BY, and HAVING clauses, as well as in the SELECT clause itself after the alias is defined.
 
 ```sql
-SELECT number * 2 AS a FROM numbers(3) WHERE (a + 1) % 3 = 0;
-+--------+
-|    a   |
-+--------+
-|    2   |
-+--------+
+SELECT number * 2 AS a, a * 2 AS double FROM numbers(3) WHERE (a + 1) % 3 = 0;
++---+--------+
+| a | double |
++---+--------+
+| 2 |      4 |
++---+--------+
 
 SELECT MAX(number) AS b, number % 3 AS c FROM numbers(100) GROUP BY c HAVING b > 8;
 +----+---+
@@ -88,7 +88,6 @@ SELECT MAX(number) AS b, number % 3 AS c FROM numbers(100) GROUP BY c HAVING b >
 | 97 | 1 |
 | 98 | 2 |
 +----+---+
-
 ```
 
 If you assign an alias to a column and the alias name is the same as the column name, the WHERE and GROUP BY clauses will recognize the alias as the column name. However, the HAVING clause will recognize the alias as the alias itself.
