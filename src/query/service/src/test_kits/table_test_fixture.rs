@@ -60,12 +60,12 @@ use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+use crate::interpreters::fill_missing_columns;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -178,7 +178,6 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_default_exprs: vec![],
             field_comments: vec![],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
@@ -202,7 +201,6 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_default_exprs: vec![],
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
@@ -237,7 +235,6 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_default_exprs: vec![],
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
@@ -427,17 +424,12 @@ impl TestFixture {
         )?;
 
         let data_schema: DataSchemaRef = Arc::new(source_schema.into());
-        build_res
-            .main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformResortAddOn::try_create(
-                    self.ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    data_schema.clone(),
-                    table.clone(),
-                )
-            })?;
+        fill_missing_columns(
+            self.ctx.clone(),
+            table.clone(),
+            data_schema,
+            &mut build_res.main_pipeline,
+        )?;
 
         table.append_data(
             self.ctx.clone(),

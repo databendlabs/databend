@@ -20,6 +20,7 @@ use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
 use common_ast::ast::ColumnDefinition;
+use common_ast::ast::ColumnExpr;
 use common_ast::ast::CompactTarget;
 use common_ast::ast::CreateTableSource;
 use common_ast::ast::CreateTableStmt;
@@ -53,6 +54,7 @@ use common_exception::Result;
 use common_expression::infer_schema_type;
 use common_expression::infer_table_schema;
 use common_expression::types::DataType;
+use common_expression::ComputedExpr;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
@@ -64,6 +66,7 @@ use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use parking_lot::RwLock;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -105,6 +108,7 @@ use crate::plans::VacuumTableOption;
 use crate::plans::VacuumTablePlan;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::Metadata;
 use crate::Planner;
 use crate::ScalarExpr;
 use crate::SelectBuilder;
@@ -372,7 +376,7 @@ impl Binder {
         }
 
         // Build table schema
-        let (schema, field_default_exprs, field_comments) = match (&source, &as_query) {
+        let (schema, field_comments) = match (&source, &as_query) {
             (Some(source), None) => {
                 // `CREATE TABLE` without `AS SELECT ...`
                 self.analyze_create_table_schema(source).await?
@@ -393,11 +397,11 @@ impl Binder {
                     .collect::<Result<Vec<_>>>()?;
                 let schema = TableSchemaRefExt::create(fields);
                 Self::validate_create_table_schema(&schema)?;
-                (schema, vec![], vec![])
+                (schema, vec![])
             }
             (Some(source), Some(query)) => {
                 // e.g. `CREATE TABLE t (i INT) AS SELECT * from old_t` with columns specified
-                let (source_schema, source_default_exprs, source_comments) =
+                let (source_schema, source_comments) =
                     self.analyze_create_table_schema(source).await?;
                 let mut init_bind_context = BindContext::new();
                 let (_, bind_context) = self.bind_query(&mut init_bind_context, query).await?;
@@ -415,7 +419,7 @@ impl Binder {
                     return Err(ErrorCode::BadArguments("Number of columns does not match"));
                 }
                 Self::validate_create_table_schema(&source_schema)?;
-                (source_schema, source_default_exprs, source_comments)
+                (source_schema, source_comments)
             }
             _ => Err(ErrorCode::BadArguments(
                 "Incorrect CREATE query: required list of column descriptions or AS section or SELECT..",
@@ -502,7 +506,6 @@ impl Binder {
             storage_params,
             part_prefix,
             options,
-            field_default_exprs,
             field_comments,
             cluster_key,
             as_select: if let Some(query) = as_query {
@@ -611,7 +614,7 @@ impl Binder {
                 })))
             }
             AlterTableAction::AddColumn { column } => {
-                let (schema, field_default_exprs, field_comments) = self
+                let (schema, field_comments) = self
                     .analyze_create_table_schema_by_columns(&[column.clone()], true)
                     .await?;
                 Ok(Plan::AddTableColumn(Box::new(AddTableColumnPlan {
@@ -619,7 +622,6 @@ impl Binder {
                     database,
                     table,
                     schema,
-                    field_default_exprs,
                     field_comments,
                 })))
             }
@@ -914,7 +916,7 @@ impl Binder {
         &self,
         columns: &[ColumnDefinition],
         is_add_column: bool,
-    ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
+    ) -> Result<(TableSchemaRef, Vec<String>)> {
         let mut bind_context = BindContext::new();
         let mut scalar_binder = ScalarBinder::new(
             &mut bind_context,
@@ -923,61 +925,182 @@ impl Binder {
             self.metadata.clone(),
             &[],
         );
+
+        let mut has_computed = false;
         let mut fields = Vec::with_capacity(columns.len());
-        let mut fields_default_expr = Vec::with_capacity(columns.len());
         let mut fields_comments = Vec::with_capacity(columns.len());
         for column in columns.iter() {
             let name = normalize_identifier(&column.name, &self.name_resolution_ctx).name;
             let schema_data_type = resolve_type_name(&column.data_type)?;
-
-            fields.push(TableField::new(&name, schema_data_type.clone()));
-            fields_default_expr.push({
-                if let Some(default_expr) = &column.default_expr {
-                    let (expr, _) = scalar_binder.bind(default_expr).await?;
-                    let is_try = schema_data_type.is_nullable();
-                    let cast_expr = ScalarExpr::CastExpr(CastExpr {
-                        span: expr.span(),
-                        is_try,
-                        target_type: Box::new(DataType::from(&schema_data_type)),
-                        argument: Box::new(expr),
-                    })
-                    .as_expr()?;
-
-                    // Added columns are not allowed to use expressions,
-                    // as the default values will be generated at at each query.
-                    if is_add_column && !cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-                        return Err(ErrorCode::SemanticError(format!(
-                            "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.", cast_expr.sql_display(),
-                        )));
-                    }
-
-                    let expr = if cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-                        let (fold_to_constant, _) = ConstantFolder::fold(
-                            &cast_expr,
-                            &self.ctx.get_function_context()?,
-                            &BUILTIN_FUNCTIONS,
-                        );
-                        fold_to_constant
-                    } else {
-                        cast_expr
-                    };
-                    Some(expr.sql_display())
-                } else {
-                    None
-                }
-            });
             fields_comments.push(column.comment.clone().unwrap_or_default());
+
+            let mut field = TableField::new(&name, schema_data_type.clone());
+            if let Some(expr) = &column.expr {
+                match expr {
+                    ColumnExpr::Default(default_expr) => {
+                        let (expr, _) = scalar_binder.bind(default_expr).await?;
+                        let is_try = schema_data_type.is_nullable();
+                        let cast_expr = ScalarExpr::CastExpr(CastExpr {
+                            span: expr.span(),
+                            is_try,
+                            target_type: Box::new(DataType::from(&schema_data_type)),
+                            argument: Box::new(expr),
+                        })
+                        .as_expr()?;
+
+                        // Added columns are not allowed to use expressions,
+                        // as the default values will be generated at at each query.
+                        if is_add_column && !cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                            return Err(ErrorCode::SemanticError(format!(
+                                "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.",
+                                cast_expr.sql_display(),
+                            )));
+                        }
+                        let expr = if cast_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                            let (fold_to_constant, _) = ConstantFolder::fold(
+                                &cast_expr,
+                                &self.ctx.get_function_context()?,
+                                &BUILTIN_FUNCTIONS,
+                            );
+                            fold_to_constant
+                        } else {
+                            cast_expr
+                        };
+                        field = field.with_default_expr(Some(expr.sql_display()));
+                    }
+                    _ => {
+                        has_computed = true;
+                    }
+                }
+            }
+            fields.push(field);
         }
+        let fields = if has_computed {
+            let mut index = 0;
+            let mut bind_context = BindContext::new();
+            let mut metadata = Metadata::default();
+            for (column, field) in columns.iter().zip(fields.iter()) {
+                if let Some(expr) = &column.expr {
+                    match expr {
+                        ColumnExpr::Virtual(_) | ColumnExpr::Stored(_) => {
+                            continue;
+                        }
+                        _ => {}
+                    }
+                }
+                bind_context.add_column_binding(ColumnBinding {
+                    database_name: None,
+                    table_name: None,
+                    table_index: None,
+                    column_name: field.name().clone(),
+                    index,
+                    data_type: Box::new(field.data_type().into()),
+                    visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
+                });
+                metadata.add_base_table_column(
+                    field.name().clone(),
+                    field.data_type().clone(),
+                    0,
+                    None,
+                    None,
+                    None,
+                );
+                index += 1;
+            }
+            let mut scalar_binder = ScalarBinder::new(
+                &mut bind_context,
+                self.ctx.clone(),
+                &self.name_resolution_ctx,
+                Arc::new(RwLock::new(metadata)),
+                &[],
+            );
+            let mut new_fields = Vec::with_capacity(fields.len());
+            for (column, field) in columns.iter().zip(fields.into_iter()) {
+                match &column.expr {
+                    Some(ColumnExpr::Virtual(virtual_expr)) => {
+                        let expr = self
+                            .analyze_computed_expr(
+                                virtual_expr,
+                                &field,
+                                &mut scalar_binder,
+                                is_add_column,
+                            )
+                            .await?;
+                        new_fields
+                            .push(field.with_computed_expr(Some(ComputedExpr::Virtual(expr))));
+                    }
+                    Some(ColumnExpr::Stored(stored_expr)) => {
+                        let expr = self
+                            .analyze_computed_expr(
+                                stored_expr,
+                                &field,
+                                &mut scalar_binder,
+                                is_add_column,
+                            )
+                            .await?;
+                        new_fields.push(field.with_computed_expr(Some(ComputedExpr::Stored(expr))));
+                    }
+                    _ => {
+                        new_fields.push(field);
+                    }
+                }
+            }
+            new_fields
+        } else {
+            fields
+        };
+
         let schema = TableSchemaRefExt::create(fields);
         Self::validate_create_table_schema(&schema)?;
-        Ok((schema, fields_default_expr, fields_comments))
+        Ok((schema, fields_comments))
+    }
+
+    #[async_backtrace::framed]
+    async fn analyze_computed_expr(
+        &self,
+        expr: &Expr,
+        field: &TableField,
+        scalar_binder: &mut ScalarBinder<'_>,
+        is_add_column: bool,
+    ) -> Result<String> {
+        // TODO: support add computed expression column.
+        if is_add_column {
+            return Err(ErrorCode::SemanticError(
+                "can't add a computed column".to_string(),
+            ));
+        }
+        let (scalar, data_type) = scalar_binder.bind(expr).await?;
+        if data_type != DataType::from(field.data_type()) {
+            return Err(ErrorCode::SemanticError(format!(
+                "expected computed column expression have type {}, but `{}` has type {}.",
+                field.data_type(),
+                expr,
+                data_type,
+            )));
+        }
+        let computed_expr = scalar.as_expr()?;
+        if !computed_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            return Err(ErrorCode::SemanticError(format!(
+                "computed column expression `{}` is not deterministic.",
+                computed_expr.sql_display(),
+            )));
+        }
+        let mut expr = expr.clone();
+        walk_expr_mut(
+            &mut IdentifierNormalizer {
+                ctx: &self.name_resolution_ctx,
+            },
+            &mut expr,
+        );
+        Ok(format!("{:#}", expr))
     }
 
     #[async_backtrace::framed]
     async fn analyze_create_table_schema(
         &self,
         source: &CreateTableSource,
-    ) -> Result<(TableSchemaRef, Vec<Option<String>>, Vec<String>)> {
+    ) -> Result<(TableSchemaRef, Vec<String>)> {
         match source {
             CreateTableSource::Columns(columns) => {
                 self.analyze_create_table_schema_by_columns(columns, false)
@@ -996,14 +1119,14 @@ impl Binder {
                     if let Some(query) = table.get_table_info().options().get(QUERY) {
                         let mut planner = Planner::new(self.ctx.clone());
                         let (plan, _) = planner.plan_sql(query).await?;
-                        Ok((infer_table_schema(&plan.schema())?, vec![], vec![]))
+                        Ok((infer_table_schema(&plan.schema())?, vec![]))
                     } else {
                         Err(ErrorCode::Internal(
                             "Logical error, View Table must have a SelectQuery inside.",
                         ))
                     }
                 } else {
-                    Ok((table.schema(), vec![], table.field_comments().clone()))
+                    Ok((table.schema(), table.field_comments().clone()))
                 }
             }
         }
@@ -1061,6 +1184,7 @@ impl Binder {
                 index,
                 data_type: Box::new(DataType::from(field.data_type())),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             };
             bind_context.columns.push(column);
         }

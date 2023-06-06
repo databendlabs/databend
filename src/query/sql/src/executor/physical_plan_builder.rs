@@ -350,7 +350,7 @@ impl PhysicalPlanBuilder {
 
         let table_entry = metadata.table(scan.table_index);
         let table = table_entry.table();
-        let mut table_schema = table.schema();
+        let mut table_schema = Arc::new(table.schema().as_ref().remove_virtual_computed_fields());
         if !project_internal_columns.is_empty() {
             let mut schema = table_schema.as_ref().clone();
             for internal_column in project_internal_columns.values() {
@@ -833,6 +833,7 @@ impl PhysicalPlanBuilder {
                                         index: f.name().parse().unwrap(),
                                         data_type: Box::new(f.data_type().clone()),
                                         visibility: Visibility::Visible,
+                                        virtual_computed_expr: None,
                                     },
                                 }),
                                 common_ty,

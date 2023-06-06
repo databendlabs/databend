@@ -5,7 +5,7 @@ error:
   --> SQL:1:38
   |
 1 | create table a.b (c integer not null 1, b float(10))
-  | ------                               ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, `COMMENT`, or `,`
+  | ------                               ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, `AS`, `COMMENT`, or 1 more ...
   | |                                     
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -17,7 +17,7 @@ error:
   --> SQL:1:24
   |
 1 | create table a (c float(10))
-  | ------                 ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, `COMMENT`, or `,`
+  | ------                 ^ expected `)`, `NULL`, `NOT`, `DEFAULT`, `AS`, `COMMENT`, or 1 more ...
   | |                       
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
@@ -31,7 +31,7 @@ error:
 1 | create table a (c varch)
   | ------          - ^^^^^ expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 33 more ...
   | |               |  
-  | |               while parsing `<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -45,7 +45,7 @@ error:
   | ------          - ----- ^ expected `BOOLEAN`, `BOOL`, `UINT8`, `TINYINT`, `UINT16`, `SMALLINT`, or 35 more ...
   | |               | |      
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -59,7 +59,7 @@ error:
   | ------          - -------^ expected `(`
   | |               | |       
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 
@@ -74,7 +74,7 @@ error:
   | |               | |                   
   | |               | while parsing TUPLE(<name> <type>, ...)
   | |               | while parsing type name
-  | |               while parsing `<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`
+  | |               while parsing `<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`
   | while parsing `CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`
 
 

@@ -66,10 +66,27 @@ pub struct DataSchema {
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ComputedExpr {
+    Virtual(String),
+    Stored(String),
+}
+
+impl ComputedExpr {
+    #[inline]
+    pub fn expr(&self) -> &String {
+        match self {
+            ComputedExpr::Virtual(expr) => expr,
+            ComputedExpr::Stored(expr) => expr,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Eq, PartialEq, Serialize, Deserialize)]
 pub struct DataField {
     name: String,
     default_expr: Option<String>,
     data_type: DataType,
+    computed_expr: Option<ComputedExpr>,
 }
 
 fn uninit_column_id() -> ColumnId {
@@ -92,6 +109,7 @@ pub struct TableField {
     pub data_type: TableDataType,
     #[serde(default = "uninit_column_id")]
     pub column_id: ColumnId,
+    pub computed_expr: Option<ComputedExpr>,
 }
 
 /// DataType with more information that is only available for table field, e.g, the
@@ -237,7 +255,12 @@ impl DataSchema {
     }
 
     pub fn to_arrow(&self) -> ArrowSchema {
-        let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
+        let fields = self
+            .fields()
+            .iter()
+            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .map(|f| f.into())
+            .collect::<Vec<_>>();
 
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
@@ -791,8 +814,46 @@ impl TableSchema {
         }
     }
 
+    #[must_use]
+    pub fn remove_computed_fields(&self) -> Self {
+        let new_fields = self
+            .fields()
+            .iter()
+            .filter(|f| f.computed_expr().is_none())
+            .cloned()
+            .collect::<Vec<_>>();
+
+        Self {
+            fields: new_fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
+    }
+
+    /// removing virtual computed fields.
+    #[must_use]
+    pub fn remove_virtual_computed_fields(&self) -> Self {
+        let new_fields = self
+            .fields()
+            .iter()
+            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .cloned()
+            .collect::<Vec<_>>();
+
+        Self {
+            fields: new_fields,
+            metadata: self.metadata.clone(),
+            next_column_id: self.next_column_id,
+        }
+    }
+
     pub fn to_arrow(&self) -> ArrowSchema {
-        let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
+        let fields = self
+            .fields()
+            .iter()
+            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .map(|f| f.into())
+            .collect::<Vec<_>>();
 
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
@@ -804,6 +865,7 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type,
+            computed_expr: None,
         }
     }
 
@@ -812,12 +874,18 @@ impl DataField {
             name: name.to_string(),
             default_expr: None,
             data_type: data_type.wrap_nullable(),
+            computed_expr: None,
         }
     }
 
     #[must_use]
     pub fn with_default_expr(mut self, default_expr: Option<String>) -> Self {
         self.default_expr = default_expr;
+        self
+    }
+
+    pub fn with_computed_expr(mut self, computed_expr: Option<ComputedExpr>) -> Self {
+        self.computed_expr = computed_expr;
         self
     }
 
@@ -831,6 +899,10 @@ impl DataField {
 
     pub fn default_expr(&self) -> Option<&String> {
         self.default_expr.as_ref()
+    }
+
+    pub fn computed_expr(&self) -> Option<&ComputedExpr> {
+        self.computed_expr.as_ref()
     }
 
     #[inline]
@@ -851,6 +923,7 @@ impl TableField {
             default_expr: None,
             data_type,
             column_id: 0,
+            computed_expr: None,
         }
     }
 
@@ -860,6 +933,7 @@ impl TableField {
             default_expr: None,
             data_type,
             column_id,
+            computed_expr: None,
         }
     }
 
@@ -905,6 +979,7 @@ impl TableField {
             default_expr: self.default_expr.clone(),
             data_type: self.data_type.clone(),
             column_id,
+            computed_expr: self.computed_expr.clone(),
         }
     }
 
@@ -943,6 +1018,11 @@ impl TableField {
         self
     }
 
+    pub fn with_computed_expr(mut self, computed_expr: Option<ComputedExpr>) -> Self {
+        self.computed_expr = computed_expr;
+        self
+    }
+
     pub fn name(&self) -> &String {
         &self.name
     }
@@ -953,6 +1033,10 @@ impl TableField {
 
     pub fn default_expr(&self) -> Option<&String> {
         self.default_expr.as_ref()
+    }
+
+    pub fn computed_expr(&self) -> Option<&ComputedExpr> {
+        self.computed_expr.as_ref()
     }
 
     #[inline]
@@ -1144,7 +1228,9 @@ impl From<&TableField> for DataField {
     fn from(f: &TableField) -> Self {
         let data_type = f.data_type.clone();
         let name = f.name.clone();
-        DataField::new(&name, DataType::from(&data_type)).with_default_expr(f.default_expr.clone())
+        DataField::new(&name, DataType::from(&data_type))
+            .with_default_expr(f.default_expr.clone())
+            .with_computed_expr(f.computed_expr.clone())
     }
 }
 
@@ -1176,6 +1262,7 @@ impl From<&ArrowField> for TableField {
             data_type: f.into(),
             default_expr: None,
             column_id: 0,
+            computed_expr: None,
         }
     }
 }
@@ -1186,6 +1273,7 @@ impl From<&ArrowField> for DataField {
             name: f.name.clone(),
             data_type: DataType::from(&TableDataType::from(f)),
             default_expr: None,
+            computed_expr: None,
         }
     }
 }

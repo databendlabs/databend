@@ -162,6 +162,7 @@ impl Binder {
                 index: column_index,
                 data_type: Box::new(srf_expr.data_type().clone()),
                 visibility: Visibility::InVisible,
+                virtual_computed_expr: None,
             };
 
             let item = SrfItem {
