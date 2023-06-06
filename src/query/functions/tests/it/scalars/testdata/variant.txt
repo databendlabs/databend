@@ -1,6 +1,6 @@
 ast            : parse_json(NULL)
 raw expr       : parse_json(NULL)
-checked expr   : parse_json<String NULL>(CAST(NULL AS String NULL))
+checked expr   : parse_json<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -101,7 +101,7 @@ evaluation:
 | Row 3  | '-32768'                                                  | -32768                |
 | Row 4  | '1234.5678'                                               | 1234.5678             |
 | Row 5  | '1.912e2'                                                 | 191.2                 |
-| Row 6  | '"\\\"abc\\\""'                                           | "\"abc\""             |
+| Row 6  | '"\\\"abc\\\""'                                           | "\\\"abc\\\""         |
 | Row 7  | '"databend"'                                              | "databend"            |
 | Row 8  | '{"k":"v","a":"b"}'                                       | {"a":"b","k":"v"}     |
 | Row 9  | '[1,2,3,["a","b","c"]]'                                   | [1,2,3,["a","b","c"]] |
@@ -140,7 +140,7 @@ evaluation (internal):
 
 ast            : try_parse_json(NULL)
 raw expr       : try_parse_json(NULL)
-checked expr   : try_parse_json<String NULL>(CAST(NULL AS String NULL))
+checked expr   : try_parse_json<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : Variant NULL
 output domain  : {NULL}
@@ -234,7 +234,7 @@ evaluation:
 | Row 3  | '-32768'                                                  | -32768                |
 | Row 4  | '1234.5678'                                               | 1234.5678             |
 | Row 5  | '1.912e2'                                                 | 191.2                 |
-| Row 6  | '"\\\"abc\\\""'                                           | "\"abc\""             |
+| Row 6  | '"\\\"abc\\\""'                                           | "\\\"abc\\\""         |
 | Row 7  | '"databend"'                                              | "databend"            |
 | Row 8  | '{"k":"v","a":"b"}'                                       | {"a":"b","k":"v"}     |
 | Row 9  | '[1,2,3,["a","b","c"]]'                                   | [1,2,3,["a","b","c"]] |
@@ -273,7 +273,7 @@ evaluation (internal):
 
 ast            : check_json(NULL)
 raw expr       : check_json(NULL)
-checked expr   : check_json<String NULL>(CAST(NULL AS String NULL))
+checked expr   : check_json<Variant NULL>(CAST(NULL AS Variant NULL))
 optimized expr : NULL
 output type    : String NULL
 output domain  : {NULL}

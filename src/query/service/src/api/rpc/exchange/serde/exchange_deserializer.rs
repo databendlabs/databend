@@ -193,8 +193,8 @@ impl Processor for TransformExchangeDeserializer {
                     self.output_data = Some(match exchange_meta.packet.pop().unwrap() {
                         DataPacket::ErrorCode(v) => Err(v),
                         DataPacket::Dictionary(_) => unreachable!(),
-                        DataPacket::FetchProgressAndPrecommit => unreachable!(),
-                        DataPacket::ProgressAndPrecommit { .. } => unreachable!(),
+                        DataPacket::FetchProgress => unreachable!(),
+                        DataPacket::SerializeProgress { .. } => unreachable!(),
                         DataPacket::FragmentData(v) => self.recv_data(exchange_meta.packet, v),
                     }?);
 
