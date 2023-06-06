@@ -28,7 +28,6 @@ use futures_util::future::Either;
 
 use crate::api::rpc::flight_client::FlightExchange;
 use crate::api::rpc::flight_client::FlightSender;
-use crate::api::rpc::packets::PrecommitBlock;
 use crate::api::rpc::packets::ProgressInfo;
 use crate::api::DataPacket;
 use crate::sessions::QueryContext;
@@ -125,11 +124,7 @@ impl StatisticsSender {
     #[async_backtrace::framed]
     async fn send_statistics(ctx: &Arc<QueryContext>, flight_sender: &FlightSender) -> Result<()> {
         let progress = Self::fetch_progress(ctx)?;
-        let precommit = Self::fetch_precommit(ctx)?;
-        let data_packet = DataPacket::ProgressAndPrecommit {
-            progress,
-            precommit,
-        };
+        let data_packet = DataPacket::SerializeProgress(progress);
 
         flight_sender.send(data_packet).await
     }
@@ -159,13 +154,5 @@ impl StatisticsSender {
         }
 
         Ok(progress_info)
-    }
-
-    fn fetch_precommit(ctx: &Arc<QueryContext>) -> Result<Vec<PrecommitBlock>> {
-        Ok(ctx
-            .consume_precommit_blocks()
-            .into_iter()
-            .map(PrecommitBlock)
-            .collect())
     }
 }

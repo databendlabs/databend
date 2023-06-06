@@ -39,7 +39,6 @@ pub use rpc::HashFlightScatter;
 pub use rpc::InitNodesChannelPacket;
 pub use rpc::MergeExchange;
 pub use rpc::MergeExchangeParams;
-pub use rpc::PrecommitBlock;
 pub use rpc::QueryFragmentsPlanPacket;
 pub use rpc::ShuffleDataExchange;
 pub use rpc::ShuffleExchangeParams;

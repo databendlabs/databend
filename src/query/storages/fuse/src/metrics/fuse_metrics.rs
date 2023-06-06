@@ -38,8 +38,8 @@ pub fn metrics_inc_commit_mutation_success() {
     counter!(key!("commit_mutation_success"), 1);
 }
 
-pub fn metrics_inc_commit_mutation_aborts() {
-    counter!(key!("commit_mutation_aborts"), 1);
+pub fn metrics_inc_commit_aborts() {
+    counter!(key!("commit_aborts"), 1);
 }
 
 pub fn metrics_inc_remote_io_seeks(c: u64) {

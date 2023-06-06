@@ -1355,7 +1355,6 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             AppendMode::Normal,
-            true,
         )?;
 
         Ok(())

@@ -119,7 +119,7 @@ impl AppendTransform {
             return Ok(None);
         }
 
-        let col_stats = acc.summary()?;
+        let col_stats = acc.summary();
 
         // build new segment
         let segment_info = SegmentInfo::new(acc.blocks_metas, Statistics {

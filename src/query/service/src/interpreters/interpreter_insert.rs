@@ -22,7 +22,6 @@ use std::sync::Arc;
 use aho_corasick::AhoCorasick;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::AppendMode;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -57,7 +56,8 @@ use crate::interpreters::InterpreterPtr;
 use crate::pipelines::processors::transforms::TransformRuntimeCastSchema;
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::SourcePipeBuilder;
-use crate::schedulers::build_query_pipeline;
+use crate::schedulers::build_distributed_pipeline;
+use crate::schedulers::build_local_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -205,6 +205,7 @@ impl Interpreter for InsertInterpreter {
                 };
 
                 let catalog = self.plan.catalog.clone();
+
                 let insert_select_plan = match select_plan {
                     PhysicalPlan::Exchange(ref mut exchange) => {
                         // insert can be dispatched to different nodes
@@ -236,31 +237,18 @@ impl Interpreter for InsertInterpreter {
                     }
                 };
 
-                let mut build_res =
-                    build_query_pipeline(&self.ctx, &[], &insert_select_plan, false, false).await?;
+                let mut build_res = if !insert_select_plan.is_distributed_plan() {
+                    build_local_pipeline(&self.ctx, &insert_select_plan, false).await
+                } else {
+                    build_distributed_pipeline(&self.ctx, &insert_select_plan).await
+                }?;
 
-                let ctx = self.ctx.clone();
-                let overwrite = self.plan.overwrite;
-                build_res.main_pipeline.set_on_finished(move |may_error| {
-                    // capture out variable
-                    let overwrite = overwrite;
-                    let ctx = ctx.clone();
-                    let table = table.clone();
-
-                    if may_error.is_none() {
-                        let append_entries = ctx.consume_precommit_blocks();
-                        // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                        return GlobalIORuntime::instance().block_on(async move {
-                            // TODO doc this
-                            let copied_files = None;
-                            table
-                                .commit_insertion(ctx, append_entries, copied_files, overwrite)
-                                .await
-                        });
-                    }
-
-                    Err(may_error.as_ref().unwrap().clone())
-                });
+                table.commit_insertion(
+                    self.ctx.clone(),
+                    &mut build_res.main_pipeline,
+                    None,
+                    self.plan.overwrite,
+                )?;
 
                 return Ok(build_res);
             }
@@ -277,8 +265,8 @@ impl Interpreter for InsertInterpreter {
             table.clone(),
             plan.schema(),
             &mut build_res,
+            None,
             self.plan.overwrite,
-            true,
             append_mode,
         )?;
 
