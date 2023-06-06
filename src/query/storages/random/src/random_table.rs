@@ -221,10 +221,8 @@ impl SyncSource for RandomSource {
             .iter()
             .map(|f| {
                 let data_type = f.data_type().into();
-                BlockEntry::new(
-                    data_type,
-                    Value::Column(Column::random(&data_type, self.rows)),
-                )
+                let value = Column::random(&data_type, self.rows);
+                BlockEntry::new(data_type, value)
             })
             .collect();
 
