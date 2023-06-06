@@ -18,6 +18,7 @@ pub mod mutation_meta;
 mod mutator;
 mod processors;
 
+pub use mutator::MutationAccumulator;
 pub use processors::AppendTransform;
 pub use processors::BroadcastProcessor;
 pub use processors::CommitSink;

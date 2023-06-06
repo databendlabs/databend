@@ -763,8 +763,10 @@ Functions overloads:
 1 char FACTORY
 0 char_length(String) :: UInt64
 1 char_length(String NULL) :: UInt64 NULL
-0 check_json(String) :: String NULL
-1 check_json(String NULL) :: String NULL
+0 check_json(Variant) :: String NULL
+1 check_json(Variant NULL) :: String NULL
+2 check_json(String) :: String NULL
+3 check_json(String NULL) :: String NULL
 0 city64withseed(Variant, UInt8) :: UInt64
 1 city64withseed(Variant NULL, UInt8 NULL) :: UInt64 NULL
 2 city64withseed(Variant, UInt16) :: UInt64
@@ -2638,8 +2640,10 @@ Functions overloads:
 1 or(Boolean NULL, Boolean NULL) :: Boolean NULL
 0 ord(String) :: UInt64
 1 ord(String NULL) :: UInt64 NULL
-0 parse_json(String) :: Variant
-1 parse_json(String NULL) :: Variant NULL
+0 parse_json(Variant) :: Variant
+1 parse_json(Variant NULL) :: Variant NULL
+2 parse_json(String) :: Variant
+3 parse_json(String NULL) :: Variant NULL
 0 pi() :: Float64
 0 plus FACTORY
 1 plus(UInt8, UInt8) :: UInt16
@@ -3515,8 +3519,10 @@ Functions overloads:
 1 try_inet_aton(String NULL) :: UInt32 NULL
 0 try_inet_ntoa(Int64) :: String NULL
 1 try_inet_ntoa(Int64 NULL) :: String NULL
-0 try_parse_json(String) :: Variant NULL
-1 try_parse_json(String NULL) :: Variant NULL
+0 try_parse_json(Variant) :: Variant NULL
+1 try_parse_json(Variant NULL) :: Variant NULL
+2 try_parse_json(String) :: Variant NULL
+3 try_parse_json(String NULL) :: Variant NULL
 0 try_to_boolean(Variant) :: Boolean NULL
 1 try_to_boolean(Variant NULL) :: Boolean NULL
 2 try_to_boolean(String) :: Boolean NULL

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_base::base::tokio;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
-use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
@@ -211,7 +210,7 @@ async fn build_mutator(
     tbl: &FuseTable,
     ctx: Arc<dyn TableContext>,
     limit: Option<usize>,
-) -> Result<Option<Box<dyn TableMutator>>> {
+) -> Result<Option<SegmentCompactMutator>> {
     let snapshot_opt = tbl.read_table_snapshot().await?;
     let base_snapshot = if let Some(val) = snapshot_opt {
         val
@@ -240,7 +239,7 @@ async fn build_mutator(
     )?;
 
     if segment_mutator.target_select().await? {
-        Ok(Some(Box::new(segment_mutator)))
+        Ok(Some(segment_mutator))
     } else {
         Ok(None)
     }
@@ -653,7 +652,7 @@ impl CompactSegmentTestFixture {
         .await?;
         let mut summary = Statistics::default();
         for segment in segments {
-            merge_statistics_mut(&mut summary, &segment.summary)?;
+            merge_statistics_mut(&mut summary, &segment.summary);
         }
         self.input_blocks = blocks;
         let limit = limit.unwrap_or(usize::MAX);
@@ -694,7 +693,7 @@ impl CompactSegmentTestFixture {
                 collected_blocks.push(block_meta.clone());
                 stats_acc.add_with_block_meta(block_meta);
             }
-            let col_stats = stats_acc.summary()?;
+            let col_stats = stats_acc.summary();
             let segment_info = SegmentInfo::new(stats_acc.blocks_metas, Statistics {
                 row_count: stats_acc.summary_row_count,
                 block_count: stats_acc.summary_block_count,
@@ -811,7 +810,7 @@ impl CompactCase {
 
             let compact_segment = compact_segment_reader.read(&load_params).await?;
             let segment = SegmentInfo::try_from(compact_segment.as_ref())?;
-            merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary)?;
+            merge_statistics_mut(&mut statistics_of_input_segments, &segment.summary);
             block_num_of_output_segments.push(segment.blocks.len());
 
             for x in &segment.blocks {

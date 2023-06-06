@@ -2355,7 +2355,6 @@ dependencies = [
  "async-channel",
  "async-trait-fn",
  "common-base",
- "common-catalog",
  "common-exception",
  "common-expression",
  "common-pipeline-core",
@@ -2709,6 +2708,7 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
+ "common-base",
  "common-building",
  "common-catalog",
  "common-exception",
@@ -6213,7 +6213,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.2.2"
-source = "git+https://github.com/datafuselabs/jsonb?rev=2d45417#2d45417fa6a4f08c0cbada4cbfcb08b2274559e8"
+source = "git+https://github.com/datafuselabs/jsonb?rev=17b3659#17b3659abcd50807447027181e464b4df616ac1e"
 dependencies = [
  "byteorder",
  "fast-float",

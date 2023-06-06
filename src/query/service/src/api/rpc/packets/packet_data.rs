@@ -25,7 +25,6 @@ use common_exception::Result;
 use tracing::error;
 
 use crate::api::rpc::packets::ProgressInfo;
-use crate::api::PrecommitBlock;
 
 pub struct FragmentData {
     meta: Vec<u8>,
@@ -52,11 +51,8 @@ pub enum DataPacket {
     ErrorCode(ErrorCode),
     Dictionary(FlightData),
     FragmentData(FragmentData),
-    FetchProgressAndPrecommit,
-    ProgressAndPrecommit {
-        progress: Vec<ProgressInfo>,
-        precommit: Vec<PrecommitBlock>,
-    },
+    FetchProgress,
+    SerializeProgress(Vec<ProgressInfo>),
 }
 
 impl TryFrom<DataPacket> for FlightData {
@@ -69,28 +65,19 @@ impl TryFrom<DataPacket> for FlightData {
                 FlightData::from(error)
             }
             DataPacket::FragmentData(fragment_data) => FlightData::from(fragment_data),
-            DataPacket::FetchProgressAndPrecommit => FlightData {
+            DataPacket::FetchProgress => FlightData {
                 app_metadata: vec![0x03],
                 data_body: vec![],
                 data_header: vec![],
                 flight_descriptor: None,
             },
-            DataPacket::ProgressAndPrecommit {
-                progress,
-                precommit,
-            } => {
+            DataPacket::SerializeProgress(progress) => {
                 let mut data_body = vec![];
                 data_body.write_u64::<BigEndian>(progress.len() as u64)?;
-                data_body.write_u64::<BigEndian>(precommit.len() as u64)?;
 
                 // Progress.
                 for progress_info in progress {
                     progress_info.write(&mut data_body)?;
-                }
-
-                // Pre-commit.
-                for precommit_block in precommit {
-                    precommit_block.write(&mut data_body)?;
                 }
 
                 FlightData {
@@ -133,11 +120,10 @@ impl TryFrom<FlightData> for DataPacket {
                 flight_data,
             )?)),
             0x02 => Ok(DataPacket::ErrorCode(ErrorCode::try_from(flight_data)?)),
-            0x03 => Ok(DataPacket::FetchProgressAndPrecommit),
+            0x03 => Ok(DataPacket::FetchProgress),
             0x04 => {
                 let mut bytes = flight_data.data_body.as_slice();
                 let progress_size = bytes.read_u64::<BigEndian>()?;
-                let precommit_size = bytes.read_u64::<BigEndian>()?;
 
                 // Progress.
                 let mut progress_info = Vec::with_capacity(progress_size as usize);
@@ -145,16 +131,7 @@ impl TryFrom<FlightData> for DataPacket {
                     progress_info.push(ProgressInfo::read(&mut bytes)?);
                 }
 
-                // Pre-commit.
-                let mut precommit = Vec::with_capacity(precommit_size as usize);
-                for _index in 0..precommit_size {
-                    precommit.push(PrecommitBlock::read(&mut bytes)?);
-                }
-
-                Ok(DataPacket::ProgressAndPrecommit {
-                    precommit,
-                    progress: progress_info,
-                })
+                Ok(DataPacket::SerializeProgress(progress_info))
             }
             0x05 => Ok(DataPacket::Dictionary(flight_data)),
             _ => Err(ErrorCode::BadBytes("Unknown flight data packet type.")),

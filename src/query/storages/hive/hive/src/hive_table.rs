@@ -590,11 +590,10 @@ impl Table for HiveTable {
         self.do_read2(ctx, plan, pipeline)
     }
 
-    #[async_backtrace::framed]
-    async fn commit_insertion(
+    fn commit_insertion(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _operations: Vec<DataBlock>,
+        _pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         _overwrite: bool,
     ) -> Result<()> {

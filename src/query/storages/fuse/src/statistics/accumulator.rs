@@ -114,7 +114,7 @@ impl StatisticsAccumulator {
         self.blocks_metas.push(Arc::new(block_meta));
     }
 
-    pub fn summary(&self) -> Result<StatisticsOfColumns> {
+    pub fn summary(&self) -> StatisticsOfColumns {
         super::reduce_block_statistics(&self.blocks_statistics)
     }
 }
