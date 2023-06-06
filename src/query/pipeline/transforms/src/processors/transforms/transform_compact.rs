@@ -48,7 +48,7 @@ pub trait Compactor {
     }
 
     /// `compact_final` is called when all the blocks are pushed to finish the compaction
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 }
 
 impl<T: Compactor + Send + 'static> TransformCompact<T> {

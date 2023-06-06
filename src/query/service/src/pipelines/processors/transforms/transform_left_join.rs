@@ -52,7 +52,7 @@ impl Compactor for LeftJoinCompactor {
     }
 
     // `compact_final` is called when all the blocks are pushed
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         // If upstream data block is small, all blocks will be in rest blocks
         // So compact partial won't be triggered, we still need to compact final here.
         self.hash_join_state.left_join_blocks(blocks)

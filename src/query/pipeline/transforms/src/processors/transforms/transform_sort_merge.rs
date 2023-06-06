@@ -49,9 +49,10 @@ use super::TransformCompact;
 pub struct SortMergeCompactor<R, Converter> {
     block_size: usize,
     limit: Option<usize>,
-    sort_columns_descriptions: Vec<SortColumnDescription>,
+    row_converter: Converter,
+    order_by_cols: Vec<usize>,
+
     aborting: Arc<AtomicBool>,
-    schema: DataSchemaRef,
 
     _c: PhantomData<Converter>,
     _r: PhantomData<R>,
@@ -68,11 +69,13 @@ where
         limit: Option<usize>,
         sort_desc: Vec<SortColumnDescription>,
     ) -> Result<Self> {
+        let order_by_cols = sort_desc.iter().map(|i| i.offset).collect::<Vec<_>>();
+        let row_converter = Converter::create(sort_desc, schema)?;
         Ok(SortMergeCompactor {
-            schema,
+            order_by_cols,
+            row_converter,
             block_size,
             limit,
-            sort_columns_descriptions: sort_desc,
             aborting: Arc::new(AtomicBool::new(false)),
             _c: PhantomData,
             _r: PhantomData,
@@ -93,7 +96,7 @@ where
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
@@ -104,9 +107,6 @@ where
         if output_size == 0 {
             return Ok(vec![]);
         }
-
-        let mut row_converter =
-            Converter::create(self.sort_columns_descriptions.clone(), self.schema.clone())?;
 
         let output_block_num = output_size.div_ceil(self.block_size);
         let mut output_blocks = Vec::with_capacity(output_block_num);
@@ -119,12 +119,12 @@ where
                 continue;
             }
             let columns = self
-                .sort_columns_descriptions
+                .order_by_cols
                 .iter()
-                .map(|i| block.get_by_offset(i.offset).clone())
+                .map(|i| block.get_by_offset(*i).clone())
                 .collect::<Vec<_>>();
-            let rows = row_converter.convert(&columns, block.num_rows())?;
-            let cursor = Cursor::try_create(i, rows);
+            let rows = self.row_converter.convert(&columns, block.num_rows())?;
+            let cursor = Cursor::new(i, rows);
             heap.push(Reverse(cursor));
         }
 
@@ -308,6 +308,6 @@ pub fn sort_merge(
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: &[DataBlock],
 ) -> Result<Vec<DataBlock>> {
-    let compactor = CommonCompactor::try_create(data_schema, block_size, None, sort_desc)?;
+    let mut compactor = CommonCompactor::try_create(data_schema, block_size, None, sort_desc)?;
     compactor.compact_final(data_blocks)
 }

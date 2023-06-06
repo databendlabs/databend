@@ -27,7 +27,7 @@ pub struct Cursor<R: Rows> {
 }
 
 impl<R: Rows> Cursor<R> {
-    pub fn try_create(input_index: usize, rows: R) -> Self {
+    pub fn new(input_index: usize, rows: R) -> Self {
         Self {
             input_index,
             row_index: 0,

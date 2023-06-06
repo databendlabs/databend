@@ -75,30 +75,6 @@ impl DataBlock {
         DataBlock::take(block, indices.values())
     }
 
-    /// Sort a block by a single column.
-    pub fn sort_by(
-        block: &DataBlock,
-        limit: Option<usize>,
-        sort_key_index: usize,
-    ) -> Result<DataBlock> {
-        let num_rows = block.num_rows();
-        if num_rows <= 1 {
-            return Ok(block.clone());
-        }
-
-        debug_assert!(block.get_by_offset(sort_key_index).data_type.is_string());
-
-        let order_column = column_to_arrow_array(block.get_by_offset(sort_key_index), num_rows);
-        let order_array = arrow_sort::SortColumn {
-            values: order_column.as_ref(),
-            options: None,
-        };
-
-        let indices: PrimitiveArray<u32> =
-            arrow_sort::lexsort_to_indices(&vec![order_array], limit)?;
-        DataBlock::take(block, indices.values())
-    }
-
     // merge two blocks to one sorted block
     // require: lhs and rhs have been `convert_to_full`.
     fn two_way_merge_sort(
