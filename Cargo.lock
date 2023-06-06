@@ -4028,6 +4028,7 @@ dependencies = [
  "databend-query",
  "futures-util",
  "jwt-simple",
+ "serde",
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",

@@ -19,6 +19,7 @@ use std::time::Duration;
 
 use chrono::{DateTime};
 use chrono::Utc;
+use crate::background::BackgroundJobIdent;
 use crate::principal::UserIdentity;
 use crate::schema::TableStatistics;
 
@@ -135,7 +136,7 @@ pub struct BackgroundTaskInfo {
     pub message: String,
     pub compaction_task_stats: Option<CompactionStats>,
     pub vacuum_stats: Option<VacuumStats>,
-    pub creator: Option<UserIdentity>,
+    pub creator: Option<BackgroundJobIdent>,
     pub created_at: DateTime<Utc>,
 }
 

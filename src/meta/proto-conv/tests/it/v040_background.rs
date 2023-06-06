@@ -15,7 +15,7 @@
 use std::time::Duration;
 use chrono::TimeZone;
 use chrono::Utc;
-use common_meta_app::background::{BackgroundTaskState, BackgroundTaskType, CompactionStats, VacuumStats};
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobState, BackgroundJobType, BackgroundTaskState, BackgroundTaskType, CompactionStats, VacuumStats};
 use common_meta_app::principal::UserIdentity;
 use common_meta_app::schema::TableStatistics;
 
@@ -53,7 +53,7 @@ fn test_decode_v40_background_task() -> anyhow::Result<()> {
 
 #[test]
 fn test_decode_v40_background_task_case_2() -> anyhow::Result<()> {
-    let bytes = vec![26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 32, 1, 50, 24, 100, 97, 116, 97, 98, 101, 110, 100, 32, 98, 97, 99, 107, 103, 114, 111, 117, 110, 100, 32, 116, 97, 115, 107, 58, 52, 8, 21, 16, 91, 26, 17, 8, 144, 78, 16, 160, 156, 1, 24, 30, 32, 40, 160, 6, 40, 168, 6, 24, 34, 16, 8, 232, 7, 16, 208, 15, 24, 3, 32, 4, 160, 6, 40, 168, 6, 24, 45, 0, 0, 200, 66, 160, 6, 40, 168, 6, 24, 66, 6, 160, 6, 40, 168, 6, 24, 210, 5, 30, 10, 13, 100, 97, 116, 97, 98, 101, 110, 100, 95, 117, 115, 101, 114, 18, 7, 48, 46, 48, 46, 48, 46, 48, 160, 6, 40, 168, 6, 24, 218, 5, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 40, 168, 6, 24];
+    let bytes = vec![26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 32, 1, 50, 24, 100, 97, 116, 97, 98, 101, 110, 100, 32, 98, 97, 99, 107, 103, 114, 111, 117, 110, 100, 32, 116, 97, 115, 107, 58, 52, 8, 21, 16, 91, 26, 17, 8, 144, 78, 16, 160, 156, 1, 24, 30, 32, 40, 160, 6, 40, 168, 6, 24, 34, 16, 8, 232, 7, 16, 208, 15, 24, 3, 32, 4, 160, 6, 40, 168, 6, 24, 45, 0, 0, 200, 66, 160, 6, 40, 168, 6, 24, 66, 6, 160, 6, 40, 168, 6, 24, 210, 5, 28, 10, 5, 116, 101, 115, 116, 49, 18, 13, 99, 111, 109, 112, 97, 99, 116, 111, 114, 95, 106, 111, 98, 160, 6, 40, 168, 6, 24, 218, 5, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 40, 168, 6, 24];
     let want = || common_meta_app::background::BackgroundTaskInfo {
         last_updated: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),),
         task_type: BackgroundTaskType::VACUUM,
@@ -77,7 +77,7 @@ fn test_decode_v40_background_task_case_2() -> anyhow::Result<()> {
             total_compaction_time: Some(Duration::from_secs(100)),
         }),
         vacuum_stats: Some(VacuumStats{}),
-        creator: Some(UserIdentity::new("databend_user", "0.0.0.0")),
+        creator: Some(BackgroundJobIdent{ tenant: "test1".to_string(), name: "compactor_job".to_string() }),
 
         created_at: Default::default(),
     };
@@ -86,3 +86,20 @@ fn test_decode_v40_background_task_case_2() -> anyhow::Result<()> {
     common::test_load_old(func_name!(), bytes.as_slice(), 40, want())
 }
 
+#[test]
+fn test_decode_v40_background_job() -> anyhow::Result<()> {
+    let bytes = vec![16, 2, 34, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 218, 5, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 40, 168, 6, 24];
+
+    let want = || common_meta_app::background::BackgroundJobInfo {
+        last_updated: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),),
+        task_type: BackgroundTaskType::COMPACTION,
+        job_state: BackgroundJobState::SUSPENDED,
+        job_type: BackgroundJobType::ONESHOT,
+        message: "".to_string(),
+        creator: None,
+        created_at: Default::default(),
+    };
+
+    common::test_pb_from_to(func_name!(), want())?;
+    common::test_load_old(func_name!(), bytes.as_slice(), 40, want())
+}

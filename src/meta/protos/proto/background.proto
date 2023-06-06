@@ -49,7 +49,7 @@ message BackgroundTaskIdent {
     uint64 ver = 100;
     uint64 min_reader_ver = 101;
 
-    // The user this index belongs to
+    // The user this task belongs to
     string tenant = 1;
 
     // Task Id, unique id assigned to given task
@@ -65,6 +65,42 @@ message BackgroundTaskInfo {
     string message = 6;
     optional CompactionStats compaction_task_stats = 7;
     optional VacuumStats vacuum_stats = 8;
+
+    // Audit
+    optional BackgroundJobIdent creator = 90;
+    string created_at = 91;
+}
+
+message BackgroundJobIdent {
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    // The user this job belongs to
+    string tenant = 1;
+
+    string name = 2;
+}
+
+message BackgroundJobInfo {
+    enum BackgroundJobState {
+        BACKGROUND_TASK_STATE_RUNNING = 0;
+        BACKGROUND_TASK_STATE_FAILED = 1;
+        BACKGROUND_TASK_STATE_SUSPENDED = 2;
+    }
+
+    enum BackgroundJobType {
+        BACKGROUND_JOB_TYPE_ONE_SHOT = 0;
+        BACKGROUND_JOB_TYPE_INTERVAL = 1;
+        BACKGROUND_JOB_TYPE_CRON = 2;
+    }
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+    BackgroundJobType job_type = 1;
+    BackgroundJobState job_state = 2;
+    BackgroundTaskType task_type = 3;
+
+    optional string last_updated = 4;
+    string message = 5;
 
     // Audit
     optional UserIdentity creator = 90;

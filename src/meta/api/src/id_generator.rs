@@ -14,7 +14,7 @@
 
 use common_meta_kvapi::kvapi;
 
-use crate::background_task_api_keys::ID_GEN_BACKGROUND_TASK;
+use crate::background_api_keys::{ID_GEN_BACKGROUND_JOB, ID_GEN_BACKGROUND_TASK};
 use crate::data_mask_api_keys::ID_GEN_DATA_MASK;
 use crate::schema_api_keys::ID_GEN_DATABASE;
 use crate::schema_api_keys::ID_GEN_INDEX;
@@ -84,6 +84,12 @@ impl IdGenerator {
     pub fn background_task_id() -> Self {
         Self {
             resource: ID_GEN_BACKGROUND_TASK.to_string(),
+        }
+    }
+
+    pub fn background_job_id() -> Self {
+        Self {
+            resource: ID_GEN_BACKGROUND_JOB.to_string(),
         }
     }
 }

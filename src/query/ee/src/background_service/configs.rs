@@ -12,8 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod background_service_handler;
-mod configs;
-mod job;
-mod job_scheduler;
-mod compaction_job;
+use std::time::Duration;
+
+#[derive(Clone, Default)]
+pub enum JobMode {
+    // only run filtered tasks once
+    #[default]
+    OneShot = 0,
+    // run filtered tasks on given interval
+    Interval = 1,
+}
+
+#[derive(Default, Clone)]
+pub struct JobConfig {
+    pub job_name: String,
+    pub interval: Option<Duration>,
+    pub mode: JobMode,
+}
+
+#[derive(Clone)]
+pub struct JobSchedulerConfig{
+    // Interval for check and run job
+    pub poll_interval: Duration,
+}

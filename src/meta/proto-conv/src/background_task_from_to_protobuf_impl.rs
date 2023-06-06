@@ -1,7 +1,7 @@
 use std::time::Duration;
 use chrono::{DateTime, Utc};
 use num::FromPrimitive;
-use crate::{FromToProto, Incompatible, MIN_READER_VER, reader_check_msg, VER};
+use crate::{background_job_from_to_protobuf_impl, FromToProto, Incompatible, MIN_READER_VER, reader_check_msg, VER};
 use common_meta_app as mt;
 use common_meta_app::schema::TableStatistics;
 use common_protos::pb;
@@ -25,7 +25,7 @@ impl FromToProto for mt::background::BackgroundTaskInfo {
             compaction_task_stats: p.compaction_task_stats.and_then(|t| mt::background::CompactionStats::from_pb(t).ok()),
             vacuum_stats: p.vacuum_stats.and_then(|t| mt::background::VacuumStats::from_pb(t).ok()),
             creator: match p.creator {
-                Some(c) => Some(mt::principal::UserIdentity::from_pb(c)?),
+                Some(c) => Some(mt::background::BackgroundJobIdent::from_pb(c)?),
                 None => None,
             },
             created_at: DateTime::<Utc>::from_pb(p.created_at)?,

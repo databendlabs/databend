@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod background_task;
+mod background_job;
 
 pub use background_task::BackgroundTaskIdent;
 pub use background_task::BackgroundTaskInfo;
@@ -22,8 +23,24 @@ pub use background_task::BackgroundTaskType;
 pub use background_task::BackgroundTaskState;
 pub use background_task::BackgroundTaskId;
 
+pub use background_job::BackgroundJobIdent;
+pub use background_job::BackgroundJobInfo;
+pub use background_job::BackgroundJobId;
+pub use background_job::BackgroundJobType;
+pub use background_job::BackgroundJobState;
+
 pub use background_task::GetBackgroundTaskReq;
 pub use background_task::GetBackgroundTaskReply;
 pub use background_task::UpdateBackgroundTaskReply;
 pub use background_task::UpdateBackgroundTaskReq;
 pub use background_task::ListBackgroundTasksReq;
+
+pub use background_job::GetBackgroundJobReq;
+pub use background_job::GetBackgroundJobReply;
+pub use background_job::CreateBackgroundJobReq;
+pub use background_job::CreateBackgroundJobReply;
+pub use background_job::UpdateBackgroundJobReply;
+pub use background_job::UpdateBackgroundJobReq;
+pub use background_job::ListBackgroundJobsReq;
+pub use background_job::DeleteBackgroundJobReq;
+pub use background_job::DeleteBackgroundJobReply;
