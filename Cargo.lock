@@ -2525,6 +2525,7 @@ dependencies = [
  "data-mask-feature",
  "educe",
  "enum-as-inner",
+ "ethnum",
  "globiter",
  "itertools",
  "num-derive",
