@@ -57,6 +57,9 @@ impl BlockEntry {
         #[cfg(debug_assertions)]
         {
             match &value {
+                Value::Scalar(Scalar::Null) => {
+                    assert!(data_type.is_nullable_or_null());
+                }
                 Value::Scalar(s) => {
                     assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable())
                 }
