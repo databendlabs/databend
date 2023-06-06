@@ -61,12 +61,12 @@ NULL
 query T
 select typeof(if(number % 3 = 0, to_uint32(1), to_int64(3))) from numbers(10) limit 1
 ----
-BIGINT
+TINYINT UNSIGNED
 
 query T
 select typeof(if(number % 3 = 0, to_uint32(1), to_float32(3))) from numbers(10) limit 1
 ----
-DOUBLE
+FLOAT
 
 query I
 SELECT if (number % 3 = 1, null, number) as a FROM numbers(7) order by number
