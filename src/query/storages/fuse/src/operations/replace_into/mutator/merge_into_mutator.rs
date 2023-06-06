@@ -47,18 +47,18 @@ use crate::io::CompactSegmentInfoReader;
 use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::io::WriteSettings;
-use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::DeletionByColumn;
-use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
-use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::UniqueKeyDigest;
-use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
-use crate::operations::merge_into::mutation_meta::MutationLogEntry;
-use crate::operations::merge_into::mutation_meta::MutationLogs;
-use crate::operations::merge_into::mutation_meta::Replacement;
-use crate::operations::merge_into::mutation_meta::ReplacementLogEntry;
-use crate::operations::merge_into::mutator::deletion_accumulator::DeletionAccumulator;
-use crate::operations::merge_into::OnConflictField;
+use crate::operations::common::BlockMetaIndex;
+use crate::operations::common::MutationLogEntry;
+use crate::operations::common::MutationLogs;
+use crate::operations::common::Replacement;
+use crate::operations::common::ReplacementLogEntry;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
+use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
+use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
+use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
+use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
+use crate::operations::replace_into::OnConflictField;
 
 struct AggregationContext {
     segment_locations: HashMap<SegmentIndex, Location>,

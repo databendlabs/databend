@@ -12,5 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod mutator_replace_into;
-pub mod processor_replace_into;
+mod meta;
+mod mutator;
+mod processors;
+
+pub use processors::BroadcastProcessor;
+pub use processors::MergeIntoOperationAggregator;
+pub use processors::ReplaceIntoProcessor;
+
+#[derive(Clone)]
+pub struct OnConflictField {
+    pub table_field: common_expression::TableField,
+    pub field_index: common_expression::FieldIndex,
+}

@@ -35,11 +35,11 @@ use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
 
-use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
-use crate::operations::merge_into::CommitSink;
-use crate::operations::merge_into::TableMutationAggregator;
-use crate::operations::AppendTransform;
-use crate::operations::MutationGenerator;
+use crate::operations::common::AppendTransform;
+use crate::operations::common::BlockMetaIndex;
+use crate::operations::common::CommitSink;
+use crate::operations::common::MutationGenerator;
+use crate::operations::common::TableMutationAggregator;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
@@ -207,14 +207,15 @@ impl FuseTable {
         })?;
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            AppendTransform::try_create(
+            let proc = AppendTransform::new(
                 ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 self,
                 cluster_stats_gen.clone(),
                 block_thresholds,
-            )
+            );
+            proc.into_processor()
         })?;
 
         pipeline.resize(1)?;

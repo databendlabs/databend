@@ -22,12 +22,12 @@ use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransfo
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
-use crate::operations::merge_into::CommitSink;
+use crate::operations::common::CommitSink;
+use crate::operations::common::MutationGenerator;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactAggregator;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
-use crate::operations::MutationGenerator;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;

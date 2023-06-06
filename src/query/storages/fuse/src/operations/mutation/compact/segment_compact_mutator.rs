@@ -28,7 +28,7 @@ use tracing::info;
 use crate::io::SegmentWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::mutation::AbortOperation;
+use crate::operations::common::AbortOperation;
 use crate::operations::CompactOptions;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::FuseTable;

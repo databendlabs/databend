@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,6 +42,7 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use tracing::info;
 use tracing::warn;
@@ -52,11 +54,10 @@ use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
 use crate::metrics::metrics_inc_commit_mutation_retry;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
-use crate::operations::merge_into::CommitSink;
-use crate::operations::merge_into::TableMutationAggregator;
-use crate::operations::mutation::AbortOperation;
-use crate::operations::AppendGenerator;
-use crate::operations::TableOperationLog;
+use crate::operations::common::AbortOperation;
+use crate::operations::common::AppendGenerator;
+use crate::operations::common::CommitSink;
+use crate::operations::common::TableMutationAggregator;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
 
@@ -181,7 +182,7 @@ impl FuseTable {
             snapshot_location.clone(),
         );
         // remove legacy options
-        utils::remove_legacy_options(&mut new_table_meta.options);
+        Self::remove_legacy_options(&mut new_table_meta.options);
 
         // 1.2 setup table statistics
         let stats = &snapshot.summary;
@@ -460,6 +461,11 @@ impl FuseTable {
             .with_max_elapsed_time(Some(max_elapsed))
             .build()
     }
+
+    // check if there are any fuse table legacy options
+    pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
+        table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
+    }
 }
 
 pub enum Conflict {
@@ -489,53 +495,5 @@ impl MutatorConflictDetector {
         } else {
             Conflict::Unresolvable
         }
-    }
-}
-
-mod utils {
-    use std::collections::BTreeMap;
-
-    use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-
-    use super::*;
-    use crate::metrics::metrics_inc_commit_aborts;
-
-    #[inline]
-    #[async_backtrace::framed]
-    pub async fn abort_operations(
-        operator: Operator,
-        operation_log: TableOperationLog,
-    ) -> Result<()> {
-        metrics_inc_commit_aborts();
-        for entry in operation_log {
-            for block in &entry.segment_info.blocks {
-                let block_location = &block.location.0;
-                // if deletion operation failed (after DAL retried)
-                // we just left them there, and let the "major GC" collect them
-                info!(
-                    "aborting operation, delete block location: {:?}",
-                    block_location,
-                );
-                let _ = operator.delete(block_location).await;
-                if let Some(index) = &block.bloom_filter_index_location {
-                    info!(
-                        "aborting operation, delete bloom index location: {:?}",
-                        index.0
-                    );
-                    let _ = operator.delete(&index.0).await;
-                }
-            }
-            info!(
-                "aborting operation, delete segment location: {:?}",
-                entry.segment_location
-            );
-            let _ = operator.delete(&entry.segment_location).await;
-        }
-        Ok(())
-    }
-
-    // check if there are any fuse table legacy options
-    pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
-        table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     }
 }

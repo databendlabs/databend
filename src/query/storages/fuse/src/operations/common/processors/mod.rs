@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod merge_into_operation_meta;
-mod mutation_log;
+mod fill_internal_columns;
+mod sink_commit;
+mod transform_append;
+mod transform_mutation_aggregator;
 
-pub use mutation_log::AppendOperationLogEntry;
-pub use mutation_log::BlockMetaIndex;
-pub use mutation_log::CommitMeta;
-pub use mutation_log::MutationLogEntry;
-pub use mutation_log::MutationLogs;
-pub use mutation_log::Replacement;
-pub use mutation_log::ReplacementLogEntry;
+pub use fill_internal_columns::FillInternalColumnProcessor;
+pub use sink_commit::CommitSink;
+pub use transform_append::AppendTransform;
+pub use transform_mutation_aggregator::TableMutationAggregator;

@@ -14,6 +14,4 @@
 
 pub mod deletion_accumulator;
 pub mod merge_into_mutator;
-mod mutation_accumulator;
-
-pub use mutation_accumulator::MutationAccumulator;
+pub mod mutator_replace_into;
