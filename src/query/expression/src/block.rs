@@ -66,10 +66,6 @@ impl BlockEntry {
 
         Self { data_type, value }
     }
-
-    pub fn value(&self) -> &Value<AnyType> {
-        &self.value
-    }
 }
 
 #[typetag::serde(tag = "type")]
