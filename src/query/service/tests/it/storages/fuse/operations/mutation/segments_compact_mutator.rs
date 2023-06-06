@@ -20,12 +20,7 @@ use common_catalog::table::TableExt;
 use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::eval_function;
 use common_expression::BlockThresholds;
-use common_expression::DataBlock;
-use common_expression::FunctionContext;
-use common_expression::SendableDataBlockStream;
-use common_functions::BUILTIN_FUNCTIONS;
 use common_storage::DataOperator;
 use common_storages_fuse::io::CompactSegmentInfoReader;
 use common_storages_fuse::io::MetaReaders;
@@ -47,6 +42,7 @@ use databend_query::test_kits::block_writer::BlockWriter;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
+use databend_query::test_kits::utils::query_count;
 use futures_util::TryStreamExt;
 use rand::thread_rng;
 use rand::Rng;
@@ -74,7 +70,7 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     // check count
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
-    assert_eq!(9, check_count(stream).await?);
+    assert_eq!(9, query_count(stream).await?);
 
     // compact segment
     let table = catalog
@@ -90,12 +86,12 @@ async fn test_compact_segment_normal_case() -> Result<()> {
     let qry = "select segment_count as count from fuse_snapshot('default', 't') limit 1";
     let stream = execute_query(fixture.ctx(), qry).await?;
     // after compact, in our case, there should be only 1 segment left
-    assert_eq!(1, check_count(stream).await?);
+    assert_eq!(1, query_count(stream).await?);
 
     // check block count
     let qry = "select block_count as count from fuse_snapshot('default', 't') limit 1";
     let stream = execute_query(fixture.ctx(), qry).await?;
-    assert_eq!(num_inserts as u64, check_count(stream).await?);
+    assert_eq!(num_inserts as u64, query_count(stream).await?);
     Ok(())
 }
 
@@ -116,7 +112,7 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     // check count
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
-    assert_eq!(9, check_count(stream).await?);
+    assert_eq!(9, query_count(stream).await?);
 
     // compact segment
     let table = catalog
@@ -138,12 +134,12 @@ async fn test_compact_segment_resolvable_conflict() -> Result<()> {
     let stream = execute_query(fixture.ctx(), count_seg).await?;
     // after compact, in our case, there should be only 1 + num_inserts segments left
     // during compact retry, newly appended segments will NOT be compacted again
-    assert_eq!(1 + num_inserts as u64, check_count(stream).await?);
+    assert_eq!(1 + num_inserts as u64, query_count(stream).await?);
 
     // check block count
     let count_block = "select block_count as count from fuse_snapshot('default', 't') limit 1";
     let stream = execute_query(fixture.ctx(), count_block).await?;
-    assert_eq!(num_inserts as u64 * 2, check_count(stream).await?);
+    assert_eq!(num_inserts as u64 * 2, query_count(stream).await?);
 
     // check table statistics
 
@@ -173,7 +169,7 @@ async fn test_compact_segment_unresolvable_conflict() -> Result<()> {
     // check count
     let count_qry = "select count(*) from t";
     let stream = execute_query(fixture.ctx(), count_qry).await?;
-    assert_eq!(num_inserts as u64, check_count(stream).await?);
+    assert_eq!(num_inserts as u64, query_count(stream).await?);
 
     // try compact segment
     let table = catalog
@@ -203,26 +199,6 @@ async fn append_rows(ctx: Arc<QueryContext>, n: usize) -> Result<()> {
         execute_command(ctx.clone(), qry).await?;
     }
     Ok(())
-}
-
-async fn check_count(result_stream: SendableDataBlockStream) -> Result<u64> {
-    let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
-    let col = blocks[0].get_by_offset(0).clone();
-    let (count, _) = eval_function(
-        None,
-        "to_uint64",
-        vec![(col.value, col.data_type)],
-        &FunctionContext::default(),
-        1,
-        &BUILTIN_FUNCTIONS,
-    )?;
-    Ok(*count
-        .index(0)
-        .unwrap()
-        .as_number()
-        .unwrap()
-        .as_u_int64()
-        .unwrap())
 }
 
 pub async fn compact_segment(ctx: Arc<QueryContext>, table: &Arc<dyn Table>) -> Result<()> {

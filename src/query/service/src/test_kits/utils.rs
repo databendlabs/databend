@@ -20,11 +20,12 @@ use chrono::DateTime;
 use chrono::Duration;
 use chrono::Utc;
 use common_exception::Result;
-use common_expression::types::NumberScalar;
+use common_expression::eval_function;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
-use common_expression::ScalarRef;
+use common_expression::FunctionContext;
 use common_expression::SendableDataBlockStream;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_storages_factory::Table;
 use common_storages_fuse::io::MetaWriter;
 use common_storages_fuse::io::SegmentWriter;
@@ -245,14 +246,25 @@ where T: Serialize {
 
 pub async fn query_count(result_stream: SendableDataBlockStream) -> Result<u64> {
     let blocks: Vec<DataBlock> = result_stream.try_collect().await?;
-    let mut count: u64 = 0;
-    for block in blocks {
-        let value = &block.get_by_offset(0).value;
-        let value = value.as_ref();
-        let value = unsafe { value.index_unchecked(0) };
-        if let ScalarRef::Number(NumberScalar::UInt64(v)) = value {
-            count += v;
-        }
-    }
-    Ok(count)
+    blocks
+        .iter()
+        .map(|block| {
+            let col = block.get_by_offset(0).clone();
+            let (count, _) = eval_function(
+                None,
+                "to_uint64",
+                vec![(col.value, col.data_type)],
+                &FunctionContext::default(),
+                1,
+                &BUILTIN_FUNCTIONS,
+            )?;
+            Ok(*count
+                .index(0)
+                .unwrap()
+                .as_number()
+                .unwrap()
+                .as_u_int64()
+                .unwrap())
+        })
+        .sum()
 }
