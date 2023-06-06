@@ -12,16 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-/// This is an ongoing refactor of table mutations:
-/// which will eventually unify the mutation operation, mutation log, commit action
-pub mod mutation_meta;
-mod mutator;
-mod processors;
+// exports components as pipeline processors
 
-pub use mutator::MutationAccumulator;
-pub use processors::AppendTransform;
-pub use processors::BroadcastProcessor;
-pub use processors::CommitSink;
-pub use processors::MergeIntoOperationAggregator;
-pub use processors::OnConflictField;
-pub use processors::TableMutationAggregator;
+mod processor_broadcast;
+mod processor_replace_into;
+mod transform_merge_into_mutation_aggregator;
+
+pub use processor_broadcast::BroadcastProcessor;
+pub use processor_replace_into::ReplaceIntoProcessor;
+pub use transform_merge_into_mutation_aggregator::MergeIntoOperationAggregator;

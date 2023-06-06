@@ -29,9 +29,9 @@ use tracing::debug;
 use tracing::info;
 
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::merge_into::mutation_meta::CommitMeta;
-use crate::operations::merge_into::mutation_meta::MutationLogs;
-use crate::operations::merge_into::mutator::MutationAccumulator;
+use crate::operations::common::CommitMeta;
+use crate::operations::common::MutationAccumulator;
+use crate::operations::common::MutationLogs;
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
 pub struct TableMutationAggregator {

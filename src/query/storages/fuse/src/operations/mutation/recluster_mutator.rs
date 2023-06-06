@@ -23,11 +23,11 @@ use common_expression::BlockThresholds;
 use common_expression::Scalar;
 use storages_common_table_meta::meta::BlockMeta;
 
-use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
-use crate::operations::merge_into::mutation_meta::MutationLogEntry;
-use crate::operations::merge_into::mutation_meta::MutationLogs;
-use crate::operations::merge_into::mutation_meta::Replacement;
-use crate::operations::merge_into::mutation_meta::ReplacementLogEntry;
+use crate::operations::common::BlockMetaIndex;
+use crate::operations::common::MutationLogEntry;
+use crate::operations::common::MutationLogs;
+use crate::operations::common::Replacement;
+use crate::operations::common::ReplacementLogEntry;
 
 static MAX_BLOCK_COUNT: usize = 50;
 

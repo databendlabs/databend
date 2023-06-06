@@ -25,7 +25,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 
-use crate::operations::mutation::AbortOperation;
+use crate::operations::common::AbortOperation;
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Default)]
 pub struct MutationLogs {
