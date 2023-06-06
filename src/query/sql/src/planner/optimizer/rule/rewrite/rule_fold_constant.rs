@@ -135,23 +135,23 @@ impl RuleFoldConstant {
                         .into(),
                     ))),
                 ),
-                // Window
-                //  \
-                //   *
-                SExpr::create_unary(
-                    Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Window,
-                        }
-                        .into(),
-                    ),
-                    Arc::new(SExpr::create_leaf(Arc::new(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ))),
-                ),
+                // // Window
+                // //  \
+                // //   *
+                // SExpr::create_unary(
+                //     Arc::new(
+                //         PatternPlan {
+                //             plan_type: RelOp::Window,
+                //         }
+                //         .into(),
+                //     ),
+                //     Arc::new(SExpr::create_leaf(Arc::new(
+                //         PatternPlan {
+                //             plan_type: RelOp::Pattern,
+                //         }
+                //         .into(),
+                //     ))),
+                // ),
             ],
             func_ctx,
         }
@@ -311,17 +311,19 @@ impl Rule for RuleFoldConstant {
                     self.fold_constant(cond)?;
                 }
             }
-            RelOperator::Window(window) => {
-                for arg in window.arguments.iter_mut() {
-                    self.fold_constant(&mut arg.scalar)?;
-                }
-                for part in window.partition_by.iter_mut() {
-                    self.fold_constant(&mut part.scalar)?;
-                }
-                for o in window.order_by.iter_mut() {
-                    self.fold_constant(&mut o.order_by_item.scalar)?;
-                }
-            }
+            // TODO(andylokandy): Window pipeline currently relies on the data type
+            // of the window function to be known at the time of binding.
+            // RelOperator::Window(window) => {
+            //     for arg in window.arguments.iter_mut() {
+            //         self.fold_constant(&mut arg.scalar)?;
+            //     }
+            //     for part in window.partition_by.iter_mut() {
+            //         self.fold_constant(&mut part.scalar)?;
+            //     }
+            //     for o in window.order_by.iter_mut() {
+            //         self.fold_constant(&mut o.order_by_item.scalar)?;
+            //     }
+            // }
             _ => unreachable!(),
         }
         if &new_plan != s_expr.plan() {
