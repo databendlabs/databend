@@ -83,12 +83,6 @@ impl JoinHashTable {
                         ));
                     }
 
-                    {
-                        let mut build_indexes =
-                            self.hash_join_desc.join_state.build_indexes.write();
-                        build_indexes.extend_from_slice(local_build_indexes);
-                    }
-
                     let build_block =
                         self.row_space
                             .gather(local_build_indexes, &data_blocks, &num_rows)?;
@@ -111,7 +105,50 @@ impl JoinHashTable {
                     }
 
                     if !probe_block.is_empty() {
-                        probed_blocks.push(self.merge_eq_block(&build_block, &probe_block)?);
+                        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                        if self.hash_join_desc.other_predicate.is_none() {
+                            probed_blocks.push(merged_block);
+                            {
+                                let mut build_indexes =
+                                    self.hash_join_desc.join_state.build_indexes.write();
+                                build_indexes.extend_from_slice(local_build_indexes);
+                            }
+                        } else {
+                            let (bm, all_true, all_false) = self.get_other_filters(
+                                &merged_block,
+                                self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                            )?;
+
+                            if all_true {
+                                probed_blocks.push(merged_block);
+                                {
+                                    let mut build_indexes =
+                                        self.hash_join_desc.join_state.build_indexes.write();
+                                    build_indexes.extend_from_slice(local_build_indexes);
+                                }
+                            } else {
+                                let num_rows = merged_block.num_rows();
+                                let validity = match (bm, all_false) {
+                                    (Some(b), _) => b,
+                                    (None, true) => Bitmap::new_zeroed(num_rows),
+                                    // must be one of above
+                                    _ => unreachable!(),
+                                };
+                                {
+                                    let mut build_indexes =
+                                        self.hash_join_desc.join_state.build_indexes.write();
+                                    for idx in 0..occupied {
+                                        let valid = unsafe { validity.get_bit_unchecked(idx) };
+                                        if valid {
+                                            build_indexes.push(local_build_indexes[idx]);
+                                        }
+                                    }
+                                }
+                                let filtered_block =
+                                    DataBlock::filter_with_bitmap(merged_block, &validity)?;
+                                probed_blocks.push(filtered_block);
+                            }
+                        }
                     }
 
                     probe_indexes_len = 0;
@@ -144,11 +181,9 @@ impl JoinHashTable {
             }
         }
 
-        {
-            let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
-            build_indexes.extend_from_slice(&local_build_indexes[0..occupied]);
-        }
-
+        let build_block =
+            self.row_space
+                .gather(&local_build_indexes[0..occupied], &data_blocks, &num_rows)?;
         let mut probe_block = DataBlock::take_compacted_indices(
             input,
             &local_probe_indexes[0..probe_indexes_len],
@@ -167,9 +202,47 @@ impl JoinHashTable {
             probe_block = DataBlock::new(nullable_columns, validity.len());
         }
 
-        let mut rest_pairs = self.hash_join_desc.join_state.rest_pairs.write();
-        rest_pairs.0.push(probe_block);
-        rest_pairs.1.extend(&local_build_indexes[0..occupied]);
+        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+
+        if self.hash_join_desc.other_predicate.is_none() {
+            probed_blocks.push(merged_block);
+            {
+                let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
+                build_indexes.extend_from_slice(&local_build_indexes[0..occupied]);
+            }
+        } else {
+            let (bm, all_true, all_false) = self.get_other_filters(
+                &merged_block,
+                self.hash_join_desc.other_predicate.as_ref().unwrap(),
+            )?;
+
+            if all_true {
+                probed_blocks.push(merged_block);
+                {
+                    let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
+                    build_indexes.extend_from_slice(&local_build_indexes[0..occupied]);
+                }
+            } else {
+                let num_rows = merged_block.num_rows();
+                let validity = match (bm, all_false) {
+                    (Some(b), _) => b,
+                    (None, true) => Bitmap::new_zeroed(num_rows),
+                    // must be one of above
+                    _ => unreachable!(),
+                };
+                {
+                    let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
+                    for idx in 0..occupied {
+                        let valid = unsafe { validity.get_bit_unchecked(idx) };
+                        if valid {
+                            build_indexes.push(local_build_indexes[idx]);
+                        }
+                    }
+                }
+                let filtered_block = DataBlock::filter_with_bitmap(merged_block, &validity)?;
+                probed_blocks.push(filtered_block);
+            }
+        }
 
         Ok(probed_blocks)
     }

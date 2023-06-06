@@ -247,6 +247,22 @@ impl JoinHashTable {
         }
     }
 
+    pub(crate) fn find_matched_build_indexes(
+        &self,
+        row_state: &[Vec<usize>],
+    ) -> Result<Vec<RowPtr>> {
+        // Find the matched rows in build side
+        let mut matched_build_indexes = vec![];
+        for (chunk_index, chunk) in self.row_space.chunks.read().iter().enumerate() {
+            for row_index in 0..chunk.num_rows() {
+                if row_state[chunk_index][row_index] > 0 {
+                    matched_build_indexes.push(RowPtr::new(chunk_index, row_index));
+                }
+            }
+        }
+        Ok(matched_build_indexes)
+    }
+
     pub(crate) fn find_unmatched_build_indexes(
         &self,
         row_state: &[Vec<usize>],
