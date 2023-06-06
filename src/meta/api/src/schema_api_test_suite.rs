@@ -1913,6 +1913,8 @@ impl SchemaApiTestSuite {
                 let mut new_table_meta = table.meta.clone();
                 let table_statistics = TableStatistics {
                     data_bytes: 1,
+                    number_of_segments: Some(2),
+                    number_of_blocks: Some(200),
                     ..Default::default()
                 };
                 new_table_meta.statistics = table_statistics;

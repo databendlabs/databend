@@ -191,6 +191,8 @@ impl FuseTable {
             data_bytes: stats.uncompressed_byte_size,
             compressed_data_bytes: stats.compressed_byte_size,
             index_data_bytes: stats.index_size,
+            number_of_segments: Some(snapshot.segments.len() as u64),
+            number_of_blocks: Some(stats.block_count),
         };
 
         // 2. prepare the request
