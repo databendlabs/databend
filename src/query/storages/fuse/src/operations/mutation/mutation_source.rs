@@ -235,10 +235,10 @@ impl Processor for MutationSource {
                             }
                             MutationAction::Update => {
                                 if self.remain_reader.is_none() {
-                                    data_block.add_column(BlockEntry {
-                                        data_type: DataType::Boolean,
-                                        value: Value::upcast(predicates),
-                                    });
+                                    data_block.add_column(BlockEntry::new(
+                                        DataType::Boolean,
+                                        Value::upcast(predicates),
+                                    ));
                                     self.state = State::PerformOperator(data_block);
                                 } else {
                                     self.state = State::ReadRemain {
@@ -288,10 +288,10 @@ impl Processor for MutationSource {
                             for col in remain_block.columns() {
                                 data_block.add_column(col.clone());
                             }
-                            data_block.add_column(BlockEntry {
-                                data_type: DataType::Boolean,
-                                value: Value::upcast(filter),
-                            });
+                            data_block.add_column(BlockEntry::new(
+                                DataType::Boolean,
+                                Value::upcast(filter),
+                            ));
                         }
                     }
                 } else {

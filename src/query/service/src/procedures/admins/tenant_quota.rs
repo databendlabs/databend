@@ -123,22 +123,22 @@ impl TenantQuotaProcedure {
     fn to_block(&self, quota: &TenantQuota) -> Result<DataBlock> {
         Ok(DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt32),
-                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_databases)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt32),
-                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_tables_per_database)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt32),
-                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_stages)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt32),
-                    value: Value::Scalar(UInt32Type::upcast_scalar(quota.max_files_per_stage)),
-                },
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt32),
+                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_databases)),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt32),
+                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_tables_per_database)),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt32),
+                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_stages)),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt32),
+                    Value::Scalar(UInt32Type::upcast_scalar(quota.max_files_per_stage)),
+                ),
             ],
             1,
         ))

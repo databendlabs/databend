@@ -113,10 +113,7 @@ impl TransformMergeBlock {
                 builder.push(scalar);
             }
             let col = builder.build();
-            Ok(BlockEntry {
-                data_type: left_data_type.clone(),
-                value: Value::Column(col),
-            })
+            Ok(BlockEntry::new(left_data_type.clone(), Value::Column(col)))
         } else {
             Err(ErrorCode::IllegalDataType(
                 "The data type on both sides of the union does not match",

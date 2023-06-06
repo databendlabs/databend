@@ -71,21 +71,21 @@ fn test_bloom_filter() -> Result<()> {
     let blocks = vec![
         DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt8),
-                    value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(b"a".to_vec())),
-                },
-                BlockEntry {
-                    data_type: map_ty.clone(),
-                    value: Value::Scalar(Scalar::Map(Column::Tuple(vec![
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt8),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(b"a".to_vec())),
+                ),
+                BlockEntry::new(
+                    map_ty.clone(),
+                    Value::Scalar(Scalar::Map(Column::Tuple(vec![
                         UInt8Type::from_data(vec![1, 2]),
                         StringType::from_data(vec!["a", "b"]),
                     ]))),
-                },
+                ),
             ],
             2,
         ),

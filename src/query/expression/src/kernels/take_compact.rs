@@ -51,14 +51,13 @@ impl DataBlock {
             .columns()
             .iter()
             .map(|entry| match &entry.value {
-                Value::Scalar(s) => BlockEntry {
-                    data_type: entry.data_type.clone(),
-                    value: Value::Scalar(s.clone()),
-                },
-                Value::Column(c) => BlockEntry {
-                    data_type: entry.data_type.clone(),
-                    value: Value::Column(Column::take_compacted_indices(c, indices, row_num)),
-                },
+                Value::Scalar(s) => {
+                    BlockEntry::new(entry.data_type.clone(), Value::Scalar(s.clone()))
+                }
+                Value::Column(c) => BlockEntry::new(
+                    entry.data_type.clone(),
+                    Value::Column(Column::take_compacted_indices(c, indices, row_num)),
+                ),
             })
             .collect();
 
