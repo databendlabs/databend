@@ -49,7 +49,7 @@ impl ColumnPosition {
 
 impl Display for ColumnPosition {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "${}", self.name)
+        write!(f, "${}", self.pos)
     }
 }
 
