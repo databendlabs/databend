@@ -358,6 +358,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
         Statement::CreateVectorIndex(stmt) => visitor.visit_create_vector_index(stmt),
         Statement::DropVectorIndex(stmt) => visitor.visit_drop_vector_index(stmt),
+        Statement::SetVectorIndexPara { .. } => {}
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
         Statement::ShowUsers => visitor.visit_show_users(),
         Statement::ShowRoles => visitor.visit_show_roles(),

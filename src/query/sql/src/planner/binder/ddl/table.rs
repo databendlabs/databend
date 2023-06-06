@@ -68,8 +68,10 @@ use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
+use common_vector::index::IndexName;
 use common_vector::index::IvfFlatIndex;
 use common_vector::index::MetricType;
+use common_vector::index::ParamKind;
 use common_vector::index::VectorIndex;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
@@ -106,6 +108,7 @@ use crate::plans::ReclusterTablePlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
+use crate::plans::SetVectorIndexParaPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
@@ -948,6 +951,83 @@ impl Binder {
         Ok(Plan::DropVectorIndex(Box::new(plan)))
     }
 
+    #[async_backtrace::framed]
+    #[allow(clippy::too_many_arguments)]
+    pub(in crate::planner::binder) async fn bind_set_vector_index_para(
+        &mut self,
+        para: &TokenKind,
+        catalog: &Option<Identifier>,
+        database: &Option<Identifier>,
+        table: &Identifier,
+        column: &Identifier,
+        val: &Expr,
+        metric: &TokenKind,
+    ) -> Result<Plan> {
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(catalog, database, table);
+        let column = normalize_identifier(column, &self.name_resolution_ctx).name;
+        let metric_type = match metric {
+            TokenKind::COSINE => MetricType::Cosine,
+            _ => unreachable!(),
+        };
+
+        let index_name = IndexName::create(&catalog, &database, &table, &column, &metric_type);
+        let tenant = self.ctx.get_tenant();
+        let table_meta = self
+            .resolve_data_source(
+                tenant.as_str(),
+                catalog.as_str(),
+                database.as_str(),
+                table.as_str(),
+                &None,
+            )
+            .await?;
+        let indexes = self
+            .resolve_table_indexes(tenant.as_str(), catalog.as_str(), table_meta.get_id())
+            .await?;
+        let pos = indexes.iter().position(|index| index.1 == index_name);
+        if pos.is_none() {
+            return Err(ErrorCode::UnknownIndex(format!(
+                "index {} not found",
+                index_name
+            )));
+        }
+        let param_kind = match para {
+            TokenKind::NPROBE => {
+                let vector_index = indexes[pos.unwrap()].2.vector_index.as_ref().ok_or(
+                    ErrorCode::UnknownIndex(format!("index {} not found", index_name)),
+                )?;
+                match vector_index {
+                    VectorIndex::IvfFlat(_) => Ok::<ParamKind, ErrorCode>(ParamKind::NPROBE),
+                }
+            }
+            _ => unreachable!(),
+        }?;
+        let mut bind_context = BindContext::new();
+        let mut scalar_binder = ScalarBinder::new(
+            &mut bind_context,
+            self.ctx.clone(),
+            &self.name_resolution_ctx,
+            self.metadata.clone(),
+            &[],
+        );
+        let (scalar_expr, _) = scalar_binder.bind(val).await?;
+        let val = match &scalar_expr {
+            ScalarExpr::ConstantExpr(e) => e.value.clone(),
+            _ => {
+                return Err(ErrorCode::SyntaxException(
+                    "wrong type of vector index parameters",
+                ));
+            }
+        };
+        Ok(Plan::SetVectorIndexPara(Box::new(SetVectorIndexParaPlan {
+            index_name,
+            param_kind,
+            val,
+            index_meta: indexes[pos.unwrap()].2.clone(),
+        })))
+    }
+
     fn validate_ivfflat_paras(paras: &[Expr]) -> Result<VectorIndex> {
         if paras.len() != 1 {
             return Err(ErrorCode::SyntaxException(
@@ -973,6 +1053,7 @@ impl Binder {
                 ) if column.name == "nlist" => {
                     return Ok(VectorIndex::IvfFlat(IvfFlatIndex {
                         nlists: *nlists as usize,
+                        nprobe: 1,
                     }));
                 }
                 _ => {}

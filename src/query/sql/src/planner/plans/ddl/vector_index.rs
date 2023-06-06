@@ -12,7 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use common_expression::Scalar;
+use common_meta_app::schema::IndexMeta;
 use common_vector::index::MetricType;
+use common_vector::index::ParamKind;
 use common_vector::index::VectorIndex;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -29,4 +32,12 @@ pub struct CreateVectorIndexPlan {
 pub struct DropVectorIndexPlan {
     pub if_exists: bool,
     pub index: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetVectorIndexParaPlan {
+    pub index_name: String,
+    pub param_kind: ParamKind,
+    pub val: Scalar,
+    pub index_meta: IndexMeta,
 }

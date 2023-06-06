@@ -224,6 +224,23 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let set_vector_index_para = map(
+        rule! {
+            SET ~ #period_separated_idents_2_to_4 ~ Period ~ COSINE ~ Period ~ NPROBE ~ "=" ~ #subexpr(0)
+        },
+        |(_, (catalog, database, table, column), _, metric, _, para, _, val)| {
+            Statement::SetVectorIndexPara {
+                para: para.kind,
+                catalog,
+                database,
+                table,
+                column,
+                metric: metric.kind,
+                val: Box::new(val),
+            }
+        },
+    );
+
     let unset_variable = map(
         rule! {
             UNSET ~ #unset_source
@@ -277,7 +294,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
     let create_vector_index = map(
-        // example: CREATE INDEX ON items USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);
+        // example: CREATE INDEX ON items USING ivfflat (embedding vector_l2_ops) WITH (nlists = 100);
         rule! {
             CREATE ~ INDEX~ ON ~ #period_separated_idents_1_to_3
             ~ USING ~ IVFFLAT ~ "(" ~ #ident ~ COSINE ~")"
@@ -1393,6 +1410,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #create_vector_index: "`CREATE INDEX ON <table_name> USING index_type ( <column_name>,metric_type) WITH(paras)`"
             | #drop_vector_index: "`DROP VECTOR INDEX ON <table_name>`"
+            | #set_vector_index_para: "`SET [catalog_name.][database_name.]table_name.column_name.metric.para = <value>`"
         ),
     ));
 

@@ -19,6 +19,7 @@ common-expression = { path = "../../query/expression" }
 common-io = { path = "../../common/io" }
 common-meta-kvapi = { path = "../kvapi" }
 common-meta-types = { path = "../types" }
+common-vector = { path = "../../common/vector" }
 
 anyerror = { workspace = true }
 chrono = { workspace = true }

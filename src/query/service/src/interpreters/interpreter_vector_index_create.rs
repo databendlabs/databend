@@ -24,6 +24,7 @@ use common_meta_app::schema::IndexType;
 use common_sql::plans::CreateVectorIndexPlan;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::TableContext;
+use common_vector::index::IndexName;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -69,17 +70,24 @@ impl Interpreter for CreateVectorIndexInterpreter {
             .create_vector_index(ctx, column_idx, &plan.vector_index, &plan.metric_type)
             .await?;
         let catalog = self.ctx.get_catalog(&plan.catalog)?;
-        let index_name = format!("{}.{}.{}", plan.catalog, plan.database, plan.table);
+        let index_name = IndexName::create(
+            &plan.catalog,
+            &plan.database,
+            &plan.table,
+            &plan.column,
+            &plan.metric_type,
+        );
         let tenant = self.ctx.get_tenant();
         let create_index_req = CreateIndexReq {
             if_not_exists: false,
             name_ident: IndexNameIdent { tenant, index_name },
             meta: IndexMeta {
                 table_id: table.get_id(),
-                index_type: IndexType::IVF,
+                index_type: IndexType::VECTOR,
                 created_on: Utc::now(),
                 drop_on: None,
                 query: String::new(),
+                vector_index: Some(plan.vector_index.clone()),
             },
         };
         let handler = get_agg_index_handler();

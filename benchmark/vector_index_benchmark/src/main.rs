@@ -23,7 +23,7 @@ async fn main() {
     table.printstd();
 }
 
-const TABLE_NAME: &str = "ttttttttttttttttttttttttttttttttttttttt";
+const TABLE_NAME: &str = "v";
 
 async fn warmup(dim: usize, k: usize, conn: &dyn Connection) {
     let target = generate_points(1, dim);
@@ -45,6 +45,7 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     println!("generating {} {}d points randomly", num_points, dim);
     let points = generate_points(num_points, dim);
     let words = generate_string(num_points, 20);
+    let mut csv = String::new();
     println!("generating points done");
     let target = generate_points(1, dim);
 
@@ -126,7 +127,7 @@ fn insert(points: &[f32], words: &[String], dim: usize, table_name: &str) -> Str
         let start = i * dim;
         let end = start + dim;
         let point = &points[start..end];
-        insert_sql.push_str(&format!("('{}',{:?})", words[i], points));
+        insert_sql.push_str(&format!("('{}',{:?})", words[i], point));
         if i != points.len() / dim - 1 {
             insert_sql.push(',');
         }

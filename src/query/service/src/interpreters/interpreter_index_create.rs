@@ -76,6 +76,7 @@ impl Interpreter for CreateIndexInterpreter {
                 created_on: Utc::now(),
                 drop_on: None,
                 query: self.plan.query.clone(),
+                vector_index: None,
             },
         };
 

@@ -55,4 +55,6 @@ message IndexMeta {
 
   // The index based query string
   string query = 5;
+
+  string vector_index = 6;
 }

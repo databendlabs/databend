@@ -254,6 +254,23 @@ pub enum NumberScalar {
     Float64(F64),
 }
 
+impl NumberScalar {
+    pub fn try_get_uint(&self) -> Option<u64> {
+        match self {
+            NumberScalar::UInt8(v) => Some(*v as u64),
+            NumberScalar::UInt16(v) => Some(*v as u64),
+            NumberScalar::UInt32(v) => Some(*v as u64),
+            NumberScalar::UInt64(v) => Some(*v),
+            NumberScalar::Int8(_) => None,
+            NumberScalar::Int16(_) => None,
+            NumberScalar::Int32(_) => None,
+            NumberScalar::Int64(_) => None,
+            NumberScalar::Float32(_) => None,
+            NumberScalar::Float64(_) => None,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, EnumAsInner)]
 pub enum NumberColumn {
     UInt8(Buffer<u8>),

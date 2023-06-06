@@ -464,6 +464,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::ShowGrantsOfShare(stmt) => visitor.visit_show_grants_of_share(stmt),
         Statement::CreateVectorIndex(stmt) => visitor.visit_create_vector_index(stmt),
         Statement::DropVectorIndex(stmt) => visitor.visit_drop_vector_index(stmt),
+        Statement::SetVectorIndexPara { .. } => {}
         Statement::CreateDatamaskPolicy(stmt) => visitor.visit_create_data_mask_policy(stmt),
         Statement::DropDatamaskPolicy(stmt) => visitor.visit_drop_data_mask_policy(stmt),
         Statement::DescDatamaskPolicy(stmt) => visitor.visit_desc_data_mask_policy(stmt),

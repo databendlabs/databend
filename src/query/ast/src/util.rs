@@ -202,6 +202,34 @@ pub fn period_separated_idents_1_to_3<'a>(
     )(i)
 }
 
+/// Parse two three four idents separated by a period, fulfilling from the right.
+///
+/// Example: `table.column`
+/// Example: `db.table.column`
+/// Example: `db.schema.table.column`
+#[allow(clippy::needless_lifetimes)]
+pub fn period_separated_idents_2_to_4<'a>(
+    i: Input<'a>,
+) -> IResult<
+    'a,
+    (
+        Option<Identifier>,
+        Option<Identifier>,
+        Identifier,
+        Identifier,
+    ),
+> {
+    map(
+        rule! {
+            #ident ~ "." ~ #ident ~ ("." ~ #ident ~ ("." ~ #ident)?)?
+        },
+        |(id1, __, id2, opt)| match opt {
+            None => (None, None, id1, id2),
+            Some((_, id3, None)) => (None, Some(id1), id2, id3),
+            Some((_, id3, Some((_, id4)))) => (Some(id1), Some(id2), id3, id4),
+        },
+    )(i)
+}
 pub fn comma_separated_list0<'a, T>(
     item: impl FnMut(Input<'a>) -> IResult<'a, T>,
 ) -> impl FnMut(Input<'a>) -> IResult<'a, Vec<T>> {

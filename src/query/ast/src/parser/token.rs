@@ -639,6 +639,8 @@ pub enum TokenKind {
     NATURAL,
     #[token("NDJSON", ignore(ascii_case))]
     NDJSON,
+    #[token("NPROBE", ignore(ascii_case))]
+    NPROBE,
     #[token("NO_PASSWORD", ignore(ascii_case))]
     NO_PASSWORD,
     #[token("NONE", ignore(ascii_case))]

@@ -3695,6 +3695,7 @@ impl SchemaApiTestSuite {
             created_on,
             drop_on: None,
             query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
+            vector_index: None,
         };
 
         let index_name_2 = "idx2";
@@ -3704,6 +3705,7 @@ impl SchemaApiTestSuite {
             created_on,
             drop_on: None,
             query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
+            vector_index: None,
         };
 
         let name_ident_1 = IndexNameIdent {

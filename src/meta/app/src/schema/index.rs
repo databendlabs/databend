@@ -81,7 +81,7 @@ pub enum IndexType {
     #[default]
     AGGREGATING = 1,
     JOIN = 2,
-    IVF = 3,
+    VECTOR = 3,
 }
 
 impl Display for IndexType {
@@ -89,7 +89,7 @@ impl Display for IndexType {
         match self {
             IndexType::AGGREGATING => write!(f, "AGGREGATING"),
             IndexType::JOIN => write!(f, "JOIN"),
-            IndexType::IVF => write!(f, "IVF"),
+            IndexType::VECTOR => write!(f, "VECTOR"),
         }
     }
 }
@@ -103,6 +103,7 @@ pub struct IndexMeta {
     // if used in CreateIndexReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub query: String,
+    pub vector_index: Option<common_vector::index::VectorIndex>,
 }
 
 impl Default for IndexMeta {
@@ -113,6 +114,7 @@ impl Default for IndexMeta {
             created_on: Utc::now(),
             drop_on: None,
             query: "".to_string(),
+            vector_index: None,
         }
     }
 }

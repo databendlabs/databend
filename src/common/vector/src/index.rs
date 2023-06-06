@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt::Display;
+
 use ndarray::ArrayViewMut;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -22,11 +24,20 @@ pub enum VectorIndex {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct IvfFlatIndex {
     pub nlists: usize,
+    pub nprobe: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum MetricType {
     Cosine,
+}
+
+impl Display for MetricType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MetricType::Cosine => write!(f, "cosine"),
+        }
+    }
 }
 
 pub fn normalize(vec: &mut [f32]) {
@@ -41,4 +52,31 @@ pub fn normalize(vec: &mut [f32]) {
 
 pub fn normalize_vectors(vecs: &mut [f32], dim: usize) {
     let _: Vec<_> = vecs.chunks_mut(dim).map(normalize).collect();
+}
+
+pub struct IndexName;
+
+impl IndexName {
+    pub fn create(
+        catalog: &str,
+        database: &str,
+        table: &str,
+        column: &str,
+        metric: &MetricType,
+    ) -> String {
+        format!(
+            "{}.{}.{}.{}.{}",
+            catalog.to_ascii_lowercase(),
+            database.to_ascii_lowercase(),
+            table.to_ascii_lowercase(),
+            column.to_ascii_lowercase(),
+            metric
+        )
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ParamKind {
+    NLISTS,
+    NPROBE,
 }

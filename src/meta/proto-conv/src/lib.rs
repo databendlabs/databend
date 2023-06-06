@@ -73,6 +73,7 @@ mod stage_from_to_protobuf_impl;
 mod table_from_to_protobuf_impl;
 mod user_from_to_protobuf_impl;
 mod util;
+mod vector_index_from_to_pb_impl;
 
 pub use from_to_protobuf::FromToProto;
 pub use from_to_protobuf::Incompatible;

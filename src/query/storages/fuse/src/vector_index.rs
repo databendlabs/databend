@@ -85,7 +85,7 @@ impl FuseTable {
             let dimension = raw_data.len() / column.len();
 
             let (desp, index_location) = match vector_index {
-                VectorIndex::IvfFlat(IvfFlatIndex { nlists }) => {
+                VectorIndex::IvfFlat(IvfFlatIndex { nlists, nprobe: _ }) => {
                     let desp = format!("IVF{},Flat", nlists);
                     let index_location = block_meta.location.0.clone() + POST_FIX_IVF;
                     (desp, index_location)

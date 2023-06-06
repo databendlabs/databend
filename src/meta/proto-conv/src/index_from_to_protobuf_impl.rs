@@ -19,6 +19,7 @@ use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app::schema as mt;
 use common_protos::pb;
+use common_vector::index::VectorIndex;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;
@@ -78,6 +79,10 @@ impl FromToProto for mt::IndexMeta {
                 None => None,
             },
             query: p.query,
+            vector_index: match p.vector_index.as_str() {
+                "" => None,
+                s => Some(VectorIndex::from_pb(s.to_string())?),
+            },
         };
         Ok(v)
     }
@@ -94,6 +99,12 @@ impl FromToProto for mt::IndexMeta {
                 None => None,
             },
             query: self.query.clone(),
+            vector_index: self
+                .vector_index
+                .as_ref()
+                .map(|x| x.to_pb())
+                .transpose()?
+                .unwrap_or_default(),
         };
         Ok(p)
     }

@@ -26,6 +26,7 @@ use crate::ast::Expr;
 use crate::ast::Identifier;
 use crate::ast::Query;
 use crate::ast::TableReference;
+use crate::parser::token::TokenKind;
 
 // SQL statement
 #[allow(clippy::large_enum_variant)]
@@ -66,6 +67,16 @@ pub enum Statement {
         is_global: bool,
         variable: Identifier,
         value: Box<Expr>,
+    },
+
+    SetVectorIndexPara {
+        para: TokenKind,
+        catalog: Option<Identifier>,
+        database: Option<Identifier>,
+        table: Identifier,
+        column: Identifier,
+        metric: TokenKind,
+        val: Box<Expr>,
     },
 
     UnSetVariable(UnSetStmt),
@@ -343,6 +354,27 @@ impl Display for Statement {
                     write!(f, "GLOBAL ")?;
                 }
                 write!(f, "{variable} = {value}")?;
+            }
+            Statement::SetVectorIndexPara {
+                para,
+                catalog,
+                database,
+                table,
+                column,
+                metric,
+                val,
+            } => {
+                write!(f, "SET ")?;
+                if let Some(catalog) = catalog {
+                    write!(f, "{catalog}.")?;
+                }
+                if let Some(database) = database {
+                    write!(f, "{database}.")?;
+                }
+                write!(f, "{table}.")?;
+                write!(f, "{column}.")?;
+                write!(f, "{:?}.", metric)?;
+                write!(f, "{:?} = {val}", para)?;
             }
             Statement::UnSetVariable(unset) => write!(f, "{unset}")?,
             Statement::SetRole {

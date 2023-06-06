@@ -95,7 +95,7 @@ impl AccessChecker for PrivilegeAccess {
             | Plan::UndropDatabase(_)
             | Plan::DropUDF(_)
             | Plan::DropIndex(_)
-            |Plan::DropVectorIndex(_) => {
+            | Plan::DropVectorIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Drop])
                     .await?;
@@ -414,7 +414,10 @@ impl AccessChecker for PrivilegeAccess {
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Grant])
                     .await?;
             }
-            Plan::SetVariable(_) | Plan::UnSetVariable(_) | Plan::Kill(_) => {
+            Plan::SetVariable(_)
+            | Plan::UnSetVariable(_)
+            | Plan::Kill(_)
+            | Plan::SetVectorIndexPara(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;

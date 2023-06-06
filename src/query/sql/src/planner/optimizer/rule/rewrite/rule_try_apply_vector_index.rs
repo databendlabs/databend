@@ -110,7 +110,10 @@ impl Rule for RuleTryApplyVectorIndex {
         }
 
         let vector_index = match vector_index.unwrap() {
-            IndexType::IVF => VectorIndex::IvfFlat(IvfFlatIndex { nlists: 0 }), /* TODO(Sky):Store nlist in meta */
+            IndexType::VECTOR => VectorIndex::IvfFlat(IvfFlatIndex {
+                nlists: 0,
+                nprobe: 1,
+            }), // TODO(Sky):Store nlist in meta
             _ => unreachable!(),
         };
 
