@@ -143,7 +143,7 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
             }
         }
 
-        run_pratt_parser(ExprParser, &mut expr_elements.into_iter(), rest, i)
+        run_pratt_parser(ExprParser, &expr_elements.into_iter(), rest, i)
     }
 }
 
