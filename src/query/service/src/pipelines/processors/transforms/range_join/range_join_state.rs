@@ -31,7 +31,8 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::RangeJoin;
 use common_sql::executor::RangeJoinCondition;
 use common_sql::executor::RangeJoinType;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::Mutex;
+use parking_lot::RwLock;
 
 use crate::pipelines::processors::transforms::range_join::ie_join_state::IEJoinState;
 use crate::sessions::QueryContext;

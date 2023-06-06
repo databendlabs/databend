@@ -68,10 +68,15 @@ impl RangeJoinState {
             right_sort_block.num_rows(),
         );
 
-        let mut left_buffer = vec![];
-        let mut right_buffer = vec![];
         let mut i = 0;
         let mut j = 0;
+
+        let row_offset = self.row_offset.read();
+        let (left_offset, right_offset) = row_offset[task_id];
+
+        let mut result_blocks = vec![];
+        let left_table = self.left_table.read();
+        let right_table = self.right_table.read();
 
         while i < left_len && j < right_len {
             let left_scalar = unsafe { left_join_key_col.index_unchecked(i) };
@@ -81,50 +86,51 @@ impl RangeJoinState {
                 &right_scalar,
                 self.conditions[0].operator.as_str(),
             ) {
+                let mut left_result_block = DataBlock::empty();
+                let mut right_buffer = vec![];
                 if let ScalarRef::Number(NumberScalar::Int64(left)) =
                     unsafe { left_idx_col.index_unchecked(i) }
                 {
-                    left_buffer.append(&mut vec![left - 1; right_len - j]);
+                    left_result_block = left_table[left_idx].take_compacted_indices(
+                        &[(
+                            ((left - 1) as usize - left_offset) as u32,
+                            (right_len - j) as u32,
+                        )],
+                        right_len - j,
+                    )?;
                 }
                 for k in j..right_len {
                     if let ScalarRef::Number(NumberScalar::Int64(right)) =
                         unsafe { right_idx_col.index_unchecked(k) }
                     {
-                        right_buffer.push(-right - 1);
+                        right_buffer.push((-right - 1) as usize - right_offset);
                     }
+                }
+                if !left_result_block.is_empty() {
+                    let mut indices = Vec::with_capacity(right_buffer.len());
+                    for res in right_buffer.iter() {
+                        indices.push((0usize, *res, 1usize));
+                    }
+                    let right_result_block =
+                        DataBlock::take_blocks(&[&right_table[right_idx]], &indices, indices.len());
+                    // Merge left_result_block and right_result_block
+                    for col in right_result_block.columns() {
+                        left_result_block.add_column(col.clone());
+                    }
+                    for filter in self.other_conditions.iter() {
+                        left_result_block = filter_block(left_result_block, filter)?;
+                    }
+                    result_blocks.push(left_result_block);
                 }
                 i += 1;
             } else {
                 j += 1;
             }
         }
-
-        if left_buffer.is_empty() {
+        if result_blocks.is_empty() {
             return Ok(DataBlock::empty());
         }
-
-        let left_table = self.left_table.read();
-        let right_table = self.right_table.read();
-        let mut indices = Vec::with_capacity(left_buffer.len());
-        for res in left_buffer.iter() {
-            indices.push((0usize, *res as usize, 1usize));
-        }
-        let mut left_result_block =
-            DataBlock::take_blocks(&[&left_table[left_idx]], &indices, indices.len());
-        indices.clear();
-        for res in right_buffer.iter() {
-            indices.push((0usize, *res as usize, 1usize));
-        }
-        let right_result_block =
-            DataBlock::take_blocks(&[&right_table[right_idx]], &indices, indices.len());
-        // Merge left_result_block and right_result_block
-        for col in right_result_block.columns() {
-            left_result_block.add_column(col.clone());
-        }
-        for filter in self.other_conditions.iter() {
-            left_result_block = filter_block(left_result_block, filter)?;
-        }
-        Ok(left_result_block)
+        DataBlock::concat(&result_blocks)
     }
 
     // Used by merge join
@@ -151,7 +157,7 @@ impl RangeJoinState {
         vec![SortColumnDescription {
             offset: 0,
             asc,
-            nulls_first: false,
+            nulls_first: true,
             is_nullable,
         }]
     }

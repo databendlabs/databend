@@ -39,6 +39,6 @@ fn rule_set_rs_l1() -> RuleSet {
     RuleSet::create_with_ids(vec![
         RuleID::CommuteJoinBaseTable,
         RuleID::LeftExchangeJoin,
-        // RuleID::EagerAggregation,
+        RuleID::EagerAggregation,
     ])
 }
