@@ -450,13 +450,16 @@ pub struct RaftConfig {
     #[clap(long, default_value = "1000")]
     pub max_applied_log_to_keep: u64,
 
-    /// Single node metasrv. It creates a single node cluster if meta data is not initialized.
-    /// Otherwise it opens the previous one.
-    /// This is mainly for testing purpose.
+    /// Start databend-meta in single node mode.
+    /// It initialize a single node cluster, if meta data is not initialized.
+    /// If on-disk data is already initialized, this argument has no effect.
     #[clap(long)]
     pub single: bool,
 
-    /// Bring up a metasrv node and join a cluster.
+    /// Bring up a databend-meta node and join a cluster.
+    ///
+    /// It will take effect only when the meta data is not initialized.
+    /// If on-disk data is already initialized, this argument has no effect.
     ///
     /// The value is one or more addresses of a node in the cluster, to which this node sends a `join` request.
     #[clap(long, multiple_occurrences = true, multiple_values = true)]
@@ -473,7 +476,7 @@ pub struct RaftConfig {
     pub leave_id: Option<u64>,
 
     /// The node id. Only used when this server is not initialized,
-    ///  e.g. --boot or --single for the first time.
+    ///  e.g. --single for the first time.
     ///  Otherwise this argument is ignored.
     #[clap(long, default_value = "0")]
     pub id: u64,
