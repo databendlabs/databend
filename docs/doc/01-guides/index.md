@@ -20,7 +20,7 @@ import TabItem from '@theme/TabItem';
 * [Deploying a Standalone Databend](../10-deploy/02-deploying-databend.md)
 * [Expanding a Standalone Databend](../10-deploy/03-expanding-to-a-databend-cluster.md)
 * [Deploying a Query Cluster on Kubernetes](../10-deploy/06-metasrv/11-deploying-databend-on-kubernetes.md)
-* [Local and Docker Deployments (Non-Production Use)](../10-deploy/05-deploying-local.md)
+* [Docker and Local Deployments](../10-deploy/05-deploying-local.md)
 * [Databend Cloud (Beta)](../02-cloud/index.md)
 
 </TabItem>
