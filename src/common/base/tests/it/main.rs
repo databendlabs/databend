@@ -14,6 +14,7 @@
 
 use common_base::mem_allocator::GlobalAllocator;
 
+mod fixed_heap;
 mod pool;
 mod pool_retry;
 mod progress;
