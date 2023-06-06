@@ -14,10 +14,11 @@
 
 mod analyze;
 mod append;
+mod append_transform;
 mod commit;
+mod common;
 mod compact;
 mod delete;
-mod fuse_sink;
 mod gc;
 mod merge_into;
 mod mutation;
@@ -36,9 +37,12 @@ mod read;
 mod revert;
 pub mod util;
 
+pub use append_transform::AppendTransform;
+pub use common::AppendGenerator;
+pub use common::MutationGenerator;
+pub use common::SnapshotGenerator;
 pub use compact::CompactOptions;
-pub use fuse_sink::BloomIndexState;
-pub use fuse_sink::FuseTableSink;
+pub use merge_into::mutation_meta::BlockMetaIndex;
 pub use mutation::BlockCompactMutator;
 pub use mutation::CompactPartInfo;
 pub use mutation::FillInternalColumnProcessor;

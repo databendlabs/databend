@@ -195,6 +195,7 @@ pub trait PhysicalPlanReplacer {
             input: Box::new(input),
             order_by: plan.order_by.clone(),
             limit: plan.limit,
+            after_exchange: plan.after_exchange,
             stat_info: plan.stat_info.clone(),
         }))
     }

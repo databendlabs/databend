@@ -733,7 +733,7 @@ impl PhysicalPlanBuilder {
                     })
                     .collect(),
                 limit: sort.limit,
-
+                after_exchange: sort.after_exchange,
                 stat_info: Some(stat_info),
             })),
 

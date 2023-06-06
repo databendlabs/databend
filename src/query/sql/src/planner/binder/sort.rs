@@ -246,6 +246,7 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
+            after_exchange: false,
         };
         new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
         Ok(new_expr)
@@ -296,6 +297,7 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
+            after_exchange: false,
         };
         Ok(SExpr::create_unary(
             Arc::new(sort_plan.into()),

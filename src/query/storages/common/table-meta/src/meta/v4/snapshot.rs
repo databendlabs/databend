@@ -117,6 +117,19 @@ impl TableSnapshot {
         }
     }
 
+    pub fn new_empty_snapshot(schema: TableSchema) -> Self {
+        Self::new(
+            Uuid::new_v4(),
+            &None,
+            None,
+            schema,
+            Statistics::default(),
+            vec![],
+            None,
+            None,
+        )
+    }
+
     pub fn from_previous(previous: &TableSnapshot) -> Self {
         let id = Uuid::new_v4();
         let clone = previous.clone();

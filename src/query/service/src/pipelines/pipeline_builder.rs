@@ -906,7 +906,7 @@ impl PipelineBuilder {
 
             sort_desc.extend(order_by.clone());
 
-            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None)?;
+            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None, false)?;
         }
         // `TransformWindow` is a pipeline breaker.
         self.main_pipeline.resize(1)?;
@@ -992,7 +992,13 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.build_sort_pipeline(input_schema, sort_desc, sort.plan_id, sort.limit)
+        self.build_sort_pipeline(
+            input_schema,
+            sort_desc,
+            sort.plan_id,
+            sort.limit,
+            sort.after_exchange,
+        )
     }
 
     fn build_sort_pipeline(
@@ -1001,6 +1007,7 @@ impl PipelineBuilder {
         sort_desc: Vec<SortColumnDescription>,
         plan_id: u32,
         limit: Option<usize>,
+        after_exchange: bool,
     ) -> Result<()> {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
@@ -1009,21 +1016,25 @@ impl PipelineBuilder {
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.resize(max_threads)?;
         }
-        // Sort
-        self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
 
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
-                    transform,
-                    plan_id,
-                    self.prof_span_set.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
-        })?;
+        // If the sort plan is after an exchange plan, the blocks are already sorted on other nodes.
+        if limit.is_none() || !after_exchange {
+            // Sort
+            self.main_pipeline.add_transform(|input, output| {
+                let transform =
+                    TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
+
+                if self.enable_profiling {
+                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                        transform,
+                        plan_id,
+                        self.prof_span_set.clone(),
+                    )))
+                } else {
+                    Ok(ProcessorPtr::create(transform))
+                }
+            })?;
+        }
 
         // Merge
         self.main_pipeline.add_transform(|input, output| {
@@ -1344,7 +1355,6 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             AppendMode::Normal,
-            true,
         )?;
 
         Ok(())

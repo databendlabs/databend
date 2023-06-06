@@ -15,7 +15,6 @@
 use std::borrow::Borrow;
 use std::collections::HashMap;
 
-use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
 use common_expression::Scalar;
@@ -26,7 +25,7 @@ use storages_common_table_meta::meta::StatisticsOfColumns;
 
 pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     stats_of_columns: &[T],
-) -> Result<StatisticsOfColumns> {
+) -> StatisticsOfColumns {
     // Combine statistics of a column into `Vec`, that is:
     // from : `&[HashMap<ColumnId, ColumnStatistics>]`
     // to   : `HashMap<ColumnId, Vec<&ColumnStatistics>)>`
@@ -46,7 +45,7 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
     let len = col_to_stats_lit.len();
     col_to_stats_lit
         .iter()
-        .try_fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
+        .fold(HashMap::with_capacity(len), |mut acc, (id, stats)| {
             let mut min_stats = Vec::with_capacity(stats.len());
             let mut max_stats = Vec::with_capacity(stats.len());
             let mut null_count = 0;
@@ -87,35 +86,34 @@ pub fn reduce_block_statistics<T: Borrow<StatisticsOfColumns>>(
                 in_memory_size,
                 distinct_of_values: None,
             });
-            Ok(acc)
+            acc
         })
 }
 
-pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Result<Statistics> {
-    let s = Statistics {
-        row_count: l.row_count + r.row_count,
-        block_count: l.block_count + r.block_count,
-        perfect_block_count: l.perfect_block_count + r.perfect_block_count,
-        uncompressed_byte_size: l.uncompressed_byte_size + r.uncompressed_byte_size,
-        compressed_byte_size: l.compressed_byte_size + r.compressed_byte_size,
-        index_size: l.index_size + r.index_size,
-        col_stats: reduce_block_statistics(&[&l.col_stats, &r.col_stats])?,
-    };
-    Ok(s)
+pub fn merge_statistics(l: &Statistics, r: &Statistics) -> Statistics {
+    let mut new = l.clone();
+    merge_statistics_mut(&mut new, r);
+    new
 }
 
-pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) -> Result<()> {
+pub fn merge_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.row_count += r.row_count;
     l.block_count += r.block_count;
     l.perfect_block_count += r.perfect_block_count;
     l.uncompressed_byte_size += r.uncompressed_byte_size;
     l.compressed_byte_size += r.compressed_byte_size;
     l.index_size += r.index_size;
-    l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats])?;
-    Ok(())
+    l.col_stats = reduce_block_statistics(&[&l.col_stats, &r.col_stats]);
 }
 
-// Deduct statistics, only be used for calculate snapshot summary during update/delete/replace.
+// Deduct statistics, only be used for calculate snapshot summary.
+pub fn deduct_statistics(l: &Statistics, r: &Statistics) -> Statistics {
+    let mut new = l.clone();
+    deduct_statistics_mut(&mut new, r);
+    new
+}
+
+// Deduct statistics, only be used for calculate snapshot summary.
 pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     l.row_count -= r.row_count;
     l.block_count -= r.block_count;
@@ -133,18 +131,18 @@ pub fn deduct_statistics_mut(l: &mut Statistics, r: &Statistics) {
     }
 }
 
-pub fn reduce_statistics<T: Borrow<Statistics>>(stats: &[T]) -> Result<Statistics> {
+pub fn reduce_statistics<T: Borrow<Statistics>>(stats: &[T]) -> Statistics {
     let mut statistics = Statistics::default();
     for item in stats {
-        statistics = merge_statistics(&statistics, item.borrow())?
+        statistics = merge_statistics(&statistics, item.borrow());
     }
-    Ok(statistics)
+    statistics
 }
 
 pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
     block_metas: &[T],
     thresholds: BlockThresholds,
-) -> Result<Statistics> {
+) -> Statistics {
     let mut row_count: u64 = 0;
     let mut block_count: u64 = 0;
     let mut uncompressed_byte_size: u64 = 0;
@@ -168,9 +166,9 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         .iter()
         .map(|v| &v.borrow().col_stats)
         .collect::<Vec<_>>();
-    let merged_col_stats = reduce_block_statistics(&stats)?;
+    let merged_col_stats = reduce_block_statistics(&stats);
 
-    Ok(Statistics {
+    Statistics {
         row_count,
         block_count,
         perfect_block_count,
@@ -178,5 +176,5 @@ pub fn reduce_block_metas<T: Borrow<BlockMeta>>(
         compressed_byte_size,
         index_size,
         col_stats: merged_col_stats,
-    })
+    }
 }

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod abort_operation;
-mod base_mutator;
 mod compact;
 mod mutation_fill_internal_columns;
 mod mutation_meta;
@@ -23,9 +22,6 @@ mod recluster_mutator;
 mod transform_serialize_data;
 
 pub use abort_operation::AbortOperation;
-pub use base_mutator::BaseMutator;
-pub use base_mutator::BlockIndex;
-pub use base_mutator::SegmentIndex;
 pub use compact::BlockCompactMutator;
 pub use compact::CompactAggregator;
 pub use compact::CompactPartInfo;
@@ -40,3 +36,6 @@ pub use mutation_source::MutationAction;
 pub use mutation_source::MutationSource;
 pub use recluster_mutator::ReclusterMutator;
 pub use transform_serialize_data::SerializeDataTransform;
+
+pub type SegmentIndex = usize;
+pub type BlockIndex = usize;

@@ -50,7 +50,6 @@ use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -133,8 +132,8 @@ impl CopyInterpreter {
             table,
             data_schema,
             &mut build_res,
+            None,
             false,
-            true,
             AppendMode::Normal,
         )?;
         Ok(build_res)
@@ -258,12 +257,10 @@ impl CopyInterpreter {
             .await?;
             (build_res, plan.required_source_schema.clone(), files)
         };
-        let table_data_schema = Arc::new(to_table.schema().into());
 
         debug!("source schema:{:?}", source_schema);
         debug!("required source schema:{:?}", plan.required_source_schema);
         debug!("required values schema:{:?}", plan.required_values_schema);
-        debug!("table_data_schema:{:?}", table_data_schema);
 
         if source_schema != plan.required_source_schema {
             // only parquet need cast
@@ -291,81 +288,88 @@ impl CopyInterpreter {
             )?;
         }
 
-        if matches!(
-            plan.write_mode,
-            CopyIntoTableMode::Insert { .. } | CopyIntoTableMode::Copy
-        ) {
-            if plan.required_values_schema != table_data_schema {
-                build_res.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        TransformResortAddOn::try_create(
-                            ctx.clone(),
-                            transform_input_port,
-                            transform_output_port,
-                            plan.required_values_schema.clone(),
-                            to_table.clone(),
-                        )
-                    },
-                )?;
-            }
-
-            to_table.append_data(
-                ctx.clone(),
-                &mut build_res.main_pipeline,
-                AppendMode::Copy,
-                false,
-            )?;
-        }
-
-        let stage_table_info_clone = plan.stage_table_info.clone();
+        let stage_info_clone = plan.stage_table_info.stage_info.clone();
         let force = plan.force;
         let write_mode = plan.write_mode;
+        let mut purge = true;
+        match write_mode {
+            CopyIntoTableMode::Insert { overwrite } => {
+                append2table(
+                    ctx.clone(),
+                    to_table,
+                    plan.required_values_schema.clone(),
+                    &mut build_res,
+                    None,
+                    overwrite,
+                    AppendMode::Copy,
+                )?;
+            }
+            CopyIntoTableMode::Copy => {
+                if !stage_info_clone.copy_options.purge {
+                    purge = false;
+                }
+                let copied_files = CopyInterpreter::upsert_copied_files_request(
+                    ctx.clone(),
+                    to_table.clone(),
+                    stage_info_clone.clone(),
+                    files.clone(),
+                    force,
+                )?;
+                append2table(
+                    ctx.clone(),
+                    to_table,
+                    plan.required_values_schema.clone(),
+                    &mut build_res,
+                    copied_files,
+                    false,
+                    AppendMode::Copy,
+                )?;
+            }
+            CopyIntoTableMode::Replace => {}
+        }
+
         build_res.main_pipeline.set_on_finished(move |may_error| {
             match may_error {
                 None => {
-                    match write_mode {
-                        CopyIntoTableMode::Insert { overwrite } => {
-                            let operations = ctx.consume_precommit_blocks();
+                    GlobalIORuntime::instance().block_on(async move {
+                        {
+                            let status =
+                                format!("end of commit, number of copied files:{}", files.len());
+                            ctx.set_status_info(&status);
+                            info!(status);
+                        }
 
-                            GlobalIORuntime::instance().block_on(async move {
-                                to_table
-                                    .commit_insertion(ctx.clone(), operations, None, overwrite)
-                                    .await?;
-                                CopyInterpreter::try_purge_files(
-                                    ctx.clone(),
-                                    &stage_table_info_clone.stage_info,
-                                    &files,
-                                )
-                                .await;
-                                Ok(())
-                            })?;
-                        }
-                        CopyIntoTableMode::Replace => {
-                            GlobalIORuntime::instance().block_on(async move {
-                                CopyInterpreter::try_purge_files(
-                                    ctx.clone(),
-                                    &stage_table_info_clone.stage_info,
-                                    &files,
-                                )
-                                .await;
-                                Ok(())
-                            })?;
-                        }
-                        CopyIntoTableMode::Copy => {
-                            CopyInterpreter::commit_copy_into_table(
-                                ctx.clone(),
-                                to_table,
-                                stage_table_info_clone.stage_info,
-                                files,
-                                write_mode,
-                                force,
-                            )?;
-                            // Status.
-                            {
-                                info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                        // 1. log on_error mode errors.
+                        // todo(ariesdevil): persist errors with query_id
+                        if let Some(error_map) = ctx.get_maximum_error_per_file() {
+                            for (file_name, e) in error_map {
+                                error!(
+                                    "copy(on_error={}): file {} encounter error {},",
+                                    stage_info_clone.copy_options.on_error,
+                                    file_name,
+                                    e.to_string()
+                                );
                             }
                         }
-                    }
+
+                        // 2. Try to purge copied files if purge option is true, if error will skip.
+                        // If a file is already copied(status with AlreadyCopied) we will try to purge them.
+                        if purge {
+                            CopyInterpreter::try_purge_files(
+                                ctx.clone(),
+                                &stage_info_clone,
+                                &files,
+                            )
+                            .await;
+                        }
+
+                        // Status.
+                        {
+                            info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                        }
+
+                        Ok(())
+                    })?;
                 }
                 Some(error) => {
                     error!(
@@ -381,21 +385,14 @@ impl CopyInterpreter {
         Ok(build_res)
     }
 
-    /// Pipeline finish.
-    /// 1. commit the data.
-    /// 2. update the NeedCopy file into to meta.
-    /// 3. log on_error mode errors.
-    /// 4. purge the copied files.
     #[allow(clippy::too_many_arguments)]
-    fn commit_copy_into_table(
+    fn upsert_copied_files_request(
         ctx: Arc<QueryContext>,
         to_table: Arc<dyn Table>,
         stage_info: StageInfo,
         copied_files: Vec<StageFileInfo>,
-        mode: CopyIntoTableMode,
         force: bool,
-    ) -> Result<()> {
-        let num_copied_files = copied_files.len();
+    ) -> Result<Option<UpsertTableCopiedFileReq>> {
         let mut copied_file_tree = BTreeMap::new();
         for file in &copied_files {
             // Short the etag to 7 bytes for less space in metasrv.
@@ -410,86 +407,32 @@ impl CopyInterpreter {
             });
         }
 
-        GlobalIORuntime::instance().block_on(async move {
-            // 1. Commit data to table.
-            let operations = ctx.consume_precommit_blocks();
+        let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
 
-            let expire_hours = ctx.get_settings().get_load_file_metadata_expire_hours()?;
-
-            let upsert_copied_files_request = {
-                if mode != CopyIntoTableMode::Copy {
-                    None
-                } else  if stage_info.copy_options.purge && force {
-                    // if `purge-after-copy` is enabled, and in `force` copy mode,
-                    // we do not need to upsert copied files into meta server
-                    info!("[purge] and [force] are both enabled,  will not update copied-files set. ({})", &to_table.get_table_info().desc);
-                    None
-                } else {
-                    let fail_if_duplicated = !force;
-                    Self::upsert_copied_files_request(
-                        expire_hours,
-                        copied_file_tree,
-                        fail_if_duplicated,
-                    )
-                }
-            };
-
-            {
-                let status = format!("begin commit, number of copied files:{}", num_copied_files);
-                ctx.set_status_info(&status);
-                info!(status);
+        let upsert_copied_files_request = {
+            if stage_info.copy_options.purge && force {
+                // if `purge-after-copy` is enabled, and in `force` copy mode,
+                // we do not need to upsert copied files into meta server
+                info!(
+                    "[purge] and [force] are both enabled,  will not update copied-files set. ({})",
+                    &to_table.get_table_info().desc
+                );
+                None
+            } else if copied_file_tree.is_empty() {
+                None
+            } else {
+                tracing::debug!("upsert_copied_files_info: {:?}", copied_file_tree);
+                let expire_at = expire_hours * 60 * 60 + Utc::now().timestamp() as u64;
+                let req = UpsertTableCopiedFileReq {
+                    file_info: copied_file_tree,
+                    expire_at: Some(expire_at),
+                    fail_if_duplicated: !force,
+                };
+                Some(req)
             }
-
-            to_table
-                .commit_insertion(
-                    ctx.clone(),
-                    operations,
-                    upsert_copied_files_request,
-                    false,
-                )
-                .await?;
-
-            info!("end of commit");
-
-            // 3. log on_error mode errors.
-            // todo(ariesdevil): persist errors with query_id
-            if let Some(error_map) = ctx.get_maximum_error_per_file() {
-                for (file_name, e) in error_map {
-                    error!(
-                                "copy(on_error={}): file {} encounter error {},",
-                                stage_info.copy_options.on_error,
-                                file_name,
-                                e.to_string()
-                            );
-                }
-            }
-
-            // 4. Try to purge copied files if purge option is true, if error will skip.
-            // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-            if stage_info.copy_options.purge {
-                CopyInterpreter::try_purge_files(ctx.clone(), &stage_info, &copied_files).await;
-            }
-
-            Ok(())
-        })
-    }
-
-    fn upsert_copied_files_request(
-        expire_hours: u64,
-        copy_stage_files: BTreeMap<String, TableCopiedFileInfo>,
-        fail_if_duplicated: bool,
-    ) -> Option<UpsertTableCopiedFileReq> {
-        if copy_stage_files.is_empty() {
-            return None;
-        }
-        tracing::debug!("upsert_copied_files_info: {:?}", copy_stage_files);
-        let expire_at = expire_hours * 60 * 60 + Utc::now().timestamp() as u64;
-        let req = UpsertTableCopiedFileReq {
-            file_info: copy_stage_files,
-            expire_at: Some(expire_at),
-            fail_if_duplicated,
         };
-        Some(req)
+
+        Ok(upsert_copied_files_request)
     }
 }
 
