@@ -101,33 +101,33 @@ impl FuseTable {
             let dal = self.operator.clone();
 
             // TODO: need refactor
-            pipeline.set_on_init(move || {
-                let table = table.clone();
-                let table_info = table_info.clone();
-                let ctx = query_ctx.clone();
-                let dal = dal.clone();
-                let push_downs = push_downs.clone();
-                // let lazy_init_segments = lazy_init_segments.clone();
-
-                let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-                    let (_statistics, partitions) = table
-                        .prune_snapshot_blocks(
-                            ctx,
-                            dal,
-                            push_downs,
-                            table_info,
-                            lazy_init_segments,
-                            0,
-                        )
-                        .await?;
-
-                    Result::<_, ErrorCode>::Ok(partitions)
-                })?;
-
-                query_ctx.set_partitions(partitions)?;
-                Ok(())
-            });
-        }
+        //     pipeline.set_on_init(move || {
+        //         let table = table.clone();
+        //         let table_info = table_info.clone();
+        //         let ctx = query_ctx.clone();
+        //         let dal = dal.clone();
+        //         let push_downs = push_downs.clone();
+        //         // let lazy_init_segments = lazy_init_segments.clone();
+        //
+        //         let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
+        //             let (_statistics, partitions) = table
+        //                 .prune_snapshot_blocks(
+        //                     ctx,
+        //                     dal,
+        //                     push_downs,
+        //                     table_info,
+        //                     lazy_init_segments,
+        //                     0,
+        //                 )
+        //                 .await?;
+        //
+        //             Result::<_, ErrorCode>::Ok(partitions)
+        //         })?;
+        //
+        //         query_ctx.set_partitions(partitions)?;
+        //         Ok(())
+        //     });
+        // }
 
         let block_reader = self.build_block_reader(plan, ctx.clone())?;
         let max_io_requests = self.adjust_io_request(&ctx)?;

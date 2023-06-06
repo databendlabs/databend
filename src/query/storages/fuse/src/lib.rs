@@ -27,6 +27,8 @@ pub mod pruning;
 pub mod statistics;
 pub mod table_functions;
 
+mod fuse_lazy_part_new;
+mod index_analyzer;
 mod metrics;
 
 use common_catalog::table::NavigationPoint;

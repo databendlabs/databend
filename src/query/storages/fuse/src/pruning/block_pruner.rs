@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::BLOCK_NAME_COL_NAME;
 use futures_util::future;
 use storages_common_pruner::BlockMetaIndex;
+use storages_common_pruner::InternalColumnPruner;
 use storages_common_pruner::Limiter;
 use storages_common_pruner::RangePruner;
 use storages_common_table_meta::meta::BlockMeta;
@@ -226,17 +227,18 @@ impl BlockPruner {
     fn block_pruning_sync_1(&self, metas: &[Arc<BlockMeta>]) -> Result<Vec<bool>> {
         let mut mask_res = vec![true; metas.len()];
 
-        if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner {
-            for (idx, meta_info) in metas.iter().enumerate() {
-                mask_res[idx] =
-                    internal_column_pruner.should_keep(BLOCK_NAME_COL_NAME, &meta_info.location.0);
-            }
-        }
-
         let block_meta_pruner = LimitBlockMetaPruner::create(
             &self.pruning_ctx,
             RangeBlockMetaPruner::create(&self.pruning_ctx),
         );
+
+        if let Some(internal_column_pruner) = &self.pruning_ctx.internal_column_pruner {
+            let block_meta_pruner =
+                InternalBlockMetaPruner::create(block_meta_pruner, internal_column_pruner.clone());
+
+            block_meta_pruner.pruning(metas, &mut mask_res)?;
+            return Ok(mask_res);
+        }
 
         block_meta_pruner.pruning(metas, &mut mask_res)?;
         Ok(mask_res)
@@ -363,6 +365,17 @@ impl<T: BlockMetaPruner> LimitBlockMetaPruner<T> {
     }
 }
 
+pub struct InternalBlockMetaPruner<T: BlockMetaPruner> {
+    inner: T,
+    pruner: Arc<InternalColumnPruner>,
+}
+
+impl<T: BlockMetaPruner> InternalBlockMetaPruner<T> {
+    pub fn create(inner: T, pruner: Arc<InternalColumnPruner>) -> InternalBlockMetaPruner<T> {
+        InternalBlockMetaPruner::<T> { inner, pruner }
+    }
+}
+
 #[async_trait::async_trait]
 impl<T: BlockMetaPruner> BlockMetaPruner for LimitBlockMetaPruner<T> {
     #[inline(always)]
@@ -375,6 +388,25 @@ impl<T: BlockMetaPruner> BlockMetaPruner for LimitBlockMetaPruner<T> {
     }
 
     #[inline(always)]
+    fn pruning(&self, metas: &[Arc<BlockMeta>], mask_res: &mut [bool]) -> Result<()> {
+        for (idx, meta_info) in metas.iter().enumerate() {
+            if mask_res[idx] {
+                mask_res[idx] &= self.apply(meta_info);
+            }
+        }
+
+        Ok(())
+    }
+}
+
+#[async_trait::async_trait]
+impl<T: BlockMetaPruner> BlockMetaPruner for InternalBlockMetaPruner<T> {
+    fn apply(&self, meta: &BlockMeta) -> bool {
+        self.pruner
+            .should_keep(BLOCK_NAME_COL_NAME, &meta.location.0)
+            && self.inner.apply(meta)
+    }
+
     fn pruning(&self, metas: &[Arc<BlockMeta>], mask_res: &mut [bool]) -> Result<()> {
         for (idx, meta_info) in metas.iter().enumerate() {
             if mask_res[idx] {
