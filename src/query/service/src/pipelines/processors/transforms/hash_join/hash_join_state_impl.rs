@@ -15,7 +15,6 @@
 use std::sync::atomic::Ordering;
 
 use common_arrow::arrow::bitmap::Bitmap;
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Column;
@@ -508,10 +507,10 @@ impl HashJoinState for JoinHashTable {
 
         let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
         input_block.push(null_block);
-        return Ok(input_block);
+        Ok(input_block)
     }
 
-    fn right_semi_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn right_semi_join_blocks(&self, _blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
@@ -530,7 +529,7 @@ impl HashJoinState for JoinHashTable {
         let build_block = self
             .row_space
             .gather(&build_indexes, &data_blocks, &num_rows)?;
-        return Ok(vec![build_block]);
+        Ok(vec![build_block])
     }
 
     fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {

@@ -137,11 +137,13 @@ impl JoinHashTable {
                                 {
                                     let mut build_indexes =
                                         self.hash_join_desc.join_state.build_indexes.write();
-                                    for idx in 0..occupied {
+                                    let mut idx = 0;
+                                    while idx < occupied {
                                         let valid = unsafe { validity.get_bit_unchecked(idx) };
                                         if valid {
                                             build_indexes.push(local_build_indexes[idx]);
                                         }
+                                        idx += 1;
                                     }
                                 }
                                 let filtered_block =
@@ -232,11 +234,13 @@ impl JoinHashTable {
                 };
                 {
                     let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
-                    for idx in 0..occupied {
+                    let mut idx = 0;
+                    while idx < occupied {
                         let valid = unsafe { validity.get_bit_unchecked(idx) };
                         if valid {
                             build_indexes.push(local_build_indexes[idx]);
                         }
+                        idx += 1;
                     }
                 }
                 let filtered_block = DataBlock::filter_with_bitmap(merged_block, &validity)?;

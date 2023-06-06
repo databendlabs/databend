@@ -1185,11 +1185,7 @@ impl PipelineBuilder {
                 let transform = TransformRightSemiAntiJoin::try_create(
                     input,
                     output,
-                    RightSemiAntiJoinCompactor::create(
-                        state.clone(),
-                        join.non_equi_conditions.is_empty()
-                            && join.join_type == JoinType::RightAnti,
-                    ),
+                    RightSemiAntiJoinCompactor::create(state.clone(), false),
                 )?;
 
                 if self.enable_profiling {
