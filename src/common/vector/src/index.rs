@@ -73,6 +73,10 @@ impl IndexName {
             metric
         )
     }
+
+    pub fn create_postfix(column: &str, metric: &MetricType) -> String {
+        format!("{}.{}", column.to_ascii_lowercase(), metric)
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

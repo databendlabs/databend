@@ -165,7 +165,12 @@ impl Binder {
             } => {
                 let (catalog, database, table_name) =
                     self.normalize_object_identifier_triple(catalog, database, table);
-                let vector_index_name = format!("{catalog}.{database}.{table_name}");
+                let vector_index_name_prefix = format!(
+                    "{}.{}.{}.",
+                    catalog.to_ascii_lowercase(),
+                    database.to_ascii_lowercase(),
+                    table_name.to_ascii_lowercase()
+                );
 
                 let table_alias_name = if let Some(table_alias) = alias {
                     Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
@@ -323,15 +328,15 @@ impl Binder {
                                 .add_agg_indexes(full_table_name, agg_indexes);
                         }
 
-                        let vector_index = indexes.iter().find(|(_, index_name, _)| {
-                            index_name.eq_ignore_ascii_case(vector_index_name.as_str())
-                        });
-
-                        if let Some(vector_index) = vector_index {
-                            self.metadata
-                                .write()
-                                .set_vector_index(vector_index.2.index_type.clone());
-                        }
+                        indexes
+                            .iter()
+                            .filter(|x| x.1.starts_with(vector_index_name_prefix.as_str()))
+                            .for_each(|x| {
+                                self.metadata.write().add_vector_index(
+                                    x.2.vector_index.as_ref().unwrap(),
+                                    x.1.strip_prefix(&vector_index_name_prefix).unwrap(),
+                                );
+                            });
 
                         let (s_expr, mut bind_context) = self
                             .bind_base_table(bind_context, database.as_str(), table_index)

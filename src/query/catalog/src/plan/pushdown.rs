@@ -113,7 +113,7 @@ pub struct PushDownInfo {
     /// Aggregating index information.
     pub agg_index: Option<AggIndexInfo>,
     /// Optional vector similarity info
-    pub similarity: Option<VectorSimilarityInfo>,
+    pub similarity: Option<Box<VectorSimilarityInfo>>,
 }
 
 /// TopK is a wrapper for topk push down items.

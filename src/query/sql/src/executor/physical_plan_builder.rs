@@ -23,7 +23,6 @@ use common_catalog::plan::AggIndexInfo;
 use common_catalog::plan::PrewhereInfo;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
-use common_catalog::plan::VectorSimilarityInfo;
 use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -45,7 +44,6 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_vector::index::MetricType;
 use itertools::Itertools;
 
 use super::cast_expr_to_non_null_boolean;
@@ -1587,47 +1585,6 @@ impl PhysicalPlanBuilder {
 
         let virtual_columns = self.build_virtual_columns(&scan.columns);
 
-        let similarity = scan
-            .similarity
-            .as_ref()
-            .map(|x| {
-                let (func, vector_index) = x.as_ref();
-                let metric = match func.func_name.to_ascii_lowercase().as_str() {
-                    "cosine_distance" => Ok(MetricType::Cosine),
-                    _ => Err(ErrorCode::BadArguments(format!(
-                        "invalid similarity function: {}",
-                        func.func_name
-                    ))),
-                }?;
-                if func.arguments.len() != 2 {
-                    return Err(ErrorCode::BadArguments(format!(
-                        "invalid arguments for similarity function: {}",
-                        func.func_name
-                    )));
-                }
-                let column = match &func.arguments[0] {
-                    ScalarExpr::BoundColumnRef(expr) => Ok(expr.column.index),
-                    _ => Err(ErrorCode::BadArguments(format!(
-                        "invalid arguments for similarity function: {}",
-                        func.func_name
-                    ))),
-                }?;
-                let target = match &func.arguments[1] {
-                    ScalarExpr::ConstantExpr(expr) => Ok(expr.value.clone()),
-                    _ => Err(ErrorCode::BadArguments(format!(
-                        "invalid arguments for similarity function: {}",
-                        func.func_name
-                    ))),
-                }?;
-                Ok(VectorSimilarityInfo {
-                    vector_index: vector_index.clone(),
-                    metric,
-                    column,
-                    target,
-                })
-            })
-            .transpose()?;
-
         let agg_index = scan
             .agg_index
             .as_ref()
@@ -1676,7 +1633,7 @@ impl PhysicalPlanBuilder {
             order_by: order_by.unwrap_or_default(),
             virtual_columns,
             lazy_materialization: !metadata.lazy_columns().is_empty(),
-            similarity,
+            similarity: scan.similarity.clone(),
             agg_index,
         })
     }

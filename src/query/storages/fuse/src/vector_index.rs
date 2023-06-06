@@ -29,6 +29,7 @@ use common_vector::index::MetricType;
 use common_vector::index::VectorIndex;
 use faiss::index::io::deserialize;
 use faiss::index::io::serialize;
+use faiss::index::IndexImpl;
 use faiss::index::SearchResult;
 use faiss::index_factory;
 use faiss::Idx;
@@ -101,8 +102,6 @@ impl FuseTable {
             let mut index = index_factory(dimension as u32, desp, metric)?;
             index.train(&raw_data)?;
             index.add(&raw_data)?;
-            // TODO(sky): we should add an indendpendent sql for this, like: SET ivfflat.nprobe = 10;
-            index.set_nprobe(70);
             // TODO(sky): provide a safe interface for serialize in faiss-rs
             let index_bin = unsafe { serialize(&index)? };
             let index_bin = compress(&COMPRESSION_TYPE, index_bin)?;
@@ -119,12 +118,12 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         limit: usize,
         target: &mut [f32],
-        index_type: &VectorIndex,
+        vector_index: &VectorIndex,
         metric_type: &MetricType,
     ) -> Result<Option<DataBlock>> {
         let read_settings = ReadSettings::from_ctx(&ctx)?;
         let block_metas = self.collect_block_metas().await?;
-        let post_fix = match index_type {
+        let post_fix = match vector_index {
             VectorIndex::IvfFlat(_) => POST_FIX_IVF.to_string(),
         };
         let pos_fix = match metric_type {
@@ -142,6 +141,7 @@ impl FuseTable {
             let index_bin = self.get_operator().read(&index_location).await?;
             let index_bin = decompress(&COMPRESSION_TYPE, index_bin)?;
             let mut index = deserialize(&index_bin).unwrap();
+            pre_search(&mut index, vector_index);
             let SearchResult { distances, labels } = index.search(target, limit).unwrap();
             result_per_block.push((labels, distances, block_meta.clone()));
         }
@@ -188,4 +188,12 @@ fn merge_results(
         start[min] += 1;
     }
     topk
+}
+
+fn pre_search(index: &mut IndexImpl, index_meta: &VectorIndex) {
+    match index_meta {
+        VectorIndex::IvfFlat(ivf_flat) => {
+            index.set_nprobe(ivf_flat.nprobe);
+        }
+    }
 }

@@ -15,15 +15,16 @@ async fn main() {
         "data size",
         "query time without index",
         "nlists",
+        "nprobe",
         "build index time",
         "query time with ivf index",
         "recall"
     ]);
-    table.add_row(bench(10000, 128, 50, 100).await);
+    table.add_row(bench(10000, 128, 50, 100, 70).await);
     table.printstd();
 }
 
-const TABLE_NAME: &str = "v";
+const TABLE_NAME: &str = "vvvvv";
 
 async fn warmup(dim: usize, k: usize, conn: &dyn Connection) {
     let target = generate_points(1, dim);
@@ -34,7 +35,7 @@ async fn warmup(dim: usize, k: usize, conn: &dyn Connection) {
     let _ = conn.exec(&knn_sql);
 }
 
-async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
+async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: usize) -> Row {
     let mut row = Row::empty();
 
     row.add_cell(Cell::new(&format_num(num_points)));
@@ -83,6 +84,7 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     println!("querying without index done");
     row.add_cell(Cell::new(&format_time(elapsed.as_nanos() as usize)));
     row.add_cell(Cell::new(&nlists.to_string()));
+    row.add_cell(Cell::new(&nprobe.to_string()));
 
     println!("building index");
     let start = quanta::Instant::now();
@@ -98,6 +100,9 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize) -> Row {
     //////////////////////////////////////////////////////////////////////////////////////////////////////
     // warmup(dim, k, conn.as_ref()).await;
     println!("querying with index");
+    conn.exec(&format!("SET {}.c.cosine.nprobe = {}", TABLE_NAME, nprobe))
+        .await
+        .unwrap();
     let mut index_result = Vec::with_capacity(k);
     let start = quanta::Instant::now();
     let mut stream = conn.query_iter(&knn_sql).await.unwrap();

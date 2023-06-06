@@ -51,6 +51,7 @@ fn test_decode_v37_index() -> anyhow::Result<()> {
             created_on,
             drop_on: None,
             query,
+            vector_index: None,
         }
     };
 

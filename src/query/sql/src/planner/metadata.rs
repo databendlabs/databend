@@ -27,7 +27,7 @@ use common_expression::types::DataType;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_meta_app::schema;
+use common_vector::index::VectorIndex;
 use parking_lot::RwLock;
 
 use crate::optimizer::SExpr;
@@ -59,7 +59,7 @@ pub struct Metadata {
     //// Columns that are lazy materialized.
     lazy_columns: HashSet<usize>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
-    vector_index: Option<schema::IndexType>,
+    vector_indexes: HashMap<String, VectorIndex>,
 }
 
 impl Metadata {
@@ -233,12 +233,13 @@ impl Metadata {
         self.agg_indexes.get(table).map(|v| v.as_slice())
     }
 
-    pub fn set_vector_index(&mut self, ty: schema::IndexType) {
-        self.vector_index = Some(ty);
+    pub fn add_vector_index(&mut self, vector_index: &VectorIndex, index_name: &str) {
+        self.vector_indexes
+            .insert(index_name.to_string(), vector_index.clone());
     }
 
-    pub fn vector_index(&self) -> Option<&schema::IndexType> {
-        self.vector_index.as_ref()
+    pub fn vector_indexes(&self) -> &HashMap<String, VectorIndex> {
+        &self.vector_indexes
     }
 
     pub fn add_table(

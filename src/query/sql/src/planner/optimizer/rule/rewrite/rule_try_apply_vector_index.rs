@@ -14,13 +14,18 @@
 
 use std::sync::Arc;
 
-use common_meta_app::schema::IndexType;
-use common_vector::index::IvfFlatIndex;
+use ahash::HashMap;
+use common_catalog::plan::VectorSimilarityInfo;
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_vector::index::IndexName;
+use common_vector::index::MetricType;
 use common_vector::index::VectorIndex;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
+use crate::plans::FunctionCall;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::MetadataRef;
@@ -97,25 +102,13 @@ impl Rule for RuleTryApplyVectorIndex {
         let eval_scalar = s_expr.walk_down(2).plan().as_eval_scalar().unwrap();
 
         let meta = self.metadata.read();
-        let vector_index = meta.vector_index();
+        let vector_indexes = meta.vector_indexes();
 
-        if vector_index.is_none()
-            || limit.offset != 0
-            || limit.limit.is_none()
-            || sort.items.len() != 1
-            || !sort.items[0].asc
+        if limit.offset != 0 || limit.limit.is_none() || sort.items.len() != 1 || !sort.items[0].asc
         {
             state.add_result(s_expr.clone());
             return Ok(());
         }
-
-        let vector_index = match vector_index.unwrap() {
-            IndexType::VECTOR => VectorIndex::IvfFlat(IvfFlatIndex {
-                nlists: 0,
-                nprobe: 1,
-            }), // TODO(Sky):Store nlist in meta
-            _ => unreachable!(),
-        };
 
         let sort_by_idx = eval_scalar
             .items
@@ -124,13 +117,18 @@ impl Rule for RuleTryApplyVectorIndex {
             .unwrap();
         let sort_by_item = &eval_scalar.items[sort_by_idx];
         match &sort_by_item.scalar {
-            ScalarExpr::FunctionCall(func) if func.func_name == "cosine_distance" => {
+            ScalarExpr::FunctionCall(func) => {
+                let similarity = parse_similarity_func(func, vector_indexes)?;
+                if similarity.is_none() {
+                    state.add_result(s_expr.clone());
+                    return Ok(());
+                }
                 let mut new_scan = s_expr.walk_down(3).clone();
                 let mut new_operator = new_scan.plan.as_ref().clone();
                 new_operator.as_scan_mut().unwrap().order_by = Some(sort.items.clone());
                 new_operator.as_scan_mut().unwrap().limit = Some(limit.limit.unwrap());
                 new_operator.as_scan_mut().unwrap().similarity =
-                    Some(Box::new((func.clone(), vector_index)));
+                    Some(Box::new(similarity.unwrap()));
                 new_scan.plan = Arc::new(new_operator);
                 new_scan.set_applied_rule(&self.id);
                 state.add_result(new_scan);
@@ -143,4 +141,51 @@ impl Rule for RuleTryApplyVectorIndex {
     fn patterns(&self) -> &Vec<crate::optimizer::SExpr> {
         &self.patterns
     }
+}
+
+fn parse_similarity_func(
+    func: &FunctionCall,
+    vector_indexes: &HashMap<String, VectorIndex>,
+) -> Result<Option<VectorSimilarityInfo>> {
+    let metric = match func.func_name.to_ascii_lowercase().as_str() {
+        "cosine_distance" => Ok(MetricType::Cosine),
+        _ => Err(ErrorCode::BadArguments(format!(
+            "invalid similarity function: {}",
+            func.func_name
+        ))),
+    }?;
+    if func.arguments.len() != 2 {
+        return Err(ErrorCode::BadArguments(format!(
+            "invalid arguments for similarity function: {}",
+            func.func_name
+        )));
+    }
+    let (column_idx, column_name) = match &func.arguments[0] {
+        ScalarExpr::BoundColumnRef(expr) => {
+            Ok((expr.column.index, expr.column.column_name.clone()))
+        }
+        _ => Err(ErrorCode::BadArguments(format!(
+            "invalid arguments for similarity function: {}",
+            func.func_name
+        ))),
+    }?;
+    let index_name_postfix = IndexName::create_postfix(column_name.as_str(), &metric);
+    let index = vector_indexes.get(index_name_postfix.as_str());
+    if index.is_none() {
+        return Ok(None);
+    }
+    let index = index.unwrap();
+    let target = match &func.arguments[1] {
+        ScalarExpr::ConstantExpr(expr) => Ok(expr.value.clone()),
+        _ => Err(ErrorCode::BadArguments(format!(
+            "invalid arguments for similarity function: {}",
+            func.func_name
+        ))),
+    }?;
+    Ok(Some(VectorSimilarityInfo {
+        vector_index: index.clone(),
+        metric,
+        column: column_idx,
+        target,
+    }))
 }
