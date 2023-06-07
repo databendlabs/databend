@@ -21,6 +21,7 @@ use common_ast::ast::UnaryOperator;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
+use common_expression::shrink_scalar;
 use common_expression::types::decimal::DecimalDataType;
 use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::decimal::DecimalSize;
@@ -149,7 +150,7 @@ pub fn transform_expr(ast: AExpr, columns: &[(&str, DataType)]) -> RawExpr {
                 .into_iter()
                 .map(|param| match param {
                     ASTLiteral::UInt64(u) => u as usize,
-                    ASTLiteral::Decimal128 { .. } => 0_usize,
+                    ASTLiteral::Decimal256 { .. } => 0_usize,
                     _ => unimplemented!(),
                 })
                 .collect(),
@@ -527,37 +528,8 @@ fn transform_data_type(target_type: common_ast::ast::TypeName) -> DataType {
 }
 
 pub fn transform_literal(lit: ASTLiteral) -> Scalar {
-    match lit {
-        ASTLiteral::UInt64(u) => {
-            if u < u8::MAX as u64 {
-                Scalar::Number(NumberScalar::UInt8(u as u8))
-            } else if u < u16::MAX as u64 {
-                Scalar::Number(NumberScalar::UInt16(u as u16))
-            } else if u < u32::MAX as u64 {
-                Scalar::Number(NumberScalar::UInt32(u as u32))
-            } else {
-                Scalar::Number(NumberScalar::UInt64(u))
-            }
-        }
-        ASTLiteral::Int64(int) => {
-            if int >= i8::MIN as i64 && int <= i8::MAX as i64 {
-                Scalar::Number(NumberScalar::Int8(int as i8))
-            } else if int >= i16::MIN as i64 && int <= i16::MAX as i64 {
-                Scalar::Number(NumberScalar::Int16(int as i16))
-            } else if int >= i32::MIN as i64 && int <= i32::MAX as i64 {
-                Scalar::Number(NumberScalar::Int32(int as i32))
-            } else {
-                Scalar::Number(NumberScalar::Int64(int))
-            }
-        }
-        ASTLiteral::Decimal128 {
-            value,
-            precision,
-            scale,
-        } => Scalar::Decimal(DecimalScalar::Decimal128(value, DecimalSize {
-            precision,
-            scale,
-        })),
+    let scalar = match lit {
+        ASTLiteral::UInt64(u) => Scalar::Number(NumberScalar::UInt64(u)),
         ASTLiteral::Decimal256 {
             value,
             precision,
@@ -569,7 +541,9 @@ pub fn transform_literal(lit: ASTLiteral) -> Scalar {
         ASTLiteral::String(s) => Scalar::String(s.as_bytes().to_vec()),
         ASTLiteral::Boolean(b) => Scalar::Boolean(b),
         ASTLiteral::Null => Scalar::Null,
-        ASTLiteral::Float(f) => Scalar::Number(NumberScalar::Float64(OrderedFloat(f))),
+        ASTLiteral::Float64(f) => Scalar::Number(NumberScalar::Float64(OrderedFloat(f))),
         _ => unimplemented!("{lit}"),
-    }
+    };
+
+    shrink_scalar(scalar)
 }
