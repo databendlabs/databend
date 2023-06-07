@@ -51,12 +51,7 @@ impl JoinHashTable {
                 if self.hash_join_desc.other_predicate.is_none() {
                     self.probe_left_join::<false, _, _>(hash_table, probe_state, keys_iter, input)
                 } else {
-                    self.probe_left_join::<true, _, _>(
-                        hash_table,
-                        probe_state,
-                        keys_iter,
-                        input,
-                    )
+                    self.probe_left_join::<true, _, _>(hash_table, probe_state, keys_iter, input)
                 }
             }
             JoinType::Right => {

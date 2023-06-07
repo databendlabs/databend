@@ -31,7 +31,12 @@ use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
 
 impl JoinHashTable {
-    pub(crate) fn probe_left_join<'a, const WITH_OTHER_CONJUNCT: bool, H: HashJoinHashtableLike, IT>(
+    pub(crate) fn probe_left_join<
+        'a,
+        const WITH_OTHER_CONJUNCT: bool,
+        H: HashJoinHashtableLike,
+        IT,
+    >(
         &self,
         hash_table: &H,
         probe_state: &mut ProbeState,
@@ -181,13 +186,14 @@ impl JoinHashTable {
                                 &merged_block,
                                 self.hash_join_desc.other_predicate.as_ref().unwrap(),
                             )?;
-    
+
                             if all_true {
                                 result_blocks.push(merged_block);
                                 if self.hash_join_desc.join_type == JoinType::Full {
                                     let mut build_indexes =
                                         self.hash_join_desc.join_state.build_indexes.write();
-                                    build_indexes.extend_from_slice(&local_build_indexes[0..matched]);
+                                    build_indexes
+                                        .extend_from_slice(&local_build_indexes[0..matched]);
                                 }
                             } else {
                                 let num_rows = merged_block.num_rows();
