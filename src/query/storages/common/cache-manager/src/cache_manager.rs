@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
+use common_cache::BytesMeter;
 use common_cache::CountableMeter;
 use common_cache::DefaultHashBuilder;
 use common_config::CacheConfig;
@@ -38,6 +39,7 @@ use crate::caches::TableSnapshotStatisticCache;
 use crate::ColumnArrayMeter;
 use crate::CompactSegmentInfoMeter;
 use crate::PrunePartitionsCache;
+use crate::VectorIndexCache;
 
 static DEFAULT_FILE_META_DATA_CACHE_ITEMS: u64 = 3000;
 
@@ -52,6 +54,7 @@ pub struct CacheManager {
     file_meta_data_cache: Option<FileMetaDataCache>,
     table_data_cache: Option<TableDataCache>,
     table_column_array_cache: Option<ColumnArrayCache>,
+    vector_index_cache: Option<VectorIndexCache>,
 }
 
 impl CacheManager {
@@ -81,6 +84,10 @@ impl CacheManager {
             "table_data_column_array",
         );
 
+        // setup in-memory vector index cache
+        let vector_index_cache =
+            Self::new_in_memory_cache(1024 * 1024 * 1024, BytesMeter, "vector_index");
+
         // setup in-memory table meta cache
         if !config.enable_table_meta_cache {
             GlobalInstance::set(Arc::new(Self {
@@ -93,6 +100,7 @@ impl CacheManager {
                 table_statistic_cache: None,
                 table_data_cache,
                 table_column_array_cache,
+                vector_index_cache,
             }));
         } else {
             let table_snapshot_cache =
@@ -125,6 +133,7 @@ impl CacheManager {
                 table_statistic_cache,
                 table_data_cache,
                 table_column_array_cache,
+                vector_index_cache,
             }));
         }
 
@@ -169,6 +178,10 @@ impl CacheManager {
 
     pub fn get_table_data_array_cache(&self) -> Option<ColumnArrayCache> {
         self.table_column_array_cache.clone()
+    }
+
+    pub fn get_vector_index_cache(&self) -> Option<VectorIndexCache> {
+        self.vector_index_cache.clone()
     }
 
     // create cache that meters size by `Count`

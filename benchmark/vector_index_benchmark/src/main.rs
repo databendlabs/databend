@@ -24,7 +24,7 @@ async fn main() {
     table.printstd();
 }
 
-const TABLE_NAME: &str = "vvvvv";
+const TABLE_NAME: &str = "eeeee";
 
 async fn warmup(dim: usize, k: usize, conn: &dyn Connection) {
     let target = generate_points(1, dim);
@@ -32,7 +32,7 @@ async fn warmup(dim: usize, k: usize, conn: &dyn Connection) {
         "SELECT * FROM {} ORDER BY cosine_distance(c,{:?}) LIMIT {}",
         TABLE_NAME, target, k
     );
-    let _ = conn.exec(&knn_sql);
+    conn.exec(&knn_sql).await.unwrap();
 }
 
 async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: usize) -> Row {
@@ -46,7 +46,6 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: u
     println!("generating {} {}d points randomly", num_points, dim);
     let points = generate_points(num_points, dim);
     let words = generate_string(num_points, 20);
-    let mut csv = String::new();
     println!("generating points done");
     let target = generate_points(1, dim);
 
@@ -68,7 +67,7 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: u
         .unwrap();
     println!("inserting points done");
     /////////////////////////////////////////////////////////////////////////////////////////////////////
-    // warmup(dim, k, conn.as_ref()).await;
+    warmup(dim, k, conn.as_ref()).await;
     println!("querying without index");
     let knn_sql = format!(
         "SELECT word FROM {} ORDER BY cosine_distance(c,{:?}) LIMIT {}",
@@ -98,7 +97,7 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: u
     row.add_cell(Cell::new(&format_time(elapsed.as_nanos() as usize)));
     println!("building index done");
     //////////////////////////////////////////////////////////////////////////////////////////////////////
-    // warmup(dim, k, conn.as_ref()).await;
+    warmup(dim, k, conn.as_ref()).await;
     println!("querying with index");
     conn.exec(&format!("SET {}.c.cosine.nprobe = {}", TABLE_NAME, nprobe))
         .await

@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 
+#[derive(Default)]
 pub struct LoadParams {
     pub location: String,
     pub len_hint: Option<u64>,

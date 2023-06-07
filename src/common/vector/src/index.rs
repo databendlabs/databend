@@ -51,7 +51,7 @@ pub fn normalize(vec: &mut [f32]) {
 }
 
 pub fn normalize_vectors(vecs: &mut [f32], dim: usize) {
-    let _: Vec<_> = vecs.chunks_mut(dim).map(normalize).collect();
+    vecs.chunks_mut(dim).for_each(normalize);
 }
 
 pub struct IndexName;

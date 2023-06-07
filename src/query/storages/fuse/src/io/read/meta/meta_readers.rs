@@ -25,6 +25,7 @@ use futures_util::AsyncReadExt;
 use futures_util::AsyncSeekExt;
 use opendal::Operator;
 use opendal::Reader;
+use storages_common_cache::InMemoryBytesCacheReader;
 use storages_common_cache::InMemoryItemCacheReader;
 use storages_common_cache::LoadParams;
 use storages_common_cache::Loader;
@@ -51,6 +52,8 @@ pub type CompactSegmentInfoReader = InMemoryItemCacheReader<
     DefaultHashBuilder,
     CompactSegmentInfoMeter,
 >;
+
+pub type VectorIndexReader = InMemoryBytesCacheReader<LoaderWrapper<Operator>>;
 
 pub struct MetaReaders;
 
@@ -79,6 +82,13 @@ impl MetaReaders {
     pub fn bloom_index_meta_reader(dal: Operator) -> BloomIndexMetaReader {
         BloomIndexMetaReader::new(
             CacheManager::instance().get_bloom_index_meta_cache(),
+            LoaderWrapper(dal),
+        )
+    }
+
+    pub fn vector_index_reader(dal: Operator) -> VectorIndexReader {
+        VectorIndexReader::new(
+            CacheManager::instance().get_vector_index_cache(),
             LoaderWrapper(dal),
         )
     }
@@ -135,6 +145,17 @@ impl Loader<BloomIndexMeta> for LoaderWrapper<Operator> {
             })?;
 
         BloomIndexMeta::try_from(meta)
+    }
+}
+
+#[async_trait::async_trait]
+impl Loader<Vec<u8>> for LoaderWrapper<Operator> {
+    #[async_backtrace::framed]
+    async fn load(&self, params: &LoadParams) -> Result<Vec<u8>> {
+        let mut reader = bytes_reader(&self.0, params.location.as_str(), params.len_hint).await?;
+        let mut buf = Vec::new();
+        reader.read_to_end(&mut buf).await?;
+        Ok(buf)
     }
 }
 

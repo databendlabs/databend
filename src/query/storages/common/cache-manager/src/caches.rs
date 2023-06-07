@@ -24,6 +24,7 @@ use common_cache::Meter;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use storages_common_cache::CacheAccessor;
+use storages_common_cache::InMemoryBytesCacheHolder;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::NamedCache;
 use storages_common_index::filters::Xor8Filter;
@@ -51,6 +52,8 @@ pub type BloomIndexFilterCache = NamedCache<InMemoryItemCacheHolder<Xor8Filter>>
 pub type BloomIndexMetaCache = NamedCache<InMemoryItemCacheHolder<BloomIndexMeta>>;
 /// In memory object cache of parquet FileMetaData of external parquet files
 pub type FileMetaDataCache = NamedCache<InMemoryItemCacheHolder<FileMetaData>>;
+/// In memory bytes cache of vector index
+pub type VectorIndexCache = NamedCache<InMemoryBytesCacheHolder>;
 
 pub type PrunePartitionsCache = NamedCache<InMemoryItemCacheHolder<(PartStatistics, Partitions)>>;
 

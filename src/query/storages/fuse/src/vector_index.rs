@@ -34,12 +34,14 @@ use faiss::index::SearchResult;
 use faiss::index_factory;
 use faiss::Idx;
 use faiss::Index;
+use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::compress;
-use storages_common_table_meta::meta::decompress;
+use storages_common_table_meta::meta::decompress_slice;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::MetaCompression;
 
 use crate::io::BlockReader;
+use crate::io::MetaReaders;
 use crate::io::ReadSettings;
 use crate::FuseTable;
 
@@ -136,10 +138,16 @@ impl FuseTable {
         // 1. get knn of each block
         let mut result_per_block: Vec<(Vec<Idx>, Vec<f32>, Arc<BlockMeta>)> =
             Vec::with_capacity(block_metas.len());
+        let index_reader = MetaReaders::vector_index_reader(self.get_operator());
         for ref block_meta in block_metas {
             let index_location = block_meta.location.0.clone() + &pos_fix;
-            let index_bin = self.get_operator().read(&index_location).await?;
-            let index_bin = decompress(&COMPRESSION_TYPE, index_bin)?;
+            let load_params = LoadParams {
+                location: index_location.clone(),
+                put_cache: true,
+                ..Default::default()
+            };
+            let index_bin = index_reader.read(&load_params).await?;
+            let index_bin = decompress_slice(&COMPRESSION_TYPE, &index_bin)?;
             let mut index = deserialize(&index_bin).unwrap();
             pre_search(&mut index, vector_index);
             let SearchResult { distances, labels } = index.search(target, limit).unwrap();

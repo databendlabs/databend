@@ -31,6 +31,7 @@ pub use current::*;
 pub use format::compress;
 pub use format::decode;
 pub use format::decompress;
+pub use format::decompress_slice;
 pub use format::Compression as MetaCompression;
 pub use format::Encoding;
 pub use statistics::ClusterKey;

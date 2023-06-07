@@ -104,6 +104,28 @@ pub fn decompress(compression: &Compression, data: Vec<u8>) -> Result<Vec<u8>> {
     }
 }
 
+pub fn decompress_slice(compression: &Compression, data: &[u8]) -> Result<Vec<u8>> {
+    match compression {
+        Compression::Zstd => {
+            let mut decoder = ZstdDecoder::new(data)?;
+            let mut decompressed_data = Vec::new();
+            decoder
+                .read_to_end(&mut decompressed_data)
+                .map_err(|e| Error::new(ErrorKind::InvalidData, e))?;
+            Ok(decompressed_data)
+        }
+        #[cfg(feature = "dev")]
+        Compression::Snappy => Ok(SnapDecoder::new()
+            .decompress_vec(data)
+            .map_err(|e| Error::new(ErrorKind::InvalidData, e))?),
+        #[cfg(not(feature = "dev"))]
+        _ => Err(ErrorCode::UnknownFormat(format!(
+            "unsupported compression: {:?}",
+            compression
+        ))),
+    }
+}
+
 #[repr(u8)]
 #[derive(Default, Debug, Clone)]
 pub enum Encoding {
