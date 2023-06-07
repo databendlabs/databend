@@ -133,10 +133,7 @@ impl Processor for TransformCreateSets {
             let mut new_columns = Vec::with_capacity(self.sub_queries_result.len());
             for (index, result) in self.sub_queries_result.iter().enumerate() {
                 let data_type = self.schema.field(start_index + index).data_type();
-                let col = BlockEntry {
-                    data_type: data_type.clone(),
-                    value: Value::Scalar(result.clone()),
-                };
+                let col = BlockEntry::new(data_type.clone(), Value::Scalar(result.clone()));
                 new_columns.push(col);
             }
 

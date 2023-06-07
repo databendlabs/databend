@@ -331,10 +331,7 @@ impl MemoryTableSource {
                 let inner_columns = col.into_tuple().unwrap();
                 let mut values = Vec::with_capacity(inner_tys.len());
                 for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
-                    values.push(BlockEntry {
-                        data_type: ty.clone(),
-                        value: Value::Column(col.clone()),
-                    })
+                    values.push(BlockEntry::new(ty.clone(), Value::Column(col.clone())));
                 }
                 Self::traverse_paths(&values[..], &path[1..])
             }

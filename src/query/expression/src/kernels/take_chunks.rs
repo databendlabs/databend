@@ -69,10 +69,7 @@ impl DataBlock {
 
                 let ty = columns[0].0.data_type.clone();
                 if ty.is_null() {
-                    return BlockEntry {
-                        data_type: ty,
-                        value: Value::Scalar(Scalar::Null),
-                    };
+                    return BlockEntry::new(ty, Value::Scalar(Scalar::Null));
                 }
 
                 // if they are all same scalars
@@ -98,10 +95,7 @@ impl DataBlock {
                 let column =
                     Column::take_column_indices(&full_columns, ty.clone(), indices, result_size);
 
-                BlockEntry {
-                    data_type: ty,
-                    value: Value::Column(column),
-                }
+                BlockEntry::new(ty, Value::Column(column))
             })
             .collect();
 
@@ -187,10 +181,7 @@ impl DataBlock {
 
         let col = builder.build();
 
-        BlockEntry {
-            data_type: ty.clone(),
-            value: Value::Column(col),
-        }
+        BlockEntry::new(ty.clone(), Value::Column(col))
     }
 }
 

@@ -169,9 +169,11 @@ impl JoinHashTable {
                         let columns = build_data_schema
                             .fields()
                             .iter()
-                            .map(|field| BlockEntry {
-                                data_type: field.data_type().wrap_nullable(),
-                                value: Value::Scalar(Scalar::Null),
+                            .map(|field| {
+                                BlockEntry::new(
+                                    field.data_type().wrap_nullable(),
+                                    Value::Scalar(Scalar::Null),
+                                )
                             })
                             .collect::<Vec<_>>();
                         DataBlock::new(columns, input.num_rows())
@@ -188,9 +190,11 @@ impl JoinHashTable {
                             build_block
                                 .columns()
                                 .iter()
-                                .map(|c| BlockEntry {
-                                    value: Value::Scalar(Scalar::Null),
-                                    data_type: c.data_type.wrap_nullable(),
+                                .map(|c| {
+                                    BlockEntry::new(
+                                        c.data_type.wrap_nullable(),
+                                        Value::Scalar(Scalar::Null),
+                                    )
                                 })
                                 .collect::<Vec<_>>(),
                             occupied,
@@ -325,9 +329,11 @@ impl JoinHashTable {
             let columns = build_data_schema
                 .fields()
                 .iter()
-                .map(|field| BlockEntry {
-                    data_type: field.data_type().wrap_nullable(),
-                    value: Value::Scalar(Scalar::Null),
+                .map(|field| {
+                    BlockEntry::new(
+                        field.data_type().wrap_nullable(),
+                        Value::Scalar(Scalar::Null),
+                    )
                 })
                 .collect::<Vec<_>>();
             DataBlock::new(columns, input.num_rows())
@@ -341,10 +347,7 @@ impl JoinHashTable {
             build_block
                 .columns()
                 .iter()
-                .map(|c| BlockEntry {
-                    data_type: c.data_type.clone(),
-                    value: Value::Scalar(Scalar::Null),
-                })
+                .map(|c| BlockEntry::new(c.data_type.clone(), Value::Scalar(Scalar::Null)))
                 .collect::<Vec<_>>()
         } else {
             build_block

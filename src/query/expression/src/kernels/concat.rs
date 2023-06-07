@@ -81,10 +81,10 @@ impl DataBlock {
                     })
                     .collect::<Vec<_>>();
 
-                BlockEntry {
-                    data_type: blocks[0].get_by_offset(i).data_type.clone(),
-                    value: Value::Column(Column::concat(&columns)),
-                }
+                BlockEntry::new(
+                    blocks[0].get_by_offset(i).data_type.clone(),
+                    Value::Column(Column::concat(&columns)),
+                )
             })
             .collect();
 

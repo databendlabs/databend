@@ -95,22 +95,22 @@ impl Interpreter for PresignInterpreter {
 
         let block = DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(
                         presigned_req.method().as_str().as_bytes().to_vec(),
                     )),
-                },
-                BlockEntry {
-                    data_type: DataType::Variant,
-                    value: Value::Scalar(Scalar::Variant(header.to_vec())),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(
+                ),
+                BlockEntry::new(
+                    DataType::Variant,
+                    Value::Scalar(Scalar::Variant(header.to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(
                         presigned_req.uri().to_string().as_bytes().to_vec(),
                     )),
-                },
+                ),
             ],
             1,
         );
