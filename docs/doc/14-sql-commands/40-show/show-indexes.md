@@ -2,6 +2,10 @@
 title: SHOW INDEXES
 ---
 
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced: v1.1.50"/>
+
 Shows the created aggregating indexes. Equivalent to `SELECT * FROM system.indexes`.
 
 See also: [system.indexes](../../13-sql-reference/20-system-tables/system-indexes.md)
