@@ -78,7 +78,11 @@ impl RangeJoinState {
         let left_table = self.left_table.read();
         let right_table = self.right_table.read();
 
-        while i < left_len && j < right_len {
+        while i < left_len {
+            if j == right_len {
+                i += 1;
+                j = 0;
+            }
             let left_scalar = unsafe { left_join_key_col.index_unchecked(i) };
             let right_scalar = unsafe { right_join_key_col.index_unchecked(j) };
             if compare_scalar(
