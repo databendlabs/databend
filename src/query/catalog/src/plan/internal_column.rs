@@ -193,39 +193,39 @@ impl InternalColumn {
                     }
                 }
 
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(UInt64Type::from_data(row_ids)),
-                }
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(UInt64Type::from_data(row_ids)),
+                )
             }
             InternalColumnType::BlockName => {
                 let mut builder = StringColumnBuilder::with_capacity(1, meta.block_location.len());
                 builder.put_str(&meta.block_location);
                 builder.commit_row();
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(builder.build_scalar())),
-                }
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(builder.build_scalar())),
+                )
             }
             InternalColumnType::SegmentName => {
                 let mut builder =
                     StringColumnBuilder::with_capacity(1, meta.segment_location.len());
                 builder.put_str(&meta.segment_location);
                 builder.commit_row();
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(builder.build_scalar())),
-                }
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(builder.build_scalar())),
+                )
             }
             InternalColumnType::SnapshotName => {
                 let mut builder =
                     StringColumnBuilder::with_capacity(1, meta.snapshot_location.len());
                 builder.put_str(&meta.snapshot_location);
                 builder.commit_row();
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(builder.build_scalar())),
-                }
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(builder.build_scalar())),
+                )
             }
         }
     }

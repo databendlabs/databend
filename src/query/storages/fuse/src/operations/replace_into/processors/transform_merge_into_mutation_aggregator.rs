@@ -21,8 +21,8 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::transform_accumulating_async::AsyncAccumulatingTransform;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 
-use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
-pub use crate::operations::merge_into::mutator::merge_into_mutator::MergeIntoOperationAggregator;
+use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
+pub use crate::operations::replace_into::mutator::merge_into_mutator::MergeIntoOperationAggregator;
 
 /// Takes multiple [MergeIntoOperation]s in, and aggregate them.
 /// Applies them to segments(and data blocks belong to this Aggregator) in the `final` stage.

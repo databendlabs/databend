@@ -33,7 +33,7 @@ use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 
-use crate::operations::AppendTransform;
+use crate::operations::common::AppendTransform;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -72,15 +72,16 @@ impl FuseTable {
 
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            AppendTransform::try_create(
+        pipeline.add_transform(|input, output| {
+            let proc = AppendTransform::new(
                 ctx.clone(),
-                transform_input_port,
-                transform_output_port,
+                input,
+                output,
                 self,
                 cluster_stats_gen.clone(),
                 block_thresholds,
-            )
+            );
+            proc.into_processor()
         })?;
         Ok(())
     }

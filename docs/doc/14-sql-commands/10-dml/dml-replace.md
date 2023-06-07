@@ -7,6 +7,10 @@ The `REPLACE INTO` statement in Databend is used to either insert a new row into
 
 If a row with the specified conflict key(*not primary key*) already exists in the table, then the `REPLACE INTO` statement will replace the existing row with the new data. If the row doesn't exist, a new row will be inserted with the specified data.
 
+:::tip atomic operations
+Databend ensures data integrity with atomic operations. Inserts, updates, replaces, and deletes either succeed completely or fail entirely.
+:::
+
 ## Syntax
 
 ```sql
