@@ -354,7 +354,7 @@ SELECT number FROM numbers(100000) ORDER BY number LIMIT 2 OFFSET 10;
 +--------+
 ```
 
-For optimizing query performance with large result sets, you can enable the *lazy_topn_threshold* option. This option is specifically designed for queries that involve an ORDER BY clause and a LIMIT clause. When enabled, the optimization is activated for queries where the specified LIMIT number is smaller than the threshold value you set. 
+For optimizing query performance with large result sets, Databend has enabled the lazy_topn_threshold option by default with a default value of 1,000. This option is specifically designed for queries that involve an ORDER BY clause and a LIMIT clause. When the lazy_topn_threshold is enabled, the optimization is activated for queries where the specified LIMIT number is smaller than or equal to the threshold value you set. To disable the option, set it to 0.
 
 <details>
   <summary>How it works</summary>
@@ -363,13 +363,13 @@ For optimizing query performance with large result sets, you can enable the *laz
 
 ```sql
 MySQL [(none)]> SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
-Empty set (0.897 sec)
+Empty set (0.300 sec)
 
-MySQL [(none)]> set lazy_topn_threshold=100;
+MySQL [(none)]> set lazy_topn_threshold=0;
 Query OK, 0 rows affected (0.004 sec)
 
 MySQL [(none)]> SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
-Empty set (0.300 sec)
+Empty set (0.897 sec)
 ```
 
 ## OFFSET Clause
