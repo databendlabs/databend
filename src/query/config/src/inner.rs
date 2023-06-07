@@ -29,9 +29,9 @@ use common_meta_app::tenant::TenantQuota;
 use common_storage::StorageConfig;
 use common_tracing::Config as LogConfig;
 use common_users::idm_config::IDMConfig;
-use crate::background_config::InnerBackgroundConfig;
 
 use super::config::Config;
+use crate::background_config::InnerBackgroundConfig;
 
 /// Inner config for query.
 ///
@@ -64,7 +64,7 @@ pub struct InnerConfig {
     pub cache: CacheConfig,
 
     // Background Config
-    pub background: InnerBackgroundConfig
+    pub background: InnerBackgroundConfig,
 }
 
 impl InnerConfig {

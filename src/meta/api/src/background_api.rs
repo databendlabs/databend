@@ -12,7 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::background::{BackgroundJobInfo, BackgroundTaskInfo, CreateBackgroundJobReply, CreateBackgroundJobReq, DeleteBackgroundJobReply, DeleteBackgroundJobReq, GetBackgroundJobReply, GetBackgroundJobReq, GetBackgroundTaskReply, GetBackgroundTaskReq, ListBackgroundJobsReq, ListBackgroundTasksReq, UpdateBackgroundJobReply, UpdateBackgroundJobReq, UpdateBackgroundTaskReply, UpdateBackgroundTaskReq};
+use common_meta_app::background::BackgroundJobInfo;
+use common_meta_app::background::BackgroundTaskInfo;
+use common_meta_app::background::CreateBackgroundJobReply;
+use common_meta_app::background::CreateBackgroundJobReq;
+use common_meta_app::background::DeleteBackgroundJobReply;
+use common_meta_app::background::DeleteBackgroundJobReq;
+use common_meta_app::background::GetBackgroundJobReply;
+use common_meta_app::background::GetBackgroundJobReq;
+use common_meta_app::background::GetBackgroundTaskReply;
+use common_meta_app::background::GetBackgroundTaskReq;
+use common_meta_app::background::ListBackgroundJobsReq;
+use common_meta_app::background::ListBackgroundTasksReq;
+use common_meta_app::background::UpdateBackgroundJobReply;
+use common_meta_app::background::UpdateBackgroundJobReq;
+use common_meta_app::background::UpdateBackgroundTaskReply;
+use common_meta_app::background::UpdateBackgroundTaskReq;
+
 use crate::kv_app_error::KVAppError;
 
 #[async_trait::async_trait]
@@ -39,12 +55,18 @@ pub trait BackgroundApi: Send + Sync {
         req: ListBackgroundJobsReq,
     ) -> Result<Vec<(u64, BackgroundJobInfo)>, KVAppError>;
     // Return a list of background tasks (task_id, BackgroundInfo)
-    async fn list_background_tasks(&self, req: ListBackgroundTasksReq) -> Result<Vec<(u64, BackgroundTaskInfo)>, KVAppError>;
+    async fn list_background_tasks(
+        &self,
+        req: ListBackgroundTasksReq,
+    ) -> Result<Vec<(u64, BackgroundTaskInfo)>, KVAppError>;
 
     async fn update_background_task(
         &self,
         req: UpdateBackgroundTaskReq,
     ) -> Result<UpdateBackgroundTaskReply, KVAppError>;
 
-    async fn get_background_task(&self, req: GetBackgroundTaskReq) -> Result<GetBackgroundTaskReply, KVAppError>;
+    async fn get_background_task(
+        &self,
+        req: GetBackgroundTaskReq,
+    ) -> Result<GetBackgroundTaskReply, KVAppError>;
 }

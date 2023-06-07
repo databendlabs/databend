@@ -12,8 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::background_service::configs::JobConfig;
 use async_trait::async_trait;
+
+use crate::background_service::configs::JobConfig;
 /// A trait for implementing a background job
 ///
 /// Example implementation:
@@ -36,7 +37,6 @@ use async_trait::async_trait;
 ///         &self.config
 ///     }
 /// }
-///
 /// ```
 #[async_trait]
 pub trait Job: JobClone {
@@ -51,8 +51,7 @@ pub trait JobClone {
 }
 
 impl<T> JobClone for T
-    where
-        T: 'static + Job + Clone + Send + Sync,
+where T: 'static + Job + Clone + Send + Sync
 {
     fn box_clone(&self) -> BoxedJob {
         Box::new((*self).clone())

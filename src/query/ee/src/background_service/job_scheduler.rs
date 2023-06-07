@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use futures_util::future::join_all;
+
 use common_base::base::tokio;
-use crate::background_service::configs::JobSchedulerConfig;
-use crate::background_service::job::{BoxedJob, Job};
 use common_exception::Result;
+use futures_util::future::join_all;
+
+use crate::background_service::configs::JobSchedulerConfig;
+use crate::background_service::job::BoxedJob;
+use crate::background_service::job::Job;
 
 pub struct JobScheduler {
     jobs: Vec<BoxedJob>,

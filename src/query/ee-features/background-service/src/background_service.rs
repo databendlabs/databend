@@ -12,32 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::{format, vec};
+use std::format;
 use std::sync::Arc;
+use std::vec;
 
+use arrow_array::RecordBatch;
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::GlobalInstance;
 use common_catalog::table_context::TableContext;
-use common_exception::{ErrorCode, Result};
+use common_exception::ErrorCode;
+use common_exception::Result;
+use common_meta_app::principal::UserInfo;
 use common_storages_fuse::FuseTable;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::servers::Server;
-use arrow_array::RecordBatch;
-use common_meta_app::principal::UserInfo;
 use databend_query::sessions::QueryContext;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {
-    async fn execute_sql(
-        &self,
-        sql: &str,
-    ) -> Result<Option<RecordBatch>>;
-
-    async fn set_current_user(
-        &self,
-        user: UserInfo,
-    );
+    async fn execute_sql(&self, sql: &str) -> Result<Option<RecordBatch>>;
 }
 
 pub struct BackgroundServiceHandlerWrapper {
@@ -50,21 +44,8 @@ impl BackgroundServiceHandlerWrapper {
     }
 
     #[async_backtrace::framed]
-    pub async fn execute_sql(
-        &self,
-        sql: &str,
-    ) -> Result<Option<RecordBatch>> {
-        self.handler
-            .execute_sql(sql)
-            .await
-    }
-
-    #[async_backtrace::framed]
-    pub async fn set_current_user(
-        &self,
-        user: UserInfo,
-    ) {
-        self.handler.set_current_user(user).await;
+    pub async fn execute_sql(&self, sql: &str) -> Result<Option<RecordBatch>> {
+        self.handler.execute_sql(sql).await
     }
     // #[async_backtrace::framed]
     // pub async fn create(

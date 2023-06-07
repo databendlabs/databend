@@ -17,21 +17,21 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
-use chrono::{DateTime};
+use chrono::DateTime;
 use chrono::Utc;
+
 use crate::background::BackgroundJobIdent;
-use crate::principal::UserIdentity;
 use crate::schema::TableStatistics;
 
 #[derive(
-serde::Serialize,
-serde::Deserialize,
-Clone,
-Debug,
-Default,
-Eq,
-PartialEq,
-num_derive::FromPrimitive,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    num_derive::FromPrimitive,
 )]
 pub enum BackgroundTaskState {
     #[default]
@@ -50,22 +50,21 @@ impl Display for BackgroundTaskState {
     }
 }
 
-
 // BackgroundTaskType
 #[derive(
-serde::Serialize,
-serde::Deserialize,
-Clone,
-Debug,
-Default,
-Eq,
-PartialEq,
-num_derive::FromPrimitive,
+    serde::Serialize,
+    serde::Deserialize,
+    Clone,
+    Debug,
+    Default,
+    Eq,
+    PartialEq,
+    num_derive::FromPrimitive,
 )]
 pub enum BackgroundTaskType {
     #[default]
     COMPACTION = 0,
-    VACUUM  = 1,
+    VACUUM = 1,
 }
 
 impl Display for BackgroundTaskType {
@@ -119,8 +118,7 @@ impl Display for CompactionStats {
 
 // TODO(zhihanz) provide detailed vacuum stats
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct VacuumStats {
-}
+pub struct VacuumStats {}
 
 impl Display for VacuumStats {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
@@ -152,7 +150,11 @@ impl Display for UpdateBackgroundTaskReq {
         write!(
             f,
             "update_background_task({}, {}, {}, {}, {:?})",
-            self.task_name, self.task_info.task_type, self.task_info.task_state, self.task_info.message, self.task_info.last_updated
+            self.task_name,
+            self.task_info.task_type,
+            self.task_info.task_state,
+            self.task_info.message,
+            self.task_info.last_updated
         )
     }
 }
@@ -171,12 +173,9 @@ pub struct GetBackgroundTaskReq {
 
 impl Display for GetBackgroundTaskReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f, "get_background_task({})", self.name
-        )
+        write!(f, "get_background_task({})", self.name)
     }
 }
-
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct GetBackgroundTaskReply {
@@ -190,9 +189,7 @@ pub struct ListBackgroundTasksReq {
 
 impl Display for ListBackgroundTasksReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f, "list_background_tasks({})", self.tenant
-        )
+        write!(f, "list_background_tasks({})", self.tenant)
     }
 }
 
@@ -206,7 +203,9 @@ impl ListBackgroundTasksReq {
 
 mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;
-    use crate::background::background_task::{BackgroundTaskId, BackgroundTaskIdent};
+
+    use crate::background::background_task::BackgroundTaskId;
+    use crate::background::background_task::BackgroundTaskIdent;
     const PREFIX_BACKGROUND: &str = "__fd_background_task";
     const PREFIX_BACKGROUND_TASK_BY_ID: &str = "__fd_background_task_by_id";
 
@@ -228,7 +227,10 @@ mod kvapi_key_impl {
             let id = p.next_str()?;
             p.done()?;
 
-            Ok(BackgroundTaskIdent { tenant, task_id: id })
+            Ok(BackgroundTaskIdent {
+                tenant,
+                task_id: id,
+            })
         }
     }
 

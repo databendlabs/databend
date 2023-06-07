@@ -13,6 +13,6 @@
 // limitations under the License.
 
 #![feature(unwrap_infallible)]
+mod background_service;
 mod license;
 mod storages;
-mod background_service;

@@ -300,7 +300,6 @@ impl UnknownBackgroundJob {
     }
 }
 
-
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownDatabaseId: `{db_id}` while `{context}`")]
 pub struct UnknownDatabaseId {
@@ -861,7 +860,6 @@ impl AppErrorMessage for BackgroundJobAlreadyExists {
     fn message(&self) -> String {
         format!("Background job '{}' already exists", self.name)
     }
-
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -1194,7 +1192,9 @@ impl From<AppError> for ErrorCode {
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
 
-            AppError::BackgroundJobAlreadyExists(err) => ErrorCode::BackgroundJobAlreadyExists(err.message()),
+            AppError::BackgroundJobAlreadyExists(err) => {
+                ErrorCode::BackgroundJobAlreadyExists(err.message())
+            }
             AppError::UnknownBackgroundJob(err) => ErrorCode::UnknownBackgroundJob(err.message()),
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
             AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),

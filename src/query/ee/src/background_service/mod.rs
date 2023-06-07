@@ -13,10 +13,10 @@
 // limitations under the License.
 
 mod background_service_handler;
+mod compaction_job;
 mod configs;
 mod job;
 mod job_scheduler;
-mod compaction_job;
 mod session;
 
 pub use background_service_handler::RealBackgroundService;

@@ -13,10 +13,13 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use tracing::error;
-use databend_query::sessions::{Session, SessionManager, SessionType};
+
 use common_exception::Result;
+use databend_query::sessions::Session;
+use databend_query::sessions::SessionManager;
+use databend_query::sessions::SessionType;
 use databend_query::status;
+use tracing::error;
 
 pub async fn create_session() -> Result<Arc<Session>> {
     let session = SessionManager::instance()

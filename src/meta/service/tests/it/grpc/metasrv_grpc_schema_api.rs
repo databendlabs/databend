@@ -18,7 +18,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use common_base::base::tokio;
-use common_meta_api::{BackgroundApiTestSuite, SchemaApiTestSuite};
+use common_meta_api::BackgroundApiTestSuite;
+use common_meta_api::SchemaApiTestSuite;
 use common_meta_api::ShareApiTestSuite;
 use databend_meta::init_meta_ut;
 

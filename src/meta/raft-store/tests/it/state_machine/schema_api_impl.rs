@@ -17,7 +17,8 @@ use std::sync::Mutex;
 
 use async_trait::async_trait;
 use common_base::base::tokio;
-use common_meta_api::{BackgroundApiTestSuite, SchemaApiTestSuite};
+use common_meta_api::BackgroundApiTestSuite;
+use common_meta_api::SchemaApiTestSuite;
 use common_meta_api::ShareApiTestSuite;
 use common_meta_kvapi::kvapi;
 use common_meta_raft_store::state_machine::StateMachine;

@@ -51,7 +51,6 @@ use serfig::collectors::from_env;
 use serfig::collectors::from_file;
 use serfig::collectors::from_self;
 use serfig::parsers::Toml;
-use crate::background_config::BackgroundConfig;
 
 use super::inner;
 use super::inner::CatalogConfig as InnerCatalogConfig;
@@ -60,6 +59,7 @@ use super::inner::InnerConfig;
 use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use crate::background_config::BackgroundConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
 // FIXME: too much boilerplate here

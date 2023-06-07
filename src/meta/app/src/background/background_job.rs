@@ -16,8 +16,9 @@ use std::fmt;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
-use chrono::{DateTime};
+use chrono::DateTime;
 use chrono::Utc;
+
 use crate::background::BackgroundTaskType;
 use crate::principal::UserIdentity;
 
@@ -87,7 +88,6 @@ pub struct BackgroundJobIdent {
 // Info
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundJobInfo {
-
     pub job_type: BackgroundJobType,
     pub job_state: BackgroundJobState,
     pub task_type: BackgroundTaskType,
@@ -117,11 +117,15 @@ impl Display for CreateBackgroundJobReq {
         write!(
             f,
             "create_background_job({}, {}, {}, {}, {}, {:?})",
-            self.job_name.name, self.job_info.task_type, self.job_info.job_type, self.job_info.job_state, self.job_info.message, self.job_info.last_updated
+            self.job_name.name,
+            self.job_info.task_type,
+            self.job_info.job_type,
+            self.job_info.job_state,
+            self.job_info.message,
+            self.job_info.last_updated
         )
     }
 }
-
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateBackgroundJobReply {
@@ -156,7 +160,12 @@ impl Display for UpdateBackgroundJobReq {
         write!(
             f,
             "update_background_job({}, {}, {}, {}, {}, {:?})",
-            self.job_name.name, self.info.task_type, self.info.job_type, self.info.job_state, self.info.message, self.info.last_updated
+            self.job_name.name,
+            self.info.task_type,
+            self.info.job_type,
+            self.info.job_state,
+            self.info.message,
+            self.info.last_updated
         )
     }
 }
@@ -193,7 +202,9 @@ impl Display for ListBackgroundJobsReq {
 
 mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;
-    use crate::background::background_job::{BackgroundJobId, BackgroundJobIdent};
+
+    use crate::background::background_job::BackgroundJobId;
+    use crate::background::background_job::BackgroundJobIdent;
     const PREFIX_BACKGROUND_JOB: &str = "__fd_background_job";
     const PREFIX_BACKGROUND_JOB_BY_ID: &str = "__fd_background_job_by_id";
 

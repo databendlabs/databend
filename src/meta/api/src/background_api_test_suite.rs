@@ -1,15 +1,31 @@
-use std::os::linux::raw::stat;
-use chrono::{DateTime, Utc};
-use common_meta_app::background::{BackgroundJobIdent, BackgroundJobInfo, BackgroundJobState, BackgroundTaskIdent, BackgroundTaskInfo, BackgroundTaskState, CreateBackgroundJobReq, GetBackgroundJobReq, GetBackgroundTaskReq, ListBackgroundJobsReq, ListBackgroundTasksReq, UpdateBackgroundJobReq, UpdateBackgroundTaskReq};
+
+use chrono::DateTime;
+use chrono::Utc;
+use common_meta_app::background::BackgroundJobIdent;
+use common_meta_app::background::BackgroundJobInfo;
+use common_meta_app::background::BackgroundJobState;
+use common_meta_app::background::BackgroundJobType::ONESHOT;
+use common_meta_app::background::BackgroundTaskIdent;
+use common_meta_app::background::BackgroundTaskInfo;
+use common_meta_app::background::BackgroundTaskState;
+use common_meta_app::background::CreateBackgroundJobReq;
+use common_meta_app::background::GetBackgroundJobReq;
+use common_meta_app::background::GetBackgroundTaskReq;
+use common_meta_app::background::ListBackgroundJobsReq;
+use common_meta_app::background::ListBackgroundTasksReq;
+use common_meta_app::background::UpdateBackgroundJobReq;
+use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_kvapi::kvapi;
 use common_meta_types::MetaError;
+use tracing::info;
+
 use crate::background_api::BackgroundApi;
 use crate::SchemaApi;
-use tracing::info;
-use common_meta_app::background::BackgroundJobType::ONESHOT;
 
-
-fn new_background_task(state: BackgroundTaskState, created_at: DateTime<Utc>) -> BackgroundTaskInfo {
+fn new_background_task(
+    state: BackgroundTaskState,
+    created_at: DateTime<Utc>,
+) -> BackgroundTaskInfo {
     BackgroundTaskInfo {
         last_updated: None,
         task_type: Default::default(),
@@ -45,9 +61,9 @@ pub struct BackgroundApiTestSuite {}
 impl BackgroundApiTestSuite {
     /// Test BackgroundTaskApi on a single node
     pub async fn test_single_node<B, MT>(b: B) -> anyhow::Result<()>
-        where
-            B: kvapi::ApiBuilder<MT>,
-            MT: BackgroundApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
+    where
+        B: kvapi::ApiBuilder<MT>,
+        MT: BackgroundApi + kvapi::AsKVApi<Error = MetaError> + SchemaApi,
     {
         let suite = BackgroundApiTestSuite {};
 
@@ -87,35 +103,46 @@ impl BackgroundApiTestSuite {
         {
             let req = UpdateBackgroundTaskReq {
                 task_name: task_name.clone(),
-                task_info: new_background_task( BackgroundTaskState::STARTED, create_on),
+                task_info: new_background_task(BackgroundTaskState::STARTED, create_on),
                 expire_at: expire_at.timestamp() as u64,
             };
 
             let res = mt.update_background_task(req).await;
             info!("update log res: {:?}", res);
-            let res = mt.get_background_task(GetBackgroundTaskReq {
-                name: task_name.clone(),
-            }).await;
+            let res = mt
+                .get_background_task(GetBackgroundTaskReq {
+                    name: task_name.clone(),
+                })
+                .await;
             info!("get log res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(BackgroundTaskState::STARTED, res.task_info.unwrap().task_state, "first state is started");
+            assert_eq!(
+                BackgroundTaskState::STARTED,
+                res.task_info.unwrap().task_state,
+                "first state is started"
+            );
         }
         {
             let req = UpdateBackgroundTaskReq {
                 task_name: task_name.clone(),
-                task_info: new_background_task( BackgroundTaskState::DONE, create_on),
+                task_info: new_background_task(BackgroundTaskState::DONE, create_on),
                 expire_at: expire_at.timestamp() as u64,
             };
 
             let res = mt.update_background_task(req).await;
             info!("update log res: {:?}", res);
-            let res = mt.get_background_task(GetBackgroundTaskReq {
-
-                name: task_name.clone(),
-            }).await;
+            let res = mt
+                .get_background_task(GetBackgroundTaskReq {
+                    name: task_name.clone(),
+                })
+                .await;
             info!("get log res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(BackgroundTaskState::DONE, res.task_info.unwrap().task_state, "first state is done");
+            assert_eq!(
+                BackgroundTaskState::DONE,
+                res.task_info.unwrap().task_state,
+                "first state is done"
+            );
         }
         {
             let req = ListBackgroundTasksReq {
@@ -126,7 +153,11 @@ impl BackgroundApiTestSuite {
             info!("update log res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.len(), "there is one task");
-            assert_eq!(BackgroundTaskState::DONE, res[0].1.task_state, "first state is done");
+            assert_eq!(
+                BackgroundTaskState::DONE,
+                res[0].1.task_state,
+                "first state is done"
+            );
         }
         Ok(())
     }
@@ -166,12 +197,18 @@ impl BackgroundApiTestSuite {
 
             let res = mt.create_background_job(req).await;
             info!("update log res: {:?}", res);
-            let res = mt.get_background_job(GetBackgroundJobReq {
-                name: job_ident.clone(),
-            }).await;
+            let res = mt
+                .get_background_job(GetBackgroundJobReq {
+                    name: job_ident.clone(),
+                })
+                .await;
             info!("get log res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(BackgroundJobState::RUNNING, res.info.job_state, "first state is started");
+            assert_eq!(
+                BackgroundJobState::RUNNING,
+                res.info.job_state,
+                "first state is started"
+            );
         }
         info!("--- update a background job");
         {
@@ -182,12 +219,18 @@ impl BackgroundApiTestSuite {
 
             let res = mt.update_background_job(req).await;
             info!("update log res: {:?}", res);
-            let res = mt.get_background_job(GetBackgroundJobReq {
-                name: job_ident.clone(),
-            }).await;
+            let res = mt
+                .get_background_job(GetBackgroundJobReq {
+                    name: job_ident.clone(),
+                })
+                .await;
             info!("get log res: {:?}", res);
             let res = res.unwrap();
-            assert_eq!(BackgroundJobState::SUSPENDED, res.info.job_state, "first state is started");
+            assert_eq!(
+                BackgroundJobState::SUSPENDED,
+                res.info.job_state,
+                "first state is started"
+            );
         }
         info!("--- list background jobs when their is 1 tasks");
         {
@@ -199,7 +242,11 @@ impl BackgroundApiTestSuite {
             assert!(res.is_ok());
             let resp = res.unwrap();
             assert_eq!(1, resp.len());
-            assert_eq!(BackgroundJobState::SUSPENDED, resp[0].1.job_state, "first state is started");
+            assert_eq!(
+                BackgroundJobState::SUSPENDED,
+                resp[0].1.job_state,
+                "first state is started"
+            );
         }
         Ok(())
     }

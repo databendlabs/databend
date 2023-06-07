@@ -16,6 +16,10 @@
 #![deny(unused_crate_dependencies)]
 extern crate common_meta_types;
 
+mod background_api;
+mod background_api_impl;
+mod background_api_keys;
+mod background_api_test_suite;
 pub mod compat_errors;
 mod data_mask_api;
 mod data_mask_api_impl;
@@ -34,11 +38,9 @@ mod share_api_keys;
 mod share_api_test_suite;
 pub(crate) mod testing;
 pub(crate) mod util;
-mod background_api;
-mod background_api_keys;
-mod background_api_impl;
-mod background_api_test_suite;
 
+pub use background_api::BackgroundApi;
+pub use background_api_test_suite::BackgroundApiTestSuite;
 pub use data_mask_api::DatamaskApi;
 pub use id::Id;
 pub(crate) use id_generator::IdGenerator;
@@ -47,8 +49,6 @@ pub(crate) use schema_api_impl::get_db_or_err;
 pub use schema_api_test_suite::SchemaApiTestSuite;
 pub use share_api::ShareApi;
 pub use share_api_test_suite::ShareApiTestSuite;
-pub use background_api::BackgroundApi;
-pub use background_api_test_suite::BackgroundApiTestSuite;
 pub use util::assert_table_exist;
 pub use util::convert_share_meta_to_spec;
 pub use util::db_has_to_exist;

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::time::Duration;
+
 use common_meta_app::background::BackgroundJobType;
 
 #[derive(Default, Clone)]
@@ -23,7 +24,7 @@ pub struct JobConfig {
 }
 
 #[derive(Clone)]
-pub struct JobSchedulerConfig{
+pub struct JobSchedulerConfig {
     // Interval for check and run job
     pub poll_interval: Duration,
 }

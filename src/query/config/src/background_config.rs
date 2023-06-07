@@ -1,9 +1,11 @@
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
+use std::fmt::Formatter;
+
 use clap::Args;
+use common_exception::ErrorCode;
+use common_exception::Result;
 use serde::Deserialize;
 use serde::Serialize;
-use common_exception::Result;
-use common_exception::ErrorCode;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
@@ -41,7 +43,7 @@ pub struct BackgroundCompactionConfig {
     pub block_limit: Option<u64>,
 
     #[clap(flatten)]
-    pub fixed_config: BackgroundCompactionFixedConfig
+    pub fixed_config: BackgroundCompactionFixedConfig,
 }
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
@@ -51,7 +53,6 @@ pub struct BackgroundCompactionFixedConfig {
     #[clap(long, default_value = "1800")]
     pub duration_secs: i64,
 }
-
 
 /// Config for background config
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -65,7 +66,6 @@ pub struct InnerBackgroundCompactionConfig {
     pub segment_limit: Option<u64>,
     pub block_limit: Option<u64>,
     pub params: CompactionParams,
-
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -97,7 +97,7 @@ impl Debug for CompactionFixedConfig {
 impl Default for CompactionFixedConfig {
     fn default() -> Self {
         Self {
-           duration_secs: std::time::Duration::from_secs(1800)
+            duration_secs: std::time::Duration::from_secs(1800),
         }
     }
 }
@@ -123,7 +123,7 @@ impl From<InnerBackgroundConfig> for BackgroundConfig {
     fn from(inner: InnerBackgroundConfig) -> Self {
         Self {
             service_type: inner.mode,
-            compaction: BackgroundCompactionConfig::from(inner.compaction)
+            compaction: BackgroundCompactionConfig::from(inner.compaction),
         }
     }
 }
@@ -140,7 +140,7 @@ impl TryInto<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
                     "fixed" => CompactionParams::Fixed(self.fixed_config.try_into()?),
                     _ => return Err(ErrorCode::StorageOther("not supported compaction mode")),
                 }
-            }
+            },
         })
     }
 }
@@ -166,7 +166,7 @@ impl From<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
 impl From<CompactionFixedConfig> for BackgroundCompactionFixedConfig {
     fn from(inner: CompactionFixedConfig) -> Self {
         Self {
-            duration_secs: inner.duration_secs.as_secs() as i64
+            duration_secs: inner.duration_secs.as_secs() as i64,
         }
     }
 }
@@ -215,7 +215,7 @@ impl Debug for BackgroundCompactionConfig {
 impl Default for BackgroundCompactionFixedConfig {
     fn default() -> Self {
         Self {
-            duration_secs: 1800
+            duration_secs: 1800,
         }
     }
 }

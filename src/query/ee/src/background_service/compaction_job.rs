@@ -14,16 +14,22 @@
 
 use std::fmt::format;
 use std::sync::Arc;
-use tracing::debug;
-use arrow_array::{BooleanArray, RecordBatch, StringArray, UInt64Array};
+
+use arrow_array::BooleanArray;
+use arrow_array::RecordBatch;
+use arrow_array::StringArray;
+use arrow_array::UInt64Array;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
 use common_config::InnerConfig;
-use crate::background_service::configs::JobConfig;
-use crate::background_service::job::Job;
 use common_exception::Result;
-use common_expression::types::{Float32Type, Float64Type};
+use common_expression::types::Float32Type;
+use common_expression::types::Float64Type;
 use common_meta_app::background::CompactionStats;
 use common_meta_app::schema::TableStatistics;
+use tracing::debug;
+
+use crate::background_service::configs::JobConfig;
+use crate::background_service::job::Job;
 use crate::background_service::RealBackgroundService;
 
 // TODO(zhihanz) add more configs to filter out tables need to be compacted
@@ -60,61 +66,150 @@ impl Job for CompactionJob {
     }
 }
 
-//Service
+// Service
 // optimize table limit
 // vacuum
 impl CompactionJob {
-
     async fn do_compaction_job(&self) -> Result<()> {
         Ok(())
     }
 
-    pub async fn do_get_all_target_tables(svc: &Arc<BackgroundServiceHandlerWrapper> ) -> Result<Option<RecordBatch>> {
+    pub async fn do_get_all_target_tables(
+        svc: &Arc<BackgroundServiceHandlerWrapper>,
+    ) -> Result<Option<RecordBatch>> {
         let res = svc.execute_sql(GET_ALL_TARGET_TABLES).await?;
         let num_of_tables = res.as_ref().map_or_else(|| 0, |r| r.num_rows());
-        debug!(job="compaction", background=true, tables=num_of_tables, "get all target tables");
+        debug!(
+            job = "compaction",
+            background = true,
+            tables = num_of_tables,
+            "get all target tables"
+        );
         Ok(res)
     }
 
-    pub async fn do_check_table(svc: &Arc<BackgroundServiceHandlerWrapper> , database: String, table: String, seg_size: u64, avg_seg: u64, avg_blk: u64) -> Result<(bool, bool, TableStatistics)> {
+    pub async fn do_check_table(
+        svc: &Arc<BackgroundServiceHandlerWrapper>,
+        database: String,
+        table: String,
+        seg_size: u64,
+        avg_seg: u64,
+        avg_blk: u64,
+    ) -> Result<(bool, bool, TableStatistics)> {
         let sql = Self::get_compaction_advice_sql(database, table, seg_size, avg_seg, avg_blk);
-        debug!(job="compaction", background=true, sql=sql.as_str(), "get all target tables");
+        debug!(
+            job = "compaction",
+            background = true,
+            sql = sql.as_str(),
+            "get all target tables"
+        );
         let res = svc.execute_sql(sql.as_str()).await?;
         if res.is_none() {
             return Ok((false, false, TableStatistics::default()));
         }
         let res = res.unwrap();
-        let need_segment_compact = res.column(0).as_any().downcast_ref::<BooleanArray>().unwrap().value(0);
-        let need_block_compact = res.column(1).as_any().downcast_ref::<BooleanArray>().unwrap().value(0);
+        let need_segment_compact = res
+            .column(0)
+            .as_any()
+            .downcast_ref::<BooleanArray>()
+            .unwrap()
+            .value(0);
+        let need_block_compact = res
+            .column(1)
+            .as_any()
+            .downcast_ref::<BooleanArray>()
+            .unwrap()
+            .value(0);
 
         let table_statistics = TableStatistics {
-            number_of_rows: res.column(2).as_any().downcast_ref::<UInt64Array>().unwrap().value(0),
-            data_bytes: res.column(3).as_any().downcast_ref::<UInt64Array>().unwrap().value(0),
-            compressed_data_bytes: res.column(4).as_any().downcast_ref::<UInt64Array>().unwrap().value(0),
-            index_data_bytes: res.column(5).as_any().downcast_ref::<UInt64Array>().unwrap().value(0),
-            number_of_segments: Some(res.column(6).as_any().downcast_ref::<UInt64Array>().unwrap().value(0)),
-            number_of_blocks: Some(res.column(7).as_any().downcast_ref::<UInt64Array>().unwrap().value(0)),
+            number_of_rows: res
+                .column(2)
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .unwrap()
+                .value(0),
+            data_bytes: res
+                .column(3)
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .unwrap()
+                .value(0),
+            compressed_data_bytes: res
+                .column(4)
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .unwrap()
+                .value(0),
+            index_data_bytes: res
+                .column(5)
+                .as_any()
+                .downcast_ref::<UInt64Array>()
+                .unwrap()
+                .value(0),
+            number_of_segments: Some(
+                res.column(6)
+                    .as_any()
+                    .downcast_ref::<UInt64Array>()
+                    .unwrap()
+                    .value(0),
+            ),
+            number_of_blocks: Some(
+                res.column(7)
+                    .as_any()
+                    .downcast_ref::<UInt64Array>()
+                    .unwrap()
+                    .value(0),
+            ),
         };
 
         Ok((need_segment_compact, need_block_compact, table_statistics))
     }
 
-    async fn do_segment_compaction(&self, svc: &Arc<BackgroundServiceHandlerWrapper> , database: String, table: String) -> Result<()> {
-        let sql = Self::get_segment_compaction_sql(database, table, self.conf.background.compaction.segment_limit);
+    async fn do_segment_compaction(
+        &self,
+        svc: &Arc<BackgroundServiceHandlerWrapper>,
+        database: String,
+        table: String,
+    ) -> Result<()> {
+        let sql = Self::get_segment_compaction_sql(
+            database,
+            table,
+            self.conf.background.compaction.segment_limit,
+        );
         svc.execute_sql(sql.as_str()).await?;
         Ok(())
     }
 
-    async fn do_block_compaction(&self, svc: &Arc<BackgroundServiceHandlerWrapper> , database: String, table: String) -> Result<()> {
-
-        let sql = Self::get_block_compaction_sql(database, table, self.conf.background.compaction.block_limit);
-        debug!(job="compaction", background=true, sql=sql.as_str(), "block_compaction");
+    async fn do_block_compaction(
+        &self,
+        svc: &Arc<BackgroundServiceHandlerWrapper>,
+        database: String,
+        table: String,
+    ) -> Result<()> {
+        let sql = Self::get_block_compaction_sql(
+            database,
+            table,
+            self.conf.background.compaction.block_limit,
+        );
+        debug!(
+            job = "compaction",
+            background = true,
+            sql = sql.as_str(),
+            "block_compaction"
+        );
         svc.execute_sql(sql.as_str()).await?;
         Ok(())
     }
 
-    pub fn get_compaction_advice_sql(database: String, table: String, seg_size: u64, avg_seg: u64, avg_blk: u64) -> String {
-        format!("
+    pub fn get_compaction_advice_sql(
+        database: String,
+        table: String,
+        seg_size: u64,
+        avg_seg: u64,
+        avg_blk: u64,
+    ) -> String {
+        format!(
+            "
         select
         IF(segment_count > {} and block_count / segment_count < {}, TRUE, FALSE) AS segment_advice,
         IF(bytes_uncompressed / block_count / 1024 / 1024 < {}, TRUE, FALSE) AS block_advice,
@@ -123,15 +218,24 @@ impl CompactionJob {
         block_count/segment_count,
         humanize_size(bytes_uncompressed / block_count) AS per_block_uncompressed_size_string
         from fuse_snapshot('{}', '{}') order by timestamp ASC LIMIT 1;
-        ", seg_size, avg_seg, avg_blk, database, table)
+        ",
+            seg_size, avg_seg, avg_blk, database, table
+        )
     }
-    pub fn get_segment_compaction_sql(database: String, table: String, limit: Option<u64>) -> String {
+    pub fn get_segment_compaction_sql(
+        database: String,
+        table: String,
+        limit: Option<u64>,
+    ) -> String {
         let limit = if let Some(s) = limit {
             format!(" LIMIT {}", s)
         } else {
             "".to_string()
         };
-        format!("OPTIMIZE TABLE {}.{} COMPACT SEGMENT{};", database, table, limit)
+        format!(
+            "OPTIMIZE TABLE {}.{} COMPACT SEGMENT{};",
+            database, table, limit
+        )
     }
 
     pub fn get_block_compaction_sql(database: String, table: String, limit: Option<u64>) -> String {
