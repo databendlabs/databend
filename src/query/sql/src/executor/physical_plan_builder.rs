@@ -28,7 +28,6 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::type_check;
-use common_expression::type_check::check_cast;
 use common_expression::type_check::check_function;
 use common_expression::type_check::common_super_type;
 use common_expression::types::DataType;
@@ -36,7 +35,6 @@ use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
-use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
 use common_expression::RawExpr;
@@ -55,7 +53,6 @@ use super::AggregatePartial;
 use super::EvalScalar;
 use super::Exchange as PhysicalExchange;
 use super::Filter;
-use super::HashJoin;
 use super::Limit;
 use super::NthValueFunctionDesc;
 use super::ProjectSet;
@@ -64,14 +61,14 @@ use super::Sort;
 use super::TableScan;
 use super::WindowFunction;
 use crate::binder::wrap_cast;
-use crate::binder::JoinPredicate;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
+use crate::executor::physical_join;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::FragmentKind;
-use crate::executor::IEJoin;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
+use crate::executor::PhysicalJoinType;
 use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::SortDesc;
@@ -79,15 +76,12 @@ use crate::executor::UnionAll;
 use crate::executor::Window;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::RelExpr;
-use crate::optimizer::RelationalProperty;
 use crate::optimizer::SExpr;
 use crate::planner;
 use crate::plans::AggregateMode;
 use crate::plans::BoundColumnRef;
 use crate::plans::Exchange;
 use crate::plans::FunctionCall;
-use crate::plans::Join;
-use crate::plans::JoinType;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::ScalarItem;
@@ -112,7 +106,7 @@ use crate::DUMMY_TABLE_INDEX;
 pub struct PhysicalPlanBuilder {
     metadata: MetadataRef,
     ctx: Arc<dyn TableContext>,
-    func_ctx: FunctionContext,
+    pub(crate) func_ctx: FunctionContext,
 
     next_plan_id: u32,
 }
@@ -128,7 +122,7 @@ impl PhysicalPlanBuilder {
         }
     }
 
-    fn next_plan_id(&mut self) -> u32 {
+    pub(crate) fn next_plan_id(&mut self) -> u32 {
         let id = self.next_plan_id;
         self.next_plan_id += 1;
         id
@@ -434,146 +428,15 @@ impl PhysicalPlanBuilder {
                 }))
             }
             RelOperator::Join(join) => {
-                // First, consider if join can be IEJoin
-                let ie_join = self.try_ie_join(join, s_expr).await?;
-                if let Some(ie_join) = ie_join {
-                    return Ok(ie_join);
-                }
-                // build hash join
-                let build_side = self.build(s_expr.child(1)?).await?;
-                let probe_side = self.build(s_expr.child(0)?).await?;
-
-                let build_schema = match join.join_type {
-                    JoinType::Left | JoinType::Full => {
-                        let build_schema = build_side.output_schema()?;
-                        // Wrap nullable type for columns in build side.
-                        let build_schema = DataSchemaRefExt::create(
-                            build_schema
-                                .fields()
-                                .iter()
-                                .map(|field| {
-                                    DataField::new(field.name(), field.data_type().wrap_nullable())
-                                })
-                                .collect::<Vec<_>>(),
-                        );
-                        build_schema
+                // Choose physical join type by join conditions
+                let physical_join = physical_join(join, s_expr)?;
+                match physical_join {
+                    // Todo(xudong): support sort merge join
+                    PhysicalJoinType::Hash | PhysicalJoinType::SortMerge => {
+                        self.build_hash_join(join, s_expr, stat_info).await
                     }
-
-                    _ => build_side.output_schema()?,
-                };
-
-                let probe_schema = match join.join_type {
-                    JoinType::Right | JoinType::Full => {
-                        let probe_schema = probe_side.output_schema()?;
-                        // Wrap nullable type for columns in probe side.
-                        let probe_schema = DataSchemaRefExt::create(
-                            probe_schema
-                                .fields()
-                                .iter()
-                                .map(|field| {
-                                    DataField::new(field.name(), field.data_type().wrap_nullable())
-                                })
-                                .collect::<Vec<_>>(),
-                        );
-                        probe_schema
-                    }
-
-                    _ => probe_side.output_schema()?,
-                };
-
-                assert_eq!(join.left_conditions.len(), join.right_conditions.len());
-                let mut left_join_conditions = Vec::new();
-                let mut right_join_conditions = Vec::new();
-                for (left_condition, right_condition) in join
-                    .left_conditions
-                    .iter()
-                    .zip(join.right_conditions.iter())
-                {
-                    let left_expr = left_condition
-                        .resolve_and_check(probe_schema.as_ref())?
-                        .project_column_ref(|index| {
-                            probe_schema.index_of(&index.to_string()).unwrap()
-                        });
-                    let right_expr = right_condition
-                        .resolve_and_check(build_schema.as_ref())?
-                        .project_column_ref(|index| {
-                            build_schema.index_of(&index.to_string()).unwrap()
-                        });
-
-                    // Unify the data types of the left and right expressions.
-                    let left_type = left_expr.data_type();
-                    let right_type = right_expr.data_type();
-                    let common_ty = common_super_type(
-                        left_type.clone(),
-                        right_type.clone(),
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
-                    )
-                    .ok_or_else(|| {
-                        ErrorCode::IllegalDataType(format!(
-                            "Cannot find common type for {:?} and {:?}",
-                            left_type, right_type
-                        ))
-                    })?;
-                    let left_expr = check_cast(
-                        left_expr.span(),
-                        false,
-                        left_expr,
-                        &common_ty,
-                        &BUILTIN_FUNCTIONS,
-                    )?;
-                    let right_expr = check_cast(
-                        right_expr.span(),
-                        false,
-                        right_expr,
-                        &common_ty,
-                        &BUILTIN_FUNCTIONS,
-                    )?;
-
-                    let (left_expr, _) =
-                        ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                    let (right_expr, _) =
-                        ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-
-                    left_join_conditions.push(left_expr.as_remote_expr());
-                    right_join_conditions.push(right_expr.as_remote_expr());
+                    PhysicalJoinType::IEJoin => self.build_ie_join(join, s_expr).await,
                 }
-
-                let merged_schema = DataSchemaRefExt::create(
-                    probe_schema
-                        .fields()
-                        .iter()
-                        .chain(build_schema.fields())
-                        .cloned()
-                        .collect::<Vec<_>>(),
-                );
-
-                Ok(PhysicalPlan::HashJoin(HashJoin {
-                    plan_id: self.next_plan_id(),
-                    build: Box::new(build_side),
-                    probe: Box::new(probe_side),
-                    join_type: join.join_type.clone(),
-                    build_keys: right_join_conditions,
-                    probe_keys: left_join_conditions,
-                    non_equi_conditions: join
-                        .non_equi_conditions
-                        .iter()
-                        .map(|scalar| {
-                            let expr = scalar
-                                .resolve_and_check(merged_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    merged_schema.index_of(&index.to_string()).unwrap()
-                                });
-                            let (expr, _) =
-                                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                            Ok(expr.as_remote_expr())
-                        })
-                        .collect::<Result<_>>()?,
-                    marker_index: join.marker_index,
-                    from_correlated_subquery: join.from_correlated_subquery,
-
-                    contain_runtime_filter: join.contain_runtime_filter,
-                    stat_info: Some(stat_info),
-                }))
             }
 
             RelOperator::EvalScalar(eval_scalar) => {
@@ -870,7 +733,7 @@ impl PhysicalPlanBuilder {
                     })
                     .collect(),
                 limit: sort.limit,
-
+                after_exchange: sort.after_exchange,
                 stat_info: Some(stat_info),
             })),
 
@@ -1051,25 +914,44 @@ impl PhysicalPlanBuilder {
                     .iter()
                     .zip(op.right_runtime_filters.iter())
                 {
-                    left_runtime_filters.insert(
-                        left.0.clone(),
-                        left.1
-                            .resolve_and_check(left_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                left_schema.index_of(&index.to_string()).unwrap()
-                            })
-                            .as_remote_expr(),
-                    );
-                    right_runtime_filters.insert(
-                        right.0.clone(),
-                        right
-                            .1
-                            .resolve_and_check(right_schema.as_ref())?
-                            .project_column_ref(|index| {
-                                right_schema.index_of(&index.to_string()).unwrap()
-                            })
-                            .as_remote_expr(),
-                    );
+                    let left_expr = left
+                        .1
+                        .resolve_and_check(left_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            left_schema.index_of(&index.to_string()).unwrap()
+                        });
+                    let right_expr = right
+                        .1
+                        .resolve_and_check(right_schema.as_ref())?
+                        .project_column_ref(|index| {
+                            right_schema.index_of(&index.to_string()).unwrap()
+                        });
+
+                    let common_ty = common_super_type(left_expr.data_type().clone(), right_expr.data_type().clone(), &BUILTIN_FUNCTIONS.default_cast_rules)
+                        .ok_or_else(|| ErrorCode::SemanticError(format!("RuntimeFilter's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}", left.0, left_expr.data_type(), right.0, right_expr.data_type())))?;
+
+                    let left_expr = type_check::check_cast(
+                        left_expr.span(),
+                        false,
+                        left_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+                    let right_expr = type_check::check_cast(
+                        right_expr.span(),
+                        false,
+                        right_expr,
+                        &common_ty,
+                        &BUILTIN_FUNCTIONS,
+                    )?;
+
+                    let (left_expr, _) =
+                        ConstantFolder::fold(&left_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                    let (right_expr, _) =
+                        ConstantFolder::fold(&right_expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+
+                    left_runtime_filters.insert(left.0.clone(), left_expr.as_remote_expr());
+                    right_runtime_filters.insert(right.0.clone(), right_expr.as_remote_expr());
                 }
                 Ok(PhysicalPlan::RuntimeFilterSource(RuntimeFilterSource {
                     plan_id: self.next_plan_id(),
@@ -1569,10 +1451,12 @@ impl PhysicalPlanBuilder {
                 });
                 let filter = predicate
                     .map(|pred| -> Result<_> {
-                        Ok(cast_expr_to_non_null_boolean(
+                        let expr = cast_expr_to_non_null_boolean(
                             pred.as_expr()?.project_column_ref(|col| col.index),
-                        )?
-                        .as_remote_expr())
+                        )?;
+                        let (expr, _) =
+                            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                        Ok(expr.as_remote_expr())
                     })
                     .transpose()?;
                 let selection = agg
@@ -1607,7 +1491,7 @@ impl PhysicalPlanBuilder {
         })
     }
 
-    fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
+    pub(crate) fn build_plan_stat_info(&self, s_expr: &SExpr) -> Result<PlanStatsInfo> {
         let rel_expr = RelExpr::with_s_expr(s_expr);
         let stat_info = rel_expr.derive_cardinality()?;
 
@@ -1615,178 +1499,6 @@ impl PhysicalPlanBuilder {
             estimated_rows: stat_info.cardinality,
         })
     }
-
-    async fn try_ie_join(&mut self, join: &Join, s_expr: &SExpr) -> Result<Option<PhysicalPlan>> {
-        if !join.left_conditions.is_empty()
-            || join.non_equi_conditions.len() < 2
-            || !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
-        {
-            // Use hash join if exists equi conditions
-            return Ok(None);
-        }
-        let mut other_conditions = Vec::new();
-        let mut ie_conditions = Vec::new();
-        let left_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
-        let right_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
-        for condition in join.non_equi_conditions.iter() {
-            if check_ie_join_condition(condition, &left_prop, &right_prop)
-                && ie_conditions.len() < 2
-            {
-                ie_conditions.push(condition);
-            } else {
-                other_conditions.push(condition);
-            }
-        }
-        if ie_conditions.len() != 2 {
-            return Ok(None);
-        }
-        // Construct IEJoin
-        let left_side = self.build(s_expr.child(0)?).await?;
-        let right_side = self.build(s_expr.child(1)?).await?;
-
-        let left_schema = left_side.output_schema()?;
-        let right_schema = right_side.output_schema()?;
-
-        let merged_schema = DataSchemaRefExt::create(
-            left_side
-                .output_schema()?
-                .fields()
-                .iter()
-                .chain(right_side.output_schema()?.fields())
-                .cloned()
-                .collect::<Vec<_>>(),
-        );
-
-        Ok(Some(PhysicalPlan::IEJoin(IEJoin {
-            plan_id: self.next_plan_id(),
-            left: Box::new(left_side),
-            right: Box::new(right_side),
-            conditions: ie_conditions
-                .iter()
-                .map(|scalar| {
-                    resolve_ie_scalar(scalar, &left_schema, &right_schema, &left_prop, &right_prop)
-                })
-                .collect::<Result<_>>()?,
-            other_conditions: other_conditions
-                .iter()
-                .map(|scalar| resolve_scalar(scalar, &merged_schema))
-                .collect::<Result<_>>()?,
-            join_type: JoinType::Inner,
-            stat_info: Some(self.build_plan_stat_info(s_expr)?),
-        })))
-    }
-}
-
-fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchemaRef) -> Result<RemoteExpr> {
-    let expr = scalar
-        .resolve_and_check(schema.as_ref())?
-        .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
-    Ok(expr.as_remote_expr())
-}
-
-fn resolve_ie_scalar(
-    expr: &ScalarExpr,
-    left_schema: &DataSchemaRef,
-    right_schema: &DataSchemaRef,
-    left_prop: &RelationalProperty,
-    right_prop: &RelationalProperty,
-) -> Result<IEJoinCondition> {
-    match expr {
-        ScalarExpr::FunctionCall(func) => {
-            let mut left = None;
-            let mut right = None;
-            let mut opposite = false;
-            let mut arg1 = func.arguments[0].clone();
-            let mut arg2 = func.arguments[1].clone();
-            // Try to find common type for left_expr/right_expr
-            let arg1_data_type = arg1.data_type()?;
-            let arg2_data_type = arg2.data_type()?;
-            if arg1_data_type.ne(&arg2_data_type) {
-                let common_type = common_super_type(
-                    arg1_data_type.clone(),
-                    arg2_data_type.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for {arg1_data_type} and {arg2_data_type}"
-                    ))
-                })?;
-                arg1 = wrap_cast(&arg1, &common_type);
-                arg2 = wrap_cast(&arg2, &common_type);
-            };
-            for (idx, arg) in [arg1, arg2].iter().enumerate() {
-                let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
-                match join_predicate {
-                    JoinPredicate::Left(_) => {
-                        left = Some(
-                            arg.resolve_and_check(left_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    left_schema.index_of(&index.to_string()).unwrap()
-                                }),
-                        );
-                    }
-                    JoinPredicate::Right(_) => {
-                        if idx == 0 {
-                            opposite = true;
-                        }
-                        right = Some(
-                            arg.resolve_and_check(right_schema.as_ref())?
-                                .project_column_ref(|index| {
-                                    right_schema.index_of(&index.to_string()).unwrap()
-                                }),
-                        );
-                    }
-                    JoinPredicate::Both { .. } | JoinPredicate::Other(_) => unreachable!(),
-                }
-            }
-            let op = if opposite {
-                match func.func_name.as_str() {
-                    "gt" => "lt",
-                    "lt" => "gt",
-                    "gte" => "lte",
-                    "lte" => "gte",
-                    _ => unreachable!(),
-                }
-            } else {
-                func.func_name.as_str()
-            };
-            Ok(IEJoinCondition {
-                left_expr: left.unwrap().as_remote_expr(),
-                right_expr: right.unwrap().as_remote_expr(),
-                operator: op.to_string(),
-            })
-        }
-        _ => unreachable!(),
-    }
-}
-
-fn check_ie_join_condition(
-    expr: &ScalarExpr,
-    left_prop: &RelationalProperty,
-    right_prop: &RelationalProperty,
-) -> bool {
-    if let ScalarExpr::FunctionCall(func) = expr {
-        if matches!(func.func_name.as_str(), "gt" | "lt" | "gte" | "lte") {
-            debug_assert_eq!(func.arguments.len(), 2);
-            let mut left = false;
-            let mut right = false;
-            for arg in func.arguments.iter() {
-                let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
-                match join_predicate {
-                    JoinPredicate::Left(_) => left = true,
-                    JoinPredicate::Right(_) => right = true,
-                    JoinPredicate::Both { .. } | JoinPredicate::Other(_) => {
-                        return false;
-                    }
-                }
-            }
-            if left && right {
-                return true;
-            }
-        }
-    }
-    false
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

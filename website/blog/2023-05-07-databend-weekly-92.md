@@ -81,7 +81,7 @@ To resolve this issue, you can fetch the latest tags from the official Databend 
 Here are some noteworthy items recorded here, perhaps you can find something that interests you.
 
 - Optimizer now supports constant folding. If interested, please check [PR #11216](https://github.com/datafuselabs/databend/pull/11216).
-- Learn how to [Transform Data During Load](https://databend.rs/doc/load-data/data-load-transform) through three simple tutorials.
+- Learn how to [Transform Data During Load](https://databend.rs/doc/load-data/transform/data-load-transform) through three simple tutorials.
 - Added bitmap functions: `bitmap_count` and `build_bitmap`.
 
 ## What's Up Next

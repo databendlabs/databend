@@ -136,12 +136,12 @@ impl EvalScalar {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
         for (expr, index) in self.exprs.iter() {
+            let name = index.to_string();
             if let RemoteExpr::ColumnRef { id, .. } = expr {
-                if index == id {
+                if name == fields[*id].name().as_str() {
                     continue;
                 }
             }
-            let name = index.to_string();
             let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
             fields.push(DataField::new(&name, data_type));
         }
@@ -367,6 +367,9 @@ pub struct Sort {
     pub order_by: Vec<SortDesc>,
     // limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
+
+    // If the sort plan is after the exchange plan
+    pub after_exchange: bool,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -652,10 +655,7 @@ pub struct DistributedInsertSelect {
 
 impl DistributedInsertSelect {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", DataType::String),
-            DataField::new("seg_info", DataType::String),
-        ]))
+        Ok(DataSchemaRef::default())
     }
 }
 

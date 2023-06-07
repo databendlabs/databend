@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -41,23 +43,23 @@ impl GroupState {
 /// `Group` is a set of logically equivalent relational expressions represented with `MExpr`.
 #[derive(Clone)]
 pub struct Group {
-    pub group_index: IndexType,
-    pub m_exprs: Vec<MExpr>,
+    pub(crate) group_index: IndexType,
+    pub(crate) m_exprs: Vec<MExpr>,
 
     /// Relational property shared by expressions in a same `Group`
-    pub relational_prop: RelationalProperty,
+    pub(crate) relational_prop: Arc<RelationalProperty>,
 
     /// Stat info shared by expressions in a same `Group`
-    pub stat_info: StatInfo,
+    pub(crate) stat_info: Arc<StatInfo>,
 
-    pub state: GroupState,
+    pub(crate) state: GroupState,
 }
 
 impl Group {
     pub fn create(
         index: IndexType,
-        relational_prop: RelationalProperty,
-        stat_info: StatInfo,
+        relational_prop: Arc<RelationalProperty>,
+        stat_info: Arc<StatInfo>,
     ) -> Self {
         Group {
             group_index: index,

@@ -318,6 +318,28 @@ impl UnknownDatabaseId {
 }
 
 #[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnmatchColumnDataType: `{name}`:`{data_type}` while `{context}`")]
+pub struct UnmatchColumnDataType {
+    name: String,
+    data_type: String,
+    context: String,
+}
+
+impl UnmatchColumnDataType {
+    pub fn new(
+        name: impl Into<String>,
+        data_type: impl Into<String>,
+        context: impl Into<String>,
+    ) -> Self {
+        Self {
+            name: name.into(),
+            data_type: data_type.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[error("UnknownTable: `{table_name}` while `{context}`")]
 pub struct UnknownTable {
     table_name: String,
@@ -661,6 +683,38 @@ impl DropIndexWithDropTime {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("VirtualColumnAlreadyExists: `{table_id}` while `{context}`")]
+pub struct VirtualColumnAlreadyExists {
+    table_id: u64,
+    context: String,
+}
+
+impl VirtualColumnAlreadyExists {
+    pub fn new(table_id: impl Into<u64>, context: impl Into<String>) -> Self {
+        Self {
+            table_id: table_id.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("VirtualColumnNotFound: `{table_id}` while `{context}`")]
+pub struct VirtualColumnNotFound {
+    table_id: u64,
+    context: String,
+}
+
+impl VirtualColumnNotFound {
+    pub fn new(table_id: impl Into<u64>, context: impl Into<String>) -> Self {
+        Self {
+            table_id: table_id.into(),
+            context: context.into(),
+        }
+    }
+}
+
 /// Application error.
 ///
 /// The application does not get expected result but there is nothing wrong with meta-service.
@@ -786,6 +840,15 @@ pub enum AppError {
 
     #[error(transparent)]
     UnknownBackgroundJob(#[from] UnknownBackgroundJob),
+
+    #[error(transparent)]
+    UnmatchColumnDataType(#[from] UnmatchColumnDataType),
+
+    #[error(transparent)]
+    VirtualColumnNotFound(#[from] VirtualColumnNotFound),
+
+    #[error(transparent)]
+    VirtualColumnAlreadyExists(#[from] VirtualColumnAlreadyExists),
 }
 
 impl AppErrorMessage for UnknownBackgroundJob {
@@ -798,6 +861,7 @@ impl AppErrorMessage for BackgroundJobAlreadyExists {
     fn message(&self) -> String {
         format!("Background job '{}' already exists", self.name)
     }
+
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -1036,6 +1100,30 @@ impl AppErrorMessage for UnknownDatamask {
     }
 }
 
+impl AppErrorMessage for UnmatchColumnDataType {
+    fn message(&self) -> String {
+        format!(
+            "Column '{}' data type {} does not match",
+            self.name, self.data_type
+        )
+    }
+}
+
+impl AppErrorMessage for VirtualColumnNotFound {
+    fn message(&self) -> String {
+        format!("Virtual Column for table '{}' not found", self.table_id)
+    }
+}
+
+impl AppErrorMessage for VirtualColumnAlreadyExists {
+    fn message(&self) -> String {
+        format!(
+            "Virtual Column for table '{}' already exists",
+            self.table_id
+        )
+    }
+}
+
 impl From<AppError> for ErrorCode {
     fn from(app_err: AppError) -> Self {
         match app_err {
@@ -1108,6 +1196,11 @@ impl From<AppError> for ErrorCode {
 
             AppError::BackgroundJobAlreadyExists(err) => ErrorCode::BackgroundJobAlreadyExists(err.message()),
             AppError::UnknownBackgroundJob(err) => ErrorCode::UnknownBackgroundJob(err.message()),
+            AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
+            AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),
+            AppError::VirtualColumnAlreadyExists(err) => {
+                ErrorCode::VirtualColumnAlreadyExists(err.message())
+            }
         }
     }
 }

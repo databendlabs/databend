@@ -83,7 +83,6 @@ ALTER TABLE <table> FLASHBACK TO (TIMESTAMP => '<timestamp>'::TIMESTAMP);
 
 **Learn More**
 
-- [Docs | RESTORE TABLE](https://databend.rs/doc/sql-commands/ddl/table/ddl-restore-table)
 - [PR | alter table flashback](https://github.com/datafuselabs/databend/pull/8967)
 
 ## What's Up Next

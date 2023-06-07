@@ -16,7 +16,6 @@
 
 mod async_mpsc_sink;
 mod async_sink;
-mod context_sink;
 mod empty_sink;
 mod sync_mpsc_sink;
 mod sync_sink;
@@ -27,7 +26,6 @@ pub use async_mpsc_sink::AsyncMpscSink;
 pub use async_mpsc_sink::AsyncMpscSinker;
 pub use async_sink::AsyncSink;
 pub use async_sink::AsyncSinker;
-pub use context_sink::ContextSink;
 pub use empty_sink::EmptySink;
 pub use sync_mpsc_sink::SyncMpscSink;
 pub use sync_mpsc_sink::SyncMpscSinker;

@@ -28,19 +28,23 @@ use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
 use common_pipeline_transforms::processors::transforms::try_create_transform_sort_merge;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_pipeline_transforms::processors::transforms::BlockCompactor;
 use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
 
-use crate::operations::FuseTableSink;
+use crate::operations::common::AppendTransform;
+use crate::operations::common::BlockMetaIndex;
+use crate::operations::common::CommitSink;
+use crate::operations::common::MutationGenerator;
+use crate::operations::common::TableMutationAggregator;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::FuseTable;
-use crate::TableMutator;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 
@@ -51,9 +55,9 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<()> {
         if self.cluster_key_meta.is_none() {
-            return Ok(None);
+            return Ok(());
         }
 
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -61,7 +65,7 @@ impl FuseTable {
             val
         } else {
             // no snapshot, no recluster.
-            return Ok(None);
+            return Ok(());
         };
 
         let schema = self.table_info.schema();
@@ -71,14 +75,17 @@ impl FuseTable {
         let block_metas = pruner.pruning(segment_locations).await?;
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
-        let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
+        let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();
         block_metas.iter().for_each(|(idx, b)| {
             if let Some(stats) = &b.cluster_stats {
                 if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
-                    blocks_map
-                        .entry(stats.level)
-                        .or_default()
-                        .push((idx.segment_idx, b.clone()));
+                    blocks_map.entry(stats.level).or_default().push((
+                        BlockMetaIndex {
+                            segment_idx: idx.segment_idx,
+                            block_idx: idx.block_idx,
+                        },
+                        b.clone(),
+                    ));
                 }
             }
         });
@@ -95,22 +102,12 @@ impl FuseTable {
             1.0
         };
 
-        let mut mutator = ReclusterMutator::try_create(
-            ctx.clone(),
-            self.meta_location_generator.clone(),
-            snapshot,
-            threshold,
-            block_thresholds,
-            blocks_map,
-            self.operator.clone(),
-        )?;
+        let mut mutator = ReclusterMutator::try_create(threshold, block_thresholds)?;
 
-        let need_recluster = mutator.target_select().await?;
+        let need_recluster = mutator.target_select(blocks_map).await?;
         if !need_recluster {
-            return Ok(None);
+            return Ok(());
         }
-
-        let partitions_total = mutator.partitions_total();
 
         let block_metas: Vec<_> = mutator
             .selected_blocks()
@@ -121,7 +118,8 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &block_metas,
-            partitions_total,
+            None,
+            block_count as usize,
             PruningStatistics::default(),
         )?;
         let table_info = self.get_table_info();
@@ -136,6 +134,7 @@ impl FuseTable {
             tbl_args: self.table_args(),
             push_downs: None,
             query_internal_columns: false,
+            data_mask_policy: None,
         };
 
         ctx.set_partitions(plan.parts.clone())?;
@@ -207,19 +206,40 @@ impl FuseTable {
             )?))
         })?;
 
-        pipeline.add_sink(|input| {
-            FuseTableSink::try_create(
-                input,
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            let proc = AppendTransform::new(
                 ctx.clone(),
-                self.get_write_settings(),
-                self.operator.clone(),
-                self.meta_location_generator().clone(),
+                transform_input_port,
+                transform_output_port,
+                self,
                 cluster_stats_gen.clone(),
                 block_thresholds,
-                self.table_info.schema(),
-                None,
-            )
+            );
+            proc.into_processor()
         })?;
-        Ok(Some(Box::new(mutator)))
+
+        pipeline.resize(1)?;
+
+        pipeline.add_transform(|input, output| {
+            let mut aggregator = TableMutationAggregator::create(
+                ctx.clone(),
+                snapshot.segments.clone(),
+                snapshot.summary.clone(),
+                self.get_block_thresholds(),
+                self.meta_location_generator().clone(),
+                self.schema(),
+                self.get_operator(),
+            );
+            aggregator.accumulate_log_entry(mutator.mutation_logs());
+            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                input, output, aggregator,
+            )))
+        })?;
+
+        let snapshot_gen = MutationGenerator::new(snapshot);
+        pipeline.add_sink(|input| {
+            CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
+        })?;
+        Ok(())
     }
 }

@@ -75,6 +75,7 @@ mod user_from_to_protobuf_impl;
 mod background_task_from_to_protobuf_impl;
 mod util;
 mod background_job_from_to_protobuf_impl;
+mod virtual_column_from_to_protobuf_impl;
 
 pub use from_to_protobuf::FromToProto;
 pub use from_to_protobuf::Incompatible;

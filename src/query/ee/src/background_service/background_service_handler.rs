@@ -24,10 +24,8 @@ use common_config::InnerConfig;
 use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use databend_query::servers::Server;
 use databend_query::sessions::Session;
-use common_exception::Result;
+use common_exception::{ErrorCode, Result};
 use common_expression::DataBlock;
-use common_sql::PlanExtras;
-use common_sql::plans::Plan;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::status;
 use crate::background_service::session::create_session;
@@ -37,12 +35,13 @@ pub struct RealBackgroundService {
     executor: FlightSqlServiceImpl,
     session: Arc<Session>,
 }
-
+#[async_trait::async_trait]
 impl Server for RealBackgroundService {
+    #[async_backtrace::framed]
     async fn shutdown(&mut self, graceful: bool) {
         todo!()
     }
-
+    #[async_backtrace::framed]
     async fn start(&mut self, listening: SocketAddr) -> common_exception::Result<SocketAddr> {
         todo!()
     }
@@ -81,11 +80,10 @@ impl RealBackgroundService {
         &self,
         sql: &str,
     ) -> Result<RecordBatch> {
-        let (plan, plan_extras) = self.executor.plan_sql( &session, sql).await?;
+        let (plan, plan_extras) = self.executor.plan_sql( &self.session, sql).await?;
         let context = self.session
             .create_query_context()
-            .await
-            .map_err(|e| status!("Could not create_query_context for background service", e))?;
+            .await?;
 
         context.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
@@ -97,7 +95,7 @@ impl RealBackgroundService {
             result.push(block);
         }
         let record = DataBlock::concat(&result)?;
-        let record = record.to_record_batch(data_schema.as_ref())?;
-        Ok(record)
+        let record = record.to_record_batch(data_schema.as_ref()).map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
+        Ok(record.into())
     }
 }

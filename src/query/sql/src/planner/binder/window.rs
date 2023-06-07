@@ -315,7 +315,7 @@ impl<'a> WindowRewriter<'a> {
             Vec::with_capacity(window.partition_by.len());
         let mut replaced_order_by_items: Vec<WindowOrderBy> =
             Vec::with_capacity(window.order_by.len());
-        let mut agg_args = vec![];
+        let mut window_args = vec![];
 
         let window_func_name = window.func.func_name();
         let func = match &window.func {
@@ -324,41 +324,13 @@ impl<'a> WindowRewriter<'a> {
                 let mut replaced_args: Vec<ScalarExpr> = Vec::with_capacity(agg.args.len());
                 for (i, arg) in agg.args.iter().enumerate() {
                     let arg = self.visit(arg)?;
-                    let name = format!("{}_arg_{}", &window_func_name, i);
-                    if let ScalarExpr::BoundColumnRef(column_ref) = &arg {
-                        replaced_args.push(column_ref.clone().into());
-                        agg_args.push(ScalarItem {
-                            index: column_ref.column.index,
-                            scalar: arg.clone(),
-                        });
-                    } else {
-                        let index = self
-                            .metadata
-                            .write()
-                            .add_derived_column(name.clone(), arg.data_type()?);
-
-                        // Generate a ColumnBinding for each argument of aggregates
-                        let column_binding = ColumnBinding {
-                            database_name: None,
-                            table_name: None,
-                            table_index: None,
-                            column_name: name,
-                            index,
-                            data_type: Box::new(arg.data_type()?),
-                            visibility: Visibility::Visible,
-                        };
-                        replaced_args.push(
-                            BoundColumnRef {
-                                span: arg.span(),
-                                column: column_binding.clone(),
-                            }
-                            .into(),
-                        );
-                        agg_args.push(ScalarItem {
-                            index,
-                            scalar: arg.clone(),
-                        });
-                    }
+                    let name = format!("{window_func_name}_arg_{i}");
+                    let replaced_arg = self.replace_expr(&name, &arg)?;
+                    window_args.push(ScalarItem {
+                        index: replaced_arg.column.index,
+                        scalar: arg,
+                    });
+                    replaced_args.push(replaced_arg.into());
                 }
                 WindowFuncType::Aggregate(AggregateFunction {
                     display_name: agg.display_name.clone(),
@@ -371,7 +343,7 @@ impl<'a> WindowRewriter<'a> {
             }
             WindowFuncType::LagLead(ll) => {
                 let (new_arg, new_default) =
-                    self.replace_lag_lead_args(&mut agg_args, &window_func_name, ll)?;
+                    self.replace_lag_lead_args(&mut window_args, &window_func_name, ll)?;
 
                 WindowFuncType::LagLead(LagLeadFunction {
                     is_lag: ll.is_lag,
@@ -382,10 +354,16 @@ impl<'a> WindowRewriter<'a> {
                 })
             }
             WindowFuncType::NthValue(func) => {
-                let new_arg = self.visit(&func.arg)?;
+                let arg = self.visit(&func.arg)?;
+                let name = format!("{window_func_name}_arg");
+                let replaced_arg = self.replace_expr(&name, &arg)?;
+                window_args.push(ScalarItem {
+                    index: replaced_arg.column.index,
+                    scalar: arg,
+                });
                 WindowFuncType::NthValue(NthValueFunction {
                     n: func.n,
-                    arg: Box::new(new_arg),
+                    arg: Box::new(replaced_arg.into()),
                     return_type: func.return_type.clone(),
                 })
             }
@@ -396,96 +374,34 @@ impl<'a> WindowRewriter<'a> {
         let mut partition_by_items = vec![];
         for (i, part) in window.partition_by.iter().enumerate() {
             let part = self.visit(part)?;
-            let name = format!("{}_part_{}", &window_func_name, i);
-            if let ScalarExpr::BoundColumnRef(column_ref) = &part {
-                replaced_partition_items.push(column_ref.clone().into());
-                partition_by_items.push(ScalarItem {
-                    index: column_ref.column.index,
-                    scalar: part.clone(),
-                });
-            } else {
-                let index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(name.clone(), part.data_type()?);
-
-                // Generate a ColumnBinding for each argument of aggregates
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    table_index: None,
-                    column_name: name,
-                    index,
-                    data_type: Box::new(part.data_type()?),
-                    visibility: Visibility::Visible,
-                };
-                replaced_partition_items.push(
-                    BoundColumnRef {
-                        span: part.span(),
-                        column: column_binding.clone(),
-                    }
-                    .into(),
-                );
-                partition_by_items.push(ScalarItem {
-                    index,
-                    scalar: part.clone(),
-                });
-            }
+            let name = format!("{window_func_name}_part_{i}");
+            let replaced_part = self.replace_expr(&name, &part)?;
+            partition_by_items.push(ScalarItem {
+                index: replaced_part.column.index,
+                scalar: part,
+            });
+            replaced_partition_items.push(replaced_part.into());
         }
 
         // resolve order by
         let mut order_by_items = vec![];
         for (i, order) in window.order_by.iter().enumerate() {
             let order_expr = self.visit(&order.expr)?;
-            let name = format!("{}_order_{}", &window_func_name, i);
-            if let ScalarExpr::BoundColumnRef(column_ref) = &order_expr {
-                replaced_order_by_items.push(WindowOrderBy {
-                    expr: column_ref.clone().into(),
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
-                });
-                order_by_items.push(WindowOrderByInfo {
-                    order_by_item: ScalarItem {
-                        index: column_ref.column.index,
-                        scalar: order_expr.clone(),
-                    },
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
-                })
-            } else {
-                let index = self
-                    .metadata
-                    .write()
-                    .add_derived_column(name.clone(), order_expr.data_type()?);
-
-                // Generate a ColumnBinding for each argument of aggregates
-                let column_binding = ColumnBinding {
-                    database_name: None,
-                    table_name: None,
-                    table_index: None,
-                    column_name: name,
-                    index,
-                    data_type: Box::new(order_expr.data_type()?),
-                    visibility: Visibility::Visible,
-                };
-                replaced_order_by_items.push(WindowOrderBy {
-                    expr: BoundColumnRef {
-                        span: order_expr.span(),
-                        column: column_binding,
-                    }
-                    .into(),
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
-                });
-                order_by_items.push(WindowOrderByInfo {
-                    order_by_item: ScalarItem {
-                        index,
-                        scalar: order_expr,
-                    },
-                    asc: order.asc,
-                    nulls_first: order.nulls_first,
-                })
-            }
+            let name = format!("{window_func_name}_order_{i}");
+            let replaced_order = self.replace_expr(&name, &order_expr)?;
+            order_by_items.push(WindowOrderByInfo {
+                order_by_item: ScalarItem {
+                    index: replaced_order.column.index,
+                    scalar: order_expr,
+                },
+                asc: order.asc,
+                nulls_first: order.nulls_first,
+            });
+            replaced_order_by_items.push(WindowOrderBy {
+                expr: replaced_order.into(),
+                asc: order.asc,
+                nulls_first: order.nulls_first,
+            });
         }
 
         let index = self
@@ -498,7 +414,7 @@ impl<'a> WindowRewriter<'a> {
             span: window.span,
             index,
             func: func.clone(),
-            arguments: agg_args,
+            arguments: window_args,
             partition_by_items,
             order_by_items,
             frame: window.frame.clone(),
@@ -526,52 +442,58 @@ impl<'a> WindowRewriter<'a> {
 
     fn replace_lag_lead_args(
         &mut self,
-        agg_args: &mut Vec<ScalarItem>,
+        window_args: &mut Vec<ScalarItem>,
         window_func_name: &String,
         f: &LagLeadFunction,
     ) -> Result<(ScalarExpr, Option<Box<ScalarExpr>>)> {
-        let new_arg = self.visit(&f.arg)?;
+        let arg = self.visit(&f.arg)?;
+        let name = format!("{window_func_name}_arg");
+        let replaced_arg = self.replace_expr(&name, &arg)?;
+        window_args.push(ScalarItem {
+            scalar: arg,
+            index: replaced_arg.column.index,
+        });
         let new_default = match &f.default {
             None => None,
             Some(d) => {
                 let d = self.visit(d)?;
-                let replaced_default = if let ScalarExpr::BoundColumnRef(column_ref) = &d {
-                    agg_args.push(ScalarItem {
-                        index: column_ref.column.index,
-                        scalar: d.clone(),
-                    });
-                    column_ref.clone().into()
-                } else {
-                    let name = format!("{}_default_value", &window_func_name);
-                    let index = self
-                        .metadata
-                        .write()
-                        .add_derived_column(name.clone(), d.data_type()?);
-
-                    let column_binding = ColumnBinding {
-                        database_name: None,
-                        table_name: None,
-                        table_index: None,
-                        column_name: name,
-                        index,
-                        data_type: Box::new(d.data_type()?),
-                        visibility: Visibility::Visible,
-                    };
-                    agg_args.push(ScalarItem {
-                        index,
-                        scalar: d.clone(),
-                    });
-
-                    BoundColumnRef {
-                        span: d.span(),
-                        column: column_binding,
-                    }
-                    .into()
-                };
-                Some(Box::new(replaced_default))
+                let name = format!("{window_func_name}_default_value");
+                let replaced_default = self.replace_expr(&name, &d)?;
+                window_args.push(ScalarItem {
+                    scalar: d,
+                    index: replaced_default.column.index,
+                });
+                Some(Box::new(replaced_default.into()))
             }
         };
-        Ok((new_arg, new_default))
+        Ok((replaced_arg.into(), new_default))
+    }
+
+    fn replace_expr(&self, name: &str, arg: &ScalarExpr) -> Result<BoundColumnRef> {
+        if let ScalarExpr::BoundColumnRef(col) = &arg {
+            Ok(col.clone())
+        } else {
+            let ty = arg.data_type()?;
+            let index = self
+                .metadata
+                .write()
+                .add_derived_column(name.to_string(), ty.clone());
+
+            // Generate a ColumnBinding for each argument of aggregates
+            let column = ColumnBinding {
+                database_name: None,
+                table_name: None,
+                table_index: None,
+                column_name: name.to_string(),
+                index,
+                data_type: Box::new(ty),
+                visibility: Visibility::Visible,
+            };
+            Ok(BoundColumnRef {
+                span: arg.span(),
+                column,
+            })
+        }
     }
 }
 

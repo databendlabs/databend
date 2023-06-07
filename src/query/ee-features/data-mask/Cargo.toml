@@ -1,5 +1,5 @@
 [package]
-name = "data-mask"
+name = "data-mask-feature"
 description = "data mask"
 version = { workspace = true }
 authors = { workspace = true }
@@ -17,7 +17,6 @@ common-base = { path = "../../../common/base" }
 common-exception = { path = "../../../common/exception" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-store = { path = "../../../meta/store" }
-common-sql = { path = "../../sql" }
 
 async-trait = "0.1.57"
 

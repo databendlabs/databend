@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use tracing::error;
 use databend_query::sessions::{Session, SessionManager, SessionType};
 use common_exception::Result;
 use databend_query::status;
@@ -20,7 +21,6 @@ use databend_query::status;
 pub async fn create_session() -> Result<Arc<Session>> {
     let session = SessionManager::instance()
         .create_session(SessionType::FlightSQL)
-        .await
-        .map_err(|e| status!("Could not create session for background_service", e))?;
+        .await?;
     Ok(session)
 }

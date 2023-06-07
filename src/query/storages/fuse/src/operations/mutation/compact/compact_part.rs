@@ -21,7 +21,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use storages_common_table_meta::meta::BlockMeta;
 
-use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
+use crate::operations::common::BlockMetaIndex;
 
 #[derive(serde::Serialize, serde::Deserialize, PartialEq)]
 pub struct CompactPartInfo {

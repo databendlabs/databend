@@ -83,6 +83,10 @@ impl UserInfo {
             self.option = user_option;
         };
     }
+
+    pub fn is_root(&self) -> bool {
+        self.name.eq("root") || self.name.eq("default")
+    }
 }
 
 impl TryFrom<Vec<u8>> for UserInfo {

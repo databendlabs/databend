@@ -183,7 +183,7 @@ Databend's Fuse Engine was designed in a way similar to Git. It introduces three
 
 Let's repeat the operations we just did with Git in Fuse Engine.
 
-1. [Create a table](https://databend.rs/doc/reference/sql/ddl/table/ddl-create-table).
+1. [Create a table](https://databend.rs/doc/sql-commands/ddl/table/ddl-create-table).
 
 ```sql
 CREATE TABLE git(file VARCHAR, content VARCHAR);

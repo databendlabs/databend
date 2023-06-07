@@ -15,7 +15,6 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::Duration;
 
 use common_base::base::tokio;
 use common_base::base::Progress;
@@ -32,7 +31,6 @@ use common_catalog::table_context::StageAttachment;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::BlockThresholds;
 use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
@@ -49,16 +47,21 @@ use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::CreateTableLockRevReply;
 use common_meta_app::schema::CreateTableReply;
 use common_meta_app::schema::CreateTableReq;
+use common_meta_app::schema::CreateVirtualColumnReply;
+use common_meta_app::schema::CreateVirtualColumnReq;
 use common_meta_app::schema::DropDatabaseReply;
 use common_meta_app::schema::DropDatabaseReq;
 use common_meta_app::schema::DropIndexReply;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
+use common_meta_app::schema::DropVirtualColumnReply;
+use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
+use common_meta_app::schema::ListVirtualColumnsReq;
 use common_meta_app::schema::RenameDatabaseReply;
 use common_meta_app::schema::RenameDatabaseReq;
 use common_meta_app::schema::RenameTableReply;
@@ -74,33 +77,30 @@ use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
+use common_meta_app::schema::UpdateVirtualColumnReply;
+use common_meta_app::schema::UpdateVirtualColumnReq;
 use common_meta_app::schema::UpsertTableOptionReply;
 use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_app::schema::VirtualColumnMeta;
 use common_meta_types::MetaId;
 use common_pipeline_core::InputError;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
 use common_storage::StageFileInfo;
-use common_storages_fuse::io::SegmentWriter;
-use common_storages_fuse::io::TableMetaLocationGenerator;
-use common_storages_fuse::operations::AppendOperationLogEntry;
-use common_storages_fuse::statistics::reducers::reduce_block_metas;
 use common_storages_fuse::FuseTable;
 use common_storages_fuse::FUSE_TBL_SNAPSHOT_PREFIX;
 use dashmap::DashMap;
 use databend_query::sessions::QueryContext;
-use databend_query::test_kits::block_writer::BlockWriter;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
-use rand::thread_rng;
-use rand::Rng;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
+use storages_common_table_meta::meta::TableSnapshot;
+use storages_common_table_meta::meta::Versioned;
+use uuid::Uuid;
 use walkdir::WalkDir;
-
-use crate::storages::fuse::operations::mutation::CompactSegmentTestFixture;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_fuse_occ_retry() -> Result<()> {
@@ -151,7 +151,6 @@ async fn test_fuse_occ_retry() -> Result<()> {
         "+----------+----------+",
         "| Column 0 | Column 1 |",
         "+----------+----------+",
-        "| 1        | (2, 3)   |",
         "| 5        | (10, 15) |",
         "+----------+----------+",
     ];
@@ -198,13 +197,12 @@ async fn test_last_snapshot_hint() -> Result<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn test_abort_on_error() -> Result<()> {
+async fn test_commit_to_meta_server() -> Result<()> {
     struct Case {
         update_meta_error: Option<ErrorCode>,
         expected_error: Option<ErrorCode>,
         expected_snapshot_left: usize,
         case_name: &'static str,
-        max_retry_time: Option<Duration>,
     }
 
     impl Case {
@@ -217,20 +215,34 @@ async fn test_abort_on_error() -> Result<()> {
             let table = fixture.latest_default_table().await?;
             let fuse_table = FuseTable::try_from_table(table.as_ref())?;
 
-            let overwrite = false;
-            let log = vec![AppendOperationLogEntry {
-                segment_location: "do not care".to_string(),
-                segment_info: Arc::new(SegmentInfo::new(vec![], Statistics::default())),
-            }];
+            let new_segments = vec![("do not care".to_string(), SegmentInfo::VERSION)];
+            let new_snapshot = TableSnapshot::new(
+                Uuid::new_v4(),
+                &None,
+                None,
+                table.schema().as_ref().clone(),
+                Statistics::default(),
+                new_segments,
+                None,
+                None,
+            );
 
             let faked_catalog = FakedCatalog {
                 cat: catalog,
                 error_injection: self.update_meta_error.clone(),
             };
             let ctx = Arc::new(CtxDelegation::new(ctx, faked_catalog));
-            let r = fuse_table
-                .commit_with_max_retry_elapsed(ctx, log, None, self.max_retry_time, overwrite)
-                .await;
+            let r = FuseTable::commit_to_meta_server(
+                ctx.as_ref(),
+                fuse_table.get_table_info(),
+                fuse_table.meta_location_generator(),
+                new_snapshot,
+                None,
+                &None,
+                fuse_table.get_operator_ref(),
+            )
+            .await;
+
             if self.update_meta_error.is_some() {
                 assert_eq!(
                     r.unwrap_err().code(),
@@ -276,7 +288,6 @@ async fn test_abort_on_error() -> Result<()> {
             expected_error: injected_error,
             expected_snapshot_left,
             case_name: "normal, not meta store error",
-            max_retry_time: None,
         };
         case.run().await?;
     }
@@ -292,73 +303,10 @@ async fn test_abort_on_error() -> Result<()> {
             expected_error: injected_error,
             expected_snapshot_left,
             case_name: "meta store error which may have side effects",
-            max_retry_time: None,
         };
         case.run().await?;
     }
 
-    {
-        let injected_error = Some(ErrorCode::TableVersionMismatched(
-            "does not matter".to_owned(),
-        ));
-        // if commit failed and end up with TableVersionMismatched error,
-        // an OCCRetryFailure is expected to be popped up
-        let expected_error = Some(ErrorCode::OCCRetryFailure("not matter".to_owned()));
-        // error may have no side effects, expect no snapshot, the operation be reverted
-        let expected_snapshot_left = 0;
-        let case = Case {
-            update_meta_error: injected_error,
-            expected_error,
-            expected_snapshot_left,
-            case_name: "table version mismatch err",
-            // shrink the test time usage
-            max_retry_time: Some(Duration::from_millis(100)),
-        };
-        case.run().await?;
-    }
-
-    Ok(())
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn test_merge_segments() -> common_exception::Result<()> {
-    let fixture = TestFixture::new().await;
-    let ctx = fixture.ctx();
-
-    let operator = ctx.get_data_operator()?.operator();
-    let data_accessor = operator.clone();
-    let location_gen = TableMetaLocationGenerator::with_prefix("test/".to_owned());
-    let block_writer = BlockWriter::new(&data_accessor, &location_gen);
-    let segment_writer = SegmentWriter::new(&data_accessor, &location_gen);
-
-    let mut rand = thread_rng();
-    let number_of_segments: usize = rand.gen_range(1..10);
-    let mut block_number_of_segments = Vec::with_capacity(number_of_segments);
-    let mut rows_per_blocks = Vec::with_capacity(number_of_segments);
-    for _ in 0..number_of_segments {
-        block_number_of_segments.push(rand.gen_range(10..30));
-        rows_per_blocks.push(rand.gen_range(1..8));
-    }
-
-    let threshold = BlockThresholds {
-        max_rows_per_block: 5,
-        min_rows_per_block: 4,
-        max_bytes_per_block: 1024,
-    };
-
-    let (locations, block_metas, segment_infos) = CompactSegmentTestFixture::gen_segments(
-        &block_writer,
-        &segment_writer,
-        &block_number_of_segments,
-        &rows_per_blocks,
-        threshold,
-    )
-    .await?;
-
-    let expect = reduce_block_metas(&block_metas, threshold)?;
-    let iter = locations.iter().zip(segment_infos.iter());
-    let (_, results) = FuseTable::merge_segments(iter)?;
-    assert_eq!(expect, results);
     Ok(())
 }
 
@@ -517,7 +465,7 @@ impl TableContext for CtxDelegation {
     }
 
     fn get_settings(&self) -> Arc<Settings> {
-        todo!()
+        Settings::create("fake_settings".to_string())
     }
 
     fn get_shard_settings(&self) -> Arc<Settings> {
@@ -575,14 +523,6 @@ impl TableContext for CtxDelegation {
 
     fn get_data_operator(&self) -> Result<DataOperator> {
         self.ctx.get_data_operator()
-    }
-
-    fn push_precommit_block(&self, _block: DataBlock) {
-        todo!()
-    }
-
-    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        todo!()
     }
 
     async fn get_file_format(&self, _name: &str) -> Result<FileFormatParams> {
@@ -741,6 +681,38 @@ impl Catalog for FakedCatalog {
 
     #[async_backtrace::framed]
     async fn list_indexes(&self, _req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn create_virtual_column(
+        &self,
+        _req: CreateVirtualColumnReq,
+    ) -> Result<CreateVirtualColumnReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_virtual_column(
+        &self,
+        _req: UpdateVirtualColumnReq,
+    ) -> Result<UpdateVirtualColumnReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn drop_virtual_column(
+        &self,
+        _req: DropVirtualColumnReq,
+    ) -> Result<DropVirtualColumnReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn list_virtual_columns(
+        &self,
+        _req: ListVirtualColumnsReq,
+    ) -> Result<Vec<VirtualColumnMeta>> {
         unimplemented!()
     }
 
