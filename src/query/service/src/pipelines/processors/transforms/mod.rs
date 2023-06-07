@@ -79,7 +79,6 @@ pub use transform_hash_join::TransformHashJoinProbe;
 pub use transform_ie_join::TransformIEJoinLeft;
 pub use transform_ie_join::TransformIEJoinRight;
 pub use transform_left_join::LeftJoinCompactor;
-pub use transform_left_join::TransformLeftJoin;
 pub use transform_limit::TransformLimit;
 pub use transform_mark_join::MarkJoinCompactor;
 pub use transform_mark_join::TransformMarkJoin;

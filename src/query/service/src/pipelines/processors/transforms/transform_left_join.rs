@@ -19,7 +19,6 @@ use common_expression::DataBlock;
 
 use crate::pipelines::processors::transforms::Compactor;
 use crate::pipelines::processors::HashJoinState;
-use crate::pipelines::processors::TransformCompact;
 
 pub struct LeftJoinCompactor {
     hash_join_state: Arc<dyn HashJoinState>,
@@ -58,5 +57,3 @@ impl Compactor for LeftJoinCompactor {
         self.hash_join_state.left_join_blocks(blocks)
     }
 }
-
-pub type TransformLeftJoin = TransformCompact<LeftJoinCompactor>;

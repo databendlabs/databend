@@ -49,9 +49,14 @@ impl JoinHashTable {
             // Single join is similar to left join, but the result is a single row.
             JoinType::Left | JoinType::Single | JoinType::Full => {
                 if self.hash_join_desc.other_predicate.is_none() {
-                    self.probe_left_join::<false, _, _>(hash_table, probe_state, keys_iter, input)
+                    self.probe_left_join::<_, _>(hash_table, probe_state, keys_iter, input)
                 } else {
-                    self.probe_left_join::<true, _, _>(hash_table, probe_state, keys_iter, input)
+                    self.probe_left_join_with_conjunct::<_, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )
                 }
             }
             JoinType::Right => {

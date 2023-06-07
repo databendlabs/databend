@@ -93,7 +93,6 @@ use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
 use crate::pipelines::processors::transforms::TransformIEJoinLeft;
 use crate::pipelines::processors::transforms::TransformIEJoinRight;
-use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
@@ -103,7 +102,6 @@ use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::JoinHashTable;
-use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
@@ -1112,30 +1110,6 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })?;
-
-        if (join.join_type == JoinType::Left
-            || join.join_type == JoinType::Full
-            || join.join_type == JoinType::Single)
-            && join.non_equi_conditions.is_empty()
-        {
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformLeftJoin::try_create(
-                    input,
-                    output,
-                    LeftJoinCompactor::create(state.clone()),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        join.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
 
         if join.join_type == JoinType::LeftMark {
             self.main_pipeline.resize(1)?;

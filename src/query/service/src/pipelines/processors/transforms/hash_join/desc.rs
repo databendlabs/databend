@@ -25,7 +25,7 @@ use parking_lot::RwLock;
 
 use crate::sql::plans::JoinType;
 
-pub const JOIN_MAX_BLOCK_SIZE: usize = 65535;
+pub const JOIN_MAX_BLOCK_SIZE: usize = 65536;
 
 pub struct MarkJoinDesc {
     // pub(crate) marker_index: Option<IndexType>,
