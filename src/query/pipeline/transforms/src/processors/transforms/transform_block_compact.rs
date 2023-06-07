@@ -74,10 +74,13 @@ impl Compactor for BlockCompactor {
             let merged = DataBlock::concat(blocks)?;
             blocks.clear();
 
-            if accumulated_rows >= self.thresholds.max_rows_per_block
-                || accumulated_bytes >= self.thresholds.max_bytes_per_block
-            {
-                // we can't use slice here, it did not deallocate memory
+            if accumulated_rows >= self.thresholds.max_rows_per_block {
+                let (perfect, remain) = merged.split_by_rows(self.thresholds.max_rows_per_block);
+                res.extend(perfect);
+                if let Some(b) = remain {
+                    blocks.push(b);
+                }
+            } else if accumulated_bytes >= self.thresholds.max_bytes_per_block {
                 // too large for merged block, flush to results
                 res.push(merged);
             } else {
