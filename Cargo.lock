@@ -4005,6 +4005,7 @@ name = "enterprise-query"
 version = "0.1.0"
 dependencies = [
  "aggregating-index",
+ "arrow-array",
  "async-backtrace",
  "async-trait",
  "background-service",
@@ -4014,6 +4015,7 @@ dependencies = [
  "common-catalog",
  "common-config",
  "common-exception",
+ "common-expression",
  "common-license",
  "common-meta-api",
  "common-meta-app",

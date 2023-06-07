@@ -14,14 +14,22 @@
 
 use std::net::SocketAddr;
 use std::sync::Arc;
+use arrow_array::RecordBatch;
+use futures_util::StreamExt;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
 use background_service::BackgroundServiceHandler;
 use common_base::base::GlobalInstance;
+use common_catalog::table_context::TableContext;
 use common_config::InnerConfig;
 use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use databend_query::servers::Server;
 use databend_query::sessions::Session;
 use common_exception::Result;
+use common_expression::DataBlock;
+use common_sql::PlanExtras;
+use common_sql::plans::Plan;
+use databend_query::interpreters::InterpreterFactory;
+use databend_query::status;
 use crate::background_service::session::create_session;
 
 pub struct RealBackgroundService {
@@ -67,5 +75,29 @@ impl RealBackgroundService {
         let wrapper = BackgroundServiceHandlerWrapper::new(Box::new(rm));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
+    }
+    #[async_backtrace::framed]
+    pub async fn execute_sql(
+        &self,
+        sql: &str,
+    ) -> Result<RecordBatch> {
+        let (plan, plan_extras) = self.executor.plan_sql( &session, sql).await?;
+        let context = self.session
+            .create_query_context()
+            .await
+            .map_err(|e| status!("Could not create_query_context for background service", e))?;
+
+        context.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
+        let interpreter = InterpreterFactory::get(context.clone(), &plan).await?;
+        let data_schema = interpreter.schema();
+        let mut blocks = interpreter.execute(context.clone()).await?;
+        let mut result = vec![];
+        while let Some(block) = blocks.next().await {
+            let block = block?;
+            result.push(block);
+        }
+        let record = DataBlock::concat(&result)?;
+        let record = record.to_record_batch(data_schema.as_ref())?;
+        Ok(record)
     }
 }

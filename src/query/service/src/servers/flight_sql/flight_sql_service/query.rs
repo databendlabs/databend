@@ -68,7 +68,7 @@ impl FlightSqlServiceImpl {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn plan_sql(
+    pub async fn plan_sql(
         &self,
         session: &Arc<Session>,
         query: &str,

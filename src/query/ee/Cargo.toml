@@ -23,6 +23,7 @@ common-exception = { path = "../../common/exception" }
 common-license = { path = "../../common/license" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
+common-expression = { path = "../expression" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
@@ -44,6 +45,7 @@ dashmap = "5.4"
 futures-util = "0.3.24"
 jwt-simple = "0.11.0"
 tracing = "0.1.36"
+arrow-array = { version = "37.0.0" }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }
