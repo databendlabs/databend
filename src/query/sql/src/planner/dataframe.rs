@@ -53,7 +53,7 @@ impl Dataframe {
         table_name: &str,
     ) -> Result<Self> {
         let table = TableReference::Table {
-            database: db.map(|c| Identifier::from_name(c)),
+            database: db.map(Identifier::from_name),
             table: Identifier::from_name(table_name),
             span: None,
             catalog: None,
@@ -114,7 +114,7 @@ impl Dataframe {
     pub async fn select_columns(self, columns: &[&str]) -> Result<Self> {
         let schema = self.bind_context.output_schema();
         for column in columns {
-            if !schema.field_with_name(column).is_ok() {
+            if schema.field_with_name(column).is_err() {
                 return Err(ErrorCode::UnknownColumn(format!(
                     "Unknown column: '{}'",
                     column
@@ -154,7 +154,7 @@ impl Dataframe {
         let bind_context = &mut self.bind_context;
         let select_list = self
             .binder
-            .normalize_select_list(bind_context, &select_list)
+            .normalize_select_list(bind_context, select_list)
             .await?;
 
         let (scalar_items, projections) = self
@@ -405,7 +405,7 @@ impl Dataframe {
         Plan::Query {
             s_expr: Box::new(self.s_expr),
             metadata: self.binder.metadata.clone(),
-            bind_context: Box::new(self.bind_context.clone()),
+            bind_context: Box::new(self.bind_context),
             rewrite_kind: None,
             ignore_result: false,
             formatted_ast: None,

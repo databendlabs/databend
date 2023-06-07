@@ -14,35 +14,12 @@
 
 use std::sync::Arc;
 
-use arrow_flight::sql;
-use common_ast::ast::Engine;
 use common_ast::ast::Expr;
-use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
-use common_ast::ast::TableReference;
-use common_ast::parser::parse_sql;
-use common_ast::parser::tokenize_sql;
-use common_ast::Dialect;
 use common_base::base::tokio;
-use common_catalog::catalog::CatalogManager;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_expression::block_debug::assert_blocks_eq;
-use common_expression::block_debug::assert_blocks_sorted_eq;
 use common_expression::block_debug::box_render;
-use common_expression::types::NumberDataType;
-use common_expression::TableDataType;
-use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
 use common_sql::dataframe::Dataframe;
-use common_sql::optimizer::SExpr;
-use common_sql::plans::CreateTablePlan;
-use common_sql::plans::Plan;
-use common_sql::BindContext;
-use common_sql::Binder;
-use common_sql::Metadata;
-use common_sql::MetadataRef;
-use common_sql::NameResolutionContext;
 use common_sql::Planner;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
