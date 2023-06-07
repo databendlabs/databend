@@ -1491,23 +1491,25 @@ impl<'a> TypeChecker<'a> {
             args: arguments,
         };
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            self.ctx.set_cacheable(false);
-        }
 
-        if let (common_expression::Expr::Constant { scalar, .. }, _) =
-            ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
-        {
-            let scalar = shrink_scalar(scalar);
-            let ty = scalar.as_ref().infer_data_type();
-            return Ok(Box::new((
-                ConstantExpr {
-                    span,
-                    value: scalar,
-                }
-                .into(),
-                ty,
-            )));
+        if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            // Fold constant and shrink scalar type
+            if let (common_expression::Expr::Constant { scalar, .. }, _) =
+                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
+            {
+                let scalar = shrink_scalar(scalar);
+                let ty = scalar.as_ref().infer_data_type();
+                return Ok(Box::new((
+                    ConstantExpr {
+                        span,
+                        value: scalar,
+                    }
+                    .into(),
+                    ty,
+                )));
+            }
+        } else {
+            self.ctx.set_cacheable(false);
         }
 
         Ok(Box::new((
