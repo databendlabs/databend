@@ -47,10 +47,10 @@ pub struct SExpr {
     /// Since `SExpr` is `Send + Sync`, we use `Mutex` to protect
     /// the cache.
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-    pub(crate) rel_prop: Arc<Mutex<Option<RelationalProperty>>>,
+    pub(crate) rel_prop: Arc<Mutex<Option<Arc<RelationalProperty>>>>,
 
     #[educe(Hash(ignore), PartialEq(ignore), Eq(ignore))]
-    pub(crate) stat_info: Arc<Mutex<Option<StatInfo>>>,
+    pub(crate) stat_info: Arc<Mutex<Option<Arc<StatInfo>>>>,
 
     /// A bitmap to record applied rules on current SExpr, to prevent
     /// redundant transformations.
@@ -62,8 +62,8 @@ impl SExpr {
         plan: Arc<RelOperator>,
         children: impl IntoIterator<Item = Arc<SExpr>>,
         original_group: Option<IndexType>,
-        rel_prop: Option<RelationalProperty>,
-        stat_info: Option<StatInfo>,
+        rel_prop: Option<Arc<RelationalProperty>>,
+        stat_info: Option<Arc<StatInfo>>,
     ) -> Self {
         SExpr {
             plan,
@@ -170,12 +170,12 @@ impl SExpr {
         }
     }
 
-    pub fn replace_plan(&self, plan: RelOperator) -> Self {
+    pub fn replace_plan(&self, plan: Arc<RelOperator>) -> Self {
         Self {
-            plan: Arc::new(plan),
+            plan,
             original_group: self.original_group,
-            rel_prop: self.rel_prop.clone(),
-            stat_info: self.stat_info.clone(),
+            rel_prop: Arc::new(Mutex::new(None)),
+            stat_info: Arc::new(Mutex::new(None)),
             applied_rules: self.applied_rules.clone(),
             children: self.children.clone(),
         }

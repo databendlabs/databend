@@ -110,6 +110,56 @@ impl AccessChecker for PrivilegeAccess {
                     .await?
             }
 
+            // Virtual Column.
+            Plan::CreateVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Create],
+                    )
+                    .await?;
+            }
+            Plan::AlterVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Alter],
+                    )
+                    .await?;
+            }
+            Plan::DropVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Drop],
+                    )
+                    .await?;
+            }
+            Plan::GenerateVirtualColumns(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Super],
+                    )
+                    .await?;
+            }
+
             // Table.
             Plan::ShowCreateTable(plan) => {
                 session
@@ -184,6 +234,18 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::AddTableColumn(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Alter],
+                    )
+                    .await?;
+            }
+            Plan::ModifyTableColumn(plan) => {
                 session
                     .validate_privilege(
                         &GrantObject::Table(
@@ -431,35 +493,13 @@ impl AccessChecker for PrivilegeAccess {
                     .await?;
             }
             Plan::Copy(plan) => match plan.as_ref() {
-                CopyPlan::IntoTable {
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    ..
-                } => {
+                CopyPlan::IntoTable(plan) => {
                     session
                         .validate_privilege(
                             &GrantObject::Table(
-                                catalog_name.to_string(),
-                                database_name.to_string(),
-                                table_name.to_string(),
-                            ),
-                            vec![UserPrivilegeType::Insert],
-                        )
-                        .await?;
-                }
-                CopyPlan::IntoTableWithTransform {
-                    catalog_name,
-                    database_name,
-                    table_name,
-                    ..
-                } => {
-                    session
-                        .validate_privilege(
-                            &GrantObject::Table(
-                                catalog_name.to_string(),
-                                database_name.to_string(),
-                                table_name.to_string(),
+                                plan.catalog_name.to_string(),
+                                plan.database_name.to_string(),
+                                plan.table_name.to_string(),
                             ),
                             vec![UserPrivilegeType::Insert],
                         )

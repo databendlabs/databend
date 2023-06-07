@@ -284,7 +284,6 @@ impl HttpQuery {
                 location: attachment.location.clone(),
                 file_format_options: attachment.file_format_options.clone(),
                 copy_options: attachment.copy_options.clone(),
-                values_str: "".to_string(),
             }),
             None => {}
         };

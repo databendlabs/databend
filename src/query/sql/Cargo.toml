@@ -41,6 +41,7 @@ common-storages-result-cache = { path = "../storages/result_cache" }
 common-storages-view = { path = "../storages/view" }
 common-users = { path = "../users" }
 common-vector = { path = "../../common/vector" }
+data-mask-feature = { path = "../ee-features/data-mask" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 
 # GitHub dependencies

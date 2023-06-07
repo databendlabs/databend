@@ -10,7 +10,7 @@ const GITHUB_REPO = 'https://api.github.com/repos/datafuselabs/databend';
 const DATABEND_RELEASES = 'https://api.github.com/repos/datafuselabs/databend/releases';
 const DATABEND_DOWNLOAD =  'https://repo.databend.rs/databend';
 
-const IGNORE_TEXT = '<!-- Release notes generated using configuration in .github/release.yml at main -->';
+const IGNORE_TEXT = /<!-- Release notes generated using configuration in .github\/release.yml at [\w.-]+ -->/;
 const REG = /https:\/\/github\.com\/datafuselabs\/databend\/pull\/(\d+)/g;
 const REPLACE_TEXT = '[#$1](https://github.com/datafuselabs/databend/pull/$1)';
 

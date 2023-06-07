@@ -35,9 +35,9 @@ use tracing::info;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::merge_into::mutation_meta::CommitMeta;
+use crate::operations::common::AbortOperation;
+use crate::operations::common::CommitMeta;
 use crate::operations::mutation::compact::CompactSourceMeta;
-use crate::operations::mutation::AbortOperation;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
@@ -122,8 +122,8 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         for (segment_idx, block_map) in std::mem::take(&mut self.merge_blocks) {
             // generate the new segment.
             let blocks: Vec<_> = block_map.into_values().collect();
-            let new_summary = reduce_block_metas(&blocks, self.thresholds)?;
-            merge_statistics_mut(&mut self.merged_statistics, &new_summary)?;
+            let new_summary = reduce_block_metas(&blocks, self.thresholds);
+            merge_statistics_mut(&mut self.merged_statistics, &new_summary);
             let new_segment = SegmentInfo::new(blocks, new_summary);
             let location = self.location_gen.gen_segment_info_location();
             self.abort_operation.add_segment(location.clone());

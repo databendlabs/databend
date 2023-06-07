@@ -35,7 +35,6 @@ use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 pub use common_catalog::table_context::TableContext;
-use common_catalog::table_mutator::TableMutator;
 pub use constants::*;
 pub use fuse_part::FusePartInfo;
 pub use fuse_table::FuseStorageFormat;

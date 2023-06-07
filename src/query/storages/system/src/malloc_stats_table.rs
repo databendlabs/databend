@@ -85,10 +85,10 @@ impl MallocStatsTable {
         tikv_jemalloc_ctl::stats_print::stats_print(&mut buf, options)?;
         let json_value: serde_json::Value = serde_json::from_slice(&buf)?;
         let jsonb_value: jsonb::Value = (&json_value).into();
-        Ok(vec![BlockEntry {
-            data_type: DataType::Variant,
-            value: Value::Scalar(Scalar::Variant(jsonb_value.to_vec())),
-        }])
+        Ok(vec![BlockEntry::new(
+            DataType::Variant,
+            Value::Scalar(Scalar::Variant(jsonb_value.to_vec())),
+        )])
     }
 }
 

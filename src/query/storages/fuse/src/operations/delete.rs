@@ -36,14 +36,10 @@ use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
-use crate::operations::merge_into::CommitSink;
-use crate::operations::merge_into::TableMutationAggregator;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
@@ -140,26 +136,7 @@ impl FuseTable {
             )
         })?;
 
-        pipeline.resize(1)?;
-
-        pipeline.add_transform(|input, output| {
-            let aggregator = TableMutationAggregator::create(
-                ctx.clone(),
-                snapshot.segments.clone(),
-                snapshot.summary.clone(),
-                self.get_block_thresholds(),
-                self.meta_location_generator().clone(),
-                self.schema(),
-                self.get_operator(),
-            );
-            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
-                input, output, aggregator,
-            )))
-        })?;
-
-        pipeline
-            .add_sink(|input| CommitSink::try_create(self, ctx.clone(), snapshot.clone(), input))?;
-        Ok(())
+        self.chain_mutation_pipes(&ctx, pipeline, snapshot).await
     }
 
     pub fn try_eval_const(
@@ -171,13 +148,7 @@ impl FuseTable {
         let dummy_field = DataField::new("dummy", DataType::Null);
         let _dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
         let dummy_value = Value::Column(Column::Null { len: 1 });
-        let dummy_block = DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::Null,
-                value: dummy_value,
-            }],
-            1,
-        );
+        let dummy_block = DataBlock::new(vec![BlockEntry::new(DataType::Null, dummy_value)], 1);
 
         let filter = filter
             .as_expr(&BUILTIN_FUNCTIONS)
@@ -320,6 +291,7 @@ impl FuseTable {
             self.table_info.schema(),
             None,
             &range_block_metas,
+            None,
             base_snapshot.summary.block_count as usize,
             PruningStatistics::default(),
         )?;

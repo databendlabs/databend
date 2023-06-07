@@ -471,12 +471,13 @@ impl PipelineBuilder {
     fn build_eval_scalar(&mut self, eval_scalar: &EvalScalar) -> Result<()> {
         self.build_pipeline(&eval_scalar.input)?;
 
+        let input_schema = eval_scalar.input.output_schema()?;
         let exprs = eval_scalar
             .exprs
             .iter()
             .filter(|(scalar, idx)| {
                 if let RemoteExpr::ColumnRef { id, .. } = scalar {
-                    return idx != id;
+                    return idx.to_string() != input_schema.field(*id).name().as_str();
                 }
                 true
             })
@@ -487,7 +488,7 @@ impl PipelineBuilder {
 
         let func_ctx = self.ctx.get_function_context()?;
 
-        let num_input_columns = eval_scalar.input.output_schema()?.num_fields();
+        let num_input_columns = input_schema.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
             let transform = CompoundBlockOperator::create(
@@ -903,7 +904,7 @@ impl PipelineBuilder {
 
             sort_desc.extend(order_by.clone());
 
-            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None)?;
+            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None, false)?;
         }
         // `TransformWindow` is a pipeline breaker.
         self.main_pipeline.resize(1)?;
@@ -989,7 +990,13 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.build_sort_pipeline(input_schema, sort_desc, sort.plan_id, sort.limit)
+        self.build_sort_pipeline(
+            input_schema,
+            sort_desc,
+            sort.plan_id,
+            sort.limit,
+            sort.after_exchange,
+        )
     }
 
     fn build_sort_pipeline(
@@ -998,6 +1005,7 @@ impl PipelineBuilder {
         sort_desc: Vec<SortColumnDescription>,
         plan_id: u32,
         limit: Option<usize>,
+        after_exchange: bool,
     ) -> Result<()> {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
@@ -1006,21 +1014,25 @@ impl PipelineBuilder {
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.resize(max_threads)?;
         }
-        // Sort
-        self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
 
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
-                    transform,
-                    plan_id,
-                    self.prof_span_set.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
-        })?;
+        // If the sort plan is after an exchange plan, the blocks are already sorted on other nodes.
+        if limit.is_none() || !after_exchange {
+            // Sort
+            self.main_pipeline.add_transform(|input, output| {
+                let transform =
+                    TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
+
+                if self.enable_profiling {
+                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                        transform,
+                        plan_id,
+                        self.prof_span_set.clone(),
+                    )))
+                } else {
+                    Ok(ProcessorPtr::create(transform))
+                }
+            })?;
+        }
 
         // Merge
         self.main_pipeline.add_transform(|input, output| {
@@ -1341,7 +1353,6 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &mut self.main_pipeline,
             AppendMode::Normal,
-            true,
         )?;
 
         Ok(())

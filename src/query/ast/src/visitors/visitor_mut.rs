@@ -193,7 +193,28 @@ pub trait VisitorMut: Sized {
 
     fn visit_literal(&mut self, _span: Span, _lit: &mut Literal) {}
 
-    fn visit_count_all(&mut self, _span: Span) {}
+    fn visit_count_all(&mut self, _span: Span, window: &mut Option<Window>) {
+        if let Some(window) = window {
+            match window {
+                Window::WindowReference(reference) => {
+                    self.visit_identifier(&mut reference.window_name);
+                }
+                Window::WindowSpec(spec) => {
+                    spec.partition_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, expr));
+                    spec.order_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, &mut expr.expr));
+
+                    if let Some(frame) = &mut spec.window_frame {
+                        self.visit_frame_bound(&mut frame.start_bound);
+                        self.visit_frame_bound(&mut frame.end_bound);
+                    }
+                }
+            }
+        }
+    }
 
     fn visit_tuple(&mut self, _span: Span, elements: &mut [Expr]) {
         for elem in elements.iter_mut() {
@@ -458,7 +479,16 @@ pub trait VisitorMut: Sized {
     fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
 
     fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
+
     fn visit_drop_index(&mut self, _stmt: &mut DropIndexStmt) {}
+
+    fn visit_create_virtual_columns(&mut self, _stmt: &mut CreateVirtualColumnsStmt) {}
+
+    fn visit_alter_virtual_columns(&mut self, _stmt: &mut AlterVirtualColumnsStmt) {}
+
+    fn visit_drop_virtual_columns(&mut self, _stmt: &mut DropVirtualColumnsStmt) {}
+
+    fn visit_generate_virtual_columns(&mut self, _stmt: &mut GenerateVirtualColumnsStmt) {}
 
     fn visit_show_users(&mut self) {}
 

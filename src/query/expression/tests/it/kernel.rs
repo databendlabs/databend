@@ -101,17 +101,17 @@ pub fn test_pass() {
         ];
         for i in 0..3 {
             let mut columns = Vec::with_capacity(3);
-            columns.push(BlockEntry {
-                data_type: DataType::Number(NumberDataType::UInt8),
-                value: Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
-            });
-            columns.push(BlockEntry {
-                data_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                value: Value::Column(UInt8Type::from_data_with_validity(
+            columns.push(BlockEntry::new(
+                DataType::Number(NumberDataType::UInt8),
+                Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
+            ));
+            columns.push(BlockEntry::new(
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                Value::Column(UInt8Type::from_data_with_validity(
                     vec![(i + 10) as u8; 4],
                     vec![true, true, false, false],
                 )),
-            });
+            ));
             blocks.push(DataBlock::new(columns, 4))
         }
 
@@ -132,17 +132,17 @@ pub fn test_pass() {
         ];
         for i in 0..3 {
             let mut columns = Vec::with_capacity(3);
-            columns.push(BlockEntry {
-                data_type: DataType::Number(NumberDataType::UInt8),
-                value: Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
-            });
-            columns.push(BlockEntry {
-                data_type: DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
-                value: Value::Column(UInt8Type::from_data_with_validity(
+            columns.push(BlockEntry::new(
+                DataType::Number(NumberDataType::UInt8),
+                Value::Column(UInt8Type::from_data(vec![(i + 10) as u8; 4])),
+            ));
+            columns.push(BlockEntry::new(
+                DataType::Nullable(Box::new(DataType::Number(NumberDataType::UInt8))),
+                Value::Column(UInt8Type::from_data_with_validity(
                     vec![(i + 10) as u8; 4],
                     vec![true, true, false, false],
                 )),
-            });
+            ));
             blocks.push(DataBlock::new(columns, 4))
         }
 

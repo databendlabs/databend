@@ -35,6 +35,7 @@ mod update;
 mod user;
 mod vector_index;
 mod view;
+mod virtual_columns;
 
 pub use call::*;
 pub use catalog::*;
@@ -59,3 +60,4 @@ pub use update::*;
 pub use user::*;
 pub use vector_index::*;
 pub use view::*;
+pub use virtual_columns::*;

@@ -86,6 +86,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                             | TokenKind::REPLACE
                             | TokenKind::UPDATE
                             | TokenKind::DELETE
+                            | TokenKind::COPY
                     )
                 ) && kind == TokenKind::HintPrefix
                 {
@@ -521,6 +522,8 @@ pub enum TokenKind {
     SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
+    #[token("GENERATE", ignore(ascii_case))]
+    GENERATE,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -633,6 +636,8 @@ pub enum TokenKind {
     MINUTE,
     #[token("MONTH", ignore(ascii_case))]
     MONTH,
+    #[token("MODIFY", ignore(ascii_case))]
+    MODIFY,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]
@@ -915,6 +920,8 @@ pub enum TokenKind {
     VECTOR,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
+    #[token("VIRTUAL", ignore(ascii_case))]
+    VIRTUAL,
     #[token("WEEK", ignore(ascii_case))]
     WEEK,
     #[token("WHEN", ignore(ascii_case))]

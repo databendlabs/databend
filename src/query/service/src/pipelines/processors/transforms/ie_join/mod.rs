@@ -13,5 +13,6 @@
 // limitations under the License.
 
 mod ie_join_state;
+mod ie_join_util;
 
 pub use ie_join_state::IEJoinState;

@@ -22,6 +22,7 @@ mod table;
 mod udf;
 mod vector_index;
 mod view;
+mod virtual_column;
 
 pub use account::*;
 pub use catalog::*;
@@ -33,3 +34,4 @@ pub use table::*;
 pub use udf::*;
 pub use vector_index::*;
 pub use view::*;
+pub use virtual_column::*;

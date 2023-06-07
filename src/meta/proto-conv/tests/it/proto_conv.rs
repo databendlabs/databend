@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::vec;
 
 use ce::types::decimal::DecimalSize;
 use ce::types::DecimalDataType;
@@ -198,6 +199,7 @@ fn new_table_meta() -> mt::TableMeta {
         drop_on: None,
         statistics: Default::default(),
         shared_by: btreeset! {1},
+        column_mask_policy: Some(btreemap! {s("a") => s("b")}),
     }
 }
 
@@ -265,6 +267,17 @@ fn new_data_mask_meta() -> common_meta_app::data_mask::DatamaskMeta {
         comment: Some("some comment".to_string()),
         create_on: Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap(),
         update_on: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap()),
+    }
+}
+
+fn new_table_statistics() -> common_meta_app::schema::TableStatistics {
+    common_meta_app::schema::TableStatistics {
+        number_of_rows: 100,
+        data_bytes: 200,
+        compressed_data_bytes: 15,
+        index_data_bytes: 20,
+        number_of_segments: Some(1),
+        number_of_blocks: Some(2),
     }
 }
 
@@ -435,6 +448,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("data mask:{:?}", buf);
+    }
+
+    // table statistics
+    {
+        let table_statistics = new_table_statistics();
+        let p = table_statistics.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("table statistics:{:?}", buf);
     }
 
     Ok(())

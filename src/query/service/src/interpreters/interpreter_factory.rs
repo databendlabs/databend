@@ -175,6 +175,9 @@ impl InterpreterFactory {
             Plan::AddTableColumn(add_table_column) => Ok(Arc::new(
                 AddTableColumnInterpreter::try_create(ctx, *add_table_column.clone())?,
             )),
+            Plan::ModifyTableColumn(modify_table_column) => Ok(Arc::new(
+                ModifyTableColumnInterpreter::try_create(ctx, *modify_table_column.clone())?,
+            )),
             Plan::DropTableColumn(drop_table_column) => Ok(Arc::new(
                 DropTableColumnInterpreter::try_create(ctx, *drop_table_column.clone())?,
             )),
@@ -242,6 +245,22 @@ impl InterpreterFactory {
                 *index.clone(),
             )?)),
 
+            // Virtual columns
+            Plan::CreateVirtualColumns(create_virtual_columns) => Ok(Arc::new(
+                CreateVirtualColumnsInterpreter::try_create(ctx, *create_virtual_columns.clone())?,
+            )),
+            Plan::AlterVirtualColumns(alter_virtual_columns) => Ok(Arc::new(
+                AlterVirtualColumnsInterpreter::try_create(ctx, *alter_virtual_columns.clone())?,
+            )),
+            Plan::DropVirtualColumns(drop_virtual_columns) => Ok(Arc::new(
+                DropVirtualColumnsInterpreter::try_create(ctx, *drop_virtual_columns.clone())?,
+            )),
+            Plan::GenerateVirtualColumns(generate_virtual_columns) => {
+                Ok(Arc::new(GenerateVirtualColumnsInterpreter::try_create(
+                    ctx,
+                    *generate_virtual_columns.clone(),
+                )?))
+            }
             // Users
             Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
                 ctx,

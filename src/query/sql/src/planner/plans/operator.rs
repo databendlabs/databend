@@ -46,11 +46,11 @@ pub trait Operator {
         false
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty>;
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>>;
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty>;
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo>;
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>>;
 
     fn compute_required_prop_child(
         &self,
@@ -122,7 +122,7 @@ impl Operator for RelOperator {
         }
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         match self {
             RelOperator::Scan(rel_op) => rel_op.derive_relational_prop(rel_expr),
             RelOperator::Join(rel_op) => rel_op.derive_relational_prop(rel_expr),
@@ -160,7 +160,7 @@ impl Operator for RelOperator {
         }
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         match self {
             RelOperator::Scan(rel_op) => rel_op.derive_cardinality(rel_expr),
             RelOperator::Join(rel_op) => rel_op.derive_cardinality(rel_expr),

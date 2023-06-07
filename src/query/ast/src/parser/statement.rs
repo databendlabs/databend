@@ -781,6 +781,60 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let create_virtual_columns = map(
+        rule! {
+            CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+            Statement::CreateVirtualColumns(CreateVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+                virtual_columns,
+            })
+        },
+    );
+
+    let alter_virtual_columns = map(
+        rule! {
+            ALTER ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+            Statement::AlterVirtualColumns(AlterVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+                virtual_columns,
+            })
+        },
+    );
+
+    let drop_virtual_columns = map(
+        rule! {
+            DROP ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, table))| {
+            Statement::DropVirtualColumns(DropVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
+    let generate_virtual_columns = map(
+        rule! {
+            GENERATE ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, table))| {
+            Statement::GenerateVirtualColumns(GenerateVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
@@ -1027,12 +1081,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let copy_into = map(
         rule! {
             COPY
+            ~ #hint?
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
             ~ ( #copy_option )*
         },
-        |(_, _, dst, _, src, opts)| {
+        |(_, opt_hints, _, dst, _, src, opts)| {
             let mut copy_stmt = CopyStmt {
+                hints: opt_hints,
                 src,
                 dst,
                 files: Default::default(),
@@ -1331,6 +1387,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
+        ),
+        rule!(
+            #create_virtual_columns: "`CREATE VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
+            | #alter_virtual_columns: "`ALTER VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
+            | #drop_virtual_columns: "`DROP VIRTUAL COLUMNS FOR [<database>.]<table>`"
+            | #generate_virtual_columns: "`GENERATE VIRTUAL COLUMNS FOR [<database>.]<table>`"
         ),
         rule!(
             #show_users : "`SHOW USERS`"
@@ -1800,6 +1862,15 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, column)| AlterTableAction::AddColumn { column },
     );
+    let modify_column = map(
+        rule! {
+            MODIFY ~ COLUMN ~ #ident ~ SET ~ MASKING ~ POLICY ~ #ident
+        },
+        |(_, _, column, _, _, _, mask_name)| AlterTableAction::ModifyColumn {
+            column,
+            action: ModifyColumnAction::SetMaskingPolicy(mask_name.to_string()),
+        },
+    );
     let drop_column = map(
         rule! {
             DROP ~ COLUMN ~ #ident
@@ -1841,6 +1912,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         #rename_table
         | #add_column
         | #drop_column
+        | #modify_column
         | #alter_table_cluster_key
         | #drop_table_cluster_key
         | #recluster_table

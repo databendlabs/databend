@@ -203,4 +203,36 @@ impl PushDownInfo {
             Projection::Columns(indices)
         }
     }
+
+    pub fn virtual_columns_of_push_downs(
+        push_downs: &Option<PushDownInfo>,
+    ) -> Option<Vec<VirtualColumnInfo>> {
+        if let Some(PushDownInfo {
+            virtual_columns,
+            prewhere,
+            ..
+        }) = push_downs
+        {
+            if let Some(PrewhereInfo {
+                virtual_columns: prewhere_virtual_columns,
+                ..
+            }) = prewhere
+            {
+                match (virtual_columns, prewhere_virtual_columns) {
+                    (Some(virtual_columns), Some(prewhere_virtual_columns)) => {
+                        let mut virtual_columns = virtual_columns.clone();
+                        let mut prewhere_virtual_columns = prewhere_virtual_columns.clone();
+                        virtual_columns.append(&mut prewhere_virtual_columns);
+                        Some(virtual_columns)
+                    }
+                    (None, Some(_)) => prewhere_virtual_columns.clone(),
+                    (_, _) => virtual_columns.clone(),
+                }
+            } else {
+                virtual_columns.clone()
+            }
+        } else {
+            None
+        }
+    }
 }

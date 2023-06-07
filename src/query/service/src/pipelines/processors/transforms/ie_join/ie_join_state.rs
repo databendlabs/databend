@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::min;
-use std::cmp::Ordering;
 use std::sync::atomic;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -37,6 +35,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::FunctionContext;
+use common_expression::RemoteExpr;
 use common_expression::ScalarRef;
 use common_expression::SortColumnDescription;
 use common_expression::Value;
@@ -47,6 +46,9 @@ use common_sql::executor::IEJoin;
 use common_sql::executor::IEJoinCondition;
 use parking_lot::RwLock;
 
+use crate::pipelines::processors::transforms::ie_join::ie_join_util::filter_block;
+use crate::pipelines::processors::transforms::ie_join::ie_join_util::order_match;
+use crate::pipelines::processors::transforms::ie_join::ie_join_util::probe_l1;
 use crate::sessions::QueryContext;
 
 struct IEConditionState {
@@ -74,13 +76,12 @@ pub struct IEJoinState {
     // Currently only support inner join
     // join_type: JoinType,
     conditions: Vec<IEJoinCondition>,
-    // Todo: support other_conditions
-    // other_conditions: Vec<RemoteExpr>,
+    other_conditions: Vec<RemoteExpr>,
     // Pipeline event related
     partition_finished: RwLock<bool>,
     finished_notify: Arc<Notify>,
-    left_sinker_count: AtomicU64,
-    right_sinker_count: AtomicU64,
+    left_sinker_count: RwLock<usize>,
+    right_sinker_count: RwLock<usize>,
     // Task that need to be executed, pair.0 is left table block, pair.1 is right table block
     tasks: RwLock<Vec<(usize, usize)>>,
     // Row index offset for left/right
@@ -169,10 +170,11 @@ impl IEJoinState {
             left_table: RwLock::new(Vec::new()),
             right_table: RwLock::new(Vec::new()),
             conditions: ie_join.conditions.clone(),
+            other_conditions: ie_join.other_conditions.clone(),
             partition_finished: RwLock::new(false),
             finished_notify: Arc::new(Default::default()),
-            left_sinker_count: AtomicU64::new(0),
-            right_sinker_count: AtomicU64::new(0),
+            left_sinker_count: Default::default(),
+            right_sinker_count: Default::default(),
             tasks: RwLock::new(vec![]),
             row_offset: Default::default(),
             finished_tasks: AtomicU64::new(0),
@@ -317,10 +319,10 @@ impl IEJoinState {
             for idx in count..(count + block.num_rows()) {
                 column_builder.push(NumberScalar::UInt64(idx as u64));
             }
-            block.add_column(BlockEntry {
-                data_type: DataType::Number(NumberDataType::UInt64),
-                value: Value::Column(Column::Number(column_builder.build())),
-            });
+            block.add_column(BlockEntry::new(
+                DataType::Number(NumberDataType::UInt64),
+                Value::Column(Column::Number(column_builder.build())),
+            ));
             count += block.num_rows();
         }
         // Merge `l1_sorted_blocks` to one block
@@ -471,6 +473,9 @@ impl IEJoinState {
         for col in right_result_block.columns() {
             left_result_block.add_column(col.clone());
         }
+        for filter in self.other_conditions.iter() {
+            left_result_block = filter_block(left_result_block, filter)?;
+        }
         Ok(left_result_block)
     }
 
@@ -520,33 +525,29 @@ impl IEJoinState {
 
 impl IEJoinState {
     pub fn left_attach(&self) {
-        self.left_sinker_count
-            .fetch_add(1, atomic::Ordering::SeqCst);
+        let mut left_sinker_count = self.left_sinker_count.write();
+        *left_sinker_count += 1;
     }
 
     pub fn left_detach(&self) -> Result<()> {
-        self.left_sinker_count
-            .fetch_sub(1, atomic::Ordering::SeqCst);
-        if self.left_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
-            loop {
-                if self.right_sinker_count.load(atomic::Ordering::Relaxed) == 0 {
-                    // Left and right both finish sink
-                    // Partition left/right table
-                    self.partition()?;
-                    // Set partition finished
-                    let mut partition_finished = self.partition_finished.write();
-                    *partition_finished = true;
-                    self.finished_notify.notify_waiters();
-                    break;
-                }
-            }
+        let right_sinker_count = self.right_sinker_count.read();
+        let mut left_sinker_count = self.left_sinker_count.write();
+        *left_sinker_count -= 1;
+        if *left_sinker_count == 0 && *right_sinker_count == 0 {
+            // Left and right both finish sink
+            // Partition left/right table
+            self.partition()?;
+            // Set partition finished
+            let mut partition_finished = self.partition_finished.write();
+            *partition_finished = true;
+            self.finished_notify.notify_waiters();
         }
         Ok(())
     }
 
     pub fn right_attach(&self) {
-        self.right_sinker_count
-            .fetch_add(1, atomic::Ordering::SeqCst);
+        let mut right_sinker_count = self.right_sinker_count.write();
+        *right_sinker_count += 1;
     }
 
     pub fn task_id(&self) -> Option<usize> {
@@ -557,9 +558,20 @@ impl IEJoinState {
         Some(task_id as usize)
     }
 
-    pub fn right_detach(&self) {
-        self.right_sinker_count
-            .fetch_sub(1, atomic::Ordering::SeqCst);
+    pub fn right_detach(&self) -> Result<()> {
+        let mut right_sinker_count = self.right_sinker_count.write();
+        *right_sinker_count -= 1;
+        let left_sinker_count = self.left_sinker_count.read();
+        if *right_sinker_count == 0 && *left_sinker_count == 0 {
+            // Left and right both finish sink
+            // Partition left/right table
+            self.partition()?;
+            // Set partition finished
+            let mut partition_finished = self.partition_finished.write();
+            *partition_finished = true;
+            self.finished_notify.notify_waiters();
+        }
+        Ok(())
     }
 
     pub(crate) async fn wait_merge_finish(&self) -> Result<()> {
@@ -568,67 +580,4 @@ impl IEJoinState {
         }
         Ok(())
     }
-}
-
-fn order_match(op: &str, order: Ordering) -> bool {
-    match op {
-        "gt" => order == Ordering::Greater,
-        "gte" => order == Ordering::Equal || order == Ordering::Greater,
-        "lt" => order == Ordering::Less,
-        "lte" => order == Ordering::Less || order == Ordering::Equal,
-        _ => unreachable!(),
-    }
-}
-
-// Exponential search
-fn probe_l1(l1: &Column, pos: usize, op1: &str) -> usize {
-    let mut step = 1;
-    let n = l1.len();
-    let mut hi = pos;
-    let mut lo = pos;
-    let mut off1;
-    if matches!(op1, "gte" | "lte") {
-        lo -= min(step, lo);
-        step *= 2;
-        off1 = lo;
-        while lo > 0
-            && order_match(
-                op1,
-                unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
-            )
-        {
-            hi = lo;
-            lo -= min(step, lo);
-            step *= 2;
-            off1 = lo;
-        }
-    } else {
-        hi += min(step, n - hi);
-        step *= 2;
-        off1 = hi;
-        while hi < n
-            && !order_match(
-                op1,
-                unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
-            )
-        {
-            lo = hi;
-            hi += min(step, n - hi);
-            step *= 2;
-            off1 = hi;
-        }
-    }
-    while lo < hi {
-        let mid = lo + (hi - lo) / 2;
-        off1 = mid;
-        if order_match(
-            op1,
-            unsafe { l1.index_unchecked(pos) }.cmp(&unsafe { l1.index_unchecked(off1) }),
-        ) {
-            hi = mid;
-        } else {
-            lo = mid + 1;
-        }
-    }
-    lo
 }

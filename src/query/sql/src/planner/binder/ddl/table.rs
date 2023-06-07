@@ -101,6 +101,7 @@ use crate::plans::DropTableColumnPlan;
 use crate::plans::DropTablePlan;
 use crate::plans::DropVectorIndexPlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::ModifyTableColumnPlan;
 use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
@@ -632,6 +633,15 @@ impl Binder {
                     schema,
                     field_default_exprs,
                     field_comments,
+                })))
+            }
+            AlterTableAction::ModifyColumn { column, action } => {
+                Ok(Plan::ModifyTableColumn(Box::new(ModifyTableColumnPlan {
+                    catalog,
+                    database,
+                    table,
+                    column: column.to_string(),
+                    action: action.clone(),
                 })))
             }
             AlterTableAction::DropColumn { column } => {

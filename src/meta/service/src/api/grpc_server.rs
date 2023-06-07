@@ -125,7 +125,9 @@ impl GrpcServer {
             .instrument(tracing::debug_span!("spawn-grpc")),
         );
 
-        started_rx.await.unwrap();
+        started_rx
+            .await
+            .expect("maybe address already in use, try to use another port");
 
         self.join_handle = Some(j);
         self.stop_tx = Some(stop_tx);

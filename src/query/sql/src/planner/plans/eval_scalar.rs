@@ -70,17 +70,17 @@ impl Operator for EvalScalar {
         Ok(required.clone())
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let input_prop = rel_expr.derive_relational_prop_child(0)?;
 
         // Derive output columns
-        let mut output_columns = input_prop.output_columns;
+        let mut output_columns = input_prop.output_columns.clone();
         for item in self.items.iter() {
             output_columns.insert(item.index);
         }
 
         // Derive outer columns
-        let mut outer_columns = input_prop.outer_columns;
+        let mut outer_columns = input_prop.outer_columns.clone();
         for item in self.items.iter() {
             let used_columns = item.scalar.used_columns();
             let outer = used_columns
@@ -93,16 +93,16 @@ impl Operator for EvalScalar {
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(input_prop.used_columns);
+        used_columns.extend(input_prop.used_columns.clone());
 
-        Ok(RelationalProperty {
+        Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-        })
+        }))
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         rel_expr.derive_cardinality_child(0)
     }
 }

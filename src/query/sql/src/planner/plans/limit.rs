@@ -54,28 +54,22 @@ impl Operator for Limit {
         Ok(required)
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
-        let input_prop = rel_expr.derive_relational_prop_child(0)?;
-
-        Ok(RelationalProperty {
-            output_columns: input_prop.output_columns,
-            outer_columns: input_prop.outer_columns,
-            used_columns: input_prop.used_columns,
-        })
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
+        rel_expr.derive_relational_prop_child(0)
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let stat_info = rel_expr.derive_cardinality_child(0)?;
         let cardinality = match self.limit {
             Some(limit) if (limit as f64) < stat_info.cardinality => limit as f64,
             _ => stat_info.cardinality,
         };
-        Ok(StatInfo {
+        Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats: Default::default(),
             },
-        })
+        }))
     }
 }

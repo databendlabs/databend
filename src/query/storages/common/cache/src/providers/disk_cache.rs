@@ -195,7 +195,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         }
 
         // check eviction
-        if self.cache.size() + bytes_len > self.cache.capacity() {
+        while self.cache.size() + bytes_len > self.cache.capacity() {
             if let Some((rel_path, _)) = self.cache.pop_by_policy() {
                 let cached_item_path = self.abs_path_of_cache_key(&DiskCacheKey(rel_path));
                 fs::remove_file(&cached_item_path).unwrap_or_else(|e| {
@@ -206,6 +206,7 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
                 });
             }
         }
+        debug_assert!(self.cache.size() <= self.cache.capacity());
 
         let cache_key = self.cache_key(key.as_ref());
         let path = self.abs_path_of_cache_key(&cache_key);

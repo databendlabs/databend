@@ -85,7 +85,7 @@ pub fn walk_expr_mut<V: VisitorMut>(visitor: &mut V, expr: &mut Expr) {
             trim_where,
         } => visitor.visit_trim(*span, expr, trim_where),
         Expr::Literal { span, lit } => visitor.visit_literal(*span, lit),
-        Expr::CountAll { span } => visitor.visit_count_all(*span),
+        Expr::CountAll { span, window } => visitor.visit_count_all(*span, window),
         Expr::Tuple { span, exprs } => visitor.visit_tuple(*span, exprs),
         Expr::FunctionCall {
             span,
@@ -360,6 +360,10 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::DropVectorIndex(stmt) => visitor.visit_drop_vector_index(stmt),
         Statement::SetVectorIndexPara { .. } => {}
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
+        Statement::CreateVirtualColumns(stmt) => visitor.visit_create_virtual_columns(stmt),
+        Statement::AlterVirtualColumns(stmt) => visitor.visit_alter_virtual_columns(stmt),
+        Statement::DropVirtualColumns(stmt) => visitor.visit_drop_virtual_columns(stmt),
+        Statement::GenerateVirtualColumns(stmt) => visitor.visit_generate_virtual_columns(stmt),
         Statement::ShowUsers => visitor.visit_show_users(),
         Statement::ShowRoles => visitor.visit_show_roles(),
         Statement::CreateUser(stmt) => visitor.visit_create_user(stmt),

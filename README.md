@@ -61,7 +61,7 @@ Databend uses the latest techniques in vectorized query processing to allow you 
 
 - __Support for Semi-Structured Data__
 
-  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, TUPLE, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types), which is easy to import and operate on semi-structured.
+  Databend supports [ingestion of semi-structured data](https://databend.rs/doc/load-data/load) in various formats like CSV, JSON, and Parquet, which are located in the cloud or your local file system; Databend also supports semi-structured data types: [ARRAY, TUPLE, MAP, JSON](https://databend.rs/doc/sql-reference/data-types/), which is easy to import and operate on semi-structured.
 
 
 - __MySQL/ClickHouse Compatible__
@@ -124,13 +124,13 @@ docker run --net=host  datafuselabs/databend
 <details>
 <summary>Loading Data into Databend</summary>
 
-- [How to Load Data from Local File System](https://databend.rs/doc/load-data/local)
-- [How to Load Data from Remote Files](https://databend.rs/doc/load-data/http)
-- [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/s3)
-- [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/stage)
-- [Querying Data in Staged Files](https://databend.rs/doc/load-data/querying-stage)
-- [Transforming Data During a Load](http://databend.rs/doc/load-data/data-load-transform)
-- [How to Unload Data from Databend](https://databend.rs/doc/unload-data/)
+- [How to Load Data from Local File System](https://databend.rs/doc/load-data/load/local)
+- [How to Load Data from Remote Files](https://databend.rs/doc/load-data/load/http)
+- [How to Load Data from Amazon S3](https://databend.rs/doc/load-data/load/s3)
+- [How to Load Data from Databend Stages](https://databend.rs/doc/load-data/load/stage)
+- [Querying Data in Staged Files](https://databend.rs/doc/load-data/transform/querying-stage)
+- [Transforming Data During a Load](https://databend.rs/doc/load-data/transform/data-load-transform)
+- [How to Unload Data from Databend](https://databend.rs/doc/load-data/unload)
 </details>
 
 <details>

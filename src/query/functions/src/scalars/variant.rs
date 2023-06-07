@@ -83,6 +83,30 @@ use jsonb::to_u64;
 pub fn register(registry: &mut FunctionRegistry) {
     registry.register_aliases("json_object_keys", &["object_keys"]);
 
+    registry.register_passthrough_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "parse_json",
+        |_| FunctionDomain::MayThrow,
+        vectorize_with_builder_1_arg::<VariantType, VariantType>(|s, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.commit_row();
+                    return;
+                }
+            }
+            // Variant value may be an invalid JSON, convert them to string and then parse.
+            let val = to_string(s);
+            match parse_value(val.as_bytes()) {
+                Ok(value) => {
+                    value.write_to_vec(&mut output.data);
+                }
+                Err(err) => {
+                    ctx.set_error(output.len(), err.to_string());
+                }
+            }
+            output.commit_row();
+        }),
+    );
+
     registry.register_passthrough_nullable_1_arg::<StringType, VariantType, _, _>(
         "parse_json",
         |_| FunctionDomain::MayThrow,
@@ -105,6 +129,29 @@ pub fn register(registry: &mut FunctionRegistry) {
         }),
     );
 
+    registry.register_combine_nullable_1_arg::<VariantType, VariantType, _, _>(
+        "try_parse_json",
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<VariantType>>(|s, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push_null();
+                    return;
+                }
+            }
+            // Variant value may be an invalid JSON, convert them to string and then parse.
+            let val = to_string(s);
+            match parse_value(val.as_bytes()) {
+                Ok(value) => {
+                    output.validity.push(true);
+                    value.write_to_vec(&mut output.builder.data);
+                    output.builder.commit_row();
+                }
+                Err(_) => output.push_null(),
+            }
+        }),
+    );
+
     registry.register_combine_nullable_1_arg::<StringType, VariantType, _, _>(
         "try_parse_json",
         |_| FunctionDomain::Full,
@@ -122,6 +169,25 @@ pub fn register(registry: &mut FunctionRegistry) {
                     output.builder.commit_row();
                 }
                 Err(_) => output.push_null(),
+            }
+        }),
+    );
+
+    registry.register_combine_nullable_1_arg::<VariantType, StringType, _, _>(
+        "check_json",
+        |_| FunctionDomain::Full,
+        vectorize_with_builder_1_arg::<VariantType, NullableType<StringType>>(|s, output, ctx| {
+            if let Some(validity) = &ctx.validity {
+                if !validity.get_bit(output.len()) {
+                    output.push_null();
+                    return;
+                }
+            }
+            // Variant value may be an invalid JSON, convert them to string and then check.
+            let val = to_string(s);
+            match parse_value(val.as_bytes()) {
+                Ok(_) => output.push_null(),
+                Err(e) => output.push(e.to_string().as_bytes()),
             }
         }),
     );

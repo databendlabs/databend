@@ -33,7 +33,7 @@ use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 
-use crate::operations::FuseTableSink;
+use crate::operations::common::AppendTransform;
 use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
@@ -43,10 +43,8 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         append_mode: AppendMode,
-        need_output: bool,
     ) -> Result<()> {
         let block_thresholds = self.get_block_thresholds();
-        let write_settings = self.get_write_settings();
 
         match append_mode {
             AppendMode::Normal => {
@@ -74,35 +72,17 @@ impl FuseTable {
 
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
-        if need_output {
-            pipeline.add_transform(|transform_input_port, transform_output_port| {
-                FuseTableSink::try_create(
-                    transform_input_port,
-                    ctx.clone(),
-                    write_settings.clone(),
-                    self.operator.clone(),
-                    self.meta_location_generator().clone(),
-                    cluster_stats_gen.clone(),
-                    block_thresholds,
-                    self.table_info.schema(),
-                    Some(transform_output_port),
-                )
-            })?;
-        } else {
-            pipeline.add_sink(|input| {
-                FuseTableSink::try_create(
-                    input,
-                    ctx.clone(),
-                    write_settings.clone(),
-                    self.operator.clone(),
-                    self.meta_location_generator().clone(),
-                    cluster_stats_gen.clone(),
-                    block_thresholds,
-                    self.table_info.schema(),
-                    None,
-                )
-            })?;
-        }
+        pipeline.add_transform(|input, output| {
+            let proc = AppendTransform::new(
+                ctx.clone(),
+                input,
+                output,
+                self,
+                cluster_stats_gen.clone(),
+                block_thresholds,
+            );
+            proc.into_processor()
+        })?;
         Ok(())
     }
 
