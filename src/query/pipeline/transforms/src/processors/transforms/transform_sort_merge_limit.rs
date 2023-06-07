@@ -39,8 +39,8 @@ use super::sort::RowConverter;
 use super::sort::Rows;
 use super::sort::SimpleRowConverter;
 use super::sort::SimpleRows;
-use super::AsyncAccumulatingTransform;
-use super::AsyncAccumulatingTransformer;
+use super::AccumulatingTransform;
+use super::AccumulatingTransformer;
 
 pub struct TransformSortMergeLimit<R: Rows, Converter> {
     row_converter: Converter,
@@ -49,6 +49,8 @@ pub struct TransformSortMergeLimit<R: Rows, Converter> {
 
     buffer: HashMap<usize, DataBlock>,
     cur_index: usize,
+
+    block_size: usize,
 }
 
 impl<R, Converter> TransformSortMergeLimit<R, Converter>
@@ -59,6 +61,7 @@ where
     pub fn try_create(
         schema: DataSchemaRef,
         sort_desc: Vec<SortColumnDescription>,
+        block_size: usize,
         limit: usize,
     ) -> Result<Self> {
         let order_by_cols = sort_desc.iter().map(|i| i.offset).collect::<Vec<_>>();
@@ -68,22 +71,22 @@ where
             order_by_cols,
             heap: FixedHeap::new(limit),
             buffer: HashMap::with_capacity(limit),
+            block_size,
             cur_index: 0,
         })
     }
 }
 
-#[async_trait::async_trait]
-impl<R, Converter> AsyncAccumulatingTransform for TransformSortMergeLimit<R, Converter>
+impl<R, Converter> AccumulatingTransform for TransformSortMergeLimit<R, Converter>
 where
     R: Rows + Send + Sync,
     Converter: RowConverter<R> + Send + Sync,
 {
     const NAME: &'static str = "TransformSortMergeLimit";
 
-    async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
+    fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
         if self.heap.cap() == 0 {
-            return Ok(None);
+            return Ok(vec![]);
         }
 
         let order_by_cols = self
@@ -115,12 +118,12 @@ where
         }
 
         self.cur_index += 1;
-        Ok(None)
+        Ok(vec![])
     }
 
-    async fn on_finish(&mut self, _output: bool) -> Result<Option<DataBlock>> {
+    fn on_finish(&mut self, _output: bool) -> Result<Vec<DataBlock>> {
         if self.heap.is_empty() {
-            return Ok(None);
+            return Ok(vec![]);
         }
 
         let output_size = self.heap.len();
@@ -136,51 +139,60 @@ where
             output_indices.push((block_index, cursor.row_index));
         }
 
-        let (block_idx, row_idx) = output_indices[0];
-        let mut merge_slices = Vec::with_capacity(output_indices.len());
-        merge_slices.push((block_idx, row_idx, 1));
-        for (block_idx, row_idx) in output_indices.iter().skip(1) {
-            if *block_idx == merge_slices.last().unwrap().0 {
-                // If the block index is the same as the last one, we can merge them.
-                merge_slices.last_mut().unwrap().2 += 1;
-            } else {
-                merge_slices.push((*block_idx, *row_idx, 1));
+        let output_block_num = output_size.div_ceil(self.block_size);
+        let mut output_blocks = Vec::with_capacity(output_block_num);
+
+        for i in 0..output_block_num {
+            let start = i * self.block_size;
+            let end = (start + self.block_size).min(output_indices.len());
+            // Convert indices to merge slice.
+            let mut merge_slices = Vec::with_capacity(output_indices.len());
+            let (block_idx, row_idx) = output_indices[start];
+            merge_slices.push((block_idx, row_idx, 1));
+            for (block_idx, row_idx) in output_indices.iter().take(end).skip(start + 1) {
+                if *block_idx == merge_slices.last().unwrap().0 {
+                    // If the block index is the same as the last one, we can merge them.
+                    merge_slices.last_mut().unwrap().2 += 1;
+                } else {
+                    merge_slices.push((*block_idx, *row_idx, 1));
+                }
             }
+            let block = DataBlock::take_by_slices_limit_from_blocks(&blocks, &merge_slices, None);
+            output_blocks.push(block);
         }
 
-        let block = DataBlock::take_by_slices_limit_from_blocks(&blocks, &merge_slices, None);
-
-        Ok(Some(block))
+        Ok(output_blocks)
     }
 }
 
 type SimpleDateTransform =
     TransformSortMergeLimit<SimpleRows<DateType>, SimpleRowConverter<DateType>>;
-type SimpleDateSort = AsyncAccumulatingTransformer<SimpleDateTransform>;
+type SimpleDateSort = AccumulatingTransformer<SimpleDateTransform>;
 
 type SimpleTimestampTransform =
     TransformSortMergeLimit<SimpleRows<TimestampType>, SimpleRowConverter<TimestampType>>;
-type SimpleTimestampSort = AsyncAccumulatingTransformer<SimpleTimestampTransform>;
+type SimpleTimestampSort = AccumulatingTransformer<SimpleTimestampTransform>;
 
 type SimpleStringTransform =
     TransformSortMergeLimit<SimpleRows<StringType>, SimpleRowConverter<StringType>>;
-type SimpleStringSort = AsyncAccumulatingTransformer<SimpleStringTransform>;
+type SimpleStringSort = AccumulatingTransformer<SimpleStringTransform>;
 
 type CommonTransform = TransformSortMergeLimit<ArrowRows, ArrowRowConverter>;
-type CommonSort = AsyncAccumulatingTransformer<CommonTransform>;
+type CommonSort = AccumulatingTransformer<CommonTransform>;
 
 pub fn try_create_transform_sort_merge_limit(
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     input_schema: DataSchemaRef,
     sort_desc: Vec<SortColumnDescription>,
+    block_size: usize,
     limit: usize,
 ) -> Result<Box<dyn Processor>> {
     Ok(if sort_desc.len() == 1 {
         let sort_type = input_schema.field(sort_desc[0].offset).data_type();
         match sort_type {
             DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
-                NumberDataType::NUM_TYPE => AsyncAccumulatingTransformer::<
+                NumberDataType::NUM_TYPE => AccumulatingTransformer::<
                     TransformSortMergeLimit<
                         SimpleRows<NumberType<NUM_TYPE>>,
                         SimpleRowConverter<NumberType<NUM_TYPE>>,
@@ -191,35 +203,35 @@ pub fn try_create_transform_sort_merge_limit(
                     TransformSortMergeLimit::<
                         SimpleRows<NumberType<NUM_TYPE>>,
                         SimpleRowConverter<NumberType<NUM_TYPE>>,
-                    >::try_create(input_schema, sort_desc, limit)?
+                    >::try_create(input_schema, sort_desc, block_size, limit)?
                 ),
             }),
             DataType::Date => SimpleDateSort::create(
                 input,
                 output,
-                SimpleDateTransform::try_create(input_schema, sort_desc, limit)?,
+                SimpleDateTransform::try_create(input_schema, sort_desc, block_size, limit)?,
             ),
             DataType::Timestamp => SimpleTimestampSort::create(
                 input,
                 output,
-                SimpleTimestampTransform::try_create(input_schema, sort_desc, limit)?,
+                SimpleTimestampTransform::try_create(input_schema, sort_desc, block_size, limit)?,
             ),
             DataType::String => SimpleStringSort::create(
                 input,
                 output,
-                SimpleStringTransform::try_create(input_schema, sort_desc, limit)?,
+                SimpleStringTransform::try_create(input_schema, sort_desc, block_size, limit)?,
             ),
             _ => CommonSort::create(
                 input,
                 output,
-                CommonTransform::try_create(input_schema, sort_desc, limit)?,
+                CommonTransform::try_create(input_schema, sort_desc, block_size, limit)?,
             ),
         }
     } else {
         CommonSort::create(
             input,
             output,
-            CommonTransform::try_create(input_schema, sort_desc, limit)?,
+            CommonTransform::try_create(input_schema, sort_desc, block_size, limit)?,
         )
     })
 }

@@ -55,11 +55,12 @@ pub fn build_full_sort_pipeline(
     // Merge sort
     pipeline.add_transform(|input, output| {
         let transform = match limit {
-            Some(limit) if limit <= block_size => try_create_transform_sort_merge_limit(
+            Some(limit) => try_create_transform_sort_merge_limit(
                 input,
                 output,
                 input_schema.clone(),
                 sort_desc.clone(),
+                block_size,
                 limit,
             )?,
             _ => try_create_transform_sort_merge(
@@ -67,7 +68,6 @@ pub fn build_full_sort_pipeline(
                 output,
                 input_schema.clone(),
                 block_size,
-                limit,
                 sort_desc.clone(),
             )?,
         };
