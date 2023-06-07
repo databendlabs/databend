@@ -791,6 +791,7 @@ dependencies = [
 name = "background-service"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
  "async-backtrace",
  "async-trait",
  "chrono",
@@ -798,6 +799,7 @@ dependencies = [
  "common-catalog",
  "common-config",
  "common-exception",
+ "common-meta-app",
  "common-storages-fuse",
  "databend-query",
 ]
