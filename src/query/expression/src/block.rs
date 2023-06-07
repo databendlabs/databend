@@ -52,6 +52,25 @@ pub struct BlockEntry {
     pub value: Value<AnyType>,
 }
 
+impl BlockEntry {
+    pub fn new(data_type: DataType, value: Value<AnyType>) -> Self {
+        #[cfg(debug_assertions)]
+        {
+            match &value {
+                Value::Scalar(Scalar::Null) => {
+                    assert!(data_type.is_nullable_or_null());
+                }
+                Value::Scalar(s) => {
+                    assert_eq!(s.as_ref().infer_data_type(), data_type.remove_nullable())
+                }
+                Value::Column(c) => assert_eq!(c.data_type(), data_type),
+            }
+        }
+
+        Self { data_type, value }
+    }
+}
+
 #[typetag::serde(tag = "type")]
 pub trait BlockMetaInfo: Debug + Send + Sync + 'static {
     fn as_any(&self) -> &dyn Any;
@@ -126,10 +145,7 @@ impl DataBlock {
 
         let columns = columns
             .into_iter()
-            .map(|col| BlockEntry {
-                data_type: col.data_type(),
-                value: Value::Column(col),
-            })
+            .map(|col| BlockEntry::new(col.data_type(), Value::Column(col)))
             .collect();
 
         DataBlock::new(columns, num_rows)
@@ -148,10 +164,7 @@ impl DataBlock {
             .map(|f| {
                 let builder = ColumnBuilder::with_capacity(f.data_type(), 0);
                 let col = builder.build();
-                BlockEntry {
-                    data_type: f.data_type().clone(),
-                    value: Value::Column(col),
-                }
+                BlockEntry::new(f.data_type().clone(), Value::Column(col))
             })
             .collect();
         DataBlock::new(columns, 0)
@@ -214,15 +227,11 @@ impl DataBlock {
                     let builder =
                         ColumnBuilder::repeat(&s.as_ref(), self.num_rows, &entry.data_type);
                     let col = builder.build();
-                    BlockEntry {
-                        data_type: entry.data_type.clone(),
-                        value: Value::Column(col),
-                    }
+                    BlockEntry::new(entry.data_type.clone(), Value::Column(col))
                 }
-                Value::Column(c) => BlockEntry {
-                    data_type: entry.data_type.clone(),
-                    value: Value::Column(c.clone()),
-                },
+                Value::Column(c) => {
+                    BlockEntry::new(entry.data_type.clone(), Value::Column(c.clone()))
+                }
             })
             .collect();
         Self {
@@ -237,14 +246,13 @@ impl DataBlock {
             .columns()
             .iter()
             .map(|entry| match &entry.value {
-                Value::Scalar(s) => BlockEntry {
-                    data_type: entry.data_type.clone(),
-                    value: Value::Scalar(s.clone()),
-                },
-                Value::Column(c) => BlockEntry {
-                    data_type: entry.data_type.clone(),
-                    value: Value::Column(c.slice(range.clone())),
-                },
+                Value::Scalar(s) => {
+                    BlockEntry::new(entry.data_type.clone(), Value::Scalar(s.clone()))
+                }
+                Value::Column(c) => BlockEntry::new(
+                    entry.data_type.clone(),
+                    Value::Column(c.slice(range.clone())),
+                ),
             })
             .collect();
         Self {
@@ -377,10 +385,10 @@ impl DataBlock {
             .iter()
             .zip(arrow_chunk.arrays())
             .map(|(field, col)| {
-                Ok(BlockEntry {
-                    data_type: field.data_type().clone(),
-                    value: Value::Column(Column::from_arrow(col.as_ref(), field.data_type())),
-                })
+                Ok(BlockEntry::new(
+                    field.data_type().clone(),
+                    Value::Column(Column::from_arrow(col.as_ref(), field.data_type())),
+                ))
             })
             .collect::<Result<_>>()?;
 
@@ -395,10 +403,10 @@ impl DataBlock {
             .iter()
             .zip(arrow_chunk.arrays())
             .map(|(data_type, col)| {
-                Ok(BlockEntry {
-                    data_type: data_type.clone(),
-                    value: Value::Column(Column::from_arrow(col.as_ref(), data_type)),
-                })
+                Ok(BlockEntry::new(
+                    data_type.clone(),
+                    Value::Column(Column::from_arrow(col.as_ref(), data_type)),
+                ))
             })
             .collect::<Result<_>>()?;
 
@@ -425,17 +433,16 @@ impl DataBlock {
             let data_type = field.data_type();
 
             let column = match default_val {
-                Some(default_val) => BlockEntry {
-                    data_type: data_type.clone(),
-                    value: Value::Scalar(default_val.to_owned()),
-                },
+                Some(default_val) => {
+                    BlockEntry::new(data_type.clone(), Value::Scalar(default_val.to_owned()))
+                }
                 None => {
                     let chunk_column = &chunk_columns[chunk_idx];
                     chunk_idx += 1;
-                    BlockEntry {
-                        data_type: data_type.clone(),
-                        value: Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
-                    }
+                    BlockEntry::new(
+                        data_type.clone(),
+                        Value::Column(Column::from_arrow(chunk_column.as_ref(), data_type)),
+                    )
                 }
             };
 
@@ -483,10 +490,10 @@ impl DataBlock {
             let column = if !block_column_ids.contains(&column_id) {
                 let default_val = &default_vals[i];
                 let table_data_type = field.data_type();
-                BlockEntry {
-                    data_type: table_data_type.into(),
-                    value: Value::Scalar(default_val.to_owned()),
-                }
+                BlockEntry::new(
+                    table_data_type.into(),
+                    Value::Scalar(default_val.to_owned()),
+                )
             } else {
                 let chunk_column = &data_block_columns[data_block_columns_idx];
                 data_block_columns_idx += 1;

@@ -148,13 +148,7 @@ impl FuseTable {
         let dummy_field = DataField::new("dummy", DataType::Null);
         let _dummy_schema = Arc::new(DataSchema::new(vec![dummy_field]));
         let dummy_value = Value::Column(Column::Null { len: 1 });
-        let dummy_block = DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::Null,
-                value: dummy_value,
-            }],
-            1,
-        );
+        let dummy_block = DataBlock::new(vec![BlockEntry::new(DataType::Null, dummy_value)], 1);
 
         let filter = filter
             .as_expr(&BUILTIN_FUNCTIONS)

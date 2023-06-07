@@ -25,10 +25,7 @@ pub fn new_block(columns: &[Column]) -> DataBlock {
     let len = columns.get(0).map_or(1, |c| c.len());
     let columns = columns
         .iter()
-        .map(|col| BlockEntry {
-            data_type: col.data_type(),
-            value: Value::Column(col.clone()),
-        })
+        .map(|col| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
         .collect();
 
     DataBlock::new(columns, len)

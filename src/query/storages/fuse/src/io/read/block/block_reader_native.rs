@@ -230,19 +230,19 @@ impl BlockReader {
         for (index, _) in self.project_column_nodes.iter().enumerate() {
             if let Some(array) = chunks.iter().find(|c| c.0 == index).map(|c| c.1.clone()) {
                 let data_type: DataType = self.projected_schema.field(index).data_type().into();
-                entries.push(BlockEntry {
-                    data_type: data_type.clone(),
-                    value: Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
-                });
+                entries.push(BlockEntry::new(
+                    data_type.clone(),
+                    Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
+                ));
                 rows = array.len();
             } else if let Some(ref default_val_indices) = default_val_indices {
                 if default_val_indices.contains(&index) {
                     let data_type: DataType = self.projected_schema.field(index).data_type().into();
                     let default_val = &self.default_vals[index];
-                    entries.push(BlockEntry {
-                        data_type: data_type.clone(),
-                        value: Value::Scalar(default_val.to_owned()),
-                    });
+                    entries.push(BlockEntry::new(
+                        data_type.clone(),
+                        Value::Scalar(default_val.to_owned()),
+                    ));
                 }
             }
         }
