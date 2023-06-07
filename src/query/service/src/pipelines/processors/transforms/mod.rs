@@ -23,7 +23,6 @@ mod transform_limit;
 mod transform_mark_join;
 mod window;
 
-mod profile_wrapper;
 mod range_join;
 mod runtime_filter;
 mod transform_add_const_columns;
@@ -62,7 +61,6 @@ pub use hash_join::FixedKeyHashJoinHashTable;
 pub use hash_join::HashJoinDesc;
 pub use hash_join::HashJoinState;
 pub use hash_join::JoinHashTable;
-pub use profile_wrapper::ProfileWrapper;
 pub use range_join::RangeJoinState;
 pub use runtime_filter::RuntimeFilterState;
 pub use transform_add_const_columns::TransformAddConstColumns;

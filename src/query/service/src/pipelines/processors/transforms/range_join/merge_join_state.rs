@@ -83,6 +83,9 @@ impl RangeJoinState {
                 i += 1;
                 j = 0;
             }
+            if i == left_len {
+                break;
+            }
             let left_scalar = unsafe { left_join_key_col.index_unchecked(i) };
             let right_scalar = unsafe { right_join_key_col.index_unchecked(j) };
             if compare_scalar(
