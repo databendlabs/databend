@@ -99,7 +99,7 @@ impl<'a> Binder {
                 let required_values_schema: DataSchemaRef = Arc::new(
                     match columns {
                         Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => table.schema(),
+                        None => self.schema_project(&table.schema(), &[])?,
                     }
                     .into(),
                 );
@@ -177,7 +177,7 @@ impl<'a> Binder {
                 let required_values_schema: DataSchemaRef = Arc::new(
                     match columns {
                         Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => table.schema(),
+                        None => self.schema_project(&table.schema(), &[])?,
                     }
                     .into(),
                 );
