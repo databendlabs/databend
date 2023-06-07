@@ -23,6 +23,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::DataBlock;
+use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::OutputPort;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
@@ -41,9 +42,9 @@ use crate::metrics::metrics_inc_block_index_write_nums;
 use crate::metrics::metrics_inc_block_write_bytes;
 use crate::metrics::metrics_inc_block_write_milliseconds;
 use crate::metrics::metrics_inc_block_write_nums;
-use crate::operations::merge_into::mutation_meta::AppendOperationLogEntry;
-use crate::operations::merge_into::mutation_meta::MutationLogEntry;
-use crate::operations::merge_into::mutation_meta::MutationLogs;
+use crate::operations::common::AppendOperationLogEntry;
+use crate::operations::common::MutationLogEntry;
+use crate::operations::common::MutationLogs;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::processor::ProcessorPtr;
@@ -80,14 +81,14 @@ pub struct AppendTransform {
 }
 
 impl AppendTransform {
-    pub fn try_create(
+    pub fn new(
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
         thresholds: BlockThresholds,
-    ) -> Result<ProcessorPtr> {
+    ) -> Self {
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
@@ -95,7 +96,8 @@ impl AppendTransform {
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
         };
-        Ok(ProcessorPtr::create(Box::new(AppendTransform {
+
+        AppendTransform {
             input,
             output,
             output_data: None,
@@ -103,7 +105,22 @@ impl AppendTransform {
             block_builder,
             state: State::None,
             accumulator: StatisticsAccumulator::new(thresholds),
-        })))
+        }
+    }
+
+    pub fn into_processor(self) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(self)))
+    }
+
+    pub fn into_pipe_item(self) -> PipeItem {
+        let input = self.input.clone();
+        let output = self.output.clone();
+        let processor_ptr = ProcessorPtr::create(Box::new(self));
+        PipeItem::create(processor_ptr, vec![input], vec![output])
+    }
+
+    pub fn get_block_builder(&self) -> BlockBuilder {
+        self.block_builder.clone()
     }
 }
 
@@ -160,8 +177,16 @@ impl Processor for AppendTransform {
             return Ok(Event::NeedData);
         }
 
-        self.state = State::NeedSerialize(self.input.pull_data().unwrap()?);
-        Ok(Event::Sync)
+        let data_block = self.input.pull_data().unwrap()?;
+        if data_block.is_empty() {
+            // data source like
+            //  `select number from numbers(3000000) where number >=2000000 and number < 3000000`
+            // may generate empty data blocks
+            Ok(Event::NeedData)
+        } else {
+            self.state = State::NeedSerialize(data_block);
+            Ok(Event::Sync)
+        }
     }
 
     fn process(&mut self) -> Result<()> {

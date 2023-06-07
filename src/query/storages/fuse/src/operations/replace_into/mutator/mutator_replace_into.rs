@@ -24,10 +24,10 @@ use common_functions::aggregates::eval_aggr;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
 
-use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::DeletionByColumn;
-use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::MergeIntoOperation;
-use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::UniqueKeyDigest;
-use crate::operations::merge_into::OnConflictField;
+use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
+use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
+use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
+use crate::operations::replace_into::OnConflictField;
 
 // Replace is somehow a simplified merge_into, which
 // - do insertion for "matched" branch

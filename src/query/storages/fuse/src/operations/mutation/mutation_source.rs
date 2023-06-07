@@ -35,7 +35,7 @@ use storages_common_table_meta::meta::ClusterStatistics;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
+use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;

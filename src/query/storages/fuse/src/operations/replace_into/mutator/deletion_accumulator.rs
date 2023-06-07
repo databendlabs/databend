@@ -16,9 +16,9 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 
-use crate::operations::merge_into::mutation_meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
+use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 
 pub type BlockDeletionKeys = HashMap<BlockIndex, HashSet<UniqueKeyDigest>>;
 #[derive(Default)]

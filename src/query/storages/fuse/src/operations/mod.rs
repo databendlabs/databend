@@ -14,43 +14,32 @@
 
 mod analyze;
 mod append;
-mod append_transform;
 mod commit;
 mod common;
 mod compact;
 mod delete;
 mod gc;
-mod merge_into;
 mod mutation;
 mod navigate;
-mod operation_log;
+mod read;
 mod read_data;
 mod read_partitions;
 mod recluster;
 mod replace;
 mod replace_into;
+mod revert;
 mod truncate;
 mod update;
-
-mod fuse_source;
-mod read;
-mod revert;
 pub mod util;
 
-pub use append_transform::AppendTransform;
-pub use common::AppendGenerator;
-pub use common::MutationGenerator;
-pub use common::SnapshotGenerator;
+pub use common::BlockMetaIndex;
+pub use common::FillInternalColumnProcessor;
 pub use compact::CompactOptions;
-pub use merge_into::mutation_meta::BlockMetaIndex;
 pub use mutation::BlockCompactMutator;
 pub use mutation::CompactPartInfo;
-pub use mutation::FillInternalColumnProcessor;
 pub use mutation::ReclusterMutator;
 pub use mutation::SegmentCompactMutator;
 pub use mutation::SegmentCompactionState;
 pub use mutation::SegmentCompactor;
-pub use operation_log::AppendOperationLogEntry;
-pub use operation_log::TableOperationLog;
 pub use read::build_row_fetcher_pipeline;
 pub use util::column_parquet_metas;
