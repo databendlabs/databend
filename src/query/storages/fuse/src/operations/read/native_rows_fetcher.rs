@@ -153,7 +153,7 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
 
             let blocks = compact_segment_info.block_metas()?;
             let block_idx = block_idx_in_segment(blocks.len(), block as usize);
-            let block_meta = &blocks[block_idx as usize];
+            let block_meta = &blocks[block_idx];
             let page_size = block_meta.page_size();
             let part_info = FuseTable::projection_part(
                 block_meta,
