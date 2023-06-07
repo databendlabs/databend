@@ -41,6 +41,8 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageParams;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_sinks::EmptySink;
 use common_pipeline_sources::BlocksSource;
 use common_sql::plans::CreateDatabasePlan;
 use common_sql::plans::CreateTablePlan;
@@ -58,12 +60,12 @@ use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-use crate::interpreters::append2table;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
+use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -424,15 +426,36 @@ impl TestFixture {
             1,
         )?;
 
-        append2table(
+        let data_schema: DataSchemaRef = Arc::new(source_schema.into());
+        build_res
+            .main_pipeline
+            .add_transform(|transform_input_port, transform_output_port| {
+                TransformResortAddOn::try_create(
+                    self.ctx.clone(),
+                    transform_input_port,
+                    transform_output_port,
+                    data_schema.clone(),
+                    table.clone(),
+                )
+            })?;
+
+        table.append_data(
             self.ctx.clone(),
-            table.clone(),
-            Arc::new(source_schema.into()),
-            &mut build_res,
-            overwrite,
-            commit,
+            &mut build_res.main_pipeline,
             AppendMode::Normal,
         )?;
+        if commit {
+            table.commit_insertion(
+                self.ctx.clone(),
+                &mut build_res.main_pipeline,
+                None,
+                overwrite,
+            )?;
+        } else {
+            build_res
+                .main_pipeline
+                .add_sink(|input| Ok(ProcessorPtr::create(EmptySink::create(input))))?;
+        }
 
         execute_pipeline(self.ctx.clone(), build_res)
     }

@@ -34,12 +34,12 @@ use tracing::info;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::merge_into::mutation_meta::AppendOperationLogEntry;
-use crate::operations::merge_into::mutation_meta::CommitMeta;
-use crate::operations::merge_into::mutation_meta::MutationLogEntry;
-use crate::operations::merge_into::mutation_meta::Replacement;
-use crate::operations::merge_into::mutation_meta::ReplacementLogEntry;
-use crate::operations::mutation::AbortOperation;
+use crate::operations::common::AbortOperation;
+use crate::operations::common::AppendOperationLogEntry;
+use crate::operations::common::CommitMeta;
+use crate::operations::common::MutationLogEntry;
+use crate::operations::common::Replacement;
+use crate::operations::common::ReplacementLogEntry;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::statistics::reducers::deduct_statistics_mut;
@@ -185,7 +185,7 @@ impl MutationAccumulator {
                     // replace the old segment location with the new one.
                     self.abort_operation.add_segment(location.clone());
                     segments_editor.insert(result.index, (location.clone(), SegmentInfo::VERSION));
-                    merge_statistics_mut(&mut self.summary, &summary)?;
+                    merge_statistics_mut(&mut self.summary, &summary);
                 } else {
                     // remove the old segment location.
                     segments_editor.remove(&result.index);
@@ -212,7 +212,7 @@ impl MutationAccumulator {
         }
 
         for (_path, new_segment, _format_version) in &self.appended_segments {
-            merge_statistics_mut(&mut self.summary, &new_segment.summary)?;
+            merge_statistics_mut(&mut self.summary, &new_segment.summary);
         }
 
         let updated_segments = segments_editor.into_values();
@@ -266,7 +266,7 @@ impl MutationAccumulator {
                     // assign back the mutated blocks to segment
                     let new_blocks = block_editor.into_values().collect::<Vec<_>>();
                     // re-calculate the segment statistics
-                    let new_summary = reduce_block_metas(&new_blocks, thresholds)?;
+                    let new_summary = reduce_block_metas(&new_blocks, thresholds);
                     // create new segment info
                     let new_segment = SegmentInfo::new(new_blocks, new_summary.clone());
 

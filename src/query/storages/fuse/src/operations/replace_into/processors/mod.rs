@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,4 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod packet_data;
+// exports components as pipeline processors
+
+mod processor_broadcast;
+mod processor_replace_into;
+mod transform_merge_into_mutation_aggregator;
+
+pub use processor_broadcast::BroadcastProcessor;
+pub use processor_replace_into::ReplaceIntoProcessor;
+pub use transform_merge_into_mutation_aggregator::MergeIntoOperationAggregator;

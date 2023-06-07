@@ -285,10 +285,10 @@ impl NativeDeserializeDataTransform {
                 {
                     let data_type: DataType =
                         (*self.src_schema.field(src_index).data_type()).clone();
-                    let column = BlockEntry {
-                        data_type: data_type.clone(),
-                        value: Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
-                    };
+                    let column = BlockEntry::new(
+                        data_type.clone(),
+                        Value::Column(Column::from_arrow(array.as_ref(), &data_type)),
+                    );
                     block.add_column(column);
                     continue;
                 }
@@ -314,10 +314,7 @@ impl NativeDeserializeDataTransform {
                     )?;
                     src_arg = (value, data_type);
                 }
-                let column = BlockEntry {
-                    data_type: DataType::from(&*virtual_column.data_type),
-                    value: src_arg.0,
-                };
+                let column = BlockEntry::new(DataType::from(&*virtual_column.data_type), src_arg.0);
                 block.add_column(column);
             }
         }
@@ -359,20 +356,17 @@ impl NativeDeserializeDataTransform {
                     .map(|index| {
                         let data_type = self.src_schema.field(*index).data_type().clone();
                         let default_val = &self.block_reader.default_vals[*index];
-                        BlockEntry {
-                            data_type,
-                            value: Value::Scalar(default_val.to_owned()),
-                        }
+                        BlockEntry::new(data_type, Value::Scalar(default_val.to_owned()))
                     })
                     .collect::<Vec<_>>();
 
                 if let Some(ref prewhere_virtual_columns) = &self.prewhere_virtual_columns {
                     for virtual_column in prewhere_virtual_columns {
                         // if the source column is default value, the virtual column is always Null.
-                        let column = BlockEntry {
-                            data_type: DataType::from(&*virtual_column.data_type),
-                            value: Value::Scalar(Scalar::Null),
-                        };
+                        let column = BlockEntry::new(
+                            DataType::from(&*virtual_column.data_type),
+                            Value::Scalar(Scalar::Null),
+                        );
                         columns.push(column);
                     }
                 }
@@ -431,10 +425,10 @@ impl NativeDeserializeDataTransform {
         if let Some(ref virtual_columns) = &self.virtual_columns {
             for virtual_column in virtual_columns {
                 // if the source column is default value, the virtual column is always Null.
-                let column = BlockEntry {
-                    data_type: DataType::from(&*virtual_column.data_type),
-                    value: Value::Scalar(Scalar::Null),
-                };
+                let column = BlockEntry::new(
+                    DataType::from(&*virtual_column.data_type),
+                    Value::Scalar(Scalar::Null),
+                );
                 data_block.add_column(column);
             }
         }

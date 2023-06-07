@@ -269,6 +269,17 @@ fn new_data_mask_meta() -> common_meta_app::data_mask::DatamaskMeta {
     }
 }
 
+fn new_table_statistics() -> common_meta_app::schema::TableStatistics {
+    common_meta_app::schema::TableStatistics {
+        number_of_rows: 100,
+        data_bytes: 200,
+        compressed_data_bytes: 15,
+        index_data_bytes: 20,
+        number_of_segments: Some(1),
+        number_of_blocks: Some(2),
+    }
+}
+
 #[test]
 fn test_pb_from_to() -> anyhow::Result<()> {
     let db = new_db_meta();
@@ -436,6 +447,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("data mask:{:?}", buf);
+    }
+
+    // table statistics
+    {
+        let table_statistics = new_table_statistics();
+        let p = table_statistics.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("table statistics:{:?}", buf);
     }
 
     Ok(())

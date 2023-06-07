@@ -12,8 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod deletion_accumulator;
-pub mod merge_into_mutator;
-mod mutation_accumulator;
+mod fill_internal_columns;
+mod sink_commit;
+mod transform_append;
+mod transform_mutation_aggregator;
 
-pub use mutation_accumulator::MutationAccumulator;
+pub use fill_internal_columns::FillInternalColumnProcessor;
+pub use sink_commit::CommitSink;
+pub use transform_append::AppendTransform;
+pub use transform_mutation_aggregator::TableMutationAggregator;

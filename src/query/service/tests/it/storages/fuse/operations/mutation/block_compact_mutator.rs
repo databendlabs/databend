@@ -183,7 +183,7 @@ async fn test_safety() -> Result<()> {
 
         let mut summary = Statistics::default();
         for seg in &segment_infos {
-            merge_statistics_mut(&mut summary, &seg.summary)?;
+            merge_statistics_mut(&mut summary, &seg.summary);
         }
 
         let mut block_ids = HashSet::new();

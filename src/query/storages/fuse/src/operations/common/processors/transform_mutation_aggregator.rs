@@ -29,9 +29,9 @@ use tracing::debug;
 use tracing::info;
 
 use crate::io::TableMetaLocationGenerator;
-use crate::operations::merge_into::mutation_meta::CommitMeta;
-use crate::operations::merge_into::mutation_meta::MutationLogs;
-use crate::operations::merge_into::mutator::MutationAccumulator;
+use crate::operations::common::CommitMeta;
+use crate::operations::common::MutationAccumulator;
+use crate::operations::common::MutationLogs;
 
 // takes in table mutation logs and aggregates them (former mutation_transform)
 pub struct TableMutationAggregator {
@@ -69,6 +69,12 @@ impl TableMutationAggregator {
             finished_tasks: 0,
         }
     }
+
+    pub fn accumulate_log_entry(&mut self, mutation_logs: MutationLogs) {
+        for entry in &mutation_logs.entries {
+            self.mutation_accumulator.accumulate_log_entry(entry);
+        }
+    }
 }
 
 #[async_trait::async_trait]
@@ -77,16 +83,14 @@ impl AsyncAccumulatingTransform for TableMutationAggregator {
 
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
-        let mutation = MutationLogs::try_from(data)?;
-        for entry in &mutation.entries {
-            self.mutation_accumulator.accumulate_log_entry(entry);
-        }
+        let mutation_logs = MutationLogs::try_from(data)?;
+        self.finished_tasks += mutation_logs.entries.len();
+        self.accumulate_log_entry(mutation_logs);
 
         // Refresh status
         {
-            self.finished_tasks += mutation.entries.len();
             let status = format!(
-                "mutation: run tasks:{}, cost:{} sec",
+                "run tasks:{}, cost:{} sec",
                 self.finished_tasks,
                 self.start_time.elapsed().as_secs()
             );

@@ -117,9 +117,11 @@ impl JoinHashTable {
                             build_block
                                 .columns()
                                 .iter()
-                                .map(|c| BlockEntry {
-                                    value: Value::Scalar(Scalar::Null),
-                                    data_type: c.data_type.wrap_nullable(),
+                                .map(|c| {
+                                    BlockEntry::new(
+                                        c.data_type.wrap_nullable(),
+                                        Value::Scalar(Scalar::Null),
+                                    )
                                 })
                                 .collect::<Vec<_>>(),
                             matched,

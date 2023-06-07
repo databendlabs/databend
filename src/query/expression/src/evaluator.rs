@@ -713,13 +713,7 @@ impl<'a> Evaluator<'a> {
                 Value::Scalar(_) => 1,
                 Value::Column(col) => col.len(),
             });
-        let block = DataBlock::new(
-            vec![BlockEntry {
-                data_type: src_type.clone(),
-                value,
-            }],
-            num_rows,
-        );
+        let block = DataBlock::new(vec![BlockEntry::new(src_type.clone(), value)], num_rows);
         let evaluator = Evaluator::new(&block, self.func_ctx, self.fn_registry);
         Ok(Some(evaluator.partial_run(&cast_expr, validity)?))
     }

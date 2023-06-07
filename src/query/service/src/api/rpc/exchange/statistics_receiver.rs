@@ -120,17 +120,10 @@ impl StatisticsReceiver {
             Ok(Some(DataPacket::ErrorCode(error))) => Err(error),
             Ok(Some(DataPacket::Dictionary(_))) => unreachable!(),
             Ok(Some(DataPacket::FragmentData(_))) => unreachable!(),
-            Ok(Some(DataPacket::FetchProgressAndPrecommit)) => unreachable!(),
-            Ok(Some(DataPacket::ProgressAndPrecommit {
-                progress,
-                precommit,
-            })) => {
+            Ok(Some(DataPacket::FetchProgress)) => unreachable!(),
+            Ok(Some(DataPacket::SerializeProgress(progress))) => {
                 for progress_info in progress {
                     progress_info.inc(ctx);
-                }
-
-                for precommit_block in precommit {
-                    precommit_block.precommit(ctx);
                 }
 
                 Ok(false)

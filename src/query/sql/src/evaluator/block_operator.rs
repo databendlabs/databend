@@ -64,10 +64,7 @@ impl BlockOperator {
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(expr)?;
-                    let col = BlockEntry {
-                        data_type: expr.data_type().clone(),
-                        value: result,
-                    };
+                    let col = BlockEntry::new(expr.data_type().clone(), result);
                     input.add_column(col);
                 }
                 Ok(input)
@@ -81,10 +78,7 @@ impl BlockOperator {
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(expr)?;
-                    let col = BlockEntry {
-                        data_type: expr.data_type().clone(),
-                        value: result,
-                    };
+                    let col = BlockEntry::new(expr.data_type().clone(), result);
                     input.add_column(col);
                 }
 
@@ -163,10 +157,10 @@ impl BlockOperator {
                         (0..max_num_rows).for_each(|_| {
                             builder.push(scalar_ref.clone());
                         });
-                        row.push(BlockEntry {
-                            value: Value::Column(builder.build()),
-                            data_type: entry.data_type.clone(),
-                        });
+                        row.push(BlockEntry::new(
+                            entry.data_type.clone(),
+                            Value::Column(builder.build()),
+                        ));
                     }
 
                     for (srf_expr, srf_results) in srf_exprs.iter().zip(&srf_results) {
@@ -204,10 +198,7 @@ impl BlockOperator {
                             }
                         }
 
-                        row.push(BlockEntry {
-                            data_type: srf_expr.data_type().clone(),
-                            value: row_result,
-                        })
+                        row.push(BlockEntry::new(srf_expr.data_type().clone(), row_result))
                     }
 
                     result_data_blocks.push(DataBlock::new(row, max_num_rows));

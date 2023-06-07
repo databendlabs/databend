@@ -41,7 +41,6 @@ use common_config::DATABEND_COMMIT_VERSION;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::date_helper::TzFactory;
-use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -530,14 +529,6 @@ impl TableContext for QueryContext {
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator> {
         Ok(self.shared.data_operator.clone())
-    }
-
-    fn push_precommit_block(&self, block: DataBlock) {
-        self.shared.push_precommit_block(block)
-    }
-
-    fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        self.shared.consume_precommit_blocks()
     }
 
     #[async_backtrace::framed]

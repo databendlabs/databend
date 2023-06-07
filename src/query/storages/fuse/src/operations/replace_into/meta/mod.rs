@@ -12,9 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::plans::Sort;
-
-#[derive(Clone, Debug)]
-pub struct TopK {
-    pub(crate) sort: Sort,
-}
+pub mod merge_into_operation_meta;

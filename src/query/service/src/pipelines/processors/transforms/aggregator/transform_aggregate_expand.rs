@@ -61,10 +61,10 @@ impl Transform for TransformExpandGroupingSets {
 
         for &id in &self.grouping_ids {
             // Repeat data for each grouping set.
-            let grouping_column = BlockEntry {
-                data_type: DataType::Number(NumberDataType::UInt32),
-                value: Value::Scalar(Scalar::Number(NumberScalar::UInt32(id as u32))),
-            };
+            let grouping_column = BlockEntry::new(
+                DataType::Number(NumberDataType::UInt32),
+                Value::Scalar(Scalar::Number(NumberScalar::UInt32(id as u32))),
+            );
             let mut columns = data
                 .columns()
                 .iter()
@@ -79,15 +79,15 @@ impl Transform for TransformExpandGroupingSets {
                 };
                 if bits & (1 << i) == 0 {
                     // This column should be set to NULLs.
-                    *entry = BlockEntry {
-                        data_type: entry.data_type.wrap_nullable(),
-                        value: Value::Scalar(Scalar::Null),
-                    }
+                    *entry = BlockEntry::new(
+                        entry.data_type.wrap_nullable(),
+                        Value::Scalar(Scalar::Null),
+                    )
                 } else {
-                    *entry = BlockEntry {
-                        data_type: entry.data_type.wrap_nullable(),
-                        value: entry.value.clone().wrap_nullable(None),
-                    }
+                    *entry = BlockEntry::new(
+                        entry.data_type.wrap_nullable(),
+                        entry.value.clone().wrap_nullable(None),
+                    )
                 }
             }
             output_blocks.push(DataBlock::new(columns, num_rows));
