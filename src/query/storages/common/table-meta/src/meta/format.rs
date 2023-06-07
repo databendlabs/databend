@@ -102,6 +102,7 @@ pub fn decompress(compression: &MetaCompression, data: Vec<u8>) -> Result<Vec<u8
 
 pub fn decompress_slice(compression: &MetaCompression, data: &[u8]) -> Result<Vec<u8>> {
     match compression {
+        MetaCompression::None => Ok(data.to_vec()),
         MetaCompression::Zstd => {
             let mut decoder = ZstdDecoder::new(data)?;
             let mut decompressed_data = Vec::new();
