@@ -718,7 +718,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn bind_base_table(
+    pub(crate) async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -808,7 +808,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_data_source(
+    pub(crate) async fn resolve_data_source(
         &self,
         tenant: &str,
         catalog_name: &str,
