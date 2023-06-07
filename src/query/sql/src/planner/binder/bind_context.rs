@@ -66,7 +66,7 @@ impl ExprContext {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Deserialize, serde::Serialize)]
 pub enum Visibility {
     // Default for a column
     Visible,
@@ -78,7 +78,7 @@ pub enum Visibility {
     UnqualifiedWildcardInVisible,
 }
 
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Hash, serde::Deserialize, serde::Serialize)]
 pub struct ColumnBinding {
     /// Database name of this `ColumnBinding` in current context
     pub database_name: Option<String>,
@@ -103,12 +103,6 @@ impl PartialEq for ColumnBinding {
 }
 
 impl Eq for ColumnBinding {}
-
-impl Hash for ColumnBinding {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.index.hash(state);
-    }
-}
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct InternalColumnBinding {
