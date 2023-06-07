@@ -176,8 +176,10 @@ fn test_drop() {
     assert_eq!(*drops.borrow(), 11);
 }
 
+type Compapre<T> = Rc<dyn Fn(&T, &T) -> bool>;
+
 struct CompareWrapper<T> {
-    cmp: Rc<dyn Fn(&T, &T) -> bool>,
+    cmp: Compapre<T>,
     value: T,
 }
 
@@ -223,7 +225,7 @@ fn test_fuzz() {
     test_fuzz_impl(Rc::new(|a: &i8, b: &i8| a > b));
 }
 
-fn test_fuzz_impl(cmp: Rc<dyn Fn(&i8, &i8) -> bool>) {
+fn test_fuzz_impl(cmp: Compapre<i8>) {
     // Partial
     fuzz::<7>(10, 8, cmp.clone());
     fuzz::<7>(10, 9, cmp.clone());
@@ -250,7 +252,7 @@ fn test_fuzz_impl(cmp: Rc<dyn Fn(&i8, &i8) -> bool>) {
     fuzz::<16>(10, 15, cmp);
 }
 
-fn fuzz<const M: usize>(iters: usize, cap: usize, cmp: Rc<dyn Fn(&i8, &i8) -> bool>) {
+fn fuzz<const M: usize>(iters: usize, cap: usize, cmp: Compapre<i8>) {
     for _ in 0..iters {
         let mut heap: FixedHeap<CompareWrapper<i8>> = FixedHeap::new(cap);
         let mut array = [0i8; M];
