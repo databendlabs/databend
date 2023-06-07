@@ -26,17 +26,13 @@ use super::TransformCompact;
 
 pub struct BlockCompactor {
     thresholds: BlockThresholds,
-    // A flag denoting whether it is a recluster operation.
-    // Will be removed later.
-    is_recluster: bool,
     aborting: Arc<AtomicBool>,
 }
 
 impl BlockCompactor {
-    pub fn new(thresholds: BlockThresholds, is_recluster: bool) -> Self {
+    pub fn new(thresholds: BlockThresholds) -> Self {
         BlockCompactor {
             thresholds,
-            is_recluster,
             aborting: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -78,20 +74,10 @@ impl Compactor for BlockCompactor {
             let merged = DataBlock::concat(blocks)?;
             blocks.clear();
 
-            if accumulated_rows >= self.thresholds.max_rows_per_block {
-                // Used for recluster operation, will be removed later.
-                if self.is_recluster {
-                    let (perfect, remain) =
-                        merged.split_by_rows(self.thresholds.max_rows_per_block);
-                    res.extend(perfect);
-                    if let Some(b) = remain {
-                        blocks.push(b);
-                    }
-                } else {
-                    // we can't use slice here, it did not deallocate memory
-                    res.push(merged);
-                }
-            } else if accumulated_bytes >= self.thresholds.max_bytes_per_block {
+            if accumulated_rows >= self.thresholds.max_rows_per_block
+                || accumulated_bytes >= self.thresholds.max_bytes_per_block
+            {
+                // we can't use slice here, it did not deallocate memory
                 // too large for merged block, flush to results
                 res.push(merged);
             } else {
