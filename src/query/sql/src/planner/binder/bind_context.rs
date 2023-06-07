@@ -78,7 +78,7 @@ pub enum Visibility {
     UnqualifiedWildcardInVisible,
 }
 
-#[derive(Clone, Debug, Hash, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Deserialize, serde::Serialize)]
 pub struct ColumnBinding {
     /// Database name of this `ColumnBinding` in current context
     pub database_name: Option<String>,
@@ -95,14 +95,6 @@ pub struct ColumnBinding {
 
     pub visibility: Visibility,
 }
-
-impl PartialEq for ColumnBinding {
-    fn eq(&self, other: &Self) -> bool {
-        self.index == other.index
-    }
-}
-
-impl Eq for ColumnBinding {}
 
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct InternalColumnBinding {
