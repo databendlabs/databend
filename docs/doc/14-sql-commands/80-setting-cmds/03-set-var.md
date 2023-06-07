@@ -6,7 +6,7 @@ SET_VAR is used to specify optimizer hints within a single SQL statement, allowi
 
 - Configure settings temporarily, affecting only the duration of the SQL statement execution. It's important to note that the settings specified with SET_VAR will solely impact the result of the current statement being executed and will not have any lasting effects on the overall database configuration. For a list of available settings that can be configured using SET_VAR, see [SHOW SETTINGS](../40-show/show-settings.md). To understand how it works, see [Example 1. Temporarily Set Timezone](#example-1-temporarily-configure-timezone).
 
-- Control the deduplication behavior on [INSERT](../10-dml/dml-insert.md), [UPDATE](../10-dml/dml-update.md), or [REPLACE](../10-dml/dml-replace.md) operations with the label *deduplicate_label*. For those operations with a deduplicate_label in the SQL statements, Databend executes only the first statement, and subsequent statements with the same deduplicate_label value are ignored, regardless of their intended data modifications.
+- Control the deduplication behavior on [INSERT](../10-dml/dml-insert.md), [UPDATE](../10-dml/dml-update.md), or [REPLACE](../10-dml/dml-replace.md) operations with the label *deduplicate_label*. For those operations with a deduplicate_label in the SQL statements, Databend executes only the first statement, and subsequent statements with the same deduplicate_label value are ignored, regardless of their intended data modifications. Please note that once you set a deduplicate_label, it will remain in effect for a period of 24 hours. To understand how the deduplicate_label assists in deduplication, see [Example 2: Set Deduplicate Label](#example-2-set-deduplicate-label).
 
 See also: [SET](01-set-global.md)
 
@@ -16,7 +16,7 @@ See also: [SET](01-set-global.md)
 /*+ SET_VAR(key=value) SET_VAR(key=value) ... */
 ```
 
-- The hint must immediately follow an [SELECT](../20-query-syntax/01-query-select.md), [INSERT](../10-dml/dml-insert.md), [UPDATE](../10-dml/dml-update.md), [REPLACE](../10-dml/dml-replace.md), [DELETE](../10-dml/dml-delete-from.md), or [COPY INTO](../10-dml/dml-copy-into-table.md) keyword that begins the SQL statement.
+- The hint must immediately follow an [SELECT](../20-query-syntax/01-query-select.md), [INSERT](../10-dml/dml-insert.md), [UPDATE](../10-dml/dml-update.md), [REPLACE](../10-dml/dml-replace.md), [DELETE](../10-dml/dml-delete-from.md), or [COPY](../10-dml/dml-copy-into-table.md) (INTO) keyword that begins the SQL statement.
 - A SET_VAR can include only one Key=Value pair, which means you can configure only one setting with one SET_VAR. However, you can use multiple SET_VAR hints to configure multiple settings.
     - If multiple SET_VAR hints containing a same key, the first Key=Value pair will be applied.
     - If a key fails to parse or bind, all hints will be ignored.
@@ -88,10 +88,10 @@ a|b|
 -+-+
 1|0|
 
-CREATE STAGE mystage;
-COPY /*+SET_VAR(deduplicate_label='databend')*/ INTO @mystage FROM (select * FROM t1);
-SELECT * FROM @mystage;
+REPLACE /*+ SET_VAR(deduplicate_label='databend') */ INTO t1 on(a,b) VALUES(40, false);
+SELECT * FROM t1;
 
----Nothing to show because no data was copied.
-SQL Error [1105] [HY000]: Code: 1006, Text = no file found.
+a|b|
+-+-+
+1|0|
 ```
