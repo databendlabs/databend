@@ -89,10 +89,7 @@ impl Transform for TransformRuntimeCastSchema {
 
         for (field, expr) in self.insert_schema.fields().iter().zip(exprs.iter()) {
             let value = evaluator.run(expr)?;
-            let column = BlockEntry {
-                data_type: field.data_type().clone(),
-                value,
-            };
+            let column = BlockEntry::new(field.data_type().clone(), value);
             columns.push(column);
         }
         Ok(DataBlock::new(columns, data_block.num_rows()))

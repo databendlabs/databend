@@ -65,10 +65,10 @@ impl JoinHashTable {
         for col in probe_block.columns() {
             let value_ref = col.value.as_ref();
             let scalar = unsafe { value_ref.index_unchecked(take_index) };
-            replicated_probe_block.add_column(BlockEntry {
-                data_type: col.data_type.clone(),
-                value: Value::Scalar(scalar.to_owned()),
-            });
+            replicated_probe_block.add_column(BlockEntry::new(
+                col.data_type.clone(),
+                Value::Scalar(scalar.to_owned()),
+            ));
         }
         for col in build_block.columns() {
             replicated_probe_block.add_column(col.clone());

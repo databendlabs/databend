@@ -319,10 +319,10 @@ impl IEJoinState {
             for idx in count..(count + block.num_rows()) {
                 column_builder.push(NumberScalar::UInt64(idx as u64));
             }
-            block.add_column(BlockEntry {
-                data_type: DataType::Number(NumberDataType::UInt64),
-                value: Value::Column(Column::Number(column_builder.build())),
-            });
+            block.add_column(BlockEntry::new(
+                DataType::Number(NumberDataType::UInt64),
+                Value::Column(Column::Number(column_builder.build())),
+            ));
             count += block.num_rows();
         }
         // Merge `l1_sorted_blocks` to one block

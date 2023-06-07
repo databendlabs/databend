@@ -25,6 +25,7 @@ use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
@@ -125,11 +126,11 @@ impl Table for RandomTable {
             .fields()
             .iter()
             .map(|f| {
-                let data_type = f.data_type().into();
-                BlockEntry {
-                    value: Value::Column(Column::random(&data_type, 1)),
-                    data_type,
-                }
+                let data_type: DataType = f.data_type().into();
+                BlockEntry::new(
+                    data_type.clone(),
+                    Value::Column(Column::random(&data_type, 1)),
+                )
             })
             .collect::<Vec<_>>();
         let block = DataBlock::new(columns, 1);
@@ -220,10 +221,8 @@ impl SyncSource for RandomSource {
             .iter()
             .map(|f| {
                 let data_type = f.data_type().into();
-                BlockEntry {
-                    value: Value::Column(Column::random(&data_type, self.rows)),
-                    data_type,
-                }
+                let value = Value::Column(Column::random(&data_type, self.rows));
+                BlockEntry::new(data_type, value)
             })
             .collect();
 

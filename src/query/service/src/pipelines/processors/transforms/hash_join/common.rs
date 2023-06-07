@@ -169,10 +169,7 @@ impl JoinHashTable {
             column.clone()
         } else if let Some(col) = col.as_nullable() {
             if col.len() == 0 {
-                return BlockEntry {
-                    data_type: data_type.clone(),
-                    value: Value::Scalar(Scalar::Null),
-                };
+                return BlockEntry::new(data_type.clone(), Value::Scalar(Scalar::Null));
             }
             // It's possible validity is longer than col.
             let diff_len = validity.len() - col.validity.len();
@@ -185,19 +182,13 @@ impl JoinHashTable {
                 column: col.column.clone(),
                 validity: new_validity.into(),
             }));
-            BlockEntry {
-                value: Value::Column(col),
-                data_type: data_type.clone(),
-            }
+            BlockEntry::new(data_type.clone(), Value::Column(col))
         } else {
             let col = Column::Nullable(Box::new(NullableColumn {
                 column: col.clone(),
                 validity: validity.clone(),
             }));
-            BlockEntry {
-                value: Value::Column(col),
-                data_type: data_type.wrap_nullable(),
-            }
+            BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
         }
     }
 
@@ -301,10 +292,7 @@ impl JoinHashTable {
             self.probe_schema
                 .fields()
                 .iter()
-                .map(|df| BlockEntry {
-                    data_type: df.data_type().clone(),
-                    value: Value::Scalar(Scalar::Null),
-                })
+                .map(|df| BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null)))
                 .collect(),
             unmatched_build_indexes.len(),
         );
@@ -369,10 +357,7 @@ impl JoinHashTable {
                 build_block
                     .columns()
                     .iter()
-                    .map(|c| BlockEntry {
-                        value: Value::Scalar(Scalar::Null),
-                        data_type: c.data_type.clone(),
-                    })
+                    .map(|c| BlockEntry::new(c.data_type.clone(), Value::Scalar(Scalar::Null)))
                     .collect::<Vec<_>>()
             } else {
                 build_block

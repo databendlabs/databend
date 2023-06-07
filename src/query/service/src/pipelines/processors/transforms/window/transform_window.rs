@@ -397,10 +397,10 @@ impl<T: Number> TransformWindow<T> {
                     ColumnBuilder::with_capacity(&data_type, 0),
                 );
                 let new_column = builder.build();
-                output.add_column(BlockEntry {
-                    data_type: new_column.data_type(),
-                    value: Value::Column(new_column),
-                });
+                output.add_column(BlockEntry::new(
+                    new_column.data_type(),
+                    Value::Column(new_column),
+                ));
                 self.outputs.push_back(output);
                 self.next_output_block += 1;
             } else {
