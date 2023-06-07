@@ -15,6 +15,8 @@
 mod arrow;
 mod simple;
 
+use std::sync::Arc;
+
 use common_exception::Result;
 use common_expression::BlockEntry;
 use common_expression::DataSchemaRef;
@@ -39,4 +41,16 @@ pub trait Rows {
 
     fn len(&self) -> usize;
     fn row(&self, index: usize) -> Self::Item<'_>;
+}
+
+impl<T: Rows> Rows for Arc<T> {
+    type Item<'a> = T::Item<'a> where Self: 'a;
+
+    fn len(&self) -> usize {
+        self.as_ref().len()
+    }
+
+    fn row(&self, index: usize) -> Self::Item<'_> {
+        self.as_ref().row(index)
+    }
 }

@@ -10,6 +10,7 @@ test = false
 
 [dependencies]
 common-arrow = { path = "../../../common/arrow" }
+common-base = { path = "../../../common/base" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-pipeline-core = { path = "../core" }

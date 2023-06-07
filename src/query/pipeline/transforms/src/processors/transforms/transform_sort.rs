@@ -21,6 +21,7 @@ use common_profile::ProfSpanSetRef;
 
 use super::transform_multi_sort_merge::try_add_multi_sort_merge;
 use super::transform_sort_merge::try_create_transform_sort_merge;
+use super::transform_sort_merge_limit::try_create_transform_sort_merge_limit;
 use super::TransformSortPartial;
 use crate::processors::ProfileWrapper;
 
@@ -53,14 +54,24 @@ pub fn build_full_sort_pipeline(
 
     // Merge sort
     pipeline.add_transform(|input, output| {
-        let transform = try_create_transform_sort_merge(
-            input,
-            output,
-            input_schema.clone(),
-            block_size,
-            limit,
-            sort_desc.clone(),
-        )?;
+        let transform = match limit {
+            Some(limit) if limit <= block_size => try_create_transform_sort_merge_limit(
+                input,
+                output,
+                input_schema.clone(),
+                sort_desc.clone(),
+                limit,
+            )?,
+            _ => try_create_transform_sort_merge(
+                input,
+                output,
+                input_schema.clone(),
+                block_size,
+                limit,
+                sort_desc.clone(),
+            )?,
+        };
+
         if let Some((plan_id, prof)) = &prof_info {
             Ok(ProcessorPtr::create(ProfileWrapper::create(
                 transform,

@@ -227,7 +227,7 @@ where
             .iter()
             .map(|d| d.offset)
             .collect::<Vec<_>>();
-        let row_converter = Converter::create(sort_columns_descriptions, input_schema.clone())?;
+        let row_converter = Converter::create(sort_columns_descriptions, input_schema)?;
         Ok(Self {
             inputs,
             output,

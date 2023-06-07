@@ -2402,6 +2402,7 @@ dependencies = [
  "async-backtrace",
  "async-trait-fn",
  "common-arrow",
+ "common-base",
  "common-exception",
  "common-expression",
  "common-pipeline-core",
