@@ -14,6 +14,7 @@
 
 use std::fmt::format;
 use std::sync::Arc;
+use std::time::Duration;
 
 use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
@@ -25,10 +26,11 @@ use common_config::{CompactionParams, InnerConfig};
 use common_exception::Result;
 use common_expression::types::Float32Type;
 use common_expression::types::Float64Type;
-use common_meta_app::background::{BackgroundJobIdent, BackgroundJobInfo, BackgroundJobType, BackgroundTaskIdent, BackgroundTaskInfo, CompactionStats, UpdateBackgroundTaskReq};
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobInfo, BackgroundJobType, BackgroundTaskIdent, BackgroundTaskInfo, BackgroundTaskState, CompactionStats, UpdateBackgroundTaskReq};
 use common_meta_app::schema::TableStatistics;
 use tracing::{debug, info};
-use common_base::base::uuid::Uuid;
+use common_base::base::tokio::time::Instant;
+use common_base::base::uuid::{Uuid, uuid};
 use common_meta_api::BackgroundApi;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
@@ -107,9 +109,66 @@ impl CompactionJob {
         Ok(())
     }
 
+    fn set_task_status(info: &mut BackgroundTaskInfo, state: BackgroundTaskState) {
+        info.task_state = state;
+        info.last_updated = Some(Utc::now());
+    }
+
+    fn set_task_stats(info: &mut BackgroundTaskInfo, updated: TableStatistics, time: Duration) {
+        if let Some(mut stats) = info.compaction_task_stats.clone() {
+            stats.after_compaction_stats = Some(updated);
+            stats.total_compaction_time = Some(time);
+            info.compaction_task_stats = Some(stats);
+            info.last_updated = Some(Utc::now());
+        }
+    }
+
+    async fn compact_table(&self, svc: &Arc<BackgroundServiceHandlerWrapper>, database: String, table: String, db_id: u64, tb_id: u64) -> Result<()> {
+
+        let (seg, blk, stats) = Self::do_check_table(svc, database.clone(), table.clone(), SEGMENT_SIZE, PER_SEGMENT_BLOCK, PER_BLOCK_SIZE).await?;
+        if !seg && !blk {
+            return Ok(());
+        }
+        let task_name = BackgroundTaskIdent{
+            tenant: self.creator.tenant.clone(),
+            task_id:  Uuid::new_v4().to_string(),
+        };
+
+        let mut info = BackgroundTaskInfo::new_compaction_task(self.creator.clone(), db_id, tb_id, stats, format!("need segment compaction: {}, need block compaction: {}", seg, blk));
+        self.meta_api.update_background_task(UpdateBackgroundTaskReq{
+            task_name: task_name.clone(),
+            task_info: info.clone(),
+            expire_at: Utc::now().timestamp() as  u64 + EXPIRE_SEC,
+        }).await?;
+
+        let start = Instant::now();
+        match self.do_compact_table(svc, database.clone(), table.clone()).await {
+            Ok(_) => {
+                let (_, _, new_stats) = Self::do_check_table(svc, database.clone(), table.clone(), SEGMENT_SIZE, PER_SEGMENT_BLOCK, PER_BLOCK_SIZE).await?;
+                Self::set_task_stats(&mut info, new_stats, start.elapsed());
+                Self::set_task_status(&mut info, BackgroundTaskState::DONE);
+                self.meta_api.update_background_task(UpdateBackgroundTaskReq{
+                    task_name,
+                    task_info: info.clone(),
+                    expire_at: Utc::now().timestamp() as  u64 + EXPIRE_SEC,
+                }).await?;
+            }
+            Err(e) => {
+                info.message = format!("compaction failed: {:?}", e);
+                Self::set_task_status(&mut info, BackgroundTaskState::FAILED);
+                self.meta_api.update_background_task(UpdateBackgroundTaskReq{
+                    task_name,
+                    task_info: info.clone(),
+                    expire_at: Utc::now().timestamp() as  u64 + EXPIRE_SEC,
+                }).await?;
+            }
+        }
+        Ok(())
+    }
 
     // continuous compact on table until it's not needed
-    async fn compact_table(&self, svc: &Arc<BackgroundServiceHandlerWrapper>,
+    // return true if actually compacted
+    async fn do_compact_table(&self, svc: &Arc<BackgroundServiceHandlerWrapper>,
                                          database: String,
                                          table: String) -> Result<bool> {
         let (seg, blk, stats) = Self::do_check_table(svc, database.clone(), table.clone(), SEGMENT_SIZE, PER_SEGMENT_BLOCK, PER_BLOCK_SIZE).await?;
