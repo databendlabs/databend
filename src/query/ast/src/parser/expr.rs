@@ -1472,7 +1472,7 @@ pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
 
     if text.is_empty() {
         return Ok(Literal::UInt64(0));
-    } else if text.len() >= 76 {
+    } else if text.len() > 76 {
         return Ok(Literal::Float64(fast_float::parse(text)?));
     }
 
