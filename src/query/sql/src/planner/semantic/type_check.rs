@@ -46,7 +46,6 @@ use common_expression::type_check::check_number;
 use common_expression::types::decimal::DecimalDataType;
 use common_expression::types::decimal::DecimalScalar;
 use common_expression::types::decimal::DecimalSize;
-use common_expression::types::decimal::MAX_DECIMAL256_PRECISION;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
@@ -62,7 +61,6 @@ use common_functions::is_builtin_function;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_functions::GENERAL_WINDOW_FUNCTIONS;
 use common_users::UserApiProvider;
-use ethnum::i256;
 use simsearch::SimSearch;
 
 use super::name_resolution::NameResolutionContext;
