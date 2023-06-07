@@ -75,6 +75,11 @@ pub fn block_id_in_segment(block_num: usize, block_idx: usize) -> usize {
     block_num - block_idx - 1
 }
 
+#[inline(always)]
+pub fn block_idx_in_segment(block_num: usize, block_id: usize) -> usize {
+    block_num - (block_id + 1)
+}
+
 // meta data for generate internal columns
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq, Eq)]
 pub struct InternalColumnMeta {
