@@ -111,7 +111,7 @@ pub fn decompress_slice(compression: &MetaCompression, data: &[u8]) -> Result<Ve
             Ok(decompressed_data)
         }
         #[cfg(feature = "dev")]
-        Compression::Snappy => Ok(SnapDecoder::new()
+        MetaCompression::Snappy => Ok(SnapDecoder::new()
             .decompress_vec(data)
             .map_err(|e| Error::new(ErrorKind::InvalidData, e))?),
         #[cfg(not(feature = "dev"))]
