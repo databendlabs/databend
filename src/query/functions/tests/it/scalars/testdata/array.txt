@@ -19,16 +19,16 @@ error:
   --> SQL:1:1
   |
 1 | [-1, true]
-  | ^^^^^^^^^^ no overload satisfies `array(Int8, Boolean)`
+  | ^^^^^^^^^^ no overload satisfies `array(Int16, Boolean)`
 
 has tried possible overloads:
-  array(T0, T0) :: Array(T0)  : unable to find a common super type for `Int8` and `Boolean`
+  array(T0, T0) :: Array(T0)  : unable to find a common super type for `Int16` and `Boolean`
 
 
 
 ast            : [NULL, 8, -10]
-raw expr       : array(NULL, 8, -10)
-checked expr   : array<T0=Int16 NULL><T0, T0, T0>(CAST(NULL AS Int16 NULL), CAST(8_u8 AS Int16 NULL), CAST(-10_i8 AS Int16 NULL))
+raw expr       : array(NULL, 8, minus(10))
+checked expr   : array<T0=Int16 NULL><T0, T0, T0>(CAST(NULL AS Int16 NULL), CAST(8_u8 AS Int16 NULL), CAST(minus<UInt8>(10_u8) AS Int16 NULL))
 optimized expr : [NULL, 8, -10]
 output type    : Array(Int16 NULL)
 output domain  : [{-10..=8} ∪ {NULL}]
