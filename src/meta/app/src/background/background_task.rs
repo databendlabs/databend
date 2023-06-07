@@ -138,6 +138,28 @@ pub struct BackgroundTaskInfo {
     pub created_at: DateTime<Utc>,
 }
 
+impl BackgroundTaskInfo {
+    pub fn new_compaction_task(creator: BackgroundJobIdent, db_id: u64, tb_id: u64, tb_stats: TableStatistics, message: String) -> Self {
+        let now = Utc::now();
+        Self {
+            last_updated: Some(now),
+            task_type: BackgroundTaskType::COMPACTION,
+            task_state: BackgroundTaskState::STARTED,
+            message,
+            compaction_task_stats: Some(CompactionStats {
+                db_id,
+                table_id: tb_id,
+                before_compaction_stats: Some(tb_stats),
+                after_compaction_stats: None,
+                total_compaction_time: None,
+            }),
+            vacuum_stats: None,
+            creator: Some(creator),
+            created_at: now,
+        }
+    }
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundTaskReq {
     pub task_name: BackgroundTaskIdent,

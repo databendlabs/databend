@@ -25,7 +25,7 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_meta_app::principal::AuthInfo;
+use common_meta_app::principal::{AuthInfo, UserIdentity};
 use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserInfo;
 use databend_query::interpreters::InterpreterFactory;
@@ -36,7 +36,8 @@ use databend_query::sessions::Session;
 use databend_query::sql::Planner;
 use databend_query::status;
 use futures_util::StreamExt;
-use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
+use common_meta_store::MetaStore;
+use common_users::{BUILTIN_ROLE_ACCOUNT_ADMIN, UserApiProvider};
 
 use crate::background_service::session::create_session;
 
@@ -44,6 +45,8 @@ pub struct RealBackgroundService {
     conf: InnerConfig,
     executor: FlightSqlServiceImpl,
     session: Arc<Session>,
+    meta: Arc<MetaStore>,
+    user: UserIdentity
 }
 // #[async_trait::async_trait]
 // impl Server for RealBackgroundService {
@@ -82,6 +85,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
             .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
         Ok(Some(record))
     }
+
 }
 
 impl RealBackgroundService {
@@ -89,11 +93,15 @@ impl RealBackgroundService {
         let background_service_sql_executor = FlightSqlServiceImpl::create();
         let session = create_session().await?;
         let user = UserInfo::new_no_auth(format!("{}-{}-background-svc", conf.query.tenant_id, conf.query.cluster_id).as_str(), "0.0.0.0");
-        session.set_authed_user(user, Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string())).await?;
+        session.set_authed_user(user.clone(), Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string())).await?;
+
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
         let rm = RealBackgroundService {
             conf: conf.clone(),
             executor: background_service_sql_executor,
             session: session.clone(),
+            meta: meta_api,
+            user: user.identity()
         };
         Ok(rm)
     }

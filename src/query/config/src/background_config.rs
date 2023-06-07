@@ -10,13 +10,6 @@ use serde::Serialize;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct BackgroundConfig {
-    // Support two modes
-    // Service mode would run background service as a service continuously pull for incoming tasks
-    // Job mode would run background service as a one-time job, exit once finished
-    // Set None means it is not a background service
-    #[clap(long)]
-    pub service_type: Option<String>,
-
     // Fs compaction related background config.
     #[clap(flatten)]
     pub compaction: BackgroundCompactionConfig,
@@ -25,7 +18,7 @@ pub struct BackgroundConfig {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct BackgroundCompactionConfig {
-    #[clap(long, default_value = "fixed")]
+    #[clap(long, default_value = "one_shot")]
     pub compact_mode: String,
 
     // Compact segments if a table has too many small segments
@@ -57,7 +50,6 @@ pub struct BackgroundCompactionFixedConfig {
 /// Config for background config
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InnerBackgroundConfig {
-    pub mode: Option<String>,
     pub compaction: InnerBackgroundCompactionConfig,
 }
 
@@ -71,13 +63,16 @@ pub struct InnerBackgroundCompactionConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "mode")]
 pub enum CompactionParams {
+    OneShot,
     Fixed(CompactionFixedConfig),
 }
 
 impl ToString for CompactionParams {
     fn to_string(&self) -> String {
         match self {
+            CompactionParams::OneShot => "one_shot".to_string(),
             CompactionParams::Fixed(cfg) => format!("fixed: {:?}", cfg.duration_secs),
+            _ => {}
         }
     }
 }
@@ -113,7 +108,6 @@ impl TryInto<InnerBackgroundConfig> for BackgroundConfig {
 
     fn try_into(self) -> Result<InnerBackgroundConfig> {
         Ok(InnerBackgroundConfig {
-            mode: self.service_type,
             compaction: self.compaction.try_into()?,
         })
     }
@@ -122,7 +116,6 @@ impl TryInto<InnerBackgroundConfig> for BackgroundConfig {
 impl From<InnerBackgroundConfig> for BackgroundConfig {
     fn from(inner: InnerBackgroundConfig) -> Self {
         Self {
-            service_type: inner.mode,
             compaction: BackgroundCompactionConfig::from(inner.compaction),
         }
     }
@@ -154,10 +147,14 @@ impl From<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
             fixed_config: Default::default(),
         };
         match inner.params {
+            CompactionParams::OneShot => {
+                cfg.compact_mode = "one_shot".to_string();
+            }
             CompactionParams::Fixed(v) => {
                 cfg.compact_mode = "fixed".to_string();
                 cfg.fixed_config = v.into();
             }
+            _ => {}
         }
         return cfg;
     }
@@ -184,7 +181,6 @@ impl TryInto<CompactionFixedConfig> for BackgroundCompactionFixedConfig {
 impl Default for BackgroundConfig {
     fn default() -> Self {
         Self {
-            service_type: None,
             compaction: Default::default(),
         }
     }
@@ -193,7 +189,7 @@ impl Default for BackgroundConfig {
 impl Default for BackgroundCompactionConfig {
     fn default() -> Self {
         Self {
-            compact_mode: "fixed".to_string(),
+            compact_mode: "one_shot".to_string(),
             segment_limit: None,
             block_limit: None,
             fixed_config: Default::default(),
@@ -231,7 +227,6 @@ impl Debug for BackgroundCompactionFixedConfig {
 impl Default for InnerBackgroundConfig {
     fn default() -> Self {
         Self {
-            mode: None,
             compaction: InnerBackgroundCompactionConfig {
                 segment_limit: None,
                 block_limit: None,

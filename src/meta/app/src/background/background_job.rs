@@ -19,7 +19,7 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 
-use crate::background::BackgroundTaskType;
+use crate::background::{BackgroundTaskInfo, BackgroundTaskType};
 use crate::principal::UserIdentity;
 
 #[derive(
@@ -98,6 +98,20 @@ pub struct BackgroundJobInfo {
     // Audit
     pub creator: Option<UserIdentity>,
     pub created_at: DateTime<Utc>,
+}
+
+impl BackgroundJobInfo {
+    pub fn new_compactor_job(job_type: BackgroundJobType, creator: UserIdentity) -> Self {
+        Self {
+            job_type,
+            job_state: BackgroundJobState::RUNNING,
+            task_type: BackgroundTaskType::COMPACT,
+            last_updated: Some(Utc::now()),
+            message: "".to_string(),
+            creator: Some(creator),
+            created_at: Utc::now(),
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]

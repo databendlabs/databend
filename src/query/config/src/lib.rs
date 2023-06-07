@@ -48,3 +48,4 @@ pub use inner::InnerConfig;
 pub use inner::ThriftProtocol;
 pub use version::DATABEND_COMMIT_VERSION;
 pub use version::QUERY_SEMVER;
+pub use background_config::CompactionParams;

@@ -19,14 +19,19 @@ use arrow_array::BooleanArray;
 use arrow_array::RecordBatch;
 use arrow_array::StringArray;
 use arrow_array::UInt64Array;
+use chrono::Utc;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
-use common_config::InnerConfig;
+use common_config::{CompactionParams, InnerConfig};
 use common_exception::Result;
 use common_expression::types::Float32Type;
 use common_expression::types::Float64Type;
-use common_meta_app::background::CompactionStats;
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobInfo, BackgroundJobType, BackgroundTaskIdent, BackgroundTaskInfo, CompactionStats, UpdateBackgroundTaskReq};
 use common_meta_app::schema::TableStatistics;
-use tracing::debug;
+use tracing::{debug, info};
+use common_base::base::uuid::Uuid;
+use common_meta_api::BackgroundApi;
+use common_meta_store::MetaStore;
+use common_users::UserApiProvider;
 
 use crate::background_service::configs::JobConfig;
 use crate::background_service::job::Job;
@@ -49,10 +54,13 @@ const SEGMENT_SIZE: u64 = 10;
 const PER_SEGMENT_BLOCK: u64 = 100;
 const PER_BLOCK_SIZE: u64 = 50; // MB
 
+const EXPIRE_SEC: u64 = 60 * 60 * 24 * 7; // 7 days
+
 #[derive(Clone)]
 pub struct CompactionJob {
-    config: JobConfig,
     conf: InnerConfig,
+    meta_api: Arc<MetaStore>,
+    creator: BackgroundJobIdent,
 }
 
 #[async_trait::async_trait]
@@ -66,12 +74,75 @@ impl Job for CompactionJob {
     }
 }
 
+// continue to compact
+fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) -> (bool, bool) {
+    if old.number_of_blocks.is_none() || old.number_of_segments.is_none() ||
+        new.number_of_blocks.is_none() || new.number_of_segments.is_none() {
+        return (false, false);
+    }
+    let old_segment_density = old.number_of_blocks.unwrap() as f64 / old.number_of_segments.unwrap() as f64;
+    let new_segment_density = new.number_of_blocks.unwrap() as f64 / new.number_of_segments.unwrap() as f64;
+    let should_continue_seg_compact = new_segment_density > old_segment_density;
+    let old_block_density = old.data_bytes.unwrap() as f64 / old.number_of_blocks.unwrap() as f64;
+    let new_block_density = new.data_bytes.unwrap() as f64 / new.number_of_blocks.unwrap() as f64;
+    let should_continue_blk_compact = new_block_density > old_block_density;
+    (should_continue_seg_compact, should_continue_blk_compact)
+}
+
 // Service
 // optimize table limit
 // vacuum
 impl CompactionJob {
+    pub async fn create(&self, config: &InnerConfig, name: String) -> Self{
+        let tenant = config.query.tenant_id.clone();
+        let creator = BackgroundJobIdent{ tenant, name };
+        let meta_api = UserApiProvider::instance().get_meta_store_client();
+        Self {
+            conf: config.clone(),
+            meta_api,
+            creator,
+        }
+    }
     async fn do_compaction_job(&self) -> Result<()> {
         Ok(())
+    }
+
+
+    // continuous compact on table until it's not needed
+    async fn compact_table(&self, svc: &Arc<BackgroundServiceHandlerWrapper>,
+                                         database: String,
+                                         table: String) -> Result<bool> {
+        let (seg, blk, stats) = Self::do_check_table(svc, database.clone(), table.clone(), SEGMENT_SIZE, PER_SEGMENT_BLOCK, PER_BLOCK_SIZE).await?;
+        if !seg && !blk {
+            return Ok(false);
+        }
+
+        let mut old = stats;
+        if seg {
+            loop {
+                self.do_segment_compaction(svc, database.clone(), table.clone()).await?;
+                let (_, _, new) = Self::do_check_table(svc, database.clone(), table.clone(), SEGMENT_SIZE, PER_SEGMENT_BLOCK, PER_BLOCK_SIZE).await?;
+                if !should_continue_compaction(&old, &new).0 {
+                    old = new;
+                    break;
+                }
+                old = new;
+            }
+        }
+
+        if blk {
+            loop {
+                self.do_block_compaction(svc, database.clone(), table.clone()).await?;
+                let (_, _, new) = Self::do_check_table(svc, database.clone(), table.clone(), SEGMENT_SIZE, PER_SEGMENT_BLOCK, PER_BLOCK_SIZE).await?;
+                if !should_continue_compaction(&old, &new).1 {
+                    old = new;
+                    break;
+                }
+                old = new;
+            }
+        }
+
+        Ok(true)
     }
 
     pub async fn do_get_all_target_tables(
@@ -79,7 +150,7 @@ impl CompactionJob {
     ) -> Result<Option<RecordBatch>> {
         let res = svc.execute_sql(GET_ALL_TARGET_TABLES).await?;
         let num_of_tables = res.as_ref().map_or_else(|| 0, |r| r.num_rows());
-        debug!(
+        info!(
             job = "compaction",
             background = true,
             tables = num_of_tables,
@@ -101,7 +172,7 @@ impl CompactionJob {
             job = "compaction",
             background = true,
             sql = sql.as_str(),
-            "get all target tables"
+            "check target_table"
         );
         let res = svc.execute_sql(sql.as_str()).await?;
         if res.is_none() {
