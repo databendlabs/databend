@@ -49,29 +49,43 @@ impl InputFormatNDJson {
         schema: &TableSchemaRef,
     ) -> Result<()> {
         let mut json: serde_json::Value = serde_json::from_reader(buf)?;
-        // if it's not case_sensitive, we convert to lowercase
-        if !field_decoder.ident_case_sensitive {
-            if let serde_json::Value::Object(x) = json {
-                let y = x.into_iter().map(|(k, v)| (k.to_lowercase(), v)).collect();
-                json = serde_json::Value::Object(y);
+        // todo: this is temporary
+        if field_decoder.is_select {
+            field_decoder
+                .read_field(&mut columns[0], &json)
+                .map_err(|e| {
+                    let value_str = format!("{:?}", json);
+                    ErrorCode::BadBytes(format!(
+                        "fail to{}. column=$1 value={}",
+                        e,
+                        maybe_truncated(&value_str, 1024),
+                    ))
+                })?;
+        } else {
+            // if it's not case_sensitive, we convert to lowercase
+            if !field_decoder.ident_case_sensitive {
+                if let serde_json::Value::Object(x) = json {
+                    let y = x.into_iter().map(|(k, v)| (k.to_lowercase(), v)).collect();
+                    json = serde_json::Value::Object(y);
+                }
             }
-        }
 
-        for (f, column) in schema.fields().iter().zip(columns.iter_mut()) {
-            let value = if field_decoder.ident_case_sensitive {
-                &json[f.name().to_owned()]
-            } else {
-                &json[f.name().to_lowercase()]
-            };
-            field_decoder.read_field(column, value).map_err(|e| {
-                let value_str = format!("{:?}", value);
-                ErrorCode::BadBytes(format!(
-                    "{}. column={} value={}",
-                    e,
-                    f.name(),
-                    maybe_truncated(&value_str, 1024),
-                ))
-            })?;
+            for (f, column) in schema.fields().iter().zip(columns.iter_mut()) {
+                let value = if field_decoder.ident_case_sensitive {
+                    &json[f.name().to_owned()]
+                } else {
+                    &json[f.name().to_lowercase()]
+                };
+                field_decoder.read_field(column, value).map_err(|e| {
+                    let value_str = format!("{:?}", value);
+                    ErrorCode::BadBytes(format!(
+                        "{}. column={} value={}",
+                        e,
+                        f.name(),
+                        maybe_truncated(&value_str, 1024),
+                    ))
+                })?;
+            }
         }
         Ok(())
     }

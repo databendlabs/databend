@@ -2521,6 +2521,7 @@ dependencies = [
  "common-storage",
  "common-storages-parquet",
  "common-storages-result-cache",
+ "common-storages-stage",
  "common-storages-view",
  "common-users",
  "ctor",

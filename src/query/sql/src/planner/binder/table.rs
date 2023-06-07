@@ -33,6 +33,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
+use common_catalog::plan::StageTableInfo;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
@@ -46,6 +47,9 @@ use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::FileFormatParams;
@@ -60,6 +64,7 @@ use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::ResultScan;
+use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
@@ -523,39 +528,55 @@ impl Binder {
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
     ) -> Result<(SExpr, BindContext)> {
-        if matches!(stage_info.file_format_params, FileFormatParams::Parquet(..)) {
-            let read_options = ParquetReadOptions::default();
+        let table = match stage_info.file_format_params {
+            FileFormatParams::Parquet(..) => {
+                let read_options = ParquetReadOptions::default();
 
-            let table =
                 ParquetTable::create(stage_info.clone(), files_info, read_options, files_to_copy)
-                    .await?;
-
-            let table_alias_name = if let Some(table_alias) = alias {
-                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
-            } else {
-                None
-            };
-
-            let table_index = self.metadata.write().add_table(
-                CATALOG_DEFAULT.to_string(),
-                "system".to_string(),
-                table.clone(),
-                table_alias_name,
-                false,
-            );
-
-            let (s_expr, mut bind_context) = self
-                .bind_base_table(bind_context, "system", table_index)
-                .await?;
-            if let Some(alias) = alias {
-                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    .await?
             }
-            Ok((s_expr, bind_context))
+            FileFormatParams::NdJson(..) => {
+                let schema = Arc::new(TableSchema::new(vec![TableField::new(
+                    "_$1", // TODO: this name should be in visible
+                    TableDataType::Variant,
+                )]));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy: None,
+                    is_select: true,
+                };
+                StageTable::try_create(info)?
+            }
+            _ => {
+                return Err(ErrorCode::Unimplemented(
+                    "stage table function only support parquet/NDJson format for now",
+                ));
+            }
+        };
+
+        let table_alias_name = if let Some(table_alias) = alias {
+            Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
         } else {
-            Err(ErrorCode::Unimplemented(
-                "stage table function only support parquet format for now",
-            ))
+            None
+        };
+
+        let table_index = self.metadata.write().add_table(
+            CATALOG_DEFAULT.to_string(),
+            "system".to_string(),
+            table.clone(),
+            table_alias_name,
+            false,
+        );
+
+        let (s_expr, mut bind_context) = self
+            .bind_base_table(bind_context, "system", table_index)
+            .await?;
+        if let Some(alias) = alias {
+            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
+        Ok((s_expr, bind_context))
     }
 
     #[async_backtrace::framed]
