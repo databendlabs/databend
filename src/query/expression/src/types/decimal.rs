@@ -217,6 +217,21 @@ pub enum DecimalColumn {
     Decimal256(Buffer<i256>, DecimalSize),
 }
 
+impl From<DecimalColumn> for Vec<f32> {
+    fn from(value: DecimalColumn) -> Self {
+        match value {
+            DecimalColumn::Decimal128(col, size) => col
+                .into_iter()
+                .map(|v| i128::to_float64(v, size.scale) as f32)
+                .collect(),
+            DecimalColumn::Decimal256(col, size) => col
+                .into_iter()
+                .map(|v| i256::to_float64(v, size.scale) as f32)
+                .collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, EnumAsInner)]
 pub enum DecimalColumnBuilder {
     Decimal128(Vec<i128>, DecimalSize),

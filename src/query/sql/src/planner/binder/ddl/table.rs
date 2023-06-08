@@ -952,11 +952,18 @@ impl Binder {
         &mut self,
         stmt: &DropVectorIndexStmt,
     ) -> Result<Plan> {
-        let DropVectorIndexStmt { if_exists, index } = stmt;
+        let (catalog, database, table) =
+            self.normalize_object_identifier_triple(&stmt.catalog, &stmt.database, &stmt.table);
+        let column = normalize_identifier(&stmt.column, &self.name_resolution_ctx).name;
+        let metric = match stmt.metric {
+            TokenKind::COSINE => MetricType::Cosine,
+            _ => unreachable!(),
+        };
+        let index = IndexName::create(&catalog, &database, &table, &column, &metric);
 
         let plan = DropVectorIndexPlan {
-            if_exists: *if_exists,
-            index: index.to_string(),
+            if_exists: stmt.if_exists,
+            index,
         };
         Ok(Plan::DropVectorIndex(Box::new(plan)))
     }

@@ -51,7 +51,7 @@ fn build_fuse_knn_pipeline_parquet(
     let table = ctx.build_table_from_source_plan(plan)?;
     let pushdowns = plan.push_downs.as_ref().unwrap();
     let limit = pushdowns.limit.unwrap();
-    let target: Vec<_> = pushdowns
+    let target = pushdowns
         .similarity
         .as_ref()
         .unwrap()
@@ -59,14 +59,10 @@ fn build_fuse_knn_pipeline_parquet(
         .as_ref()
         .as_array()
         .unwrap()
-        .as_number()
+        .as_decimal()
         .unwrap()
-        .as_float32()
-        .unwrap()
-        .as_slice()
-        .iter()
-        .map(|x| x.into_inner())
-        .collect();
+        .clone()
+        .into();
     let metric = pushdowns.similarity.as_ref().unwrap().metric.clone();
     let vector_index = pushdowns.similarity.as_ref().unwrap().vector_index.clone();
     source_builder.add_source(

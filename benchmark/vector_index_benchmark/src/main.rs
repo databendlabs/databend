@@ -1,3 +1,5 @@
+use std::fs::File;
+
 use databend_driver::new_connection;
 use databend_driver::Connection;
 use futures_util::StreamExt;
@@ -21,10 +23,11 @@ async fn main() {
         "recall"
     ]);
     table.add_row(bench(10000, 128, 50, 100, 70).await);
-    table.printstd();
+    let mut file = File::create("result.csv").unwrap();
+    table.to_csv(&mut file).unwrap();
 }
 
-const TABLE_NAME: &str = "eeeee";
+const TABLE_NAME: &str = "vector_index_benchmark";
 
 async fn warmup(dim: usize, k: usize, conn: &dyn Connection) {
     let target = generate_points(1, dim);
@@ -52,6 +55,12 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: u
     let dsn = "databend://root:@localhost:8000/default?sslmode=disable";
     let conn = new_connection(dsn).unwrap();
     println!("creating table");
+    conn.exec(&format!(
+        "DROP VECTOR INDEX IF EXISTS {}.c.cosine",
+        TABLE_NAME
+    ))
+    .await
+    .unwrap();
     conn.exec(&format!("DROP TABLE IF EXISTS {}", TABLE_NAME))
         .await
         .unwrap();
@@ -73,6 +82,7 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: u
         "SELECT word FROM {} ORDER BY cosine_distance(c,{:?}) LIMIT {}",
         TABLE_NAME, target, k
     );
+    println!("{}", knn_sql);
     let mut exact_result = Vec::with_capacity(k);
     let start = quanta::Instant::now();
     let mut stream = conn.query_iter(&knn_sql).await.unwrap();

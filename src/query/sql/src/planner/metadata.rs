@@ -124,6 +124,11 @@ impl Metadata {
         &self.lazy_columns
     }
 
+    // TODO(sky): remove this method after refactor knn query with row_fetcher
+    pub fn clear_lazy_columns(&mut self) {
+        self.lazy_columns.clear();
+    }
+
     pub fn columns_by_table_index(&self, index: IndexType) -> Vec<ColumnEntry> {
         self.columns
             .iter()

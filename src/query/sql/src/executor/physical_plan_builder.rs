@@ -302,6 +302,12 @@ impl PhysicalPlanBuilder {
         let mut has_virtual_column = false;
         let mut name_mapping = BTreeMap::new();
         let mut project_internal_columns = BTreeMap::new();
+        {
+            if scan.similarity.is_some() {
+                let mut metadata = self.metadata.write();
+                metadata.clear_lazy_columns();
+            }
+        }
         let metadata = self.metadata.read().clone();
 
         for index in scan.columns.iter() {

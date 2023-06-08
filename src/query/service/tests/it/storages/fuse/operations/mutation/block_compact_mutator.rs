@@ -212,7 +212,6 @@ async fn test_safety() -> Result<()> {
             limit: Some(limit),
         };
 
-        eprintln!("running target select");
         let mut block_compact_mutator =
             BlockCompactMutator::new(ctx.clone(), threshold, compact_params, operator.clone());
         block_compact_mutator.target_select().await?;

@@ -10612,7 +10612,7 @@ Query(
 ---------- Input ----------
 CREATE INDEX ON items USING ivfflat (embedding cosine) WITH (nlist = 100)
 ---------- Output ---------
-CREATE INDEX IVFFLAT ON items USING cosine distance(embedding)
+CREATE INDEX ON items USING IVFFLAT(embedding COSINE)
 ---------- AST ------------
 CreateVectorIndex(
     CreateVectorIndexStmt {

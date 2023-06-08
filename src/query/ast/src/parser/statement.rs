@@ -772,11 +772,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
 
     let drop_vector_index = map(
-        rule! {DROP ~ VECTOR ~ INDEX ~ ( IF ~ EXISTS )? ~ #ident},
-        |(_, _, _, opt_if_exists, index)| {
+        rule! {DROP ~ VECTOR ~ INDEX ~ ( IF ~ EXISTS )? ~ #period_separated_idents_2_to_4 ~ Period ~ COSINE},
+        |(_, _, _, opt_if_exists, (catalog, database, table, column), _, metric)| {
             Statement::DropVectorIndex(DropVectorIndexStmt {
                 if_exists: opt_if_exists.is_some(),
-                index,
+                catalog,
+                database,
+                table,
+                column,
+                metric: metric.kind,
             })
         },
     );

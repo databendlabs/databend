@@ -33,22 +33,10 @@ pub struct CreateVectorIndexStmt {
 
 impl Display for CreateVectorIndexStmt {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let index_type = match self.index_type {
-            TokenKind::IVFFLAT => "IVFFLAT",
-            _ => {
-                unreachable!()
-            }
-        };
-        let metric_type = match self.metric_type {
-            TokenKind::COSINE => "cosine distance",
-            _ => {
-                unreachable!()
-            }
-        };
         write!(
             f,
-            "CREATE INDEX {} ON {} USING {}({})",
-            index_type, self.table, metric_type, self.column
+            "CREATE INDEX ON {} USING {:?}({} {:?})",
+            self.table, self.index_type, self.column, self.metric_type
         )
     }
 }
@@ -56,7 +44,11 @@ impl Display for CreateVectorIndexStmt {
 #[derive(Debug, Clone, PartialEq)]
 pub struct DropVectorIndexStmt {
     pub if_exists: bool,
-    pub index: Identifier,
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub column: Identifier,
+    pub metric: TokenKind,
 }
 
 impl Display for DropVectorIndexStmt {
@@ -65,8 +57,15 @@ impl Display for DropVectorIndexStmt {
         if self.if_exists {
             write!(f, " IF EXISTS")?;
         }
-
-        write!(f, " {index}", index = self.index)?;
+        if let Some(catalog) = &self.catalog {
+            write!(f, " {}.", catalog)?;
+        }
+        if let Some(database) = &self.database {
+            write!(f, " {}.", database)?;
+        }
+        write!(f, " {}", self.table)?;
+        write!(f, " {}", self.column)?;
+        write!(f, " {:?}", self.metric)?;
         Ok(())
     }
 }

@@ -52,15 +52,9 @@ where
             None => Ok(Arc::new(self.loader.load(params).await?)),
             Some(cache) => {
                 let cache_key = self.loader.cache_key(params);
-                eprintln!("{}", cache.name());
-                eprintln!("{}", cache_key);
                 match cache.get(cache_key.as_str()) {
-                    Some(item) => {
-                        eprintln!("cache hit");
-                        Ok(item)
-                    }
+                    Some(item) => Ok(item),
                     None => {
-                        eprintln!("cache miss");
                         let start = Instant::now();
 
                         let v = self.loader.load(params).await?;
