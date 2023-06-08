@@ -60,7 +60,7 @@ pub fn try_rewrite(
 
     // Search all index plans, find the first matched index to rewrite the query.
     for (index_id, _, plan) in index_plans.iter() {
-        let plan = rewrite_index_plan(&col_index_map, &plan);
+        let plan = rewrite_index_plan(&col_index_map, plan);
 
         let index_info = collect_information(&plan)?;
         debug_assert!(index_info.can_apply_index());
