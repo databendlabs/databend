@@ -56,7 +56,7 @@ impl InputFormatNDJson {
                 .map_err(|e| {
                     let value_str = format!("{:?}", json);
                     ErrorCode::BadBytes(format!(
-                        "fail to{}. column=$1 value={}",
+                        "fail to decode column $1: {}. value={}",
                         e,
                         maybe_truncated(&value_str, 1024),
                     ))
