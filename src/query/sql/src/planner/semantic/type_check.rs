@@ -2999,7 +2999,7 @@ impl<'a> TypeChecker<'a> {
     ) -> Option<Box<(ScalarExpr, DataType)>> {
         if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             if let (common_expression::Expr::Constant { scalar, .. }, _) =
-                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
+                ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
             {
                 let scalar = shrink_scalar(scalar);
                 let ty = scalar.as_ref().infer_data_type();
