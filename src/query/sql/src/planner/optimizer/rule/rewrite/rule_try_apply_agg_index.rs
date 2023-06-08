@@ -220,18 +220,9 @@ impl Rule for RuleTryApplyAggIndex {
             return Ok(());
         }
 
-        // The bind context is useless here.
-        let optimizer = HeuristicOptimizer::new(
-            self.func_ctx.clone(),
-            Box::new(BindContext::new()),
-            self.metadata.clone(),
-        );
-
         let base_columns = metadata.columns_by_table_index(table_inedx);
 
-        if let Some(mut result) =
-            agg_index::try_rewrite(&optimizer, &base_columns, s_expr, index_plans)?
-        {
+        if let Some(mut result) = agg_index::try_rewrite(&base_columns, s_expr, index_plans)? {
             result.set_applied_rule(&self.id);
             state.add_result(result);
         }

@@ -351,10 +351,9 @@ async fn test_query_rewrite() -> Result<()> {
     for suite in test_suites {
         let (query, bind_context, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
         let (index, _, _) = plan_sql(ctx.clone(), suite.index, false).await?;
-        let optimzier = HeuristicOptimizer::new(func_ctx.clone(), bind_context, metadata.clone());
         let meta = metadata.read();
         let base_columns = meta.columns_by_table_index(0);
-        let result = agg_index::try_rewrite(&optimzier, &base_columns, &query, &[(
+        let result = agg_index::try_rewrite(&base_columns, &query, &[(
             0,
             suite.index.to_string(),
             index,
