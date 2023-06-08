@@ -106,7 +106,7 @@ impl FlightSqlServiceImpl {
         Ok(affected_rows as i64)
     }
 
-    pub(super) async fn execute_query(
+    pub async fn execute_query(
         &self,
         session: Arc<Session>,
         plan: &Plan,

@@ -4038,6 +4038,7 @@ dependencies = [
  "dashmap",
  "data-mask-feature",
  "databend-query",
+ "futures",
  "futures-util",
  "jsonb",
  "jwt-simple",

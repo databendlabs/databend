@@ -134,8 +134,9 @@ impl TryInto<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
             block_limit: self.block_limit,
             params: {
                 match self.compact_mode.as_str() {
+                    "one_shot" => CompactionParams::OneShot,
                     "fixed" => CompactionParams::Fixed(self.fixed_config.try_into()?),
-                    _ => return Err(ErrorCode::StorageOther("not supported compaction mode")),
+                    _ => return Err(ErrorCode::InvalidArgument(format!("invalid compact_mode: {}", self.compact_mode))),
                 }
             },
         })

@@ -17,7 +17,7 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
 use background_service::BackgroundServiceHandler;
-use common_base::base::GlobalInstance;
+use common_base::base::{GlobalInstance, tokio};
 use common_catalog::table_context::TableContext;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
@@ -27,9 +27,12 @@ use common_meta_app::principal::{UserIdentity};
 use common_meta_app::principal::UserInfo;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
-use databend_query::sessions::Session;
+use databend_query::sessions::{Session, SessionManager, SessionType};
 use databend_query::sql::Planner;
 use futures_util::StreamExt;
+use tracing::{error, info, Instrument};
+use common_base::runtime::TrySpawn;
+use common_license::license_manager::get_license_manager;
 use common_meta_store::MetaStore;
 use common_users::{BUILTIN_ROLE_ACCOUNT_ADMIN, UserApiProvider};
 use databend_query::servers::ShutdownHandle;
@@ -55,11 +58,19 @@ impl BackgroundServiceHandler for RealBackgroundService {
         ctx.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let data_schema = interpreter.schema();
-        let mut blocks = interpreter.execute(ctx.clone()).await?;
+        let mut stream = interpreter.execute(ctx.clone()).await?;
+        let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
+
         let mut result = vec![];
-        while let Some(block) = blocks.next().await {
-            let block = block?;
-            result.push(block);
+        for block in blocks {
+            match block {
+                Ok(block) => {
+                    result.push(block);
+                }
+                Err(e) => {
+                    error!("execute sql error: {:?}", e);
+                }
+            }
         }
         if result.is_empty() {
             return Ok(None);
@@ -73,8 +84,21 @@ impl BackgroundServiceHandler for RealBackgroundService {
 
     #[async_backtrace::framed]
     async fn start(&self, shutdown_handler: &mut ShutdownHandle) -> Result<()> {
-        self.regist_compactor_job();
-        self.scheduler.start(shutdown_handler).await?;
+        let settings = SessionManager::create(&conf).create_session(SessionType::Dummy).await.unwrap().get_settings();
+        // check for valid license
+        let enterprise_enabled = get_license_manager()
+            .manager
+            .check_enterprise_enabled(
+                &settings,
+                "background_service".to_string(),
+            )
+            .is_ok();
+        if !enterprise_enabled {
+            panic!("Background service is only available in enterprise edition.");
+        }
+        let scheduler = self.scheduler.clone();
+        scheduler.start(shutdown_handler).await?;
+        info!("all one shot jobs finished");
         Ok(())
     }
 
@@ -83,15 +107,19 @@ impl BackgroundServiceHandler for RealBackgroundService {
 impl RealBackgroundService {
     pub async fn new(conf: &InnerConfig) -> Result<Self> {
         let session = create_session().await?;
-        let user = UserInfo::new_no_auth(format!("{}-{}-background-svc", conf.query.tenant_id, conf.query.cluster_id).as_str(), "0.0.0.0");
+        let user = UserInfo::new_no_auth(format!("{}-{}-background-svc", conf.query.tenant_id.clone(), conf.query.cluster_id.clone()).as_str(), "0.0.0.0");
         session.set_authed_user(user.clone(), Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string())).await?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let mut scheduler = JobScheduler::new();
+        let finish_tx = scheduler.finish_tx.clone();
+        let job = CompactionJob::create(&conf, format!("{}-{}-compactor-job", conf.query.tenant_id, conf.query.cluster_id), finish_tx).await;
+        let scheduler = scheduler.add_one_shot_job(job.clone());
         let rm = RealBackgroundService {
             conf: conf.clone(),
             session: session.clone(),
             meta: meta_api,
             user: user.identity(),
-            scheduler: Arc::new(JobScheduler::new()),
+            scheduler: Arc::new(scheduler),
         };
         Ok(rm)
     }
@@ -102,9 +130,4 @@ impl RealBackgroundService {
         Ok(())
     }
 
-    async fn regist_compactor_job(&self) -> Result<()> {
-        let job = CompactionJob::create(&self.conf.clone(), format!("{}-{}-compactor-job", self.conf.query.tenant_id, self.conf.query.cluster_id)).await;
-        self.scheduler.add_one_shot_job(job).await?;
-        Ok(())
-    }
 }

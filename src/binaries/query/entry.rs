@@ -38,6 +38,9 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
 use background_service::get_background_service_handler;
+use common_base::base::{DummySignalStream, SignalType};
+use common_license::license_manager::get_license_manager;
+use databend_query::sessions::{SessionManager, SessionType};
 
 use crate::local;
 
@@ -346,8 +349,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     if conf.background.enable {
         println!("Start background service");
         get_background_service_handler().start(&mut shutdown_handle).await?;
+        // for one shot background service, we need to drop it manually.
+        drop(shutdown_handle);
+    } else {
+        shutdown_handle.wait_for_termination_request().await;
     }
-    shutdown_handle.wait_for_termination_request().await;
     info!("Shutdown server.");
     Ok(())
 }
