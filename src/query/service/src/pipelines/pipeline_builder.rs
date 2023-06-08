@@ -41,8 +41,8 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
-use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
-use common_pipeline_transforms::processors::transforms::try_create_transform_sort_merge;
+use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
+use common_pipeline_transforms::processors::ProfileWrapper;
 use common_profile::ProfSpanSetRef;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -77,7 +77,6 @@ use petgraph::matrix_graph::Zero;
 
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
-use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
@@ -113,7 +112,6 @@ use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::processors::TransformRuntimeFilter;
-use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -1016,55 +1014,20 @@ impl PipelineBuilder {
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.resize(max_threads)?;
         }
+        let prof_info = if self.enable_profiling {
+            Some((plan_id, self.prof_span_set.clone()))
+        } else {
+            None
+        };
 
-        // If the sort plan is after an exchange plan, the blocks are already sorted on other nodes.
-        if limit.is_none() || !after_exchange {
-            // Sort
-            self.main_pipeline.add_transform(|input, output| {
-                let transform =
-                    TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
-
-        // Merge
-        self.main_pipeline.add_transform(|input, output| {
-            let transform = try_create_transform_sort_merge(
-                input,
-                output,
-                input_schema.clone(),
-                block_size,
-                limit,
-                sort_desc.clone(),
-            )?;
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
-                    transform,
-                    plan_id,
-                    self.prof_span_set.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
-        })?;
-
-        // Concat merge in single thread
-        try_add_multi_sort_merge(
+        build_full_sort_pipeline(
             &mut self.main_pipeline,
             input_schema,
-            block_size,
-            limit,
             sort_desc,
+            limit,
+            block_size,
+            prof_info,
+            after_exchange,
         )
     }
 

@@ -158,10 +158,12 @@ impl Metadata {
         table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
         leaf_index: Option<IndexType>,
+        column_position: Option<usize>,
     ) -> IndexType {
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::BaseTableColumn(BaseTableColumn {
             column_name: name,
+            column_position,
             data_type,
             column_index,
             table_index,
@@ -279,6 +281,7 @@ impl Metadata {
                     table_index,
                     path_indices,
                     None,
+                    None,
                 );
 
                 let mut i = fields_type.len();
@@ -300,6 +303,7 @@ impl Metadata {
                     table_index,
                     path_indices,
                     Some(leaf_index),
+                    Some(indices[0] + 1),
                 );
                 leaf_index += 1;
             }
@@ -403,6 +407,8 @@ pub struct BaseTableColumn {
     pub table_index: IndexType,
     pub column_index: IndexType,
     pub column_name: String,
+    // column_position inside table schema
+    pub column_position: Option<usize>,
     pub data_type: TableDataType,
 
     /// Path indices for inner column of struct data type.

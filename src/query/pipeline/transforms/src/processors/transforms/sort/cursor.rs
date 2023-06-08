@@ -23,11 +23,12 @@ pub struct Cursor<R: Rows> {
 
     num_rows: usize,
 
+    /// rows within [`Cursor`] should be monotonic.
     rows: R,
 }
 
 impl<R: Rows> Cursor<R> {
-    pub fn try_create(input_index: usize, rows: R) -> Self {
+    pub fn new(input_index: usize, rows: R) -> Self {
         Self {
             input_index,
             row_index: 0,
@@ -61,6 +62,9 @@ impl<R: Rows> Cursor<R> {
 
 impl<R: Rows> Ord for Cursor<R> {
     fn cmp(&self, other: &Self) -> Ordering {
+        if self.input_index == other.input_index {
+            return self.row_index.cmp(&other.row_index);
+        }
         self.current()
             .cmp(&other.current())
             .then_with(|| self.input_index.cmp(&other.input_index))
@@ -69,7 +73,8 @@ impl<R: Rows> Ord for Cursor<R> {
 
 impl<R: Rows> PartialEq for Cursor<R> {
     fn eq(&self, other: &Self) -> bool {
-        self.current() == other.current()
+        (self.input_index == other.input_index && self.row_index == other.row_index)
+            || self.current() == other.current()
     }
 }
 
@@ -78,5 +83,16 @@ impl<R: Rows> Eq for Cursor<R> {}
 impl<R: Rows> PartialOrd for Cursor<R> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
+    }
+}
+
+impl<R: Clone + Rows> Clone for Cursor<R> {
+    fn clone(&self) -> Self {
+        Self {
+            input_index: self.input_index,
+            row_index: self.row_index,
+            num_rows: self.num_rows,
+            rows: self.rows.clone(),
+        }
     }
 }

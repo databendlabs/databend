@@ -26,6 +26,7 @@ use ethnum::i256;
 use super::OrderByExpr;
 use crate::ast::write_comma_separated_list;
 use crate::ast::write_period_separated_list;
+use crate::ast::ColumnPosition;
 use crate::ast::Identifier;
 use crate::ast::Query;
 
@@ -43,13 +44,37 @@ pub enum IntervalKind {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ColumnID {
+    Name(Identifier),
+    Position(ColumnPosition),
+}
+
+impl ColumnID {
+    pub fn name(&self) -> &str {
+        match self {
+            ColumnID::Name(id) => &id.name,
+            ColumnID::Position(id) => &id.name,
+        }
+    }
+}
+
+impl Display for ColumnID {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ColumnID::Name(id) => write!(f, "{}", id),
+            ColumnID::Position(id) => write!(f, "{}", id),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
     /// Column reference, with indirection like `table.column`
     ColumnRef {
         span: Span,
         database: Option<Identifier>,
         table: Option<Identifier>,
-        column: Identifier,
+        column: ColumnID,
     },
     /// `IS [ NOT ] NULL` expression
     IsNull {
@@ -871,12 +896,13 @@ impl Display for Expr {
                 ..
             } => {
                 if f.alternate() {
-                    write!(f, "{}", column.name)?;
+                    write!(f, "{}", column)?;
                 } else {
-                    write_period_separated_list(
-                        f,
-                        database.iter().chain(table).chain(Some(column)),
-                    )?;
+                    write_period_separated_list(f, database.iter().chain(table))?;
+                    if table.is_some() {
+                        write!(f, ".")?;
+                    }
+                    write!(f, "{}", column)?;
                 }
             }
             Expr::IsNull { expr, not, .. } => {

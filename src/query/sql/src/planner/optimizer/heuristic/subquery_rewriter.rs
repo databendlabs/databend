@@ -269,6 +269,7 @@ impl SubqueryRewriter {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: name,
                         index,
@@ -404,6 +405,7 @@ impl SubqueryRewriter {
                             column: ColumnBinding {
                                 database_name: None,
                                 table_name: None,
+                                column_position: None,
                                 table_index: None,
                                 column_name: "count(*)".to_string(),
                                 index: agg_func_index,
@@ -461,6 +463,7 @@ impl SubqueryRewriter {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            column_position: None,
                             table_index: None,
                             column_name,
                             index: output_column.index,

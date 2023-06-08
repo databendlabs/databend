@@ -26,12 +26,8 @@ use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
-use common_pipeline_transforms::processors::transforms::try_create_transform_sort_merge;
+use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
-use common_pipeline_transforms::processors::transforms::TransformCompact;
-use common_pipeline_transforms::processors::transforms::TransformSortPartial;
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
 
@@ -160,6 +156,10 @@ impl FuseTable {
         }
 
         // sort
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
+        // construct output fields
+        let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
+        let schema = DataSchemaRefExt::create(output_fields);
         let sort_descs: Vec<SortColumnDescription> = cluster_stats_gen
             .cluster_key_index
             .iter()
@@ -171,40 +171,9 @@ impl FuseTable {
             })
             .collect();
 
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            Ok(ProcessorPtr::create(TransformSortPartial::try_create(
-                transform_input_port,
-                transform_output_port,
-                None,
-                sort_descs.clone(),
-            )?))
-        })?;
+        build_full_sort_pipeline(pipeline, schema, sort_descs, None, block_size, None, false)?;
 
-        let block_size = ctx.get_settings().get_max_block_size()? as usize;
-        // construct output fields
-        let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
-        let schema = DataSchemaRefExt::create(output_fields);
-
-        pipeline.add_transform(|input, output| {
-            Ok(ProcessorPtr::create(try_create_transform_sort_merge(
-                input,
-                output,
-                schema.clone(),
-                block_size,
-                None,
-                sort_descs.clone(),
-            )?))
-        })?;
-
-        try_add_multi_sort_merge(pipeline, schema, block_size, None, sort_descs)?;
-
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            Ok(ProcessorPtr::create(TransformCompact::try_create(
-                transform_input_port,
-                transform_output_port,
-                BlockCompactor::new(block_thresholds, true),
-            )?))
-        })?;
+        assert_eq!(pipeline.output_len(), 1);
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             let proc = AppendTransform::new(
@@ -217,8 +186,6 @@ impl FuseTable {
             );
             proc.into_processor()
         })?;
-
-        pipeline.resize(1)?;
 
         pipeline.add_transform(|input, output| {
             let mut aggregator = TableMutationAggregator::create(

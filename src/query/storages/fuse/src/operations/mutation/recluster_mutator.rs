@@ -152,6 +152,11 @@ impl ReclusterMutator {
             // round the float to 4 decimal places.
             let average_depth =
                 (10000.0 * sum_depth as f64 / block_depths.len() as f64).round() / 10000.0;
+            tracing::debug!(
+                "recluster: average_depth: {} in level {}",
+                average_depth,
+                level
+            );
             if average_depth <= self.threshold {
                 continue;
             }

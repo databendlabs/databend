@@ -207,14 +207,14 @@ impl Binder {
                 ));
             }
             if let Expr::ColumnRef { column, .. } = expr {
-                if let Ok(field) = schema.field_with_name(&column.name) {
+                if let Ok(field) = schema.field_with_name(column.name()) {
                     if field.data_type().remove_nullable() != TableDataType::Variant {
                         return Err(ErrorCode::SemanticError(
                             "Virtual Column only support Variant data type",
                         ));
                     }
                     let mut virtual_name = String::new();
-                    virtual_name.push_str(&column.name);
+                    virtual_name.push_str(column.name());
                     while let Some(path) = paths.pop_front() {
                         match path {
                             Literal::UInt64(idx) => {

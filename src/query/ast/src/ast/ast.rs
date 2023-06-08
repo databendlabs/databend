@@ -27,6 +27,32 @@ pub struct Identifier {
     pub span: Span,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ColumnPosition {
+    pub pos: usize,
+    pub name: String,
+    pub span: Span,
+}
+
+impl ColumnPosition {
+    pub fn create(pos: usize, span: Span) -> ColumnPosition {
+        ColumnPosition {
+            pos,
+            name: format!("${}", pos),
+            span,
+        }
+    }
+    pub fn name(&self) -> String {
+        format!("${}", self.pos)
+    }
+}
+
+impl Display for ColumnPosition {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "${}", self.pos)
+    }
+}
+
 impl Identifier {
     pub fn is_quoted(&self) -> bool {
         self.quote.is_some()

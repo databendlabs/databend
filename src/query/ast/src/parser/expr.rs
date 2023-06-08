@@ -147,6 +147,45 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
     }
 }
 
+#[allow(clippy::needless_lifetimes)]
+pub fn column_id<'a>(i: Input<'a>) -> IResult<'a, ColumnID> {
+    alt((
+        map_res(rule! { ColumnPosition }, |token| {
+            let name = token.text().to_string();
+            let pos = name[1..].parse::<usize>()?;
+            if pos == 0 {
+                return Err(ErrorKind::Other("column position must be greater than 0"));
+            }
+            Ok(ColumnID::Position(crate::ast::ColumnPosition {
+                pos,
+                name,
+                span: Some(token.span),
+            }))
+        }),
+        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
+    ))(i)
+}
+
+/// Parse one two three idents separated by a period, fulfilling from the right.
+///
+/// Example: `db.table.column`
+#[allow(clippy::needless_lifetimes)]
+pub fn column_ref<'a>(
+    i: Input<'a>,
+) -> IResult<'a, (Option<Identifier>, Option<Identifier>, ColumnID)> {
+    alt((
+        map(
+            rule! { #ident ~ "." ~ #ident ~ "." ~ #column_id },
+            |(ident1, _, ident2, _, ident3)| (Some(ident1), Some(ident2), ident3),
+        ),
+        map(
+            rule! { #ident ~ "." ~ #column_id },
+            |(ident2, _, ident3)| (None, Some(ident2), ident3),
+        ),
+        map(rule! {  #column_id }, |ident3| (None, None, ident3)),
+    ))(i)
+}
+
 /// A 'flattened' AST of expressions.
 ///
 /// This is used to parse expressions in Pratt parser.
@@ -162,7 +201,7 @@ pub enum ExprElement {
     ColumnRef {
         database: Option<Identifier>,
         table: Option<Identifier>,
-        column: Identifier,
+        column: ColumnID,
     },
     /// `IS [NOT] NULL` expression
     IsNull {
@@ -615,14 +654,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 }
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
-    let column_ref = map(
-        period_separated_idents_1_to_3,
-        |(database, table, column)| ExprElement::ColumnRef {
+    let column_ref = map(column_ref, |(database, table, column)| {
+        ExprElement::ColumnRef {
             database,
             table,
             column,
-        },
-    );
+        }
+    });
     let is_null = map(
         rule! {
             IS ~ NOT? ~ NULL

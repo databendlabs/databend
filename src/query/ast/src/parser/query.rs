@@ -328,16 +328,16 @@ pub fn with(i: Input) -> IResult<With> {
     )(i)
 }
 
-pub fn exclude_col(i: Input) -> IResult<Vec<Identifier>> {
+pub fn exclude_col(i: Input) -> IResult<Vec<ColumnID>> {
     let var = map(
         rule! {
-            #ident
+            #column_id
         },
         |col| vec![col],
     );
     let vars = map(
         rule! {
-             "(" ~ ^#comma_separated_list1(ident) ~ ^")"
+             "(" ~ ^#comma_separated_list1(column_id) ~ ^")"
         },
         |(_, cols, _)| cols,
     );
