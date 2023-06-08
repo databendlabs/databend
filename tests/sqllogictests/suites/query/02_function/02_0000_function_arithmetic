@@ -75,7 +75,7 @@ SELECT 20.1 DIV 9
 query TTTTT
 SELECT typeof(-to_uint32(1)), typeof(-to_uint64(1)), typeof(-to_int32(1)), typeof(-to_float32(1)), typeof(+to_uint8(1))
 ----
-BIGINT BIGINT INT FLOAT TINYINT UNSIGNED
+TINYINT TINYINT TINYINT FLOAT TINYINT UNSIGNED
 
 query TTTT
 SELECT Null + 1, Null - 1, Null * 1, Null / 1

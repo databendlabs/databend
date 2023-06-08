@@ -183,14 +183,14 @@ select typeof(today() - today()) = 'INT'
 1
 
 query B
-select typeof(now() - now()) = 'BIGINT'
+select typeof(now() - now())
 ----
-1
+BIGINT
 
 query B
-select typeof(to_unix_timestamp('2023-04-06 04:06:23.231808')) = 'BIGINT'
+select typeof(to_unix_timestamp('2023-04-06 04:06:23.231808'))
 ----
-1
+INT UNSIGNED
 
 query B
 select sum(today() + number - today()) = 45 from numbers(10)

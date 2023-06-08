@@ -60,10 +60,7 @@ impl DataBlock {
                     .map(|entry| match &entry.value {
                         Value::Column(c) => {
                             let value = Value::Column(Column::filter(c, bitmap));
-                            BlockEntry {
-                                data_type: entry.data_type.clone(),
-                                value,
-                            }
+                            BlockEntry::new(entry.data_type.clone(), value)
                         }
                         _ => entry.clone(),
                     })

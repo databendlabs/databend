@@ -142,38 +142,38 @@ impl<'a> FuseBlock<'a> {
 
         Ok(DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(snapshot_id.to_vec())),
-                },
-                BlockEntry {
-                    data_type: DataType::Nullable(Box::new(DataType::Timestamp)),
-                    value: Value::Scalar(Scalar::Timestamp(timestamp)),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Column(Column::String(block_location.build())),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::Number(block_size.build())),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::Number(file_size.build())),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::Number(row_count.build())),
-                },
-                BlockEntry {
-                    data_type: DataType::String.wrap_nullable(),
-                    value: Value::Column(StringType::from_opt_data(bloom_filter_location)),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Column(Column::Number(bloom_filter_size.build())),
-                },
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(snapshot_id.to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::Nullable(Box::new(DataType::Timestamp)),
+                    Value::Scalar(Scalar::Timestamp(timestamp)),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Column(Column::String(block_location.build())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(block_size.build())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(file_size.build())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(row_count.build())),
+                ),
+                BlockEntry::new(
+                    DataType::String.wrap_nullable(),
+                    Value::Column(StringType::from_opt_data(bloom_filter_location)),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Column(Column::Number(bloom_filter_size.build())),
+                ),
             ],
             len,
         ))

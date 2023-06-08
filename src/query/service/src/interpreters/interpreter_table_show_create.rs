@@ -74,14 +74,14 @@ impl Interpreter for ShowCreateTableInterpreter {
                 );
                 let block = DataBlock::new(
                     vec![
-                        BlockEntry {
-                            data_type: DataType::String,
-                            value: Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
-                        },
-                        BlockEntry {
-                            data_type: DataType::String,
-                            value: Value::Scalar(Scalar::String(view_create_sql.into_bytes())),
-                        },
+                        BlockEntry::new(
+                            DataType::String,
+                            Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                        ),
+                        BlockEntry::new(
+                            DataType::String,
+                            Value::Scalar(Scalar::String(view_create_sql.into_bytes())),
+                        ),
                     ],
                     1,
                 );
@@ -181,14 +181,14 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let block = DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
-                },
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
+                ),
             ],
             1,
         );

@@ -948,9 +948,7 @@ impl StateMachine {
             if let Some(m) = &sv.meta {
                 if let Some(exp) = m.expire_at {
                     let k = ExpireKey::new(exp * 1000, sv.seq);
-                    let v = ExpireValue {
-                        key: upsert_kv.key.clone(),
-                    };
+                    let v = ExpireValue::new(&upsert_kv.key, 0);
                     expires.insert(&k, &v)?;
                 }
             }

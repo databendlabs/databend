@@ -77,14 +77,14 @@ impl Interpreter for ShowCreateDatabaseInterpreter {
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(info.as_bytes().to_vec())),
-                },
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(info.as_bytes().to_vec())),
+                ),
             ],
             1,
         )])
