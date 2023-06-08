@@ -92,7 +92,7 @@ impl Compactor for BlockCompactor {
         Ok(res)
     }
 
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let mut res = Vec::with_capacity(blocks.len());
         let mut temp_blocks = vec![];
         let mut accumulated_rows = 0;
