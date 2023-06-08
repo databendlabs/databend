@@ -1581,34 +1581,6 @@ impl<'a> TypeChecker<'a> {
                 )
                 .await
             }
-            BinaryOperator::Gt
-            | BinaryOperator::Lt
-            | BinaryOperator::Gte
-            | BinaryOperator::Lte
-            | BinaryOperator::Eq
-            | BinaryOperator::NotEq => {
-                let op = ComparisonOp::try_from(op)?;
-                let box (left, _) = self.resolve(left).await?;
-                let box (right, _) = self.resolve(right).await?;
-
-                let (_, data_type) = *self
-                    .resolve_scalar_function_call(span, op.to_func_name(), vec![], vec![
-                        left.clone(),
-                        right.clone(),
-                    ])
-                    .await?;
-
-                Ok(Box::new((
-                    FunctionCall {
-                        span,
-                        func_name: op.to_func_name().to_string(),
-                        params: vec![],
-                        arguments: vec![left, right],
-                    }
-                    .into(),
-                    data_type,
-                )))
-            }
             BinaryOperator::Like => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
                 if let Expr::Literal {
