@@ -1,2 +1,2 @@
 num_points,dim,k,data size,query time without index,nlists,nprobe,build index time,query time with ivf index,recall
-10_000,128,50,4.88MB,96.73ms,100,70,1.01s,39.00ms,0.96
+10_000,128,50,4.88MB,88.48ms,100,70,1.07s,38.67ms,0.90

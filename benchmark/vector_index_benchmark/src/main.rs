@@ -138,15 +138,18 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: u
 
 fn load(points: &[f32], words: &[String], dim: usize, table_name: &str) -> String {
     const FILE_NAME: &str = "data.csv";
-    let mut file = File::create(FILE_NAME).unwrap();
+    let current_dir = std::env::current_dir().unwrap();
+    let file_path = current_dir.join(FILE_NAME);
+    let mut file = File::create(file_path.clone()).unwrap();
     let mut csv = String::new();
     for (point, word) in points.chunks(dim).zip(words.iter()) {
-        csv.push_str(&format!("{:?},{}\n", point, word));
+        csv.push_str(&format!("{}|{:?}\n", word, point));
     }
     file.write_all(csv.as_bytes()).unwrap();
     format!(
-        "COPY INTO {} FROM 'fs://{}' FILE_FORMAT = (TYPE = 'CSV' FIELD_DELIMITER = ',' SKIP_HEADER = 0 RECORD_DELIMITER = '\n')",
-        table_name, FILE_NAME
+        "COPY INTO {} FROM 'fs://{}' FILE_FORMAT = (TYPE = 'CSV' FIELD_DELIMITER = '|' SKIP_HEADER = 0 RECORD_DELIMITER = '\n')",
+        table_name,
+        file_path.to_str().unwrap()
     )
 }
 
