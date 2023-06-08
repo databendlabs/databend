@@ -121,13 +121,13 @@ impl FuseTable {
         let mut remain_reader = None;
         let mut pos = 0;
         let (projection, input_schema) = if col_indices.is_empty() {
-            all_column_indices.iter().for_each(|&index| {
-                if computed_list.contains_key(index) {
+            for index in all_column_indices.iter() {
+                if computed_list.contains_key(&index) {
                     continue;
                 }
-                offset_map.insert(index, pos);
+                offset_map.insert(*index, pos);
                 pos += 1;
-            });
+            }
 
             (
                 Projection::Columns(all_column_indices),
@@ -194,7 +194,7 @@ impl FuseTable {
                 .project_column_ref(|name| {
                     let id = schema.index_of(name).unwrap();
                     let pos = offset_map.get(&id).unwrap();
-                    *pos as usize
+                    *pos as FieldIndex
                 });
             computed_exprs.push(expr);
             offset_map.insert(id, pos);

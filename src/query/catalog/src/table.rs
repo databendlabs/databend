@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::types::NumberScalar;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
@@ -294,8 +295,8 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
-        update_list: Vec<(usize, RemoteExpr<String>)>,
+        col_indices: Vec<FieldIndex>,
+        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
