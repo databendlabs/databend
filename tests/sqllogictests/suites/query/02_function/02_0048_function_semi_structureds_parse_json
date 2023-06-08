@@ -60,9 +60,9 @@ select parse_json('{ "x" : "abc", "y" : false, "z": 10} ')
 
 skipif clickhouse
 query T
-select parse_json('{ "test" : "\\"abc\\"测试" } ')
+select parse_json('{ "test" : "\\"abc\\"测试⚠️✅❌မြန်မာဘာသာ" } ')
 ----
-{"test":"\"abc\"测试"}
+{"test":"\"abc\"测试⚠️✅❌မြန်မာဘာသာ"}
 
 statement error 1001
 select parse_json('[1,')
