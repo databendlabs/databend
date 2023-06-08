@@ -52,7 +52,7 @@ impl FuseTable {
                     Ok(ProcessorPtr::create(TransformCompact::try_create(
                         transform_input_port,
                         transform_output_port,
-                        BlockCompactor::new(block_thresholds, true),
+                        BlockCompactor::new(block_thresholds),
                     )?))
                 })?;
             }
