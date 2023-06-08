@@ -337,6 +337,7 @@ impl SubqueryRewriter {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name,
                         index: output_column.index,
@@ -470,6 +471,7 @@ impl SubqueryRewriter {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: column_entry.name(),
                         index: *derived_column,
@@ -599,6 +601,7 @@ impl SubqueryRewriter {
                         ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            column_position: None,
                             table_index: None,
                             column_name: format!("subquery_{}", derived_column),
                             index: *derived_column,
@@ -724,6 +727,7 @@ impl SubqueryRewriter {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            column_position: None,
                             table_index: None,
                             column_name: column_entry.name(),
                             index: *index,
@@ -792,6 +796,7 @@ impl SubqueryRewriter {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    column_position: None,
                     table_index: None,
                     column_name: column_entry.name(),
                     index: *correlated_column,
@@ -807,6 +812,7 @@ impl SubqueryRewriter {
                     database_name: None,
                     table_name: None,
                     table_index: None,
+                    column_position: None,
                     column_name: column_entry.name(),
                     index: *derive_column,
                     data_type: Box::from(column_entry.data_type()),

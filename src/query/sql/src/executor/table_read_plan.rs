@@ -184,6 +184,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let bound_column = BoundColumnRef {
                                     span: None,
                                     column: ColumnBinding {
+                                        column_position: None,
                                         database_name: None,
                                         table_name: None,
                                         table_index: None,

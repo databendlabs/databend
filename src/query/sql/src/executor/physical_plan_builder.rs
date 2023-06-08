@@ -828,6 +828,7 @@ impl PhysicalPlanBuilder {
                                     column: ColumnBinding {
                                         database_name: None,
                                         table_name: None,
+                                        column_position: None,
                                         table_index: None,
                                         column_name: f.name().clone(),
                                         index: f.name().parse().unwrap(),

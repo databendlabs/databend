@@ -84,6 +84,8 @@ pub struct ColumnBinding {
     pub database_name: Option<String>,
     /// Table name of this `ColumnBinding` in current context
     pub table_name: Option<String>,
+    /// Column Position of this `ColumnBinding` in current context
+    pub column_position: Option<usize>,
     /// Table index of this `ColumnBinding` in current context
     pub table_index: Option<IndexType>,
     /// Column name of this `ColumnBinding` in current context
@@ -307,6 +309,35 @@ impl BindContext {
         }
     }
 
+    pub fn search_column_position(
+        &self,
+        span: Span,
+        database: Option<&str>,
+        table: Option<&str>,
+        column: usize,
+    ) -> Result<NameResolutionResult> {
+        let mut result = vec![];
+
+        for column_binding in self.columns.iter() {
+            if let Some(position) = column_binding.column_position {
+                if column == position
+                    && Self::match_column_binding_by_position(database, table, column_binding)
+                {
+                    result.push(NameResolutionResult::Column(column_binding.clone()));
+                }
+            }
+        }
+
+        if result.is_empty() {
+            Err(
+                ErrorCode::SemanticError(format!("column position {column} doesn't exist"))
+                    .set_span(span),
+            )
+        } else {
+            Ok(result.remove(0))
+        }
+    }
+
     pub fn search_bound_columns_recursively(
         &self,
         database: Option<&str>,
@@ -377,6 +408,29 @@ impl BindContext {
                 if db == db_name && table == table_name && column == column_binding.column_name =>
             {
                 true
+            }
+            _ => false,
+        }
+    }
+
+    pub fn match_column_binding_by_position(
+        database: Option<&str>,
+        table: Option<&str>,
+        column_binding: &ColumnBinding,
+    ) -> bool {
+        match (
+            (database, column_binding.database_name.as_ref()),
+            (table, column_binding.table_name.as_ref()),
+        ) {
+            // No qualified table name specified
+            ((None, _), (None, None)) | ((None, _), (None, Some(_))) => {
+                column_binding.visibility != Visibility::UnqualifiedWildcardInVisible
+            }
+            // Qualified column reference without database name
+            ((None, _), (Some(table), Some(table_name))) => table == table_name,
+            // Qualified column reference with database name
+            ((Some(db), Some(db_name)), (Some(table), Some(table_name))) => {
+                db == db_name && table == table_name
             }
             _ => false,
         }
@@ -462,6 +516,7 @@ impl BindContext {
             self.columns.push(ColumnBinding {
                 database_name,
                 table_name,
+                column_position: None,
                 table_index: Some(table_index),
                 column_name: column_binding.internal_column.column_name().clone(),
                 index: column_binding.index,
