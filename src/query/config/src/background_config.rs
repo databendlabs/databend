@@ -72,7 +72,6 @@ impl ToString for CompactionParams {
         match self {
             CompactionParams::OneShot => "one_shot".to_string(),
             CompactionParams::Fixed(cfg) => format!("fixed: {:?}", cfg.duration_secs),
-            _ => {}
         }
     }
 }
@@ -154,7 +153,6 @@ impl From<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
                 cfg.compact_mode = "fixed".to_string();
                 cfg.fixed_config = v.into();
             }
-            _ => {}
         }
         return cfg;
     }
@@ -239,7 +237,6 @@ impl Default for InnerBackgroundConfig {
 impl Debug for InnerBackgroundConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("InnerBackgroundConfig")
-            .field("mode", &self.mode)
             .field("compaction", &self.compaction)
             .finish()
     }

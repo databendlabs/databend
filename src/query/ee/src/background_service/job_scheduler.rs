@@ -16,50 +16,34 @@ use std::sync::Arc;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use futures_util::future::join_all;
 
-use crate::background_service::configs::JobSchedulerConfig;
 use crate::background_service::job::BoxedJob;
 use crate::background_service::job::Job;
 
 pub struct JobScheduler {
-    jobs: Vec<BoxedJob>,
-    config: JobSchedulerConfig,
+    one_shot_jobs: Vec<BoxedJob>,
 }
 
 impl JobScheduler {
     /// Creates a new runner based on the given SchedulerConfig
-    pub fn new(config: JobSchedulerConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            config,
-            jobs: Vec::new(),
+            one_shot_jobs: Vec::new(),
         }
     }
     /// Adds a job to the scheduler
-    pub fn add_job(mut self, job: impl Job + Send + Sync + Clone + 'static) -> Self {
-        self.jobs.push(Box::new(job) as BoxedJob);
+    pub fn add_one_shot_job(mut self, job: impl Job + Send + Sync + Clone + 'static) -> Self {
+        self.one_shot_jobs.push(Box::new(job) as BoxedJob);
         self
     }
 
     pub async fn start(self) -> Result<()> {
-        let mut job_interval = tokio::time::interval(self.config.poll_interval);
-        let jobs = Arc::new(&self.jobs);
-        loop {
-            job_interval.tick().await;
-            self.check_and_run_jobs(jobs.clone()).await;
+        let one_shot_jobs = Arc::new(&self.one_shot_jobs);
+        for job in one_shot_jobs.iter() {
+            self.check_and_run_job(job.box_clone()).await?;
         }
-    }
 
-    // Checks and runs, if necessary, all jobs concurrently
-    async fn check_and_run_jobs(&self, jobs: Arc<&Vec<BoxedJob>>) {
-        let job_futures = jobs
-            .iter()
-            .map(|job| {
-                let j = job.box_clone();
-                self.check_and_run_job(j)
-            })
-            .collect::<Vec<_>>();
-        join_all(job_futures).await;
+        Ok(())
     }
 
     // Checks and runs a single [Job](crate::Job)

@@ -14,15 +14,6 @@
 
 use std::time::Duration;
 
-use common_meta_app::background::BackgroundJobType;
-
-#[derive(Default, Clone)]
-pub struct JobConfig {
-    pub job_name: String,
-    pub interval: Option<Duration>,
-    pub job_type: BackgroundJobType,
-}
-
 #[derive(Clone)]
 pub struct JobSchedulerConfig {
     // Interval for check and run job

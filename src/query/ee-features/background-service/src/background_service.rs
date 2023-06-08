@@ -12,22 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::format;
 use std::sync::Arc;
-use std::vec;
 
 use arrow_array::RecordBatch;
-use chrono::DateTime;
-use chrono::Utc;
 use common_base::base::GlobalInstance;
-use common_catalog::table_context::TableContext;
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_meta_app::principal::UserInfo;
-use common_storages_fuse::FuseTable;
-use databend_query::interpreters::InterpreterFactory;
-use databend_query::servers::Server;
-use databend_query::sessions::QueryContext;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {

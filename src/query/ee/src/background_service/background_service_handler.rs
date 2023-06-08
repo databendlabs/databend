@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::format;
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use arrow_array::RecordBatch;
@@ -25,16 +23,12 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_meta_app::principal::{AuthInfo, UserIdentity};
-use common_meta_app::principal::PasswordHashMethod;
+use common_meta_app::principal::{UserIdentity};
 use common_meta_app::principal::UserInfo;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
-use databend_query::servers::Server;
-use databend_query::sessions::QueryContext;
 use databend_query::sessions::Session;
 use databend_query::sql::Planner;
-use databend_query::status;
 use futures_util::StreamExt;
 use common_meta_store::MetaStore;
 use common_users::{BUILTIN_ROLE_ACCOUNT_ADMIN, UserApiProvider};
@@ -48,17 +42,6 @@ pub struct RealBackgroundService {
     meta: Arc<MetaStore>,
     user: UserIdentity
 }
-// #[async_trait::async_trait]
-// impl Server for RealBackgroundService {
-//     #[async_backtrace::framed]
-//     async fn shutdown(&mut self, graceful: bool) {
-//         todo!()
-//     }
-//     #[async_backtrace::framed]
-//     async fn start(&mut self, listening: SocketAddr) -> common_exception::Result<SocketAddr> {
-//         todo!()
-//     }
-// }
 
 #[async_trait::async_trait]
 impl BackgroundServiceHandler for RealBackgroundService {

@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fmt::format;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,22 +21,19 @@ use arrow_array::StringArray;
 use arrow_array::UInt64Array;
 use chrono::Utc;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
-use common_config::{CompactionParams, InnerConfig};
+use common_config::{InnerConfig};
 use common_exception::Result;
-use common_expression::types::Float32Type;
-use common_expression::types::Float64Type;
-use common_meta_app::background::{BackgroundJobIdent, BackgroundJobInfo, BackgroundJobType, BackgroundTaskIdent, BackgroundTaskInfo, BackgroundTaskState, CompactionStats, UpdateBackgroundTaskReq};
+use common_meta_app::background::{BackgroundJobIdent, BackgroundTaskIdent, BackgroundTaskInfo, BackgroundTaskState, UpdateBackgroundTaskReq};
 use common_meta_app::schema::TableStatistics;
-use tracing::{debug, info};
+use tracing::{debug, error, info};
+use background_service::get_background_service_handler;
 use common_base::base::tokio::time::Instant;
-use common_base::base::uuid::{Uuid, uuid};
+use common_base::base::uuid::{Uuid};
 use common_meta_api::BackgroundApi;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
 
-use crate::background_service::configs::JobConfig;
 use crate::background_service::job::Job;
-use crate::background_service::RealBackgroundService;
 
 // TODO(zhihanz) add more configs to filter out tables need to be compacted
 const GET_ALL_TARGET_TABLES: &str = "
@@ -70,24 +66,20 @@ impl Job for CompactionJob {
     async fn run(&self) {
         self.do_compaction_job().await.expect("TODO: panic message");
     }
-
-    fn get_config(&self) -> &JobConfig {
-        &self.config
-    }
 }
 
 // continue to compact
-fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) -> (bool, bool) {
+pub fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) -> (bool, bool) {
     if old.number_of_blocks.is_none() || old.number_of_segments.is_none() ||
         new.number_of_blocks.is_none() || new.number_of_segments.is_none() {
         return (false, false);
     }
     let old_segment_density = old.number_of_blocks.unwrap() as f64 / old.number_of_segments.unwrap() as f64;
     let new_segment_density = new.number_of_blocks.unwrap() as f64 / new.number_of_segments.unwrap() as f64;
-    let should_continue_seg_compact = new_segment_density > old_segment_density;
-    let old_block_density = old.data_bytes.unwrap() as f64 / old.number_of_blocks.unwrap() as f64;
-    let new_block_density = new.data_bytes.unwrap() as f64 / new.number_of_blocks.unwrap() as f64;
-    let should_continue_blk_compact = new_block_density > old_block_density;
+    let should_continue_seg_compact = new_segment_density > old_segment_density || old.number_of_blocks != new.number_of_blocks || old.number_of_segments != new.number_of_segments;
+    let old_block_density = old.data_bytes as f64 / old.number_of_blocks.unwrap() as f64;
+    let new_block_density = new.data_bytes as f64 / new.number_of_blocks.unwrap() as f64;
+    let should_continue_blk_compact = new_block_density > old_block_density || old.data_bytes != new.data_bytes || old.number_of_blocks != new.number_of_blocks;
     (should_continue_seg_compact, should_continue_blk_compact)
 }
 
@@ -105,7 +97,28 @@ impl CompactionJob {
             creator,
         }
     }
-    async fn do_compaction_job(&self) -> Result<()> {
+    async fn do_compaction_job(&self) -> Result<()>{
+        let svc = get_background_service_handler();
+        if let Some(records) = Self::do_get_all_target_tables(&svc).await? {
+            let db_names = records.column(0).as_any().downcast_ref::<StringArray>().unwrap();
+            let db_ids = records.column(1).as_any().downcast_ref::<UInt64Array>().unwrap();
+            let tb_names = records.column(2).as_any().downcast_ref::<StringArray>().unwrap();
+            let tb_ids = records.column(3).as_any().downcast_ref::<UInt64Array>().unwrap();
+            for i in 0..records.num_rows() {
+                let db_name = db_names.value(i).to_string();
+                let db_id = db_ids.value(i);
+                let tb_name = tb_names.value(i).to_string();
+                let tb_id = tb_ids.value(i);
+                match self.compact_table(&svc, db_name.clone(), tb_name.clone(), db_id, tb_id).await {
+                    Ok(_) => {
+                        debug!("compaction job success, db: {}, table: {}", db_name, tb_name);
+                    }
+                    Err(e) => {
+                        error!("compaction job failed, db: {}, table: {}, err: {}", db_name, tb_name, e);
+                    }
+                }
+            }
+        }
         Ok(())
     }
 
@@ -194,7 +207,6 @@ impl CompactionJob {
                 self.do_block_compaction(svc, database.clone(), table.clone()).await?;
                 let (_, _, new) = Self::do_check_table(svc, database.clone(), table.clone(), SEGMENT_SIZE, PER_SEGMENT_BLOCK, PER_BLOCK_SIZE).await?;
                 if !should_continue_compaction(&old, &new).1 {
-                    old = new;
                     break;
                 }
                 old = new;

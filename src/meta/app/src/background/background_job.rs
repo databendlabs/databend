@@ -19,7 +19,7 @@ use std::fmt::Formatter;
 use chrono::DateTime;
 use chrono::Utc;
 
-use crate::background::{BackgroundTaskInfo, BackgroundTaskType};
+use crate::background::BackgroundTaskType;
 use crate::principal::UserIdentity;
 
 #[derive(
@@ -105,7 +105,7 @@ impl BackgroundJobInfo {
         Self {
             job_type,
             job_state: BackgroundJobState::RUNNING,
-            task_type: BackgroundTaskType::COMPACT,
+            task_type: BackgroundTaskType::COMPACTION,
             last_updated: Some(Utc::now()),
             message: "".to_string(),
             creator: Some(creator),

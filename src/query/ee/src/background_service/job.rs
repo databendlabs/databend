@@ -14,7 +14,6 @@
 
 use async_trait::async_trait;
 
-use crate::background_service::configs::JobConfig;
 /// A trait for implementing a background job
 ///
 /// Example implementation:
@@ -42,8 +41,6 @@ use crate::background_service::configs::JobConfig;
 pub trait Job: JobClone {
     /// Runs the job
     async fn run(&self);
-    /// Exposes the configuration of the job
-    fn get_config(&self) -> &JobConfig;
 }
 
 pub trait JobClone {

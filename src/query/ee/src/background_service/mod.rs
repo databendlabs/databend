@@ -21,3 +21,6 @@ mod session;
 
 pub use background_service_handler::RealBackgroundService;
 pub use compaction_job::CompactionJob;
+pub use job::Job;
+pub use job_scheduler::JobScheduler;
+pub use compaction_job::should_continue_compaction;
