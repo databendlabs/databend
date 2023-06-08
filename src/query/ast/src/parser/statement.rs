@@ -298,7 +298,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             CREATE ~ INDEX~ ON ~ #period_separated_idents_1_to_3
             ~ USING ~ IVFFLAT ~ "(" ~ #ident ~ COSINE ~")"
-            ~ WITH ~ "(" ~ #comma_separated_list1(expr) ~ ")"
+            ~ WITH ~ "(" ~ NLIST ~ Eq ~ #expr ~")"
         },
         |(
             _,
@@ -313,7 +313,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             _,
             _,
             _,
-            paras,
+            _,
+            _,
+            nlist,
             _,
         )| {
             Statement::CreateVectorIndex(CreateVectorIndexStmt {
@@ -323,7 +325,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
                 index_type: index_type.kind,
                 column,
                 metric_type: metric_type.kind,
-                paras,
+                paras: vec![nlist],
             })
         },
     );

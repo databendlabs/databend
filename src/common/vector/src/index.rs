@@ -23,7 +23,7 @@ pub enum VectorIndex {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct IvfFlatIndex {
-    pub nlists: usize,
+    pub nlist: usize,
     pub nprobe: usize,
 }
 

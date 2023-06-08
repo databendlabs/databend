@@ -362,7 +362,7 @@ impl Display for Statement {
                 write!(f, "{variable} = {value}")?;
             }
             Statement::SetVectorIndexParam {
-                param: para,
+                param,
                 catalog,
                 database,
                 table,
@@ -380,7 +380,7 @@ impl Display for Statement {
                 write!(f, "{table}.")?;
                 write!(f, "{column}.")?;
                 write!(f, "{:?}.", metric)?;
-                write!(f, "{:?} = {val}", para)?;
+                write!(f, "{:?} = {val}", param)?;
             }
             Statement::UnSetVariable(unset) => write!(f, "{unset}")?,
             Statement::SetRole {

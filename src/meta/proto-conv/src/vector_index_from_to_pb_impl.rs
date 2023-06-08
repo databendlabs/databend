@@ -28,7 +28,7 @@ impl FromToProto for VectorIndex {
 
     fn to_pb(&self) -> Result<String, Incompatible> {
         let pb = match self {
-            VectorIndex::IvfFlat(v) => format!("IvfFlat_{}_{}", v.nlists, v.nprobe),
+            VectorIndex::IvfFlat(v) => format!("IvfFlat_{}_{}", v.nlist, v.nprobe),
         };
         Ok(pb)
     }
@@ -55,7 +55,7 @@ impl FromToProto for VectorIndex {
                     reason: format!("Invalid index: {}, {}", p, e),
                 })?;
                 Ok(VectorIndex::IvfFlat(common_vector::index::IvfFlatIndex {
-                    nlists,
+                    nlist: nlists,
                     nprobe,
                 }))
             }

@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
-use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnDefinition;
 use common_ast::ast::CompactTarget;
 use common_ast::ast::CreateTableSource;
@@ -1048,37 +1047,21 @@ impl Binder {
     }
 
     fn validate_ivfflat_paras(paras: &[Expr]) -> Result<VectorIndex> {
-        if paras.len() != 1 {
-            return Err(ErrorCode::SyntaxException(
-                "wrong number of vector index parameters",
-            ));
-        }
-        if let Expr::BinaryOp {
-            op: BinaryOperator::Eq,
-            left,
-            right,
-            ..
-        } = &paras[0]
-        {
-            let left = left.as_ref();
-            let right = right.as_ref();
-            match (left, right) {
-                (
-                    Expr::ColumnRef { column, .. },
-                    Expr::Literal {
-                        lit: Literal::UInt64(nlists),
-                        ..
-                    },
-                ) if column.name == "nlist" => {
-                    return Ok(VectorIndex::IvfFlat(IvfFlatIndex {
-                        nlists: *nlists as usize,
-                        nprobe: 1,
-                    }));
-                }
-                _ => {}
+        const DEFAULT_NPROBE: usize = 1;
+        match paras[0] {
+            Expr::Literal {
+                lit: Literal::UInt64(nlist),
+                ..
+            } => {
+                return Ok(VectorIndex::IvfFlat(IvfFlatIndex {
+                    nlist: nlist as usize,
+                    nprobe: DEFAULT_NPROBE,
+                }));
+            }
+            _ => {
+                return Err(ErrorCode::SyntaxException("wrong vector index parameters"));
             }
         }
-        Err(ErrorCode::SyntaxException("wrong vector index parameters"))
     }
 
     #[async_backtrace::framed]
