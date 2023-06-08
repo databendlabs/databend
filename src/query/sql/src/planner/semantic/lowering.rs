@@ -195,6 +195,7 @@ impl ScalarExpr {
                 id: ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    column_position: None,
                     table_index: None,
                     column_name: win.display_name.clone(),
                     index: usize::MAX,
@@ -211,6 +212,7 @@ impl ScalarExpr {
                     database_name: None,
                     table_name: None,
                     table_index: None,
+                    column_position: None,
                     column_name: agg.display_name.clone(),
                     index: usize::MAX,
                     data_type: Box::new((*agg.return_type).clone()),
@@ -250,6 +252,7 @@ fn new_dummy_column(data_type: DataType) -> ColumnBinding {
     ColumnBinding {
         database_name: None,
         table_name: None,
+        column_position: None,
         table_index: None,
         column_name: "DUMMY".to_string(),
         index: usize::MAX,

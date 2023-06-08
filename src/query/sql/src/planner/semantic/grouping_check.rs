@@ -48,6 +48,7 @@ impl<'a> GroupingChecker<'a> {
                 ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    column_position: None,
                     table_index: None,
                     column_name: "group_item".to_string(),
                     index: column.index,
@@ -140,6 +141,7 @@ impl<'a> GroupingChecker<'a> {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: win.display_name.clone(),
                         index: window_info.index,
@@ -168,6 +170,7 @@ impl<'a> GroupingChecker<'a> {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: agg.display_name.clone(),
                         index: agg_func.index,

@@ -542,6 +542,7 @@ impl<'a> Binder {
         ColumnBinding {
             database_name,
             table_name,
+            column_position: None,
             table_index,
             column_name,
             index,

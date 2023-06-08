@@ -1329,6 +1329,7 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
         column: ColumnBinding {
             database_name: None,
             table_name: None,
+            column_position: None,
             table_index: None,
             column_name: "_eager".to_string(),
             index: args_index,
@@ -1392,6 +1393,7 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    column_position: None,
                     table_index: None,
                     column_name: "_eager_final_sum".to_string(),
                     index: left_index,
@@ -1406,6 +1408,7 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: "_eager_final_count".to_string(),
                         index: right_index,
@@ -1601,6 +1604,7 @@ fn create_eager_count_multiply_scalar_item(
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            column_position: None,
                             table_index: None,
                             column_name: "_eager_count".to_string(),
                             index: eager_count_index,

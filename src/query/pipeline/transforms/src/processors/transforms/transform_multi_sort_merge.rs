@@ -49,7 +49,7 @@ use super::sort::SimpleRows;
 
 pub fn try_add_multi_sort_merge(
     pipeline: &mut Pipeline,
-    output_schema: DataSchemaRef,
+    input_schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
@@ -70,7 +70,7 @@ pub fn try_add_multi_sort_merge(
             let processor = create_processor(
                 inputs_port.clone(),
                 output_port.clone(),
-                output_schema,
+                input_schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
@@ -90,13 +90,13 @@ pub fn try_add_multi_sort_merge(
 fn create_processor(
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
-    output_schema: DataSchemaRef,
+    input_schema: DataSchemaRef,
     block_size: usize,
     limit: Option<usize>,
     sort_columns_descriptions: Vec<SortColumnDescription>,
 ) -> Result<ProcessorPtr> {
     Ok(if sort_columns_descriptions.len() == 1 {
-        let sort_type = output_schema
+        let sort_type = input_schema
             .field(sort_columns_descriptions[0].offset)
             .data_type();
         match sort_type {
@@ -108,7 +108,7 @@ fn create_processor(
                     >::create(
                         inputs,
                         output,
-                        output_schema,
+                        input_schema,
                         block_size,
                         limit,
                         sort_columns_descriptions,
@@ -120,7 +120,7 @@ fn create_processor(
             >::create(
                 inputs,
                 output,
-                output_schema,
+                input_schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
@@ -131,7 +131,7 @@ fn create_processor(
             >::create(
                 inputs,
                 output,
-                output_schema,
+                input_schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
@@ -142,7 +142,7 @@ fn create_processor(
             >::create(
                 inputs,
                 output,
-                output_schema,
+                input_schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
@@ -153,7 +153,7 @@ fn create_processor(
             >::create(
                 inputs,
                 output,
-                output_schema,
+                input_schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
@@ -166,7 +166,7 @@ fn create_processor(
         >::create(
             inputs,
             output,
-            output_schema,
+            input_schema,
             block_size,
             limit,
             sort_columns_descriptions,
@@ -183,7 +183,6 @@ where
     /// Data from inputs (every input is sorted)
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
-    output_schema: DataSchemaRef,
     /// Sort fields' indices in `output_schema`
     sort_field_indices: Vec<usize>,
 
@@ -218,7 +217,7 @@ where
     pub fn create(
         inputs: Vec<Arc<InputPort>>,
         output: Arc<OutputPort>,
-        output_schema: DataSchemaRef,
+        input_schema: DataSchemaRef,
         block_size: usize,
         limit: Option<usize>,
         sort_columns_descriptions: Vec<SortColumnDescription>,
@@ -228,11 +227,10 @@ where
             .iter()
             .map(|d| d.offset)
             .collect::<Vec<_>>();
-        let row_converter = Converter::create(sort_columns_descriptions, output_schema.clone())?;
+        let row_converter = Converter::create(sort_columns_descriptions, input_schema)?;
         Ok(Self {
             inputs,
             output,
-            output_schema,
             sort_field_indices,
             block_size,
             limit,
@@ -360,8 +358,7 @@ where
 
     /// Drain `self.in_progress_rows` to build a output data block.
     fn build_block(&mut self) -> Result<DataBlock> {
-        let num_rows = self.in_progress_rows.len();
-        debug_assert!(num_rows > 0);
+        debug_assert!(!self.in_progress_rows.is_empty());
 
         let mut blocks_num_pre_sum = Vec::with_capacity(self.blocks.len());
         let mut len = 0;
@@ -393,22 +390,8 @@ where
         }
         indices.push((index, start_row_index, end_row_index - start_row_index));
 
-        let columns = self
-            .output_schema
-            .fields()
-            .iter()
-            .enumerate()
-            .map(|(col_id, _)| {
-                // Collect all rows for a certain column out of all preserved chunks.
-                let candidate_cols = self
-                    .blocks
-                    .iter()
-                    .flatten()
-                    .map(|block| block.get_by_offset(col_id).clone())
-                    .collect::<Vec<_>>();
-                DataBlock::take_column_by_slices_limit(&candidate_cols, &indices, None)
-            })
-            .collect::<Vec<_>>();
+        let candidate_blocks = self.blocks.iter().flatten().cloned().collect::<Vec<_>>();
+        let output = DataBlock::take_by_slices_limit_from_blocks(&candidate_blocks, &indices, None);
 
         // Clear no need data.
         self.in_progress_rows.clear();
@@ -421,7 +404,7 @@ where
             }
         }
 
-        Ok(DataBlock::new(columns, num_rows))
+        Ok(output)
     }
 }
 
@@ -529,7 +512,7 @@ where
                         .map(|i| block.get_by_offset(*i).clone())
                         .collect::<Vec<_>>();
                     let rows = self.row_converter.convert(&columns, block.num_rows())?;
-                    let cursor = Cursor::try_create(input_index, rows);
+                    let cursor = Cursor::new(input_index, rows);
                     self.heap.push(Reverse(cursor));
                     self.cursor_finished[input_index] = false;
                     self.blocks[input_index].push_back(block);

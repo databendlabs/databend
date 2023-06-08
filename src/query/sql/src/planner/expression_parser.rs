@@ -77,6 +77,7 @@ pub fn parse_exprs(
             }) => ColumnBinding {
                 database_name: Some("default".to_string()),
                 table_name: Some(table.name().to_string()),
+                column_position: None,
                 table_index: Some(table.index()),
                 column_name: column_name.clone(),
                 index,
@@ -135,6 +136,7 @@ pub fn parse_computed_exprs(
         bind_context.add_column_binding(ColumnBinding {
             database_name: None,
             table_name: None,
+            column_position: None,
             table_index: None,
             column_name: field.name().clone(),
             index,
@@ -147,6 +149,7 @@ pub fn parse_computed_exprs(
             table_field.name().clone(),
             table_field.data_type().clone(),
             0,
+            None,
             None,
             None,
             None,

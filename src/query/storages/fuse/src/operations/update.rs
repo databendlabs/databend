@@ -104,6 +104,7 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
+    #[allow(clippy::too_many_arguments)]
     async fn try_add_update_source(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -122,7 +123,7 @@ impl FuseTable {
         let mut pos = 0;
         let (projection, input_schema) = if col_indices.is_empty() {
             for index in all_column_indices.iter() {
-                if computed_list.contains_key(&index) {
+                if computed_list.contains_key(index) {
                     continue;
                 }
                 offset_map.insert(*index, pos);

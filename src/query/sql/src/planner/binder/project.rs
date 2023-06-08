@@ -199,8 +199,8 @@ impl Binder {
                             self.name_resolution_ctx.unquoted_ident_case_sensitive;
                         for col in cols {
                             let name = is_unquoted_ident_case_sensitive
-                                .then(|| col.name.clone())
-                                .unwrap_or_else(|| col.name.to_lowercase());
+                                .then(|| col.name().to_owned())
+                                .unwrap_or_else(|| col.name().to_lowercase());
                             exclude_cols.insert(name);
                         }
                         if exclude_cols.len() < cols.len() {

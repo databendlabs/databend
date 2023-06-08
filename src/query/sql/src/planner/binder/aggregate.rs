@@ -238,6 +238,7 @@ impl<'a> AggregateRewriter<'a> {
 
                     // TODO(leiysky): use a more reasonable name, since aggregate arguments
                     // can not be referenced, the name is only for debug
+                    column_position: None,
                     table_index: None,
                     column_name: name,
                     index,
@@ -709,7 +710,7 @@ impl Binder {
                 ..
             } = expr
             {
-                if col_name.eq_ignore_ascii_case(column.name.as_str()) {
+                if col_name.eq_ignore_ascii_case(column.name()) {
                     result.push(i);
                 }
             }

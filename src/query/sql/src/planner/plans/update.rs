@@ -61,6 +61,7 @@ impl UpdatePlan {
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: "_predicate".to_string(),
                 index: schema.num_fields(),
@@ -144,9 +145,9 @@ impl UpdatePlan {
 
                 // If related column has updated, the stored computed column need to regenerate.
                 let mut need_update = false;
-                let column_ids = expr.column_refs();
-                for (column_id, _) in column_ids.iter() {
-                    if self.update_list.contains_key(&column_id) {
+                let field_indices = expr.column_refs();
+                for (field_index, _) in field_indices.iter() {
+                    if self.update_list.contains_key(field_index) {
                         need_update = true;
                         break;
                     }
@@ -155,7 +156,6 @@ impl UpdatePlan {
                     let remote_expr = expr
                         .project_column_ref(|index| schema.field(*index).name().to_string())
                         .as_remote_expr();
-
                     remote_exprs.insert(i, remote_expr);
                 }
             }

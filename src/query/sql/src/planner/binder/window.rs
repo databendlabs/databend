@@ -269,6 +269,7 @@ impl<'a> WindowRewriter<'a> {
                         let column_binding = ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            column_position: None,
                             table_index: None,
                             column_name: agg_func.display_name.clone(),
                             index: agg.index,
@@ -484,6 +485,7 @@ impl<'a> WindowRewriter<'a> {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: name.to_string(),
                 index,

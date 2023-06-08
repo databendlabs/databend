@@ -157,6 +157,7 @@ impl Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: name.clone(),
                 index: column_index,
