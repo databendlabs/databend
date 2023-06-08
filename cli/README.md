@@ -39,8 +39,6 @@ Options:
   -V, --version              Print version
 ```
 
-## Examples
-
 ### REPL
 ```sql
 ❯ bendsql

@@ -125,6 +125,59 @@ We can use `.CMD_NAME VAL` to update the `Settings` above in runtime, example:
 :) .max_display_rows 10
 ```
 
+## DSN
+
+Format:
+```
+databend[+flight]://user:[password]@host[:port]/[database][?sslmode=disabled][&arg1=value1]
+```
+
+Examples:
+
+- `databend://root:@localhost:8000/?sslmode=disable`
+
+- `databend://user1:password1@tnxxxx--default.gw.aws-us-east-2.default.databend.com:443/benchmark?enable_dphyp=1`
+
+- `databend+flight://root:@localhost:8900/database1?connect_timeout=10`
+
+
+Available Args:
+
+Common:
+
+| Arg | Description |
+|---|---|
+| `tenant` | Tenant ID, Databend Cloud only. |
+| `warehouse` | Warehouse name, Databend Cloud only. |
+| `sslmode` | Set to `disable` if not using tls |
+
+
+RestAPI client:
+
+| Arg | Description |
+|---|---|
+| `presigned_url_disabled` | Set to `1` to disable presigned upload to object storage, *should only be used with local testing environment* |
+| `wait_time_secs` | Request wait time for page, default to `1` |
+| `max_rows_in_buffer` | Max rows for page buffer |
+| `max_rows_per_page` | Max response rows for a single page |
+
+
+FlightSQL client:
+
+| Arg | Description |
+|---|---|
+| `connect_timeout` | Grpc connect timeout seconds |
+| `query_timeout` | Query timeout seconds |
+| `tcp_nodelay` | Default to `true` |
+| `tcp_keepalive` | Tcp keepalive seconds, default to `3600`, set to `0` to disable keepalive |
+| `http2_keep_alive_interval` | Keep alive interval in seconds, default to `300` |
+| `keep_alive_timeout` | Keep alive timeout in seconds, default to `20` |
+| `keep_alive_while_idle` | Default to `true` |
+
+Query Settings:
+
+see: [Databend Query Settings](https://databend.rs/doc/sql-commands/show/show-settings)
+
 
 ## Development
 

@@ -142,7 +142,7 @@ async fn select_decimal() {
             Value::Number(NumberValue::Decimal128(
                 50i128,
                 DecimalSize {
-                    precision: 3,
+                    precision: 2,
                     scale: 1
                 },
             )),
