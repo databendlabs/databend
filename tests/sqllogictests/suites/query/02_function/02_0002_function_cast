@@ -14,27 +14,27 @@ SELECT typeof(CAST(number AS UInt64)) FROM numbers_mt(1)
 BIGINT UNSIGNED
 
 query T
-SELECT typeof(to_int8('8')) FROM numbers_mt(1)
+SELECT typeof(to_int8(number)) FROM numbers_mt(1)
 ----
 TINYINT
 
 query T
-SELECT typeof(to_int16('16')) FROM numbers_mt(1)
+SELECT typeof(to_int16(number)) FROM numbers_mt(1)
 ----
 SMALLINT
 
 query T
-SELECT typeof(to_int32('32')) FROM numbers_mt(1)
+SELECT typeof(to_int32(number)) FROM numbers_mt(1)
 ----
 INT
 
 query T
-SELECT typeof(to_int64('64')) FROM numbers_mt(1)
+SELECT typeof(to_int64(number)) FROM numbers_mt(1)
 ----
 BIGINT
 
 query T
-SELECT typeof(to_uint32('64')) FROM numbers_mt(1)
+SELECT typeof(to_uint32(number)) FROM numbers_mt(1)
 ----
 INT UNSIGNED
 

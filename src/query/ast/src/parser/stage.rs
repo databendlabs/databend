@@ -27,15 +27,10 @@ use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
 
-pub fn ident_to_string(i: Input) -> IResult<String> {
-    map_res(ident, |ident| Ok(ident.name))(i)
-}
-
-pub fn u64_to_string(i: Input) -> IResult<String> {
-    map(literal_u64, |v| v.to_string())(i)
-}
-
 pub fn parameter_to_string(i: Input) -> IResult<String> {
+    let ident_to_string = |i| map_res(ident, |ident| Ok(ident.name))(i);
+    let u64_to_string = |i| map(literal_u64, |v| v.to_string())(i);
+
     map(
         rule! { ( #literal_string | #ident_to_string | #u64_to_string ) },
         |parameter| parameter,
@@ -103,9 +98,9 @@ pub fn format_options(i: Input) -> IResult<BTreeMap<String, String>> {
 
     let int_options = map(
         rule! {
-            SKIP_HEADER ~ "=" ~ #u64_to_string
+            SKIP_HEADER ~ "=" ~ #literal_u64
         },
-        |(k, _, v)| (k.text().to_string(), v),
+        |(k, _, v)| (k.text().to_string(), v.to_string()),
     );
 
     let none_options = map(
@@ -132,10 +127,13 @@ pub fn file_format_clause(i: Input) -> IResult<BTreeMap<String, String>> {
 pub fn options(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-        "(" ~ ( #ident_to_string ~ "=" ~ #parameter_to_string )* ~ ")"
+        "(" ~ ( #ident ~ "=" ~ #parameter_to_string )* ~ ")"
         },
         |(_, opts, _)| {
-            BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone())))
+            BTreeMap::from_iter(
+                opts.iter()
+                    .map(|(k, _, v)| (k.name.to_lowercase(), v.clone())),
+            )
         },
     )(i)
 }

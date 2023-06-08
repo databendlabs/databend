@@ -120,10 +120,10 @@ impl BindContext {
         operators.push(BlockOperator::Map { exprs: map_exprs });
 
         let one_row_chunk = DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::Number(NumberDataType::UInt8),
-                value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
-            }],
+            vec![BlockEntry::new(
+                DataType::Number(NumberDataType::UInt8),
+                Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
+            )],
             1,
         );
         let func_ctx = ctx.get_function_context()?;

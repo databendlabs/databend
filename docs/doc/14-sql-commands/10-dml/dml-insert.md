@@ -4,8 +4,8 @@ title: INSERT
 
 Writing data.
 
-:::note
-**Databend guarantees data integrity**. In Databend, Insert, Update, and Delete operations are guaranteed to be atomic, which means that all data in the operation must succeed or all must fail.
+:::tip atomic operations
+Databend ensures data integrity with atomic operations. Inserts, updates, replaces, and deletes either succeed completely or fail entirely.
 :::
 
 ## Insert Into Statement

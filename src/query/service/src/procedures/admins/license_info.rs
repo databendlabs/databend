@@ -107,19 +107,19 @@ impl LicenseInfoProcedure {
             HumanDuration::from(Duration::from_micros(available_time)).to_string();
         Ok(DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(
                         info.issuer
                             .clone()
                             .unwrap_or("".to_string())
                             .into_bytes()
                             .to_vec(),
                     )),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(
                         info.custom
                             .r#type
                             .clone()
@@ -127,10 +127,10 @@ impl LicenseInfoProcedure {
                             .into_bytes()
                             .to_vec(),
                     )),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(
                         info.custom
                             .org
                             .clone()
@@ -138,25 +138,25 @@ impl LicenseInfoProcedure {
                             .into_bytes()
                             .to_vec(),
                     )),
-                },
-                BlockEntry {
-                    data_type: DataType::Timestamp,
-                    value: Value::Scalar(Scalar::Timestamp(
+                ),
+                BlockEntry::new(
+                    DataType::Timestamp,
+                    Value::Scalar(Scalar::Timestamp(
                         info.issued_at.unwrap_or_default().as_micros() as i64,
                     )),
-                },
-                BlockEntry {
-                    data_type: DataType::Timestamp,
-                    value: Value::Scalar(Scalar::Timestamp(
+                ),
+                BlockEntry::new(
+                    DataType::Timestamp,
+                    Value::Scalar(Scalar::Timestamp(
                         info.expires_at.unwrap_or_default().as_micros() as i64,
                     )),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(
                         human_readable_available_time.into_bytes().to_vec(),
                     )),
-                },
+                ),
             ],
             1,
         ))

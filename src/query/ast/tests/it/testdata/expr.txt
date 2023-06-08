@@ -119,9 +119,9 @@ Array {
             span: Some(
                 5..8,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 35,
-                precision: 2,
+                precision: 76,
                 scale: 1,
             },
         },
@@ -129,9 +129,9 @@ Array {
             span: Some(
                 10..12,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 4,
-                precision: 1,
+                precision: 76,
                 scale: 0,
             },
         },
@@ -139,9 +139,9 @@ Array {
             span: Some(
                 14..18,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 1,
-                precision: 3,
+                precision: 76,
                 scale: 3,
             },
         },
@@ -149,9 +149,9 @@ Array {
             span: Some(
                 20..23,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 500,
-                precision: 3,
+                precision: 76,
                 scale: 0,
             },
         },
@@ -159,9 +159,9 @@ Array {
             span: Some(
                 25..33,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 1925,
-                precision: 6,
+                precision: 76,
                 scale: 6,
             },
         },
@@ -169,9 +169,9 @@ Array {
             span: Some(
                 35..41,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 3800000,
-                precision: 7,
+                precision: 76,
                 scale: 0,
             },
         },
@@ -179,9 +179,9 @@ Array {
             span: Some(
                 43..49,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 1,
-                precision: 1,
+                precision: 76,
                 scale: 1,
             },
         },
@@ -214,9 +214,9 @@ Literal {
     span: Some(
         0..30,
     ),
-    lit: Decimal128 {
+    lit: Decimal256 {
         value: 123456789012345678901234567890,
-        precision: 30,
+        precision: 76,
         scale: 0,
     },
 }
@@ -231,9 +231,9 @@ Literal {
     span: Some(
         0..33,
     ),
-    lit: Decimal128 {
+    lit: Decimal256 {
         value: 94522879687365475552814062743484560,
-        precision: 38,
+        precision: 76,
         scale: 0,
     },
 }
@@ -248,7 +248,7 @@ Literal {
     span: Some(
         0..17,
     ),
-    lit: Float(
+    lit: Float64(
         inf,
     ),
 }
@@ -263,9 +263,9 @@ Literal {
     span: Some(
         0..2,
     ),
-    lit: Decimal128 {
+    lit: Decimal256 {
         value: 1,
-        precision: 1,
+        precision: 76,
         scale: 1,
     },
 }
@@ -274,15 +274,21 @@ Literal {
 ---------- Input ----------
 -1
 ---------- Output ---------
--1
+(- 1)
 ---------- AST ------------
-Literal {
+UnaryOp {
     span: Some(
-        1..2,
+        0..1,
     ),
-    lit: Int64(
-        -1,
-    ),
+    op: Minus,
+    expr: Literal {
+        span: Some(
+            1..2,
+        ),
+        lit: UInt64(
+            1,
+        ),
+    },
 }
 
 
@@ -758,7 +764,7 @@ FunctionCall {
 ---------- Input ----------
 - - + + - 1 + + - 2
 ---------- Output ---------
-((- (- (+ (+ -1)))) + (+ -2))
+((- (- (+ (+ (- 1))))) + (+ (- 2)))
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -785,13 +791,19 @@ BinaryOp {
                         6..7,
                     ),
                     op: Plus,
-                    expr: Literal {
+                    expr: UnaryOp {
                         span: Some(
-                            10..11,
+                            8..9,
                         ),
-                        lit: Int64(
-                            -1,
-                        ),
+                        op: Minus,
+                        expr: Literal {
+                            span: Some(
+                                10..11,
+                            ),
+                            lit: UInt64(
+                                1,
+                            ),
+                        },
                     },
                 },
             },
@@ -802,13 +814,19 @@ BinaryOp {
             14..15,
         ),
         op: Plus,
-        expr: Literal {
+        expr: UnaryOp {
             span: Some(
-                18..19,
+                16..17,
             ),
-            lit: Int64(
-                -2,
-            ),
+            op: Minus,
+            expr: Literal {
+                span: Some(
+                    18..19,
+                ),
+                lit: UInt64(
+                    2,
+                ),
+            },
         },
     },
 }
@@ -874,7 +892,7 @@ BinaryOp {
 ---------- Input ----------
 1 - -(- - -1)
 ---------- Output ---------
-(1 - (- (- (- -1))))
+(1 - (- (- (- (- 1)))))
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -904,13 +922,19 @@ BinaryOp {
                     8..9,
                 ),
                 op: Minus,
-                expr: Literal {
+                expr: UnaryOp {
                     span: Some(
-                        11..12,
+                        10..11,
                     ),
-                    lit: Int64(
-                        -1,
-                    ),
+                    op: Minus,
+                    expr: Literal {
+                        span: Some(
+                            11..12,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
                 },
             },
         },

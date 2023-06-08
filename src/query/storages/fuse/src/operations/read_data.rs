@@ -18,6 +18,7 @@ use common_base::runtime::Runtime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -31,8 +32,10 @@ use storages_common_index::RangeIndex;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
-use crate::operations::fuse_source::build_fuse_source_pipeline;
+use crate::operations::read::build_fuse_parquet_source_pipeline;
+use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 use crate::pruning::SegmentLocation;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -188,7 +191,7 @@ impl FuseTable {
             )
         });
 
-        build_fuse_source_pipeline(
+        Self::build_fuse_source_pipeline(
             ctx.clone(),
             pipeline,
             self.storage_format,
@@ -202,5 +205,37 @@ impl FuseTable {
         self.apply_data_mask_policy_if_needed(ctx, plan, pipeline)?;
 
         Ok(())
+    }
+
+    fn build_fuse_source_pipeline(
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        storage_format: FuseStorageFormat,
+        block_reader: Arc<BlockReader>,
+        plan: &DataSourcePlan,
+        top_k: Option<TopK>,
+        max_io_requests: usize,
+    ) -> Result<()> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+
+        match storage_format {
+            FuseStorageFormat::Native => build_fuse_native_source_pipeline(
+                ctx,
+                pipeline,
+                block_reader,
+                max_threads,
+                plan,
+                top_k,
+                max_io_requests,
+            ),
+            FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
+                ctx,
+                pipeline,
+                block_reader,
+                plan,
+                max_threads,
+                max_io_requests,
+            ),
+        }
     }
 }

@@ -123,6 +123,8 @@ impl FuseTable {
                 data_bytes: summary.uncompressed_byte_size,
                 compressed_data_bytes: summary.compressed_byte_size,
                 index_data_bytes: summary.index_size,
+                number_of_segments: Some(snapshot.segments.len() as u64),
+                number_of_blocks: Some(summary.block_count),
             };
 
             // let's instantiate it

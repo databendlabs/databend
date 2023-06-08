@@ -31,7 +31,18 @@ impl UserApiProvider {
     #[async_backtrace::framed]
     pub async fn get_user(&self, tenant: &str, user: UserIdentity) -> Result<UserInfo> {
         if user.is_root() {
-            let mut user_info = UserInfo::new_no_auth(&user.username, &user.hostname);
+            let mut user_info = if let Some(auth_info) = self.get_configured_user(&user.username) {
+                UserInfo::new(&user.username, "%", auth_info.clone())
+            } else {
+                // The default root user does not need check auth password.
+                // If the root user's password has been changed, then auth check is required.
+                let client = self.get_user_api_client(tenant)?;
+                if let Ok(user_info) = client.get_user(user.clone(), MatchSeq::GE(0)).await {
+                    user_info.data
+                } else {
+                    UserInfo::new_no_auth(&user.username, &user.hostname)
+                }
+            };
             if user.is_localhost() {
                 user_info.grants.grant_privileges(
                     &GrantObject::Global,
@@ -126,6 +137,12 @@ impl UserApiProvider {
                 "same name with configured user",
             ));
         }
+        if user_info.is_root() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "User cannot be created with builtin user name {}",
+                user_info.name
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         let add_user = client.add_user(user_info);
         match add_user.await {
@@ -209,6 +226,18 @@ impl UserApiProvider {
     // Drop a user by name and hostname.
     #[async_backtrace::framed]
     pub async fn drop_user(&self, tenant: &str, user: UserIdentity, if_exists: bool) -> Result<()> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Configured user {} cannot be dropped",
+                user.username
+            )));
+        }
+        if user.is_root() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Builtin user {} cannot be dropped",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         let drop_user = client.drop_user(user, MatchSeq::GE(1));
         match drop_user.await {
@@ -232,7 +261,21 @@ impl UserApiProvider {
         auth_info: Option<AuthInfo>,
         user_option: Option<UserOption>,
     ) -> Result<Option<u64>> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Configured user {} cannot be updated",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
+        if user.is_root() && auth_info.is_some() {
+            // Root user info is not exist, need to add user info first.
+            let user_info =
+                UserInfo::new(&user.username, &user.hostname, auth_info.clone().unwrap());
+            if let Ok(res) = client.add_user(user_info).await {
+                return Ok(Some(res));
+            }
+        }
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_auth_option(auth_info, user_option)

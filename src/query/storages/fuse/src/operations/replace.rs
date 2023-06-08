@@ -22,6 +22,8 @@ use common_exception::Result;
 use common_expression::TableField;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
@@ -31,15 +33,15 @@ use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
-use crate::operations::merge_into::AppendTransform;
-use crate::operations::merge_into::BroadcastProcessor;
-use crate::operations::merge_into::CommitSink;
-use crate::operations::merge_into::MergeIntoOperationAggregator;
-use crate::operations::merge_into::OnConflictField;
-use crate::operations::merge_into::TableMutationAggregator;
+use crate::operations::common::AppendTransform;
+use crate::operations::common::CommitSink;
+use crate::operations::common::MutationGenerator;
+use crate::operations::common::TableMutationAggregator;
 use crate::operations::mutation::SegmentIndex;
-use crate::operations::replace_into::processor_replace_into::ReplaceIntoProcessor;
-use crate::operations::MutationGenerator;
+use crate::operations::replace_into::BroadcastProcessor;
+use crate::operations::replace_into::MergeIntoOperationAggregator;
+use crate::operations::replace_into::OnConflictField;
+use crate::operations::replace_into::ReplaceIntoProcessor;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 
@@ -163,14 +165,13 @@ impl FuseTable {
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
 
-        let append_transform = AppendTransform::try_create(
+        let append_transform = AppendTransform::new(
             ctx.clone(),
-            self.get_write_settings(),
-            self.operator.clone(),
-            self.meta_location_generator.clone(),
-            schema,
-            self.get_block_thresholds(),
+            InputPort::create(),
+            OutputPort::create(),
+            self,
             cluster_stats_gen,
+            self.get_block_thresholds(),
         );
         let block_builder = append_transform.get_block_builder();
 

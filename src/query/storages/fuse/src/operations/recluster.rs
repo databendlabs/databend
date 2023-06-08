@@ -28,16 +28,14 @@ use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
-use common_pipeline_transforms::processors::transforms::BlockCompactor;
-use common_pipeline_transforms::processors::transforms::TransformCompact;
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
 
-use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
-use crate::operations::merge_into::CommitSink;
-use crate::operations::merge_into::TableMutationAggregator;
-use crate::operations::AppendTransform;
-use crate::operations::MutationGenerator;
+use crate::operations::common::AppendTransform;
+use crate::operations::common::BlockMetaIndex;
+use crate::operations::common::CommitSink;
+use crate::operations::common::MutationGenerator;
+use crate::operations::common::TableMutationAggregator;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
@@ -175,26 +173,19 @@ impl FuseTable {
 
         build_full_sort_pipeline(pipeline, schema, sort_descs, None, block_size, None, false)?;
 
-        pipeline.add_transform(|transform_input_port, transform_output_port| {
-            Ok(ProcessorPtr::create(TransformCompact::try_create(
-                transform_input_port,
-                transform_output_port,
-                BlockCompactor::new(block_thresholds, true),
-            )?))
-        })?;
+        assert_eq!(pipeline.output_len(), 1);
 
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            AppendTransform::try_create(
+            let proc = AppendTransform::new(
                 ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 self,
                 cluster_stats_gen.clone(),
                 block_thresholds,
-            )
+            );
+            proc.into_processor()
         })?;
-
-        pipeline.resize(1)?;
 
         pipeline.add_transform(|input, output| {
             let mut aggregator = TableMutationAggregator::create(
