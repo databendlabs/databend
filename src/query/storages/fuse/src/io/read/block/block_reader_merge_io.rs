@@ -19,7 +19,6 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
-use storages_common_cache::CacheAccessor;
 use storages_common_cache::TableDataCache;
 use storages_common_cache::TableDataCacheKey;
 use storages_common_cache_manager::SizedColumnArray;

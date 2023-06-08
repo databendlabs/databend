@@ -154,9 +154,12 @@ impl BlockReader {
             }
 
             // and then, check column data cache
-            if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key) {
-                cached_column_data.push((*column_id, cached_column_raw_data));
-                continue;
+            if let Some(column_data_cache) = &column_data_cache {
+                if let Some(cached_column_raw_data) = column_data_cache.get(&column_cache_key).await
+                {
+                    cached_column_data.push((*column_id, cached_column_raw_data));
+                    continue;
+                }
             }
 
             // if all cache missed, prepare the ranges to be read
