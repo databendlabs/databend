@@ -15,14 +15,18 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::ComputedExpr;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 
+use crate::parse_computed_exprs;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
@@ -116,5 +120,45 @@ impl UpdatePlan {
                 Ok::<_, ErrorCode>(acc)
             },
         )
+    }
+
+    pub fn generate_stored_computed_list(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        schema: DataSchemaRef,
+    ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
+        let mut remote_exprs = Vec::new();
+        for (i, f) in schema.fields().iter().enumerate() {
+            if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
+                let mut expr = parse_computed_exprs(ctx.clone(), schema.clone(), stored_expr)?;
+                let mut expr = expr.remove(0);
+                if expr.data_type() != f.data_type() {
+                    expr = Expr::Cast {
+                        span: None,
+                        is_try: f.data_type().is_nullable(),
+                        expr: Box::new(expr),
+                        dest_type: f.data_type().clone(),
+                    };
+                }
+
+                // If related column has updated, the stored computed column need to regenerate.
+                let mut need_update = false;
+                let column_ids = expr.column_refs();
+                for (column_id, _) in column_ids.iter() {
+                    if self.update_list.contains_key(&column_id) {
+                        need_update = true;
+                        break;
+                    }
+                }
+                if need_update {
+                    let remote_expr = expr
+                        .project_column_ref(|index| schema.field(*index).name().to_string())
+                        .as_remote_expr();
+
+                    remote_exprs.push((i, remote_expr));
+                }
+            }
+        }
+        Ok(remote_exprs)
     }
 }

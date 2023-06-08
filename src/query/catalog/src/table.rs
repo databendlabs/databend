@@ -296,9 +296,17 @@ pub trait Table: Sync + Send {
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
         update_list: Vec<(usize, RemoteExpr<String>)>,
+        computed_list: Vec<(usize, RemoteExpr<String>)>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _, _) = (ctx, filter, col_indices, update_list, pipeline);
+        let (_, _, _, _, _, _) = (
+            ctx,
+            filter,
+            col_indices,
+            update_list,
+            computed_list,
+            pipeline,
+        );
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support UPDATE",

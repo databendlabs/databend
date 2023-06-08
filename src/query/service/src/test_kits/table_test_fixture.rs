@@ -578,6 +578,8 @@ pub async fn do_update(
         (None, vec![])
     };
     let update_list = plan.generate_update_list(table.schema().into(), col_indices.clone())?;
+    let computed_list =
+        plan.generate_stored_computed_list(ctx.clone(), Arc::new(table.schema().into()))?;
 
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut res = PipelineBuildResult::create();
@@ -587,6 +589,7 @@ pub async fn do_update(
             filter,
             col_indices,
             update_list,
+            computed_list,
             &mut res.main_pipeline,
         )
         .await?;

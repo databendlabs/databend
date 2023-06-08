@@ -645,10 +645,18 @@ impl Table for FuseTable {
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<FieldIndex>,
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+        computed_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_update(ctx, filter, col_indices, update_list, pipeline)
-            .await
+        self.do_update(
+            ctx,
+            filter,
+            col_indices,
+            update_list,
+            computed_list,
+            pipeline,
+        )
+        .await
     }
 
     fn get_block_thresholds(&self) -> BlockThresholds {

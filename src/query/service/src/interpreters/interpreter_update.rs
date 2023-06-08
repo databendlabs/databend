@@ -90,12 +90,17 @@ impl Interpreter for UpdateInterpreter {
             .plan
             .generate_update_list(tbl.schema().into(), col_indices.clone())?;
 
+        let computed_list = self
+            .plan
+            .generate_stored_computed_list(self.ctx.clone(), Arc::new(tbl.schema().into()))?;
+
         let mut build_res = PipelineBuildResult::create();
         tbl.update(
             self.ctx.clone(),
             filter,
             col_indices,
             update_list,
+            computed_list,
             &mut build_res.main_pipeline,
         )
         .await?;
