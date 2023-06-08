@@ -255,12 +255,7 @@ impl DataSchema {
     }
 
     pub fn to_arrow(&self) -> ArrowSchema {
-        let fields = self
-            .fields()
-            .iter()
-            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
-            .map(|f| f.into())
-            .collect::<Vec<_>>();
+        let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
 
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }
@@ -848,12 +843,7 @@ impl TableSchema {
     }
 
     pub fn to_arrow(&self) -> ArrowSchema {
-        let fields = self
-            .fields()
-            .iter()
-            .filter(|f| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
-            .map(|f| f.into())
-            .collect::<Vec<_>>();
+        let fields = self.fields().iter().map(|f| f.into()).collect::<Vec<_>>();
 
         ArrowSchema::from(fields).with_metadata(self.metadata.clone())
     }

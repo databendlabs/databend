@@ -35,13 +35,12 @@ pub enum DataSourceInfo {
 
 impl DataSourceInfo {
     pub fn schema(&self) -> Arc<TableSchema> {
-        let table_schema = match self {
+        match self {
             DataSourceInfo::TableSource(table_info) => table_info.schema(),
             DataSourceInfo::StageSource(table_info) => table_info.schema(),
             DataSourceInfo::ParquetSource(table_info) => table_info.schema(),
             DataSourceInfo::ResultScanSource(table_info) => table_info.schema(),
-        };
-        Arc::new(table_schema.as_ref().remove_virtual_computed_fields())
+        }
     }
 
     pub fn desc(&self) -> String {
