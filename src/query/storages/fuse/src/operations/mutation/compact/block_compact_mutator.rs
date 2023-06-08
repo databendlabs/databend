@@ -219,7 +219,11 @@ impl BlockCompactMutator {
                     block_idx += 1;
                 }
                 if unchanged {
-                    unchanged_blocks.insert(block_idx, block.clone());
+                    if builder.check_column_ids(block) {
+                        unchanged_blocks.insert(block_idx, block.clone());
+                    } else {
+                        tasks.push_back((block_idx, vec![block.clone()]));
+                    }
                     block_idx += 1;
                 }
             }
@@ -335,33 +339,25 @@ impl CompactTaskBuilder {
     }
 
     fn add(&mut self, block: &Arc<BlockMeta>, thresholds: BlockThresholds) -> (bool, bool) {
-        self.total_rows += block.row_count as usize;
-        self.total_size += block.block_size as usize;
+        if block.cluster_stats.as_ref().map_or(false, |v| v.level != 0) {
+            return (true, !self.blocks.is_empty());
+        }
 
-        if !thresholds.check_large_enough(self.total_rows, self.total_size) {
+        let total_rows = self.total_rows + block.row_count as usize;
+        let total_size = self.total_size + block.block_size as usize;
+        if !thresholds.check_large_enough(total_rows, total_size) {
             // blocks < N
             self.blocks.push(block.clone());
-            return (false, false);
-        }
-
-        if self.blocks.is_empty() {
-            if self.check_column_ids(block) {
-                self.total_rows = 0;
-                self.total_size = 0;
-                return (true, false);
-            } else {
-                self.blocks.push(block.clone());
-                return (false, true);
-            }
-        }
-
-        if thresholds.check_for_compact(self.total_rows, self.total_size) {
+            self.total_rows = total_rows;
+            self.total_size = total_size;
+            (false, false)
+        } else if thresholds.check_for_compact(total_rows, total_size) {
             // N <= blocks < 2N
             self.blocks.push(block.clone());
             (false, true)
         } else {
             // blocks > 2N
-            (true, true)
+            (true, !self.blocks.is_empty())
         }
     }
 }

@@ -116,11 +116,6 @@ impl FuseTable {
         pipeline: &mut Pipeline,
         options: CompactOptions,
     ) -> Result<()> {
-        // skip cluster table.
-        if self.cluster_key_meta.is_some() {
-            return Ok(());
-        }
-
         let thresholds = self.get_block_thresholds();
         let schema = self.schema();
         let write_settings = self.get_write_settings();
