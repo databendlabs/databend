@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io::Write;
 
 use databend_driver::new_connection;
 use databend_driver::Connection;
@@ -71,7 +72,7 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: u
     .await
     .unwrap();
     println!("inserting points");
-    conn.exec(&insert(&points, &words, dim, TABLE_NAME))
+    conn.exec(&load(&points, &words, dim, TABLE_NAME))
         .await
         .unwrap();
     println!("inserting points done");
@@ -135,18 +136,18 @@ async fn bench(num_points: usize, dim: usize, k: usize, nlists: usize, nprobe: u
     row
 }
 
-fn insert(points: &[f32], words: &[String], dim: usize, table_name: &str) -> String {
-    let mut insert_sql = format!("INSERT INTO {} VALUES ", table_name);
-    for i in 0..points.len() / dim {
-        let start = i * dim;
-        let end = start + dim;
-        let point = &points[start..end];
-        insert_sql.push_str(&format!("('{}',{:?})", words[i], point));
-        if i != points.len() / dim - 1 {
-            insert_sql.push(',');
-        }
+fn load(points: &[f32], words: &[String], dim: usize, table_name: &str) -> String {
+    const FILE_NAME: &str = "data.csv";
+    let mut file = File::create(FILE_NAME).unwrap();
+    let mut csv = String::new();
+    for (point, word) in points.chunks(dim).zip(words.iter()) {
+        csv.push_str(&format!("{:?},{}\n", point, word));
     }
-    insert_sql
+    file.write_all(csv.as_bytes()).unwrap();
+    format!(
+        "COPY INTO {} FROM 'fs://{}' FILE_FORMAT = (TYPE = 'CSV' FIELD_DELIMITER = ',' SKIP_HEADER = 0 RECORD_DELIMITER = '\n')",
+        table_name, FILE_NAME
+    )
 }
 
 fn format_num(num: usize) -> String {

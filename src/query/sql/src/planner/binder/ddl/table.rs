@@ -109,7 +109,7 @@ use crate::plans::ReclusterTablePlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
-use crate::plans::SetVectorIndexParaPlan;
+use crate::plans::SetVectorIndexParamPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
@@ -970,9 +970,9 @@ impl Binder {
 
     #[async_backtrace::framed]
     #[allow(clippy::too_many_arguments)]
-    pub(in crate::planner::binder) async fn bind_set_vector_index_para(
+    pub(in crate::planner::binder) async fn bind_set_vector_index_param(
         &mut self,
-        para: &TokenKind,
+        param: &TokenKind,
         catalog: &Option<Identifier>,
         database: &Option<Identifier>,
         table: &Identifier,
@@ -1009,7 +1009,7 @@ impl Binder {
                 index_name
             )));
         }
-        let param_kind = match para {
+        let param_kind = match param {
             TokenKind::NPROBE => {
                 let vector_index = indexes[pos.unwrap()].2.vector_index.as_ref().ok_or(
                     ErrorCode::UnknownIndex(format!("index {} not found", index_name)),
@@ -1037,12 +1037,14 @@ impl Binder {
                 ));
             }
         };
-        Ok(Plan::SetVectorIndexPara(Box::new(SetVectorIndexParaPlan {
-            index_name,
-            param_kind,
-            val,
-            index_meta: indexes[pos.unwrap()].2.clone(),
-        })))
+        Ok(Plan::SetVectorIndexParam(Box::new(
+            SetVectorIndexParamPlan {
+                index_name,
+                param_kind,
+                val,
+                index_meta: indexes[pos.unwrap()].2.clone(),
+            },
+        )))
     }
 
     fn validate_ivfflat_paras(paras: &[Expr]) -> Result<VectorIndex> {

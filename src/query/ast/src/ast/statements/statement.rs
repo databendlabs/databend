@@ -69,8 +69,8 @@ pub enum Statement {
         value: Box<Expr>,
     },
 
-    SetVectorIndexPara {
-        para: TokenKind,
+    SetVectorIndexParam {
+        param: TokenKind,
         catalog: Option<Identifier>,
         database: Option<Identifier>,
         table: Identifier,
@@ -361,8 +361,8 @@ impl Display for Statement {
                 }
                 write!(f, "{variable} = {value}")?;
             }
-            Statement::SetVectorIndexPara {
-                para,
+            Statement::SetVectorIndexParam {
+                param: para,
                 catalog,
                 database,
                 table,

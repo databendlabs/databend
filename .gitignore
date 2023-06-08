@@ -73,3 +73,6 @@ benchmark/clickbench/results
 
 # z3
 **/.z3-trace
+
+# vector index data set
+benchmark/vector_index_benchmark/data.csv

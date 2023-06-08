@@ -78,7 +78,7 @@ impl Plan {
             // Vector Indexes
             Plan::CreateVectorIndex(create_index) => Ok(format!("{:?}", create_index)),
             Plan::DropVectorIndex(drop_index) => Ok(format!("{:?}", drop_index)),
-            Plan::SetVectorIndexPara(set_index_para) => Ok(format!("{:?}", set_index_para)),
+            Plan::SetVectorIndexParam(set_index_para) => Ok(format!("{:?}", set_index_para)),
 
             // Views
             Plan::CreateView(create_view) => Ok(format!("{:?}", create_view)),

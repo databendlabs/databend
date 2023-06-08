@@ -479,7 +479,7 @@ impl AccessChecker for PrivilegeAccess {
             Plan::SetVariable(_)
             | Plan::UnSetVariable(_)
             | Plan::Kill(_)
-            | Plan::SetVectorIndexPara(_) => {
+            | Plan::SetVectorIndexParam(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Super])
                     .await?;

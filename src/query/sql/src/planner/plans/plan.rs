@@ -32,7 +32,7 @@ use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::DropVectorIndexPlan;
 use super::ModifyTableColumnPlan;
-use super::SetVectorIndexParaPlan;
+use super::SetVectorIndexParamPlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
@@ -180,7 +180,7 @@ pub enum Plan {
     // vector index
     CreateVectorIndex(Box<CreateVectorIndexPlan>),
     DropVectorIndex(Box<DropVectorIndexPlan>),
-    SetVectorIndexPara(Box<SetVectorIndexParaPlan>),
+    SetVectorIndexParam(Box<SetVectorIndexParamPlan>),
 
     // Insert
     Insert(Box<Insert>),
@@ -384,7 +384,7 @@ impl Display for Plan {
             }
             Plan::CreateVectorIndex(_) => write!(f, "CreateVectorIndex"),
             Plan::DropVectorIndex(_) => write!(f, "DropVectorIndex"),
-            Plan::SetVectorIndexPara(_) => write!(f, "SetVectorIndexParam"),
+            Plan::SetVectorIndexParam(_) => write!(f, "SetVectorIndexParam"),
         }
     }
 }

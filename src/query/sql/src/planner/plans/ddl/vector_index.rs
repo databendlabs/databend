@@ -35,7 +35,7 @@ pub struct DropVectorIndexPlan {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SetVectorIndexParaPlan {
+pub struct SetVectorIndexParamPlan {
     pub index_name: String,
     pub param_kind: ParamKind,
     pub val: Scalar,

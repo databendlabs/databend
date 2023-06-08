@@ -186,7 +186,7 @@ pub use interpreter_vector_index_create::CreateVectorIndexInterpreter;
 #[cfg(not(feature = "vector-index"))]
 pub use interpreter_vector_index_create_empty::CreateVectorIndexInterpreter;
 pub use interpreter_vector_index_drop::DropVectorIndexInterpreter;
-pub use interpreter_vector_index_set_para::SetVectorIndexParaInterpreter;
+pub use interpreter_vector_index_set_para::SetVectorIndexParamInterpreter;
 pub use interpreter_view_alter::AlterViewInterpreter;
 pub use interpreter_view_create::CreateViewInterpreter;
 pub use interpreter_view_drop::DropViewInterpreter;

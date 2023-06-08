@@ -21,7 +21,7 @@ use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
-use common_sql::plans::SetVectorIndexParaPlan;
+use common_sql::plans::SetVectorIndexParamPlan;
 use common_storages_fuse::TableContext;
 use common_vector::index::ParamKind;
 use common_vector::index::VectorIndex;
@@ -30,19 +30,19 @@ use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
-pub struct SetVectorIndexParaInterpreter {
+pub struct SetVectorIndexParamInterpreter {
     ctx: Arc<QueryContext>,
-    plan: SetVectorIndexParaPlan,
+    plan: SetVectorIndexParamPlan,
 }
 
-impl SetVectorIndexParaInterpreter {
-    pub fn try_create(ctx: Arc<QueryContext>, plan: SetVectorIndexParaPlan) -> Result<Self> {
+impl SetVectorIndexParamInterpreter {
+    pub fn try_create(ctx: Arc<QueryContext>, plan: SetVectorIndexParamPlan) -> Result<Self> {
         Ok(Self { ctx, plan })
     }
 }
 
 #[async_trait::async_trait]
-impl Interpreter for SetVectorIndexParaInterpreter {
+impl Interpreter for SetVectorIndexParamInterpreter {
     fn name(&self) -> &str {
         "SetVectorIndexParaInterpreter"
     }

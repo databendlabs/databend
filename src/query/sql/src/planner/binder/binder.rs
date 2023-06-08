@@ -257,7 +257,7 @@ impl<'a> Binder {
             // vector indexes
             Statement::CreateVectorIndex(stmt) => self.bind_create_vector_index(stmt).await?,
             Statement::DropVectorIndex(stmt) => self.bind_drop_vector_index(stmt).await?,
-            Statement::SetVectorIndexPara { para, catalog, database, table, column, val,metric } =>self.bind_set_vector_index_para(para, catalog, database, table, column, val,metric).await?,
+            Statement::SetVectorIndexParam { param, catalog, database, table, column, val,metric } =>self.bind_set_vector_index_param(param, catalog, database, table, column, val,metric).await?,
 
             // Views
             Statement::CreateView(stmt) => self.bind_create_view(stmt).await?,

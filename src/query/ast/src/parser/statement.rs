@@ -228,9 +228,9 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule! {
             SET ~ #period_separated_idents_2_to_4 ~ Period ~ COSINE ~ Period ~ NPROBE ~ "=" ~ #subexpr(0)
         },
-        |(_, (catalog, database, table, column), _, metric, _, para, _, val)| {
-            Statement::SetVectorIndexPara {
-                para: para.kind,
+        |(_, (catalog, database, table, column), _, metric, _, param, _, val)| {
+            Statement::SetVectorIndexParam {
+                param: param.kind,
                 catalog,
                 database,
                 table,
