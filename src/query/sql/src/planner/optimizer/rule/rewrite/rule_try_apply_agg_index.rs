@@ -15,33 +15,28 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::FunctionContext;
 
 use super::agg_index;
 use crate::optimizer::rule::Rule;
-use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator;
-use crate::BindContext;
 use crate::IndexType;
 use crate::MetadataRef;
 
 pub struct RuleTryApplyAggIndex {
     id: RuleID,
     metadata: MetadataRef,
-    func_ctx: FunctionContext,
 
     patterns: Vec<SExpr>,
 }
 
 impl RuleTryApplyAggIndex {
-    pub fn new(func_ctx: FunctionContext, metadata: MetadataRef) -> Self {
+    pub fn new(metadata: MetadataRef) -> Self {
         Self {
             id: RuleID::TryApplyAggIndex,
-            func_ctx,
             metadata,
             patterns: vec![
                 // Expression

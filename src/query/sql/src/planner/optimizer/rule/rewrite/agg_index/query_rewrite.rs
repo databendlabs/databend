@@ -20,7 +20,6 @@ use common_expression::types::DataType;
 use common_expression::Scalar;
 
 use crate::binder::split_conjunctions;
-use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;

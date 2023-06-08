@@ -56,7 +56,7 @@ impl RuleFactory {
     pub fn create_rule(
         id: RuleID,
         metadata: MetadataRef,
-        func_ctx: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<RulePtr> {
         match id {
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
@@ -93,7 +93,7 @@ impl RuleFactory {
             RuleID::RightExchangeJoin => Ok(Box::new(RuleRightExchangeJoin::new())),
             RuleID::ExchangeJoin => Ok(Box::new(RuleExchangeJoin::new())),
             RuleID::PushDownPrewhere => Ok(Box::new(RulePushDownPrewhere::new(metadata))),
-            RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(func_ctx, metadata))),
+            RuleID::TryApplyAggIndex => Ok(Box::new(RuleTryApplyAggIndex::new(metadata))),
         }
     }
 }
