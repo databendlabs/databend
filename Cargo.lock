@@ -3472,6 +3472,7 @@ dependencies = [
  "anyerror",
  "anyhow",
  "async-backtrace",
+ "background-service",
  "clap 3.2.23",
  "comfy-table",
  "common-base",

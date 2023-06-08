@@ -37,6 +37,7 @@ use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
+use background_service::get_background_service_handler;
 
 use crate::local;
 
@@ -342,6 +343,10 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     }
 
     info!("Ready for connections.");
+    if conf.background.enable {
+        println!("Start background service");
+        get_background_service_handler().start(&mut shutdown_handle).await?;
+    }
     shutdown_handle.wait_for_termination_request().await;
     info!("Shutdown server.");
     Ok(())

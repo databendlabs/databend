@@ -14,7 +14,6 @@
 
 mod background_service_handler;
 mod compaction_job;
-mod configs;
 mod job;
 mod job_scheduler;
 mod session;

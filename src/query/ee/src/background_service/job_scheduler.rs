@@ -13,12 +13,15 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use futures_util::future::join_all;
 
-use common_base::base::tokio;
+use common_base::base::{DummySignalStream, SignalType, tokio};
 use common_exception::Result;
 
 use crate::background_service::job::BoxedJob;
 use crate::background_service::job::Job;
+
+use databend_query::servers::ShutdownHandle;
 
 pub struct JobScheduler {
     one_shot_jobs: Vec<BoxedJob>,
@@ -37,15 +40,22 @@ impl JobScheduler {
         self
     }
 
-    pub async fn start(self) -> Result<()> {
+    pub async fn start(self, handler: &mut ShutdownHandle) -> Result<()> {
         let one_shot_jobs = Arc::new(&self.one_shot_jobs);
-        for job in one_shot_jobs.iter() {
-            self.check_and_run_job(job.box_clone()).await?;
-        }
-
+        self.check_and_run_jobs(one_shot_jobs).await;
+        handler.shutdown(DummySignalStream::create(SignalType::Exit)).await;
         Ok(())
     }
-
+    async fn check_and_run_jobs(&self, jobs: Arc<&Vec<BoxedJob>>) {
+        let job_futures = jobs
+            .iter()
+            .map(|job| {
+                let j = job.box_clone();
+                self.check_and_run_job(j)
+            })
+            .collect::<Vec<_>>();
+        join_all(job_futures).await;
+    }
     // Checks and runs a single [Job](crate::Job)
     async fn check_and_run_job(&self, job: BoxedJob) -> Result<()> {
         tokio::spawn(async move {

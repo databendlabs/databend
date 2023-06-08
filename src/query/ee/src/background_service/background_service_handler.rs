@@ -32,15 +32,17 @@ use databend_query::sql::Planner;
 use futures_util::StreamExt;
 use common_meta_store::MetaStore;
 use common_users::{BUILTIN_ROLE_ACCOUNT_ADMIN, UserApiProvider};
+use databend_query::servers::ShutdownHandle;
+use crate::background_service::{CompactionJob, JobScheduler};
 
 use crate::background_service::session::create_session;
 
 pub struct RealBackgroundService {
     conf: InnerConfig,
-    executor: FlightSqlServiceImpl,
     session: Arc<Session>,
     meta: Arc<MetaStore>,
-    user: UserIdentity
+    user: UserIdentity,
+    scheduler: Arc<JobScheduler>,
 }
 
 #[async_trait::async_trait]
@@ -69,22 +71,27 @@ impl BackgroundServiceHandler for RealBackgroundService {
         Ok(Some(record))
     }
 
+    #[async_backtrace::framed]
+    async fn start(&self, shutdown_handler: &mut ShutdownHandle) -> Result<()> {
+        self.regist_compactor_job();
+        self.scheduler.start(shutdown_handler).await?;
+        Ok(())
+    }
+
 }
 
 impl RealBackgroundService {
     pub async fn new(conf: &InnerConfig) -> Result<Self> {
-        let background_service_sql_executor = FlightSqlServiceImpl::create();
         let session = create_session().await?;
         let user = UserInfo::new_no_auth(format!("{}-{}-background-svc", conf.query.tenant_id, conf.query.cluster_id).as_str(), "0.0.0.0");
         session.set_authed_user(user.clone(), Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string())).await?;
-
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let rm = RealBackgroundService {
             conf: conf.clone(),
-            executor: background_service_sql_executor,
             session: session.clone(),
             meta: meta_api,
-            user: user.identity()
+            user: user.identity(),
+            scheduler: Arc::new(JobScheduler::new()),
         };
         Ok(rm)
     }
@@ -92,6 +99,12 @@ impl RealBackgroundService {
         let rm = RealBackgroundService::new(conf).await?;
         let wrapper = BackgroundServiceHandlerWrapper::new(Box::new(rm));
         GlobalInstance::set(Arc::new(wrapper));
+        Ok(())
+    }
+
+    async fn regist_compactor_job(&self) -> Result<()> {
+        let job = CompactionJob::create(&self.conf.clone(), format!("{}-{}-compactor-job", self.conf.query.tenant_id, self.conf.query.cluster_id)).await;
+        self.scheduler.add_one_shot_job(job).await?;
         Ok(())
     }
 }

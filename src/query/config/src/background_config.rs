@@ -10,6 +10,8 @@ use serde::Serialize;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct BackgroundConfig {
+    #[clap(long = "enable-background-service")]
+    pub enable: bool,
     // Fs compaction related background config.
     #[clap(flatten)]
     pub compaction: BackgroundCompactionConfig,
@@ -50,6 +52,7 @@ pub struct BackgroundCompactionFixedConfig {
 /// Config for background config
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InnerBackgroundConfig {
+    pub enable: bool,
     pub compaction: InnerBackgroundCompactionConfig,
 }
 
@@ -107,6 +110,7 @@ impl TryInto<InnerBackgroundConfig> for BackgroundConfig {
 
     fn try_into(self) -> Result<InnerBackgroundConfig> {
         Ok(InnerBackgroundConfig {
+            enable: self.enable,
             compaction: self.compaction.try_into()?,
         })
     }
@@ -115,6 +119,7 @@ impl TryInto<InnerBackgroundConfig> for BackgroundConfig {
 impl From<InnerBackgroundConfig> for BackgroundConfig {
     fn from(inner: InnerBackgroundConfig) -> Self {
         Self {
+            enable: inner.enable,
             compaction: BackgroundCompactionConfig::from(inner.compaction),
         }
     }
@@ -179,6 +184,7 @@ impl TryInto<CompactionFixedConfig> for BackgroundCompactionFixedConfig {
 impl Default for BackgroundConfig {
     fn default() -> Self {
         Self {
+            enable: false,
             compaction: Default::default(),
         }
     }
@@ -225,6 +231,7 @@ impl Debug for BackgroundCompactionFixedConfig {
 impl Default for InnerBackgroundConfig {
     fn default() -> Self {
         Self {
+            enable: false,
             compaction: InnerBackgroundCompactionConfig {
                 segment_limit: None,
                 block_limit: None,

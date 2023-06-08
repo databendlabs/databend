@@ -17,10 +17,12 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
+use databend_query::servers::ShutdownHandle;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {
     async fn execute_sql(&self, sql: &str) -> Result<Option<RecordBatch>>;
+    async fn start(&self, shutdown_handler: &mut ShutdownHandle) -> Result<()>;
 }
 
 pub struct BackgroundServiceHandlerWrapper {
@@ -35,6 +37,11 @@ impl BackgroundServiceHandlerWrapper {
     #[async_backtrace::framed]
     pub async fn execute_sql(&self, sql: &str) -> Result<Option<RecordBatch>> {
         self.handler.execute_sql(sql).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn start(&self, shutdown_handler: &mut ShutdownHandle) -> Result<()> {
+        self.handler.start(shutdown_handler).await
     }
     // #[async_backtrace::framed]
     // pub async fn create(

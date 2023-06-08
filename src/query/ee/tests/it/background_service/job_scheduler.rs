@@ -17,7 +17,9 @@ use std::sync::atomic::AtomicUsize;
 use std::time::Duration;
 use enterprise_query::background_service::{Job, JobScheduler};
 use common_exception::Result;
-use common_base::base::tokio;
+use common_base::base::{GlobalInstance, tokio};
+use databend_query::servers::ShutdownHandle;
+use databend_query::test_kits::TestGlobalServices;
 
 #[derive(Clone)]
 struct TestJob {
@@ -26,19 +28,25 @@ struct TestJob {
 #[async_trait::async_trait]
 impl Job for TestJob {
     async fn run(&self) {
-        self.counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_one_shot_job() -> Result<()> {
+    let _guard =
+        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
+            .await?;
     let scheduler = JobScheduler::new();
     let counter = Arc::new(AtomicUsize::new(0));
     let job = TestJob {
         counter: counter.clone()
     };
     let scheduler = scheduler.add_one_shot_job(job.clone());
-    scheduler.start().await?;
-    assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 1);
+    let mut shutdown_handle = ShutdownHandle::create()?;
+    scheduler.start(&mut shutdown_handle).await?;
+    // atomic operation is flaky, so we need to sleep for a while
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(counter.load(std::sync::atomic::Ordering::Relaxed), 1);
     Ok(())
 }

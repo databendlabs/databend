@@ -87,7 +87,7 @@ pub fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) 
 // optimize table limit
 // vacuum
 impl CompactionJob {
-    pub async fn create(&self, config: &InnerConfig, name: String) -> Self{
+    pub async fn create(config: &InnerConfig, name: String) -> Self{
         let tenant = config.query.tenant_id.clone();
         let creator = BackgroundJobIdent{ tenant, name };
         let meta_api = UserApiProvider::instance().get_meta_store_client();
