@@ -485,7 +485,7 @@ pub struct RaftConfig {
     #[clap(long, default_value = "")]
     pub sled_tree_prefix: String,
 
-    /// Tne node name. If the user specifies a name, the user-supplied name is used,
+    /// The node name. If the user specifies a name, the user-supplied name is used,
     /// if not, the default name is used
     #[clap(long, default_value = "foo_cluster")]
     pub cluster_name: String,

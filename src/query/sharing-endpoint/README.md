@@ -54,7 +54,7 @@ share_endpoint_address = "127.0.0.1:13003" # receive shared information from ope
 
 ### How to share a table?
 
-For the tenant who wants to share the table `tabl1` from database `db1` to tenant `vendor`
+For the tenant who wants to share the table `table1` from database `db1` to tenant `vendor`
 
 ```sql
 CREATE SHARE myshare;
