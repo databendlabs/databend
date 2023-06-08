@@ -21,10 +21,10 @@ use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::DropIndexReq;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::IndexNameIdent;
+use common_meta_app::schema::VectorIndex;
 use common_sql::plans::SetVectorIndexParamPlan;
 use common_storages_fuse::TableContext;
 use common_vector::index::ParamKind;
-use common_vector::index::VectorIndex;
 
 use super::Interpreter;
 use crate::pipelines::PipelineBuildResult;

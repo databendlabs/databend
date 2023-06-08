@@ -214,6 +214,20 @@ fn new_index_meta() -> mt::IndexMeta {
     }
 }
 
+fn new_vector_index_meta() -> mt::IndexMeta {
+    mt::IndexMeta {
+        table_id: 7,
+        index_type: IndexType::VECTOR,
+        created_on: Utc.with_ymd_and_hms(2015, 3, 9, 20, 0, 9).unwrap(),
+        drop_on: None,
+        query: "".to_string(),
+        vector_index: Some(mt::VectorIndex::IvfFlat(mt::IvfFlatIndex {
+            nlist: 100,
+            nprobe: 70,
+        })),
+    }
+}
+
 pub(crate) fn new_latest_schema() -> TableSchema {
     let b1 = TableDataType::Tuple {
         fields_name: vec!["b11".to_string(), "b12".to_string()],
@@ -408,6 +422,16 @@ fn test_build_pb_buf() -> anyhow::Result<()> {
         let mut buf = vec![];
         common_protos::prost::Message::encode(&p, &mut buf)?;
         println!("index:{buf:?}");
+    }
+
+    // VectorIndexMeta
+    {
+        let vector_index = new_vector_index_meta();
+        let p = vector_index.to_pb()?;
+
+        let mut buf = vec![];
+        common_protos::prost::Message::encode(&p, &mut buf)?;
+        println!("vector index:{:?}", buf);
     }
 
     // TableCopiedFileInfo

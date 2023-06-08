@@ -18,9 +18,9 @@ use ahash::HashMap;
 use common_catalog::plan::VectorSimilarityInfo;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::VectorIndex;
 use common_vector::index::IndexName;
 use common_vector::index::MetricType;
-use common_vector::index::VectorIndex;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::RuleID;
@@ -148,12 +148,9 @@ fn parse_similarity_func(
     vector_indexes: &HashMap<String, VectorIndex>,
 ) -> Result<Option<VectorSimilarityInfo>> {
     let metric = match func.func_name.to_ascii_lowercase().as_str() {
-        "cosine_distance" => Ok(MetricType::Cosine),
-        _ => Err(ErrorCode::BadArguments(format!(
-            "invalid similarity function: {}",
-            func.func_name
-        ))),
-    }?;
+        "cosine_distance" => MetricType::Cosine,
+        _ => return Ok(None),
+    };
     if func.arguments.len() != 2 {
         return Err(ErrorCode::BadArguments(format!(
             "invalid arguments for similarity function: {}",

@@ -18,8 +18,8 @@
 use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app::schema as mt;
+use common_meta_app::schema::VectorIndex;
 use common_protos::pb;
-use common_vector::index::VectorIndex;
 use num::FromPrimitive;
 
 use crate::reader_check_msg;

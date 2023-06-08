@@ -15,7 +15,8 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
-use common_vector::index::VectorIndex;
+use common_meta_app::schema::IvfFlatIndex;
+use common_meta_app::schema::VectorIndex;
 
 use crate::FromToProto;
 use crate::Incompatible;
@@ -54,7 +55,7 @@ impl FromToProto for VectorIndex {
                 let nprobe = v[2].parse::<usize>().map_err(|e| Incompatible {
                     reason: format!("Invalid index: {}, {}", p, e),
                 })?;
-                Ok(VectorIndex::IvfFlat(common_vector::index::IvfFlatIndex {
+                Ok(VectorIndex::IvfFlat(IvfFlatIndex {
                     nlist: nlists,
                     nprobe,
                 }))

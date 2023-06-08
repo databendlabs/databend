@@ -63,15 +63,15 @@ use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::schema::IvfFlatIndex;
+use common_meta_app::schema::VectorIndex;
 use common_meta_app::storage::StorageParams;
 use common_storage::DataOperator;
 use common_storages_view::view_table::QUERY;
 use common_storages_view::view_table::VIEW_ENGINE;
 use common_vector::index::IndexName;
-use common_vector::index::IvfFlatIndex;
 use common_vector::index::MetricType;
 use common_vector::index::ParamKind;
-use common_vector::index::VectorIndex;
 use storages_common_table_meta::table::is_reserved_opt_key;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
@@ -1052,15 +1052,11 @@ impl Binder {
             Expr::Literal {
                 lit: Literal::UInt64(nlist),
                 ..
-            } => {
-                return Ok(VectorIndex::IvfFlat(IvfFlatIndex {
-                    nlist: nlist as usize,
-                    nprobe: DEFAULT_NPROBE,
-                }));
-            }
-            _ => {
-                return Err(ErrorCode::SyntaxException("wrong vector index parameters"));
-            }
+            } => Ok(VectorIndex::IvfFlat(IvfFlatIndex {
+                nlist: nlist as usize,
+                nprobe: DEFAULT_NPROBE,
+            })),
+            _ => Err(ErrorCode::SyntaxException("wrong vector index parameters")),
         }
     }
 

@@ -10635,33 +10635,13 @@ CreateVectorIndex(
         },
         metric_type: COSINE,
         paras: [
-            BinaryOp {
+            Literal {
                 span: Some(
-                    67..68,
+                    69..72,
                 ),
-                op: Eq,
-                left: ColumnRef {
-                    span: Some(
-                        61..66,
-                    ),
-                    database: None,
-                    table: None,
-                    column: Identifier {
-                        name: "nlist",
-                        quote: None,
-                        span: Some(
-                            61..66,
-                        ),
-                    },
-                },
-                right: Literal {
-                    span: Some(
-                        69..72,
-                    ),
-                    lit: UInt64(
-                        100,
-                    ),
-                },
+                lit: UInt64(
+                    100,
+                ),
             },
         ],
     },

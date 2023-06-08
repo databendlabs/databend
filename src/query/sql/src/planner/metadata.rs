@@ -27,7 +27,7 @@ use common_expression::types::DataType;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_vector::index::VectorIndex;
+use common_meta_app::schema::VectorIndex;
 use parking_lot::RwLock;
 
 use crate::optimizer::SExpr;

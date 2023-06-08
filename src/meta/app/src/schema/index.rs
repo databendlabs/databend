@@ -103,7 +103,7 @@ pub struct IndexMeta {
     // if used in CreateIndexReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
     pub query: String,
-    pub vector_index: Option<common_vector::index::VectorIndex>,
+    pub vector_index: Option<VectorIndex>,
 }
 
 impl Default for IndexMeta {
@@ -134,6 +134,17 @@ impl Display for CreateIndexReq {
             self.if_not_exists, self.name_ident.tenant, self.meta
         )
     }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum VectorIndex {
+    IvfFlat(IvfFlatIndex),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct IvfFlatIndex {
+    pub nlist: usize,
+    pub nprobe: usize,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]

@@ -21,8 +21,8 @@ use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_meta_app::schema::VectorIndex;
 use common_vector::index::MetricType;
-use common_vector::index::VectorIndex;
 
 use crate::plan::Projection;
 

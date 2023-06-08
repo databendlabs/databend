@@ -14,7 +14,6 @@ test = false
 common-expression = { path = "../../query/expression" }
 common-meta-app = { path = "../app" }
 common-protos = { path = "../protos" }
-common-vector = { path = "../../common/vector" }
 
 chrono = { workspace = true }
 num = "0.4.0"

@@ -17,17 +17,6 @@ use std::fmt::Display;
 use ndarray::ArrayViewMut;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub enum VectorIndex {
-    IvfFlat(IvfFlatIndex),
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct IvfFlatIndex {
-    pub nlist: usize,
-    pub nprobe: usize,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum MetricType {
     Cosine,
 }

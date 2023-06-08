@@ -14,9 +14,9 @@
 
 use common_expression::Scalar;
 use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::VectorIndex;
 use common_vector::index::MetricType;
 use common_vector::index::ParamKind;
-use common_vector::index::VectorIndex;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CreateVectorIndexPlan {

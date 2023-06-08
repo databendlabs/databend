@@ -19,12 +19,12 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_meta_app::schema::VectorIndex;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_vector::index::MetricType;
-use common_vector::index::VectorIndex;
 
 use crate::io::BlockReader;
 use crate::FuseTable;
