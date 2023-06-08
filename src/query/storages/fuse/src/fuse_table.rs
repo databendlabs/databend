@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::str;
 use std::str::FromStr;
@@ -645,7 +646,7 @@ impl Table for FuseTable {
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<FieldIndex>,
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-        computed_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_update(

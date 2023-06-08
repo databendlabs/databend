@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -126,8 +127,8 @@ impl UpdatePlan {
         &self,
         ctx: Arc<dyn TableContext>,
         schema: DataSchemaRef,
-    ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
-        let mut remote_exprs = Vec::new();
+    ) -> Result<BTreeMap<FieldIndex, RemoteExpr<String>>> {
+        let mut remote_exprs = BTreeMap::new();
         for (i, f) in schema.fields().iter().enumerate() {
             if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
                 let mut expr = parse_computed_exprs(ctx.clone(), schema.clone(), stored_expr)?;
@@ -155,7 +156,7 @@ impl UpdatePlan {
                         .project_column_ref(|index| schema.field(*index).name().to_string())
                         .as_remote_expr();
 
-                    remote_exprs.push((i, remote_expr));
+                    remote_exprs.insert(i, remote_expr);
                 }
             }
         }

@@ -296,7 +296,7 @@ pub trait Table: Sync + Send {
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
         update_list: Vec<(usize, RemoteExpr<String>)>,
-        computed_list: Vec<(usize, RemoteExpr<String>)>,
+        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let (_, _, _, _, _, _) = (

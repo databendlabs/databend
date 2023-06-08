@@ -45,8 +45,8 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<FieldIndex>,
-        update_list: Vec<(usize, RemoteExpr<String>)>,
-        computed_list: Vec<(usize, RemoteExpr<String>)>,
+        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -110,7 +110,7 @@ impl FuseTable {
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<FieldIndex>,
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
-        computed_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         base_snapshot: &TableSnapshot,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -122,6 +122,9 @@ impl FuseTable {
         let mut pos = 0;
         let (projection, input_schema) = if col_indices.is_empty() {
             all_column_indices.iter().for_each(|&index| {
+                if computed_list.contains_key(index) {
+                    continue;
+                }
                 offset_map.insert(index, pos);
                 pos += 1;
             });
@@ -143,7 +146,7 @@ impl FuseTable {
 
             let remain_col_indices: Vec<FieldIndex> = all_column_indices
                 .into_iter()
-                .filter(|index| !col_indices.contains(index))
+                .filter(|index| !col_indices.contains(index) && !computed_list.contains_key(index))
                 .collect();
             if !remain_col_indices.is_empty() {
                 remain_col_indices.iter().for_each(|&index| {
@@ -200,6 +203,7 @@ impl FuseTable {
         if !exprs.is_empty() {
             ops.push(BlockOperator::Map { exprs });
         }
+        // recalculate related stored computed columns.
         if !computed_exprs.is_empty() {
             ops.push(BlockOperator::Map {
                 exprs: computed_exprs,

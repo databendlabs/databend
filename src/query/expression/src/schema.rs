@@ -825,7 +825,6 @@ impl TableSchema {
         }
     }
 
-    /// removing virtual computed fields.
     #[must_use]
     pub fn remove_virtual_computed_fields(&self) -> Self {
         let new_fields = self
