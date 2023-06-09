@@ -59,12 +59,12 @@ NULL
 
 
 query T
-select typeof(if(number % 3 = 0, to_uint32(1), to_int64(3))) from numbers(10) limit 1
+select typeof(if(number % 3 = 0, to_uint32(number), to_int64(number))) from numbers(10) limit 1
 ----
 BIGINT
 
 query T
-select typeof(if(number % 3 = 0, to_uint32(1), to_float32(3))) from numbers(10) limit 1
+select typeof(if(number % 3 = 0, to_uint32(number), to_float32(number))) from numbers(10) limit 1
 ----
 DOUBLE
 

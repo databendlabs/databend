@@ -74,6 +74,7 @@ pub fn parse_exprs(
             }) => ColumnBinding {
                 database_name: Some("default".to_string()),
                 table_name: Some(table.name().to_string()),
+                column_position: None,
                 table_index: Some(table.index()),
                 column_name: column_name.clone(),
                 index,

@@ -20,16 +20,17 @@ use crate::ast::Expr;
 use crate::ast::TypeName;
 use crate::input::Input;
 use crate::parser::expr::*;
-use crate::parser::stage::ident_to_string;
 use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
 
 fn data_mask_arg(i: Input) -> IResult<DataMaskArg> {
-    map(
-        rule! { #ident_to_string ~ #type_name },
-        |(arg_name, arg_type)| DataMaskArg { arg_name, arg_type },
-    )(i)
+    map(rule! { #ident ~ #type_name }, |(arg_name, arg_type)| {
+        DataMaskArg {
+            arg_name: arg_name.name,
+            arg_type,
+        }
+    })(i)
 }
 
 fn data_mask_more_arg(i: Input) -> IResult<DataMaskArg> {

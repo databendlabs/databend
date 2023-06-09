@@ -281,13 +281,6 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
             .unwrap_or(30);
         builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
 
-        // Timeout default to 120s.
-        let timeout = env::var("_DATABEND_INTERNAL_TIMEOUT")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(120);
-        builder = builder.timeout(Duration::from_secs(timeout));
-
         builder
     };
 

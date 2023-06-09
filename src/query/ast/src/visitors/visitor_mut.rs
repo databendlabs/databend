@@ -28,6 +28,7 @@ use super::walk_mut::walk_statement_mut;
 use super::walk_mut::walk_table_reference_mut;
 use super::walk_time_travel_point_mut;
 use crate::ast::*;
+use crate::visitors::walk_column_id_mut;
 
 pub trait VisitorMut: Sized {
     fn visit_expr(&mut self, expr: &mut Expr) {
@@ -35,6 +36,19 @@ pub trait VisitorMut: Sized {
     }
 
     fn visit_identifier(&mut self, _ident: &mut Identifier) {}
+
+    fn visit_column_id(&mut self, column: &mut ColumnID) {
+        match column {
+            ColumnID::Name(ident) => {
+                self.visit_identifier(ident);
+            }
+            ColumnID::Position(pos) => {
+                self.visit_column_position(pos);
+            }
+        }
+    }
+
+    fn visit_column_position(&mut self, _ident: &mut ColumnPosition) {}
 
     fn visit_database_ref(&mut self, catalog: &mut Option<Identifier>, database: &mut Identifier) {
         if let Some(catalog) = catalog {
@@ -66,7 +80,7 @@ pub trait VisitorMut: Sized {
         _span: Span,
         database: &mut Option<Identifier>,
         table: &mut Option<Identifier>,
-        column: &mut Identifier,
+        column: &mut ColumnID,
     ) {
         if let Some(database) = database {
             walk_identifier_mut(self, database);
@@ -76,7 +90,7 @@ pub trait VisitorMut: Sized {
             walk_identifier_mut(self, table);
         }
 
-        walk_identifier_mut(self, column);
+        walk_column_id_mut(self, column);
     }
 
     fn visit_is_null(&mut self, _span: Span, expr: &mut Expr, _not: bool) {

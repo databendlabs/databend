@@ -20,7 +20,7 @@ use common_hashtable::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 
 /// ProbeState used for probe phase of hash join.
-/// We may need some reuseable state for probe phase.
+/// We may need some reusable state for probe phase.
 pub struct ProbeState {
     pub(crate) probe_indexes: Vec<(u32, u32)>,
     pub(crate) build_indexes: Vec<RowPtr>,

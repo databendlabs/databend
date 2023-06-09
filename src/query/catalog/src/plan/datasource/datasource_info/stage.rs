@@ -30,6 +30,7 @@ pub struct StageTableInfo {
     pub files_info: StageFilesInfo,
     pub stage_info: StageInfo,
     pub files_to_copy: Option<Vec<StageFileInfo>>,
+    pub is_select: bool,
 }
 
 impl StageTableInfo {

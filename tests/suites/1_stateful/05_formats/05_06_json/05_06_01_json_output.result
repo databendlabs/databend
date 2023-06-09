@@ -5,4 +5,4 @@
 ---2 rows
 {"meta":[{"name":"c1","type":"Nullable(Int32)"},{"name":"c2","type":"Nullable(String)"}],"data":[{"c1":1,"c2":"a"},{"c1":2,"c2":"b"}],"rows":2}
 ---tests
-{"meta":[{"name":"a","type":"Tuple(UInt8, Nullable(Int32), UInt8)"},{"name":"b","type":"Array(Nullable(Int32))"}],"data":[{"a":{"0":1,"1":2,"2":3},"b":[1,2,3]},{"a":{"0":1,"1":2,"2":3},"b":[1,2,3]}],"rows":2}
+{"meta":[{"name":"a","type":"Tuple(UInt8, UInt8, UInt8)"},{"name":"b","type":"Array(Nullable(Int32))"}],"data":[{"a":{"0":1,"1":2,"2":3},"b":[1,2,3]},{"a":{"0":1,"1":2,"2":3},"b":[1,2,3]}],"rows":2}

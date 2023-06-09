@@ -148,7 +148,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         _span: Span,
         database: &'ast Option<Identifier>,
         table: &'ast Option<Identifier>,
-        column: &'ast Identifier,
+        column: &'ast ColumnID,
     ) {
         let mut name = String::new();
         name.push_str("ColumnIdentifier ");
