@@ -309,6 +309,7 @@ impl JoinHashTable {
                 probe_indexes[probe_indexes_occupied] = (idx as u32, 1);
                 probe_indexes_occupied += 1;
             }
+            row_state[idx] = 0;
             idx += 1;
         }
 
