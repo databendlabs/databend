@@ -1066,7 +1066,7 @@ impl PipelineBuilder {
                 self.ctx.clone(),
                 input,
                 output,
-                state.clone(),
+                TransformHashJoinProbe::attach(state.clone())?,
                 join.output_schema()?,
             )?;
 

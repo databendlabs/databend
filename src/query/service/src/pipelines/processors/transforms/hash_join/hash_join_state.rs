@@ -31,8 +31,8 @@ pub trait HashJoinState: Send + Sync {
 
     fn join_state(&self) -> &JoinState;
 
-    /// Attach to state: `build_count` and `finalize_count`
-    fn attach(&self) -> Result<()>;
+    /// Attach to state: `build_count` and `finalize_count`.
+    fn build_attach(&self) -> Result<()>;
 
     /// Detach to state: `build_count`, create finalize task and initialize the hash table.
     fn build_done(&self) -> Result<()>;
@@ -43,11 +43,14 @@ pub trait HashJoinState: Send + Sync {
     /// Get the finalize task and using the `chunks` in `row_space` to build hash table in parallel.
     fn finalize(&self, task: (usize, usize)) -> Result<()>;
 
-    /// Get one finalize task
+    /// Get one finalize task.
     fn finalize_task(&self) -> Option<(usize, usize)>;
 
     /// Detach to state: `finalize_count`.
     fn finalize_done(&self) -> Result<()>;
+
+    /// Attach to state: `probe_count`.
+    fn probe_attach(&self) -> Result<()>;
 
     // Detach to state: `probe_count`.
     fn probe_done(&self) -> Result<()>;

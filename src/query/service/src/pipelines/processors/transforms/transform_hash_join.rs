@@ -71,6 +71,11 @@ impl TransformHashJoinProbe {
         }))
     }
 
+    pub fn attach(join_state: Arc<dyn HashJoinState>) -> Result<Arc<dyn HashJoinState>> {
+        join_state.probe_attach()?;
+        Ok(join_state)
+    }
+
     fn probe(&mut self, block: &DataBlock) -> Result<()> {
         self.probe_state.clear();
         self.output_data_blocks
@@ -240,7 +245,7 @@ impl TransformHashJoinBuild {
     }
 
     pub fn attach(join_state: Arc<dyn HashJoinState>) -> Result<Arc<dyn HashJoinState>> {
-        join_state.attach()?;
+        join_state.build_attach()?;
         Ok(join_state)
     }
 }
