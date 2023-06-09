@@ -85,11 +85,14 @@ pub struct JoinHashTable {
     /// Reference count
     pub(crate) build_count: Mutex<usize>,
     pub(crate) finalize_count: Mutex<usize>,
-    pub(crate) is_built: Mutex<bool>,
-    pub(crate) is_finalized: Mutex<bool>,
+    pub(crate) probe_count: Mutex<usize>,
+    pub(crate) build_done: Mutex<bool>,
+    pub(crate) finalize_done: Mutex<bool>,
+    pub(crate) probe_done: Mutex<bool>,
     /// Notifier
-    pub(crate) built_notify: Arc<Notify>,
-    pub(crate) finalized_notify: Arc<Notify>,
+    pub(crate) build_done_notify: Arc<Notify>,
+    pub(crate) finalize_done_notify: Arc<Notify>,
+    pub(crate) probe_done_notify: Arc<Notify>,
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: Arc<SyncUnsafeCell<HashJoinHashTable>>,
     pub(crate) method: Arc<HashMethodKind>,
@@ -100,9 +103,12 @@ pub struct JoinHashTable {
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
     pub(crate) interrupt: Arc<AtomicBool>,
-    /// Finalize tasks
+    /// OuterScan bitmap
+    pub(crate) outer_scan_bitmap: Arc<SyncUnsafeCell<Vec<MutableBitmap>>>,
+    /// Finalize and OuterScan tasks
     pub(crate) worker_num: Arc<AtomicU32>,
     pub(crate) finalize_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
+    pub(crate) outer_scan_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
 }
 
 impl JoinHashTable {
@@ -151,10 +157,13 @@ impl JoinHashTable {
             ctx,
             build_count: Mutex::new(0),
             finalize_count: Mutex::new(0),
-            is_built: Mutex::new(false),
-            is_finalized: Mutex::new(false),
-            built_notify: Arc::new(Notify::new()),
-            finalized_notify: Arc::new(Notify::new()),
+            probe_count: Mutex::new(0),
+            build_done: Mutex::new(false),
+            finalize_done: Mutex::new(false),
+            probe_done: Mutex::new(false),
+            build_done_notify: Arc::new(Notify::new()),
+            finalize_done_notify: Arc::new(Notify::new()),
+            probe_done_notify: Arc::new(Notify::new()),
             hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
             method: Arc::new(method),
             entry_size: Arc::new(AtomicUsize::new(0)),
@@ -163,8 +172,10 @@ impl JoinHashTable {
             row_ptrs: RwLock::new(vec![]),
             probe_schema: probe_data_schema,
             interrupt: Arc::new(AtomicBool::new(false)),
+            outer_scan_bitmap: Arc::new(SyncUnsafeCell::new(Vec::new())),
             worker_num: Arc::new(AtomicU32::new(0)),
             finalize_tasks: Arc::new(RwLock::new(VecDeque::new())),
+            outer_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
         })
     }
 

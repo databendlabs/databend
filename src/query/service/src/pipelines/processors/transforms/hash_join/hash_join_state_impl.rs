@@ -14,8 +14,11 @@
 
 use std::sync::atomic::Ordering;
 
+use common_arrow::arrow::bitmap::Bitmap;
+use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::HashMethod;
@@ -23,6 +26,8 @@ use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
 use common_expression::HashMethodSingleString;
 use common_expression::KeysState;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::RawEntry;
 use common_hashtable::RowPtr;
@@ -90,16 +95,18 @@ impl HashJoinState for JoinHashTable {
         *count += 1;
         let mut count = self.finalize_count.lock();
         *count += 1;
+        let mut count = self.probe_count.lock();
+        *count += 1;
         self.worker_num.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
-    fn build_end(&self) -> Result<()> {
+    fn build_done(&self) -> Result<()> {
         let mut count = self.build_count.lock();
         *count -= 1;
         if *count == 0 {
             // Divide the finalize phase into multiple tasks.
-            self.divide_finalize_task()?;
+            self.generate_finalize_task()?;
 
             // Get the number of rows of the build side.
             let chunks = self.row_space.chunks.read();
@@ -179,14 +186,14 @@ impl HashJoinState for JoinHashTable {
             let hashtable = unsafe { &mut *self.hash_table.get() };
             *hashtable = hashjoin_hashtable;
 
-            let mut is_built = self.is_built.lock();
-            *is_built = true;
-            self.built_notify.notify_waiters();
+            let mut build_done = self.build_done.lock();
+            *build_done = true;
+            self.build_done_notify.notify_waiters();
         }
         Ok(())
     }
 
-    fn divide_finalize_task(&self) -> Result<()> {
+    fn generate_finalize_task(&self) -> Result<()> {
         {
             let buffer = self.row_space.buffer.write();
             if !buffer.is_empty() {
@@ -201,9 +208,9 @@ impl HashJoinState for JoinHashTable {
             return Ok(());
         }
 
-        let task_num = self.worker_num.load(Ordering::Relaxed) as usize;
-        let (task_size, task_num) = if chunks_len >= task_num {
-            (chunks_len / task_num, task_num)
+        let worker_num = self.worker_num.load(Ordering::Relaxed) as usize;
+        let (task_size, task_num) = if chunks_len >= worker_num {
+            (chunks_len / worker_num, worker_num)
         } else {
             (1, chunks_len)
         };
@@ -413,30 +420,270 @@ impl HashJoinState for JoinHashTable {
         Ok(())
     }
 
-    fn task(&self) -> Option<(usize, usize)> {
+    fn finalize_task(&self) -> Option<(usize, usize)> {
         let mut tasks = self.finalize_tasks.write();
         tasks.pop_front()
     }
 
-    fn finalize_end(&self) -> Result<()> {
+    fn finalize_done(&self) -> Result<()> {
         let mut count = self.finalize_count.lock();
         *count -= 1;
         if *count == 0 {
-            let mut is_finalized = self.is_finalized.lock();
-            *is_finalized = true;
-            self.finalized_notify.notify_waiters();
+            let mut finalize_done = self.finalize_done.lock();
+            *finalize_done = true;
+            self.finalize_done_notify.notify_waiters();
         }
         Ok(())
+    }
+
+    fn probe_done(&self) -> Result<()> {
+        let mut count = self.probe_count.lock();
+        *count -= 1;
+        if *count == 0 {
+            // Divide the outer scan phase into multiple tasks.
+            self.generate_outer_scan_task()?;
+
+            let mut probe_done = self.probe_done.lock();
+            *probe_done = true;
+            self.probe_done_notify.notify_waiters();
+        }
+        Ok(())
+    }
+
+    fn need_outer_scan(&self) -> bool {
+        matches!(
+            self.hash_join_desc.join_type,
+            JoinType::Full | JoinType::Right | JoinType::RightSemi | JoinType::RightAnti
+        )
+    }
+
+    fn generate_outer_scan_task(&self) -> Result<()> {
+        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let bitmap_num = outer_scan_bitmap.len();
+        if bitmap_num == 0 {
+            return Ok(());
+        }
+        let mut outer_scan_tasks = self.outer_scan_tasks.write();
+        for idx in 0..bitmap_num {
+            let task = (idx, idx + 1);
+            outer_scan_tasks.push_back(task);
+        }
+        Ok(())
+    }
+
+    fn outer_scan_task(&self) -> Option<(usize, usize)> {
+        let mut tasks = self.outer_scan_tasks.write();
+        tasks.pop_front()
+    }
+
+    fn outer_scan(&self, task: (usize, usize), state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+        match &self.hash_join_desc.join_type {
+            JoinType::Right | JoinType::Full => self.outer_scan_right_and_full_join(task, state),
+            JoinType::RightSemi => self.outer_scan_right_semi_join(task, state),
+            JoinType::RightAnti => self.outer_scan_right_anti_join(task, state),
+            _ => unreachable!(),
+        }
+    }
+
+    fn outer_scan_right_and_full_join(
+        &self,
+        task: (usize, usize),
+        state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
+        let true_validity = &state.true_validity;
+        let build_indexes = &mut state.build_indexes;
+        let mut build_indexes_occupied = 0;
+        let mut result_blocks = vec![];
+
+        let data_blocks = self.row_space.chunks.read();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
+        let total_num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
+
+        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let interrupt = self.interrupt.clone();
+        let mut chunk_index = task.0;
+        while chunk_index < task.1 {
+            if interrupt.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+            let bitmap = &outer_scan_bitmap[chunk_index];
+            let bitmap_len = bitmap.len();
+            let mut row_index = 0;
+            while row_index < bitmap_len {
+                while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+                    if !bitmap.get(row_index) {
+                        build_indexes[build_indexes_occupied].chunk_index = chunk_index;
+                        build_indexes[build_indexes_occupied].row_index = row_index;
+                        build_indexes_occupied += 1;
+                    }
+                    row_index += 1;
+                }
+                let mut unmatched_build_block = self.row_space.gather(
+                    &build_indexes[0..build_indexes_occupied],
+                    &data_blocks,
+                    &total_num_rows,
+                )?;
+
+                if self.hash_join_desc.join_type == JoinType::Full {
+                    let num_rows = unmatched_build_block.num_rows();
+                    let nullable_unmatched_build_columns = if num_rows == JOIN_MAX_BLOCK_SIZE {
+                        unmatched_build_block
+                            .columns()
+                            .iter()
+                            .map(|c| Self::set_validity(c, num_rows, true_validity))
+                            .collect::<Vec<_>>()
+                    } else {
+                        let mut validity = MutableBitmap::new();
+                        validity.extend_constant(num_rows, true);
+                        let validity: Bitmap = validity.into();
+                        unmatched_build_block
+                            .columns()
+                            .iter()
+                            .map(|c| Self::set_validity(c, num_rows, &validity))
+                            .collect::<Vec<_>>()
+                    };
+                    unmatched_build_block =
+                        DataBlock::new(nullable_unmatched_build_columns, num_rows);
+                };
+                // Create null chunk for unmatched rows in probe side
+                let null_probe_block = DataBlock::new(
+                    self.probe_schema
+                        .fields()
+                        .iter()
+                        .map(|df| {
+                            BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null))
+                        })
+                        .collect(),
+                    build_indexes_occupied,
+                );
+                result_blocks.push(self.merge_eq_block(&unmatched_build_block, &null_probe_block)?);
+                build_indexes_occupied = 0;
+            }
+            chunk_index += 1;
+        }
+        Ok(result_blocks)
+    }
+
+    fn outer_scan_right_semi_join(
+        &self,
+        task: (usize, usize),
+        state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
+        let build_indexes = &mut state.build_indexes;
+        let mut build_indexes_occupied = 0;
+        let mut result_blocks = vec![];
+
+        let data_blocks = self.row_space.chunks.read();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
+        let total_num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
+
+        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let interrupt = self.interrupt.clone();
+        let mut chunk_index = task.0;
+        while chunk_index < task.1 {
+            if interrupt.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+            let bitmap = &outer_scan_bitmap[chunk_index];
+            let bitmap_len = bitmap.len();
+            let mut row_index = 0;
+            while row_index < bitmap_len {
+                while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+                    if bitmap.get(row_index) {
+                        build_indexes[build_indexes_occupied].chunk_index = chunk_index;
+                        build_indexes[build_indexes_occupied].row_index = row_index;
+                        build_indexes_occupied += 1;
+                    }
+                    row_index += 1;
+                }
+                result_blocks.push(self.row_space.gather(
+                    &build_indexes[0..build_indexes_occupied],
+                    &data_blocks,
+                    &total_num_rows,
+                )?);
+                build_indexes_occupied = 0;
+            }
+            chunk_index += 1;
+        }
+        // for bl in result_blocks.iter() {
+        //     dbg!("bl = {:?}", &bl);
+        // }
+        Ok(result_blocks)
+    }
+
+    fn outer_scan_right_anti_join(
+        &self,
+        task: (usize, usize),
+        state: &mut ProbeState,
+    ) -> Result<Vec<DataBlock>> {
+        let build_indexes = &mut state.build_indexes;
+        let mut build_indexes_occupied = 0;
+        let mut result_blocks = vec![];
+
+        let data_blocks = self.row_space.chunks.read();
+        let data_blocks = data_blocks
+            .iter()
+            .map(|c| &c.data_block)
+            .collect::<Vec<_>>();
+        let total_num_rows = data_blocks
+            .iter()
+            .fold(0, |acc, chunk| acc + chunk.num_rows());
+
+        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let interrupt = self.interrupt.clone();
+        let mut chunk_index = task.0;
+        while chunk_index < task.1 {
+            if interrupt.load(Ordering::Relaxed) {
+                return Err(ErrorCode::AbortedQuery(
+                    "Aborted query, because the server is shutting down or the query was killed.",
+                ));
+            }
+            let bitmap = &outer_scan_bitmap[chunk_index];
+            let bitmap_len = bitmap.len();
+            let mut row_index = 0;
+            while row_index < bitmap_len {
+                while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+                    if !bitmap.get(row_index) {
+                        build_indexes[build_indexes_occupied].chunk_index = chunk_index;
+                        build_indexes[build_indexes_occupied].row_index = row_index;
+                        build_indexes_occupied += 1;
+                    }
+                    row_index += 1;
+                }
+                result_blocks.push(self.row_space.gather(
+                    &build_indexes[0..build_indexes_occupied],
+                    &data_blocks,
+                    &total_num_rows,
+                )?);
+                build_indexes_occupied = 0;
+            }
+            chunk_index += 1;
+        }
+        Ok(result_blocks)
     }
 
     #[async_backtrace::framed]
     async fn wait_build_finish(&self) -> Result<()> {
         let notified = {
-            let built_guard = self.is_built.lock();
+            let built_guard = self.build_done.lock();
 
             match *built_guard {
                 true => None,
-                false => Some(self.built_notify.notified()),
+                false => Some(self.build_done_notify.notified()),
             }
         };
 
@@ -449,11 +696,28 @@ impl HashJoinState for JoinHashTable {
     #[async_backtrace::framed]
     async fn wait_finalize_finish(&self) -> Result<()> {
         let notified = {
-            let finalized_guard = self.is_finalized.lock();
+            let finalized_guard = self.finalize_done.lock();
 
             match *finalized_guard {
                 true => None,
-                false => Some(self.finalized_notify.notified()),
+                false => Some(self.finalize_done_notify.notified()),
+            }
+        };
+
+        if let Some(notified) = notified {
+            notified.await;
+        }
+        Ok(())
+    }
+
+    #[async_backtrace::framed]
+    async fn wait_probe_finish(&self) -> Result<()> {
+        let notified = {
+            let finalized_guard = self.probe_done.lock();
+
+            match *finalized_guard {
+                true => None,
+                false => Some(self.probe_done_notify.notified()),
             }
         };
 
@@ -480,76 +744,5 @@ impl HashJoinState for JoinHashTable {
         let marker_block = self.create_marker_block(*has_null, markers)?;
         let build_block = self.row_space.gather(&row_ptrs, &data_blocks, &num_rows)?;
         Ok(vec![self.merge_eq_block(&marker_block, &build_block)?])
-    }
-
-    fn right_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        let row_state = self.row_state_for_right_join()?;
-        let unmatched_build_indexes = self.find_unmatched_build_indexes(&row_state)?;
-
-        // Don't need process non-equi conditions for full join in the method
-        // Because non-equi conditions have been processed in left probe join
-        if self.hash_join_desc.join_type == JoinType::Full {
-            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
-            return Ok(vec![DataBlock::concat(&[blocks, &[null_block]].concat())?]);
-        }
-
-        let mut input_block = blocks.to_vec();
-
-        if unmatched_build_indexes.is_empty() {
-            return Ok(input_block);
-        }
-
-        if input_block.is_empty() {
-            let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
-            return Ok(vec![null_block]);
-        }
-
-        let null_block = self.null_blocks_for_right_join(&unmatched_build_indexes)?;
-        input_block.push(null_block);
-        Ok(input_block)
-    }
-
-    fn right_semi_join_blocks(&self, _blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
-
-        let row_state = self.row_state_for_right_join()?;
-        let build_indexes = if self.hash_join_desc.join_type == JoinType::RightAnti {
-            self.find_unmatched_build_indexes(&row_state)?
-        } else {
-            self.find_matched_build_indexes(&row_state)?
-        };
-
-        let result_size = build_indexes.len();
-        let mut result_blocks = vec![];
-        let mut start = 0;
-        while start < result_size {
-            let end = std::cmp::min(start + JOIN_MAX_BLOCK_SIZE, result_size);
-            result_blocks.push(self.row_space.gather(
-                &build_indexes[start..end],
-                &data_blocks,
-                &num_rows,
-            )?);
-            start = end;
-        }
-
-        Ok(result_blocks)
-    }
-
-    fn left_join_blocks(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
-        // Get rest blocks
-        let mut input_blocks = blocks.to_vec();
-        let rest_block = self.rest_block()?;
-        if rest_block.is_empty() {
-            return Ok(input_blocks);
-        }
-        input_blocks.push(rest_block);
-        Ok(input_blocks)
     }
 }

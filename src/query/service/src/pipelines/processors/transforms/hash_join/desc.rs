@@ -12,10 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::Result;
 use common_expression::type_check::check_function;
-use common_expression::DataBlock;
 use common_expression::Expr;
 use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -33,20 +31,13 @@ pub struct MarkJoinDesc {
 }
 
 pub struct JoinState {
-    /// Record rows in build side that are matched with rows in probe side.
-    /// It's order-sensitive, aligned with the order of rows in merged block.
-    pub(crate) build_indexes: RwLock<Vec<RowPtr>>,
-    /// Rest build indexes and probe blocks
-    pub(crate) rest_pairs: RwLock<(Vec<DataBlock>, Vec<RowPtr>)>,
-    pub(crate) validity: RwLock<MutableBitmap>,
+    pub(crate) _build_indexes: RwLock<Vec<RowPtr>>,
 }
 
 impl JoinState {
     pub fn create() -> Result<Self> {
         Ok(JoinState {
-            build_indexes: RwLock::new(Vec::with_capacity(JOIN_MAX_BLOCK_SIZE)),
-            validity: RwLock::new(MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE)),
-            rest_pairs: Default::default(),
+            _build_indexes: RwLock::new(Vec::with_capacity(1)),
         })
     }
 }

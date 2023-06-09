@@ -28,7 +28,6 @@ use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
 impl JoinHashTable {
-    /// Used by right join/right semi(anti) join
     pub(crate) fn probe_right_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -58,6 +57,7 @@ impl JoinHashTable {
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -108,10 +108,8 @@ impl JoinHashTable {
                         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
                         if self.hash_join_desc.other_predicate.is_none() {
                             probed_blocks.push(merged_block);
-                            {
-                                let mut build_indexes =
-                                    self.hash_join_desc.join_state.build_indexes.write();
-                                build_indexes.extend_from_slice(local_build_indexes);
+                            for row_ptr in local_build_indexes.iter() {
+                                outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
                             }
                         } else {
                             let (bm, all_true, all_false) = self.get_other_filters(
@@ -121,10 +119,9 @@ impl JoinHashTable {
 
                             if all_true {
                                 probed_blocks.push(merged_block);
-                                {
-                                    let mut build_indexes =
-                                        self.hash_join_desc.join_state.build_indexes.write();
-                                    build_indexes.extend_from_slice(local_build_indexes);
+                                for row_ptr in local_build_indexes.iter() {
+                                    outer_scan_bitmap[row_ptr.chunk_index]
+                                        .set(row_ptr.row_index, true);
                                 }
                             } else {
                                 let num_rows = merged_block.num_rows();
@@ -134,21 +131,20 @@ impl JoinHashTable {
                                     // must be one of above
                                     _ => unreachable!(),
                                 };
-                                {
-                                    let mut build_indexes =
-                                        self.hash_join_desc.join_state.build_indexes.write();
-                                    let mut idx = 0;
-                                    while idx < occupied {
-                                        let valid = unsafe { validity.get_bit_unchecked(idx) };
-                                        if valid {
-                                            build_indexes.push(local_build_indexes[idx]);
-                                        }
-                                        idx += 1;
+                                let mut idx = 0;
+                                while idx < occupied {
+                                    let valid = unsafe { validity.get_bit_unchecked(idx) };
+                                    if valid {
+                                        outer_scan_bitmap[local_build_indexes[idx].chunk_index]
+                                            .set(local_build_indexes[idx].row_index, true);
                                     }
+                                    idx += 1;
                                 }
                                 let filtered_block =
                                     DataBlock::filter_with_bitmap(merged_block, &validity)?;
-                                probed_blocks.push(filtered_block);
+                                if !filtered_block.is_empty() {
+                                    probed_blocks.push(filtered_block);
+                                }
                             }
                         }
                     }
@@ -206,45 +202,45 @@ impl JoinHashTable {
 
         let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
 
-        if self.hash_join_desc.other_predicate.is_none() {
-            probed_blocks.push(merged_block);
-            {
-                let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
-                build_indexes.extend_from_slice(&local_build_indexes[0..occupied]);
-            }
-        } else {
-            let (bm, all_true, all_false) = self.get_other_filters(
-                &merged_block,
-                self.hash_join_desc.other_predicate.as_ref().unwrap(),
-            )?;
-
-            if all_true {
+        if !merged_block.is_empty() {
+            if self.hash_join_desc.other_predicate.is_none() {
                 probed_blocks.push(merged_block);
-                {
-                    let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
-                    build_indexes.extend_from_slice(&local_build_indexes[0..occupied]);
+                for row_ptr in local_build_indexes.iter().take(occupied) {
+                    outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
                 }
             } else {
-                let num_rows = merged_block.num_rows();
-                let validity = match (bm, all_false) {
-                    (Some(b), _) => b,
-                    (None, true) => Bitmap::new_zeroed(num_rows),
-                    // must be one of above
-                    _ => unreachable!(),
-                };
-                {
-                    let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
+                let (bm, all_true, all_false) = self.get_other_filters(
+                    &merged_block,
+                    self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                )?;
+
+                if all_true {
+                    probed_blocks.push(merged_block);
+                    for row_ptr in local_build_indexes.iter().take(occupied) {
+                        outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                    }
+                } else {
+                    let num_rows = merged_block.num_rows();
+                    let validity = match (bm, all_false) {
+                        (Some(b), _) => b,
+                        (None, true) => Bitmap::new_zeroed(num_rows),
+                        // must be one of above
+                        _ => unreachable!(),
+                    };
                     let mut idx = 0;
                     while idx < occupied {
                         let valid = unsafe { validity.get_bit_unchecked(idx) };
                         if valid {
-                            build_indexes.push(local_build_indexes[idx]);
+                            outer_scan_bitmap[local_build_indexes[idx].chunk_index]
+                                .set(local_build_indexes[idx].row_index, true);
                         }
                         idx += 1;
                     }
+                    let filtered_block = DataBlock::filter_with_bitmap(merged_block, &validity)?;
+                    if !filtered_block.is_empty() {
+                        probed_blocks.push(filtered_block);
+                    }
                 }
-                let filtered_block = DataBlock::filter_with_bitmap(merged_block, &validity)?;
-                probed_blocks.push(filtered_block);
             }
         }
 

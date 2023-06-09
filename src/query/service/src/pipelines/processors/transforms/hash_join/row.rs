@@ -56,22 +56,6 @@ impl RowSpace {
         })
     }
 
-    pub fn push_cols(&self, data_block: DataBlock, cols: ColumnVector) -> Result<()> {
-        let chunk = Chunk {
-            data_block,
-            cols,
-            keys_state: None,
-        };
-
-        {
-            // Acquire write lock in current scope
-            let mut chunks = self.chunks.write();
-            chunks.push(chunk);
-        }
-
-        Ok(())
-    }
-
     pub fn datablocks(&self) -> Vec<DataBlock> {
         let chunks = self.chunks.read();
         chunks.iter().map(|c| c.data_block.clone()).collect()
