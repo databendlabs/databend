@@ -114,8 +114,7 @@ impl ExecutorTasksQueue {
         let worker_id = context.get_worker_id();
         workers_tasks.workers_waiting_status.wait_worker(worker_id);
         drop(workers_tasks);
-        context
-            .get_workers_condvar()
+        workers_condvar
             .wait(worker_id, self.finished.clone());
     }
 
