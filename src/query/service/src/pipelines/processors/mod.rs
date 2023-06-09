@@ -21,7 +21,6 @@ pub use transforms::HashJoinDesc;
 pub use transforms::HashJoinState;
 pub use transforms::JoinHashTable;
 pub use transforms::MarkJoinCompactor;
-pub use transforms::ProfileWrapper;
 pub use transforms::SinkRuntimeFilterSource;
 pub use transforms::TransformBlockCompact;
 pub use transforms::TransformCastSchema;
