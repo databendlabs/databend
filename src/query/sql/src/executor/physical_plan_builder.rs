@@ -334,6 +334,7 @@ impl PhysicalPlanBuilder {
         }
 
         if !metadata.lazy_columns().is_empty() {
+            dbg!("come here");
             // Lazy materilaztion is enabled.
             if let Entry::Vacant(entry) = name_mapping.entry(ROW_ID_COL_NAME.to_string()) {
                 let internal_column = INTERNAL_COLUMN_FACTORY

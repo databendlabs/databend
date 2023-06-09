@@ -17,15 +17,34 @@ use std::sync::Arc;
 use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::DataBlock;
+use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
+use common_sql::optimizer::SExpr;
+use common_sql::plans::BoundColumnRef;
+use common_sql::plans::EvalScalar;
+use common_sql::plans::RelOperator;
+use common_sql::plans::ScalarItem;
+use common_sql::BindContext;
+use common_sql::ColumnBinding;
+use common_sql::ScalarExpr;
+use common_sql::Visibility;
+use futures_util::TryStreamExt;
 use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::SelectInterpreter;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::DeletePlan;
+use crate::stream::PullingExecutorStream;
 
 /// interprets DeletePlan
 pub struct DeleteInterpreter {
@@ -88,10 +107,57 @@ impl Interpreter for DeleteInterpreter {
             let col_indices = scalar.used_columns().into_iter().collect();
             (Some(filter), col_indices)
         } else {
-            if self.plan.input_expr.is_some() {
-                return Err(ErrorCode::Unimplemented(
-                    "Delete with subquery isn't supported",
-                ));
+            if let Some(input_expr) = &self.plan.input_expr {
+                // Select `_row_id` column
+                let table_index = self.plan.metadata.read().get_table_index(
+                    Some(self.plan.database_name.as_str()),
+                    self.plan.table_name.as_str(),
+                );
+                let row_id_col = ColumnBinding {
+                    database_name: Some(self.plan.database_name.clone()),
+                    table_name: Some(self.plan.table_name.clone()),
+                    column_position: None,
+                    table_index,
+                    column_name: ROW_ID_COL_NAME.to_string(),
+                    index: self.plan.metadata.read().columns().len(),
+                    data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                    visibility: Visibility::InVisible,
+                };
+                let expr = SExpr::create_unary(
+                    Arc::new(RelOperator::EvalScalar(EvalScalar {
+                        items: vec![ScalarItem {
+                            scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                                span: None,
+                                column: row_id_col.clone(),
+                            }),
+                            index: 0,
+                        }],
+                    })),
+                    Arc::new(input_expr.clone()),
+                );
+                // Create `input_expr` pipeline and execute it to get `_row_id` data block.
+                let select_interpreter = SelectInterpreter::try_create(
+                    self.ctx.clone(),
+                    BindContext::new(),
+                    expr,
+                    self.plan.metadata.clone(),
+                    None,
+                    false,
+                )?;
+                // Build physical plan
+                let physical_plan = select_interpreter.build_physical_plan().await?;
+                // Create pipeline for physical plan
+                let pipeline =
+                    build_query_pipeline(&self.ctx, &[row_id_col], &physical_plan, false, false)
+                        .await?;
+                let settings = self.ctx.get_settings();
+                let query_id = self.ctx.get_id();
+                let settings = ExecutorSettings::try_create(&settings, query_id)?;
+                let pulling_executor = PipelinePullingExecutor::from_pipelines(pipeline, settings)?;
+                self.ctx.set_executor(pulling_executor.get_inner())?;
+                let stream = PullingExecutorStream::create(pulling_executor)?;
+                let blocks = stream.try_collect::<Vec<DataBlock>>().await?;
+                dbg!(blocks);
             }
             (None, vec![])
         };

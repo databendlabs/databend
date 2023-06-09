@@ -12,22 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
+use crate::executor::PhysicalJoinType::Hash;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
+use crate::plans::BoundColumnRef;
 use crate::plans::DeletePlan;
+use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
 use crate::BindContext;
+use crate::ColumnBinding;
 use crate::ScalarExpr;
+use crate::Visibility;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -75,6 +86,21 @@ impl<'a> Binder {
                     SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
                 let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
                 let filter_expr = rewriter.rewrite(&filter_expr)?;
+                let support_row_id = self
+                    .ctx
+                    .get_table(
+                        catalog_name.as_str(),
+                        database_name.as_str(),
+                        table_name.as_str(),
+                    )
+                    .await?
+                    .support_row_id_column();
+                if !support_row_id {
+                    return Err(ErrorCode::from_string(
+                        "table doesn't support row_id, so it can't use delete with subquery"
+                            .to_string(),
+                    ));
+                }
                 (None, Some(filter_expr))
             } else {
                 (Some(scalar), None)
@@ -87,6 +113,7 @@ impl<'a> Binder {
             catalog_name,
             database_name,
             table_name,
+            metadata: self.metadata.clone(),
             selection,
             input_expr,
         };
