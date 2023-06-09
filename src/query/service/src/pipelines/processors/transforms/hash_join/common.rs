@@ -242,7 +242,6 @@ impl JoinHashTable {
 
     // Add `data_block` for build table to `row_space`
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
-        let func_ctx = self.ctx.get_function_context()?;
         let mut data_block = data_block;
         if matches!(
             self.hash_join_desc.join_type,
@@ -259,26 +258,9 @@ impl JoinHashTable {
                 .collect::<Vec<_>>();
             data_block = DataBlock::new(nullable_columns, data_block.num_rows());
         }
-        let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
-
-        let build_cols = self
-            .hash_join_desc
-            .build_keys
-            .iter()
-            .map(|expr| {
-                let return_type = expr.data_type();
-                Ok((
-                    evaluator
-                        .run(expr)?
-                        .convert_to_full_column(return_type, data_block.num_rows()),
-                    return_type.clone(),
-                ))
-            })
-            .collect::<Result<_>>()?;
 
         let chunk = Chunk {
             data_block,
-            cols: build_cols,
             keys_state: None,
         };
 

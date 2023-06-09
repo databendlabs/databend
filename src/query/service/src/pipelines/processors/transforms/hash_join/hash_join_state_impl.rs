@@ -18,9 +18,11 @@ use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::Evaluator;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
 use common_expression::HashMethodSerializer;
@@ -28,6 +30,7 @@ use common_expression::HashMethodSingleString;
 use common_expression::KeysState;
 use common_expression::Scalar;
 use common_expression::Value;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::RawEntry;
 use common_hashtable::RowPtr;
@@ -90,14 +93,12 @@ impl HashJoinState for JoinHashTable {
         &self.hash_join_desc.join_state
     }
 
-    fn attach(&self) -> Result<()> {
+    fn build_attach(&self) -> Result<()> {
         let mut count = self.build_count.lock();
         *count += 1;
         let mut count = self.finalize_count.lock();
         *count += 1;
-        let mut count = self.probe_count.lock();
-        *count += 1;
-        self.worker_num.fetch_add(1, Ordering::Relaxed);
+        self.build_worker_num.fetch_add(1, Ordering::Relaxed);
         Ok(())
     }
 
@@ -208,7 +209,7 @@ impl HashJoinState for JoinHashTable {
             return Ok(());
         }
 
-        let worker_num = self.worker_num.load(Ordering::Relaxed) as usize;
+        let worker_num = self.build_worker_num.load(Ordering::Relaxed) as usize;
         let (task_size, task_num) = if chunks_len >= worker_num {
             (chunks_len / worker_num, worker_num)
         } else {
@@ -345,9 +346,10 @@ impl HashJoinState for JoinHashTable {
             }};
         }
 
-        let interrupt = self.interrupt.clone();
+        let func_ctx = self.ctx.get_function_context()?;
         let chunks = self.row_space.chunks.read();
         let mut has_null = false;
+        let interrupt = self.interrupt.clone();
         for chunk_index in task.0..task.1 {
             if interrupt.load(Ordering::Relaxed) {
                 return Err(ErrorCode::AbortedQuery(
@@ -356,15 +358,29 @@ impl HashJoinState for JoinHashTable {
             }
 
             let chunk = &chunks[chunk_index];
-            let columns = &chunk.cols;
+            let evaluator = Evaluator::new(&chunk.data_block, &func_ctx, &BUILTIN_FUNCTIONS);
+            let columns: Vec<(Column, DataType)> = self
+                .hash_join_desc
+                .build_keys
+                .iter()
+                .map(|expr| {
+                    let return_type = expr.data_type();
+                    Ok((
+                        evaluator
+                            .run(expr)?
+                            .convert_to_full_column(return_type, chunk.data_block.num_rows()),
+                        return_type.clone(),
+                    ))
+                })
+                .collect::<Result<_>>()?;
             let markers = match self.hash_join_desc.join_type {
-                JoinType::LeftMark => Self::init_markers(&chunk.cols, chunk.num_rows())
+                JoinType::LeftMark => Self::init_markers(&columns, chunk.num_rows())
                     .iter()
                     .map(|x| Some(*x))
                     .collect(),
                 JoinType::RightMark => {
-                    if !has_null && !chunk.cols.is_empty() {
-                        if let Some(validity) = chunk.cols[0].0.validity().1 {
+                    if !has_null && !columns.is_empty() {
+                        if let Some(validity) = columns[0].0.validity().1 {
                             if validity.unset_bits() > 0 {
                                 has_null = true;
                                 let mut has_null_ref =
@@ -388,10 +404,10 @@ impl HashJoinState for JoinHashTable {
                   &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces,
                 },
                 HashJoinHashTable::KeysU8(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method, chunk,columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u8,
+                  &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u8,
                 },
                 HashJoinHashTable::KeysU16(table) => insert_key! {
-                  &mut table.hash_table, &markers, &table.hash_method, chunk,columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u16,
+                  &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u16,
                 },
                 HashJoinHashTable::KeysU32(table) => insert_key! {
                   &mut table.hash_table, &markers, &table.hash_method, chunk, columns, chunk_index, entry_size, &mut local_raw_entry_spaces, u32,
@@ -433,6 +449,12 @@ impl HashJoinState for JoinHashTable {
             *finalize_done = true;
             self.finalize_done_notify.notify_waiters();
         }
+        Ok(())
+    }
+
+    fn probe_attach(&self) -> Result<()> {
+        let mut count = self.probe_count.lock();
+        *count += 1;
         Ok(())
     }
 
