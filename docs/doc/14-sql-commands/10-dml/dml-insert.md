@@ -2,13 +2,14 @@
 title: INSERT
 ---
 
-Writing data.
+Writes data into a table.
 
 :::tip atomic operations
 Databend ensures data integrity with atomic operations. Inserts, updates, replaces, and deletes either succeed completely or fail entirely.
 :::
 
-## Insert Into Statement
+## Insert Values
+
 ### Syntax
 
 ```sql
@@ -17,8 +18,6 @@ INSERT INTO|OVERWRITE [db.]table [(c1, c2, c3)] VALUES (v11, v12, v13), (v21, v2
 
 ### Examples
 
-
-Example:
 ```sql
 CREATE TABLE test(a INT UNSIGNED, b Varchar);
 
@@ -42,22 +41,18 @@ SELECT * FROM test;
 +------+-------+
 ```
 
-## Inserting the Results of SELECT
+## Insert Results of SELECT
+
+When inserting the results of a SELECT statement, the mapping of columns follows their positions in the SELECT clause. Therefore, the number of columns in the SELECT statement must be equal to or greater than the number of columns in the INSERT table. In cases where the data types of the columns in the SELECT statement and the INSERT table differ, type casting will be performed as needed.
+
 ### Syntax
 
-```
+```sql
 INSERT INTO [db.]table [(c1, c2, c3)] SELECT ...
 ```
 
-:::tip
-Columns are mapped according to their position in the SELECT clause, So the number of columns in SELECT should be greater or equal to the INSERT table.
-
-The data type of columns in the SELECT and INSERT table could be different, if necessary, type casting will be performed.
-:::
-
 ### Examples
 
-Example:
 ```sql
 CREATE TABLE select_table(a VARCHAR, b VARCHAR, c VARCHAR);
 INSERT INTO select_table VALUES('1','11','abc');
@@ -69,7 +64,7 @@ SELECT * FROM select_table;
 | 1    | 11   | abc  |
 +------+------+------+
 
-CREATE TABLE test(c1 TINTINT UNSIGNED, c2 BIGINT UNSIGNED, c3 VARCHAR) ;
+CREATE TABLE test(c1 TINTINT UNSIGNED, c2 BIGINT UNSIGNED, c3 VARCHAR);
 INSERT INTO test SELECT * FROM select_table;
 
 SELECT * from test;
@@ -81,6 +76,7 @@ SELECT * from test;
 ```
 
 Aggregate Example:
+
 ```sql
 -- create table
 CREATE TABLE base_table(a INT);
@@ -102,7 +98,7 @@ SELECT * FROM aggregate_table ORDER BY b;
 +------+
 ```
 
-## Insert with `DEFAULT` to fill default value
+## Insert Default Values
 
 ### Syntax
 
@@ -128,7 +124,7 @@ SELECT * FROM t_insert_default;
 +------+------+------+------+
 ```
 
-## Insert with Stage Attachment
+## Insert with Staged Files
 
 :::info
 This method is only available with native http api currently.
@@ -155,7 +151,7 @@ CREATE TABLE t_insert_stage(a int null, b int default 2, c float, d varchar defa
 4,4.0
 ```
 
-Upload `values.csv` into stages:
+Upload `values.csv` into a stage:
 
 ```shell title='Request /v1/upload_to_stage' API
 curl -H "stage_name:my_int_stage" -F "upload=@./values.csv" -XPUT http://root:@localhost:8000/v1/upload_to_stage
