@@ -50,6 +50,7 @@ use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
+use common_expression::ColumnIndex;
 use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
 use common_expression::FunctionKind;
@@ -484,6 +485,11 @@ impl<'a> TypeChecker<'a> {
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
+
+                if let Some(constant) = self.try_fold_constant(&checked_expr) {
+                    return Ok(constant);
+                }
+
                 Box::new((
                     CastExpr {
                         span: expr.span(),
@@ -508,6 +514,11 @@ impl<'a> TypeChecker<'a> {
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
+
+                if let Some(constant) = self.try_fold_constant(&checked_expr) {
+                    return Ok(constant);
+                }
+
                 Box::new((
                     CastExpr {
                         span: expr.span(),
@@ -1504,24 +1515,12 @@ impl<'a> TypeChecker<'a> {
         };
         let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
 
-        if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-            // Fold constant and shrink scalar type
-            if let (common_expression::Expr::Constant { scalar, .. }, _) =
-                ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
-            {
-                let scalar = shrink_scalar(scalar);
-                let ty = scalar.as_ref().infer_data_type();
-                return Ok(Box::new((
-                    ConstantExpr {
-                        span,
-                        value: scalar,
-                    }
-                    .into(),
-                    ty,
-                )));
-            }
-        } else {
+        if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.ctx.set_cacheable(false);
+        }
+
+        if let Some(constant) = self.try_fold_constant(&expr) {
+            return Ok(constant);
         }
 
         Ok(Box::new((
@@ -1581,34 +1580,6 @@ impl<'a> TypeChecker<'a> {
                     vec![left, right],
                 )
                 .await
-            }
-            BinaryOperator::Gt
-            | BinaryOperator::Lt
-            | BinaryOperator::Gte
-            | BinaryOperator::Lte
-            | BinaryOperator::Eq
-            | BinaryOperator::NotEq => {
-                let op = ComparisonOp::try_from(op)?;
-                let box (left, _) = self.resolve(left).await?;
-                let box (right, _) = self.resolve(right).await?;
-
-                let (_, data_type) = *self
-                    .resolve_scalar_function_call(span, op.to_func_name(), vec![], vec![
-                        left.clone(),
-                        right.clone(),
-                    ])
-                    .await?;
-
-                Ok(Box::new((
-                    FunctionCall {
-                        span,
-                        func_name: op.to_func_name().to_string(),
-                        params: vec![],
-                        arguments: vec![left, right],
-                    }
-                    .into(),
-                    data_type,
-                )))
             }
             BinaryOperator::Like => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
@@ -2992,6 +2963,30 @@ impl<'a> TypeChecker<'a> {
             && self.ctx.get_settings().get_collation().unwrap() != "binary"
             && names.contains(&name);
         Ok(result)
+    }
+
+    fn try_fold_constant<Index: ColumnIndex>(
+        &self,
+        expr: &common_expression::Expr<Index>,
+    ) -> Option<Box<(ScalarExpr, DataType)>> {
+        if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            if let (common_expression::Expr::Constant { scalar, .. }, _) =
+                ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
+            {
+                let scalar = shrink_scalar(scalar);
+                let ty = scalar.as_ref().infer_data_type();
+                return Some(Box::new((
+                    ConstantExpr {
+                        span: expr.span(),
+                        value: scalar,
+                    }
+                    .into(),
+                    ty,
+                )));
+            }
+        }
+
+        None
     }
 }
 
