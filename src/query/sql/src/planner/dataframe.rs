@@ -14,9 +14,13 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
 use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
+use common_ast::ast::Join;
+use common_ast::ast::JoinCondition;
+use common_ast::ast::JoinOperator;
 use common_ast::ast::OrderByExpr;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::TableReference;
@@ -28,8 +32,10 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use parking_lot::RwLock;
 
+use crate::optimizer::optimize;
+use crate::optimizer::OptimizerConfig;
+use crate::optimizer::OptimizerContext;
 use crate::planner::optimizer::s_expr::SExpr;
-use crate::plans::JoinType;
 use crate::plans::Limit;
 use crate::plans::Plan;
 use crate::BindContext;
@@ -129,7 +135,7 @@ impl Dataframe {
                     span: None,
                     database: None,
                     table: None,
-                    column: Identifier::from_name(*c),
+                    column: ColumnID::Name(Identifier::from_name(*c)),
                 }),
                 alias: None,
             })
@@ -200,6 +206,12 @@ impl Dataframe {
             .normalize_select_list(&mut self.bind_context, &select_list)
             .await?;
 
+        let aliases = select_list
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect::<Vec<_>>();
+
         if !groupby.is_empty() {
             self.binder
                 .analyze_group_items(
@@ -225,7 +237,7 @@ impl Dataframe {
         let having = if let Some(having) = &having {
             Some(
                 self.binder
-                    .analyze_aggregate_having(&mut self.bind_context, &[], having)
+                    .analyze_aggregate_having(&mut self.bind_context, &aliases, having)
                     .await?,
             )
         } else {
@@ -237,6 +249,18 @@ impl Dataframe {
                 .bind_having(&mut self.bind_context, having, None, self.s_expr)
                 .await?;
         }
+        let (scalar_items, projections) = self
+            .binder
+            .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
+        self.s_expr = self.binder.bind_projection(
+            &mut self.bind_context,
+            &projections,
+            &scalar_items,
+            self.s_expr,
+        )?;
+        self.s_expr = self
+            .bind_context
+            .add_internal_column_into_expr(self.s_expr.clone());
         Ok(self)
     }
 
@@ -249,10 +273,12 @@ impl Dataframe {
             })
             .collect();
 
-        let select_list = self
+        let mut select_list = self
             .binder
             .normalize_select_list(&mut self.bind_context, select_list.as_slice())
             .await?;
+        self.binder
+            .analyze_aggregate_select(&mut self.bind_context, &mut select_list)?;
         let (mut scalar_items, projections) = self
             .binder
             .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
@@ -264,6 +290,15 @@ impl Dataframe {
             self.s_expr.clone(),
         )?;
 
+        self.s_expr = self.binder.bind_projection(
+            &mut self.bind_context,
+            &projections,
+            &scalar_items,
+            self.s_expr,
+        )?;
+        self.s_expr = self
+            .bind_context
+            .add_internal_column_into_expr(self.s_expr.clone());
         Ok(self)
     }
 
@@ -292,6 +327,11 @@ impl Dataframe {
             .binder
             .normalize_select_list(&mut self.bind_context, select_list.as_slice())
             .await?;
+        let aliases = select_list
+            .items
+            .iter()
+            .map(|item| (item.alias.clone(), item.scalar.clone()))
+            .collect::<Vec<_>>();
         let (mut scalar_items, projections) = self
             .binder
             .analyze_projection(&self.bind_context.aggregate_info, &select_list)?;
@@ -300,7 +340,7 @@ impl Dataframe {
             .analyze_order_items(
                 &mut self.bind_context,
                 &mut scalar_items,
-                &[],
+                &aliases,
                 &projections,
                 order_by,
                 distinct,
@@ -348,19 +388,46 @@ impl Dataframe {
         Ok(self)
     }
 
-    pub async fn join(mut self, right: Dataframe, join_type: JoinType) -> Result<Self> {
-        let (s_expr, bind_context) = self.binder.bind_intersect_or_except(
-            None,
-            None,
-            self.bind_context,
-            right.bind_context,
-            self.s_expr,
-            right.s_expr,
-            join_type,
-        )?;
+    pub async fn join(
+        mut self,
+        from: Vec<(Option<&str>, &str)>,
+        op: JoinOperator,
+        condition: JoinCondition,
+    ) -> Result<Self> {
+        let mut table_ref = vec![];
+        for (db, table_name) in from {
+            let table = TableReference::Table {
+                database: db.map(Identifier::from_name),
+                table: Identifier::from_name(table_name),
+                span: None,
+                catalog: None,
+                alias: None,
+                travel_point: None,
+                pivot: None,
+                unpivot: None,
+            };
+            table_ref.push(table);
+        }
+        let cross_joins = table_ref
+            .iter()
+            .cloned()
+            .reduce(|left, right| TableReference::Join {
+                span: None,
+                join: Join {
+                    op: op.clone(),
+                    condition: condition.clone(),
+                    left: Box::new(left),
+                    right: Box::new(right),
+                },
+            })
+            .unwrap();
+        let (join_expr, ctx) = self
+            .binder
+            .bind_table_reference(&mut self.bind_context, &cross_joins)
+            .await?;
 
-        self.s_expr = s_expr;
-        self.bind_context = bind_context;
+        self.s_expr = join_expr;
+        self.bind_context = ctx;
         Ok(self)
     }
     pub async fn union(mut self, dataframe: Dataframe) -> Result<Self> {
@@ -401,14 +468,18 @@ impl Dataframe {
         &self.s_expr
     }
 
-    pub fn into_plan(self) -> Plan {
-        Plan::Query {
+    pub fn into_plan(self, enable_distributed_optimization: bool) -> Result<Plan> {
+        let plan = Plan::Query {
             s_expr: Box::new(self.s_expr),
             metadata: self.binder.metadata.clone(),
             bind_context: Box::new(self.bind_context),
             rewrite_kind: None,
             ignore_result: false,
             formatted_ast: None,
-        }
+        };
+        let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
+            enable_distributed_optimization,
+        }));
+        optimize(self.query_ctx, opt_ctx, plan)
     }
 }

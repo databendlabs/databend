@@ -153,7 +153,7 @@ impl Binder {
 
     #[async_recursion]
     #[async_backtrace::framed]
-    async fn bind_single_table(
+    pub(crate) async fn bind_single_table(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,
