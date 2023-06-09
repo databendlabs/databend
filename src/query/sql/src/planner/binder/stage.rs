@@ -77,7 +77,7 @@ impl BindContext {
 
             let (scalar, data_type) = scalar_binder.bind(expr).await?;
             let target_type = schema.field(i).data_type();
-            let scalar = wrap_cast_scalar(&scalar, &data_type, &target_type)?;
+            let scalar = wrap_cast_scalar(&scalar, &data_type, target_type)?;
             let expr = scalar
                 .as_expr()?
                 .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
