@@ -1593,7 +1593,11 @@ pub fn infer_table_schema(data_schema: &DataSchemaRef) -> Result<TableSchemaRef>
     let mut fields = Vec::with_capacity(data_schema.fields().len());
     for field in data_schema.fields() {
         let field_type = infer_schema_type(field.data_type())?;
-        fields.push(TableField::new(field.name(), field_type));
+        fields.push(
+            TableField::new(field.name(), field_type)
+                .with_default_expr(field.default_expr.clone())
+                .with_computed_expr(field.computed_expr.clone()),
+        );
     }
     Ok(TableSchemaRefExt::create(fields))
 }

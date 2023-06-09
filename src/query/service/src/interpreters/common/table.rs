@@ -17,7 +17,6 @@ use std::sync::Arc;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
 use common_exception::Result;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
@@ -35,8 +34,8 @@ pub fn fill_missing_columns(
 ) -> Result<()> {
     let table_default_schema = &table.schema().remove_computed_fields();
     let table_computed_schema = &table.schema().remove_virtual_computed_fields();
-    let default_schema = Arc::new(DataSchema::from(table_default_schema));
-    let computed_schema = Arc::new(DataSchema::from(table_computed_schema));
+    let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+    let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
 
     // Fill missing default columns and resort the columns.
     if source_schema != default_schema {

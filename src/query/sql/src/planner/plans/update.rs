@@ -21,15 +21,17 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::ComputedExpr;
+use common_expression::ConstantFolder;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_functions::BUILTIN_FUNCTIONS;
 
+use crate::binder::wrap_cast_scalar;
 use crate::parse_computed_exprs;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
@@ -53,6 +55,7 @@ impl UpdatePlan {
 
     pub fn generate_update_list(
         &self,
+        ctx: Arc<dyn TableContext>,
         schema: DataSchema,
         col_indices: Vec<usize>,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
@@ -75,12 +78,10 @@ impl UpdatePlan {
             Vec::with_capacity(self.update_list.len()),
             |mut acc, (index, scalar)| {
                 let field = schema.field(*index);
-                let left = ScalarExpr::CastExpr(CastExpr {
-                    span: scalar.span(),
-                    is_try: false,
-                    argument: Box::new(scalar.clone()),
-                    target_type: Box::new(field.data_type().clone()),
-                });
+                let data_type = scalar.data_type()?;
+                let target_type = field.data_type();
+                let left = wrap_cast_scalar(scalar, &data_type, target_type)?;
+
                 let scalar = if col_indices.is_empty() {
                     // The condition is always true.
                     // Replace column to the result of the following expression:
@@ -112,13 +113,12 @@ impl UpdatePlan {
                         arguments: vec![predicate.clone(), left, right],
                     })
                 };
-                acc.push((
-                    *index,
-                    scalar
-                        .as_expr()?
-                        .project_column_ref(|col| col.column_name.clone())
-                        .as_remote_expr(),
-                ));
+                let expr = scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone());
+                let (expr, _) =
+                    ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+                acc.push((*index, expr.as_remote_expr()));
                 Ok::<_, ErrorCode>(acc)
             },
         )
@@ -153,10 +153,14 @@ impl UpdatePlan {
                     }
                 }
                 if need_update {
-                    let remote_expr = expr
-                        .project_column_ref(|index| schema.field(*index).name().to_string())
-                        .as_remote_expr();
-                    remote_exprs.insert(i, remote_expr);
+                    let expr =
+                        expr.project_column_ref(|index| schema.field(*index).name().to_string());
+                    let (expr, _) = ConstantFolder::fold(
+                        &expr,
+                        &ctx.get_function_context()?,
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    remote_exprs.insert(i, expr.as_remote_expr());
                 }
             }
         }

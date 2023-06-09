@@ -86,9 +86,11 @@ impl Interpreter for UpdateInterpreter {
             (None, vec![])
         };
 
-        let update_list = self
-            .plan
-            .generate_update_list(tbl.schema().into(), col_indices.clone())?;
+        let update_list = self.plan.generate_update_list(
+            self.ctx.clone(),
+            tbl.schema().into(),
+            col_indices.clone(),
+        )?;
 
         let computed_list = self
             .plan

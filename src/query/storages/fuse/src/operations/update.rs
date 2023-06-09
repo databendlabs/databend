@@ -122,13 +122,10 @@ impl FuseTable {
         let mut remain_reader = None;
         let mut pos = 0;
         let (projection, input_schema) = if col_indices.is_empty() {
-            for index in all_column_indices.iter() {
-                if computed_list.contains_key(index) {
-                    continue;
-                }
-                offset_map.insert(*index, pos);
+            all_column_indices.iter().for_each(|&index| {
+                offset_map.insert(index, pos);
                 pos += 1;
-            }
+            });
 
             (
                 Projection::Columns(all_column_indices),
@@ -147,7 +144,7 @@ impl FuseTable {
 
             let remain_col_indices: Vec<FieldIndex> = all_column_indices
                 .into_iter()
-                .filter(|index| !col_indices.contains(index) && !computed_list.contains_key(index))
+                .filter(|index| !col_indices.contains(index))
                 .collect();
             if !remain_col_indices.is_empty() {
                 remain_col_indices.iter().for_each(|&index| {
@@ -204,7 +201,7 @@ impl FuseTable {
         if !exprs.is_empty() {
             ops.push(BlockOperator::Map { exprs });
         }
-        // recalculate related stored computed columns.
+        // regenerate related stored computed columns.
         if !computed_exprs.is_empty() {
             ops.push(BlockOperator::Map {
                 exprs: computed_exprs,

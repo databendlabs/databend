@@ -39,6 +39,22 @@ a3 a3-c c
 a4 a4-c c
 
 statement ok
+update t_stored set a = 'aa', c = 'cc' where a = 'a4'
+
+statement error 1006
+update t_stored set b = 'bb', c = 'cc'
+
+query SSS
+select * from t_stored order by a, c
+----
+a a-c5 c5
+a a-c6 c6
+a1 a1-c1 c1
+a2 a2-c2 c2
+a3 a3-c c
+aa aa-cc cc
+
+statement ok
 drop table if exists t_stored2
 
 statement ok
@@ -53,6 +69,19 @@ select * from t_stored2
 {"id":1,"name":"tom"} 1 tom
 {"id":2,"name":"jim"} 2 jim
 {"id":3} 3 NULL
+
+statement ok
+update t_stored2 set a = '{"id":3, "name":"jack"}' where b = 3
+
+statement error 1006
+update t_stored2 set c = 'test'
+
+query TIS
+select * from t_stored2
+----
+{"id":1,"name":"tom"} 1 tom
+{"id":2,"name":"jim"} 2 jim
+{"id":3,"name":"jack"} 3 jack
 
 statement ok
 drop table if exists t_virtual
@@ -86,6 +115,22 @@ a3 a3-c c
 a4 a4-c c
 
 statement ok
+update t_virtual set a = 'aa', c = 'cc' where a = 'a4'
+
+statement error 1006
+update t_virtual set b = 'bb', c = 'cc'
+
+query SSS
+select * from t_virtual order by a, c
+----
+a a-c5 c5
+a a-c6 c6
+a1 a1-c1 c1
+a2 a2-c2 c2
+a3 a3-c c
+aa aa-cc cc
+
+statement ok
 drop table if exists t_virtual2
 
 statement ok
@@ -102,4 +147,18 @@ select * from t_virtual2
 {"id":3} 3 NULL
 
 statement ok
+update t_virtual2 set a = '{"id":3, "name":"jack"}' where b = 3
+
+statement error 1006
+update t_virtual2 set c = 'test'
+
+query TIS
+select * from t_virtual2
+----
+{"id":1,"name":"tom"} 1 tom
+{"id":2,"name":"jim"} 2 jim
+{"id":3,"name":"jack"} 3 jack
+
+statement ok
 DROP DATABASE db1
+
