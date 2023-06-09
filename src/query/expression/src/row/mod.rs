@@ -1,4 +1,4 @@
-// Copyright 2022 Datafuse Labs.
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![feature(box_patterns)]
-#![feature(try_blocks)]
+//! A comparable row format inspired by apache/arrow-rs.
+//! Use this module to convert column-oriented data into row-oriented data.
+//! It's mainly used for sort processors.
 
-extern crate core;
+mod fixed;
+mod row_converter;
+mod variable;
 
-mod common;
-mod decimal;
-mod group_by;
-mod kernel;
-mod row;
-mod serde;
-mod sort;
+pub use row_converter::RowConverter;

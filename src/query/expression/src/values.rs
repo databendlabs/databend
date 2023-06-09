@@ -1169,7 +1169,7 @@ impl Column {
         }
     }
 
-    fn set_validity(
+    pub fn set_validity(
         arrow_array: Box<dyn common_arrow::arrow::array::Array>,
         validity: &Bitmap,
     ) -> Box<dyn common_arrow::arrow::array::Array> {

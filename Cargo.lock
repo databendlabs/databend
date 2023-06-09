@@ -1850,6 +1850,7 @@ name = "common-expression"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-ord",
  "arrow-schema",
  "base64 0.21.0",
  "chrono",
