@@ -47,6 +47,7 @@ use crate::FileFormatOptionsExt;
 pub struct FieldJsonAstDecoder {
     pub timezone: Tz,
     pub ident_case_sensitive: bool,
+    pub is_select: bool,
 }
 
 impl FieldDecoder for FieldJsonAstDecoder {
@@ -60,6 +61,7 @@ impl FieldJsonAstDecoder {
         FieldJsonAstDecoder {
             timezone: options.timezone,
             ident_case_sensitive: options.ident_case_sensitive,
+            is_select: options.is_select,
         }
     }
 

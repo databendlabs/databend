@@ -42,7 +42,6 @@ use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
-
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
     ShareGrantObjectName(ShareGrantObjectName),

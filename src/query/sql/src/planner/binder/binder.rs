@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use chrono_tz::Tz;
@@ -32,6 +33,7 @@ use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::Expr;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::UserDefinedFunction;
 use tracing::warn;
 
@@ -355,11 +357,18 @@ impl<'a> Binder {
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
-            Statement::CreateFileFormat{  if_not_exists, name, file_format_options} =>  Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
-                if_not_exists: *if_not_exists,
-                name: name.clone(),
-                file_format_params: file_format_options.clone().try_into()?
-            })),
+            Statement::CreateFileFormat{  if_not_exists, name, file_format_options} =>  {
+                if StageFileFormatType::from_str(name).is_ok() {
+                    return Err(ErrorCode::SyntaxException(format!(
+                        "File format {name} is reserved"
+                    )));
+                }
+                Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
+                    if_not_exists: *if_not_exists,
+                    name: name.clone(),
+                    file_format_params: file_format_options.clone().try_into()?
+                }))
+            },
 
             Statement::DropFileFormat{
                 if_exists,
