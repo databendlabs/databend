@@ -139,6 +139,7 @@ pub fn optimize(
     }
 }
 
+// test
 pub fn optimize_query(
     ctx: Arc<dyn TableContext>,
     opt_ctx: Arc<OptimizerContext>,
