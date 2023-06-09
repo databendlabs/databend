@@ -25,6 +25,7 @@ use common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
+use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::PhysicalJoinType::Hash;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
@@ -32,8 +33,11 @@ use crate::plans::BoundColumnRef;
 use crate::plans::DeletePlan;
 use crate::plans::EvalScalar;
 use crate::plans::Filter;
+use crate::plans::Operator;
 use crate::plans::Plan;
+use crate::plans::RelOp;
 use crate::plans::RelOperator;
+use crate::plans::RelOperator::Scan;
 use crate::plans::ScalarItem;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -63,7 +67,7 @@ impl<'a> Binder {
             ));
         };
 
-        let (table_expr, mut context) = self
+        let (mut table_expr, mut context) = self
             .bind_table_reference(bind_context, table_reference)
             .await?;
 
@@ -75,13 +79,29 @@ impl<'a> Binder {
             &[],
         );
 
-        let (selection, input_expr) = if let Some(expr) = filter {
+        let (selection, input_expr, index) = if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
             if let ScalarExpr::SubqueryExpr(_) = scalar {
                 let filter = Filter {
                     predicates: vec![scalar],
                     is_having: false,
                 };
+                debug_assert_eq!(table_expr.plan.rel_op(), RelOp::Scan);
+                let mut scan = match &*table_expr.plan {
+                    Scan(scan) => scan.clone(),
+                    _ => unreachable!(),
+                };
+                // Add row_id column to metadata
+                let internal_column = INTERNAL_COLUMN_FACTORY
+                    .get_internal_column(ROW_ID_COL_NAME)
+                    .unwrap();
+                let index = self
+                    .metadata
+                    .write()
+                    .add_internal_column(scan.table_index, internal_column.clone());
+                // Add row_id column to scan's column set
+                scan.columns.insert(index);
+                table_expr.plan = Arc::new(Scan(scan));
                 let filter_expr =
                     SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
                 let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
@@ -101,12 +121,12 @@ impl<'a> Binder {
                             .to_string(),
                     ));
                 }
-                (None, Some(filter_expr))
+                (None, Some(filter_expr), Some(index))
             } else {
-                (Some(scalar), None)
+                (Some(scalar), None, None)
             }
         } else {
-            (None, None)
+            (None, None, None)
         };
 
         let plan = DeletePlan {
@@ -116,6 +136,7 @@ impl<'a> Binder {
             metadata: self.metadata.clone(),
             selection,
             input_expr,
+            index,
         };
         Ok(Plan::Delete(Box::new(plan)))
     }

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
@@ -22,6 +23,7 @@ use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::optimizer::SExpr;
 use common_sql::plans::BoundColumnRef;
@@ -119,7 +121,7 @@ impl Interpreter for DeleteInterpreter {
                     column_position: None,
                     table_index,
                     column_name: ROW_ID_COL_NAME.to_string(),
-                    index: self.plan.metadata.read().columns().len(),
+                    index: self.plan.index.unwrap(),
                     data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
                     visibility: Visibility::InVisible,
                 };
@@ -156,10 +158,13 @@ impl Interpreter for DeleteInterpreter {
                 let pulling_executor = PipelinePullingExecutor::from_pipelines(pipeline, settings)?;
                 self.ctx.set_executor(pulling_executor.get_inner())?;
                 let stream = PullingExecutorStream::create(pulling_executor)?;
-                let blocks = stream.try_collect::<Vec<DataBlock>>().await?;
-                dbg!(blocks);
+                let row_id_col = DataBlock::concat(&stream.try_collect::<Vec<DataBlock>>().await?)?.columns()[0].value.as_ref();
+                // Make a selection: `_row_id` IN (row_id_col)
+
+                (None, vec![self.plan.index.unwrap()])
+            } else {
+                (None, vec![])
             }
-            (None, vec![])
         };
 
         let mut build_res = PipelineBuildResult::create();
