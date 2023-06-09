@@ -27,3 +27,6 @@ DROP FILE FORMAT test_format
 
 statement ok
 show FILE FORMATS
+
+statement error 1005
+CREATE FILE FORMAT csv TYPE=CSV

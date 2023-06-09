@@ -66,7 +66,7 @@ statement error 1049
 create table t (a Decimal(0, 0));
 
 query T
-select typeof(1.1::decimal(3,2)::decimal(76,2))
+select typeof(number::decimal(3,2)::decimal(76,2)) from numbers(1)
 ----
 DECIMAL(76, 2)
 
@@ -350,17 +350,17 @@ SELECT ANY(CAST(2.34 AS DECIMAL(76, 2)))
 2.34
 
 query TTTT
-select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(13,2) a , 3.1::Decimal(8,3) b);
+select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select (number+1)::Decimal(13,2) a , (number+1)::Decimal(8,3) b from numbers(1));
 ----
 DECIMAL(15, 3) DECIMAL(15, 3) DECIMAL(21, 5) DECIMAL(22, 8)
 
 query TTTT
-select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(76,2) a , 3.1::Decimal(76,3) b);
+select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select (number+1)::Decimal(76,2) a , (number+1)::Decimal(76,3) b from numbers(1));
 ----
 DECIMAL(76, 3) DECIMAL(76, 3) DECIMAL(76, 5) DECIMAL(76, 8)
 
 query TTTT
-select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select 3::Decimal(39,2) a , 3.1::Decimal(39,3) b);
+select typeof(a+b), typeof(a-b), typeof(a*b), typeof(a/b) from (select (number+1)::Decimal(39,2) a , (number+1)::Decimal(39,3) b from numbers(1));
 ----
 DECIMAL(41, 3) DECIMAL(41, 3) DECIMAL(76, 5) DECIMAL(48, 8)
 

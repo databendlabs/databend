@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
@@ -53,6 +54,7 @@ use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
@@ -505,7 +507,10 @@ impl Binder {
                 let (mut stage_info, path) =
                     parse_file_location(&self.ctx, location, options.connection.clone()).await?;
                 if let Some(f) = &options.file_format {
-                    stage_info.file_format_params = self.ctx.get_file_format(f).await?;
+                    stage_info.file_format_params = match StageFileFormatType::from_str(f) {
+                        Ok(t) => FileFormatParams::default_by_type(t)?,
+                        _ => self.ctx.get_file_format(f).await?,
+                    }
                 }
                 let files_info = StageFilesInfo {
                     path,

@@ -432,10 +432,6 @@ impl BinaryOperator {
     pub fn to_func_name(&self) -> String {
         match self {
             BinaryOperator::StringConcat => "concat".to_string(),
-            BinaryOperator::NotLike => "NOT LIKE".to_string(),
-            BinaryOperator::NotRegexp => "NOT REGEXP".to_string(),
-            BinaryOperator::NotRLike => "NOT RLIKE".to_string(),
-            BinaryOperator::SoundsLike => "SOUNDS LIKE".to_string(),
             BinaryOperator::BitwiseOr => "bit_or".to_string(),
             BinaryOperator::BitwiseAnd => "bit_and".to_string(),
             BinaryOperator::BitwiseXor => "bit_xor".to_string(),
