@@ -125,6 +125,7 @@ impl CopyInterpreter {
                 pattern: None,
             },
             files_to_copy: None,
+            is_select: false,
         };
         let table = StageTable::try_create(stage_table_info)?;
         append2table(

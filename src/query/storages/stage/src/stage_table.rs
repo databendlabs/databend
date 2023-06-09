@@ -183,6 +183,7 @@ impl Table for StageTable {
             ctx.get_scan_progress(),
             compact_threshold,
             on_error_map,
+            self.table_info.is_select,
         )?);
 
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
