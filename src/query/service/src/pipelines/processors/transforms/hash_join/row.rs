@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::KeysState;
@@ -26,11 +24,8 @@ use parking_lot::RwLock;
 
 use crate::sessions::QueryContext;
 
-pub type ColumnVector = Vec<(Column, DataType)>;
-
 pub struct Chunk {
     pub data_block: DataBlock,
-    pub cols: ColumnVector,
     pub keys_state: Option<KeysState>,
 }
 

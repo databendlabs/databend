@@ -123,14 +123,9 @@ impl JoinHashTable {
                                     outer_scan_bitmap[row_ptr.chunk_index]
                                         .set(row_ptr.row_index, true);
                                 }
-                            } else {
-                                let num_rows = merged_block.num_rows();
-                                let validity = match (bm, all_false) {
-                                    (Some(b), _) => b,
-                                    (None, true) => Bitmap::new_zeroed(num_rows),
-                                    // must be one of above
-                                    _ => unreachable!(),
-                                };
+                            } else if !all_false {
+                                // Safe to unwrap.
+                                let validity = bm.unwrap();
                                 let mut idx = 0;
                                 while idx < occupied {
                                     let valid = unsafe { validity.get_bit_unchecked(idx) };
@@ -219,14 +214,9 @@ impl JoinHashTable {
                     for row_ptr in local_build_indexes.iter().take(occupied) {
                         outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
                     }
-                } else {
-                    let num_rows = merged_block.num_rows();
-                    let validity = match (bm, all_false) {
-                        (Some(b), _) => b,
-                        (None, true) => Bitmap::new_zeroed(num_rows),
-                        // must be one of above
-                        _ => unreachable!(),
-                    };
+                } else if !all_false {
+                    // Safe to unwrap.
+                    let validity = bm.unwrap();
                     let mut idx = 0;
                     while idx < occupied {
                         let valid = unsafe { validity.get_bit_unchecked(idx) };

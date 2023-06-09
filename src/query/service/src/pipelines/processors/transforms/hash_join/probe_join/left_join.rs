@@ -178,9 +178,6 @@ impl JoinHashTable {
                         if !WITH_OTHER_CONJUNCT {
                             result_blocks.push(merged_block);
                             if self.hash_join_desc.join_type == JoinType::Full {
-                                // let mut build_indexes =
-                                //     self.hash_join_desc.join_state.build_indexes.write();
-                                // build_indexes.extend_from_slice(&local_build_indexes[0..matched]);
                                 for row_ptr in local_build_indexes.iter().take(matched) {
                                     outer_scan_bitmap[row_ptr.chunk_index]
                                         .set(row_ptr.row_index, true);
@@ -195,31 +192,25 @@ impl JoinHashTable {
                             if all_true {
                                 result_blocks.push(merged_block);
                                 if self.hash_join_desc.join_type == JoinType::Full {
-                                    // let mut build_indexes =
-                                    //     self.hash_join_desc.join_state.build_indexes.write();
-                                    // build_indexes
-                                    //     .extend_from_slice(&local_build_indexes[0..matched]);
                                     for row_ptr in local_build_indexes.iter().take(matched) {
                                         outer_scan_bitmap[row_ptr.chunk_index]
                                             .set(row_ptr.row_index, true);
                                     }
                                 }
+                            } else if all_false {
+                                let mut idx = 0;
+                                while idx < matched {
+                                    row_state[row_state_idx[idx]] -= 1;
+                                    idx += 1;
+                                }
                             } else {
-                                let num_rows = merged_block.num_rows();
-                                let validity = match (bm, all_false) {
-                                    (Some(b), _) => b,
-                                    (None, true) => Bitmap::new_zeroed(num_rows),
-                                    // must be one of above
-                                    _ => unreachable!(),
-                                };
+                                // Safe to unwrap.
+                                let validity = bm.unwrap();
                                 if self.hash_join_desc.join_type == JoinType::Full {
-                                    // let mut build_indexes =
-                                    //     self.hash_join_desc.join_state.build_indexes.write();
                                     let mut idx = 0;
                                     while idx < matched {
                                         let valid = unsafe { validity.get_bit_unchecked(idx) };
                                         if valid {
-                                            // build_indexes.push(local_build_indexes[idx]);
                                             outer_scan_bitmap[local_build_indexes[idx].chunk_index]
                                                 .set(local_build_indexes[idx].row_index, true);
                                         } else {
