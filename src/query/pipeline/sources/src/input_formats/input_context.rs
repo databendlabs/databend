@@ -162,8 +162,10 @@ impl InputContext {
         scan_progress: Arc<Progress>,
         block_compact_thresholds: BlockThresholds,
         on_error_map: Arc<DashMap<String, HashMap<u16, InputError>>>,
+        is_select: bool,
     ) -> Result<Self> {
-        let mut file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings)?;
+        let mut file_format_options_ext =
+            FileFormatOptionsExt::create_from_settings(&settings, is_select)?;
         file_format_options_ext.disable_variant_check =
             stage_info.copy_options.disable_variant_check;
         let on_error_mode = stage_info.copy_options.on_error.clone();
@@ -255,7 +257,7 @@ impl InputContext {
         block_compact_thresholds: BlockThresholds,
     ) -> Result<Self> {
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
-        let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings)?;
+        let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings, false)?;
         let format = Self::get_input_format(&file_format_params)?;
 
         let plan = StreamPlan {

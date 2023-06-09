@@ -38,6 +38,7 @@ common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 common-storages-parquet = { path = "../storages/parquet" }
 common-storages-result-cache = { path = "../storages/result_cache" }
+common-storages-stage = { path = "../storages/stage" }
 common-storages-view = { path = "../storages/view" }
 common-users = { path = "../users" }
 data-mask-feature = { path = "../ee-features/data-mask" }
