@@ -54,11 +54,10 @@ use crate::sql::planner::plans::JoinType;
 #[async_trait::async_trait]
 impl HashJoinState for JoinHashTable {
     fn build(&self, input: DataBlock) -> Result<()> {
-        let data_block_size_limit = self.ctx.get_settings().get_max_block_size()? * 16;
         let mut buffer = self.row_space.buffer.write();
         buffer.push(input);
         let buffer_row_size = buffer.iter().fold(0, |acc, x| acc + x.num_rows());
-        if buffer_row_size < data_block_size_limit as usize {
+        if buffer_row_size < *self.data_block_size_limit {
             Ok(())
         } else {
             let data_block = DataBlock::concat(buffer.as_slice())?;

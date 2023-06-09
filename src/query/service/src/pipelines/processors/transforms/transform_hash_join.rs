@@ -18,7 +18,7 @@ use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
+use common_sql::plans::JoinType;
 
 use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
@@ -55,7 +55,8 @@ impl TransformHashJoinProbe {
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         join_state: Arc<dyn HashJoinState>,
-        _output_schema: DataSchemaRef,
+        join_type: &JoinType,
+        with_conjunct: bool,
     ) -> Result<Box<dyn Processor>> {
         let default_block_size = ctx.get_settings().get_max_block_size()?;
         Ok(Box::new(TransformHashJoinProbe {
@@ -65,7 +66,7 @@ impl TransformHashJoinProbe {
             output_port,
             step: HashJoinStep::Build,
             join_state,
-            probe_state: ProbeState::with_capacity(default_block_size as usize),
+            probe_state: ProbeState::create(join_type, with_conjunct, ctx.get_function_context()?),
             block_size: default_block_size,
             outer_scan_finished: false,
         }))

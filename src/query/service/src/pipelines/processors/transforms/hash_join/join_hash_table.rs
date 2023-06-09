@@ -82,6 +82,7 @@ pub enum HashJoinHashTable {
 
 pub struct JoinHashTable {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) data_block_size_limit: Arc<usize>,
     /// Reference count
     pub(crate) build_count: Mutex<usize>,
     pub(crate) finalize_count: Mutex<usize>,
@@ -155,6 +156,7 @@ impl JoinHashTable {
         }
         Ok(Self {
             row_space: RowSpace::new(ctx.clone(), build_data_schema)?,
+            data_block_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
             ctx,
             build_count: Mutex::new(0),
             finalize_count: Mutex::new(0),
@@ -185,7 +187,6 @@ impl JoinHashTable {
         input: &DataBlock,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let func_ctx = self.ctx.get_function_context()?;
         let mut input = (*input).clone();
         if matches!(
             self.hash_join_desc.join_type,
@@ -203,7 +204,7 @@ impl JoinHashTable {
                 .collect::<Vec<_>>();
             input = DataBlock::new(nullable_columns, input.num_rows());
         }
-        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS);
 
         let probe_keys = self
             .hash_join_desc

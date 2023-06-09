@@ -1067,7 +1067,8 @@ impl PipelineBuilder {
                 input,
                 output,
                 TransformHashJoinProbe::attach(state.clone())?,
-                join.output_schema()?,
+                &join.join_type,
+                !join.non_equi_conditions.is_empty(),
             )?;
 
             if self.enable_profiling {
