@@ -16,10 +16,10 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use common_arrow::arrow::compute::sort::row::RowConverter as ArrowRowConverter;
-use common_arrow::arrow::compute::sort::row::Rows as ArrowRows;
 use common_base::containers::FixedHeap;
 use common_exception::Result;
+use common_expression::row::RowConverter as CommonRowConverter;
+use common_expression::types::string::StringColumn;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
@@ -177,7 +177,7 @@ type SimpleStringTransform =
     TransformSortMergeLimit<SimpleRows<StringType>, SimpleRowConverter<StringType>>;
 type SimpleStringSort = AccumulatingTransformer<SimpleStringTransform>;
 
-type CommonTransform = TransformSortMergeLimit<ArrowRows, ArrowRowConverter>;
+type CommonTransform = TransformSortMergeLimit<StringColumn, CommonRowConverter>;
 type CommonSort = AccumulatingTransformer<CommonTransform>;
 
 pub fn try_create_transform_sort_merge_limit(

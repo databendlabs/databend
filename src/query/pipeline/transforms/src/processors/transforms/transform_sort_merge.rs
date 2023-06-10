@@ -20,10 +20,10 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::arrow::compute::sort::row::RowConverter as ArrowRowConverter;
-use common_arrow::arrow::compute::sort::row::Rows as ArrowRows;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::row::RowConverter as CommonRowConverter;
+use common_expression::types::string::StringColumn;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
@@ -202,7 +202,7 @@ type SimpleStringCompactor =
     SortMergeCompactor<SimpleRows<StringType>, SimpleRowConverter<StringType>>;
 type SimpleStringSort = TransformCompact<SimpleStringCompactor>;
 
-type CommonCompactor = SortMergeCompactor<ArrowRows, ArrowRowConverter>;
+type CommonCompactor = SortMergeCompactor<StringColumn, CommonRowConverter>;
 type CommonSort = TransformCompact<CommonCompactor>;
 
 pub fn try_create_transform_sort_merge(

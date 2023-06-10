@@ -18,10 +18,10 @@ use std::collections::BinaryHeap;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_arrow::arrow::compute::sort::row::RowConverter as ArrowRowConverter;
-use common_arrow::arrow::compute::sort::row::Rows as ArrowRows;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::row::RowConverter as CommonRowConverter;
+use common_expression::types::string::StringColumn;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
@@ -148,8 +148,8 @@ fn create_processor(
                 sort_columns_descriptions,
             )?)),
             _ => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
-                ArrowRows,
-                ArrowRowConverter,
+                StringColumn,
+                CommonRowConverter,
             >::create(
                 inputs,
                 output,
@@ -161,8 +161,8 @@ fn create_processor(
         }
     } else {
         ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
-            ArrowRows,
-            ArrowRowConverter,
+            StringColumn,
+            CommonRowConverter,
         >::create(
             inputs,
             output,
