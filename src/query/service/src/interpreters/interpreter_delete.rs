@@ -18,16 +18,21 @@ use std::sync::Arc;
 use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
+use common_expression::Expr;
+use common_expression::RawExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::optimizer::SExpr;
 use common_sql::plans::BoundColumnRef;
+use common_sql::plans::ConstantExpr;
 use common_sql::plans::EvalScalar;
+use common_sql::plans::FunctionCall;
 use common_sql::plans::RelOperator;
 use common_sql::plans::ScalarItem;
 use common_sql::BindContext;
@@ -115,7 +120,7 @@ impl Interpreter for DeleteInterpreter {
                     Some(self.plan.database_name.as_str()),
                     self.plan.table_name.as_str(),
                 );
-                let row_id_col = ColumnBinding {
+                let row_id_column_binding = ColumnBinding {
                     database_name: Some(self.plan.database_name.clone()),
                     table_name: Some(self.plan.table_name.clone()),
                     column_position: None,
@@ -130,7 +135,7 @@ impl Interpreter for DeleteInterpreter {
                         items: vec![ScalarItem {
                             scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
                                 span: None,
-                                column: row_id_col.clone(),
+                                column: row_id_column_binding.clone(),
                             }),
                             index: 0,
                         }],
@@ -149,19 +154,68 @@ impl Interpreter for DeleteInterpreter {
                 // Build physical plan
                 let physical_plan = select_interpreter.build_physical_plan().await?;
                 // Create pipeline for physical plan
-                let pipeline =
-                    build_query_pipeline(&self.ctx, &[row_id_col], &physical_plan, false, false)
-                        .await?;
+                let pipeline = build_query_pipeline(
+                    &self.ctx,
+                    &[row_id_column_binding.clone()],
+                    &physical_plan,
+                    false,
+                    false,
+                )
+                .await?;
                 let settings = self.ctx.get_settings();
                 let query_id = self.ctx.get_id();
                 let settings = ExecutorSettings::try_create(&settings, query_id)?;
                 let pulling_executor = PipelinePullingExecutor::from_pipelines(pipeline, settings)?;
                 self.ctx.set_executor(pulling_executor.get_inner())?;
-                let stream = PullingExecutorStream::create(pulling_executor)?;
-                let row_id_col = DataBlock::concat(&stream.try_collect::<Vec<DataBlock>>().await?)?.columns()[0].value.as_ref();
-                // Make a selection: `_row_id` IN (row_id_col)
+                let stream_blocks = PullingExecutorStream::create(pulling_executor)?
+                    .try_collect::<Vec<DataBlock>>()
+                    .await?;
 
-                (None, vec![self.plan.index.unwrap()])
+                let block = if !stream_blocks.is_empty() {
+                    DataBlock::concat(&stream_blocks)?
+                } else {
+                    return Err(ErrorCode::EmptyData("Delete input is empty"));
+                };
+                let row_id_col = block.columns()[0].value.convert_to_full_column(
+                    &DataType::Number(NumberDataType::UInt64),
+                    block.num_rows(),
+                );
+                // Make a selection: `_row_id` IN (row_id_col)
+                // Construct array function for `row_id_col`
+                let mut row_id_array = Vec::with_capacity(row_id_col.len());
+                for row_id in row_id_col.iter() {
+                    let scalar = row_id.to_owned();
+                    let constant_scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                        span: None,
+                        value: scalar,
+                    });
+                    row_id_array.push(constant_scalar_expr);
+                }
+                let array_raw_expr = ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "array".to_string(),
+                    params: vec![],
+                    arguments: row_id_array,
+                });
+
+                let row_id_expr = ScalarExpr::BoundColumnRef(BoundColumnRef {
+                    span: None,
+                    column: row_id_column_binding,
+                });
+
+                let filter = cast_expr_to_non_null_boolean(
+                    ScalarExpr::FunctionCall(FunctionCall {
+                        span: None,
+                        func_name: "contains".to_string(),
+                        params: vec![],
+                        arguments: vec![array_raw_expr, row_id_expr],
+                    })
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone()),
+                )?
+                .as_remote_expr();
+                dbg!(&filter);
+                (Some(filter), vec![self.plan.index.unwrap()])
             } else {
                 (None, vec![])
             }
