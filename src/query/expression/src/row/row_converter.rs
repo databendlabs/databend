@@ -34,6 +34,9 @@ use crate::with_number_type;
 use crate::Column;
 use crate::SortField;
 
+/// Convert column-oriented data into comparable row-oriented data.
+///
+/// **NOTE**: currently, Variant is treat as String.
 pub struct RowConverter {
     fields: Arc<[SortField]>,
 }
@@ -59,7 +62,6 @@ impl RowConverter {
             | DataType::EmptyMap
             | DataType::Map(_)
             | DataType::Bitmap
-            | DataType::Variant
             | DataType::Tuple(_)
             | DataType::Generic(_) => false,
             DataType::Nullable(inner) => Self::support_data_type(inner.as_ref()),
@@ -121,7 +123,7 @@ impl RowConverter {
                 DataType::Date => lengths
                     .iter_mut()
                     .for_each(|x| *x += i32::ENCODED_LEN as u64),
-                DataType::String => {
+                DataType::String | DataType::Variant => {
                     let col = col.remove_nullable();
                     if all_null {
                         lengths.iter_mut().for_each(|x| *x += 1)
@@ -207,6 +209,7 @@ fn encode_column(out: &mut StringColumnBuilder, column: &Column, asc: bool, null
         Column::Timestamp(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Date(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::String(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
+        Column::Variant(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
         _ => unimplemented!(),
     }
 }
