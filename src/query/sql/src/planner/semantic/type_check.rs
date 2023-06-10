@@ -495,15 +495,16 @@ impl<'a> TypeChecker<'a> {
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
+
+                if let Some(constant) = self.try_fold_constant(&checked_expr) {
+                    return Ok(constant);
+                }
                 // if the source type is nullable, cast target type should also be nullable.
                 let target_type = if data_type.is_nullable() {
                     checked_expr.data_type().wrap_nullable()
                 } else {
                     checked_expr.data_type().clone()
                 };
-                if let Some(constant) = self.try_fold_constant(&checked_expr) {
-                    return Ok(constant);
-                }
 
                 Box::new((
                     CastExpr {
