@@ -109,8 +109,12 @@ where
             return Ok(vec![]);
         }
 
-        let mut blocks = blocks.to_vec();
         let output_size = blocks.iter().map(|b| b.num_rows()).sum::<usize>();
+        let mut blocks = blocks
+            .iter()
+            .filter(|b| !b.is_empty())
+            .cloned()
+            .collect::<Vec<_>>();
 
         if output_size == 0 {
             return Ok(vec![]);
@@ -123,9 +127,6 @@ where
 
         // 1. Put all blocks into a min-heap.
         for (i, block) in blocks.iter_mut().enumerate() {
-            if block.is_empty() {
-                continue;
-            }
             let columns = self
                 .order_by_cols
                 .iter()
@@ -140,7 +141,6 @@ where
                     value: Value::Column(order_col),
                 });
             }
-
             let cursor = Cursor::new(i, rows);
             heap.push(Reverse(cursor));
         }
@@ -229,6 +229,7 @@ pub fn try_create_transform_sort_merge(
     output_schema: DataSchemaRef,
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,
+    gen_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
     if sort_desc.len() == 1 {
         let sort_type = output_schema.field(sort_desc[0].offset).data_type();
@@ -245,35 +246,52 @@ pub fn try_create_transform_sort_merge(
                     SortMergeCompactor::<
                         SimpleRows<NumberType<NUM_TYPE>>,
                         SimpleRowConverter<NumberType<NUM_TYPE>>,
-                    >::try_create(output_schema, block_size, sort_desc, true)?
+                    >::try_create(
+                        output_schema, block_size, sort_desc, gen_order_col
+                    )?
                 ),
             }),
             DataType::Date => SimpleDateSort::try_create(
                 input,
                 output,
-                SimpleDateCompactor::try_create(output_schema, block_size, sort_desc, true)?,
+                SimpleDateCompactor::try_create(
+                    output_schema,
+                    block_size,
+                    sort_desc,
+                    gen_order_col,
+                )?,
             ),
             DataType::Timestamp => SimpleTimestampSort::try_create(
                 input,
                 output,
-                SimpleTimestampCompactor::try_create(output_schema, block_size, sort_desc, true)?,
+                SimpleTimestampCompactor::try_create(
+                    output_schema,
+                    block_size,
+                    sort_desc,
+                    gen_order_col,
+                )?,
             ),
             DataType::String => SimpleStringSort::try_create(
                 input,
                 output,
-                SimpleStringCompactor::try_create(output_schema, block_size, sort_desc, true)?,
+                SimpleStringCompactor::try_create(
+                    output_schema,
+                    block_size,
+                    sort_desc,
+                    gen_order_col,
+                )?,
             ),
             _ => CommonSort::try_create(
                 input,
                 output,
-                CommonCompactor::try_create(output_schema, block_size, sort_desc, true)?,
+                CommonCompactor::try_create(output_schema, block_size, sort_desc, gen_order_col)?,
             ),
         }
     } else {
         CommonSort::try_create(
             input,
             output,
-            CommonCompactor::try_create(output_schema, block_size, sort_desc, true)?,
+            CommonCompactor::try_create(output_schema, block_size, sort_desc, gen_order_col)?,
         )
     }
 }

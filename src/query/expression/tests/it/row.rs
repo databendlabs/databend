@@ -310,8 +310,7 @@ fn generate_string_column(len: usize, valid_percent: f64) -> Column {
         .map(|_| {
             rng.gen_bool(valid_percent).then(|| {
                 let len = rng.gen_range(0..100);
-                let bytes = (0..len).map(|_| rng.gen_range(0..128)).collect();
-                bytes
+                (0..len).map(|_| rng.gen_range(0..128)).collect()
             })
         })
         .collect::<Vec<_>>();
@@ -430,7 +429,7 @@ fn fuzz_test() {
                 for j in 0..num_rows {
                     let row_i = rows.index_unchecked(i);
                     let row_j = rows.index_unchecked(j);
-                    let row_cmp = row_i.cmp(&row_j);
+                    let row_cmp = row_i.cmp(row_j);
                     let lex_cmp = comparator.compare(i, j);
                     assert_eq!(
                         row_cmp,

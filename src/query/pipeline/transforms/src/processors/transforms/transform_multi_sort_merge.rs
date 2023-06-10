@@ -162,8 +162,7 @@ where R: Rows
     /// Data from inputs (every input is sorted)
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
-    /// Sort fields' indices in `output_schema`
-    sort_field_indices: Vec<usize>,
+
     sort_desc: Vec<SortColumnDescription>,
 
     // Parameters
@@ -198,11 +197,9 @@ where R: Rows
         sort_desc: Vec<SortColumnDescription>,
     ) -> Result<Self> {
         let input_size = inputs.len();
-        let sort_field_indices = sort_desc.iter().map(|d| d.offset).collect::<Vec<_>>();
         Ok(Self {
             inputs,
             output,
-            sort_field_indices,
             sort_desc,
             block_size,
             limit,
@@ -476,12 +473,14 @@ where R: Rows + Send + 'static
                         continue;
                     }
                     let block = block.convert_to_full();
-                    let columns = self
-                        .sort_field_indices
-                        .iter()
-                        .map(|i| block.get_by_offset(*i).clone())
-                        .collect::<Vec<_>>();
-                    let order_col = columns.last().unwrap().value.as_column().unwrap().clone();
+                    let order_col = block
+                        .columns()
+                        .last()
+                        .unwrap()
+                        .value
+                        .as_column()
+                        .unwrap()
+                        .clone();
                     let rows = R::from_column(order_col, &self.sort_desc).ok_or_else(|| {
                         ErrorCode::BadDataValueType("Order column type mismatched.")
                     })?;

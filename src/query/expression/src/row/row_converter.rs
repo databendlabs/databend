@@ -123,7 +123,7 @@ impl RowConverter {
                 DataType::Date => lengths
                     .iter_mut()
                     .for_each(|x| *x += i32::ENCODED_LEN as u64),
-                DataType::String | DataType::Variant => {
+                DataType::String => {
                     let col = col.remove_nullable();
                     if all_null {
                         lengths.iter_mut().for_each(|x| *x += 1)
@@ -138,6 +138,29 @@ impl RowConverter {
                             })
                     } else {
                         col.as_string()
+                            .unwrap()
+                            .iter()
+                            .zip(lengths.iter_mut())
+                            .for_each(|(bytes, length)| {
+                                *length += variable::encoded_len(bytes, false) as u64
+                            })
+                    }
+                }
+                DataType::Variant => {
+                    let col = col.remove_nullable();
+                    if all_null {
+                        lengths.iter_mut().for_each(|x| *x += 1)
+                    } else if let Some(validity) = validity {
+                        col.as_variant()
+                            .unwrap()
+                            .iter()
+                            .zip(validity.iter())
+                            .zip(lengths.iter_mut())
+                            .for_each(|((bytes, v), length)| {
+                                *length += variable::encoded_len(bytes, !v) as u64
+                            })
+                    } else {
+                        col.as_variant()
                             .unwrap()
                             .iter()
                             .zip(lengths.iter_mut())

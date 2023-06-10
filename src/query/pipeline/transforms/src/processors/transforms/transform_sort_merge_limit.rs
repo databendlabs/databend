@@ -53,6 +53,8 @@ pub struct TransformSortMergeLimit<R: Rows, Converter> {
     cur_index: usize,
 
     block_size: usize,
+
+    gen_order_col: bool,
 }
 
 impl<R, Converter> TransformSortMergeLimit<R, Converter>
@@ -65,6 +67,7 @@ where
         sort_desc: Vec<SortColumnDescription>,
         block_size: usize,
         limit: usize,
+        gen_order_col: bool,
     ) -> Result<Self> {
         let order_by_cols = sort_desc.iter().map(|i| i.offset).collect::<Vec<_>>();
         let row_converter = Converter::create(sort_desc, schema)?;
@@ -75,6 +78,7 @@ where
             buffer: HashMap::with_capacity(limit),
             block_size,
             cur_index: 0,
+            gen_order_col,
         })
     }
 }
@@ -88,6 +92,11 @@ where
 
     fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
         if self.heap.cap() == 0 {
+            // limit is 0
+            return Ok(vec![]);
+        }
+
+        if data.is_empty() {
             return Ok(vec![]);
         }
 
@@ -100,11 +109,15 @@ where
             self.row_converter
                 .convert(&order_by_cols, data.num_rows())?,
         );
-        let order_col = rows.to_column();
-        data.add_column(BlockEntry {
-            data_type: order_col.data_type(),
-            value: Value::Column(order_col),
-        });
+
+        if self.gen_order_col {
+            let order_col = rows.to_column();
+            data.add_column(BlockEntry {
+                data_type: order_col.data_type(),
+                value: Value::Column(order_col),
+            });
+        }
+
         let mut cursor = Cursor::new(self.cur_index, rows);
         self.buffer.insert(self.cur_index, data);
 
@@ -194,6 +207,7 @@ pub fn try_create_transform_sort_merge_limit(
     sort_desc: Vec<SortColumnDescription>,
     block_size: usize,
     limit: usize,
+    gen_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
     Ok(if sort_desc.len() == 1 {
         let sort_type = input_schema.field(sort_desc[0].offset).data_type();
@@ -210,35 +224,61 @@ pub fn try_create_transform_sort_merge_limit(
                     TransformSortMergeLimit::<
                         SimpleRows<NumberType<NUM_TYPE>>,
                         SimpleRowConverter<NumberType<NUM_TYPE>>,
-                    >::try_create(input_schema, sort_desc, block_size, limit)?
+                    >::try_create(
+                        input_schema, sort_desc, block_size, limit, gen_order_col
+                    )?
                 ),
             }),
             DataType::Date => SimpleDateSort::create(
                 input,
                 output,
-                SimpleDateTransform::try_create(input_schema, sort_desc, block_size, limit)?,
+                SimpleDateTransform::try_create(
+                    input_schema,
+                    sort_desc,
+                    block_size,
+                    limit,
+                    gen_order_col,
+                )?,
             ),
             DataType::Timestamp => SimpleTimestampSort::create(
                 input,
                 output,
-                SimpleTimestampTransform::try_create(input_schema, sort_desc, block_size, limit)?,
+                SimpleTimestampTransform::try_create(
+                    input_schema,
+                    sort_desc,
+                    block_size,
+                    limit,
+                    gen_order_col,
+                )?,
             ),
             DataType::String => SimpleStringSort::create(
                 input,
                 output,
-                SimpleStringTransform::try_create(input_schema, sort_desc, block_size, limit)?,
+                SimpleStringTransform::try_create(
+                    input_schema,
+                    sort_desc,
+                    block_size,
+                    limit,
+                    gen_order_col,
+                )?,
             ),
             _ => CommonSort::create(
                 input,
                 output,
-                CommonTransform::try_create(input_schema, sort_desc, block_size, limit)?,
+                CommonTransform::try_create(
+                    input_schema,
+                    sort_desc,
+                    block_size,
+                    limit,
+                    gen_order_col,
+                )?,
             ),
         }
     } else {
         CommonSort::create(
             input,
             output,
-            CommonTransform::try_create(input_schema, sort_desc, block_size, limit)?,
+            CommonTransform::try_create(input_schema, sort_desc, block_size, limit, gen_order_col)?,
         )
     })
 }
