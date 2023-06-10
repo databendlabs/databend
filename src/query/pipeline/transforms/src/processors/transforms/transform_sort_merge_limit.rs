@@ -27,9 +27,11 @@ use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::with_number_mapped_type;
+use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
+use common_expression::Value;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -84,7 +86,7 @@ where
 {
     const NAME: &'static str = "TransformSortMergeLimit";
 
-    fn transform(&mut self, data: DataBlock) -> Result<Vec<DataBlock>> {
+    fn transform(&mut self, mut data: DataBlock) -> Result<Vec<DataBlock>> {
         if self.heap.cap() == 0 {
             return Ok(vec![]);
         }
@@ -98,6 +100,11 @@ where
             self.row_converter
                 .convert(&order_by_cols, data.num_rows())?,
         );
+        let order_col = rows.to_column();
+        data.add_column(BlockEntry {
+            data_type: order_col.data_type(),
+            value: Value::Column(order_col),
+        });
         let mut cursor = Cursor::new(self.cur_index, rows);
         self.buffer.insert(self.cur_index, data);
 

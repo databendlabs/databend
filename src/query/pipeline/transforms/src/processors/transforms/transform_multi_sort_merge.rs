@@ -20,7 +20,6 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::row::RowConverter as CommonRowConverter;
 use common_expression::types::string::StringColumn;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
@@ -42,9 +41,7 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
 
 use super::sort::Cursor;
-use super::sort::RowConverter;
 use super::sort::Rows;
-use super::sort::SimpleRowConverter;
 use super::sort::SimpleRows;
 
 pub fn try_add_multi_sort_merge(
@@ -104,11 +101,9 @@ fn create_processor(
                 NumberDataType::NUM_TYPE =>
                     ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
                         SimpleRows<NumberType<NUM_TYPE>>,
-                        SimpleRowConverter<NumberType<NUM_TYPE>>,
                     >::create(
                         inputs,
                         output,
-                        input_schema,
                         block_size,
                         limit,
                         sort_columns_descriptions,
@@ -116,57 +111,43 @@ fn create_processor(
             }),
             DataType::Date => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
                 SimpleRows<DateType>,
-                SimpleRowConverter<DateType>,
             >::create(
                 inputs,
                 output,
-                input_schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
             )?)),
             DataType::Timestamp => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
                 SimpleRows<TimestampType>,
-                SimpleRowConverter<TimestampType>,
             >::create(
                 inputs,
                 output,
-                input_schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
             )?)),
             DataType::String => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
                 SimpleRows<StringType>,
-                SimpleRowConverter<StringType>,
             >::create(
                 inputs,
                 output,
-                input_schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
             )?)),
-            _ => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
-                StringColumn,
-                CommonRowConverter,
-            >::create(
+            _ => ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<StringColumn>::create(
                 inputs,
                 output,
-                input_schema,
                 block_size,
                 limit,
                 sort_columns_descriptions,
             )?)),
         }
     } else {
-        ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<
-            StringColumn,
-            CommonRowConverter,
-        >::create(
+        ProcessorPtr::create(Box::new(MultiSortMergeProcessor::<StringColumn>::create(
             inputs,
             output,
-            input_schema,
             block_size,
             limit,
             sort_columns_descriptions,
@@ -175,16 +156,15 @@ fn create_processor(
 }
 
 /// TransformMultiSortMerge is a processor with multiple input ports;
-pub struct MultiSortMergeProcessor<R, Converter>
-where
-    R: Rows,
-    Converter: RowConverter<R>,
+pub struct MultiSortMergeProcessor<R>
+where R: Rows
 {
     /// Data from inputs (every input is sorted)
     inputs: Vec<Arc<InputPort>>,
     output: Arc<OutputPort>,
     /// Sort fields' indices in `output_schema`
     sort_field_indices: Vec<usize>,
+    sort_desc: Vec<SortColumnDescription>,
 
     // Parameters
     block_size: usize,
@@ -203,35 +183,27 @@ where
     heap: BinaryHeap<Reverse<Cursor<R>>>,
     /// If the input port is finished.
     input_finished: Vec<bool>,
-    /// Used to convert columns to rows.
-    row_converter: Converter,
 
     state: ProcessorState,
 }
 
-impl<R, Converter> MultiSortMergeProcessor<R, Converter>
-where
-    R: Rows,
-    Converter: RowConverter<R>,
+impl<R> MultiSortMergeProcessor<R>
+where R: Rows
 {
     pub fn create(
         inputs: Vec<Arc<InputPort>>,
         output: Arc<OutputPort>,
-        input_schema: DataSchemaRef,
         block_size: usize,
         limit: Option<usize>,
-        sort_columns_descriptions: Vec<SortColumnDescription>,
+        sort_desc: Vec<SortColumnDescription>,
     ) -> Result<Self> {
         let input_size = inputs.len();
-        let sort_field_indices = sort_columns_descriptions
-            .iter()
-            .map(|d| d.offset)
-            .collect::<Vec<_>>();
-        let row_converter = Converter::create(sort_columns_descriptions, input_schema)?;
+        let sort_field_indices = sort_desc.iter().map(|d| d.offset).collect::<Vec<_>>();
         Ok(Self {
             inputs,
             output,
             sort_field_indices,
+            sort_desc,
             block_size,
             limit,
             blocks: vec![VecDeque::with_capacity(2); input_size],
@@ -239,7 +211,6 @@ where
             in_progress_rows: vec![],
             cursor_finished: vec![true; input_size],
             input_finished: vec![false; input_size],
-            row_converter,
             state: ProcessorState::Consume,
         })
     }
@@ -409,10 +380,8 @@ where
 }
 
 #[async_trait::async_trait]
-impl<R, Converter> Processor for MultiSortMergeProcessor<R, Converter>
-where
-    R: Rows + Send + 'static,
-    Converter: RowConverter<R> + Send + 'static,
+impl<R> Processor for MultiSortMergeProcessor<R>
+where R: Rows + Send + 'static
 {
     fn name(&self) -> String {
         "MultiSortMerge".to_string()
@@ -506,12 +475,18 @@ where
                     if block.is_empty() {
                         continue;
                     }
+                    let block = block.convert_to_full();
                     let columns = self
                         .sort_field_indices
                         .iter()
                         .map(|i| block.get_by_offset(*i).clone())
                         .collect::<Vec<_>>();
-                    let rows = self.row_converter.convert(&columns, block.num_rows())?;
+                    let order_col = columns.last().unwrap().value.as_column().unwrap().clone();
+                    let rows = R::from_column(order_col, &self.sort_desc).ok_or_else(|| {
+                        ErrorCode::BadDataValueType("Order column type mismatched.")
+                    })?;
+                    // Remove the order column
+                    let block = block.pop_columns(1)?;
                     let cursor = Cursor::new(input_index, rows);
                     self.heap.push(Reverse(cursor));
                     self.cursor_finished[input_index] = false;

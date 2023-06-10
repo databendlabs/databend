@@ -31,9 +31,11 @@ use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::with_number_mapped_type;
+use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
+use common_expression::Value;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -56,6 +58,10 @@ pub struct SortMergeCompactor<R, Converter> {
 
     aborting: Arc<AtomicBool>,
 
+    /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
+    /// we can generate the order column to avoid the extra converting in the next transform.
+    gen_order_col: bool,
+
     _c: PhantomData<Converter>,
     _r: PhantomData<R>,
 }
@@ -69,6 +75,7 @@ where
         schema: DataSchemaRef,
         block_size: usize,
         sort_desc: Vec<SortColumnDescription>,
+        gen_order_col: bool,
     ) -> Result<Self> {
         let order_by_cols = sort_desc.iter().map(|i| i.offset).collect::<Vec<_>>();
         let row_converter = Converter::create(sort_desc, schema)?;
@@ -77,6 +84,7 @@ where
             row_converter,
             block_size,
             aborting: Arc::new(AtomicBool::new(false)),
+            gen_order_col,
             _c: PhantomData,
             _r: PhantomData,
         })
@@ -101,6 +109,7 @@ where
             return Ok(vec![]);
         }
 
+        let mut blocks = blocks.to_vec();
         let output_size = blocks.iter().map(|b| b.num_rows()).sum::<usize>();
 
         if output_size == 0 {
@@ -113,7 +122,7 @@ where
         let mut heap: BinaryHeap<Reverse<Cursor<R>>> = BinaryHeap::with_capacity(blocks.len());
 
         // 1. Put all blocks into a min-heap.
-        for (i, block) in blocks.iter().enumerate() {
+        for (i, block) in blocks.iter_mut().enumerate() {
             if block.is_empty() {
                 continue;
             }
@@ -123,6 +132,15 @@ where
                 .map(|i| block.get_by_offset(*i).clone())
                 .collect::<Vec<_>>();
             let rows = self.row_converter.convert(&columns, block.num_rows())?;
+
+            if self.gen_order_col {
+                let order_col = rows.to_column();
+                block.add_column(BlockEntry {
+                    data_type: order_col.data_type(),
+                    value: Value::Column(order_col),
+                });
+            }
+
             let cursor = Cursor::new(i, rows);
             heap.push(Reverse(cursor));
         }
@@ -183,7 +201,7 @@ where
                     merge_slices.push((*block_idx, *row_idx, 1));
                 }
             }
-            let block = DataBlock::take_by_slices_limit_from_blocks(blocks, &merge_slices, None);
+            let block = DataBlock::take_by_slices_limit_from_blocks(&blocks, &merge_slices, None);
             output_blocks.push(block);
         }
 
@@ -227,35 +245,35 @@ pub fn try_create_transform_sort_merge(
                     SortMergeCompactor::<
                         SimpleRows<NumberType<NUM_TYPE>>,
                         SimpleRowConverter<NumberType<NUM_TYPE>>,
-                    >::try_create(output_schema, block_size, sort_desc)?
+                    >::try_create(output_schema, block_size, sort_desc, true)?
                 ),
             }),
             DataType::Date => SimpleDateSort::try_create(
                 input,
                 output,
-                SimpleDateCompactor::try_create(output_schema, block_size, sort_desc)?,
+                SimpleDateCompactor::try_create(output_schema, block_size, sort_desc, true)?,
             ),
             DataType::Timestamp => SimpleTimestampSort::try_create(
                 input,
                 output,
-                SimpleTimestampCompactor::try_create(output_schema, block_size, sort_desc)?,
+                SimpleTimestampCompactor::try_create(output_schema, block_size, sort_desc, true)?,
             ),
             DataType::String => SimpleStringSort::try_create(
                 input,
                 output,
-                SimpleStringCompactor::try_create(output_schema, block_size, sort_desc)?,
+                SimpleStringCompactor::try_create(output_schema, block_size, sort_desc, true)?,
             ),
             _ => CommonSort::try_create(
                 input,
                 output,
-                CommonCompactor::try_create(output_schema, block_size, sort_desc)?,
+                CommonCompactor::try_create(output_schema, block_size, sort_desc, true)?,
             ),
         }
     } else {
         CommonSort::try_create(
             input,
             output,
-            CommonCompactor::try_create(output_schema, block_size, sort_desc)?,
+            CommonCompactor::try_create(output_schema, block_size, sort_desc, true)?,
         )
     }
 }
@@ -266,6 +284,6 @@ pub fn sort_merge(
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: &[DataBlock],
 ) -> Result<Vec<DataBlock>> {
-    let mut compactor = CommonCompactor::try_create(data_schema, block_size, sort_desc)?;
+    let mut compactor = CommonCompactor::try_create(data_schema, block_size, sort_desc, false)?;
     compactor.compact_final(data_blocks)
 }

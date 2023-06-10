@@ -15,6 +15,7 @@
 use common_exception::Result;
 use common_expression::types::string::StringColumn;
 use common_expression::BlockEntry;
+use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataSchemaRef;
 use common_expression::RowConverter as CommonRowConverter;
@@ -34,6 +35,14 @@ impl Rows for StringColumn {
 
     fn row(&self, index: usize) -> Self::Item<'_> {
         unsafe { self.index_unchecked(index) }
+    }
+
+    fn to_column(&self) -> Column {
+        Column::String(self.clone())
+    }
+
+    fn from_column(col: Column, _: &[SortColumnDescription]) -> Option<Self> {
+        col.as_string().cloned()
     }
 }
 
