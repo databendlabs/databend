@@ -126,23 +126,23 @@ SELECT * FROM t_insert_default;
 
 ## Insert with Staged Files
 
-:::info
-This method is only available with native http api currently.
-
-Anything after `VALUES` will be ignored if a stage is attached to the query.
-:::
+Databend allows you to insert data from a staged file into a table by utilizing the INSERT INTO statement through its [HTTP Handler](../../11-integrations/00-api/00-rest.md).
 
 ### Syntax
 
 ```sql
-INSERT INTO [db.]table [(c1, c2, c3)] VALUES
+INSERT INTO [db.]table [(c1, c2, c3)] VALUES ...
 ```
 
 ### Examples
 
+This example showcases the usage of Databend's HTTP handler to insert data from a staged CSV file into a table. 
+
 ```sql
 CREATE TABLE t_insert_stage(a int null, b int default 2, c float, d varchar default 'd');
 ```
+
+Upload `values.csv` to a stage:
 
 ```plain title='values.csv'
 1,1.0
@@ -151,13 +151,11 @@ CREATE TABLE t_insert_stage(a int null, b int default 2, c float, d varchar defa
 4,4.0
 ```
 
-Upload `values.csv` into a stage:
-
 ```shell title='Request /v1/upload_to_stage' API
 curl -H "stage_name:my_int_stage" -F "upload=@./values.csv" -XPUT http://root:@localhost:8000/v1/upload_to_stage
 ```
 
-Insert with the uploaded stage:
+Insert with the uploaded file:
 
 ```shell
 curl -d '{"sql": "insert into t_insert_stage (a, c) values", "stage_attachment": {"location": "@my_int_stage/values.csv", "file_format_options": {}, "copy_options": {}}}' -H 'Content-type: application/json' http://root:@localhost:8000/v1/query
