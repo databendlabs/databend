@@ -975,18 +975,23 @@ impl Binder {
             }
             fields.push(field);
         }
+
+        // TODO: support add computed expression column.
+        if is_add_column && has_computed {
+            return Err(ErrorCode::SemanticError(
+                "can't add a computed column".to_string(),
+            ));
+        }
         let fields = if has_computed {
             let mut index = 0;
             let mut bind_context = BindContext::new();
             let mut metadata = Metadata::default();
             for (column, field) in columns.iter().zip(fields.iter()) {
-                if let Some(expr) = &column.expr {
-                    match expr {
-                        ColumnExpr::Virtual(_) | ColumnExpr::Stored(_) => {
-                            continue;
-                        }
-                        _ => {}
+                match &column.expr {
+                    Some(ColumnExpr::Virtual(_)) | Some(ColumnExpr::Stored(_)) => {
+                        continue;
                     }
+                    _ => {}
                 }
                 bind_context.add_column_binding(ColumnBinding {
                     database_name: None,
@@ -1022,24 +1027,14 @@ impl Binder {
                 match &column.expr {
                     Some(ColumnExpr::Virtual(virtual_expr)) => {
                         let expr = self
-                            .analyze_computed_expr(
-                                virtual_expr,
-                                &field,
-                                &mut scalar_binder,
-                                is_add_column,
-                            )
+                            .analyze_computed_expr(virtual_expr, &field, &mut scalar_binder)
                             .await?;
                         new_fields
                             .push(field.with_computed_expr(Some(ComputedExpr::Virtual(expr))));
                     }
                     Some(ColumnExpr::Stored(stored_expr)) => {
                         let expr = self
-                            .analyze_computed_expr(
-                                stored_expr,
-                                &field,
-                                &mut scalar_binder,
-                                is_add_column,
-                            )
+                            .analyze_computed_expr(stored_expr, &field, &mut scalar_binder)
                             .await?;
                         new_fields.push(field.with_computed_expr(Some(ComputedExpr::Stored(expr))));
                     }
@@ -1064,14 +1059,7 @@ impl Binder {
         expr: &Expr,
         field: &TableField,
         scalar_binder: &mut ScalarBinder<'_>,
-        is_add_column: bool,
     ) -> Result<String> {
-        // TODO: support add computed expression column.
-        if is_add_column {
-            return Err(ErrorCode::SemanticError(
-                "can't add a computed column".to_string(),
-            ));
-        }
         let (scalar, data_type) = scalar_binder.bind(expr).await?;
         if data_type != DataType::from(field.data_type()) {
             return Err(ErrorCode::SemanticError(format!(
