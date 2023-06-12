@@ -52,7 +52,7 @@ pub struct JoinConditions {
 impl Binder {
     #[async_recursion]
     #[async_backtrace::framed]
-    pub(super) async fn bind_join(
+    pub(crate) async fn bind_join(
         &mut self,
         bind_context: &BindContext,
         left_context: BindContext,

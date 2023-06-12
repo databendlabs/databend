@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -69,10 +68,11 @@ impl SerializeDataTransform {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<ProcessorPtr> {
+        let source_schema = Arc::new(table.table_info.schema().remove_virtual_computed_fields());
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
-            source_schema: table.schema(),
+            source_schema,
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
         };

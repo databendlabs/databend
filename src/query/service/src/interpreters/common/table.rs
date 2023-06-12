@@ -19,10 +19,53 @@ use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_pipeline_core::Pipeline;
 
+use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
+
+pub fn fill_missing_columns(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    source_schema: DataSchemaRef,
+    pipeline: &mut Pipeline,
+) -> Result<()> {
+    let table_default_schema = &table.schema().remove_computed_fields();
+    let table_computed_schema = &table.schema().remove_virtual_computed_fields();
+    let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+    let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
+
+    // Fill missing default columns and resort the columns.
+    if source_schema != default_schema {
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformResortAddOn::try_create(
+                ctx.clone(),
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                default_schema.clone(),
+                table.clone(),
+            )
+        })?;
+    }
+
+    // Fill computed columns.
+    if default_schema != computed_schema {
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformAddComputedColumns::try_create(
+                ctx.clone(),
+                transform_input_port,
+                transform_output_port,
+                default_schema.clone(),
+                computed_schema.clone(),
+            )
+        })?;
+    }
+
+    Ok(())
+}
 
 pub fn append2table(
     ctx: Arc<QueryContext>,
@@ -33,21 +76,12 @@ pub fn append2table(
     overwrite: bool,
     append_mode: AppendMode,
 ) -> Result<()> {
-    let table_data_schema = Arc::new(table.schema().into());
-
-    if source_schema != table_data_schema {
-        build_res
-            .main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformResortAddOn::try_create(
-                    ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    source_schema.clone(),
-                    table.clone(),
-                )
-            })?;
-    }
+    fill_missing_columns(
+        ctx.clone(),
+        table.clone(),
+        source_schema,
+        &mut build_res.main_pipeline,
+    )?;
 
     table.append_data(ctx.clone(), &mut build_res.main_pipeline, append_mode)?;
 

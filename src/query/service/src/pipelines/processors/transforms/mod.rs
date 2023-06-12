@@ -25,6 +25,7 @@ mod window;
 
 mod ie_join;
 mod runtime_filter;
+mod transform_add_computed_columns;
 mod transform_add_const_columns;
 mod transform_ie_join;
 mod transform_merge_block;
@@ -63,6 +64,7 @@ pub use hash_join::HashJoinState;
 pub use hash_join::JoinHashTable;
 pub use ie_join::IEJoinState;
 pub use runtime_filter::RuntimeFilterState;
+pub use transform_add_computed_columns::TransformAddComputedColumns;
 pub use transform_add_const_columns::TransformAddConstColumns;
 pub use transform_block_compact::BlockCompactor;
 pub use transform_block_compact::TransformBlockCompact;

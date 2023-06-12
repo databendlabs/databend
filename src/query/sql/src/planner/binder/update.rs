@@ -89,6 +89,13 @@ impl Binder {
                     col_name
                 )));
             }
+            let field = schema.field(index);
+            if field.computed_expr().is_some() {
+                return Err(ErrorCode::BadArguments(format!(
+                    "The value specified for computed column '{}' is not allowed",
+                    field.name()
+                )));
+            }
 
             // TODO(zhyass): selection and update_list support subquery.
             let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;

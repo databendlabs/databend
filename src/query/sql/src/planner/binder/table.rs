@@ -94,12 +94,12 @@ use crate::VirtualColumn;
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_one_table(
+    pub async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &SelectStmt,
+        select_list: &Vec<SelectTarget>,
     ) -> Result<(SExpr, BindContext)> {
-        for select_target in &stmt.select_list {
+        for select_target in select_list {
             if let SelectTarget::QualifiedName {
                 qualified: names, ..
             } = select_target
@@ -153,7 +153,7 @@ impl Binder {
 
     #[async_recursion]
     #[async_backtrace::framed]
-    async fn bind_single_table(
+    pub(crate) async fn bind_single_table(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,
@@ -585,7 +585,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_table_reference(
+    pub async fn bind_table_reference(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,
@@ -718,7 +718,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn bind_base_table(
+    pub(crate) async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -740,6 +740,7 @@ impl Binder {
                     leaf_index,
                     table_index,
                     column_position,
+                    virtual_computed_expr,
                     ..
                 }) => {
                     let column_binding = ColumnBinding {
@@ -755,9 +756,10 @@ impl Binder {
                         } else {
                             Visibility::Visible
                         },
+                        virtual_computed_expr: virtual_computed_expr.clone(),
                     };
                     bind_context.add_column_binding(column_binding);
-                    if path_indices.is_none() {
+                    if path_indices.is_none() && virtual_computed_expr.is_none() {
                         if let Some(col_id) = *leaf_index {
                             let col_stat =
                                 statistics_provider.column_statistics(col_id as ColumnId);
@@ -808,7 +810,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_data_source(
+    pub(crate) async fn resolve_data_source(
         &self,
         tenant: &str,
         catalog_name: &str,
@@ -841,6 +843,7 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
+                    false,
                 );
                 let box (scalar, _) = type_checker.resolve(expr).await?;
                 let scalar_expr = scalar.as_expr()?;
