@@ -431,11 +431,10 @@ impl PhysicalPlanBuilder {
                 // Choose physical join type by join conditions
                 let physical_join = physical_join(join, s_expr)?;
                 match physical_join {
-                    // Todo(xudong): support sort merge join
-                    PhysicalJoinType::Hash | PhysicalJoinType::SortMerge => {
-                        self.build_hash_join(join, s_expr, stat_info).await
+                    PhysicalJoinType::Hash => self.build_hash_join(join, s_expr, stat_info).await,
+                    PhysicalJoinType::RangeJoin(range, other) => {
+                        self.build_range_join(range, other, s_expr).await
                     }
-                    PhysicalJoinType::IEJoin => self.build_ie_join(join, s_expr).await,
                 }
             }
 
@@ -834,6 +833,7 @@ impl PhysicalPlanBuilder {
                                         index: f.name().parse().unwrap(),
                                         data_type: Box::new(f.data_type().clone()),
                                         visibility: Visibility::Visible,
+                                        virtual_computed_expr: None,
                                     },
                                 }),
                                 common_ty,
@@ -1503,7 +1503,7 @@ impl PhysicalPlanBuilder {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct IEJoinCondition {
+pub struct RangeJoinCondition {
     pub left_expr: RemoteExpr,
     pub right_expr: RemoteExpr,
     // "gt" | "lt" | "gte" | "lte"

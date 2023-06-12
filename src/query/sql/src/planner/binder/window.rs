@@ -275,6 +275,7 @@ impl<'a> WindowRewriter<'a> {
                             index: agg.index,
                             data_type: agg_func.return_type.clone(),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         };
                         Ok(BoundColumnRef {
                             span: None,
@@ -490,6 +491,7 @@ impl<'a> WindowRewriter<'a> {
                 index,
                 data_type: Box::new(ty),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             };
             Ok(BoundColumnRef {
                 span: arg.span(),

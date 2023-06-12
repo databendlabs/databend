@@ -35,14 +35,13 @@ use common_expression::Value;
 use common_pipeline_transforms::processors::transforms::Transform;
 
 use crate::binder::wrap_cast;
+use crate::binder::wrap_cast_scalar;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::CompoundBlockOperator;
-use crate::plans::FunctionCall;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
-use crate::ScalarExpr;
 
 impl BindContext {
     pub async fn exprs_to_scalar(
@@ -76,40 +75,9 @@ impl BindContext {
                 }
             }
 
-            let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
-            let field_data_type = schema.field(i).data_type();
-            scalar = if field_data_type.remove_nullable() == DataType::Variant {
-                match data_type.remove_nullable() {
-                    DataType::Boolean
-                    | DataType::Number(_)
-                    | DataType::Decimal(_)
-                    | DataType::Timestamp
-                    | DataType::Date
-                    | DataType::Bitmap
-                    | DataType::Variant => wrap_cast(&scalar, field_data_type),
-                    DataType::String => {
-                        // parse string to JSON value
-                        ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: "parse_json".to_string(),
-                            params: vec![],
-                            arguments: vec![scalar],
-                        })
-                    }
-                    _ => {
-                        if data_type == DataType::Null && field_data_type.is_nullable() {
-                            scalar
-                        } else {
-                            return Err(ErrorCode::BadBytes(format!(
-                                "unable to cast type `{}` to type `{}`",
-                                data_type, field_data_type
-                            )));
-                        }
-                    }
-                }
-            } else {
-                wrap_cast(&scalar, field_data_type)
-            };
+            let (scalar, data_type) = scalar_binder.bind(expr).await?;
+            let target_type = schema.field(i).data_type();
+            let scalar = wrap_cast_scalar(&scalar, &data_type, target_type)?;
             let expr = scalar
                 .as_expr()?
                 .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());

@@ -22,33 +22,40 @@ use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
-use crate::executor::IEJoin;
-use crate::executor::IEJoinCondition;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;
+use crate::executor::RangeJoin;
+use crate::executor::RangeJoinCondition;
+use crate::executor::RangeJoinType;
 use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::SExpr;
-use crate::plans::Join;
 use crate::plans::JoinType;
 use crate::ScalarExpr;
 use crate::TypeCheck;
 
 impl PhysicalPlanBuilder {
-    pub async fn build_ie_join(&mut self, join: &Join, s_expr: &SExpr) -> Result<PhysicalPlan> {
-        let mut other_conditions = Vec::new();
-        let mut ie_conditions = Vec::new();
+    pub async fn build_range_join(
+        &mut self,
+        mut range_conditions: Vec<ScalarExpr>,
+        mut other_conditions: Vec<ScalarExpr>,
+        s_expr: &SExpr,
+    ) -> Result<PhysicalPlan> {
         let left_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
         let right_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
-        for condition in join.non_equi_conditions.iter() {
-            if check_ie_join_condition(condition, &left_prop, &right_prop)
-                && ie_conditions.len() < 2
-            {
-                ie_conditions.push(condition);
-            } else {
-                other_conditions.push(condition);
+
+        debug_assert!(!range_conditions.is_empty());
+
+        let range_join_type = if range_conditions.len() >= 2 {
+            // Contain more than 2 ie conditions, use ie join
+            while range_conditions.len() > 2 {
+                other_conditions.push(range_conditions.pop().unwrap());
             }
-        }
+            RangeJoinType::IEJoin
+        } else {
+            RangeJoinType::Merge
+        };
+
         // Construct IEJoin
         let left_side = self.build(s_expr.child(0)?).await?;
         let right_side = self.build(s_expr.child(1)?).await?;
@@ -66,14 +73,20 @@ impl PhysicalPlanBuilder {
                 .collect::<Vec<_>>(),
         );
 
-        Ok(PhysicalPlan::IEJoin(IEJoin {
+        Ok(PhysicalPlan::RangeJoin(RangeJoin {
             plan_id: self.next_plan_id(),
             left: Box::new(left_side),
             right: Box::new(right_side),
-            conditions: ie_conditions
+            conditions: range_conditions
                 .iter()
                 .map(|scalar| {
-                    resolve_ie_scalar(scalar, &left_schema, &right_schema, &left_prop, &right_prop)
+                    resolve_range_condition(
+                        scalar,
+                        &left_schema,
+                        &right_schema,
+                        &left_prop,
+                        &right_prop,
+                    )
                 })
                 .collect::<Result<_>>()?,
             other_conditions: other_conditions
@@ -81,46 +94,19 @@ impl PhysicalPlanBuilder {
                 .map(|scalar| resolve_scalar(scalar, &merged_schema))
                 .collect::<Result<_>>()?,
             join_type: JoinType::Inner,
+            range_join_type,
             stat_info: Some(self.build_plan_stat_info(s_expr)?),
         }))
     }
 }
 
-fn check_ie_join_condition(
-    expr: &ScalarExpr,
-    left_prop: &RelationalProperty,
-    right_prop: &RelationalProperty,
-) -> bool {
-    if let ScalarExpr::FunctionCall(func) = expr {
-        if matches!(func.func_name.as_str(), "gt" | "lt" | "gte" | "lte") {
-            debug_assert_eq!(func.arguments.len(), 2);
-            let mut left = false;
-            let mut right = false;
-            for arg in func.arguments.iter() {
-                let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
-                match join_predicate {
-                    JoinPredicate::Left(_) => left = true,
-                    JoinPredicate::Right(_) => right = true,
-                    JoinPredicate::Both { .. } | JoinPredicate::Other(_) => {
-                        return false;
-                    }
-                }
-            }
-            if left && right {
-                return true;
-            }
-        }
-    }
-    false
-}
-
-fn resolve_ie_scalar(
+fn resolve_range_condition(
     expr: &ScalarExpr,
     left_schema: &DataSchemaRef,
     right_schema: &DataSchemaRef,
     left_prop: &RelationalProperty,
     right_prop: &RelationalProperty,
-) -> Result<IEJoinCondition> {
+) -> Result<RangeJoinCondition> {
     match expr {
         ScalarExpr::FunctionCall(func) => {
             let mut left = None;
@@ -181,7 +167,7 @@ fn resolve_ie_scalar(
             } else {
                 func.func_name.as_str()
             };
-            Ok(IEJoinCondition {
+            Ok(RangeJoinCondition {
                 left_expr: left.unwrap().as_remote_expr(),
                 right_expr: right.unwrap().as_remote_expr(),
                 operator: op.to_string(),
