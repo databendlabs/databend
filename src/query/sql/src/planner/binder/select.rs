@@ -374,6 +374,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
+        scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),

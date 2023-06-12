@@ -15,15 +15,15 @@
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ComputedExpr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
-use common_expression::Scalar;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
-use common_sql::parse_exprs;
-use common_storages_factory::Table;
+use common_sql::parse_computed_exprs;
 
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
@@ -32,12 +32,12 @@ use crate::pipelines::processors::transforms::transform::Transform;
 use crate::pipelines::processors::transforms::transform::Transformer;
 use crate::sessions::QueryContext;
 
-pub struct TransformResortAddOn {
+pub struct TransformAddComputedColumns {
     expression_transform: CompoundBlockOperator,
     input_len: usize,
 }
 
-impl TransformResortAddOn
+impl TransformAddComputedColumns
 where Self: Transform
 {
     pub fn try_create(
@@ -46,13 +46,13 @@ where Self: Transform
         output: Arc<OutputPort>,
         input_schema: DataSchemaRef,
         output_schema: DataSchemaRef,
-        table: Arc<dyn Table>,
     ) -> Result<ProcessorPtr> {
         let mut exprs = Vec::with_capacity(output_schema.fields().len());
         for f in output_schema.fields().iter() {
             let expr = if !input_schema.has_field(f.name()) {
-                if let Some(default_expr) = f.default_expr() {
-                    let mut expr = parse_exprs(ctx.clone(), table.clone(), default_expr)?;
+                if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
+                    let mut expr =
+                        parse_computed_exprs(ctx.clone(), input_schema.clone(), stored_expr)?;
                     let mut expr = expr.remove(0);
                     if expr.data_type() != f.data_type() {
                         expr = Expr::Cast {
@@ -64,12 +64,9 @@ where Self: Transform
                     }
                     expr
                 } else {
-                    let default_value = Scalar::default_value(f.data_type());
-                    Expr::Constant {
-                        span: None,
-                        scalar: default_value,
-                        data_type: f.data_type().clone(),
-                    }
+                    return Err(ErrorCode::Internal(
+                        "Missed field must be a computed column",
+                    ));
                 }
             } else {
                 let field = input_schema.field_with_name(f.name()).unwrap();
@@ -101,8 +98,8 @@ where Self: Transform
     }
 }
 
-impl Transform for TransformResortAddOn {
-    const NAME: &'static str = "AddOnTransform";
+impl Transform for TransformAddComputedColumns {
+    const NAME: &'static str = "AddComputedColumnsTransform";
 
     fn transform(&mut self, mut block: DataBlock) -> Result<DataBlock> {
         block = self.expression_transform.transform(block)?;

@@ -320,6 +320,7 @@ impl<'a> Range<'a> {
                 index,
                 data_type: Box::new(data_type.clone()),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             },
         };
         match (self.min, self.max) {
@@ -761,6 +762,7 @@ fn try_create_column_binding(
                 index: *index,
                 data_type: Box::new(scalar.data_type().ok()?),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             },
         })
     } else {

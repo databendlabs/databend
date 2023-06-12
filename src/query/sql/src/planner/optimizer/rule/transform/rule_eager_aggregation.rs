@@ -1335,6 +1335,7 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
             index: args_index,
             data_type: agg.return_type.clone(),
             visibility: Visibility::Visible,
+            virtual_computed_expr: None,
         },
     });
     if agg.args.is_empty() {
@@ -1398,6 +1399,7 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
                     index: left_index,
                     data_type: Box::new(DataType::Number(NumberDataType::Float64)),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
             }),
             wrap_cast(
@@ -1414,6 +1416,7 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
                             NumberDataType::UInt64,
                         )))),
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     },
                 }),
                 &DataType::Number(NumberDataType::UInt64),
@@ -1609,6 +1612,7 @@ fn create_eager_count_multiply_scalar_item(
                                 NumberDataType::UInt64,
                             )))),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     &DataType::Number(NumberDataType::UInt64),

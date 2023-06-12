@@ -89,10 +89,11 @@ impl AppendTransform {
         cluster_stats_gen: ClusterStatsGenerator,
         thresholds: BlockThresholds,
     ) -> Self {
+        let source_schema = Arc::new(table.table_info.schema().remove_virtual_computed_fields());
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
-            source_schema: table.table_info.schema(),
+            source_schema,
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
         };

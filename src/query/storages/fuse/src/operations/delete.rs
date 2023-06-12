@@ -27,6 +27,7 @@ use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::ComputedExpr;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -311,6 +312,13 @@ impl FuseTable {
     }
 
     pub fn all_column_indices(&self) -> Vec<FieldIndex> {
-        (0..self.table_info.schema().fields().len()).collect::<Vec<FieldIndex>>()
+        self.table_info
+            .schema()
+            .fields()
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .map(|(i, _)| i)
+            .collect::<Vec<FieldIndex>>()
     }
 }
