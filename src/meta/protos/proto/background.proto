@@ -123,8 +123,9 @@ message BackgroundJobInfo {
 
     BackgroundJobParams job_params = 1;
     BackgroundJobStatus job_status = 2;
-    optional string last_updated = 3;
+    BackgroundTaskType task_type = 3;;
     string message = 4;
+    optional string last_updated = 5;
 
     // Audit
     optional UserIdentity creator = 90;

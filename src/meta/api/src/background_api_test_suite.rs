@@ -1,7 +1,7 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::background::BackgroundJobIdent;
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobParams, BackgroundJobStatus};
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobState;
 use common_meta_app::background::BackgroundJobType::ONESHOT;
@@ -40,13 +40,22 @@ fn new_background_task(
 
 fn new_background_job(state: BackgroundJobState, created_at: DateTime<Utc>) -> BackgroundJobInfo {
     BackgroundJobInfo {
-        job_type: ONESHOT,
+        job_params: Some(BackgroundJobParams{
+            job_type: ONESHOT,
+            scheduled_job_interval_seconds: 0,
+            scheduled_job_timezone: None,
+            scheduled_job_cron: "".to_string(),
+        }),
         last_updated: None,
         task_type: Default::default(),
         message: "".to_string(),
         creator: None,
         created_at,
-        job_state: state,
+        job_status: Some(BackgroundJobStatus{
+            job_state: state,
+            last_task_id: None,
+            last_task_run_at: None,
+        }),
     }
 }
 
@@ -206,7 +215,7 @@ impl BackgroundApiTestSuite {
             let res = res.unwrap();
             assert_eq!(
                 BackgroundJobState::RUNNING,
-                res.info.job_state,
+                res.info.job_status.unwrap().job_state,
                 "first state is started"
             );
         }
@@ -228,7 +237,7 @@ impl BackgroundApiTestSuite {
             let res = res.unwrap();
             assert_eq!(
                 BackgroundJobState::SUSPENDED,
-                res.info.job_state,
+                res.info.job_status.unwrap().job_state,
                 "first state is started"
             );
         }
@@ -244,7 +253,7 @@ impl BackgroundApiTestSuite {
             assert_eq!(1, resp.len());
             assert_eq!(
                 BackgroundJobState::SUSPENDED,
-                resp[0].1.job_state,
+                resp[0].1.job_status.clone().unwrap().job_state,
                 "first state is started"
             );
         }

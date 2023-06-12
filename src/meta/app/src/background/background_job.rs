@@ -146,8 +146,8 @@ pub struct BackgroundJobIdent {
 // Info
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundJobInfo {
-    pub job_params: BackgroundJobParams,
-    pub job_status: BackgroundJobStatus,
+    pub job_params: Option<BackgroundJobParams>,
+    pub job_status: Option<BackgroundJobStatus>,
     pub task_type: BackgroundTaskType,
 
     pub last_updated: Option<DateTime<Utc>>,
@@ -161,8 +161,8 @@ pub struct BackgroundJobInfo {
 impl BackgroundJobInfo {
     pub fn new_compactor_job(job_params: BackgroundJobParams, creator: UserIdentity) -> Self {
         Self {
-            job_params,
-            job_status: BackgroundJobStatus::new(),
+            job_params: Some(job_params),
+            job_status: Option::from(BackgroundJobStatus::new()),
             task_type: BackgroundTaskType::COMPACTION,
             last_updated: Some(Utc::now()),
             message: "".to_string(),
@@ -188,11 +188,11 @@ impl Display for CreateBackgroundJobReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "create_background_job({}, {}, {}, {}, {}, {:?})",
+            "create_background_job({}, {}, {:?}, {:?}, {}, {:?})",
             self.job_name.name,
             self.job_info.task_type,
-            self.job_info.job_type,
-            self.job_info.job_state,
+            self.job_info.job_params,
+            self.job_info.job_status,
             self.job_info.message,
             self.job_info.last_updated
         )
@@ -274,11 +274,11 @@ impl Display for UpdateBackgroundJobReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "update_background_job({}, {}, {}, {}, {}, {:?})",
+            "update_background_job({}, {}, {:?}, {:?}, {}, {:?})",
             self.job_name.name,
             self.info.task_type,
-            self.info.job_type,
-            self.info.job_state,
+            self.info.job_params,
+            self.info.job_status,
             self.info.message,
             self.info.last_updated
         )
