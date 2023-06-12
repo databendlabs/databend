@@ -90,8 +90,6 @@ use crate::pipelines::processors::transforms::RangeJoinState;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformIEJoinLeft;
-use crate::pipelines::processors::transforms::TransformIEJoinRight;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
