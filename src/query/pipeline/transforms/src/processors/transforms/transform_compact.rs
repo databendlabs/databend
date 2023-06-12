@@ -121,7 +121,7 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
             ProcessorState::Compacting(_) => Err(ErrorCode::Internal("It's a bug.")),
             ProcessorState::Compacted(state) => {
                 if state.output_port.is_finished() {
-                    state.input_port.finish();
+                    debug_assert!(state.input_port.is_finished());
                     return Ok(Event::Finished);
                 }
 
