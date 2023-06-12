@@ -70,6 +70,15 @@ SELECT * FROM RESULT_SCAN(last_query_id()) ORDER BY a;
 3
 4
 
+onlyif mysql
+query I
+SELECT * FROM RESULT_SCAN(last_query_id(-1)) ORDER BY a;
+----
+1
+2
+3
+4
+
 statement ok
 SET enable_query_result_cache = 0;
 

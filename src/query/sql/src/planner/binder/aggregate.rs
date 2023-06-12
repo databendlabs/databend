@@ -244,6 +244,7 @@ impl<'a> AggregateRewriter<'a> {
                     index,
                     data_type: Box::new(arg.data_type()?),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 };
                 replaced_args.push(
                     BoundColumnRef {
@@ -420,7 +421,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_aggregate(
+    pub async fn bind_aggregate(
         &mut self,
         bind_context: &mut BindContext,
         child: SExpr,

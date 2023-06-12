@@ -213,9 +213,6 @@ order by
 4-NOT SPECIFIED 989
 5-LOW 1077
 
-statement ok
-set enable_bushy_join = 0
-
 # Q5
 query I
 select
@@ -248,9 +245,6 @@ INDIA 637613.0
 JAPAN 600008.0
 INDONESIA 558048.0
 VIETNAM 449785.0
-
-statement ok
-set enable_bushy_join = 1
 
 # Q6
 query I
@@ -356,9 +350,6 @@ order by
 1995 0.02864874
 1996 0.01825027
 
-statement ok
-set enable_bushy_join = 0
-
 # Q9
 query I
 select
@@ -399,9 +390,6 @@ JORDAN 1998 181148.0
 MOROCCO 1998 181533.0
 JAPAN 1998 184953.0
 VIETNAM 1998 192431.0
-
-statement ok
-set enable_bushy_join = 1
 
 # Q10
 query I

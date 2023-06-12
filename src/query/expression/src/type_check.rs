@@ -204,7 +204,21 @@ pub fn check_number<Index: ColumnIndex, T: Number>(
     expr: &Expr<Index>,
     fn_registry: &FunctionRegistry,
 ) -> Result<T> {
-    let (expr, _) = ConstantFolder::fold(expr, func_ctx, fn_registry);
+    let (expr, _) = if expr.data_type() != &DataType::Number(T::data_type()) {
+        ConstantFolder::fold(
+            &Expr::Cast {
+                span,
+                is_try: false,
+                expr: Box::new(expr.clone()),
+                dest_type: DataType::Number(T::data_type()),
+            },
+            func_ctx,
+            fn_registry,
+        )
+    } else {
+        ConstantFolder::fold(expr, func_ctx, fn_registry)
+    };
+
     match expr {
         Expr::Constant {
             scalar: Scalar::Number(num),

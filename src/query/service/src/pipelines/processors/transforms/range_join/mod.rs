@@ -14,5 +14,7 @@
 
 mod ie_join_state;
 mod ie_join_util;
+mod merge_join_state;
+mod range_join_state;
 
-pub use ie_join_state::IEJoinState;
+pub use range_join_state::RangeJoinState;
