@@ -256,9 +256,9 @@ The following is an example of creating a stored computed column: Whenever the v
 ```sql
 CREATE TABLE IF NOT EXISTS products (
   id INT,
-  price FLOAT,
+  price FLOAT64,
   quantity INT,
-  total_price FLOAT AS (price * quantity) STORED
+  total_price FLOAT64 AS (price * quantity) STORED
 );
 ```
 
@@ -499,7 +499,7 @@ The following example demonstrates a table with a stored computed column that au
 -- Create the table with a stored computed column
 CREATE TABLE IF NOT EXISTS products (
   id INT,
-  price FLOAT,
+  price FLOAT64,
   quantity INT,
   total_price FLOAT64 AS (price * quantity) STORED
 );
