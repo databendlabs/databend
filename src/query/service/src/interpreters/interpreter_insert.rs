@@ -240,7 +240,7 @@ impl Interpreter for InsertInterpreter {
                 let mut build_res = if !insert_select_plan.is_distributed_plan() {
                     build_local_pipeline(&self.ctx, &insert_select_plan, false).await
                 } else {
-                    build_distributed_pipeline(&self.ctx, &insert_select_plan).await
+                    build_distributed_pipeline(&self.ctx, &insert_select_plan, false).await
                 }?;
 
                 table.commit_insertion(
