@@ -60,7 +60,7 @@ jobs:
         working-directory: src/bendpy
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            GIT_TAG=$(git describe --tags --abbrev=0)
+            GIT_TAG=$(git describe --tags --abbrev=0 | grep -Eo '[0-9.]+')
           else
             GIT_TAG=${{ inputs.tag }}
           fi
