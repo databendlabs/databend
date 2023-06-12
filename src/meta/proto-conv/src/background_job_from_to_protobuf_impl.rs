@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app as mt;
@@ -55,6 +56,31 @@ impl FromToProto for mt::background::BackgroundJobInfo {
             created_at: self.created_at.to_pb()?,
         };
         return Ok(p);
+    }
+}
+
+impl FromToProto for mt::background::BackgroundJobParams {
+    type PB = pb::BackgroundJobParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> where Self: Sized {
+        Ok(Self {
+            job_type: FromPrimitive::from_i32(p.job_type).ok_or_else(|| Incompatible {
+                reason: format!("invalid TaskType: {}", p.task_type),
+            })?,
+            scheduled_job_interval_seconds: p.scheduled_job_interval_seconds,
+            scheduled_job_cron: p.scheduled_job_cron,
+            scheduled_job_timezone: Option::from(chrono_tz::Tz::from_str(&p.scheduled_job_timezone)
+                .map_err(|e| Incompatible {
+                    reason: format!("invalid timezone: {}", e),
+                })?),
+        })
+    }
+
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        todo!()
     }
 }
 

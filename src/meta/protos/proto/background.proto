@@ -81,13 +81,7 @@ message BackgroundJobIdent {
     string name = 2;
 }
 
-message BackgroundJobInfo {
-    enum BackgroundJobState {
-        BACKGROUND_TASK_STATE_RUNNING = 0;
-        BACKGROUND_TASK_STATE_FAILED = 1;
-        BACKGROUND_TASK_STATE_SUSPENDED = 2;
-    }
-
+message BackgroundJobParams {
     enum BackgroundJobType {
         BACKGROUND_JOB_TYPE_ONE_SHOT = 0;
         BACKGROUND_JOB_TYPE_INTERVAL = 1;
@@ -95,12 +89,42 @@ message BackgroundJobInfo {
     }
     uint64 ver = 100;
     uint64 min_reader_ver = 101;
-    BackgroundJobType job_type = 1;
-    BackgroundJobState job_state = 2;
-    BackgroundTaskType task_type = 3;
 
-    optional string last_updated = 4;
-    string message = 5;
+    BackgroundJobType job_type = 1;
+    uint64 scheduled_job_interval_seconds = 2;
+    string scheduled_job_cron = 3;
+    optional string scheduled_job_timezone = 4;
+}
+
+// contain real-time job status
+message BackgroundJobStatus {
+    enum BackgroundJobState {
+        BACKGROUND_JOB_STATE_RUNNING = 0;
+        BACKGROUND_JOB_STATE_FAILED = 1;
+        BACKGROUND_JOB_STATE_SUSPENDED = 2;
+    }
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    BackgroundJobState job_state = 2;
+    optional string last_task_id = 4;
+    optional string last_task_run_at = 5;
+}
+
+message BackgroundJobInfo {
+    enum BackgroundJobState {
+        BACKGROUND_TASK_STATE_RUNNING = 0;
+        BACKGROUND_TASK_STATE_FAILED = 1;
+        BACKGROUND_TASK_STATE_SUSPENDED = 2;
+    }
+
+    uint64 ver = 100;
+    uint64 min_reader_ver = 101;
+
+    BackgroundJobParams job_params = 1;
+    BackgroundJobStatus job_status = 2;
+    optional string last_updated = 3;
+    string message = 4;
 
     // Audit
     optional UserIdentity creator = 90;

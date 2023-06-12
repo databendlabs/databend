@@ -31,6 +31,7 @@ use databend_query::servers::ShutdownHandle;
 
 pub struct JobScheduler {
     one_shot_jobs: Vec<BoxedJob>,
+    interval_jobs: Vec<BoxedJob>,
     pub finish_tx: Arc<Mutex<Sender<u64>>>,
     pub finish_rx: Arc<Mutex<Receiver<u64>>>
 }
@@ -41,6 +42,7 @@ impl JobScheduler {
         let (finish_tx, finish_rx) = tokio::sync::mpsc::channel(100);
         Self {
             one_shot_jobs: Vec::new(),
+            interval_jobs: Vec::new(),
             finish_tx: Arc::new(Mutex::new(finish_tx)),
             finish_rx: Arc::new(Mutex::new(finish_rx)),
         }
@@ -51,13 +53,17 @@ impl JobScheduler {
         self
     }
 
+    pub fn add_interval_job(mut self, job: impl Job + Send + Sync + Clone + 'static) -> Self {
+        self.interval_jobs.push(Box::new(job) as BoxedJob);
+        self
+    }
     pub async fn start(&self, handler: &mut ShutdownHandle) -> Result<()> {
         let one_shot_jobs = Arc::new(&self.one_shot_jobs);
         self.check_and_run_jobs(one_shot_jobs.clone()).await;
-        let mut finished_jobs = vec![];
+        let mut finished_one_shot_jobs = vec![];
         while let Some(i) = self.finish_rx.clone().lock().await.recv().await {
-            finished_jobs.push(i);
-            if finished_jobs.len() == one_shot_jobs.len() {
+            finished_one_shot_jobs.push(i);
+            if finished_one_shot_jobs.len() == one_shot_jobs.len() {
                 break;
             }
         }
