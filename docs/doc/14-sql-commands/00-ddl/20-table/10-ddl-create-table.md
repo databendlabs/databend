@@ -3,6 +3,10 @@ title: CREATE TABLE
 description: Create a new table.
 ---
 
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced: v1.1.56"/>
+
 Creating tables is one of the most complicated operations for many databases because you might need to:
 
 * Manually specify the engine
@@ -518,31 +522,30 @@ FROM products;
   3 |   8.7 |        2 |        17.4
 ```
 
-The following example includes a table called "employees" with a virtual computed column named "full_name" that concatenates the "first_name" and "last_name" columns:
+In this example, we create a table called student_profiles with a Variant type column named profile to store JSON data. We also add a virtual computed column named *age* that extracts the age property from the profile column and casts it to an integer.
 
 ```sql
 -- Create the table with a virtual computed column
-CREATE TABLE IF NOT EXISTS employees (
-  id INT,
-  first_name VARCHAR,
-  last_name VARCHAR,
-  full_name VARCHAR AS (CONCAT(first_name, ' ', last_name)) VIRTUAL
+CREATE TABLE student_profiles (
+    id STRING,
+    profile VARIANT,
+    age INT NULL AS (profile['age']::INT) VIRTUAL
 );
 
 -- Insert data into the table
-INSERT INTO employees (id, first_name, last_name)
-VALUES (1, 'John', 'Doe'),
-       (2, 'Jane', 'Smith'),
-       (3, 'Mike', 'Johnson');
+INSERT INTO student_profiles (id, profile) VALUES
+    ('d78236', '{"id": "d78236", "name": "Arthur Read", "age": "16", "school": "PVPHS", "credits": 120, "sports": "none"}'),
+    ('f98112', '{"name": "Buster Bunny", "age": "15", "id": "f98112", "school": "THS", "credits": 67, "clubs": "MUN"}'),
+    ('t63512', '{"name": "Ernie Narayan", "school" : "Brooklyn Tech", "id": "t63512", "sports": "Track and Field", "clubs": "Chess"}');
 
 -- Query the table to see the computed column
-SELECT id, first_name, last_name, full_name
-FROM employees;
+SELECT * FROM student_profiles;
 
----
- id | first_name | last_name | full_name    
-----+------------+-----------+-----------------
-  1 | John       | Doe       | John Doe
-  2 | Jane       | Smith     | Jane Smith
-  3 | Mike       | Johnson   | Mike Johnson
++--------+------------------------------------------------------------------------------------------------------------+------+
+| id     | profile                                                                                                    | age  |
++--------+------------------------------------------------------------------------------------------------------------+------+
+| d78236 | {"age":"16","credits":120,"id":"d78236","name":"Arthur Read","school":"PVPHS","sports":"none"}             |   16 |
+| f98112 | {"age":"15","clubs":"MUN","credits":67,"id":"f98112","name":"Buster Bunny","school":"THS"}                 |   15 |
+| t63512 | {"clubs":"Chess","id":"t63512","name":"Ernie Narayan","school":"Brooklyn Tech","sports":"Track and Field"} | NULL |
++--------+------------------------------------------------------------------------------------------------------------+------+
 ```
