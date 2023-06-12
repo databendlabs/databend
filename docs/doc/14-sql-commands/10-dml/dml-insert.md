@@ -126,7 +126,7 @@ SELECT * FROM t_insert_default;
 
 ## Insert with Staged Files
 
-Databend allows you to insert data from a staged file into a table by utilizing the INSERT INTO statement through its [HTTP Handler](../../11-integrations/00-api/00-rest.md).
+Databend allows you to insert data from a staged file into a table by utilizing the INSERT INTO statement with its [HTTP Handler](../../11-integrations/00-api/00-rest.md).
 
 ### Syntax
 
@@ -162,10 +162,10 @@ curl -d '{"sql": "insert into t_insert_stage (a, c) values", "stage_attachment":
 ```
 
 :::tip
-`file_format_options` and `copy_options` are same with the `COPY INTO` command.
+You can specify the file format and various copy-related settings with the FILE_FORMAT and COPY_OPTIONS available in the [COPY INTO](dml-copy-into-table.md) command. When `purge` is set to `true`, the original file will only be deleted if the data update is successful. 
 :::
 
-Check if the insert succeeded:
+Verify the inserted data:
 
 ```sql
 SELECT * FROM t_insert_stage;

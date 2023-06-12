@@ -6,7 +6,11 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced: v1.1.55"/>
 
-REPLACE INTO either inserts a new row into a table or updates an existing row if the row already exists. 
+REPLACE INTO either inserts a new row into a table or updates an existing row if the row already exists with the following:
+
+- Direct values
+- Query results
+- Staged data files
 
 When a row with the specified [conflict key](#what-is-conflict-key) already exists in the table, REPLACE INTO will replace that existing row with the new data provided. However, if the row does not exist, a new row will be inserted into the table with the specified data.
 
@@ -36,7 +40,7 @@ VALUES (123, 'John Doe', 50000, 'john.doe@example.com');
 
 Here are some examples that show how to use the `REPLACE INTO` statement in Databend:
 
-### Replace with Values
+### Replace with Direct Values
 
 ```sql
 CREATE TABLE employees(id INT, name VARCHAR, salary INT);
@@ -78,7 +82,7 @@ SELECT  * FROM Employees;
 
 ### Replace with Staged Files
 
-Here is an example of using staged files for updating with a REPLACE INTO statement. 
+Below is an example that demonstrates how to use staged files for updating data with a REPLACE INTO statement. It's important to note that the REPLACE INTO functionality with staged files is only available when using Databend's [HTTP Handler](../../11-integrations/00-api/00-rest.md).
 
 First, create a table called "sample":
 
@@ -112,7 +116,11 @@ name                |size|md5|last_modified                |creator|
 sample_3_replace.csv|  83|   |2023-06-12 03:01:56.522 +0000|       |
 ```
 
-Use Databend's [HTTP handler](../../11-integrations/00-api/01-mysql-handler.md) to replace data with from a staged CSV file:
+Use REPLACE INTO to insert data from the staged CSV file through the HTTP handler:
+
+:::tip
+You can specify the file format and various copy-related settings with the FILE_FORMAT and COPY_OPTIONS available in the [COPY INTO](dml-copy-into-table.md) command. When `purge` is set to `true`, the original file will only be deleted if the data update is successful. 
+:::
 
 ```shell
 curl -s -u root: -XPOST "http://localhost:8000/v1/query" --header 'Content-Type: application/json' -d '{"sql": "REPLACE INTO sample (Id, City, Score) ON(Id) VALUES", "stage_attachment": {"location": "@s1/sample_3_replace.csv", "copy_options": {"purge": "true"}}}'
@@ -131,5 +139,5 @@ id|city       |score|country|
  3|'Chongqing'|   90|China  |
  6|'HangZhou' |   92|China  |
  9|'Changsha' |   91|China  |
-10|'Hong Kong‘|   88|China  |
+10|'Hong Kong'|   88|China  |
 ```
