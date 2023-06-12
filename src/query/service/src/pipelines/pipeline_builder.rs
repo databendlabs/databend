@@ -56,11 +56,11 @@ use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
-use common_sql::executor::IEJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
+use common_sql::executor::RangeJoin;
 use common_sql::executor::RowFetch;
 use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
@@ -85,19 +85,19 @@ use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
-use crate::pipelines::processors::transforms::IEJoinState;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
+use crate::pipelines::processors::transforms::RangeJoinState;
 use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformIEJoinLeft;
-use crate::pipelines::processors::transforms::TransformIEJoinRight;
 use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
+use crate::pipelines::processors::transforms::TransformRangeJoinLeft;
+use crate::pipelines::processors::transforms::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::TransformRightJoin;
 use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::transforms::TransformWindow;
@@ -197,26 +197,30 @@ impl PipelineBuilder {
             PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
-            PhysicalPlan::IEJoin(ie_join) => self.build_ie_join(ie_join),
+            PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
         }
     }
 
-    fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
-        let state = Arc::new(IEJoinState::new(self.ctx.clone(), ie_join));
-        self.expand_right_side_pipeline(ie_join, state.clone())?;
-        self.build_left_side(ie_join, state)
+    fn build_range_join(&mut self, range_join: &RangeJoin) -> Result<()> {
+        let state = Arc::new(RangeJoinState::new(self.ctx.clone(), range_join));
+        self.expand_right_side_pipeline(range_join, state.clone())?;
+        self.build_left_side(range_join, state)
     }
 
-    fn build_left_side(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {
-        self.build_pipeline(&ie_join.left)?;
+    fn build_left_side(
+        &mut self,
+        range_join: &RangeJoin,
+        state: Arc<RangeJoinState>,
+    ) -> Result<()> {
+        self.build_pipeline(&range_join.left)?;
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         self.main_pipeline.resize(max_threads)?;
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformIEJoinLeft::create(input, output, state.clone());
+            let transform = TransformRangeJoinLeft::create(input, output, state.clone());
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    ie_join.plan_id,
+                    range_join.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
@@ -228,8 +232,8 @@ impl PipelineBuilder {
 
     fn expand_right_side_pipeline(
         &mut self,
-        ie_join: &IEJoin,
-        state: Arc<IEJoinState>,
+        range_join: &RangeJoin,
+        state: Arc<RangeJoinState>,
     ) -> Result<()> {
         let right_side_context = QueryContext::create_from(self.ctx.clone());
         let right_side_builder = PipelineBuilder::create(
@@ -237,16 +241,16 @@ impl PipelineBuilder {
             self.enable_profiling,
             self.prof_span_set.clone(),
         );
-        let mut right_res = right_side_builder.finalize(&ie_join.right)?;
+        let mut right_res = right_side_builder.finalize(&range_join.right)?;
         right_res.main_pipeline.add_sink(|input| {
-            let transform = Sinker::<TransformIEJoinRight>::create(
+            let transform = Sinker::<TransformRangeJoinRight>::create(
                 input,
-                TransformIEJoinRight::create(state.clone()),
+                TransformRangeJoinRight::create(state.clone()),
             );
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    ie_join.plan_id,
+                    range_join.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
