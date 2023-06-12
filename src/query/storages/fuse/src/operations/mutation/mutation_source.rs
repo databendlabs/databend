@@ -84,7 +84,7 @@ pub struct MutationSource {
     operators: Vec<BlockOperator>,
     storage_format: FuseStorageFormat,
     action: MutationAction,
-    query_internal_columns: bool,
+    query_row_id_col: bool,
 
     index: BlockMetaIndex,
     origin_stats: Option<ClusterStatistics>,
@@ -101,7 +101,7 @@ impl MutationSource {
         remain_reader: Arc<Option<BlockReader>>,
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
-        query_internal_columns: bool,
+        query_row_id_col: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
@@ -112,7 +112,7 @@ impl MutationSource {
             remain_reader,
             operators,
             action,
-            query_internal_columns,
+            query_row_id_col,
             index: BlockMetaIndex::default(),
             origin_stats: None,
             storage_format,
@@ -184,7 +184,7 @@ impl Processor for MutationSource {
                 let num_rows = data_block.num_rows();
 
                 if let Some(filter) = self.filter.as_ref() {
-                    if self.query_internal_columns {
+                    if self.query_row_id_col {
                         // Add internal column to data block
                         let fuse_part = FusePartInfo::from_part(&part)?;
                         let block_meta = fuse_part.block_meta_index().unwrap();

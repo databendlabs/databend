@@ -68,7 +68,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
-        query_internal_columns: bool,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -99,7 +99,7 @@ impl FuseTable {
         }
 
         let filter_expr = filter.unwrap();
-        if col_indices.is_empty() && !query_internal_columns {
+        if col_indices.is_empty() && !query_row_id_col {
             // here the situation: filter_expr is not null, but col_indices in empty, which
             // indicates the expr being evaluated is unrelated to the value of rows:
             //   e.g.
@@ -128,7 +128,7 @@ impl FuseTable {
             &filter_expr,
             col_indices,
             &snapshot,
-            query_internal_columns,
+            query_row_id_col,
             pipeline,
         )
         .await?;
@@ -189,7 +189,7 @@ impl FuseTable {
         filter: &RemoteExpr<String>,
         col_indices: Vec<usize>,
         base_snapshot: &TableSnapshot,
-        query_internal_columns: bool,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
@@ -217,7 +217,7 @@ impl FuseTable {
 
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
         let mut schema = block_reader.schema().as_ref().clone();
-        if query_internal_columns {
+        if query_row_id_col {
             schema.add_internal_field(
                 ROW_ID_COL_NAME,
                 TableDataType::Number(NumberDataType::UInt64),
@@ -269,7 +269,7 @@ impl FuseTable {
                     remain_reader.clone(),
                     ops.clone(),
                     self.storage_format,
-                    query_internal_columns,
+                    query_row_id_col,
                 )
             },
             max_threads,

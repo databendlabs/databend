@@ -77,6 +77,7 @@ impl DeleteInterpreter {
             index: self.plan.index.unwrap(),
             data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
             visibility: Visibility::InVisible,
+            virtual_computed_expr: None,
         };
 
         let expr = SExpr::create_unary(
