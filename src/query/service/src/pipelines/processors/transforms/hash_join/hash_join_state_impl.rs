@@ -640,9 +640,6 @@ impl HashJoinState for JoinHashTable {
             }
             chunk_index += 1;
         }
-        // for bl in result_blocks.iter() {
-        //     dbg!("bl = {:?}", &bl);
-        // }
         Ok(result_blocks)
     }
 
