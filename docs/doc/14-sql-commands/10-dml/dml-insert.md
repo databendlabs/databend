@@ -1,5 +1,5 @@
 ---
-title: INSERT
+title: INSERT INTO
 ---
 
 Writes data into a table.
@@ -136,7 +136,7 @@ INSERT INTO [db.]table [(c1, c2, c3)] VALUES ...
 
 ### Examples
 
-This example showcases the usage of Databend's HTTP handler to insert data from a staged CSV file into a table. 
+This example showcases the usage of Databend's [HTTP handler](../../11-integrations/00-api/01-mysql-handler.md) to insert data from a staged CSV file into a table. 
 
 ```sql
 CREATE TABLE t_insert_stage(a int null, b int default 2, c float, d varchar default 'd');
