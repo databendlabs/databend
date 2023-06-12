@@ -73,11 +73,11 @@ impl MySQLClient {
             }
             parsed_rows.push(parsed_row);
         }
-        // Todo: add types to compare
         let mut types = vec![];
         if !parsed_rows.is_empty() {
             types = vec![DefaultColumnType::Any; parsed_rows[0].len()];
         }
+        // Todo: add types to compare
         Ok(DBOutput::Rows {
             types,
             rows: parsed_rows,
