@@ -110,7 +110,7 @@ pub struct JoinHashTable {
     pub(crate) build_worker_num: Arc<AtomicU32>,
     pub(crate) finalize_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
     /// OuterScan tasks
-    pub(crate) outer_scan_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
+    pub(crate) outer_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
 }
 
 impl JoinHashTable {

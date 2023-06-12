@@ -52,19 +52,22 @@ impl JoinHashTable {
         let probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
+        let input_num_rows = input.num_rows();
+        if input_num_rows > JOIN_MAX_BLOCK_SIZE {
+            probe_state.row_state = Some(vec![0; input_num_rows]);
+        }
+        // Safe to unwrap.
+        // The row_state is used to record whether a row in probe input is matched.
+        let row_state = probe_state.row_state.as_mut().unwrap();
         let mut dummy_row_state_indexes = vec![];
+        // The row_state_indexes[idx] = i records the row_state[i] has been increased 1 by the idx,
+        // if idx is filtered by other conditions, we will set row_state[idx] = row_state[idx] - 1.
         let row_state_indexes = if WITH_OTHER_CONJUNCT {
             // Safe to unwrap.
             probe_state.row_state_indexes.as_mut().unwrap()
         } else {
             &mut dummy_row_state_indexes
         };
-        let input_num_rows = input.num_rows();
-        if input_num_rows > JOIN_MAX_BLOCK_SIZE {
-            probe_state.row_state = Some(vec![0; input_num_rows]);
-        }
-        // Safe to unwrap.
-        let row_state = probe_state.row_state.as_mut().unwrap();
 
         let mut matched_num = 0;
         let mut probe_indexes_occupied = 0;

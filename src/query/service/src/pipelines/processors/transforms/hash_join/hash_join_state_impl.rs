@@ -486,18 +486,17 @@ impl HashJoinState for JoinHashTable {
         }
         let mut outer_scan_tasks = self.outer_scan_tasks.write();
         for idx in 0..bitmap_num {
-            let task = (idx, idx + 1);
-            outer_scan_tasks.push_back(task);
+            outer_scan_tasks.push_back(idx);
         }
         Ok(())
     }
 
-    fn outer_scan_task(&self) -> Option<(usize, usize)> {
+    fn outer_scan_task(&self) -> Option<usize> {
         let mut tasks = self.outer_scan_tasks.write();
         tasks.pop_front()
     }
 
-    fn outer_scan(&self, task: (usize, usize), state: &mut ProbeState) -> Result<Vec<DataBlock>> {
+    fn outer_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>> {
         match &self.hash_join_desc.join_type {
             JoinType::Right | JoinType::Full => self.outer_scan_right_and_full_join(task, state),
             JoinType::RightSemi => self.outer_scan_right_semi_join(task, state),
@@ -508,7 +507,7 @@ impl HashJoinState for JoinHashTable {
 
     fn outer_scan_right_and_full_join(
         &self,
-        task: (usize, usize),
+        task: usize,
         state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         let true_validity = &state.true_validity;
@@ -527,74 +526,68 @@ impl HashJoinState for JoinHashTable {
 
         let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
         let interrupt = self.interrupt.clone();
-        let mut chunk_index = task.0;
-        while chunk_index < task.1 {
-            if interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-            let bitmap = &outer_scan_bitmap[chunk_index];
-            let bitmap_len = bitmap.len();
-            let mut row_index = 0;
-            while row_index < bitmap_len {
-                while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
-                    if !bitmap.get(row_index) {
-                        build_indexes[build_indexes_occupied].chunk_index = chunk_index;
-                        build_indexes[build_indexes_occupied].row_index = row_index;
-                        build_indexes_occupied += 1;
-                    }
-                    row_index += 1;
+        let chunk_index = task;
+        if interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
+        let bitmap = &outer_scan_bitmap[chunk_index];
+        let bitmap_len = bitmap.len();
+        let mut row_index = 0;
+        while row_index < bitmap_len {
+            while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+                if !bitmap.get(row_index) {
+                    build_indexes[build_indexes_occupied].chunk_index = chunk_index;
+                    build_indexes[build_indexes_occupied].row_index = row_index;
+                    build_indexes_occupied += 1;
                 }
-                let mut unmatched_build_block = self.row_space.gather(
-                    &build_indexes[0..build_indexes_occupied],
-                    &data_blocks,
-                    &total_num_rows,
-                )?;
-
-                if self.hash_join_desc.join_type == JoinType::Full {
-                    let num_rows = unmatched_build_block.num_rows();
-                    let nullable_unmatched_build_columns = if num_rows == JOIN_MAX_BLOCK_SIZE {
-                        unmatched_build_block
-                            .columns()
-                            .iter()
-                            .map(|c| Self::set_validity(c, num_rows, true_validity))
-                            .collect::<Vec<_>>()
-                    } else {
-                        let mut validity = MutableBitmap::new();
-                        validity.extend_constant(num_rows, true);
-                        let validity: Bitmap = validity.into();
-                        unmatched_build_block
-                            .columns()
-                            .iter()
-                            .map(|c| Self::set_validity(c, num_rows, &validity))
-                            .collect::<Vec<_>>()
-                    };
-                    unmatched_build_block =
-                        DataBlock::new(nullable_unmatched_build_columns, num_rows);
-                };
-                // Create null chunk for unmatched rows in probe side
-                let null_probe_block = DataBlock::new(
-                    self.probe_schema
-                        .fields()
-                        .iter()
-                        .map(|df| {
-                            BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null))
-                        })
-                        .collect(),
-                    build_indexes_occupied,
-                );
-                result_blocks.push(self.merge_eq_block(&unmatched_build_block, &null_probe_block)?);
-                build_indexes_occupied = 0;
+                row_index += 1;
             }
-            chunk_index += 1;
+            let mut unmatched_build_block = self.row_space.gather(
+                &build_indexes[0..build_indexes_occupied],
+                &data_blocks,
+                &total_num_rows,
+            )?;
+
+            if self.hash_join_desc.join_type == JoinType::Full {
+                let num_rows = unmatched_build_block.num_rows();
+                let nullable_unmatched_build_columns = if num_rows == JOIN_MAX_BLOCK_SIZE {
+                    unmatched_build_block
+                        .columns()
+                        .iter()
+                        .map(|c| Self::set_validity(c, num_rows, true_validity))
+                        .collect::<Vec<_>>()
+                } else {
+                    let mut validity = MutableBitmap::new();
+                    validity.extend_constant(num_rows, true);
+                    let validity: Bitmap = validity.into();
+                    unmatched_build_block
+                        .columns()
+                        .iter()
+                        .map(|c| Self::set_validity(c, num_rows, &validity))
+                        .collect::<Vec<_>>()
+                };
+                unmatched_build_block = DataBlock::new(nullable_unmatched_build_columns, num_rows);
+            };
+            // Create null chunk for unmatched rows in probe side
+            let null_probe_block = DataBlock::new(
+                self.probe_schema
+                    .fields()
+                    .iter()
+                    .map(|df| BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null)))
+                    .collect(),
+                build_indexes_occupied,
+            );
+            result_blocks.push(self.merge_eq_block(&unmatched_build_block, &null_probe_block)?);
+            build_indexes_occupied = 0;
         }
         Ok(result_blocks)
     }
 
     fn outer_scan_right_semi_join(
         &self,
-        task: (usize, usize),
+        task: usize,
         state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         let build_indexes = &mut state.build_indexes;
@@ -612,40 +605,37 @@ impl HashJoinState for JoinHashTable {
 
         let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
         let interrupt = self.interrupt.clone();
-        let mut chunk_index = task.0;
-        while chunk_index < task.1 {
-            if interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-            let bitmap = &outer_scan_bitmap[chunk_index];
-            let bitmap_len = bitmap.len();
-            let mut row_index = 0;
-            while row_index < bitmap_len {
-                while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
-                    if bitmap.get(row_index) {
-                        build_indexes[build_indexes_occupied].chunk_index = chunk_index;
-                        build_indexes[build_indexes_occupied].row_index = row_index;
-                        build_indexes_occupied += 1;
-                    }
-                    row_index += 1;
+        let chunk_index = task;
+        if interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
+        let bitmap = &outer_scan_bitmap[chunk_index];
+        let bitmap_len = bitmap.len();
+        let mut row_index = 0;
+        while row_index < bitmap_len {
+            while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+                if bitmap.get(row_index) {
+                    build_indexes[build_indexes_occupied].chunk_index = chunk_index;
+                    build_indexes[build_indexes_occupied].row_index = row_index;
+                    build_indexes_occupied += 1;
                 }
-                result_blocks.push(self.row_space.gather(
-                    &build_indexes[0..build_indexes_occupied],
-                    &data_blocks,
-                    &total_num_rows,
-                )?);
-                build_indexes_occupied = 0;
+                row_index += 1;
             }
-            chunk_index += 1;
+            result_blocks.push(self.row_space.gather(
+                &build_indexes[0..build_indexes_occupied],
+                &data_blocks,
+                &total_num_rows,
+            )?);
+            build_indexes_occupied = 0;
         }
         Ok(result_blocks)
     }
 
     fn outer_scan_right_anti_join(
         &self,
-        task: (usize, usize),
+        task: usize,
         state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
         let build_indexes = &mut state.build_indexes;
@@ -663,33 +653,30 @@ impl HashJoinState for JoinHashTable {
 
         let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
         let interrupt = self.interrupt.clone();
-        let mut chunk_index = task.0;
-        while chunk_index < task.1 {
-            if interrupt.load(Ordering::Relaxed) {
-                return Err(ErrorCode::AbortedQuery(
-                    "Aborted query, because the server is shutting down or the query was killed.",
-                ));
-            }
-            let bitmap = &outer_scan_bitmap[chunk_index];
-            let bitmap_len = bitmap.len();
-            let mut row_index = 0;
-            while row_index < bitmap_len {
-                while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
-                    if !bitmap.get(row_index) {
-                        build_indexes[build_indexes_occupied].chunk_index = chunk_index;
-                        build_indexes[build_indexes_occupied].row_index = row_index;
-                        build_indexes_occupied += 1;
-                    }
-                    row_index += 1;
+        let chunk_index = task;
+        if interrupt.load(Ordering::Relaxed) {
+            return Err(ErrorCode::AbortedQuery(
+                "Aborted query, because the server is shutting down or the query was killed.",
+            ));
+        }
+        let bitmap = &outer_scan_bitmap[chunk_index];
+        let bitmap_len = bitmap.len();
+        let mut row_index = 0;
+        while row_index < bitmap_len {
+            while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+                if !bitmap.get(row_index) {
+                    build_indexes[build_indexes_occupied].chunk_index = chunk_index;
+                    build_indexes[build_indexes_occupied].row_index = row_index;
+                    build_indexes_occupied += 1;
                 }
-                result_blocks.push(self.row_space.gather(
-                    &build_indexes[0..build_indexes_occupied],
-                    &data_blocks,
-                    &total_num_rows,
-                )?);
-                build_indexes_occupied = 0;
+                row_index += 1;
             }
-            chunk_index += 1;
+            result_blocks.push(self.row_space.gather(
+                &build_indexes[0..build_indexes_occupied],
+                &data_blocks,
+                &total_num_rows,
+            )?);
+            build_indexes_occupied = 0;
         }
         Ok(result_blocks)
     }

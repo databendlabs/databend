@@ -62,29 +62,29 @@ pub trait HashJoinState: Send + Sync {
     fn generate_outer_scan_task(&self) -> Result<()>;
 
     /// Get one outer scan task.
-    fn outer_scan_task(&self) -> Option<(usize, usize)>;
+    fn outer_scan_task(&self) -> Option<usize>;
 
     /// Outer scan.
-    fn outer_scan(&self, task: (usize, usize), state: &mut ProbeState) -> Result<Vec<DataBlock>>;
+    fn outer_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
 
     /// Outer scan right and full join.
     fn outer_scan_right_and_full_join(
         &self,
-        task: (usize, usize),
+        task: usize,
         state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>>;
 
     /// Outer scan right semi join.
     fn outer_scan_right_semi_join(
         &self,
-        task: (usize, usize),
+        task: usize,
         state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>>;
 
     /// Outer scan right anti join.
     fn outer_scan_right_anti_join(
         &self,
-        task: (usize, usize),
+        task: usize,
         state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>>;
 

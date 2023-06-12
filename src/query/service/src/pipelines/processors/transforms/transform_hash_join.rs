@@ -84,7 +84,7 @@ impl TransformHashJoinProbe {
         Ok(())
     }
 
-    fn outer_scan(&mut self, task: (usize, usize)) -> Result<()> {
+    fn outer_scan(&mut self, task: usize) -> Result<()> {
         self.output_data_blocks
             .extend(self.join_state.outer_scan(task, &mut self.probe_state)?);
         Ok(())
