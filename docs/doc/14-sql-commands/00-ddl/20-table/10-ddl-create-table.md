@@ -501,7 +501,7 @@ CREATE TABLE IF NOT EXISTS products (
   id INT,
   price FLOAT,
   quantity INT,
-  total_price FLOAT AS (price * quantity) STORED
+  total_price FLOAT64 AS (price * quantity) STORED
 );
 
 -- Insert data into the table
