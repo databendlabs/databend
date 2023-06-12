@@ -515,11 +515,13 @@ SELECT id, price, quantity, total_price
 FROM products;
 
 ---
- id | price | quantity | total_price
-----+-------+----------+-------------
-  1 |  10.5 |        3 |        31.5
-  2 |  15.2 |        5 |          76
-  3 |   8.7 |        2 |        17.4
++------+-------+----------+-------------+
+| id   | price | quantity | total_price |
++------+-------+----------+-------------+
+|    1 |  10.5 |        3 |        31.5 |
+|    2 |  15.2 |        5 |        76.0 |
+|    3 |   8.7 |        2 |        17.4 |
++------+-------+----------+-------------+
 ```
 
 In this example, we create a table called student_profiles with a Variant type column named profile to store JSON data. We also add a virtual computed column named *age* that extracts the age property from the profile column and casts it to an integer.
