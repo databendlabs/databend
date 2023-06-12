@@ -17,6 +17,9 @@ use std::ops::Not;
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
+use common_catalog::plan::InternalColumn;
+use common_catalog::plan::InternalColumnMeta;
+use common_catalog::plan::InternalColumnType;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -24,10 +27,12 @@ use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::Value;
+use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::ClusterStatistics;
@@ -80,6 +85,7 @@ pub struct MutationSource {
     operators: Vec<BlockOperator>,
     storage_format: FuseStorageFormat,
     action: MutationAction,
+    query_internal_columns: bool,
 
     index: BlockMetaIndex,
     origin_stats: Option<ClusterStatistics>,
@@ -96,6 +102,7 @@ impl MutationSource {
         remain_reader: Arc<Option<BlockReader>>,
         operators: Vec<BlockOperator>,
         storage_format: FuseStorageFormat,
+        query_internal_columns: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(MutationSource {
             state: State::ReadData(None),
@@ -106,6 +113,7 @@ impl MutationSource {
             remain_reader,
             operators,
             action,
+            query_internal_columns,
             index: BlockMetaIndex::default(),
             origin_stats: None,
             storage_format,
@@ -177,6 +185,26 @@ impl Processor for MutationSource {
                 let num_rows = data_block.num_rows();
 
                 if let Some(filter) = self.filter.as_ref() {
+                    if self.query_internal_columns {
+                        // Add internal column to data block
+                        let fuse_part = FusePartInfo::from_part(&part)?;
+                        let block_meta = fuse_part.block_meta_index().unwrap();
+                        let internal_column_meta = InternalColumnMeta {
+                            segment_idx: block_meta.segment_idx,
+                            block_id: block_meta.block_id,
+                            block_location: block_meta.block_location.clone(),
+                            segment_location: block_meta.segment_location.clone(),
+                            snapshot_location: "".to_string(),
+                            offsets: None,
+                        };
+                        let internal_col = InternalColumn {
+                            column_name: ROW_ID_COL_NAME.to_string(),
+                            column_type: InternalColumnType::RowId,
+                        };
+                        let row_id_col = internal_col
+                            .generate_column_values(&internal_column_meta, data_block.num_rows());
+                        data_block.add_column(row_id_col);
+                    }
                     assert_eq!(filter.data_type(), &DataType::Boolean);
 
                     let func_ctx = self.ctx.get_function_context()?;

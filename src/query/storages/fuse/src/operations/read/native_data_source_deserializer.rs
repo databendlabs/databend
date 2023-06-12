@@ -189,7 +189,7 @@ impl NativeDeserializeDataTransform {
         let prewhere_filter = Self::build_prewhere_filter_expr(plan, &prewhere_schema)?;
 
         let mut output_schema = plan.schema().as_ref().clone();
-        output_schema.remove_internal_fields();
+        // output_schema.remove_internal_fields();
         let output_schema: DataSchema = (&output_schema).into();
 
         let mut column_leaves = Vec::with_capacity(block_reader.project_column_nodes.len());

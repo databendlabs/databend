@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
+use common_catalog::plan::InternalColumn;
+use common_catalog::plan::InternalColumnType;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
@@ -25,6 +28,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ComputedExpr;
@@ -34,9 +38,12 @@ use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_expression::TableDataType;
 use common_expression::TableSchema;
 use common_expression::Value;
+use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
@@ -45,6 +52,7 @@ use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
+use crate::operations::FillInternalColumnProcessor;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
@@ -65,6 +73,7 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
+        query_internal_columns: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -95,7 +104,7 @@ impl FuseTable {
         }
 
         let filter_expr = filter.unwrap();
-        if col_indices.is_empty() {
+        if col_indices.is_empty() && !query_internal_columns {
             // here the situation: filter_expr is not null, but col_indices in empty, which
             // indicates the expr being evaluated is unrelated to the value of rows:
             //   e.g.
@@ -119,8 +128,15 @@ impl FuseTable {
             return Ok(());
         }
 
-        self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
-            .await?;
+        self.try_add_deletion_source(
+            ctx.clone(),
+            &filter_expr,
+            col_indices,
+            &snapshot,
+            query_internal_columns,
+            pipeline,
+        )
+        .await?;
         if pipeline.is_empty() {
             return Ok(());
         }
@@ -178,6 +194,7 @@ impl FuseTable {
         filter: &RemoteExpr<String>,
         col_indices: Vec<usize>,
         base_snapshot: &TableSnapshot,
+        query_internal_columns: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
@@ -204,7 +221,14 @@ impl FuseTable {
         }
 
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
-        let schema = block_reader.schema();
+        let mut schema = block_reader.schema().as_ref().clone();
+        if query_internal_columns {
+            schema.add_internal_field(
+                ROW_ID_COL_NAME,
+                TableDataType::Number(NumberDataType::UInt64),
+                1,
+            );
+        }
         let filter = Arc::new(Some(
             filter
                 .as_expr(&BUILTIN_FUNCTIONS)
@@ -250,6 +274,7 @@ impl FuseTable {
                     remain_reader.clone(),
                     ops.clone(),
                     self.storage_format,
+                    query_internal_columns,
                 )
             },
             max_threads,
