@@ -36,7 +36,7 @@ Stay connected with the latest news about Databend.
 
 ### Column Position
 
-Databend now supports using syntax like `$N` to indicate column positions, where `$2` means matching the second column. Furthermore, Databend also supports combining column position and column name in SQL statements. Here is a simple example:
+Databend now offers support for utilizing syntax like $N to represent column positions. For instance, $2 indicates the second column. Additionally, Databend allows the usage of column positions alongside column names in SQL statements. Here is a simple example:
 
 ```SQL
 CREATE TABLE IF NOT EXISTS t1(a int, b varchar);
@@ -52,7 +52,7 @@ select $1, $2, a, b from t1;
 └─────────────────────────────────┘
 ```
 
-We have also added column position support for `SELECT FROM` with NDJSON, and support for other formats is in progress.
+You can also use column positions when you SELECT FROM a staged NDJSON files. We are also actively working on extending this support to other formats.
 
 ```sql
 select $1 from @my_stage
@@ -60,7 +60,13 @@ select $1 from @my_stage
 copy into my_table from (select $1 from @my_stage t)
 ```
 
-Please note that when using `select` for NDJson, only `$1` is allowed. This stands for the entire line and has a variant type. On the other hand, when copying into `my_table` from `@my_stage`, matching is done by name of top-level fields.
+It is important to note that when using the SELECT statement for NDJSON in Databend, only $1 is allowed, representing the entire row and having the data type variant. 
+
+```sql
+-- Select the entire row using column position:
+SELECT $1 FROM @my_stage
+
+```
 
 If you are interested in learning more, please check out the resources listed below:
 
@@ -113,10 +119,10 @@ If you are interested in learning more, please check out the resources listed be
 We have also made these improvements to Databend that we hope you will find helpful:
 
 - Added support for distributed Top-N.
-- The default `lazy_topn_threshold` setting has been enabled to 1000.
-- To ensure security, the root user has been allowed to change the password.
+- The lazy_topn_threshold setting is now active by default, with a default value of 1,000.
+- For enhanced security measures, the ability to change the password has been added to the root user.
 - Read *[Blog | Databend X Tableau](https://databend.rs/blog/2023-06-01-tableau)* to learn how to connect Databend for BI data analysis in Tableau.
-- Read *[Docs | Integrating Databend as a Sink for Vector](https://databend.rs/doc/integrations/data-tool/vector)* and *[Docs | Analyzing Nginx Access Logs with Databend](https://databend.rs/doc/use-cases/analyze-nginx-logs-with-databend-and-vector)* to understand how to integrate Vector and Databend.
+- Read *[Docs | Integrating Databend as a Sink for Vector](https://databend.rs/doc/integrations/data-tool/vector)* and *[Docs | Analyzing Nginx Access Logs with Databend](https://databend.rs/doc/use-cases/analyze-nginx-logs-with-databend-and-vector)* to understand how to integrate Vector with Databend.
 
 ## What's Up Next
 
@@ -124,7 +130,7 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Add a Deduplication Label Field to the Rest API
 
-To ensure that data ingestion is idempotent, Databend already supports deduplication of DML through the use of a deduplication label. You can find more information on this feature at [Docs | Setting Commands - SET_VAR](https://databend.rs/doc/sql-commands/setting-cmds/set-var) .
+To ensure that data ingestion is idempotent, Databend now supports deduplication of DML through the use of a deduplication label. You can find more information on this feature at [Docs | Setting Commands - SET_VAR](https://databend.rs/doc/sql-commands/setting-cmds/set-var).
 
 To facilitate cross-language driver integration, we could add a REST API field for the label.
 
