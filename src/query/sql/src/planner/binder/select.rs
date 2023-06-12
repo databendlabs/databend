@@ -19,6 +19,7 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnID;
+use common_ast::ast::ColumnPosition;
 use common_ast::ast::Expr;
 use common_ast::ast::Expr::Array;
 use common_ast::ast::GroupBy;
@@ -34,6 +35,7 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
+use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -93,6 +95,12 @@ impl Binder {
             let select_list = &stmt.select_list;
             self.bind_one_table(bind_context, select_list).await?
         } else {
+            let mut max_column_position = MaxColumnPosition::new();
+            max_column_position.visit_select_stmt(stmt);
+            self.metadata
+                .write()
+                .set_max_column_position(max_column_position.max_pos);
+
             let cross_joins = stmt
                 .from
                 .iter()
@@ -908,5 +916,23 @@ impl<'a> SelectRewriter<'a> {
             });
         };
         Ok(())
+    }
+}
+
+pub struct MaxColumnPosition {
+    pub max_pos: usize,
+}
+
+impl MaxColumnPosition {
+    pub fn new() -> Self {
+        Self { max_pos: 0 }
+    }
+}
+
+impl<'a> Visitor<'a> for MaxColumnPosition {
+    fn visit_column_position(&mut self, pos: &ColumnPosition) {
+        if pos.pos > self.max_pos {
+            self.max_pos = pos.pos;
+        }
     }
 }
