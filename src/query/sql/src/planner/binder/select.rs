@@ -74,7 +74,7 @@ pub struct SelectItem<'a> {
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_select_stmt(
+    pub(crate) async fn bind_select_stmt(
         &mut self,
         bind_context: &mut BindContext,
         stmt: &SelectStmt,
@@ -90,7 +90,8 @@ impl Binder {
             }
         }
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
-            self.bind_one_table(bind_context, stmt).await?
+            let select_list = &stmt.select_list;
+            self.bind_one_table(bind_context, select_list).await?
         } else {
             let cross_joins = stmt
                 .from
@@ -357,7 +358,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_where(
+    pub async fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
@@ -452,7 +453,7 @@ impl Binder {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bind_union(
+    pub fn bind_union(
         &mut self,
         left_span: Span,
         _right_span: Span,
@@ -489,7 +490,7 @@ impl Binder {
         Ok((new_expr, left_context))
     }
 
-    fn bind_intersect(
+    pub fn bind_intersect(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -509,7 +510,7 @@ impl Binder {
         )
     }
 
-    fn bind_except(
+    pub fn bind_except(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -530,7 +531,7 @@ impl Binder {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bind_intersect_or_except(
+    pub fn bind_intersect_or_except(
         &mut self,
         left_span: Span,
         right_span: Span,

@@ -94,12 +94,12 @@ use crate::VirtualColumn;
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_one_table(
+    pub async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &SelectStmt,
+        select_list: &Vec<SelectTarget>,
     ) -> Result<(SExpr, BindContext)> {
-        for select_target in &stmt.select_list {
+        for select_target in select_list {
             if let SelectTarget::QualifiedName {
                 qualified: names, ..
             } = select_target
@@ -153,7 +153,7 @@ impl Binder {
 
     #[async_recursion]
     #[async_backtrace::framed]
-    async fn bind_single_table(
+    pub(crate) async fn bind_single_table(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,
@@ -585,7 +585,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_table_reference(
+    pub async fn bind_table_reference(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,
@@ -718,7 +718,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn bind_base_table(
+    pub(crate) async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -810,7 +810,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_data_source(
+    pub(crate) async fn resolve_data_source(
         &self,
         tenant: &str,
         catalog_name: &str,

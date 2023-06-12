@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,24 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(thread_local)]
-#![feature(io_error_other)]
-
-extern crate core;
-
-mod api;
-mod auth;
-mod catalogs;
-mod clusters;
-mod configs;
-mod databases;
-mod frame;
-mod metrics;
-mod pipelines;
-mod servers;
-mod sessions;
-mod sql;
-mod storages;
-mod table_functions;
-mod tests;
+mod dataframe;

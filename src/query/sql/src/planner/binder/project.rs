@@ -50,7 +50,7 @@ use crate::IndexType;
 use crate::WindowChecker;
 
 impl Binder {
-    pub(super) fn analyze_projection(
+    pub fn analyze_projection(
         &mut self,
         agg_info: &AggregateInfo,
         select_list: &SelectList,
@@ -119,7 +119,7 @@ impl Binder {
         Ok((scalars, columns))
     }
 
-    pub(super) fn bind_projection(
+    pub fn bind_projection(
         &mut self,
         bind_context: &mut BindContext,
         columns: &[ColumnBinding],
@@ -177,7 +177,7 @@ impl Binder {
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
     #[async_backtrace::framed]
-    pub(super) async fn normalize_select_list<'a>(
+    pub async fn normalize_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],

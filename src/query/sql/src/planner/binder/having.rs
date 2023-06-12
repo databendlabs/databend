@@ -33,7 +33,7 @@ impl Binder {
     /// Analyze aggregates in having clause, this will rewrite aggregate functions.
     /// See `AggregateRewriter` for more details.
     #[async_backtrace::framed]
-    pub(super) async fn analyze_aggregate_having<'a>(
+    pub async fn analyze_aggregate_having<'a>(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
@@ -53,7 +53,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_having(
+    pub async fn bind_having(
         &mut self,
         bind_context: &mut BindContext,
         having: ScalarExpr,
