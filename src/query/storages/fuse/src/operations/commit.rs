@@ -12,43 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
-use std::time::Instant;
 
 use backoff::backoff::Backoff;
+use backoff::ExponentialBackoff;
 use backoff::ExponentialBackoffBuilder;
-use common_base::base::ProgressValues;
 use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableStatistics;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_meta_types::MatchSeq;
-use common_sql::field_default_value;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::Pipeline;
+use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use opendal::Operator;
 use storages_common_cache::CacheAccessor;
 use storages_common_cache_manager::CachedObject;
-use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::Versioned;
+use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
-use tracing::debug;
 use tracing::info;
 use tracing::warn;
-use uuid::Uuid;
 
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
@@ -57,299 +55,56 @@ use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
 use crate::metrics::metrics_inc_commit_mutation_retry;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
-use crate::operations::commit::utils::no_side_effects_in_meta_store;
-use crate::operations::mutation::AbortOperation;
-use crate::operations::AppendOperationLogEntry;
-use crate::operations::TableOperationLog;
-use crate::statistics;
+use crate::operations::common::AbortOperation;
+use crate::operations::common::AppendGenerator;
+use crate::operations::common::CommitSink;
+use crate::operations::common::TableMutationAggregator;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
 
 const OCC_DEFAULT_BACKOFF_INIT_DELAY_MS: Duration = Duration::from_millis(5);
 const OCC_DEFAULT_BACKOFF_MAX_DELAY_MS: Duration = Duration::from_millis(20 * 1000);
 const OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS: Duration = Duration::from_millis(120 * 1000);
-const MAX_RETRIES: u64 = 10;
 
 impl FuseTable {
     #[async_backtrace::framed]
-    pub async fn do_commit(
+    pub fn do_commit(
         &self,
         ctx: Arc<dyn TableContext>,
-        operation_log: TableOperationLog,
+        pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        self.commit_with_max_retry_elapsed(ctx, operation_log, copied_files, None, overwrite)
-            .await
-    }
+        pipeline.resize(1)?;
 
-    #[async_backtrace::framed]
-    pub async fn commit_with_max_retry_elapsed(
-        &self,
-        ctx: Arc<dyn TableContext>,
-        operation_log: TableOperationLog,
-        copied_files: Option<UpsertTableCopiedFileReq>,
-        max_retry_elapsed: Option<Duration>,
-        overwrite: bool,
-    ) -> Result<()> {
-        let mut tbl = self;
-        let mut latest: Arc<dyn Table>;
-
-        let mut retry_times = 0;
-
-        // The initial retry delay in millisecond. By default,  it is 5 ms.
-        let init_delay = OCC_DEFAULT_BACKOFF_INIT_DELAY_MS;
-
-        // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
-        // By default, it is 20 seconds.
-        let max_delay = OCC_DEFAULT_BACKOFF_MAX_DELAY_MS;
-
-        // The maximum elapsed time after the occ starts, beyond which there will be no more retries.
-        // By default, it is 2 minutes
-        let max_elapsed = max_retry_elapsed.unwrap_or(OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS);
-
-        // TODO(xuanwo): move to backon instead.
-        //
-        // To simplify the settings, using fixed common values for randomization_factor and multiplier
-        let mut backoff = ExponentialBackoffBuilder::new()
-            .with_initial_interval(init_delay)
-            .with_max_interval(max_delay)
-            .with_randomization_factor(0.5)
-            .with_multiplier(2.0)
-            .with_max_elapsed_time(Some(max_elapsed))
-            .build();
-
-        let transient = self.transient();
-        loop {
-            match tbl
-                .try_commit(ctx.clone(), &operation_log, &copied_files, overwrite)
-                .await
-            {
-                Ok(_) => {
-                    break {
-                        if transient {
-                            // Removes historical data, if table is transient
-                            warn!(
-                                "transient table detected, purging historical data. ({})",
-                                tbl.table_info.ident
-                            );
-
-                            let latest = tbl.refresh(ctx.as_ref()).await?;
-                            tbl = FuseTable::try_from_table(latest.as_ref())?;
-
-                            let keep_last_snapshot = true;
-                            let snapshot_files = self.list_snapshot_files().await?;
-                            if let Err(e) = tbl
-                                .do_purge(&ctx, snapshot_files, keep_last_snapshot, None)
-                                .await
-                            {
-                                // Errors of GC, if any, are ignored, since GC task can be picked up
-                                warn!(
-                                    "GC of transient table not success (this is not a permanent error). the error : {}",
-                                    e
-                                );
-                            } else {
-                                info!("GC of transient table done");
-                            }
-                        }
-                        Ok(())
-                    };
-                }
-                Err(e) if self::utils::is_error_recoverable(&e, transient) => {
-                    match backoff.next_backoff() {
-                        Some(d) => {
-                            let name = tbl.table_info.name.clone();
-                            debug!(
-                                "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
-                                d.as_millis(),
-                                name.as_str(),
-                                tbl.table_info.ident
-                            );
-                            common_base::base::tokio::time::sleep(d).await;
-                            latest = tbl.refresh(ctx.as_ref()).await?;
-                            tbl = FuseTable::try_from_table(latest.as_ref())?;
-                            retry_times += 1;
-                            continue;
-                        }
-                        None => {
-                            // Commit not fulfilled. try to abort the operations.
-                            // if it is safe to do so.
-                            if no_side_effects_in_meta_store(&e) {
-                                // if we are sure that table state inside metastore has not been
-                                // modified by this operation, abort this operation.
-                                info!("aborting operations");
-                                let _ = utils::abort_operations(self.get_operator(), operation_log)
-                                    .await;
-                            }
-                            break Err(ErrorCode::OCCRetryFailure(format!(
-                                "can not fulfill the tx after retries({} times, {} ms), aborted. table name {}, identity {}",
-                                retry_times,
-                                Instant::now()
-                                    .duration_since(backoff.start_time)
-                                    .as_millis(),
-                                tbl.table_info.name.as_str(),
-                                tbl.table_info.ident,
-                            )));
-                        }
-                    }
-                }
-
-                Err(e) => {
-                    // we are not sure about if the table state has been modified or not, just propagate the error
-                    // and return, without aborting anything.
-                    break Err(e);
-                }
-            }
-        }
-    }
-
-    #[inline]
-    #[async_backtrace::framed]
-    pub async fn try_commit<'a>(
-        &'a self,
-        ctx: Arc<dyn TableContext>,
-        operation_log: &'a TableOperationLog,
-        copied_files: &Option<UpsertTableCopiedFileReq>,
-        overwrite: bool,
-    ) -> Result<()> {
-        let prev = self.read_table_snapshot().await?;
-        let prev_version = self.snapshot_format_version(None).await?;
-        let prev_timestamp = prev.as_ref().and_then(|v| v.timestamp);
-        let prev_statistics_location = prev
-            .as_ref()
-            .and_then(|v| v.table_statistics_location.clone());
-        let schema = self.table_info.meta.schema.as_ref().clone();
-        let (segments, summary) = Self::merge_append_operations(operation_log)?;
-
-        let progress_values = ProgressValues {
-            rows: summary.row_count as usize,
-            bytes: summary.uncompressed_byte_size as usize,
-        };
-        ctx.get_write_progress().incr(&progress_values);
-
-        let segments = segments
-            .into_iter()
-            .map(|loc| (loc, SegmentInfo::VERSION))
-            .collect();
-
-        let new_snapshot = if overwrite {
-            TableSnapshot::new(
-                Uuid::new_v4(),
-                &prev_timestamp,
-                prev.as_ref().map(|v| (v.snapshot_id, prev_version)),
-                schema,
-                summary,
-                segments,
-                self.cluster_key_meta.clone(),
-                prev_statistics_location,
-            )
-        } else {
-            Self::merge_table_operations(
-                self.table_info.meta.schema.as_ref(),
+        pipeline.add_transform(|input, output| {
+            let aggregator = TableMutationAggregator::create(
                 ctx.clone(),
-                prev,
-                prev_version,
-                segments,
-                summary,
-                self.cluster_key_meta.clone(),
-            )?
-        };
+                vec![],
+                Statistics::default(),
+                self.get_block_thresholds(),
+                self.meta_location_generator().clone(),
+                self.schema(),
+                self.get_operator(),
+            );
+            Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
+                input, output, aggregator,
+            )))
+        })?;
 
-        let mut new_table_meta = self.get_table_info().meta.clone();
-        // update statistics
-        new_table_meta.statistics = TableStatistics {
-            number_of_rows: new_snapshot.summary.row_count,
-            data_bytes: new_snapshot.summary.uncompressed_byte_size,
-            compressed_data_bytes: new_snapshot.summary.compressed_byte_size,
-            index_data_bytes: new_snapshot.summary.index_size,
-        };
+        let snapshot_gen = AppendGenerator::new(ctx.clone(), overwrite);
+        pipeline.add_sink(|input| {
+            CommitSink::try_create(
+                self,
+                ctx.clone(),
+                copied_files.clone(),
+                snapshot_gen.clone(),
+                input,
+                None,
+            )
+        })?;
 
-        FuseTable::commit_to_meta_server(
-            ctx.as_ref(),
-            &self.table_info,
-            &self.meta_location_generator,
-            new_snapshot,
-            None,
-            copied_files,
-            &self.operator,
-        )
-        .await
-    }
-
-    fn merge_table_operations(
-        schema: &TableSchema,
-        ctx: Arc<dyn TableContext>,
-        previous: Option<Arc<TableSnapshot>>,
-        prev_version: u64,
-        mut new_segments: Vec<Location>,
-        statistics: Statistics,
-        cluster_key_meta: Option<ClusterKey>,
-    ) -> Result<TableSnapshot> {
-        // 1. merge stats with previous snapshot, if any
-        let stats = if let Some(snapshot) = &previous {
-            let mut summary = snapshot.summary.clone();
-            let mut fill_default_values = false;
-            // check if need to fill default value in statistics
-            for column_id in statistics.col_stats.keys() {
-                if !summary.col_stats.contains_key(column_id) {
-                    fill_default_values = true;
-                    break;
-                }
-            }
-            if fill_default_values {
-                let mut default_values = Vec::with_capacity(schema.num_fields());
-                for field in schema.fields() {
-                    default_values.push(field_default_value(ctx.clone(), field)?);
-                }
-                let leaf_default_values = schema.field_leaf_default_values(&default_values);
-                leaf_default_values
-                    .iter()
-                    .for_each(|(col_id, default_value)| {
-                        if !summary.col_stats.contains_key(col_id) {
-                            let (null_count, distinct_of_values) = if default_value.is_null() {
-                                (summary.row_count, Some(0))
-                            } else {
-                                (0, Some(1))
-                            };
-                            let col_stat = ColumnStatistics {
-                                min: default_value.to_owned(),
-                                max: default_value.to_owned(),
-                                null_count,
-                                in_memory_size: 0,
-                                distinct_of_values,
-                            };
-                            summary.col_stats.insert(*col_id, col_stat);
-                        }
-                    });
-            }
-
-            merge_statistics(&statistics, &summary)?
-        } else {
-            statistics
-        };
-        let prev_snapshot_id = previous.as_ref().map(|v| (v.snapshot_id, prev_version));
-        let prev_snapshot_timestamp = previous.as_ref().and_then(|v| v.timestamp);
-        let prev_statistics_location = previous
-            .as_ref()
-            .and_then(|v| v.table_statistics_location.clone());
-
-        // 2. merge segment locations with previous snapshot, if any
-        if let Some(snapshot) = &previous {
-            let mut segments = snapshot.segments.clone();
-            new_segments.append(&mut segments)
-        };
-
-        let new_snapshot = TableSnapshot::new(
-            Uuid::new_v4(),
-            &prev_snapshot_timestamp,
-            prev_snapshot_id,
-            schema.clone(),
-            stats,
-            new_segments,
-            cluster_key_meta,
-            prev_statistics_location,
-        );
-        Ok(new_snapshot)
+        Ok(())
     }
 
     #[async_backtrace::framed]
@@ -380,17 +135,56 @@ impl FuseTable {
                 .await?;
         }
 
-        // 2. prepare table meta
+        let table_statistics_location = snapshot.table_statistics_location.clone();
+        // 2. update table meta
+        let res = Self::update_table_meta(
+            ctx,
+            table_info,
+            location_generator,
+            snapshot,
+            snapshot_location,
+            copied_files,
+            operator,
+        )
+        .await;
+        if need_to_save_statistics {
+            let table_statistics_location = table_statistics_location.unwrap();
+            match &res {
+                Ok(_) => TableSnapshotStatistics::cache().put(
+                    table_statistics_location,
+                    Arc::new(table_statistics.unwrap()),
+                ),
+                Err(e) => {
+                    if Self::no_side_effects_in_meta_store(e) {
+                        let _ = operator.delete(&table_statistics_location).await;
+                    }
+                }
+            }
+        }
+        res
+    }
+
+    #[async_backtrace::framed]
+    pub async fn update_table_meta(
+        ctx: &dyn TableContext,
+        table_info: &TableInfo,
+        location_generator: &TableMetaLocationGenerator,
+        snapshot: TableSnapshot,
+        snapshot_location: String,
+        copied_files: &Option<UpsertTableCopiedFileReq>,
+        operator: &Operator,
+    ) -> Result<()> {
+        // 1. prepare table meta
         let mut new_table_meta = table_info.meta.clone();
-        // 2.1 set new snapshot location
+        // 1.1 set new snapshot location
         new_table_meta.options.insert(
             OPT_KEY_SNAPSHOT_LOCATION.to_owned(),
             snapshot_location.clone(),
         );
         // remove legacy options
-        utils::remove_legacy_options(&mut new_table_meta.options);
+        Self::remove_legacy_options(&mut new_table_meta.options);
 
-        // 2.2 setup table statistics
+        // 1.2 setup table statistics
         let stats = &snapshot.summary;
         // update statistics
         new_table_meta.statistics = TableStatistics {
@@ -398,9 +192,11 @@ impl FuseTable {
             data_bytes: stats.uncompressed_byte_size,
             compressed_data_bytes: stats.compressed_byte_size,
             index_data_bytes: stats.index_size,
+            number_of_segments: Some(snapshot.segments.len() as u64),
+            number_of_blocks: Some(stats.block_count),
         };
 
-        // 3. prepare the request
+        // 2. prepare the request
         let catalog = ctx.get_catalog(table_info.catalog())?;
         let table_id = table_info.ident.table_id;
         let table_version = table_info.ident.seq;
@@ -410,19 +206,13 @@ impl FuseTable {
             seq: MatchSeq::Exact(table_version),
             new_table_meta,
             copied_files: copied_files.clone(),
+            deduplicated_label: ctx.get_settings().get_deduplicate_label()?,
         };
 
         // 3. let's roll
         let reply = catalog.update_table_meta(table_info, req).await;
         match reply {
             Ok(_) => {
-                // upsert snapshot statistics cache
-                if let Some(snapshot_statistics) = table_statistics {
-                    if let Some(location) = &snapshot.table_statistics_location {
-                        TableSnapshotStatistics::cache()
-                            .put(location.clone(), Arc::new(snapshot_statistics));
-                    }
-                }
                 TableSnapshot::cache().put(snapshot_location.clone(), Arc::new(snapshot));
                 // try keep a hit file of last snapshot
                 Self::write_last_snapshot_hint(operator, location_generator, snapshot_location)
@@ -432,7 +222,7 @@ impl FuseTable {
             Err(e) => {
                 // commit snapshot to meta server failed.
                 // figure out if the un-committed snapshot is safe to be removed.
-                if no_side_effects_in_meta_store(&e) {
+                if Self::no_side_effects_in_meta_store(&e) {
                     // currently, only in this case (TableVersionMismatched),  we are SURE about
                     // that the table state insides meta store has NOT been changed.
                     info!(
@@ -440,55 +230,10 @@ impl FuseTable {
                         snapshot_location, table_info.desc, table_info.ident
                     );
                     let _ = operator.delete(&snapshot_location).await;
-                    if need_to_save_statistics {
-                        let _ = operator
-                            .delete(&snapshot.table_statistics_location.unwrap())
-                            .await;
-                    }
                 }
                 Err(e)
             }
         }
-    }
-
-    pub fn merge_append_operations(
-        append_log_entries: &[AppendOperationLogEntry],
-    ) -> Result<(Vec<String>, Statistics)> {
-        let iter = append_log_entries
-            .iter()
-            .map(|entry| (&entry.segment_location, entry.segment_info.as_ref()));
-        FuseTable::merge_segments(iter)
-    }
-
-    pub fn merge_segments<'a, T>(
-        mut segments: impl Iterator<Item = (&'a T, &'a SegmentInfo)>,
-    ) -> Result<(Vec<T>, Statistics)>
-    where T: Clone + 'a {
-        let len_hint = segments
-            .size_hint()
-            .1
-            .unwrap_or_else(|| segments.size_hint().0);
-        let (s, seg_locs) = segments.try_fold(
-            (Statistics::default(), Vec::with_capacity(len_hint)),
-            |(mut acc, mut seg_acc), (location, segment_info)| {
-                let stats = &segment_info.summary;
-                acc.row_count += stats.row_count;
-                acc.block_count += stats.block_count;
-                acc.perfect_block_count += stats.perfect_block_count;
-                acc.uncompressed_byte_size += stats.uncompressed_byte_size;
-                acc.compressed_byte_size += stats.compressed_byte_size;
-                acc.index_size += stats.index_size;
-                acc.col_stats = if acc.col_stats.is_empty() {
-                    stats.col_stats.clone()
-                } else {
-                    statistics::reduce_block_statistics(&[&acc.col_stats, &stats.col_stats])?
-                };
-                seg_acc.push(location.clone());
-                Ok::<_, ErrorCode>((acc, seg_acc))
-            },
-        )?;
-
-        Ok((seg_locs, s))
     }
 
     // Left a hint file which indicates the location of the latest snapshot
@@ -528,11 +273,13 @@ impl FuseTable {
         &self,
         ctx: &Arc<dyn TableContext>,
         base_snapshot: Arc<TableSnapshot>,
-        base_segments: Vec<Location>,
+        base_segments: &[Location],
         base_summary: Statistics,
         abort_operation: AbortOperation,
+        max_retry_elapsed: Option<Duration>,
     ) -> Result<()> {
         let mut retries = 0;
+        let mut backoff = Self::set_backoff(max_retry_elapsed);
 
         let mut latest_snapshot = base_snapshot.clone();
         let mut latest_table_info = &self.table_info;
@@ -550,7 +297,7 @@ impl FuseTable {
             info!(status);
         }
 
-        while retries < MAX_RETRIES {
+        loop {
             let mut snapshot_tobe_committed =
                 TableSnapshot::from_previous(latest_snapshot.as_ref());
 
@@ -558,7 +305,7 @@ impl FuseTable {
             let (segments_tobe_committed, statistics_tobe_committed) = Self::merge_with_base(
                 ctx.clone(),
                 self.operator.clone(),
-                &base_segments,
+                base_segments,
                 &base_summary,
                 concurrently_appended_segment_locations,
                 schema,
@@ -579,69 +326,84 @@ impl FuseTable {
             .await
             {
                 Err(e) if e.code() == ErrorCode::TABLE_VERSION_MISMATCHED => {
-                    latest_table_ref = self.refresh(ctx.as_ref()).await?;
-                    let latest_fuse_table = FuseTable::try_from_table(latest_table_ref.as_ref())?;
-                    latest_snapshot =
-                        latest_fuse_table
-                            .read_table_snapshot()
-                            .await?
-                            .ok_or_else(|| {
-                                ErrorCode::Internal(
-                                    "mutation meets empty snapshot during conflict reconciliation",
-                                )
-                            })?;
-                    latest_table_info = &latest_fuse_table.table_info;
+                    match backoff.next_backoff() {
+                        Some(d) => {
+                            let name = self.table_info.name.clone();
+                            tracing::debug!(
+                                "got error TableVersionMismatched, tx will be retried {} ms later. table name {}, identity {}",
+                                d.as_millis(),
+                                name.as_str(),
+                                self.table_info.ident
+                            );
 
-                    // Check if there is only insertion during the operation.
-                    match MutatorConflictDetector::detect_conflicts(
-                        base_snapshot.as_ref(),
-                        latest_snapshot.as_ref(),
-                    ) {
-                        Conflict::Unresolvable => {
+                            latest_table_ref = self.refresh(ctx.as_ref()).await?;
+                            let latest_fuse_table =
+                                FuseTable::try_from_table(latest_table_ref.as_ref())?;
+                            latest_snapshot =
+                                latest_fuse_table
+                                    .read_table_snapshot()
+                                    .await?
+                                    .ok_or_else(|| {
+                                        ErrorCode::Internal(
+                                            "mutation meets empty snapshot during conflict reconciliation",
+                                        )
+                                    })?;
+                            latest_table_info = &latest_fuse_table.table_info;
+
+                            // Check if there is only insertion during the operation.
+                            match MutatorConflictDetector::detect_conflicts(
+                                base_snapshot.as_ref(),
+                                latest_snapshot.as_ref(),
+                            ) {
+                                Conflict::Unresolvable => {
+                                    abort_operation
+                                        .abort(ctx.clone(), self.operator.clone())
+                                        .await?;
+                                    metrics_inc_commit_mutation_unresolvable_conflict();
+                                    break Err(ErrorCode::StorageOther(
+                                        "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                                    ));
+                                }
+                                Conflict::ResolvableAppend(range_of_newly_append) => {
+                                    info!("resolvable conflicts detected");
+                                    metrics_inc_commit_mutation_resolvable_conflict();
+                                    concurrently_appended_segment_locations =
+                                        &latest_snapshot.segments[range_of_newly_append];
+                                }
+                            }
+
+                            retries += 1;
+                            metrics_inc_commit_mutation_retry();
+                            continue;
+                        }
+                        None => {
+                            // Commit not fulfilled. try to abort the operations.
+                            //
+                            // Note that, here the last error we have seen is TableVersionMismatched,
+                            // otherwise we should have been returned, thus it is safe to abort the operation here.
                             abort_operation
                                 .abort(ctx.clone(), self.operator.clone())
                                 .await?;
-                            metrics_inc_commit_mutation_unresolvable_conflict();
-                            return Err(ErrorCode::StorageOther(
-                                "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                            ));
-                        }
-                        Conflict::ResolvableAppend(range_of_newly_append) => {
-                            info!("resolvable conflicts detected");
-                            metrics_inc_commit_mutation_resolvable_conflict();
-                            concurrently_appended_segment_locations =
-                                &latest_snapshot.segments[range_of_newly_append];
+                            break Err(ErrorCode::StorageOther(format!(
+                                "commit mutation failed after {} retries",
+                                retries
+                            )));
                         }
                     }
-
-                    retries += 1;
-                    metrics_inc_commit_mutation_retry();
                 }
                 Err(e) => {
                     // we are not sure about if the table state has been modified or not, just propagate the error
                     // and return, without aborting anything.
-                    return Err(e);
+                    break Err(e);
                 }
                 Ok(_) => {
-                    return {
+                    break {
                         metrics_inc_commit_mutation_success();
                         Ok(())
                     };
                 }
             }
         }
-
-        // Commit not fulfilled. try to abort the operations.
-        //
-        // Note that, here the last error we have seen is TableVersionMismatched,
-        // otherwise we should have been returned, thus it is safe to abort the operation here.
-        abort_operation
-            .abort(ctx.clone(), self.operator.clone())
-            .await?;
-        Err(ErrorCode::StorageOther(format!(
-            "commit mutation failed after {} retries",
-            retries
-        )))
     }
 
     #[async_backtrace::framed]
@@ -672,10 +434,54 @@ impl FuseTable {
             for result in concurrent_appended_segment_infos.into_iter() {
                 let concurrent_appended_segment = result?;
                 new_statistics =
-                    merge_statistics(&new_statistics, &concurrent_appended_segment.summary)?;
+                    merge_statistics(&new_statistics, &concurrent_appended_segment.summary);
             }
             Ok((new_segments, new_statistics))
         }
+    }
+
+    #[inline]
+    pub fn is_error_recoverable(e: &ErrorCode, is_table_transient: bool) -> bool {
+        let code = e.code();
+        code == ErrorCode::TABLE_VERSION_MISMATCHED
+            || (is_table_transient && code == ErrorCode::STORAGE_NOT_FOUND)
+    }
+
+    #[inline]
+    pub fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
+        // currently, the only error that we know,  which indicates there are no side effects
+        // is TABLE_VERSION_MISMATCHED
+        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
+    }
+
+    #[inline]
+    pub fn set_backoff(max_retry_elapsed: Option<Duration>) -> ExponentialBackoff {
+        // The initial retry delay in millisecond. By default,  it is 5 ms.
+        let init_delay = OCC_DEFAULT_BACKOFF_INIT_DELAY_MS;
+
+        // The maximum  back off delay in millisecond, once the retry interval reaches this value, it stops increasing.
+        // By default, it is 20 seconds.
+        let max_delay = OCC_DEFAULT_BACKOFF_MAX_DELAY_MS;
+
+        // The maximum elapsed time after the occ starts, beyond which there will be no more retries.
+        // By default, it is 2 minutes
+        let max_elapsed = max_retry_elapsed.unwrap_or(OCC_DEFAULT_BACKOFF_MAX_ELAPSED_MS);
+
+        // TODO(xuanwo): move to backon instead.
+        //
+        // To simplify the settings, using fixed common values for randomization_factor and multiplier
+        ExponentialBackoffBuilder::new()
+            .with_initial_interval(init_delay)
+            .with_max_interval(max_delay)
+            .with_randomization_factor(0.5)
+            .with_multiplier(2.0)
+            .with_max_elapsed_time(Some(max_elapsed))
+            .build()
+    }
+
+    // check if there are any fuse table legacy options
+    pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
+        table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     }
 }
 
@@ -706,67 +512,5 @@ impl MutatorConflictDetector {
         } else {
             Conflict::Unresolvable
         }
-    }
-}
-
-mod utils {
-    use std::collections::BTreeMap;
-
-    use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
-
-    use super::*;
-    use crate::metrics::metrics_inc_commit_mutation_aborts;
-
-    #[inline]
-    #[async_backtrace::framed]
-    pub async fn abort_operations(
-        operator: Operator,
-        operation_log: TableOperationLog,
-    ) -> Result<()> {
-        metrics_inc_commit_mutation_aborts();
-        for entry in operation_log {
-            for block in &entry.segment_info.blocks {
-                let block_location = &block.location.0;
-                // if deletion operation failed (after DAL retried)
-                // we just left them there, and let the "major GC" collect them
-                info!(
-                    "aborting operation, delete block location: {:?}",
-                    block_location,
-                );
-                let _ = operator.delete(block_location).await;
-                if let Some(index) = &block.bloom_filter_index_location {
-                    info!(
-                        "aborting operation, delete bloom index location: {:?}",
-                        index.0
-                    );
-                    let _ = operator.delete(&index.0).await;
-                }
-            }
-            info!(
-                "aborting operation, delete segment location: {:?}",
-                entry.segment_location
-            );
-            let _ = operator.delete(&entry.segment_location).await;
-        }
-        Ok(())
-    }
-
-    #[inline]
-    pub fn is_error_recoverable(e: &ErrorCode, is_table_transient: bool) -> bool {
-        let code = e.code();
-        code == ErrorCode::TABLE_VERSION_MISMATCHED
-            || (is_table_transient && code == ErrorCode::STORAGE_NOT_FOUND)
-    }
-
-    #[inline]
-    pub fn no_side_effects_in_meta_store(e: &ErrorCode) -> bool {
-        // currently, the only error that we know,  which indicates there are no side effects
-        // is TABLE_VERSION_MISMATCHED
-        e.code() == ErrorCode::TABLE_VERSION_MISMATCHED
-    }
-
-    // check if there are any fuse table legacy options
-    pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
-        table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
     }
 }

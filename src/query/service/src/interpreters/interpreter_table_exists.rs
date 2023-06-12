@@ -58,10 +58,10 @@ impl Interpreter for ExistsTableInterpreter {
         };
 
         PipelineBuildResult::from_blocks(vec![DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::Number(NumberDataType::UInt8),
-                value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(result))),
-            }],
+            vec![BlockEntry::new(
+                DataType::Number(NumberDataType::UInt8),
+                Value::Scalar(Scalar::Number(NumberScalar::UInt8(result))),
+            )],
             1,
         )])
     }

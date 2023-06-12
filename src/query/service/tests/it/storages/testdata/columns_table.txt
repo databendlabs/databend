@@ -9,6 +9,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'active_result_scan'            | 'system'             | 'query_cache'         | 'Boolean'          | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'auth_string'                   | 'system'             | 'users'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'auth_type'                     | 'system'             | 'users'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'auto_increment'                | 'information_schema' | 'tables'              | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'cardinality'                   | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'cargo_features'                | 'system'             | 'build_options'       | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'catalog'                       | 'system'             | 'databases'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -56,6 +57,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'current_database'              | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'data_compressed_size'          | 'system'             | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_compressed_size'          | 'system'             | 'tables_with_history' | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'data_free'                     | 'information_schema' | 'tables'              | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'data_length'                   | 'information_schema' | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'data_read_bytes'               | 'system'             | 'processes'           | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'data_size'                     | 'system'             | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
@@ -229,6 +231,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'table_catalog'                 | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'table_catalog'                 | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_catalog'                 | 'information_schema' | 'views'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'table_collation'               | 'information_schema' | 'tables'              | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'table_comment'                 | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_id'                      | 'system'             | 'tables'              | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'table_id'                      | 'system'             | 'tables_with_history' | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
@@ -237,6 +240,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'table_name'                    | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'table_name'                    | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_name'                    | 'information_schema' | 'views'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'table_rows'                    | 'information_schema' | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'table_schema'                  | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'table_schema'                  | 'information_schema' | 'key_column_usage'    | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'table_schema'                  | 'information_schema' | 'statistics'          | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_ast::ast::Expr;
 use common_exception::Result;
 use common_exception::Span;
@@ -31,12 +33,13 @@ impl Binder {
     /// Analyze aggregates in having clause, this will rewrite aggregate functions.
     /// See `AggregateRewriter` for more details.
     #[async_backtrace::framed]
-    pub(super) async fn analyze_aggregate_having<'a>(
+    pub async fn analyze_aggregate_having<'a>(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
         having: &Expr,
     ) -> Result<(ScalarExpr, Span)> {
+        bind_context.set_expr_context(ExprContext::HavingClause);
         let mut scalar_binder = ScalarBinder::new(
             bind_context,
             self.ctx.clone(),
@@ -50,7 +53,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_having(
+    pub async fn bind_having(
         &mut self,
         bind_context: &mut BindContext,
         having: ScalarExpr,
@@ -76,6 +79,9 @@ impl Binder {
             is_having: true,
         };
 
-        Ok(SExpr::create_unary(filter.into(), child))
+        Ok(SExpr::create_unary(
+            Arc::new(filter.into()),
+            Arc::new(child),
+        ))
     }
 }

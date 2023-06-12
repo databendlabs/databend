@@ -284,7 +284,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("lazy_topn_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
+                    value: UserSettingValue::UInt64(1000),
                     desc: "Enable lazy materialization and set the limit threshold of Top-N queries. Set the value to 0 to disable this setting.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -309,6 +309,12 @@ impl DefaultSettings {
                     desc: "Sets the seconds that the table lock will expire in.",
                     possible_values: None,
                     display_in_show_settings: true,
+                }),
+                ("deduplicate_label", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_owned()),
+                    desc: "Sql duplicate label for deduplication.",
+                    possible_values: None,
+                    display_in_show_settings: false,
                 }),
             ]);
 

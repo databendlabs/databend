@@ -18,6 +18,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
+use common_expression::ComputedExpr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Scalar;
@@ -73,14 +74,14 @@ impl Interpreter for ShowCreateTableInterpreter {
                 );
                 let block = DataBlock::new(
                     vec![
-                        BlockEntry {
-                            data_type: DataType::String,
-                            value: Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
-                        },
-                        BlockEntry {
-                            data_type: DataType::String,
-                            value: Value::Scalar(Scalar::String(view_create_sql.into_bytes())),
-                        },
+                        BlockEntry::new(
+                            DataType::String,
+                            Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                        ),
+                        BlockEntry::new(
+                            DataType::String,
+                            Value::Scalar(Scalar::String(view_create_sql.into_bytes())),
+                        ),
                     ],
                     1,
                 );
@@ -112,6 +113,15 @@ impl Interpreter for ShowCreateTableInterpreter {
                     }
                     None => "".to_string(),
                 };
+                let computed_expr = match field.computed_expr() {
+                    Some(ComputedExpr::Virtual(expr)) => {
+                        format!(" AS ({expr}) VIRTUAL")
+                    }
+                    Some(ComputedExpr::Stored(expr)) => {
+                        format!(" AS ({expr}) STORED")
+                    }
+                    _ => "".to_string(),
+                };
                 // compatibility: creating table in the old planner will not have `fields_comments`
                 let comment = if field_comments.len() == n_fields && !field_comments[idx].is_empty()
                 {
@@ -124,10 +134,11 @@ impl Interpreter for ShowCreateTableInterpreter {
                     "".to_string()
                 };
                 let column = format!(
-                    "  `{}` {}{}{}",
+                    "  `{}` {}{}{}{}",
                     field.name(),
                     field.data_type().sql_name(),
                     default_expr,
+                    computed_expr,
                     comment
                 );
 
@@ -170,14 +181,14 @@ impl Interpreter for ShowCreateTableInterpreter {
 
         let block = DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
-                },
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(name.as_bytes().to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(table_create_sql.into_bytes())),
+                ),
             ],
             1,
         );

@@ -314,10 +314,7 @@ impl BloomIndex {
         for filter in &self.filters {
             let serialized_bytes = filter.to_bytes()?;
             let filter_value = Value::Scalar(Scalar::String(serialized_bytes));
-            filter_columns.push(BlockEntry {
-                data_type: DataType::String,
-                value: filter_value,
-            });
+            filter_columns.push(BlockEntry::new(DataType::String, filter_value));
         }
         Ok(DataBlock::new(filter_columns, 1))
     }

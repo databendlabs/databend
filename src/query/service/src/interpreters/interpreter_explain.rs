@@ -264,7 +264,7 @@ impl ExplainInterpreter {
 
         let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 
-        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
+        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone(), false);
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();

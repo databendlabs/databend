@@ -35,7 +35,7 @@ use storages_common_table_meta::meta::ClusterStatistics;
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
+use crate::operations::common::BlockMetaIndex;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
@@ -169,7 +169,7 @@ impl Processor for MutationSource {
         match std::mem::replace(&mut self.state, State::Finish) {
             State::FilterData(part, read_res) => {
                 let chunks = read_res.columns_chunks()?;
-                let mut data_block = self.block_reader.deserialize_chunks(
+                let mut data_block = self.block_reader.deserialize_chunks_with_part_info(
                     part.clone(),
                     chunks,
                     &self.storage_format,
@@ -235,10 +235,10 @@ impl Processor for MutationSource {
                             }
                             MutationAction::Update => {
                                 if self.remain_reader.is_none() {
-                                    data_block.add_column(BlockEntry {
-                                        data_type: DataType::Boolean,
-                                        value: Value::upcast(predicates),
-                                    });
+                                    data_block.add_column(BlockEntry::new(
+                                        DataType::Boolean,
+                                        Value::upcast(predicates),
+                                    ));
                                     self.state = State::PerformOperator(data_block);
                                 } else {
                                     self.state = State::ReadRemain {
@@ -271,8 +271,11 @@ impl Processor for MutationSource {
             } => {
                 if let Some(remain_reader) = self.remain_reader.as_ref() {
                     let chunks = merged_io_read_result.columns_chunks()?;
-                    let remain_block =
-                        remain_reader.deserialize_chunks(part, chunks, &self.storage_format)?;
+                    let remain_block = remain_reader.deserialize_chunks_with_part_info(
+                        part,
+                        chunks,
+                        &self.storage_format,
+                    )?;
 
                     match self.action {
                         MutationAction::Deletion => {
@@ -285,10 +288,10 @@ impl Processor for MutationSource {
                             for col in remain_block.columns() {
                                 data_block.add_column(col.clone());
                             }
-                            data_block.add_column(BlockEntry {
-                                data_type: DataType::Boolean,
-                                value: Value::upcast(filter),
-                            });
+                            data_block.add_column(BlockEntry::new(
+                                DataType::Boolean,
+                                Value::upcast(filter),
+                            ));
                         }
                     }
                 } else {

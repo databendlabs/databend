@@ -9,13 +9,15 @@ ColumnRef {
     ),
     database: None,
     table: None,
-    column: Identifier {
-        name: "a",
-        quote: None,
-        span: Some(
-            0..1,
-        ),
-    },
+    column: Name(
+        Identifier {
+            name: "a",
+            quote: None,
+            span: Some(
+                0..1,
+            ),
+        },
+    ),
 }
 
 
@@ -119,9 +121,9 @@ Array {
             span: Some(
                 5..8,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 35,
-                precision: 2,
+                precision: 76,
                 scale: 1,
             },
         },
@@ -129,9 +131,9 @@ Array {
             span: Some(
                 10..12,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 4,
-                precision: 1,
+                precision: 76,
                 scale: 0,
             },
         },
@@ -139,9 +141,9 @@ Array {
             span: Some(
                 14..18,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 1,
-                precision: 3,
+                precision: 76,
                 scale: 3,
             },
         },
@@ -149,9 +151,9 @@ Array {
             span: Some(
                 20..23,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 500,
-                precision: 3,
+                precision: 76,
                 scale: 0,
             },
         },
@@ -159,9 +161,9 @@ Array {
             span: Some(
                 25..33,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 1925,
-                precision: 6,
+                precision: 76,
                 scale: 6,
             },
         },
@@ -169,9 +171,9 @@ Array {
             span: Some(
                 35..41,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 3800000,
-                precision: 7,
+                precision: 76,
                 scale: 0,
             },
         },
@@ -179,9 +181,9 @@ Array {
             span: Some(
                 43..49,
             ),
-            lit: Decimal128 {
+            lit: Decimal256 {
                 value: 1,
-                precision: 1,
+                precision: 76,
                 scale: 1,
             },
         },
@@ -214,9 +216,9 @@ Literal {
     span: Some(
         0..30,
     ),
-    lit: Decimal128 {
+    lit: Decimal256 {
         value: 123456789012345678901234567890,
-        precision: 30,
+        precision: 76,
         scale: 0,
     },
 }
@@ -231,9 +233,9 @@ Literal {
     span: Some(
         0..33,
     ),
-    lit: Decimal128 {
+    lit: Decimal256 {
         value: 94522879687365475552814062743484560,
-        precision: 38,
+        precision: 76,
         scale: 0,
     },
 }
@@ -248,7 +250,7 @@ Literal {
     span: Some(
         0..17,
     ),
-    lit: Float(
+    lit: Float64(
         inf,
     ),
 }
@@ -263,9 +265,9 @@ Literal {
     span: Some(
         0..2,
     ),
-    lit: Decimal128 {
+    lit: Decimal256 {
         value: 1,
-        precision: 1,
+        precision: 76,
         scale: 1,
     },
 }
@@ -274,15 +276,21 @@ Literal {
 ---------- Input ----------
 -1
 ---------- Output ---------
--1
+(- 1)
 ---------- AST ------------
-Literal {
+UnaryOp {
     span: Some(
-        1..2,
+        0..1,
     ),
-    lit: Int64(
-        -1,
-    ),
+    op: Minus,
+    expr: Literal {
+        span: Some(
+            1..2,
+        ),
+        lit: UInt64(
+            1,
+        ),
+    },
 }
 
 
@@ -758,7 +766,7 @@ FunctionCall {
 ---------- Input ----------
 - - + + - 1 + + - 2
 ---------- Output ---------
-((- (- (+ (+ -1)))) + (+ -2))
+((- (- (+ (+ (- 1))))) + (+ (- 2)))
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -785,13 +793,19 @@ BinaryOp {
                         6..7,
                     ),
                     op: Plus,
-                    expr: Literal {
+                    expr: UnaryOp {
                         span: Some(
-                            10..11,
+                            8..9,
                         ),
-                        lit: Int64(
-                            -1,
-                        ),
+                        op: Minus,
+                        expr: Literal {
+                            span: Some(
+                                10..11,
+                            ),
+                            lit: UInt64(
+                                1,
+                            ),
+                        },
                     },
                 },
             },
@@ -802,13 +816,19 @@ BinaryOp {
             14..15,
         ),
         op: Plus,
-        expr: Literal {
+        expr: UnaryOp {
             span: Some(
-                18..19,
+                16..17,
             ),
-            lit: Int64(
-                -2,
-            ),
+            op: Minus,
+            expr: Literal {
+                span: Some(
+                    18..19,
+                ),
+                lit: UInt64(
+                    2,
+                ),
+            },
         },
     },
 }
@@ -874,7 +894,7 @@ BinaryOp {
 ---------- Input ----------
 1 - -(- - -1)
 ---------- Output ---------
-(1 - (- (- (- -1))))
+(1 - (- (- (- (- 1)))))
 ---------- AST ------------
 BinaryOp {
     span: Some(
@@ -904,13 +924,19 @@ BinaryOp {
                     8..9,
                 ),
                 op: Minus,
-                expr: Literal {
+                expr: UnaryOp {
                     span: Some(
-                        11..12,
+                        10..11,
                     ),
-                    lit: Int64(
-                        -1,
-                    ),
+                    op: Minus,
+                    expr: Literal {
+                        span: Some(
+                            11..12,
+                        ),
+                        lit: UInt64(
+                            1,
+                        ),
+                    },
                 },
             },
         },
@@ -947,13 +973,15 @@ BinaryOp {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "a",
-                quote: None,
-                span: Some(
-                    4..5,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        4..5,
+                    ),
+                },
+            ),
         },
         right: ColumnRef {
             span: Some(
@@ -969,13 +997,15 @@ BinaryOp {
                     ),
                 },
             ),
-            column: Identifier {
-                name: "d",
-                quote: None,
-                span: Some(
-                    10..11,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "d",
+                    quote: None,
+                    span: Some(
+                        10..11,
+                    ),
+                },
+            ),
         },
     },
 }
@@ -997,13 +1027,15 @@ BinaryOp {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "number",
-            quote: None,
-            span: Some(
-                0..6,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "number",
+                quote: None,
+                span: Some(
+                    0..6,
+                ),
+            },
+        ),
     },
     right: Literal {
         span: Some(
@@ -1035,15 +1067,17 @@ MapAccess {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "t",
-                quote: Some(
-                    '"',
-                ),
-                span: Some(
-                    0..3,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "t",
+                    quote: Some(
+                        '"',
+                    ),
+                    span: Some(
+                        0..3,
+                    ),
+                },
+            ),
         },
         accessor: Colon {
             key: Identifier {
@@ -1090,15 +1124,17 @@ MapAccess {
                 ),
                 database: None,
                 table: None,
-                column: Identifier {
-                    name: "t",
-                    quote: Some(
-                        '"',
-                    ),
-                    span: Some(
-                        0..3,
-                    ),
-                },
+                column: Name(
+                    Identifier {
+                        name: "t",
+                        quote: Some(
+                            '"',
+                        ),
+                        span: Some(
+                            0..3,
+                        ),
+                    },
+                ),
             },
             accessor: Colon {
                 key: Identifier {
@@ -1141,13 +1177,15 @@ MapAccess {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "t",
-            quote: None,
-            span: Some(
-                0..1,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    0..1,
+                ),
+            },
+        ),
     },
     accessor: PeriodNumber {
         key: 0,
@@ -1198,13 +1236,15 @@ Between {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "col1",
-            quote: None,
-            span: Some(
-                0..4,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "col1",
+                quote: None,
+                span: Some(
+                    0..4,
+                ),
+            },
+        ),
     },
     low: Literal {
         span: Some(
@@ -1250,13 +1290,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "col1",
-                quote: None,
-                span: Some(
-                    4..8,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "col1",
+                    quote: None,
+                    span: Some(
+                        4..8,
+                    ),
+                },
+            ),
         },
     ],
     params: [],
@@ -1336,13 +1378,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "number",
-                quote: None,
-                span: Some(
-                    11..17,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "number",
+                    quote: None,
+                    span: Some(
+                        11..17,
+                    ),
+                },
+            ),
         },
         ColumnRef {
             span: Some(
@@ -1350,13 +1394,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "number",
-                quote: None,
-                span: Some(
-                    19..25,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "number",
+                    quote: None,
+                    span: Some(
+                        19..25,
+                    ),
+                },
+            ),
         },
     ],
     params: [],
@@ -1379,13 +1425,15 @@ Cast {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "col1",
-            quote: None,
-            span: Some(
-                5..9,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "col1",
+                quote: None,
+                span: Some(
+                    5..9,
+                ),
+            },
+        ),
     },
     target_type: UInt64,
     pg_style: false,
@@ -1407,13 +1455,15 @@ TryCast {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "col1",
-            quote: None,
-            span: Some(
-                9..13,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "col1",
+                quote: None,
+                span: Some(
+                    9..13,
+                ),
+            },
+        ),
     },
     target_type: UInt64,
 }
@@ -1434,13 +1484,15 @@ TryCast {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "col1",
-            quote: None,
-            span: Some(
-                9..13,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "col1",
+                quote: None,
+                span: Some(
+                    9..13,
+                ),
+            },
+        ),
     },
     target_type: Tuple {
         fields_name: None,
@@ -1503,13 +1555,15 @@ Extract {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "d",
-            quote: None,
-            span: Some(
-                18..19,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "d",
+                quote: None,
+                span: Some(
+                    18..19,
+                ),
+            },
+        ),
     },
 }
 
@@ -1537,13 +1591,15 @@ Position {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "str",
-            quote: None,
-            span: Some(
-                16..19,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "str",
+                quote: None,
+                span: Some(
+                    16..19,
+                ),
+            },
+        ),
     },
 }
 
@@ -1563,13 +1619,15 @@ Substring {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "a",
-            quote: None,
-            span: Some(
-                10..11,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    10..11,
+                ),
+            },
+        ),
     },
     substring_from: ColumnRef {
         span: Some(
@@ -1577,13 +1635,15 @@ Substring {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "b",
-            quote: None,
-            span: Some(
-                17..18,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    17..18,
+                ),
+            },
+        ),
     },
     substring_for: Some(
         ColumnRef {
@@ -1592,13 +1652,15 @@ Substring {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "c",
-                quote: None,
-                span: Some(
-                    23..24,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "c",
+                    quote: None,
+                    span: Some(
+                        23..24,
+                    ),
+                },
+            ),
         },
     ),
 }
@@ -1619,13 +1681,15 @@ Substring {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "a",
-            quote: None,
-            span: Some(
-                10..11,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    10..11,
+                ),
+            },
+        ),
     },
     substring_from: ColumnRef {
         span: Some(
@@ -1633,13 +1697,15 @@ Substring {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "b",
-            quote: None,
-            span: Some(
-                13..14,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    13..14,
+                ),
+            },
+        ),
     },
     substring_for: Some(
         ColumnRef {
@@ -1648,13 +1714,15 @@ Substring {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "c",
-                quote: None,
-                span: Some(
-                    16..17,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "c",
+                    quote: None,
+                    span: Some(
+                        16..17,
+                    ),
+                },
+            ),
         },
     ),
 }
@@ -1675,13 +1743,15 @@ Cast {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "col1",
-            quote: None,
-            span: Some(
-                0..4,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "col1",
+                quote: None,
+                span: Some(
+                    0..4,
+                ),
+            },
+        ),
     },
     target_type: UInt8,
     pg_style: true,
@@ -1711,13 +1781,15 @@ MapAccess {
                 ),
                 database: None,
                 table: None,
-                column: Identifier {
-                    name: "arr",
-                    quote: None,
-                    span: Some(
-                        1..4,
-                    ),
-                },
+                column: Name(
+                    Identifier {
+                        name: "arr",
+                        quote: None,
+                        span: Some(
+                            1..4,
+                        ),
+                    },
+                ),
             },
             accessor: Bracket {
                 key: Literal {
@@ -1771,13 +1843,15 @@ MapAccess {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "arr",
-                quote: None,
-                span: Some(
-                    0..3,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "arr",
+                    quote: None,
+                    span: Some(
+                        0..3,
+                    ),
+                },
+            ),
         },
         accessor: Bracket {
             key: Literal {
@@ -1797,15 +1871,17 @@ MapAccess {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "k",
-                quote: Some(
-                    '"',
-                ),
-                span: Some(
-                    7..10,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "k",
+                    quote: Some(
+                        '"',
+                    ),
+                    span: Some(
+                        7..10,
+                    ),
+                },
+            ),
         },
     },
 }
@@ -1827,13 +1903,15 @@ BinaryOp {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "a",
-            quote: None,
-            span: Some(
-                0..1,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    0..1,
+                ),
+            },
+        ),
     },
     right: Literal {
         span: Some(
@@ -1882,13 +1960,15 @@ BinaryOp {
                     ),
                 },
             ),
-            column: Identifier {
-                name: "B",
-                quote: None,
-                span: Some(
-                    4..5,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "B",
+                    quote: None,
+                    span: Some(
+                        4..5,
+                    ),
+                },
+            ),
         },
         not: true,
     },
@@ -1902,13 +1982,15 @@ BinaryOp {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "col1",
-                quote: None,
-                span: Some(
-                    22..26,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "col1",
+                    quote: None,
+                    span: Some(
+                        22..26,
+                    ),
+                },
+            ),
         },
         low: ColumnRef {
             span: Some(
@@ -1916,13 +1998,15 @@ BinaryOp {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "col2",
-                quote: None,
-                span: Some(
-                    39..43,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "col2",
+                    quote: None,
+                    span: Some(
+                        39..43,
+                    ),
+                },
+            ),
         },
         high: BinaryOp {
             span: Some(
@@ -1948,13 +2032,15 @@ BinaryOp {
                     ),
                     database: None,
                     table: None,
-                    column: Identifier {
-                        name: "col3",
-                        quote: None,
-                        span: Some(
-                            53..57,
-                        ),
-                    },
+                    column: Name(
+                        Identifier {
+                            name: "col3",
+                            quote: None,
+                            span: Some(
+                                53..57,
+                            ),
+                        },
+                    ),
                 },
             },
             right: FunctionCall {
@@ -1976,13 +2062,15 @@ BinaryOp {
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "col4",
-                            quote: None,
-                            span: Some(
-                                67..71,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "col4",
+                                quote: None,
+                                span: Some(
+                                    67..71,
+                                ),
+                            },
+                        ),
                     },
                 ],
                 params: [],
@@ -2042,13 +2130,15 @@ BinaryOp {
                                     ),
                                 },
                             ),
-                            column: Identifier {
-                                name: "n_name",
-                                quote: None,
-                                span: Some(
-                                    17..23,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "n_name",
+                                    quote: None,
+                                    span: Some(
+                                        17..23,
+                                    ),
+                                },
+                            ),
                         },
                         right: Literal {
                             span: Some(
@@ -2067,13 +2157,15 @@ BinaryOp {
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "ol_amount",
-                            quote: None,
-                            span: Some(
-                                41..50,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "ol_amount",
+                                quote: None,
+                                span: Some(
+                                    41..50,
+                                ),
+                            },
+                        ),
                     },
                 ],
                 else_result: Some(
@@ -2121,13 +2213,15 @@ BinaryOp {
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "ol_amount",
-                                quote: None,
-                                span: Some(
-                                    79..88,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "ol_amount",
+                                    quote: None,
+                                    span: Some(
+                                        79..88,
+                                    ),
+                                },
+                            ),
                         },
                     ],
                     params: [],
@@ -2173,13 +2267,15 @@ BinaryOp {
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "ol_amount",
-                            quote: None,
-                            span: Some(
-                                110..119,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "ol_amount",
+                                quote: None,
+                                span: Some(
+                                    110..119,
+                                ),
+                            },
+                        ),
                     },
                 ],
                 params: [],
@@ -2247,13 +2343,15 @@ BinaryOp {
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "p_partkey",
-                                        quote: None,
-                                        span: Some(
-                                            0..9,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "p_partkey",
+                                            quote: None,
+                                            span: Some(
+                                                0..9,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 right: ColumnRef {
                                     span: Some(
@@ -2261,13 +2359,15 @@ BinaryOp {
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "l_partkey",
-                                        quote: None,
-                                        span: Some(
-                                            12..21,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "l_partkey",
+                                            quote: None,
+                                            span: Some(
+                                                12..21,
+                                            ),
+                                        },
+                                    ),
                                 },
                             },
                             right: BinaryOp {
@@ -2281,13 +2381,15 @@ BinaryOp {
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "p_brand",
-                                        quote: None,
-                                        span: Some(
-                                            38..45,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "p_brand",
+                                            quote: None,
+                                            span: Some(
+                                                38..45,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 right: Literal {
                                     span: Some(
@@ -2309,13 +2411,15 @@ BinaryOp {
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "p_container",
-                                    quote: None,
-                                    span: Some(
-                                        75..86,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "p_container",
+                                        quote: None,
+                                        span: Some(
+                                            75..86,
+                                        ),
+                                    },
+                                ),
                             },
                             list: [
                                 Literal {
@@ -2365,13 +2469,15 @@ BinaryOp {
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "l_quantity",
-                                quote: None,
-                                span: Some(
-                                    149..159,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "l_quantity",
+                                    quote: None,
+                                    span: Some(
+                                        149..159,
+                                    ),
+                                },
+                            ),
                         },
                         right: Cast {
                             span: Some(
@@ -2401,13 +2507,15 @@ BinaryOp {
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "l_quantity",
-                            quote: None,
-                            span: Some(
-                                188..198,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "l_quantity",
+                                quote: None,
+                                span: Some(
+                                    188..198,
+                                ),
+                            },
+                        ),
                     },
                     right: Cast {
                         span: Some(
@@ -2450,13 +2558,15 @@ BinaryOp {
                     ),
                     database: None,
                     table: None,
-                    column: Identifier {
-                        name: "p_size",
-                        quote: None,
-                        span: Some(
-                            244..250,
-                        ),
-                    },
+                    column: Name(
+                        Identifier {
+                            name: "p_size",
+                            quote: None,
+                            span: Some(
+                                244..250,
+                            ),
+                        },
+                    ),
                 },
                 low: Cast {
                     span: Some(
@@ -2501,13 +2611,15 @@ BinaryOp {
                 ),
                 database: None,
                 table: None,
-                column: Identifier {
-                    name: "l_shipmode",
-                    quote: None,
-                    span: Some(
-                        321..331,
-                    ),
-                },
+                column: Name(
+                    Identifier {
+                        name: "l_shipmode",
+                        quote: None,
+                        span: Some(
+                            321..331,
+                        ),
+                    },
+                ),
             },
             list: [
                 Literal {
@@ -2541,13 +2653,15 @@ BinaryOp {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "l_shipinstruct",
-                quote: None,
-                span: Some(
-                    370..384,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "l_shipinstruct",
+                    quote: None,
+                    span: Some(
+                        370..384,
+                    ),
+                },
+            ),
         },
         right: Literal {
             span: Some(
@@ -2625,13 +2739,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "a",
-                quote: None,
-                span: Some(
-                    7..8,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        7..8,
+                    ),
+                },
+            ),
         },
         ColumnRef {
             span: Some(
@@ -2639,13 +2755,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "b",
-                quote: None,
-                span: Some(
-                    10..11,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        10..11,
+                    ),
+                },
+            ),
         },
     ],
     params: [],
@@ -2725,13 +2843,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "a",
-                quote: None,
-                span: Some(
-                    9..10,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        9..10,
+                    ),
+                },
+            ),
         },
         ColumnRef {
             span: Some(
@@ -2739,13 +2859,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "b",
-                quote: None,
-                span: Some(
-                    12..13,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        12..13,
+                    ),
+                },
+            ),
         },
         ColumnRef {
             span: Some(
@@ -2753,13 +2875,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "c",
-                quote: None,
-                span: Some(
-                    15..16,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "c",
+                    quote: None,
+                    span: Some(
+                        15..16,
+                    ),
+                },
+            ),
         },
     ],
     params: [],
@@ -2831,13 +2955,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "a",
-                quote: None,
-                span: Some(
-                    7..8,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "a",
+                    quote: None,
+                    span: Some(
+                        7..8,
+                    ),
+                },
+            ),
         },
         ColumnRef {
             span: Some(
@@ -2845,13 +2971,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "b",
-                quote: None,
-                span: Some(
-                    10..11,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "b",
+                    quote: None,
+                    span: Some(
+                        10..11,
+                    ),
+                },
+            ),
         },
     ],
     params: [],
@@ -2903,13 +3031,15 @@ IsDistinctFrom {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "a",
-            quote: None,
-            span: Some(
-                0..1,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    0..1,
+                ),
+            },
+        ),
     },
     right: ColumnRef {
         span: Some(
@@ -2917,13 +3047,15 @@ IsDistinctFrom {
         ),
         database: None,
         table: None,
-        column: Identifier {
-            name: "b",
-            quote: None,
-            span: Some(
-                19..20,
-            ),
-        },
+        column: Name(
+            Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    19..20,
+                ),
+            },
+        ),
     },
     not: false,
 }
@@ -3038,13 +3170,15 @@ FunctionCall {
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "salary",
-                                quote: None,
-                                span: Some(
-                                    28..34,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "salary",
+                                    quote: None,
+                                    span: Some(
+                                        28..34,
+                                    ),
+                                },
+                            ),
                         },
                         asc: Some(
                             false,
@@ -3083,13 +3217,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "salary",
-                quote: None,
-                span: Some(
-                    4..10,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "salary",
+                    quote: None,
+                    span: Some(
+                        4..10,
+                    ),
+                },
+            ),
         },
     ],
     params: [],
@@ -3130,13 +3266,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "salary",
-                quote: None,
-                span: Some(
-                    4..10,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "salary",
+                    quote: None,
+                    span: Some(
+                        4..10,
+                    ),
+                },
+            ),
         },
     ],
     params: [],
@@ -3151,13 +3289,15 @@ FunctionCall {
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "department",
-                            quote: None,
-                            span: Some(
-                                31..41,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "department",
+                                quote: None,
+                                span: Some(
+                                    31..41,
+                                ),
+                            },
+                        ),
                     },
                 ],
                 order_by: [],
@@ -3192,13 +3332,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "salary",
-                quote: None,
-                span: Some(
-                    4..10,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "salary",
+                    quote: None,
+                    span: Some(
+                        4..10,
+                    ),
+                },
+            ),
         },
     ],
     params: [],
@@ -3213,13 +3355,15 @@ FunctionCall {
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "department",
-                            quote: None,
-                            span: Some(
-                                31..41,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "department",
+                                quote: None,
+                                span: Some(
+                                    31..41,
+                                ),
+                            },
+                        ),
                     },
                 ],
                 order_by: [
@@ -3230,13 +3374,15 @@ FunctionCall {
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "salary",
-                                quote: None,
-                                span: Some(
-                                    51..57,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "salary",
+                                    quote: None,
+                                    span: Some(
+                                        51..57,
+                                    ),
+                                },
+                            ),
                         },
                         asc: Some(
                             false,
@@ -3283,13 +3429,15 @@ FunctionCall {
             ),
             database: None,
             table: None,
-            column: Identifier {
-                name: "salary",
-                quote: None,
-                span: Some(
-                    4..10,
-                ),
-            },
+            column: Name(
+                Identifier {
+                    name: "salary",
+                    quote: None,
+                    span: Some(
+                        4..10,
+                    ),
+                },
+            ),
         },
     ],
     params: [],
@@ -3304,13 +3452,15 @@ FunctionCall {
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "department",
-                            quote: None,
-                            span: Some(
-                                31..41,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "department",
+                                quote: None,
+                                span: Some(
+                                    31..41,
+                                ),
+                            },
+                        ),
                     },
                 ],
                 order_by: [
@@ -3321,13 +3471,15 @@ FunctionCall {
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "hire_date",
-                                quote: None,
-                                span: Some(
-                                    51..60,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "hire_date",
+                                    quote: None,
+                                    span: Some(
+                                        51..60,
+                                    ),
+                                },
+                            ),
                         },
                         asc: None,
                         nulls_first: None,
@@ -3389,13 +3541,15 @@ FunctionCall {
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "hire_date",
-                                quote: None,
-                                span: Some(
-                                    23..32,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "hire_date",
+                                    quote: None,
+                                    span: Some(
+                                        23..32,
+                                    ),
+                                },
+                            ),
                         },
                         asc: None,
                         nulls_first: None,
@@ -3463,13 +3617,15 @@ FunctionCall {
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "hire_date",
-                                quote: None,
-                                span: Some(
-                                    23..32,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "hire_date",
+                                    quote: None,
+                                    span: Some(
+                                        23..32,
+                                    ),
+                                },
+                            ),
                         },
                         asc: None,
                         nulls_first: None,
@@ -3522,13 +3678,15 @@ FunctionCall {
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "hire_date",
-                                quote: None,
-                                span: Some(
-                                    23..32,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "hire_date",
+                                    quote: None,
+                                    span: Some(
+                                        23..32,
+                                    ),
+                                },
+                            ),
                         },
                         asc: None,
                         nulls_first: None,
@@ -3579,13 +3737,15 @@ FunctionCall {
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "hire_date",
-                                quote: None,
-                                span: Some(
-                                    23..32,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "hire_date",
+                                    quote: None,
+                                    span: Some(
+                                        23..32,
+                                    ),
+                                },
+                            ),
                         },
                         asc: None,
                         nulls_first: None,

@@ -41,6 +41,8 @@ use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
+use crate::executor::RangeJoin;
+use crate::executor::RangeJoinType;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::Window;
 use crate::planner::MetadataRef;
@@ -146,6 +148,7 @@ fn to_format_tree(
         PhysicalPlan::RuntimeFilterSource(plan) => {
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
+        PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, prof_span_set),
     }
 }
 
@@ -670,6 +673,70 @@ fn row_fetch_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "RowFetch".to_string(),
+        children,
+    ))
+}
+
+fn range_join_to_format_tree(
+    plan: &RangeJoin,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let range_join_conditions = plan
+        .conditions
+        .iter()
+        .map(|condition| {
+            let left = condition
+                .left_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .sql_display();
+            let right = condition
+                .right_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .sql_display();
+            format!("{left} {:?} {right}", condition.operator)
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let other_conditions = plan
+        .other_conditions
+        .iter()
+        .map(|filter| filter.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    let mut left_child = to_format_tree(&plan.left, metadata, prof_span_set)?;
+    let mut right_child = to_format_tree(&plan.right, metadata, prof_span_set)?;
+
+    left_child.payload = format!("{}(Left)", left_child.payload);
+    right_child.payload = format!("{}(Right)", right_child.payload);
+
+    let mut children = vec![
+        FormatTreeNode::new(format!("join type: {}", plan.join_type)),
+        FormatTreeNode::new(format!("range join conditions: [{range_join_conditions}]")),
+        FormatTreeNode::new(format!("other conditions: [{other_conditions}]")),
+    ];
+
+    if let Some(info) = &plan.stat_info {
+        let items = plan_stats_info_to_format_tree(info);
+        children.extend(items);
+    }
+
+    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
+        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
+        children.push(FormatTreeNode::new(format!(
+            "total process time: {process_time}ms"
+        )));
+    }
+
+    children.push(left_child);
+    children.push(right_child);
+
+    Ok(FormatTreeNode::with_children(
+        match plan.range_join_type {
+            RangeJoinType::IEJoin => "IEJoin".to_string(),
+            RangeJoinType::Merge => "MergeJoin".to_string(),
+        },
         children,
     ))
 }

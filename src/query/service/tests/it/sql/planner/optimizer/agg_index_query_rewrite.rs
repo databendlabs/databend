@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,7 +75,6 @@ fn create_table_plan(fixture: &TestFixture) -> CreateTablePlan {
             (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
         ]
         .into(),
-        field_default_exprs: vec![],
         field_comments: vec![],
         as_select: None,
         cluster_key: None,
@@ -345,16 +344,14 @@ async fn test_query_rewrite() -> Result<()> {
     let create_table_plan = create_table_plan(&fixture);
     let interpreter = CreateTableInterpreter::try_create(ctx.clone(), create_table_plan)?;
     interpreter.execute(ctx.clone()).await?;
-    let func_ctx = ctx.get_function_context()?;
 
     let test_suites = get_test_suites();
     for suite in test_suites {
-        let (query, bind_context, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
+        let (query, _, metadata) = plan_sql(ctx.clone(), suite.query, true).await?;
         let (index, _, _) = plan_sql(ctx.clone(), suite.index, false).await?;
-        let optimzier = HeuristicOptimizer::new(func_ctx.clone(), bind_context, metadata.clone());
         let meta = metadata.read();
         let base_columns = meta.columns_by_table_index(0);
-        let result = agg_index::try_rewrite(&optimzier, &base_columns, &query, &vec![(
+        let result = agg_index::try_rewrite(&base_columns, &query, &[(
             0,
             suite.index.to_string(),
             index,

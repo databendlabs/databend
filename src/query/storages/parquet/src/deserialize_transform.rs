@@ -262,10 +262,7 @@ impl ParquetDeserializeTransform {
                 let mut columns = prewhere_block.columns().to_vec();
                 for (col, f) in columns.iter_mut().zip(reader.output_schema.fields()) {
                     if !self.output_schema.has_field(f.name()) {
-                        *col = BlockEntry {
-                            data_type: DataType::Null,
-                            value: Value::Scalar(Scalar::Null),
-                        };
+                        *col = BlockEntry::new(DataType::Null, Value::Scalar(Scalar::Null));
                     }
                 }
 

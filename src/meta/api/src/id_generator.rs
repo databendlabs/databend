@@ -14,6 +14,7 @@
 
 use common_meta_kvapi::kvapi;
 
+use crate::data_mask_api_keys::ID_GEN_DATA_MASK;
 use crate::schema_api_keys::ID_GEN_DATABASE;
 use crate::schema_api_keys::ID_GEN_INDEX;
 use crate::schema_api_keys::ID_GEN_TABLE;
@@ -64,6 +65,12 @@ impl IdGenerator {
     pub fn index_id() -> Self {
         Self {
             resource: ID_GEN_INDEX.to_string(),
+        }
+    }
+
+    pub fn data_mask_id() -> Self {
+        Self {
+            resource: ID_GEN_DATA_MASK.to_string(),
         }
     }
 
@@ -148,6 +155,16 @@ mod t {
             let g1 = IdGenerator::index_id();
             let k = g1.to_string_key();
             assert_eq!("__fd_id_gen/index_id", k);
+
+            let g2 = IdGenerator::from_str_key(&k)?;
+            assert_eq!(g1, g2);
+        }
+
+        // Data mask id generator
+        {
+            let g1 = IdGenerator::data_mask_id();
+            let k = g1.to_string_key();
+            assert_eq!("__fd_id_gen/data_mask_id", k);
 
             let g2 = IdGenerator::from_str_key(&k)?;
             assert_eq!(g1, g2);

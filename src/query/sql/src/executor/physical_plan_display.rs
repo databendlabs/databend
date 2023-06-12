@@ -33,6 +33,7 @@ use crate::executor::HashJoin;
 use crate::executor::Limit;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
+use crate::executor::RangeJoin;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::Sort;
 use crate::executor::TableScan;
@@ -75,6 +76,7 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::DistributedInsertSelect(insert_select) => write!(f, "{}", insert_select)?,
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
         }
 
         for node in self.node.children() {
@@ -291,6 +293,12 @@ impl Display for HashJoin {
                 )
             }
         }
+    }
+}
+
+impl Display for RangeJoin {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "IEJoin: {}", &self.join_type)
     }
 }
 

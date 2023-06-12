@@ -22,6 +22,7 @@ fn create_openai() -> Option<OpenAI> {
             key,
             "".to_string(),
             "".to_string(),
+            "".to_string(),
         ))
     } else {
         None

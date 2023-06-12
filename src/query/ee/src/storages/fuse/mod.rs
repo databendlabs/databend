@@ -17,3 +17,4 @@ pub mod operations;
 
 pub use io::snapshots::get_snapshot_referenced_segments;
 pub use operations::vacuum::do_vacuum;
+pub use operations::virtual_columns::do_generate_virtual_columns;

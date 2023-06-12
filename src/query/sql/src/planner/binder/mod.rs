@@ -40,6 +40,7 @@ mod select;
 mod setting;
 mod show;
 mod sort;
+mod stage;
 mod table;
 mod table_args;
 mod update;

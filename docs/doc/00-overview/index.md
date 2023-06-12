@@ -38,14 +38,14 @@ import TabItem from '@theme/TabItem';
 
 - Supports atomic operations such as `SELECT`, `INSERT`, `DELETE`, `UPDATE`, `COPY`, and `ALTER`.
 - Provides advanced features such as Time Travel and Multi Catalog (Apache Hive / Apache Iceberg).
-- Supports [ingestion of semi-structured data](https://databend.rs/doc/load-data) in various formats like CSV, JSON, and Parquet.
-- Supports semi-structured data types such as [ARRAY, MAP, and JSON](https://databend.rs/doc/sql-reference/data-types/data-type-semi-structured-types).
+- Supports [ingestion of semi-structured data](https://databend.rs/doc/load-data/load) in various formats like CSV, JSON, and Parquet.
+- Supports semi-structured data types such as [ARRAY, MAP, and JSON](https://databend.rs/doc/sql-reference/data-types/).
 
 </TabItem>
 
-<TabItem value="Cloud Storage" label="Cloud Storage">
+<TabItem value="Object Storage" label="Object Storage">
 
-- Supports various cloud storage platforms, including [Amazon S3](https://aws.amazon.com/s3/), [Azure Blob](https://azure.microsoft.com/en-us/services/storage/blobs/), [Google Cloud Storage](https://cloud.google.com/storage/), [Alibaba Cloud OSS](https://www.alibabacloud.com/product/object-storage-service), [Tencent Cloud COS](https://www.tencentcloud.com/products/cos), [Huawei Cloud OBS](https://www.huaweicloud.com/intl/en-us/product/obs.html), [Cloudflare R2](https://www.cloudflare.com/products/r2/), [Wasabi](https://wasabi.com/), and [MinIO](https://min.io).
+- Supports various object storage platforms. Click [here](../10-deploy/00-understanding-deployment-modes.md#supported-object-storage) to see a full list of supported platforms.
 - Allows instant elasticity, enabling users to scale up or down based on their application needs.
 
 </TabItem>

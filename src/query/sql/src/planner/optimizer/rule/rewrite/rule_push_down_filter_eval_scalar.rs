@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -27,6 +29,7 @@ use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -52,22 +55,26 @@ impl RulePushDownFilterEvalScalar {
             //    \
             //     *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_unary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::EvalScalar,
+                        plan_type: RelOp::Filter,
                     }
                     .into(),
-                    SExpr::create_leaf(
+                ),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::EvalScalar,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
                         PatternPlan {
                             plan_type: RelOp::Pattern,
                         }
                         .into(),
-                    ),
-                ),
+                    ))),
+                )),
             )],
             metadata,
         }
@@ -105,9 +112,9 @@ impl RulePushDownFilterEvalScalar {
                             display_name: agg.display_name.clone(),
                         })
                     }
-                    WindowFuncType::Lag(lag) => {
-                        let new_arg = Self::replace_predicate(&lag.arg, items)?;
-                        let new_default = match lag
+                    WindowFuncType::LagLead(ll) => {
+                        let new_arg = Self::replace_predicate(&ll.arg, items)?;
+                        let new_default = match ll
                             .default
                             .clone()
                             .map(|d| Self::replace_predicate(&d, items))
@@ -115,28 +122,20 @@ impl RulePushDownFilterEvalScalar {
                             None => None,
                             Some(d) => Some(Box::new(d?)),
                         };
-                        WindowFuncType::Lag(LagLeadFunction {
+                        WindowFuncType::LagLead(LagLeadFunction {
+                            is_lag: ll.is_lag,
                             arg: Box::new(new_arg),
-                            offset: lag.offset,
+                            offset: ll.offset,
                             default: new_default,
-                            return_type: lag.return_type.clone(),
+                            return_type: ll.return_type.clone(),
                         })
                     }
-                    WindowFuncType::Lead(lead) => {
-                        let new_arg = Self::replace_predicate(&lead.arg, items)?;
-                        let new_default = match lead
-                            .default
-                            .clone()
-                            .map(|d| Self::replace_predicate(&d, items))
-                        {
-                            None => None,
-                            Some(d) => Some(Box::new(d?)),
-                        };
-                        WindowFuncType::Lead(LagLeadFunction {
+                    WindowFuncType::NthValue(func) => {
+                        let new_arg = Self::replace_predicate(&func.arg, items)?;
+                        WindowFuncType::NthValue(NthValueFunction {
+                            n: func.n,
                             arg: Box::new(new_arg),
-                            offset: lead.offset,
-                            default: new_default,
-                            return_type: lead.return_type.clone(),
+                            return_type: func.return_type.clone(),
                         })
                     }
                     func => func.clone(),
@@ -265,8 +264,11 @@ impl Rule for RulePushDownFilterEvalScalar {
             // For example, `select a from (select a, a+1 as b from t) where a = 1 and b = 2`
             // can be optimized as `select a from (select a, a+1 as b from t where a = 1) where b = 2`
             let new_expr = SExpr::create_unary(
-                eval_scalar.into(),
-                SExpr::create_unary(filter.into(), input.child(0)?.clone()),
+                Arc::new(eval_scalar.into()),
+                Arc::new(SExpr::create_unary(
+                    Arc::new(filter.into()),
+                    Arc::new(input.child(0)?.clone()),
+                )),
             );
             state.add_result(new_expr);
         }

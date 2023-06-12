@@ -86,6 +86,7 @@ impl<'a> Iterator for Tokenizer<'a> {
                             | TokenKind::REPLACE
                             | TokenKind::UPDATE
                             | TokenKind::DELETE
+                            | TokenKind::COPY
                     )
                 ) && kind == TokenKind::HintPrefix
                 {
@@ -141,6 +142,9 @@ pub enum TokenKind {
 
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
+
+    #[regex(r#"\$[0-9]+"#)]
+    ColumnPosition,
 
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
@@ -521,6 +525,8 @@ pub enum TokenKind {
     SET_VAR,
     #[token("FUSE", ignore(ascii_case))]
     FUSE,
+    #[token("GENERATE", ignore(ascii_case))]
+    GENERATE,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]
@@ -605,6 +611,8 @@ pub enum TokenKind {
     LIST,
     #[token("LZO", ignore(ascii_case))]
     LZO,
+    #[token("MASKING", ignore(ascii_case))]
+    MASKING,
     #[token("MAP", ignore(ascii_case))]
     MAP,
     #[token("MAX_FILE_SIZE", ignore(ascii_case))]
@@ -627,6 +635,8 @@ pub enum TokenKind {
     MINUTE,
     #[token("MONTH", ignore(ascii_case))]
     MONTH,
+    #[token("MODIFY", ignore(ascii_case))]
+    MODIFY,
     #[token("NON_DISPLAY", ignore(ascii_case))]
     NON_DISPLAY,
     #[token("NATURAL", ignore(ascii_case))]
@@ -677,6 +687,8 @@ pub enum TokenKind {
     PIPELINE,
     #[token("PLAINTEXT_PASSWORD", ignore(ascii_case))]
     PLAINTEXT_PASSWORD,
+    #[token("POLICY", ignore(ascii_case))]
+    POLICY,
     #[token("POSITION", ignore(ascii_case))]
     POSITION,
     #[token("PROCESSLIST", ignore(ascii_case))]
@@ -731,6 +743,8 @@ pub enum TokenKind {
     REVOKE,
     #[token("RECURSIVE", ignore(ascii_case))]
     RECURSIVE,
+    #[token("RETURN", ignore(ascii_case))]
+    RETURN,
     #[token("RUN", ignore(ascii_case))]
     RUN,
     #[token("GRANTS", ignore(ascii_case))]
@@ -805,6 +819,8 @@ pub enum TokenKind {
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
     STATUS,
+    #[token("STORED", ignore(ascii_case))]
+    STORED,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]
@@ -901,6 +917,8 @@ pub enum TokenKind {
     VARIANT,
     #[token("VIEW", ignore(ascii_case))]
     VIEW,
+    #[token("VIRTUAL", ignore(ascii_case))]
+    VIRTUAL,
     #[token("WEEK", ignore(ascii_case))]
     WEEK,
     #[token("WHEN", ignore(ascii_case))]
@@ -1275,6 +1293,8 @@ impl TokenKind {
             | TokenKind::WINDOW
             | TokenKind::WITH
             | TokenKind::IGNORE_RESULT
+            | TokenKind::MASKING
+            | TokenKind::POLICY
             if !after_as => true,
             _ => false
         }

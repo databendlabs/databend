@@ -19,8 +19,8 @@ import TabItem from '@theme/TabItem';
 * [Understanding Deployment Modes](../10-deploy/00-understanding-deployment-modes.md)
 * [Deploying a Standalone Databend](../10-deploy/02-deploying-databend.md)
 * [Expanding a Standalone Databend](../10-deploy/03-expanding-to-a-databend-cluster.md)
-* [Deploying a Query Cluster on Kubernetes](../10-deploy/04-deploying-databend-on-kubernetes.md)
-* [Local and Docker Deployments (Non-Production Use)](../10-deploy/05-deploying-local.md)
+* [Deploying a Query Cluster on Kubernetes](../10-deploy/06-metasrv/11-deploying-databend-on-kubernetes.md)
+* [Docker and Local Deployments](../10-deploy/05-deploying-local.md)
 * [Databend Cloud (Beta)](../02-cloud/index.md)
 
 </TabItem>
@@ -52,22 +52,24 @@ Databend makes it easy to load data from various sources, stage, Amazon S3, loca
 
 * [Understanding Stages](../12-load-data/00-stage/00-whystage.md)
 * [Managing Stages](../12-load-data/00-stage/01-manage-stages.md)
-* [Querying Data in Staged Files](../12-load-data/00-stage/05-querying-stage.md)
+* [Staging Files with API](../12-load-data/00-stage/01-manage-stages.md)
 
 </TabItem>
 
-<TabItem value="Load" label="Load">
+<TabItem value="Query&Transform" label="Query & Transform" default>
+
+* [Querying Staged Files](../12-load-data/00-transform/05-querying-stage.md)
+* [Retrieving Metadata](../12-load-data/00-transform/06-querying-metadata.md)
+* [Transforming Data on Load](../12-load-data/00-transform/07-data-load-transform.md)
+
+</TabItem>
+
+<TabItem value="Load&Unload" label="Load & Unload">
 
 * [Loading from Stage](../12-load-data/01-load/00-stage.md)
 * [Loading from Bucket](../12-load-data/01-load/01-s3.md)
 * [Loading from Local File](../12-load-data/01-load/02-local.md)
 * [Loading from Remote File](../12-load-data/01-load/04-http.md)
-* [Transforming Data During Load](../12-load-data/01-load/06-data-load-transform.md)
-
-</TabItem>
-
-<TabItem value="Unload" label="Unload">
-
 * [Unloading Data](../12-load-data/09-unload.md)
 
 </TabItem>

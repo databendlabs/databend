@@ -169,10 +169,7 @@ impl JoinHashTable {
             column.clone()
         } else if let Some(col) = col.as_nullable() {
             if col.len() == 0 {
-                return BlockEntry {
-                    data_type: data_type.clone(),
-                    value: Value::Scalar(Scalar::Null),
-                };
+                return BlockEntry::new(data_type.clone(), Value::Scalar(Scalar::Null));
             }
             // It's possible validity is longer than col.
             let diff_len = validity.len() - col.validity.len();
@@ -185,19 +182,13 @@ impl JoinHashTable {
                 column: col.column.clone(),
                 validity: new_validity.into(),
             }));
-            BlockEntry {
-                value: Value::Column(col),
-                data_type: data_type.clone(),
-            }
+            BlockEntry::new(data_type.clone(), Value::Column(col))
         } else {
             let col = Column::Nullable(Box::new(NullableColumn {
                 column: col.clone(),
                 validity: validity.clone(),
             }));
-            BlockEntry {
-                value: Value::Column(col),
-                data_type: data_type.wrap_nullable(),
-            }
+            BlockEntry::new(data_type.wrap_nullable(), Value::Column(col))
         }
     }
 
@@ -212,7 +203,7 @@ impl JoinHashTable {
         let func_ctx = self.ctx.get_function_context()?;
         let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
         let predicates = evaluator
-            .run_auto_type(&filter)?
+            .run(&filter)?
             .try_downcast::<BooleanType>()
             .unwrap();
 
@@ -234,7 +225,7 @@ impl JoinHashTable {
         let func_ctx = self.ctx.get_function_context()?;
         let evaluator = Evaluator::new(merged_block, &func_ctx, &BUILTIN_FUNCTIONS);
 
-        let filter_vector: Value<AnyType> = evaluator.run_auto_type(filter)?;
+        let filter_vector: Value<AnyType> = evaluator.run(filter)?;
         let filter_vector =
             filter_vector.convert_to_full_column(filter.data_type(), merged_block.num_rows());
 
@@ -254,7 +245,7 @@ impl JoinHashTable {
         // For right/full join, build side will appear at least once in the joined table
         // Find the unmatched rows in build side
         let mut unmatched_build_indexes = vec![];
-        for (chunk_index, chunk) in self.row_space.chunks.read().unwrap().iter().enumerate() {
+        for (chunk_index, chunk) in self.row_space.chunks.read().iter().enumerate() {
             for row_index in 0..chunk.num_rows() {
                 if row_state[chunk_index][row_index] == 0 {
                     unmatched_build_indexes.push(RowPtr::new(chunk_index, row_index));
@@ -270,7 +261,7 @@ impl JoinHashTable {
         &self,
         unmatched_build_indexes: &Vec<RowPtr>,
     ) -> Result<DataBlock> {
-        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)
@@ -301,10 +292,7 @@ impl JoinHashTable {
             self.probe_schema
                 .fields()
                 .iter()
-                .map(|df| BlockEntry {
-                    data_type: df.data_type().clone(),
-                    value: Value::Scalar(Scalar::Null),
-                })
+                .map(|df| BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null)))
                 .collect(),
             unmatched_build_indexes.len(),
         );
@@ -315,7 +303,7 @@ impl JoinHashTable {
     // Record row in build side that is matched how many rows in probe side.
     pub(crate) fn row_state_for_right_join(&self) -> Result<Vec<Vec<usize>>> {
         let build_indexes = self.hash_join_desc.join_state.build_indexes.read();
-        let chunks = self.row_space.chunks.read().unwrap();
+        let chunks = self.row_space.chunks.read();
         let mut row_state = Vec::with_capacity(chunks.len());
         for chunk in chunks.iter() {
             let mut rows = Vec::with_capacity(chunk.num_rows());
@@ -337,7 +325,7 @@ impl JoinHashTable {
     }
 
     pub(crate) fn rest_block(&self) -> Result<DataBlock> {
-        let data_blocks = self.row_space.chunks.read().unwrap();
+        let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)
@@ -369,10 +357,7 @@ impl JoinHashTable {
                 build_block
                     .columns()
                     .iter()
-                    .map(|c| BlockEntry {
-                        value: Value::Scalar(Scalar::Null),
-                        data_type: c.data_type.clone(),
-                    })
+                    .map(|c| BlockEntry::new(c.data_type.clone(), Value::Scalar(Scalar::Null)))
                     .collect::<Vec<_>>()
             } else {
                 build_block

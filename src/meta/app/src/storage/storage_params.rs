@@ -322,6 +322,8 @@ pub struct StorageS3Config {
     pub role_arn: String,
     /// The ExternalId that used for AssumeRole.
     pub external_id: String,
+    /// Allow anonymous access to S3 if credential not loaded.
+    pub allow_anonymous: bool,
 }
 
 impl Default for StorageS3Config {
@@ -339,6 +341,7 @@ impl Default for StorageS3Config {
             enable_virtual_host_style: false,
             role_arn: "".to_string(),
             external_id: "".to_string(),
+            allow_anonymous: false,
         }
     }
 }
@@ -361,6 +364,7 @@ impl Debug for StorageS3Config {
             )
             .field("security_token", &mask_string(&self.security_token, 3))
             .field("master_key", &mask_string(&self.master_key, 3))
+            .field("allow_anonymous", &self.allow_anonymous)
             .finish()
     }
 }

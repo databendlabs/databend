@@ -34,16 +34,22 @@ pub fn require_property(
     let optimized_children = s_expr
         .children()
         .iter()
-        .map(|child| require_property(ctx.clone(), required, child))
-        .collect::<Result<Vec<SExpr>>>()?;
-    let optimized_expr = SExpr::create(s_expr.plan().clone(), optimized_children, None, None, None);
+        .map(|child| Ok(Arc::new(require_property(ctx.clone(), required, child)?)))
+        .collect::<Result<Vec<_>>>()?;
+    let optimized_expr = SExpr::create(
+        Arc::new(s_expr.plan().clone()),
+        optimized_children,
+        None,
+        None,
+        None,
+    );
 
     let rel_expr = RelExpr::with_s_expr(&optimized_expr);
     let mut children = Vec::with_capacity(s_expr.arity());
     for index in 0..optimized_expr.arity() {
         let required = rel_expr.compute_required_prop_child(ctx.clone(), index, required)?;
         let physical = rel_expr.derive_physical_prop_child(index)?;
-        if let RelOperator::Join(_) = &s_expr.plan {
+        if let RelOperator::Join(_) = s_expr.plan.as_ref() {
             if index == 0 && required.distribution == Distribution::Broadcast {
                 // If the child is join probe side and join type is broadcast join
                 // We should wrap the child with Random exchange to make it partition to all nodes
@@ -51,25 +57,25 @@ pub fn require_property(
                     .child(0)?
                     .children()
                     .iter()
-                    .any(check_partition)
+                    .any(|v| check_partition(v.as_ref()))
                 {
-                    children.push(optimized_expr.child(index)?.clone());
+                    children.push(Arc::new(optimized_expr.child(index)?.clone()));
                     continue;
                 }
                 let enforced_child =
                     enforce_property(optimized_expr.child(index)?, &RequiredProperty {
                         distribution: Distribution::Any,
                     })?;
-                children.push(enforced_child);
+                children.push(Arc::new(enforced_child));
                 continue;
             } else if index == 1 && required.distribution == Distribution::Broadcast {
                 // If the child is join build side and join type is broadcast join
                 // We should wrap the child with Broadcast exchange to make it available to all nodes.
                 let enforced_child = enforce_property(optimized_expr.child(index)?, &required)?;
-                children.push(enforced_child);
+                children.push(Arc::new(enforced_child));
             }
         }
-        if let RelOperator::UnionAll(_) = &s_expr.plan {
+        if let RelOperator::UnionAll(_) = s_expr.plan.as_ref() {
             // Wrap the child with Random exchange to make it partition to all nodes
             // Check if exists `Merge` in child, if not exits, wrap it with `Exchange`
             if optimized_expr
@@ -81,23 +87,23 @@ pub fn require_property(
                     enforce_property(optimized_expr.child(index)?, &RequiredProperty {
                         distribution: Distribution::Any,
                     })?;
-                children.push(enforced_child);
+                children.push(Arc::new(enforced_child));
                 continue;
             }
         }
 
         if required.satisfied_by(&physical) {
-            children.push(optimized_expr.child(index)?.clone());
+            children.push(Arc::new(optimized_expr.child(index)?.clone()));
             continue;
         }
 
         // Enforce required property on the child.
         let enforced_child = enforce_property(optimized_expr.child(index)?, &required)?;
-        children.push(enforced_child);
+        children.push(Arc::new(enforced_child));
     }
 
     Ok(SExpr::create(
-        optimized_expr.plan().clone(),
+        Arc::new(optimized_expr.plan().clone()),
         children,
         None,
         None,
@@ -113,26 +119,30 @@ fn enforce_property(s_expr: &SExpr, required: &RequiredProperty) -> Result<SExpr
 
 pub fn enforce_distribution(distribution: &Distribution, s_expr: &SExpr) -> Result<SExpr> {
     match distribution {
-        Distribution::Random | Distribution::Any => {
-            Ok(SExpr::create_unary(Exchange::Random.into(), s_expr.clone()))
-        }
+        Distribution::Random | Distribution::Any => Ok(SExpr::create_unary(
+            Arc::new(Exchange::Random.into()),
+            Arc::new(s_expr.clone()),
+        )),
 
-        Distribution::Serial => Ok(SExpr::create_unary(Exchange::Merge.into(), s_expr.clone())),
+        Distribution::Serial => Ok(SExpr::create_unary(
+            Arc::new(Exchange::Merge.into()),
+            Arc::new(s_expr.clone()),
+        )),
 
         Distribution::Broadcast => Ok(SExpr::create_unary(
-            Exchange::Broadcast.into(),
-            s_expr.clone(),
+            Arc::new(Exchange::Broadcast.into()),
+            Arc::new(s_expr.clone()),
         )),
 
         Distribution::Hash(hash_keys) => Ok(SExpr::create_unary(
-            Exchange::Hash(hash_keys.clone()).into(),
-            s_expr.clone(),
+            Arc::new(Exchange::Hash(hash_keys.clone()).into()),
+            Arc::new(s_expr.clone()),
         )),
     }
 }
 
 fn check_merge(s_expr: &SExpr) -> bool {
-    if let RelOperator::Exchange(op) = &s_expr.plan {
+    if let RelOperator::Exchange(op) = s_expr.plan.as_ref() {
         if op == &Exchange::Merge {
             return true;
         }
@@ -146,7 +156,7 @@ fn check_merge(s_expr: &SExpr) -> bool {
 }
 
 fn check_partition(s_expr: &SExpr) -> bool {
-    if let RelOperator::Exchange(op) = &s_expr.plan {
+    if let RelOperator::Exchange(op) = s_expr.plan.as_ref() {
         if matches!(op, Exchange::Random | Exchange::Hash(_)) {
             return true;
         }

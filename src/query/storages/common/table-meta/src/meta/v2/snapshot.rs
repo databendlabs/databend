@@ -63,7 +63,6 @@ pub struct TableSnapshot {
 }
 
 impl TableSnapshot {
-    // for test.
     pub fn new(
         snapshot_id: SnapshotId,
         prev_timestamp: &Option<DateTime<Utc>>,

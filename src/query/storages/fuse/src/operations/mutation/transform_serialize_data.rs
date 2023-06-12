@@ -15,7 +15,6 @@
 use std::any::Any;
 use std::sync::Arc;
 
-use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,11 +28,11 @@ use storages_common_table_meta::meta::ClusterStatistics;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
-use crate::operations::merge_into::mutation_meta::BlockMetaIndex;
-use crate::operations::merge_into::mutation_meta::MutationLogEntry;
-use crate::operations::merge_into::mutation_meta::MutationLogs;
-use crate::operations::merge_into::mutation_meta::Replacement;
-use crate::operations::merge_into::mutation_meta::ReplacementLogEntry;
+use crate::operations::common::BlockMetaIndex;
+use crate::operations::common::MutationLogEntry;
+use crate::operations::common::MutationLogs;
+use crate::operations::common::Replacement;
+use crate::operations::common::ReplacementLogEntry;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -69,10 +68,11 @@ impl SerializeDataTransform {
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
     ) -> Result<ProcessorPtr> {
+        let source_schema = Arc::new(table.table_info.schema().remove_virtual_computed_fields());
         let block_builder = BlockBuilder {
             ctx,
             meta_locations: table.meta_location_generator().clone(),
-            source_schema: table.schema(),
+            source_schema,
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
         };

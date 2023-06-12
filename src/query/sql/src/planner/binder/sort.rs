@@ -14,6 +14,7 @@
 
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::Literal;
@@ -21,6 +22,7 @@ use common_ast::ast::OrderByExpr;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
+use super::ExprContext;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::window::WindowRewriter;
@@ -56,7 +58,7 @@ pub struct OrderItem {
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn analyze_order_items(
+    pub async fn analyze_order_items(
         &mut self,
         bind_context: &mut BindContext,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
@@ -65,6 +67,7 @@ impl Binder {
         order_by: &[OrderByExpr],
         distinct: bool,
     ) -> Result<OrderItems> {
+        bind_context.set_expr_context(ExprContext::OrderByClause);
         // null is the largest value in databend, smallest in hive
         // TODO: rewrite after https://github.com/jorgecarleitao/arrow2/pull/1286 is merged
         let default_nulls_first = !self
@@ -109,7 +112,6 @@ impl Binder {
                         self.metadata.clone(),
                         aliases,
                     );
-                    scalar_binder.allow_ambiguity();
                     let (bound_expr, _) = scalar_binder.bind(&order.expr).await?;
 
                     if let Some((idx, (alias, _))) = aliases
@@ -180,7 +182,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_order_by(
+    pub async fn bind_order_by(
         &mut self,
         from_context: &BindContext,
         order_by: OrderItems,
@@ -236,7 +238,7 @@ impl Binder {
 
         let mut new_expr = if !scalars.is_empty() {
             let eval_scalar = EvalScalar { items: scalars };
-            SExpr::create_unary(eval_scalar.into(), child)
+            SExpr::create_unary(Arc::new(eval_scalar.into()), Arc::new(child))
         } else {
             child
         };
@@ -244,8 +246,9 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
+            after_exchange: false,
         };
-        new_expr = SExpr::create_unary(sort_plan.into(), new_expr);
+        new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
         Ok(new_expr)
     }
 
@@ -294,8 +297,12 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
+            after_exchange: false,
         };
-        Ok(SExpr::create_unary(sort_plan.into(), child))
+        Ok(SExpr::create_unary(
+            Arc::new(sort_plan.into()),
+            Arc::new(child),
+        ))
     }
 
     #[allow(clippy::only_used_in_recursion)]

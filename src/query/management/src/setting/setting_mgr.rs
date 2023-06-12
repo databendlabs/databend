@@ -96,7 +96,7 @@ impl SettingApi for SettingMgr {
     }
 
     #[async_backtrace::framed]
-    async fn drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()> {
+    async fn try_drop_setting(&self, name: &str, seq: MatchSeq) -> Result<()> {
         let key = format!("{}/{}", self.setting_prefix, name);
         let kv_api = self.kv_api.clone();
         let upsert_kv = async move {
@@ -104,14 +104,7 @@ impl SettingApi for SettingMgr {
                 .upsert_kv(UpsertKVReq::new(&key, seq, Operation::Delete, None))
                 .await
         };
-        let res = upsert_kv.await?;
-        if res.prev.is_some() && res.result.is_none() {
-            Ok(())
-        } else {
-            Err(ErrorCode::UnknownVariable(format!(
-                "Unknown setting {}",
-                name
-            )))
-        }
+        upsert_kv.await?;
+        Ok(())
     }
 }

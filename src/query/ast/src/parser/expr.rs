@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use ethnum::i256;
 use itertools::Itertools;
 use nom::branch::alt;
 use nom::combinator::consumed;
@@ -140,45 +141,49 @@ pub fn subexpr(min_precedence: u32) -> impl FnMut(Input) -> IResult<Expr> {
                     };
                 }
             }
-
-            if prev != -1 {
-                if let (
-                    ExprElement::UnaryOp {
-                        op: UnaryOperator::Minus,
-                    },
-                    ExprElement::Literal { lit },
-                ) = (
-                    &expr_elements[prev as usize].elem,
-                    &expr_elements[curr as usize].elem,
-                ) {
-                    if matches!(
-                        lit,
-                        Literal::Float(_)
-                            | Literal::UInt64(_)
-                            | Literal::Decimal128 { .. }
-                            | Literal::Decimal256 { .. }
-                    ) {
-                        let span = expr_elements[curr as usize].span;
-                        expr_elements[curr as usize] = WithSpan {
-                            span,
-                            elem: ExprElement::Literal { lit: lit.neg() },
-                        };
-                        let span = expr_elements[prev as usize].span;
-                        expr_elements[prev as usize] = WithSpan {
-                            span,
-                            elem: ExprElement::Skip,
-                        };
-                    }
-                }
-            }
         }
-        let iter = &mut expr_elements
-            .into_iter()
-            .filter(|x| x.elem != ExprElement::Skip)
-            .collect::<Vec<_>>()
-            .into_iter();
-        run_pratt_parser(ExprParser, iter, rest, i)
+
+        run_pratt_parser(ExprParser, &expr_elements.into_iter(), rest, i)
     }
+}
+
+#[allow(clippy::needless_lifetimes)]
+pub fn column_id<'a>(i: Input<'a>) -> IResult<'a, ColumnID> {
+    alt((
+        map_res(rule! { ColumnPosition }, |token| {
+            let name = token.text().to_string();
+            let pos = name[1..].parse::<usize>()?;
+            if pos == 0 {
+                return Err(ErrorKind::Other("column position must be greater than 0"));
+            }
+            Ok(ColumnID::Position(crate::ast::ColumnPosition {
+                pos,
+                name,
+                span: Some(token.span),
+            }))
+        }),
+        map_res(rule! { #ident }, |ident| Ok(ColumnID::Name(ident))),
+    ))(i)
+}
+
+/// Parse one two three idents separated by a period, fulfilling from the right.
+///
+/// Example: `db.table.column`
+#[allow(clippy::needless_lifetimes)]
+pub fn column_ref<'a>(
+    i: Input<'a>,
+) -> IResult<'a, (Option<Identifier>, Option<Identifier>, ColumnID)> {
+    alt((
+        map(
+            rule! { #ident ~ "." ~ #ident ~ "." ~ #column_id },
+            |(ident1, _, ident2, _, ident3)| (Some(ident1), Some(ident2), ident3),
+        ),
+        map(
+            rule! { #ident ~ "." ~ #column_id },
+            |(ident2, _, ident3)| (None, Some(ident2), ident3),
+        ),
+        map(rule! {  #column_id }, |ident3| (None, None, ident3)),
+    ))(i)
 }
 
 /// A 'flattened' AST of expressions.
@@ -196,7 +201,7 @@ pub enum ExprElement {
     ColumnRef {
         database: Option<Identifier>,
         table: Option<Identifier>,
-        column: Identifier,
+        column: ColumnID,
     },
     /// `IS [NOT] NULL` expression
     IsNull {
@@ -273,7 +278,9 @@ pub enum ExprElement {
         lit: Literal,
     },
     /// `Count(*)` expression
-    CountAll,
+    CountAll {
+        window: Option<Window>,
+    },
     /// `(foo, bar)`
     Tuple {
         exprs: Vec<Expr>,
@@ -336,7 +343,6 @@ pub enum ExprElement {
         unit: IntervalKind,
         date: Expr,
     },
-    Skip,
 }
 
 struct ExprParser;
@@ -471,8 +477,9 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
                 span: transform_span(elem.span.0),
                 lit,
             },
-            ExprElement::CountAll => Expr::CountAll {
+            ExprElement::CountAll { window } => Expr::CountAll {
                 span: transform_span(elem.span.0),
+                window,
             },
             ExprElement::Tuple { exprs } => Expr::Tuple {
                 span: transform_span(elem.span.0),
@@ -647,14 +654,13 @@ impl<'a, I: Iterator<Item = WithSpan<'a, ExprElement>>> PrattParser<I> for ExprP
 }
 
 pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
-    let column_ref = map(
-        period_separated_idents_1_to_3,
-        |(database, table, column)| ExprElement::ColumnRef {
+    let column_ref = map(column_ref, |(database, table, column)| {
+        ExprElement::ColumnRef {
             database,
             table,
             column,
-        },
-    );
+        }
+    });
     let is_null = map(
         rule! {
             IS ~ NOT? ~ NULL
@@ -791,9 +797,15 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             trim_where: Some((trim_where, Box::new(trim_str))),
         },
     );
-    let count_all = value(ExprElement::CountAll, rule! {
-        COUNT ~ "(" ~ "*" ~ ^")"
-    });
+
+    let count_all_with_window = map(
+        rule! {
+        COUNT ~ "(" ~ "*" ~ ")" ~ (OVER ~ #window_spec_ident)?
+        },
+        |(_, _, _, _, window)| ExprElement::CountAll {
+            window: window.map(|w| w.1),
+        },
+    );
     let tuple = map(
         rule! {
             "(" ~ #comma_separated_list0_ignore_trailing(subexpr(0)) ~ ","? ~ ^")"
@@ -1015,7 +1027,7 @@ pub fn expr_element(i: Input) -> IResult<WithSpan<ExprElement>> {
             | #trim : "`TRIM(...)`"
             | #trim_from : "`TRIM([(BOTH | LEADEING | TRAILING) ... FROM ...)`"
             | #is_distinct_from: "`... IS [NOT] DISTINCT FROM ...`"
-            | #count_all : "COUNT(*)"
+            | #count_all_with_window : "`COUNT(*) OVER ...`"
             | #function_call_with_window : "<function>"
             | #function_call_with_params : "<function>"
             | #function_call : "<function>"
@@ -1086,18 +1098,14 @@ pub fn binary_op(i: Input) -> IResult<BinaryOperator> {
 
 pub fn literal(i: Input) -> IResult<Literal> {
     let string = map(literal_string, Literal::String);
-    let boolean = alt((
-        value(Literal::Boolean(true), rule! { TRUE }),
-        value(Literal::Boolean(false), rule! { FALSE }),
-    ));
+    let boolean = map(literal_bool, Literal::Boolean);
     let current_timestamp = value(Literal::CurrentTimestamp, rule! { CURRENT_TIMESTAMP });
     let null = value(Literal::Null, rule! { NULL });
 
     rule!(
         #string
-        | #literal_decimal
-        | #literal_hex
         | #boolean
+        | #literal_number
         | #current_timestamp
         | #null
     )(i)
@@ -1141,51 +1149,27 @@ pub fn literal_u64(i: Input) -> IResult<u64> {
     )(i)
 }
 
-pub fn literal_f64(i: Input) -> IResult<f64> {
-    map_res(
-        rule! {
-            LiteralFloat
-        },
-        |token| Ok(fast_float::parse(token.text())?),
-    )(i)
-}
-
-pub fn literal_decimal(i: Input) -> IResult<Literal> {
-    let decimal_unit = map_res(
+pub fn literal_number(i: Input) -> IResult<Literal> {
+    let decimal_uint = map_res(
         rule! {
             LiteralInteger
         },
-        |token| Literal::parse_decimal_uint(token.text()),
+        |token| parse_uint(token.text(), 10),
     );
 
-    let decimal = map_res(
+    let hex_uint = map_res(literal_hex_str, |str| parse_uint(str, 16));
+
+    let decimal_float = map_res(
         rule! {
            LiteralFloat
         },
-        |token| Literal::parse_decimal(token.text()),
+        |token| parse_float(token.text()),
     );
 
     rule!(
-        #decimal_unit
-        | #decimal
-    )(i)
-}
-
-pub fn literal_hex(i: Input) -> IResult<Literal> {
-    let hex_u64 = map_res(literal_hex_str, |lit| {
-        Ok(Literal::UInt64(u64::from_str_radix(lit, 16)?))
-    });
-    // todo(youngsofun): more accurate precision
-    let hex_u128 = map_res(literal_hex_str, |lit| {
-        Ok(Literal::Decimal128 {
-            value: i128::from_str_radix(lit, 16)?,
-            precision: 38,
-            scale: 0,
-        })
-    });
-    rule!(
-        #hex_u64
-        | #hex_u128
+        #decimal_uint
+        | #decimal_float
+        | #hex_uint
     )(i)
 }
 
@@ -1362,8 +1346,8 @@ pub fn type_name(i: Input) -> IResult<TypeName> {
             | #ty_nullable
             ) ~ NULL? : "type name" },
         )),
-        |(ty, null_opt)| {
-            if null_opt.is_some() && !matches!(ty, TypeName::Nullable(_)) {
+        |(ty, opt_null)| {
+            if opt_null.is_some() {
                 TypeName::Nullable(Box::new(ty))
             } else {
                 ty
@@ -1470,4 +1454,74 @@ pub fn map_element(i: Input) -> IResult<(Expr, Expr)> {
         },
         |(key, _, value)| (key, value),
     )(i)
+}
+
+pub fn parse_float(text: &str) -> Result<Literal, ErrorKind> {
+    let text = text.trim_start_matches('0');
+    let point_pos = text.find('.');
+    let e_pos = text.find(|c| c == 'e' || c == 'E');
+    let (i_part, f_part, e_part) = match (point_pos, e_pos) {
+        (Some(p1), Some(p2)) => (&text[..p1], &text[(p1 + 1)..p2], Some(&text[(p2 + 1)..])),
+        (Some(p), None) => (&text[..p], &text[(p + 1)..], None),
+        (None, Some(p)) => (&text[..p], "", Some(&text[(p + 1)..])),
+        _ => unreachable!(),
+    };
+    let exp = match e_part {
+        Some(s) => match s.parse::<i32>() {
+            Ok(i) => i,
+            Err(_) => return Ok(Literal::Float64(fast_float::parse(text)?)),
+        },
+        None => 0,
+    };
+    if i_part.len() as i32 + exp > 76 {
+        Ok(Literal::Float64(fast_float::parse(text)?))
+    } else {
+        let mut digits = String::with_capacity(76);
+        digits.push_str(i_part);
+        digits.push_str(f_part);
+        if digits.is_empty() {
+            digits.push('0')
+        }
+        let mut scale = f_part.len() as i32 - exp;
+        if scale < 0 {
+            // e.g 123.1e3
+            for _ in 0..(-scale) {
+                digits.push('0')
+            }
+            scale = 0;
+        };
+
+        // truncate
+        if digits.len() > 76 {
+            scale -= digits.len() as i32 - 76;
+            digits.truncate(76);
+        }
+
+        Ok(Literal::Decimal256 {
+            value: i256::from_str_radix(&digits, 10)?,
+            precision: 76,
+            scale: scale as u8,
+        })
+    }
+}
+
+pub fn parse_uint(text: &str, radix: u32) -> Result<Literal, ErrorKind> {
+    let text = text.trim_start_matches('0');
+
+    if text.is_empty() {
+        return Ok(Literal::UInt64(0));
+    } else if text.len() > 76 {
+        return Ok(Literal::Float64(fast_float::parse(text)?));
+    }
+
+    let value = i256::from_str_radix(text, radix)?;
+    if value <= i256::from(u64::MAX) {
+        Ok(Literal::UInt64(value.as_u64()))
+    } else {
+        Ok(Literal::Decimal256 {
+            value,
+            precision: 76,
+            scale: 0,
+        })
+    }
 }

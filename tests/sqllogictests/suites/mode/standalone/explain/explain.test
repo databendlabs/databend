@@ -15,10 +15,10 @@ explain select t1.a from t1 where a > 0
 ----
 EvalScalar
 ├── expressions: [t1.a (#0)]
-├── estimated rows: 0.10
+├── estimated rows: 0.20
 └── Filter
     ├── filters: [t1.a (#0) > 0]
-    ├── estimated rows: 0.10
+    ├── estimated rows: 0.20
     └── TableScan
         ├── table: default.default.t1
         ├── read rows: 0
@@ -35,19 +35,19 @@ explain select * from t1, t2 where (t1.a = t2.a and t1.a > 3) or (t1.a = t2.a an
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.02
+├── estimated rows: 0.08
 └── Filter
     ├── filters: [t1.a (#0) > 3 OR t2.a (#2) > 5 AND t1.a (#0) > 1]
-    ├── estimated rows: 0.02
+    ├── estimated rows: 0.08
     └── HashJoin
         ├── join type: INNER
         ├── build keys: [t1.a (#0)]
         ├── probe keys: [t2.a (#2)]
         ├── filters: []
-        ├── estimated rows: 0.18
+        ├── estimated rows: 0.35
         ├── Filter(Build)
         │   ├── filters: [t1.a (#0) > 3 OR t1.a (#0) > 1]
-        │   ├── estimated rows: 0.19
+        │   ├── estimated rows: 0.36
         │   └── TableScan
         │       ├── table: default.default.t1
         │       ├── read rows: 0
@@ -598,19 +598,19 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.02
+├── estimated rows: 0.12
 └── Filter
     ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-    ├── estimated rows: 0.02
+    ├── estimated rows: 0.12
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
         ├── probe keys: []
         ├── filters: []
-        ├── estimated rows: 0.79
+        ├── estimated rows: 1.50
         ├── Filter(Build)
         │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3]
-        │   ├── estimated rows: 0.19
+        │   ├── estimated rows: 0.36
         │   └── TableScan
         │       ├── table: default.default.t1
         │       ├── read rows: 1
@@ -638,19 +638,19 @@ explain select * from t1,t2 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t2.b 
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.11
+├── estimated rows: 0.40
 └── Filter
     ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t1.a (#0) = 2]
-    ├── estimated rows: 0.11
+    ├── estimated rows: 0.40
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
         ├── probe keys: []
         ├── filters: []
-        ├── estimated rows: 0.95
+        ├── estimated rows: 1.80
         ├── Filter(Build)
         │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3 OR t1.a (#0) = 2]
-        │   ├── estimated rows: 0.19
+        │   ├── estimated rows: 0.36
         │   └── TableScan
         │       ├── table: default.default.t1
         │       ├── read rows: 1
@@ -681,10 +681,10 @@ explain select * from t1,t2, t3 where (t1.a > 1 and t2.a > 2) or (t1.b < 3 and t
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3), t3.a (#4), t3.b (#5)]
-├── estimated rows: 10.10
+├── estimated rows: 14.90
 └── Filter
     ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4 OR t3.a (#4) = 2]
-    ├── estimated rows: 10.10
+    ├── estimated rows: 14.90
     └── HashJoin
         ├── join type: CROSS
         ├── build keys: []
@@ -730,25 +730,25 @@ explain select * from t1,t2, t3 where ((t1.a > 1 and t2.a > 2) or (t1.b < 3 and 
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3), t3.a (#4), t3.b (#5)]
-├── estimated rows: 0.13
+├── estimated rows: 0.96
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 0.13
+    ├── estimated rows: 0.96
     ├── Filter(Build)
     │   ├── filters: [t1.a (#0) > 1 AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-    │   ├── estimated rows: 0.02
+    │   ├── estimated rows: 0.12
     │   └── HashJoin
     │       ├── join type: CROSS
     │       ├── build keys: []
     │       ├── probe keys: []
     │       ├── filters: []
-    │       ├── estimated rows: 0.79
+    │       ├── estimated rows: 1.50
     │       ├── Filter(Build)
     │       │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 3]
-    │       │   ├── estimated rows: 0.19
+    │       │   ├── estimated rows: 0.36
     │       │   └── TableScan
     │       │       ├── table: default.default.t1
     │       │       ├── read rows: 1
@@ -788,26 +788,26 @@ explain select * from t1,t2 where ((t1.a > 1 or t1.b < 2) and t2.a > 2) or (t1.b
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.03
+├── estimated rows: 0.22
 └── Limit
     ├── limit: 3
     ├── offset: 0
-    ├── estimated rows: 0.03
+    ├── estimated rows: 0.22
     └── Sort
         ├── sort keys: [a DESC NULLS LAST]
-        ├── estimated rows: 0.03
+        ├── estimated rows: 0.22
         └── Filter
             ├── filters: [(t1.a (#0) > 1 OR t1.b (#1) < 2) AND t2.a (#2) > 2 OR t1.b (#1) < 3 AND t2.b (#3) < 4]
-            ├── estimated rows: 0.03
+            ├── estimated rows: 0.22
             └── HashJoin
                 ├── join type: CROSS
                 ├── build keys: []
                 ├── probe keys: []
                 ├── filters: []
-                ├── estimated rows: 1.13
+                ├── estimated rows: 2.03
                 ├── Filter(Build)
                 │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 2 OR t1.b (#1) < 3]
-                │   ├── estimated rows: 0.27
+                │   ├── estimated rows: 0.49
                 │   └── TableScan
                 │       ├── table: default.default.t1
                 │       ├── read rows: 1
@@ -835,16 +835,16 @@ explain select * from t1,t2 where (t1.a > 1 or t1.b < 2) and (t1.a > 1 or t1.b <
 ----
 EvalScalar
 ├── expressions: [t1.a (#0), t1.b (#1), t2.a (#2), t2.b (#3)]
-├── estimated rows: 0.95
+├── estimated rows: 1.80
 └── HashJoin
     ├── join type: CROSS
     ├── build keys: []
     ├── probe keys: []
     ├── filters: []
-    ├── estimated rows: 0.95
+    ├── estimated rows: 1.80
     ├── Filter(Build)
     │   ├── filters: [t1.a (#0) > 1 OR t1.b (#1) < 2]
-    │   ├── estimated rows: 0.19
+    │   ├── estimated rows: 0.36
     │   └── TableScan
     │       ├── table: default.default.t1
     │       ├── read rows: 1
@@ -1085,13 +1085,13 @@ EvalScalar
     ├── estimated rows: 0.00
     └── HashJoin
         ├── join type: INNER
-        ├── build keys: [CAST(a.id (#0) AS Int32 NULL)]
-        ├── probe keys: [CAST(b.id (#2) AS Int32 NULL)]
+        ├── build keys: [a.id (#0)]
+        ├── probe keys: [b.id (#2)]
         ├── filters: []
         ├── estimated rows: 0.00
         ├── Filter(Build)
-        │   ├── filters: [is_true(a.c1 (#1) >= 1683648000), is_true(a.c1 (#1) <= 1683734400)]
-        │   ├── estimated rows: 0.01
+        │   ├── filters: [is_true(CAST(a.c1 (#1) AS Int64 NULL) >= 1683648000), is_true(CAST(a.c1 (#1) AS Int64 NULL) <= 1683734400)]
+        │   ├── estimated rows: 0.04
         │   └── TableScan
         │       ├── table: default.default.a
         │       ├── read rows: 1
@@ -1099,11 +1099,11 @@ EvalScalar
         │       ├── partitions total: 1
         │       ├── partitions scanned: 1
         │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        │       ├── push downs: [filters: [and_filters(a.c1 (#1) >= 1683648000, a.c1 (#1) <= 1683734400)], limit: NONE]
+        │       ├── push downs: [filters: [and_filters(CAST(a.c1 (#1) AS Int64 NULL) >= 1683648000, CAST(a.c1 (#1) AS Int64 NULL) <= 1683734400)], limit: NONE]
         │       └── estimated rows: 1.00
         └── Filter(Probe)
-            ├── filters: [is_true(b.c1 (#3) >= 1683648000), is_true(b.c1 (#3) <= 1683734400)]
-            ├── estimated rows: 0.02
+            ├── filters: [is_true(CAST(b.c1 (#3) AS Int64 NULL) >= 1683648000), is_true(CAST(b.c1 (#3) AS Int64 NULL) <= 1683734400)]
+            ├── estimated rows: 0.08
             └── TableScan
                 ├── table: default.default.b
                 ├── read rows: 2
@@ -1111,7 +1111,7 @@ EvalScalar
                 ├── partitions total: 2
                 ├── partitions scanned: 2
                 ├── pruning stats: [segments: <range pruning: 2 to 2>, blocks: <range pruning: 2 to 2, bloom pruning: 0 to 0>]
-                ├── push downs: [filters: [and_filters(b.c1 (#3) >= 1683648000, b.c1 (#3) <= 1683734400)], limit: NONE]
+                ├── push downs: [filters: [and_filters(CAST(b.c1 (#3) AS Int64 NULL) >= 1683648000, CAST(b.c1 (#3) AS Int64 NULL) <= 1683734400)], limit: NONE]
                 └── estimated rows: 2.00
 
 statement ok

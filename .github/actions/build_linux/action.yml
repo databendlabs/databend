@@ -75,7 +75,18 @@ runs:
         done
 
     - name: Build Release
-      if: env.BUILD_PROFILE == 'release'
+      if: env.BUILD_PROFILE == 'release' && inputs.artifacts == 'all'
+      shell: bash
+      run: |
+        artifacts="meta,metactl,query,sqllogictests"
+        for artifact in ${artifacts//,/ }; do
+          echo "==> building databend-$artifact ..."
+          cargo build --target ${{ inputs.target }} --features ${{ inputs.features }} --release --bin databend-$artifact
+          ls -lh ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/databend-$artifact
+        done
+
+    - name: Build Release for specific artifacts
+      if: env.BUILD_PROFILE == 'release' && inputs.artifacts != 'all'
       shell: bash
       run: |
         artifacts="${{ inputs.artifacts }}"

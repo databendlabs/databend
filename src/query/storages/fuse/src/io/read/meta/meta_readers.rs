@@ -37,8 +37,8 @@ use storages_common_table_meta::meta::SnapshotVersion;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
 use storages_common_table_meta::meta::TableSnapshotStatisticsVersion;
+use storages_common_table_meta::readers::VersionedReader;
 
-use super::versioned_reader::VersionedReader;
 use crate::io::read::meta::meta_readers::thrift_file_meta_read::read_thrift_file_metadata;
 
 pub type TableSnapshotStatisticsReader =

@@ -103,7 +103,7 @@ databend-meta-upgrade-09 --cmd upgrade --raft-dir "<./your/raft-dir/>"
 **Learn More**
 
 - [PR | feat(meta/upgrade): meta data upgrade program](https://github.com/datafuselabs/databend/pull/9489)
-- [Doc | Upgrade Databend Query from 0.8 to 0.9](https://databend.rs/doc/deploy/upgrade/upgrade-0.8-to-0.9)
+- [Doc | Upgrade Databend](https://databend.rs/doc/operations/upgrade)
 
 ### Release Proposal: Nightly v1.0
 

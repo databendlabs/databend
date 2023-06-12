@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
 use crate::binder::JoinPredicate;
@@ -50,28 +52,32 @@ impl RulePushDownFilterJoin {
             //   |  *
             //   *
             patterns: vec![SExpr::create_unary(
-                PatternPlan {
-                    plan_type: RelOp::Filter,
-                }
-                .into(),
-                SExpr::create_binary(
+                Arc::new(
                     PatternPlan {
-                        plan_type: RelOp::Join,
+                        plan_type: RelOp::Filter,
                     }
                     .into(),
-                    SExpr::create_leaf(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ),
-                    SExpr::create_leaf(
-                        PatternPlan {
-                            plan_type: RelOp::Pattern,
-                        }
-                        .into(),
-                    ),
                 ),
+                Arc::new(SExpr::create_binary(
+                    Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Join,
+                        }
+                        .into(),
+                    ),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
+                    Arc::new(SExpr::create_leaf(Arc::new(
+                        PatternPlan {
+                            plan_type: RelOp::Pattern,
+                        }
+                        .into(),
+                    ))),
+                )),
             )],
             _metadata: metadata,
         }
@@ -159,7 +165,8 @@ pub fn try_push_down_filter_join(
                         join.right_conditions.push(right.clone());
                         need_push = true;
                     }
-                } else if matches!(join.join_type, JoinType::Inner) {
+                } else if matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+                    join.join_type = JoinType::Inner;
                     join.non_equi_conditions.push(predicate.clone());
                     need_push = true;
                 } else {
@@ -178,12 +185,14 @@ pub fn try_push_down_filter_join(
 
     if !original_predicates.is_empty() {
         result = SExpr::create_unary(
-            Filter {
-                predicates: original_predicates,
-                is_having: false,
-            }
-            .into(),
-            result,
+            Arc::new(
+                Filter {
+                    predicates: original_predicates,
+                    is_having: false,
+                }
+                .into(),
+            ),
+            Arc::new(result),
         );
     }
     Ok((need_push, result))
