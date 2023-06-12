@@ -1,0 +1,14 @@
+statement ok
+select last_query_id();
+
+statement ok
+select last_query_id(-2);
+
+statement ok
+select last_query_id(-200000);
+
+statement ok
+select last_query_id(2);
+
+statement ok
+select last_query_id(200000);
