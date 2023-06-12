@@ -60,7 +60,11 @@ impl DataBlock {
             })
             .collect();
 
-        Ok(DataBlock::new(after_columns, indices.len()))
+        Ok(DataBlock::new_with_meta(
+            after_columns,
+            indices.len(),
+            self.get_meta().cloned(),
+        ))
     }
 }
 

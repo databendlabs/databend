@@ -199,6 +199,7 @@ impl FuseTable {
                 Some(filter.clone()),
                 projection.clone(),
                 base_snapshot,
+                true,
             )
             .await?;
         if total_tasks == 0 {
@@ -284,6 +285,7 @@ impl FuseTable {
         filter: Option<RemoteExpr<String>>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
+        with_origin: bool,
     ) -> Result<usize> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
@@ -322,7 +324,14 @@ impl FuseTable {
             block_metas
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
-                .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
+                .map(|(a, c)| {
+                    let cluster_stats = if with_origin {
+                        a.1.cluster_stats.clone()
+                    } else {
+                        None
+                    };
+                    MutationPartInfo::create(a.0, cluster_stats, c)
+                })
                 .collect(),
         );
 

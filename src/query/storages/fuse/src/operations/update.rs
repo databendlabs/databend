@@ -228,7 +228,7 @@ impl FuseTable {
         };
 
         let total_tasks = self
-            .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
+            .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot, false)
             .await?;
         if total_tasks != 0 {
             let max_threads =

@@ -49,6 +49,7 @@ pub struct BlockCompactMutator {
     pub thresholds: BlockThresholds,
     pub compact_params: CompactOptions,
     pub column_ids: HashSet<ColumnId>,
+    pub cluster_key_id: Option<u32>,
 
     // A set of Parts.
     pub compact_tasks: Partitions,
@@ -65,6 +66,7 @@ impl BlockCompactMutator {
         thresholds: BlockThresholds,
         compact_params: CompactOptions,
         operator: Operator,
+        cluster_key_id: Option<u32>,
     ) -> Self {
         let column_ids = compact_params.base_snapshot.schema.to_leaf_column_id_set();
         let unchanged_segment_statistics = compact_params.base_snapshot.summary.clone();
@@ -74,6 +76,7 @@ impl BlockCompactMutator {
             thresholds,
             compact_params,
             column_ids,
+            cluster_key_id,
             unchanged_blocks_map: HashMap::new(),
             compact_tasks: Partitions::create_nolazy(PartitionsShuffleKind::Mod, vec![]),
             unchanged_segments_map: BTreeMap::new(),
@@ -200,10 +203,12 @@ impl BlockCompactMutator {
     // as the perfect_block condition(N for short). Gets a set of segments, iterates
     // through the blocks, and finds the blocks >= N and blocks < 2N as a task.
     fn build_compact_tasks(&mut self, segments: Vec<Arc<SegmentInfo>>, segment_idx: usize) {
-        let mut builder = CompactTaskBuilder::new(self.column_ids.clone());
+        let mut builder = CompactTaskBuilder::new(self.column_ids.clone(), self.cluster_key_id);
         let mut tasks = VecDeque::new();
         let mut block_idx = 0;
-        let mut unchanged_blocks = BTreeMap::new();
+        // Used to identify whether the latest block is unchanged or needs to be compacted.
+        let mut latest_flag = true;
+        let mut unchanged_blocks: BTreeMap<usize, Arc<BlockMeta>> = BTreeMap::new();
         // The order of the compact is from old to new.
         for segment in segments.iter().rev() {
             deduct_statistics_mut(&mut self.unchanged_segment_statistics, &segment.summary);
@@ -211,34 +216,36 @@ impl BlockCompactMutator {
                 let (unchanged, need_take) = builder.add(block, self.thresholds);
                 if need_take {
                     let blocks = builder.take_blocks();
-                    if blocks.len() == 1 && builder.check_column_ids(&blocks[0]) {
-                        unchanged_blocks.insert(block_idx, blocks[0].clone());
-                    } else {
-                        tasks.push_back((block_idx, blocks));
-                    }
+                    latest_flag =
+                        builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                     block_idx += 1;
                 }
                 if unchanged {
-                    if builder.check_column_ids(block) {
-                        unchanged_blocks.insert(block_idx, block.clone());
-                    } else {
-                        tasks.push_back((block_idx, vec![block.clone()]));
-                    }
+                    let blocks = vec![block.clone()];
+                    latest_flag =
+                        builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, blocks);
                     block_idx += 1;
                 }
             }
         }
 
         if !builder.is_empty() {
-            let (index, mut blocks) = if let Some((k, v)) = tasks.pop_back() {
-                (k, v)
+            let tail = builder.take_blocks();
+            if self.cluster_key_id.is_some() && latest_flag {
+                // The clustering table cannot compact different level blocks.
+                builder.build_task(&mut tasks, &mut unchanged_blocks, block_idx, tail);
             } else {
-                unchanged_blocks
-                    .pop_last()
-                    .map_or((0, vec![]), |(k, v)| (k, vec![v]))
-            };
-            blocks.extend(builder.take_blocks());
-            tasks.push_back((index, blocks));
+                let (index, mut blocks) = if latest_flag {
+                    unchanged_blocks
+                        .pop_last()
+                        .map_or((0, vec![]), |(k, v)| (k, vec![v]))
+                } else {
+                    tasks.pop_back().unwrap_or((0, vec![]))
+                };
+
+                blocks.extend(tail);
+                tasks.push_back((index, blocks));
+            }
         }
 
         let mut partitions = tasks
@@ -308,15 +315,18 @@ impl SegmentCompactChecker {
 
 struct CompactTaskBuilder {
     column_ids: HashSet<ColumnId>,
+    cluster_key_id: Option<u32>,
+
     blocks: Vec<Arc<BlockMeta>>,
     total_rows: usize,
     total_size: usize,
 }
 
 impl CompactTaskBuilder {
-    fn new(column_ids: HashSet<ColumnId>) -> Self {
+    fn new(column_ids: HashSet<ColumnId>, cluster_key_id: Option<u32>) -> Self {
         Self {
             column_ids,
+            cluster_key_id,
             blocks: vec![],
             total_rows: 0,
             total_size: 0,
@@ -339,8 +349,12 @@ impl CompactTaskBuilder {
     }
 
     fn add(&mut self, block: &Arc<BlockMeta>, thresholds: BlockThresholds) -> (bool, bool) {
-        if block.cluster_stats.as_ref().map_or(false, |v| v.level != 0) {
-            return (true, !self.blocks.is_empty());
+        if let Some(default_cluster_key) = self.cluster_key_id {
+            if block.cluster_stats.as_ref().map_or(false, |v| {
+                v.level != 0 && v.cluster_key_id == default_cluster_key
+            }) {
+                return (true, !self.blocks.is_empty());
+            }
         }
 
         let total_rows = self.total_rows + block.row_count as usize;
@@ -359,5 +373,22 @@ impl CompactTaskBuilder {
             // blocks > 2N
             (true, !self.blocks.is_empty())
         }
+    }
+
+    fn build_task(
+        &self,
+        tasks: &mut VecDeque<(usize, Vec<Arc<BlockMeta>>)>,
+        unchanged_blocks: &mut BTreeMap<usize, Arc<BlockMeta>>,
+        block_idx: usize,
+        blocks: Vec<Arc<BlockMeta>>,
+    ) -> bool {
+        let mut flag = false;
+        if blocks.len() == 1 && self.check_column_ids(&blocks[0]) {
+            unchanged_blocks.insert(block_idx, blocks[0].clone());
+            flag = true;
+        } else {
+            tasks.push_back((block_idx, blocks));
+        }
+        flag
     }
 }

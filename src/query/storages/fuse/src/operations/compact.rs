@@ -28,6 +28,7 @@ use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactAggregator;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
+use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
@@ -117,11 +118,14 @@ impl FuseTable {
         options: CompactOptions,
     ) -> Result<()> {
         let thresholds = self.get_block_thresholds();
-        let schema = self.schema();
-        let write_settings = self.get_write_settings();
 
-        let mut mutator =
-            BlockCompactMutator::new(ctx.clone(), thresholds, options, self.operator.clone());
+        let mut mutator = BlockCompactMutator::new(
+            ctx.clone(),
+            thresholds,
+            options,
+            self.operator.clone(),
+            self.cluster_key_meta.as_ref().map(|k| k.0),
+        );
         mutator.target_select().await?;
         if mutator.compact_tasks.is_empty() {
             return Ok(());
@@ -147,16 +151,28 @@ impl FuseTable {
             |output| {
                 CompactSource::try_create(
                     ctx.clone(),
-                    self.operator.clone(),
-                    write_settings.clone(),
-                    self.meta_location_generator().clone(),
-                    schema.clone(),
+                    self.storage_format,
                     block_reader.clone(),
                     output,
                 )
             },
             max_threads,
         )?;
+
+        let block_thresholds = self.get_block_thresholds();
+        // sort
+        let cluster_stats_gen =
+            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
+
+        pipeline.add_transform(|input, output| {
+            SerializeDataTransform::try_create(
+                ctx.clone(),
+                input,
+                output,
+                self,
+                cluster_stats_gen.clone(),
+            )
+        })?;
 
         pipeline.resize(1)?;
 

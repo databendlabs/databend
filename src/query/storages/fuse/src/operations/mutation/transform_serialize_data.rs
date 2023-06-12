@@ -23,7 +23,6 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use opendal::Operator;
-use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
@@ -33,6 +32,7 @@ use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::operations::common::Replacement;
 use crate::operations::common::ReplacementLogEntry;
+use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -42,7 +42,7 @@ use crate::FuseTable;
 
 enum State {
     Consume,
-    NeedSerialize(DataBlock, Option<ClusterStatistics>),
+    NeedSerialize(DataBlock, ClusterStatsGenType),
     Serialized(BlockSerialization),
     Output(Replacement),
 }
@@ -138,7 +138,7 @@ impl Processor for SerializeDataTransform {
             if input_data.is_empty() {
                 self.state = State::Output(Replacement::Deleted);
             } else {
-                self.state = State::NeedSerialize(input_data, meta.cluster_stats.clone());
+                self.state = State::NeedSerialize(input_data, meta.stats_type.clone());
             }
         } else {
             self.state = State::Output(Replacement::DoNothing);
@@ -148,12 +148,17 @@ impl Processor for SerializeDataTransform {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::NeedSerialize(block, origin_stats) => {
-                let serialized = self.block_builder.build(block, |block, generator| {
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    Ok((cluster_stats, block))
-                })?;
+            State::NeedSerialize(block, stats_type) => {
+                let serialized =
+                    self.block_builder
+                        .build(block, |block, generator| match &stats_type {
+                            ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
+                            ClusterStatsGenType::WithOrigin(origin_stats) => {
+                                let cluster_stats = generator
+                                    .gen_with_origin_stats(&block, origin_stats.clone())?;
+                                Ok((cluster_stats, block))
+                            }
+                        })?;
 
                 self.state = State::Serialized(serialized);
             }
