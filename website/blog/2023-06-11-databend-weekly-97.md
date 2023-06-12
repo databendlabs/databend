@@ -52,7 +52,7 @@ select $1, $2, a, b from t1;
 └─────────────────────────────────┘
 ```
 
-You can also use column positions when you SELECT FROM a staged NDJSON files. We are also actively working on extending this support to other formats.
+You can also use column positions when you SELECT FROM a staged NDJSON files. We are also actively working on extending this support to other formats. When using the COPY INTO statement to copy data from a stage, the matching is performed based on the field names rather than column positions.
 
 ```sql
 select $1 from @my_stage
@@ -66,6 +66,8 @@ It is important to note that when using the SELECT statement for NDJSON in Datab
 -- Select the entire row using column position:
 SELECT $1 FROM @my_stage
 
+--Select a specific field named "a" using column position:
+SELECT $1:a FROM @my_stage
 ```
 
 If you are interested in learning more, please check out the resources listed below:
