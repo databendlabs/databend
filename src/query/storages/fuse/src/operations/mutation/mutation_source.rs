@@ -27,7 +27,6 @@ use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
-use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
 use common_expression::Evaluator;
 use common_expression::Expr;

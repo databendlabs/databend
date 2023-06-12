@@ -174,3 +174,31 @@ INSERT INTO family VALUES (1, 1), (2, 2), (3, 3)
 
 statement ok
 DELETE FROM family WHERE x=2
+
+statement ok
+drop table if exists t1
+
+statement ok
+drop table if exists t2
+
+statement ok
+create table t1 (a int)
+
+statement ok
+create table t2(b int)
+
+statement ok
+insert into t1 values(1), (2), (3), (8);
+
+statement ok
+insert into t2 values(2), (3);
+
+statement ok
+delete from t1 where a in (select b from t2);
+
+query I
+select * from t1 order by a;
+----
+1
+8
+

@@ -12,22 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
-use common_expression::Expr;
-use common_expression::RawExpr;
 use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_sql::binder::INTERNAL_COLUMN_FACTORY;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::optimizer::SExpr;
 use common_sql::plans::BoundColumnRef;
@@ -224,7 +219,15 @@ impl Interpreter for DeleteInterpreter {
             (Some(filter), col_indices)
         } else if let Some(input_expr) = &self.plan.input_expr {
             let filter = self.subquery_filter(input_expr).await?;
-            (Some(filter), vec![])
+            let col_indices = self
+                .plan
+                .child_expr
+                .as_ref()
+                .unwrap()
+                .used_columns()
+                .into_iter()
+                .collect();
+            (Some(filter), col_indices)
         } else {
             (None, vec![])
         };

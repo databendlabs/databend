@@ -12,12 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
-use common_catalog::plan::InternalColumn;
-use common_catalog::plan::InternalColumnType;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
@@ -43,7 +40,6 @@ use common_expression::TableSchema;
 use common_expression::Value;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
@@ -52,7 +48,6 @@ use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
-use crate::operations::FillInternalColumnProcessor;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;

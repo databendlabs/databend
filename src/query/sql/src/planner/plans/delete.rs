@@ -28,4 +28,6 @@ pub struct DeletePlan {
     pub input_expr: Option<SExpr>,
     // `_row_id`'s index
     pub index: Option<IndexType>,
+    //
+    pub child_expr: Option<ScalarExpr>,
 }

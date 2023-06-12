@@ -12,37 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::types::DataType;
-use common_expression::types::NumberDataType;
 use common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
 use crate::binder::ScalarBinder;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
-use crate::executor::PhysicalJoinType::Hash;
 use crate::optimizer::SExpr;
 use crate::optimizer::SubqueryRewriter;
-use crate::plans::BoundColumnRef;
 use crate::plans::DeletePlan;
-use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
-use crate::plans::RelOperator;
 use crate::plans::RelOperator::Scan;
-use crate::plans::ScalarItem;
 use crate::BindContext;
-use crate::ColumnBinding;
 use crate::ScalarExpr;
-use crate::Visibility;
 
 impl<'a> Binder {
     #[async_backtrace::framed]
@@ -79,9 +69,17 @@ impl<'a> Binder {
             &[],
         );
 
-        let (selection, input_expr, index) = if let Some(expr) = filter {
+        let (selection, input_expr, index, child_expr) = if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
-            if let ScalarExpr::SubqueryExpr(_) = scalar {
+            if let ScalarExpr::SubqueryExpr(subquery_expr) = &scalar {
+                let child_expr = if let Some(child_expr) = &subquery_expr.child_expr {
+                    Some(*child_expr.clone())
+                } else {
+                    return Err(ErrorCode::from_string(
+                        "subquery in delete statement shouldn't be scalar subquery".to_string(),
+                    ));
+                };
+
                 let filter = Filter {
                     predicates: vec![scalar],
                     is_having: false,
@@ -121,12 +119,12 @@ impl<'a> Binder {
                             .to_string(),
                     ));
                 }
-                (None, Some(filter_expr), Some(index))
+                (None, Some(filter_expr), Some(index), child_expr)
             } else {
-                (Some(scalar), None, None)
+                (Some(scalar), None, None, None)
             }
         } else {
-            (None, None, None)
+            (None, None, None, None)
         };
 
         let plan = DeletePlan {
@@ -137,6 +135,7 @@ impl<'a> Binder {
             selection,
             input_expr,
             index,
+            child_expr,
         };
         Ok(Plan::Delete(Box::new(plan)))
     }
