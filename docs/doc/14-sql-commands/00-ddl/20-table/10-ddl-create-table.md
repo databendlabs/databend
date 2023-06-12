@@ -535,7 +535,7 @@ CREATE TABLE student_profiles (
 -- Insert data into the table
 INSERT INTO student_profiles (id, profile) VALUES
     ('d78236', '{"id": "d78236", "name": "Arthur Read", "age": "16", "school": "PVPHS", "credits": 120, "sports": "none"}'),
-    ('f98112', '{"name": "Buster Bunny", "age": "15", "id": "f98112", "school": "THS", "credits": 67, "clubs": "MUN"}'),
+    ('f98112', '{"name": "Buster Bunny", "age": "15", "id": "f98112", "school": "TEO", "credits": 67, "clubs": "MUN"}'),
     ('t63512', '{"name": "Ernie Narayan", "school" : "Brooklyn Tech", "id": "t63512", "sports": "Track and Field", "clubs": "Chess"}');
 
 -- Query the table to see the computed column
@@ -545,7 +545,7 @@ SELECT * FROM student_profiles;
 | id     | profile                                                                                                    | age  |
 +--------+------------------------------------------------------------------------------------------------------------+------+
 | d78236 | {"age":"16","credits":120,"id":"d78236","name":"Arthur Read","school":"PVPHS","sports":"none"}             |   16 |
-| f98112 | {"age":"15","clubs":"MUN","credits":67,"id":"f98112","name":"Buster Bunny","school":"THS"}                 |   15 |
+| f98112 | {"age":"15","clubs":"MUN","credits":67,"id":"f98112","name":"Buster Bunny","school":"TEO"}                 |   15 |
 | t63512 | {"clubs":"Chess","id":"t63512","name":"Ernie Narayan","school":"Brooklyn Tech","sports":"Track and Field"} | NULL |
 +--------+------------------------------------------------------------------------------------------------------------+------+
 ```
