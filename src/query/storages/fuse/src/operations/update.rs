@@ -33,7 +33,6 @@ use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
-use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -89,6 +88,11 @@ impl FuseTable {
             return Ok(());
         }
 
+        let block_thresholds = self.get_block_thresholds();
+        // sort
+        let cluster_stats_gen =
+            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
+
         // TODO(zhyass): support cluster stats generator.
         pipeline.add_transform(|input, output| {
             SerializeDataTransform::try_create(
@@ -96,7 +100,7 @@ impl FuseTable {
                 input,
                 output,
                 self,
-                ClusterStatsGenerator::default(),
+                cluster_stats_gen.clone(),
             )
         })?;
 
