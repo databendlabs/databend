@@ -102,6 +102,7 @@ impl HttpQueryManager {
                         } else {
                             warn!("{msg}");
                             query.detach().await;
+                            query.kill().await;
                         };
                         break;
                     }
