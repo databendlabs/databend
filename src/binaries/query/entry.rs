@@ -38,9 +38,6 @@ use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
 use background_service::get_background_service_handler;
-use common_base::base::{DummySignalStream, SignalType};
-use common_license::license_manager::get_license_manager;
-use databend_query::sessions::{SessionManager, SessionType};
 
 use crate::local;
 
@@ -129,10 +126,6 @@ async fn precheck_services(conf: &InnerConfig) -> Result<()> {
 
     #[cfg(not(target_os = "macos"))]
     check_max_open_files();
-    Ok(())
-}
-
-async fn start_background_service(conf: &InnerConfig) -> Result<()> {
     Ok(())
 }
 

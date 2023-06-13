@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use chrono::Utc;
 
 use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::BackgroundJobAlreadyExists;
@@ -186,8 +187,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
 
     async fn update_background_job_status(&self, req: UpdateBackgroundJobStatusReq) -> Result<UpdateBackgroundJobReply, KVAppError> {
         let name = &req.job_name;
-        let (_, mut resp) = get_background_job_or_error(self, name, "failed to get background job").await?;
+        let (id, mut resp) = get_background_job_or_error(self, name, "failed to get background job").await?;
+        if resp.job_status == Some(req.status.clone()) {
+            return Ok(UpdateBackgroundJobReply {
+                id,
+            });
+        }
         resp.job_status = Some(req.status);
+        resp.last_updated = Some(Utc::now());
         let req = UpdateBackgroundJobReq{
             job_name: name.clone(),
             info: resp,
@@ -198,8 +205,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
 
     async fn update_background_job_params(&self, req: UpdateBackgroundJobParamsReq) -> Result<UpdateBackgroundJobReply, KVAppError> {
         let name = &req.job_name;
-        let (_, mut resp) = get_background_job_or_error(self, name, "failed to get background job").await?;
+        let (id, mut resp) = get_background_job_or_error(self, name, "failed to get background job").await?;
+        if resp.job_params == Some(req.params.clone()) {
+            return Ok(UpdateBackgroundJobReply {
+                id,
+            });
+        }
         resp.job_params = Some(req.params);
+        resp.last_updated = Some(Utc::now());
         let req = UpdateBackgroundJobReq{
             job_name: name.clone(),
             info: resp,

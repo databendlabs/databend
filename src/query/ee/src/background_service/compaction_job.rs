@@ -13,20 +13,17 @@
 // limitations under the License.
 
 use std::sync::{Arc};
-use std::thread::sleep;
 use std::time::Duration;
 
 use arrow_array::{BooleanArray, LargeBinaryArray};
 use arrow_array::RecordBatch;
-use arrow_array::StringArray;
 use arrow_array::UInt64Array;
 use chrono::Utc;
 use futures_util::SinkExt;
-use serde::de::Unexpected::Str;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
 use common_config::{InnerConfig};
 use common_exception::Result;
-use common_meta_app::background::{BackgroundJobIdent, BackgroundJobInfo, BackgroundJobParams, BackgroundJobStatus, BackgroundTaskIdent, BackgroundTaskInfo, BackgroundTaskState, UpdateBackgroundJobStatusReq, UpdateBackgroundTaskReq};
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobInfo, BackgroundJobStatus, BackgroundTaskIdent, BackgroundTaskInfo, BackgroundTaskState, GetBackgroundJobReq, UpdateBackgroundJobStatusReq, UpdateBackgroundTaskReq};
 use common_meta_app::schema::TableStatistics;
 use tracing::{debug, error, info};
 use background_service::get_background_service_handler;
@@ -35,7 +32,7 @@ use common_base::base::uuid::{Uuid};
 use common_meta_api::BackgroundApi;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
-use common_base::base::tokio::sync::{futures, Mutex, RwLock};
+use common_base::base::tokio::sync::{ Mutex};
 use common_base::base::tokio::sync::mpsc::Sender;
 
 use crate::background_service::job::Job;
@@ -73,10 +70,11 @@ pub struct CompactionJob {
 #[async_trait::async_trait]
 impl Job for CompactionJob {
     async fn run(&self) {
-        self.do_compaction_job().await.expect("TODO: panic message");
+        info!(background = true, job_name = ?self.creator.clone(), job_status = ?self.info.job_status.clone(), "Compaction job started");
+        self.do_compaction_job().await.expect("failed to do compaction job");
     }
 
-    async fn get_info(&self) -> BackgroundJobInfo {
+    fn get_info(&self) -> BackgroundJobInfo {
         return self.info.clone()
     }
 
@@ -85,7 +83,7 @@ impl Job for CompactionJob {
             job_name: self.creator.clone(),
             status: status.clone(),
         }).await?;
-        self.info.job_status = Some(status);
+        self.info = self.meta_api.get_background_job(GetBackgroundJobReq{ name: self.creator.clone() }).await?.info;
         Ok(())
     }
 }
@@ -144,8 +142,8 @@ impl CompactionJob {
                 }
             }
         }
-        info!(job = "compaction", background = true, "compaction job done");
-        let mut finish_tx = self.finish_tx.clone();
+        info!(job = "compaction", background = true, "compaction tasl is done");
+        let finish_tx = self.finish_tx.clone();
         let _ = finish_tx.lock().await.send(1).await;
         Ok(())
 

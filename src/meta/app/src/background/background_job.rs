@@ -17,7 +17,7 @@ use std::fmt::{Display, };
 use std::fmt::Formatter;
 use std::str::FromStr;
 
-use chrono::{DateTime, TimeZone};
+use chrono::{DateTime};
 use chrono::Utc;
 use cron::Schedule;
 
@@ -117,13 +117,8 @@ impl BackgroundJobParams {
             BackgroundJobType::INTERVAL => Some(last_run_at + chrono::Duration::seconds(self.scheduled_job_interval_seconds as i64)),
             BackgroundJobType::CRON => {
                 let schedule = Schedule::from_str(self.scheduled_job_cron.as_str()).expect(&*format!("invalid cron expression {}", self.scheduled_job_cron));
-                if let Some(tz) = self.scheduled_job_timezone {
-                    let mut upcoming = schedule.after(&last_run_at).next().unwrap();
-                    Some(upcoming.with_timezone(&Utc))
-                } else {
-                    let mut upcoming = schedule.after(&last_run_at).next().unwrap();
-                    Some(upcoming.with_timezone(&Utc))
-                }
+                let upcoming = schedule.after(&last_run_at).next().unwrap();
+                Some(upcoming.with_timezone(&Utc))
             }
         }
     }
@@ -162,12 +157,15 @@ impl Display for BackgroundJobStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "job_state: {}, last_task_id: {}, last_task_run_at: {}",
+            "job_state: {}, last_task_id: {}, last_task_run_at: {}, next_scheduled_time: {}",
             self.job_state,
             self.last_task_id.as_ref().unwrap_or(&"".to_string()),
             self.last_task_run_at
                 .map(|x| x.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
-                .unwrap_or("".to_string())
+                .unwrap_or("".to_string()),
+            self.next_task_scheduled_time
+                .map(|x| x.to_rfc3339_opts(chrono::SecondsFormat::Secs, true))
+                .unwrap_or("".to_string()),
         )
     }
 }
@@ -181,7 +179,7 @@ impl BackgroundJobStatus {
             next_task_scheduled_time: match params.job_type {
                 BackgroundJobType::ONESHOT => None,
                 BackgroundJobType::INTERVAL => Some(Utc::now()),
-                BackgroundJobType::CRON => None,
+                BackgroundJobType::CRON => params.get_next_running_time(Utc::now()),
                 }
         }
     }
@@ -194,6 +192,12 @@ pub struct BackgroundJobIdent {
     pub tenant: String,
 
     pub name: String,
+}
+
+impl Display for BackgroundJobIdent {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.tenant, self.name)
+    }
 }
 
 // Info

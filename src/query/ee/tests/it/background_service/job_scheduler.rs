@@ -20,14 +20,19 @@ use chrono_tz::Tz;
 use enterprise_query::background_service::{Job, JobScheduler};
 use common_exception::Result;
 use common_base::base::{GlobalInstance, tokio};
+use common_base::base::tokio::sync::mpsc::Sender;
+use common_base::base::tokio::sync::Mutex;
 use common_meta_app::background::{BackgroundJobInfo, BackgroundJobParams, BackgroundJobStatus};
+use common_meta_app::principal::UserIdentity;
 use databend_query::servers::ShutdownHandle;
-use databend_query::test_kits::TestGlobalServices;
+use databend_query::sessions::SessionManager;
+use databend_query::test_kits::{TestFixture, TestGlobalServices};
 
 #[derive(Clone)]
 struct TestJob {
     counter: Arc<AtomicUsize>,
     info: BackgroundJobInfo,
+    finish_tx: Arc<Mutex<Sender<u64>>>,
 }
 
 fn new_info(params: BackgroundJobParams, status: BackgroundJobStatus) -> BackgroundJobInfo {
@@ -46,36 +51,62 @@ fn new_info(params: BackgroundJobParams, status: BackgroundJobStatus) -> Backgro
 impl Job for TestJob {
     async fn run(&self) {
         self.counter.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
+        let _ = self.finish_tx.clone().lock().await.send(1).await;
     }
 
-    async fn get_info(&self) -> BackgroundJobInfo {
-        todo!()
+    fn get_info(&self) -> BackgroundJobInfo {
+        self.info.clone()
     }
 
     async fn update_job_status(&mut self, status: BackgroundJobStatus) -> Result<()> {
-        todo!()
+        Ok(())
     }
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_one_shot_job() -> Result<()> {
-    let _guard =
-        TestGlobalServices::setup(databend_query::test_kits::ConfigBuilder::create().build())
-            .await?;
     let mut scheduler = JobScheduler::new();
     let counter = Arc::new(AtomicUsize::new(0));
     let job = TestJob {
         counter: counter.clone(),
-        info: Default::default(),
+        info: BackgroundJobInfo::new_compactor_job(
+            BackgroundJobParams::new_one_shot_job(),
+            UserIdentity::default(),
+        ),
+        finish_tx: scheduler.finish_tx.clone(),
     };
-    scheduler.add_job(job.clone()).await?;
-    let mut shutdown_handle = ShutdownHandle::create()?;
-    scheduler.start(&mut shutdown_handle).await?;
-    // atomic operation is flaky, so we need to sleep for a while
+    scheduler.add_job(job.clone())?;
+    // println!("what happened");
+    scheduler.start().await?;
+    // // atomic operation is flaky, so we need to sleep for a while
     tokio::time::sleep(Duration::from_millis(100)).await;
     assert_eq!(counter.load(std::sync::atomic::Ordering::Relaxed), 1);
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_interval_job() -> Result<()> {
+    let _  = TestFixture::new().await;
+
+    let mut scheduler = JobScheduler::new();
+    scheduler.job_tick_interval = Duration::from_millis(5);
+    let counter = Arc::new(AtomicUsize::new(0));
+    let job = TestJob {
+        counter: counter.clone(),
+        info: BackgroundJobInfo::new_compactor_job(
+            BackgroundJobParams::new_interval_job(1),
+            UserIdentity::default(),
+        ),
+        finish_tx: scheduler.finish_tx.clone(),
+    };
+    scheduler.add_job(job.clone())?;
+    scheduler.start().await?;
+
+
+    Ok(())
+}
+
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_should_run_job() -> Result<()> {

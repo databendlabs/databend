@@ -29,11 +29,12 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::{Session, SessionManager, SessionType};
 use databend_query::sql::Planner;
 use futures_util::StreamExt;
-use tracing::{error, info, Instrument};
+use tracing::{error, info};
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
 use common_license::license_manager::get_license_manager;
-use common_meta_app::background::{BackgroundJobInfo, };
+use common_meta_api::BackgroundApi;
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobInfo, BackgroundJobState, CreateBackgroundJobReq, GetBackgroundJobReq, UpdateBackgroundJobParamsReq, UpdateBackgroundJobStatusReq};
 use common_meta_store::MetaStore;
 use common_users::{BUILTIN_ROLE_ACCOUNT_ADMIN, UserApiProvider};
 use databend_query::servers::ShutdownHandle;
@@ -45,7 +46,6 @@ pub struct RealBackgroundService {
     conf: InnerConfig,
     session: Arc<Session>,
     meta: Arc<MetaStore>,
-    user: UserIdentity,
     scheduler: Arc<JobScheduler>,
 }
 
@@ -59,7 +59,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
         ctx.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let data_schema = interpreter.schema();
-        let mut stream = interpreter.execute(ctx.clone()).await?;
+        let stream = interpreter.execute(ctx.clone()).await?;
         let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
 
         let mut result = vec![];
@@ -99,7 +99,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
             panic!("Background service is only available in enterprise edition.");
         }
         let scheduler = self.scheduler.clone();
-        scheduler.start(shutdown_handler).await?;
+        scheduler.start().await?;
         info!("all one shot jobs finished");
         Ok(())
     }
@@ -114,28 +114,70 @@ impl RealBackgroundService {
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let mut scheduler = JobScheduler::new();
 
-        let compactor_job = RealBackgroundService::get_compactor_job(conf, &user.identity(), scheduler.finish_tx.clone()).await;
-        scheduler.add_job(compactor_job).await?;
+        let compactor_job = RealBackgroundService::get_compactor_job(meta_api.clone(), conf, &user.identity(), scheduler.finish_tx.clone()).await?;
+        scheduler.add_job(compactor_job)?;
 
         let rm = RealBackgroundService {
             conf: conf.clone(),
             session: session.clone(),
             meta: meta_api,
-            user: user.identity(),
             scheduler: Arc::new(scheduler),
         };
         Ok(rm)
     }
 
-    async fn get_compactor_job(conf: &InnerConfig, creator: &UserIdentity, finish_tx: Arc<Mutex<Sender<u64>>>) -> CompactionJob  {
+    async fn get_compactor_job(meta: Arc<MetaStore>, conf: &InnerConfig, creator: &UserIdentity, finish_tx: Arc<Mutex<Sender<u64>>>) -> Result<CompactionJob>  {
         // background compactor job
         let name = format!("{}-{}-compactor-job", conf.query.tenant_id, conf.query.cluster_id);
         let params = conf.background.compaction.params.clone();
         let info = BackgroundJobInfo::new_compactor_job(params.clone(), creator.clone());
+
+        let id = BackgroundJobIdent{
+            tenant: conf.query.tenant_id.clone(),
+            name: name.clone(),
+        };
+        meta.create_background_job(CreateBackgroundJobReq{
+            if_not_exists: true,
+            job_name: id.clone(),
+            job_info: info,
+        }).await?;
+        Self::update_compaction_job_params(meta.clone(), &id, conf).await?;
+        let info = Self::suspend_job(meta.clone(), &id, false).await?;
+
         let job = CompactionJob::create(&conf, name, info, finish_tx).await;
-        job
+        Ok(job)
     }
 
+    async fn update_compaction_job_params(meta: Arc<MetaStore>, id: &BackgroundJobIdent, conf: &InnerConfig) -> Result<()> {
+        // create job if not exist
+        let info = meta.get_background_job(GetBackgroundJobReq{ name: id.clone() }).await?.info;
+        if info.job_params.is_some() {
+            let mut params = info.job_params.clone().unwrap();
+            meta.update_background_job_params(UpdateBackgroundJobParamsReq{
+                job_name: id.clone(),
+                params: conf.background.compaction.params.clone()
+            }).await?;
+        }
+        Ok(())
+    }
+    async fn suspend_job(meta: Arc<MetaStore>, id: &BackgroundJobIdent, suspend: bool) -> Result<BackgroundJobInfo> {
+        // create job if not exist
+        let info = meta.get_background_job(GetBackgroundJobReq{ name: id.clone() }).await?.info;
+        if info.job_status.is_some() {
+            let mut status = info.job_status.clone().unwrap();
+            if suspend {
+                status.job_state = BackgroundJobState::SUSPENDED;
+            } else {
+                status.job_state = BackgroundJobState::RUNNING;
+            }
+            meta.update_background_job_status(UpdateBackgroundJobStatusReq{
+                job_name: id.clone(),
+                status,
+            }).await?;
+        }
+        let info = meta.get_background_job(GetBackgroundJobReq{ name: id.clone() }).await?.info;
+        Ok(info)
+    }
 
     pub async fn init(conf: &InnerConfig) -> Result<()> {
         let rm = RealBackgroundService::new(conf).await?;

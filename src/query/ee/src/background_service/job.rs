@@ -42,7 +42,7 @@ use common_exception::Result;
 pub trait Job: JobClone {
     /// Runs the job
     async fn run(&self);
-    async fn get_info(&self) -> BackgroundJobInfo;
+    fn get_info(&self) -> BackgroundJobInfo;
     async fn update_job_status(&mut self, status: BackgroundJobStatus) -> Result<()>;
 }
 
