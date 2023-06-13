@@ -303,11 +303,18 @@ pub enum AlterTableAction {
     RevertTo {
         point: TimeTravelPoint,
     },
+    SetOptions {
+        set_options: BTreeMap<String, String>,
+    },
 }
 
 impl Display for AlterTableAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            AlterTableAction::SetOptions { set_options } => {
+                write!(f, "SET OPTIONS: ").expect("Set Options Write Error ");
+                write_space_separated_map(f, set_options.into_iter())
+            }
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")
             }

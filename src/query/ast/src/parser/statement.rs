@@ -1862,6 +1862,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, point)| AlterTableAction::RevertTo { point },
     );
 
+    let set_table_options = map(
+        rule! {
+            SET ~ OPTIONS ~ "(" ~ #table_option ~ ")"
+        },
+        |(_, _, _, set_options, _)| AlterTableAction::SetOptions { set_options },
+    );
+
     rule!(
         #rename_table
         | #add_column
@@ -1871,6 +1878,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_table_cluster_key
         | #recluster_table
         | #revert_table
+        | #set_table_options
     )(i)
 }
 

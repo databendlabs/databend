@@ -101,6 +101,7 @@ use crate::plans::ReclusterTablePlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
+use crate::plans::SetOptionsPlan;
 use crate::plans::ShowCreateTablePlan;
 use crate::plans::TruncateTablePlan;
 use crate::plans::UndropTablePlan;
@@ -709,6 +710,14 @@ impl Binder {
                     database,
                     table,
                     point,
+                })))
+            }
+            AlterTableAction::SetOptions { set_options } => {
+                Ok(Plan::SetOptions(Box::new(SetOptionsPlan {
+                    set_options: set_options.clone(),
+                    catalog,
+                    database,
+                    table,
                 })))
             }
         }

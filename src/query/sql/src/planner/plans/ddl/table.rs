@@ -167,6 +167,21 @@ impl RenameTablePlan {
     }
 }
 
+/// SetOptions
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetOptionsPlan {
+    pub set_options: TableOptions,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+}
+
+impl SetOptionsPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
 // Table add column
 #[derive(Clone, Debug, PartialEq)]
 pub struct AddTableColumnPlan {
