@@ -3,7 +3,7 @@ title: ARRAY_AGG
 title_includes: LIST
 ---
 
-The ARRAY_AGG function (also known by its alias LIST) transforms all the values of a column into an array.
+The ARRAY_AGG function (also known by its alias LIST) transforms all the values, including NULL, of a specific column in a query result into an array.
 
 ## Syntax
 
