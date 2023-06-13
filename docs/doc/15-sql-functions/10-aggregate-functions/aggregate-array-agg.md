@@ -3,18 +3,13 @@ title: ARRAY_AGG
 title_includes: LIST
 ---
 
-Aggregate function.
-
-The `ARRAY_AGG()` function converts all the values of a column to an Array.
-
-:::tip
-The `LIST` function is alias to `ARRAY_AGG`.
-:::
+The ARRAY_AGG function (also known by its alias LIST) transforms all the values of a column into an array.
 
 ## Syntax
 
 ```sql
 ARRAY_AGG(<expr>)
+
 LIST(<expr>)
 ```
 
@@ -26,12 +21,14 @@ LIST(<expr>)
 
 ## Return Type
 
-the Array type that use the type of the value as inner type.
+Returns an [Array](../../13-sql-reference/10-data-types/40-data-type-array-types.md) with elements that are of the same type as the original data.
 
-## Example
+## Examples
 
-**Create a Table and Insert Sample Data**
+This example demonstrates how the ARRAY_AGG function can be used to aggregate and present data in a convenient array format:
+
 ```sql
+-- Create a table and insert sample data
 CREATE TABLE movie_ratings (
   id INT,
   movie_title VARCHAR,
@@ -45,19 +42,13 @@ VALUES (1, 'Inception', 1, 5),
        (3, 'Inception', 3, 5),
        (4, 'Interstellar', 1, 4),
        (5, 'Interstellar', 2, 3);
-```
 
-**Query Demo: List All Ratings for Inception Movie**
-
-```sql
+-- List all ratings for Inception in an array
 SELECT movie_title, ARRAY_AGG(rating) AS ratings
 FROM movie_ratings
 WHERE movie_title = 'Inception'
 GROUP BY movie_title;
-```
 
-**Result**
-```sql
 | movie_title |  ratings   |
 |-------------|------------|
 | Inception   | [5, 4, 5]  |
