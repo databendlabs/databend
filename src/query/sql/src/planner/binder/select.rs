@@ -613,9 +613,7 @@ impl Binder {
             .map(|w| w.used_columns())
             .unwrap_or_default();
 
-        if !(limit > 0
-            && limit <= limit_threadhold
-            && (!order_by.is_empty() || !where_cols.is_empty()))
+        if limit == 0 || limit > limit_threadhold || (order_by.is_empty() && where_cols.is_empty())
         {
             return Ok(());
         }
