@@ -10,14 +10,10 @@ Databend allows you to directly query data in the files stored in one of the fol
 
 During this process, Databend automatically detects the schema with the [INFER_SCHEMA](../../15-sql-functions/112-table-functions/infer_schema.md) function. This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
 
-:::note
-This feature is currently only available for the Parquet file format.
-:::
-
 ## Syntax and Parameters
 
 ```sql
-SELECT <columns> FROM
+SELECT <columns> | $<col_position> FROM
 {@<stage_name>[/<path>] | '<uri>'} [(
   [ PATTERN => '<regex_pattern>']
   [ FILE_FORMAT => '<format_name>']
