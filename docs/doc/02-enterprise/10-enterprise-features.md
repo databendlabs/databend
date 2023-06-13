@@ -6,8 +6,8 @@ Databend provides a single binary that includes both core and enterprise feature
 
 <details>
   <summary>How do I obtain a license key?</summary>
-   
-   If you're interested in obtaining a trial or enterprise license key, click this [link](https://databend.rs/doc/faq/license-faqs/#obtain-a-license) to find instructions on how to acquire one.<br/>
+   <p></p>
+   If you're interested in obtaining a trial or enterprise license key, click this <a target="_self" href="https://databend.rs/doc/faq/license-faqs/#obtain-a-license">link</a> to find instructions on how to acquire one.<br/>
 
    After obtaining your license key, refer to our [License FAQs](https://databend.rs/doc/faq/license-faqs/) for guidance on how to [set your license](https://databend.rs/doc/faq/license-faqs/#set-a-license) and [verify](https://databend.rs/doc/faq/license-faqs/#verify-a-license) its validity.
 </details>
