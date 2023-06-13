@@ -32,6 +32,7 @@ use crate::plans::Operator;
 use crate::plans::Plan;
 use crate::plans::RelOp;
 use crate::plans::RelOperator::Scan;
+use crate::plans::SubqueryDesc;
 use crate::BindContext;
 use crate::ScalarExpr;
 
@@ -70,7 +71,7 @@ impl<'a> Binder {
             &[],
         );
 
-        let (selection, input_expr, index, outer_columns) = if let Some(expr) = filter {
+        let (selection, subquery_desc) = if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
             if let ScalarExpr::SubqueryExpr(subquery_expr) = &scalar {
                 if subquery_expr.data_type() != DataType::Nullable(Box::new(DataType::Boolean)) {
@@ -128,12 +129,19 @@ impl<'a> Binder {
                             .to_string(),
                     ));
                 }
-                (None, Some(filter_expr), Some(index), Some(outer_columns))
+                (
+                    None,
+                    Some(SubqueryDesc {
+                        input_expr: filter_expr,
+                        index,
+                        outer_columns,
+                    }),
+                )
             } else {
-                (Some(scalar), None, None, None)
+                (Some(scalar), None)
             }
         } else {
-            (None, None, None, None)
+            (None, None)
         };
 
         let plan = DeletePlan {
@@ -142,9 +150,7 @@ impl<'a> Binder {
             table_name,
             metadata: self.metadata.clone(),
             selection,
-            input_expr,
-            index,
-            outer_columns,
+            subquery_desc,
         };
         Ok(Plan::Delete(Box::new(plan)))
     }
