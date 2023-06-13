@@ -8,7 +8,7 @@ Databend allows you to directly query data in the files stored in one of the fol
 - Bucket or container created within your object storage, such as Amazon S3, Google Cloud Storage, and Microsoft Azure.
 - Remote servers accessible via HTTPS.
 
-During this process, Databend automatically detects the schema with the [INFER_SCHEMA](../../15-sql-functions/112-table-functions/infer_schema.md) function. This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
+This feature can be particularly useful for inspecting or viewing the contents of staged files, whether it's before or after loading data.
 
 ## Syntax and Parameters
 
