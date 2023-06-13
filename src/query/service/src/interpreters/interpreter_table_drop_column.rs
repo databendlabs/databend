@@ -76,7 +76,7 @@ impl Interpreter for DropTableColumnInterpreter {
         let table_schema = table_info.schema();
         let field = table_schema.field_with_name(self.plan.column.as_str())?;
         if field.computed_expr.is_none() {
-            // Check if this column is used by other computed columns.
+            // Check if this column is referenced by computed columns.
             let fields = table_schema
                 .fields()
                 .iter()

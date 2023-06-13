@@ -1,10 +1,10 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2023 Databend Cloud
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Elastic License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     https://www.elastic.co/licensing/elastic-license
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,13 +14,13 @@
 
 use common_config::InnerConfig;
 use common_exception::Result;
-use common_license::license_manager::LicenseManager;
-use common_license::license_manager::OssLicenseManager;
 use common_tracing::set_panic_hook;
+use databend_query::clusters::ClusterDiscovery;
+use databend_query::test_kits::TestGuard;
+use databend_query::GlobalServices;
 use tracing::info;
 
-use crate::clusters::ClusterDiscovery;
-use crate::GlobalServices;
+use crate::test_kits::mock_services::MockServices;
 
 pub struct TestGlobalServices;
 
@@ -42,7 +42,7 @@ impl TestGlobalServices {
         common_base::base::GlobalInstance::init_testing(&thread_name);
 
         GlobalServices::init_with(config.clone()).await?;
-        OssLicenseManager::init()?;
+        MockServices::init(config.clone()).await?;
 
         // Cluster register.
         {
@@ -55,25 +55,6 @@ impl TestGlobalServices {
             );
         }
 
-        Ok(TestGuard {
-            thread_name: thread_name.to_string(),
-        })
-    }
-}
-
-pub struct TestGuard {
-    thread_name: String,
-}
-
-impl TestGuard {
-    pub fn new(thread_name: String) -> Self {
-        Self { thread_name }
-    }
-}
-
-impl Drop for TestGuard {
-    fn drop(&mut self) {
-        #[cfg(debug_assertions)]
-        common_base::base::GlobalInstance::drop_testing(&self.thread_name);
+        Ok(TestGuard::new(thread_name.to_string()))
     }
 }
