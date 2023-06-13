@@ -35,3 +35,14 @@ select db.t1.a from db.t as t1
 
 statement ok
 drop database if exists db
+
+statement ok
+create table t(a int);
+
+statement ok
+insert into t values(1);
+
+query I
+select catalog,database,name,number_of_blocks,number_of_segments from system.tables where name = 't';
+----
+default default t 1 1

@@ -654,7 +654,13 @@ pub async fn do_deletion(
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut res = PipelineBuildResult::create();
     fuse_table
-        .delete(ctx.clone(), filter, col_indices, &mut res.main_pipeline)
+        .delete(
+            ctx.clone(),
+            filter,
+            col_indices,
+            false,
+            &mut res.main_pipeline,
+        )
         .await?;
 
     if !res.main_pipeline.is_empty() {

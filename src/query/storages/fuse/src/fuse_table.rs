@@ -578,6 +578,8 @@ impl Table for FuseTable {
             data_size: Some(s.data_bytes),
             data_size_compressed: Some(s.compressed_data_bytes),
             index_size: Some(s.index_data_bytes),
+            number_of_blocks: s.number_of_blocks,
+            number_of_segments: s.number_of_segments,
         }))
     }
 
@@ -634,9 +636,11 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
+        query_internal_columns: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete(ctx, filter, col_indices, pipeline).await
+        self.do_delete(ctx, filter, col_indices, query_internal_columns, pipeline)
+            .await
     }
 
     #[async_backtrace::framed]
