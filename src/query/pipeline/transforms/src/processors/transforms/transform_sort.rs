@@ -53,6 +53,7 @@ pub fn build_full_sort_pipeline(
     }
 
     // Merge sort
+    let need_multi_merge = pipeline.output_len() > 1;
     pipeline.add_transform(|input, output| {
         let transform = match limit {
             Some(limit) => try_create_transform_sort_merge_limit(
@@ -62,6 +63,7 @@ pub fn build_full_sort_pipeline(
                 sort_desc.clone(),
                 block_size,
                 limit,
+                need_multi_merge,
             )?,
             _ => try_create_transform_sort_merge(
                 input,
@@ -69,6 +71,7 @@ pub fn build_full_sort_pipeline(
                 input_schema.clone(),
                 block_size,
                 sort_desc.clone(),
+                need_multi_merge,
             )?,
         };
 
@@ -83,6 +86,10 @@ pub fn build_full_sort_pipeline(
         }
     })?;
 
-    // Multi-pipelines merge sort
-    try_add_multi_sort_merge(pipeline, input_schema, block_size, limit, sort_desc)
+    if need_multi_merge {
+        // Multi-pipelines merge sort
+        try_add_multi_sort_merge(pipeline, input_schema, block_size, limit, sort_desc)?;
+    }
+
+    Ok(())
 }
