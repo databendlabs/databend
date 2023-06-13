@@ -2,12 +2,12 @@
 title: Enterprise Features
 ---
 
-Databend Cloud provides a single binary that includes both core and enterprise features. The core features can be accessed without a license key, while the enterprise features require either a trial or an enterprise license key. This page lists the available enterprise features.
+Databend provides a single binary that includes both core and enterprise features. The core features can be accessed without a license key, while the enterprise features require either a trial or an enterprise license key. This page lists the available enterprise features.
 
 <details>
   <summary>How do I obtain a license key?</summary>
    
-   If you‘re interested in obtaining a trial or enterprise license key, click this [link](https://databend.rs/doc/faq/license-faqs/#obtain-a-license) to find instructions on how to acquire one.<br/>
+   If you're interested in obtaining a trial or enterprise license key, click this [link](../100-faq/30-license-faqs.md#obtain-a-license) to find instructions on how to acquire one.<br/>
 
    After obtaining your license key, refer to our [License FAQs](https://databend.rs/doc/faq/license-faqs/) for guidance on how to [set your license](https://databend.rs/doc/faq/license-faqs/#set-a-license) and [verify](https://databend.rs/doc/faq/license-faqs/#verify-a-license) its validity.
 </details>
