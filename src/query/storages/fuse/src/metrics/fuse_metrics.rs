@@ -196,9 +196,6 @@ pub fn metrics_reset() {
     gauge!(key!("compact_block_read_nums"), c);
     gauge!(key!("compact_block_read_bytes"), c);
     gauge!(key!("compact_block_read_milliseconds"), c);
-    gauge!(key!("compact_block_write_nums"), c);
-    gauge!(key!("compact_block_write_bytes"), c);
-    gauge!(key!("compact_block_write_milliseconds"), c);
 
     // Pruning metrics.
     gauge!(key!("pruning_prewhere_nums"), c);

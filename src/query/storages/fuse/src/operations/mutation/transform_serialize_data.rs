@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -27,6 +28,12 @@ use opendal::Operator;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
+use crate::metrics::metrics_inc_block_index_write_bytes;
+use crate::metrics::metrics_inc_block_index_write_milliseconds;
+use crate::metrics::metrics_inc_block_index_write_nums;
+use crate::metrics::metrics_inc_block_write_bytes;
+use crate::metrics::metrics_inc_block_write_milliseconds;
+use crate::metrics::metrics_inc_block_write_nums;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
@@ -181,20 +188,38 @@ impl Processor for SerializeDataTransform {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized(serialized) => {
+                let start = Instant::now();
                 // write block data.
                 let raw_block_data = serialized.block_raw_data;
+                let data_size = raw_block_data.len();
                 let path = serialized.block_meta.location.0.as_str();
                 write_data(raw_block_data, &self.dal, path).await?;
+
+                // Perf.
+                {
+                    metrics_inc_block_write_nums(1);
+                    metrics_inc_block_write_bytes(data_size as u64);
+                    metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
+                }
 
                 // write index data.
                 let bloom_index_state = serialized.bloom_index_state;
                 if let Some(bloom_index_state) = bloom_index_state {
+                    let index_size = bloom_index_state.data.len();
                     write_data(
                         bloom_index_state.data,
                         &self.dal,
                         &bloom_index_state.location.0,
                     )
                     .await?;
+                    // Perf.
+                    {
+                        metrics_inc_block_index_write_nums(1);
+                        metrics_inc_block_index_write_bytes(index_size as u64);
+                        metrics_inc_block_index_write_milliseconds(
+                            start.elapsed().as_millis() as u64
+                        );
+                    }
                 }
                 let block_meta = Arc::new(serialized.block_meta);
                 self.state = State::Output(Replacement::Replaced(block_meta));
