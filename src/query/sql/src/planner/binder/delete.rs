@@ -18,6 +18,7 @@ use common_ast::ast::Expr;
 use common_ast::ast::TableReference;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::DataType;
 use common_expression::ROW_ID_COL_NAME;
 
 use crate::binder::Binder;
@@ -69,16 +70,24 @@ impl<'a> Binder {
             &[],
         );
 
-        let (selection, input_expr, index, child_expr) = if let Some(expr) = filter {
+        let (selection, input_expr, index, outer_columns) = if let Some(expr) = filter {
             let (scalar, _) = scalar_binder.bind(expr).await?;
             if let ScalarExpr::SubqueryExpr(subquery_expr) = &scalar {
-                let child_expr = if let Some(child_expr) = &subquery_expr.child_expr {
-                    Some(*child_expr.clone())
-                } else {
+                if subquery_expr.data_type() != DataType::Nullable(Box::new(DataType::Boolean)) {
                     return Err(ErrorCode::from_string(
-                        "subquery in delete statement shouldn't be scalar subquery".to_string(),
+                        "subquery data type in delete statement should be boolean".to_string(),
                     ));
+                }
+                let mut outer_columns = Default::default();
+                if let Some(child_expr) = &subquery_expr.child_expr {
+                    outer_columns = child_expr.used_columns();
                 };
+                outer_columns.extend(subquery_expr.outer_columns.iter());
+                if outer_columns.is_empty() {
+                    return Err(ErrorCode::from_string(
+                        "The subquery is invalid in delete statement".to_string(),
+                    ));
+                }
 
                 let filter = Filter {
                     predicates: vec![scalar],
@@ -119,7 +128,7 @@ impl<'a> Binder {
                             .to_string(),
                     ));
                 }
-                (None, Some(filter_expr), Some(index), child_expr)
+                (None, Some(filter_expr), Some(index), Some(outer_columns))
             } else {
                 (Some(scalar), None, None, None)
             }
@@ -135,7 +144,7 @@ impl<'a> Binder {
             selection,
             input_expr,
             index,
-            child_expr,
+            outer_columns,
         };
         Ok(Plan::Delete(Box::new(plan)))
     }

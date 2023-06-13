@@ -222,10 +222,10 @@ impl Interpreter for DeleteInterpreter {
             let filter = self.subquery_filter(input_expr).await?;
             let col_indices = self
                 .plan
-                .child_expr
+                .outer_columns
                 .as_ref()
                 .unwrap()
-                .used_columns()
+                .clone()
                 .into_iter()
                 .collect();
             (Some(filter), col_indices)

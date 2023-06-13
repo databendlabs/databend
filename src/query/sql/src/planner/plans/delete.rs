@@ -14,6 +14,7 @@
 
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
+use crate::ColumnSet;
 use crate::IndexType;
 use crate::MetadataRef;
 
@@ -28,6 +29,5 @@ pub struct DeletePlan {
     pub input_expr: Option<SExpr>,
     // `_row_id`'s index
     pub index: Option<IndexType>,
-    // / The expr that is used to compare the result of the subquery (IN/ANY/ALL), such as `t1.a in (select t2.a from t2)`, t1.a is `child_expr`.
-    pub child_expr: Option<ScalarExpr>,
+    pub outer_columns: Option<ColumnSet>,
 }

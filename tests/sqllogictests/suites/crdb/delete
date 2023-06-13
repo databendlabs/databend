@@ -202,3 +202,68 @@ select * from t1 order by a;
 1
 8
 
+statement ok
+insert into t1 values (2),(3);
+
+statement ok
+delete from t1 where exists (select * from t2 where t1.a = t2.b);
+
+query I
+select * from t1 order by a;
+----
+1
+8
+
+statement ok
+insert into t1 values(2), (3);
+
+statement ok
+delete from t1 where a < any(select b from t2);
+
+query I
+select * from t1 order by a;
+----
+3
+8
+
+statement ok
+insert into t1 values(2), (1);
+
+# todo: support all subquery later
+# statement ok
+# delete from t1 where a = all(select b from t2);
+
+# query I
+# select * from t1 order by a;
+# ----
+# 2
+# 3
+# 8
+
+statement ok
+insert into t2 values(2), (3);
+
+statement ok
+delete from t1 where a in (select b from t2 where a > b);
+
+query I
+select * from t1 order by a;
+----
+1
+2
+3
+8
+
+statement ok
+delete from t1 where a = any(select b from t2 where t1.a = t2.b) ;
+
+query I
+select * from t1 order by a;
+----
+1
+8
+
+statement ok
+drop table t1;
+
+
