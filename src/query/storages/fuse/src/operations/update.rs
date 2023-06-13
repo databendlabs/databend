@@ -93,7 +93,6 @@ impl FuseTable {
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
 
-        // TODO(zhyass): support cluster stats generator.
         pipeline.add_transform(|input, output| {
             SerializeDataTransform::try_create(
                 ctx.clone(),

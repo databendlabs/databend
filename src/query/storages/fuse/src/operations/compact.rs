@@ -103,13 +103,13 @@ impl FuseTable {
     }
 
     /// The flow of Pipeline is as follows:
-    /// +--------------+
-    /// |CompactSource1|  ------
-    /// +--------------+        |      +-----------------+      +----------+
-    /// |    ...       |  ...   | ---> |CompactAggregator| ---> |CommitSink|
-    /// +--------------+        |      +-----------------+      +----------+
-    /// |CompactSourceN|  ------
-    /// +--------------+
+    /// +-------------+      +----------------------+
+    /// |CompactSource| ---> |SerializeDataTransform|   ------
+    /// +-------------+      +----------------------+         |      +-----------------+      +----------+
+    /// |     ...     | ---> |          ...         |   ...   | ---> |CompactAggregator| ---> |CommitSink|
+    /// +-------------+      +----------------------+         |      +-----------------+      +----------+
+    /// |CompactSource| ---> |SerializeDataTransform|   ------
+    /// +-------------+      +----------------------+
     #[async_backtrace::framed]
     async fn compact_blocks(
         &self,

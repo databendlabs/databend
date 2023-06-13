@@ -55,13 +55,13 @@ use crate::FuseTable;
 
 impl FuseTable {
     /// The flow of Pipeline is as follows:
-    /// +---------------+      +-----------------------+
-    /// |MutationSource1| ---> |SerializeDataTransform1|   ------
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |     ...       | ---> |          ...          |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
-    /// +---------------+      +-----------------------+
+    /// +--------------+      +----------------------+
+    /// |MutationSource| ---> |SerializeDataTransform|   ------
+    /// +--------------+      +----------------------+         |      +-----------------------+      +----------+
+    /// |     ...      | ---> |          ...         |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
+    /// +--------------+      +----------------------+         |      +-----------------------+      +----------+
+    /// |MutationSource| ---> |SerializeDataTransform|   ------
+    /// +--------------+      +----------------------+
     #[async_backtrace::framed]
     pub async fn do_delete(
         &self,
