@@ -13,7 +13,7 @@ This feature can be particularly useful for inspecting or viewing the contents o
 ## Syntax and Parameters
 
 ```sql
-SELECT <columns> | $<col_position> FROM
+SELECT <column> [, <column> ...] | $<col_position> [, $<col_position> ...]FROM
 {@<stage_name>[/<path>] | '<uri>'} [(
   [ PATTERN => '<regex_pattern>']
   [ FILE_FORMAT => '<format_name>']
