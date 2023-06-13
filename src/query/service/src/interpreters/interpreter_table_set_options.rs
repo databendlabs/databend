@@ -12,11 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::schema::UpsertTableOptionReq;
+use common_meta_types::MatchSeq;
 use common_sql::plans::SetOptionsPlan;
+use common_storages_fuse::TableContext;
+use tracing::error;
 
+use super::interpreter_table_create::is_valid_create_opt;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -40,8 +47,41 @@ impl Interpreter for SetOptionsInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        // todo!!!
         // valid_options_check and do request to meta_srv
+        let mut options_map = HashMap::new();
+        for table_option in self.plan.set_options.iter() {
+            let key = table_option.0.to_lowercase();
+            if !is_valid_create_opt(&key) {
+                error!("invalid opt for fuse table in create table statement");
+                return Err(ErrorCode::TableOptionInvalid(format!(
+                    "table option {key} is invalid for create table statement",
+                )));
+            }
+            options_map.insert(key, Some(table_option.1.clone()));
+        }
+        let catalog = self.ctx.get_catalog(self.plan.catalog.as_str())?;
+        let database = self.plan.database.as_str();
+        let table = self.plan.table.as_str();
+        let tbl = catalog
+            .get_table(self.ctx.get_tenant().as_str(), database, table)
+            .await
+            .ok();
+
+        let table = if let Some(table) = &tbl {
+            table
+        } else {
+            return Err(ErrorCode::UnknownTable(self.plan.table.as_str()));
+        };
+
+        let req = UpsertTableOptionReq {
+            table_id: table.get_id(),
+            seq: MatchSeq::Exact(table.get_table_info().ident.seq),
+            options: options_map,
+        };
+
+        catalog
+            .upsert_table_option(self.ctx.get_tenant().as_str(), database, req)
+            .await?;
         Ok(PipelineBuildResult::create())
     }
 }
