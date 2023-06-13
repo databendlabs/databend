@@ -63,19 +63,13 @@ impl DataBlock {
                 Value::Scalar(s) => {
                     Column::scatter_repeat_scalars::<I>(s, &entry.data_type, indices, scatter_size)
                         .into_iter()
-                        .map(|value| BlockEntry {
-                            data_type: entry.data_type.clone(),
-                            value: Value::Column(value),
-                        })
+                        .map(|value| BlockEntry::new(entry.data_type.clone(), Value::Column(value)))
                         .collect()
                 }
                 Value::Column(c) => c
                     .scatter(&entry.data_type, indices, scatter_size)
                     .into_iter()
-                    .map(|value| BlockEntry {
-                        data_type: entry.data_type.clone(),
-                        value: Value::Column(value),
-                    })
+                    .map(|value| BlockEntry::new(entry.data_type.clone(), Value::Column(value)))
                     .collect(),
             })
             .collect();

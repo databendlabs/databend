@@ -25,10 +25,16 @@ pub mod serialize;
 use common_arrow::arrow::bitmap::Bitmap;
 use common_exception::Result;
 use common_exception::Span;
+use ethnum::i256;
 
 pub use self::column_from::*;
+use crate::types::decimal::DecimalScalar;
+use crate::types::decimal::MAX_DECIMAL256_PRECISION;
 use crate::types::AnyType;
 use crate::types::DataType;
+use crate::types::DecimalDataType;
+use crate::types::DecimalSize;
+use crate::types::NumberScalar;
 use crate::BlockEntry;
 use crate::Column;
 use crate::DataBlock;
@@ -59,10 +65,7 @@ pub fn eval_function(
                     data_type: ty.clone(),
                     display_name: String::new(),
                 },
-                BlockEntry {
-                    data_type: ty,
-                    value: val,
-                },
+                BlockEntry::new(ty, val),
             )
         })
         .unzip();
@@ -104,5 +107,85 @@ pub fn column_merge_validity(column: &Column, bitmap: Option<Bitmap>) -> Option<
             Some(v) => Some(&c.validity & (&v)),
         },
         _ => bitmap,
+    }
+}
+
+pub fn shrink_scalar(scalar: Scalar) -> Scalar {
+    match scalar {
+        Scalar::Number(NumberScalar::UInt8(n)) => shrink_u64(n as u64),
+        Scalar::Number(NumberScalar::UInt16(n)) => shrink_u64(n as u64),
+        Scalar::Number(NumberScalar::UInt32(n)) => shrink_u64(n as u64),
+        Scalar::Number(NumberScalar::UInt64(n)) => shrink_u64(n),
+        Scalar::Number(NumberScalar::Int8(n)) => shrink_i64(n as i64),
+        Scalar::Number(NumberScalar::Int16(n)) => shrink_i64(n as i64),
+        Scalar::Number(NumberScalar::Int32(n)) => shrink_i64(n as i64),
+        Scalar::Number(NumberScalar::Int64(n)) => shrink_i64(n),
+        Scalar::Decimal(DecimalScalar::Decimal128(d, size)) => shrink_d256(d.into(), size),
+        Scalar::Decimal(DecimalScalar::Decimal256(d, size)) => shrink_d256(d, size),
+        Scalar::Tuple(mut fields) => {
+            for field in fields.iter_mut() {
+                *field = shrink_scalar(field.clone());
+            }
+            Scalar::Tuple(fields)
+        }
+        _ => scalar,
+    }
+}
+
+fn shrink_u64(num: u64) -> Scalar {
+    if num <= u8::MAX as u64 {
+        Scalar::Number(NumberScalar::UInt8(num as u8))
+    } else if num <= u16::MAX as u64 {
+        Scalar::Number(NumberScalar::UInt16(num as u16))
+    } else if num <= u32::MAX as u64 {
+        Scalar::Number(NumberScalar::UInt32(num as u32))
+    } else {
+        Scalar::Number(NumberScalar::UInt64(num))
+    }
+}
+
+fn shrink_i64(num: i64) -> Scalar {
+    if num >= 0 {
+        return shrink_u64(num as u64);
+    }
+
+    if num <= i8::MAX as i64 && num >= i8::MIN as i64 {
+        Scalar::Number(NumberScalar::Int8(num as i8))
+    } else if num <= i16::MAX as i64 && num >= i16::MIN as i64 {
+        Scalar::Number(NumberScalar::Int16(num as i16))
+    } else if num <= i32::MAX as i64 && num >= i32::MIN as i64 {
+        Scalar::Number(NumberScalar::Int32(num as i32))
+    } else {
+        Scalar::Number(NumberScalar::Int64(num))
+    }
+}
+
+fn shrink_d256(decimal: i256, size: DecimalSize) -> Scalar {
+    if size.scale == 0 {
+        if decimal.is_positive() && decimal <= i256::from(u64::MAX) {
+            return shrink_u64(decimal.as_u64());
+        } else if decimal <= i256::from(i64::MAX) && decimal >= i256::from(i64::MIN) {
+            return shrink_i64(decimal.as_i64());
+        }
+    }
+
+    let valid_bits = 256 - decimal.saturating_abs().leading_zeros();
+    let log10_2 = std::f64::consts::LOG10_2;
+    let mut precision = ((valid_bits as f64) * log10_2).floor() as u8;
+    if decimal >= i256::from(10).pow(precision as u32) {
+        precision += 1;
+    }
+    precision = precision.clamp(1, MAX_DECIMAL256_PRECISION).max(size.scale);
+
+    let size = DecimalSize { precision, ..size };
+    let decimal_ty = DecimalDataType::from_size(size).unwrap();
+
+    match decimal_ty {
+        DecimalDataType::Decimal128(size) => {
+            Scalar::Decimal(DecimalScalar::Decimal128(decimal.as_i128(), size))
+        }
+        DecimalDataType::Decimal256(size) => {
+            Scalar::Decimal(DecimalScalar::Decimal256(decimal, size))
+        }
     }
 }

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -36,7 +37,7 @@ pub struct ProfSpanSet<K = u32> {
 }
 
 impl<K> ProfSpanSet<K>
-where K: std::hash::Hash + Eq
+where K: std::hash::Hash + Eq + PartialEq + Clone + Debug
 {
     pub fn update(&mut self, key: K, span: ProfSpan) {
         let entry = self.spans.entry(key).or_insert_with(ProfSpan::default);

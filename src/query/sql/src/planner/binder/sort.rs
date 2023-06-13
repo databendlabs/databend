@@ -58,7 +58,7 @@ pub struct OrderItem {
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn analyze_order_items(
+    pub async fn analyze_order_items(
         &mut self,
         bind_context: &mut BindContext,
         scalar_items: &mut HashMap<IndexType, ScalarItem>,
@@ -182,7 +182,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_order_by(
+    pub async fn bind_order_by(
         &mut self,
         from_context: &BindContext,
         order_by: OrderItems,
@@ -246,6 +246,7 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
+            after_exchange: false,
         };
         new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
         Ok(new_expr)
@@ -296,6 +297,7 @@ impl Binder {
         let sort_plan = Sort {
             items: order_by_items,
             limit: None,
+            after_exchange: false,
         };
         Ok(SExpr::create_unary(
             Arc::new(sort_plan.into()),

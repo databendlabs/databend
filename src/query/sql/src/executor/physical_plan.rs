@@ -33,7 +33,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::IEJoinCondition;
+use crate::executor::RangeJoinCondition;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
@@ -368,6 +368,9 @@ pub struct Sort {
     // limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
 
+    // If the sort plan is after the exchange plan
+    pub after_exchange: bool,
+
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -531,7 +534,13 @@ impl HashJoin {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct IEJoin {
+pub enum RangeJoinType {
+    IEJoin,
+    Merge,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RangeJoin {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
@@ -539,17 +548,18 @@ pub struct IEJoin {
     pub right: Box<PhysicalPlan>,
     /// The first two conditions: (>, >=, <, <=)
     /// Condition's left/right side only contains one table's column
-    pub conditions: Vec<IEJoinCondition>,
+    pub conditions: Vec<RangeJoinCondition>,
     /// The other conditions
     pub other_conditions: Vec<RemoteExpr>,
     /// Now only support inner join, will support left/right join later
     pub join_type: JoinType,
+    pub range_join_type: RangeJoinType,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl IEJoin {
+impl RangeJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.left.output_schema()?.fields().clone();
         fields.extend(self.right.output_schema()?.fields().clone());
@@ -652,10 +662,7 @@ pub struct DistributedInsertSelect {
 
 impl DistributedInsertSelect {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", DataType::String),
-            DataField::new("seg_info", DataType::String),
-        ]))
+        Ok(DataSchemaRef::default())
     }
 }
 
@@ -695,7 +702,7 @@ pub enum PhysicalPlan {
     Limit(Limit),
     RowFetch(RowFetch),
     HashJoin(HashJoin),
-    IEJoin(IEJoin),
+    RangeJoin(RangeJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
     RuntimeFilterSource(RuntimeFilterSource),
@@ -738,7 +745,7 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
-            PhysicalPlan::IEJoin(plan) => plan.output_schema(),
+            PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
         }
     }
 
@@ -763,7 +770,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
-            PhysicalPlan::IEJoin(_) => "IEJoin".to_string(),
+            PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
         }
     }
 
@@ -797,7 +804,7 @@ impl PhysicalPlan {
                 std::iter::once(plan.left_side.as_ref())
                     .chain(std::iter::once(plan.right_side.as_ref())),
             ),
-            PhysicalPlan::IEJoin(plan) => Box::new(
+            PhysicalPlan::RangeJoin(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
         }
@@ -822,7 +829,7 @@ impl PhysicalPlan {
             | PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
-            | PhysicalPlan::IEJoin(_)
+            | PhysicalPlan::RangeJoin(_)
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_) => None,

@@ -284,6 +284,8 @@ impl FromToProto for mt::TableStatistics {
             data_bytes: p.data_bytes,
             compressed_data_bytes: p.compressed_data_bytes,
             index_data_bytes: p.index_data_bytes,
+            number_of_segments: p.number_of_segments,
+            number_of_blocks: p.number_of_blocks,
         };
 
         Ok(v)
@@ -297,6 +299,8 @@ impl FromToProto for mt::TableStatistics {
             data_bytes: self.data_bytes,
             compressed_data_bytes: self.compressed_data_bytes,
             index_data_bytes: self.index_data_bytes,
+            number_of_segments: self.number_of_segments,
+            number_of_blocks: self.number_of_blocks,
         };
         Ok(p)
     }

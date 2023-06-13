@@ -20,10 +20,10 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use common_arrow::arrow::compute::sort::row::RowConverter as ArrowRowConverter;
-use common_arrow::arrow::compute::sort::row::Rows as ArrowRows;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::row::RowConverter as CommonRowConverter;
+use common_expression::types::string::StringColumn;
 use common_expression::types::DataType;
 use common_expression::types::DateType;
 use common_expression::types::NumberDataType;
@@ -31,9 +31,11 @@ use common_expression::types::NumberType;
 use common_expression::types::StringType;
 use common_expression::types::TimestampType;
 use common_expression::with_number_mapped_type;
+use common_expression::BlockEntry;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
+use common_expression::Value;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
@@ -46,12 +48,19 @@ use super::sort::SimpleRows;
 use super::Compactor;
 use super::TransformCompact;
 
+/// Merge sort blocks without limit.
+///
+/// For merge sort with limit, see [`super::transform_sort_merge_limit`]
 pub struct SortMergeCompactor<R, Converter> {
     block_size: usize,
-    limit: Option<usize>,
-    sort_columns_descriptions: Vec<SortColumnDescription>,
+    row_converter: Converter,
+    order_by_cols: Vec<usize>,
+
     aborting: Arc<AtomicBool>,
-    schema: DataSchemaRef,
+
+    /// If the next transform of current transform is [`super::transform_multi_sort_merge::MultiSortMergeProcessor`],
+    /// we can generate the order column to avoid the extra converting in the next transform.
+    gen_order_col: bool,
 
     _c: PhantomData<Converter>,
     _r: PhantomData<R>,
@@ -65,15 +74,17 @@ where
     pub fn try_create(
         schema: DataSchemaRef,
         block_size: usize,
-        limit: Option<usize>,
         sort_desc: Vec<SortColumnDescription>,
+        gen_order_col: bool,
     ) -> Result<Self> {
+        let order_by_cols = sort_desc.iter().map(|i| i.offset).collect::<Vec<_>>();
+        let row_converter = Converter::create(sort_desc, schema)?;
         Ok(SortMergeCompactor {
-            schema,
+            order_by_cols,
+            row_converter,
             block_size,
-            limit,
-            sort_columns_descriptions: sort_desc,
             aborting: Arc::new(AtomicBool::new(false)),
+            gen_order_col,
             _c: PhantomData,
             _r: PhantomData,
         })
@@ -93,20 +104,21 @@ where
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
 
-        let all_rows = blocks.iter().map(|b| b.num_rows()).sum::<usize>();
-        let output_size = self.limit.unwrap_or(all_rows).min(all_rows);
+        let output_size = blocks.iter().map(|b| b.num_rows()).sum::<usize>();
+        let mut blocks = blocks
+            .iter()
+            .filter(|b| !b.is_empty())
+            .cloned()
+            .collect::<Vec<_>>();
 
         if output_size == 0 {
             return Ok(vec![]);
         }
-
-        let mut row_converter =
-            Converter::create(self.sort_columns_descriptions.clone(), self.schema.clone())?;
 
         let output_block_num = output_size.div_ceil(self.block_size);
         let mut output_blocks = Vec::with_capacity(output_block_num);
@@ -114,62 +126,56 @@ where
         let mut heap: BinaryHeap<Reverse<Cursor<R>>> = BinaryHeap::with_capacity(blocks.len());
 
         // 1. Put all blocks into a min-heap.
-        for (i, block) in blocks.iter().enumerate() {
-            if block.is_empty() {
-                continue;
-            }
+        for (i, block) in blocks.iter_mut().enumerate() {
             let columns = self
-                .sort_columns_descriptions
+                .order_by_cols
                 .iter()
-                .map(|i| block.get_by_offset(i.offset).clone())
+                .map(|i| block.get_by_offset(*i).clone())
                 .collect::<Vec<_>>();
-            let rows = row_converter.convert(&columns, block.num_rows())?;
-            let cursor = Cursor::try_create(i, rows);
+            let rows = self.row_converter.convert(&columns, block.num_rows())?;
+
+            if self.gen_order_col {
+                let order_col = rows.to_column();
+                block.add_column(BlockEntry {
+                    data_type: order_col.data_type(),
+                    value: Value::Column(order_col),
+                });
+            }
+            let cursor = Cursor::new(i, rows);
             heap.push(Reverse(cursor));
         }
 
-        // 2. Drain the heap till the limit is reached.
-        let mut row = 0;
-        while row < output_size {
-            match heap.pop() {
-                Some(Reverse(mut cursor)) => {
-                    let block_idx = cursor.input_index;
-                    if heap.is_empty() {
-                        // If there is no other block in the heap, we can drain the whole block.
-                        while output_size > 0 && !cursor.is_finished() {
-                            output_indices.push((block_idx, cursor.advance()));
-                            row += 1;
-                        }
-                    } else {
-                        let next_cursor = &heap.peek().unwrap().0;
-                        // If the last row of current block is smaller than the next cursor,
-                        // we can drain the whole block.
-                        if cursor.last().le(&next_cursor.current()) {
-                            while output_size > 0 && !cursor.is_finished() {
-                                output_indices.push((block_idx, cursor.advance()));
-                                row += 1;
-                            }
-                        } else {
-                            while output_size > 0 && !cursor.is_finished() && cursor.le(next_cursor)
-                            {
-                                // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
-                                output_indices.push((block_idx, cursor.advance()));
-                                row += 1;
-                            }
-                            if output_size > 0 && !cursor.is_finished() {
-                                heap.push(Reverse(cursor));
-                            }
-                        }
-                    }
-                }
-                None => {
-                    unreachable!("heap is empty, but we haven't reached the limit yet");
-                }
-            }
-            if unlikely(row % self.block_size == 0 && self.aborting.load(Ordering::Relaxed)) {
+        // 2. Drain the heap
+        while let Some(Reverse(mut cursor)) = heap.pop() {
+            if unlikely(self.aborting.load(Ordering::Relaxed)) {
                 return Err(ErrorCode::AbortedQuery(
                     "Aborted query, because the server is shutting down or the query was killed.",
                 ));
+            }
+
+            let block_idx = cursor.input_index;
+            if heap.is_empty() {
+                // If there is no other block in the heap, we can drain the whole block.
+                while output_size > 0 && !cursor.is_finished() {
+                    output_indices.push((block_idx, cursor.advance()));
+                }
+            } else {
+                let next_cursor = &heap.peek().unwrap().0;
+                // If the last row of current block is smaller than the next cursor,
+                // we can drain the whole block.
+                if cursor.last().le(&next_cursor.current()) {
+                    while output_size > 0 && !cursor.is_finished() {
+                        output_indices.push((block_idx, cursor.advance()));
+                    }
+                } else {
+                    while output_size > 0 && !cursor.is_finished() && cursor.le(next_cursor) {
+                        // If the cursor is smaller than the next cursor, don't need to push the cursor back to the heap.
+                        output_indices.push((block_idx, cursor.advance()));
+                    }
+                    if output_size > 0 && !cursor.is_finished() {
+                        heap.push(Reverse(cursor));
+                    }
+                }
             }
         }
 
@@ -195,7 +201,7 @@ where
                     merge_slices.push((*block_idx, *row_idx, 1));
                 }
             }
-            let block = DataBlock::take_by_slices_limit_from_blocks(blocks, &merge_slices, None);
+            let block = DataBlock::take_by_slices_limit_from_blocks(&blocks, &merge_slices, None);
             output_blocks.push(block);
         }
 
@@ -214,7 +220,7 @@ type SimpleStringCompactor =
     SortMergeCompactor<SimpleRows<StringType>, SimpleRowConverter<StringType>>;
 type SimpleStringSort = TransformCompact<SimpleStringCompactor>;
 
-type CommonCompactor = SortMergeCompactor<ArrowRows, ArrowRowConverter>;
+type CommonCompactor = SortMergeCompactor<StringColumn, CommonRowConverter>;
 type CommonSort = TransformCompact<CommonCompactor>;
 
 pub fn try_create_transform_sort_merge(
@@ -222,13 +228,11 @@ pub fn try_create_transform_sort_merge(
     output: Arc<OutputPort>,
     output_schema: DataSchemaRef,
     block_size: usize,
-    limit: Option<usize>,
-    sort_columns_descriptions: Vec<SortColumnDescription>,
+    sort_desc: Vec<SortColumnDescription>,
+    gen_order_col: bool,
 ) -> Result<Box<dyn Processor>> {
-    if sort_columns_descriptions.len() == 1 {
-        let sort_type = output_schema
-            .field(sort_columns_descriptions[0].offset)
-            .data_type();
+    if sort_desc.len() == 1 {
+        let sort_type = output_schema.field(sort_desc[0].offset).data_type();
         match sort_type {
             DataType::Number(num_ty) => with_number_mapped_type!(|NUM_TYPE| match num_ty {
                 NumberDataType::NUM_TYPE => TransformCompact::<
@@ -243,7 +247,7 @@ pub fn try_create_transform_sort_merge(
                         SimpleRows<NumberType<NUM_TYPE>>,
                         SimpleRowConverter<NumberType<NUM_TYPE>>,
                     >::try_create(
-                        output_schema, block_size, limit, sort_columns_descriptions,
+                        output_schema, block_size, sort_desc, gen_order_col
                     )?
                 ),
             }),
@@ -253,8 +257,8 @@ pub fn try_create_transform_sort_merge(
                 SimpleDateCompactor::try_create(
                     output_schema,
                     block_size,
-                    limit,
-                    sort_columns_descriptions,
+                    sort_desc,
+                    gen_order_col,
                 )?,
             ),
             DataType::Timestamp => SimpleTimestampSort::try_create(
@@ -263,8 +267,8 @@ pub fn try_create_transform_sort_merge(
                 SimpleTimestampCompactor::try_create(
                     output_schema,
                     block_size,
-                    limit,
-                    sort_columns_descriptions,
+                    sort_desc,
+                    gen_order_col,
                 )?,
             ),
             DataType::String => SimpleStringSort::try_create(
@@ -273,31 +277,21 @@ pub fn try_create_transform_sort_merge(
                 SimpleStringCompactor::try_create(
                     output_schema,
                     block_size,
-                    limit,
-                    sort_columns_descriptions,
+                    sort_desc,
+                    gen_order_col,
                 )?,
             ),
             _ => CommonSort::try_create(
                 input,
                 output,
-                CommonCompactor::try_create(
-                    output_schema,
-                    block_size,
-                    limit,
-                    sort_columns_descriptions,
-                )?,
+                CommonCompactor::try_create(output_schema, block_size, sort_desc, gen_order_col)?,
             ),
         }
     } else {
         CommonSort::try_create(
             input,
             output,
-            CommonCompactor::try_create(
-                output_schema,
-                block_size,
-                limit,
-                sort_columns_descriptions,
-            )?,
+            CommonCompactor::try_create(output_schema, block_size, sort_desc, gen_order_col)?,
         )
     }
 }
@@ -308,6 +302,6 @@ pub fn sort_merge(
     sort_desc: Vec<SortColumnDescription>,
     data_blocks: &[DataBlock],
 ) -> Result<Vec<DataBlock>> {
-    let compactor = CommonCompactor::try_create(data_schema, block_size, None, sort_desc)?;
+    let mut compactor = CommonCompactor::try_create(data_schema, block_size, sort_desc, false)?;
     compactor.compact_final(data_blocks)
 }

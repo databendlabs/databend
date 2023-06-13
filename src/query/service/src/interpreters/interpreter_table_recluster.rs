@@ -68,6 +68,13 @@ impl Interpreter for ReclusterTableInterpreter {
             None
         };
 
+        // Status.
+        {
+            let status = "recluster: begin to run recluster";
+            ctx.set_status_info(status);
+            tracing::info!(status);
+        }
+        let mut times = 0;
         loop {
             let table = self
                 .ctx
@@ -76,12 +83,10 @@ impl Interpreter for ReclusterTableInterpreter {
                 .await?;
 
             let mut pipeline = Pipeline::create();
-            let mutator = table
+            table
                 .recluster(ctx.clone(), &mut pipeline, extras.clone())
                 .await?;
-            let mutator = if let Some(mutator) = mutator {
-                mutator
-            } else {
+            if pipeline.is_empty() {
                 break;
             };
 
@@ -93,9 +98,18 @@ impl Interpreter for ReclusterTableInterpreter {
 
             ctx.set_executor(executor.get_inner())?;
             executor.execute()?;
-            drop(executor);
 
-            mutator.try_commit(table.clone()).await?;
+            times += 1;
+            // Status.
+            {
+                let status = format!(
+                    "recluster: run recluster tasks:{} times, cost:{} sec",
+                    times,
+                    start.elapsed().map_or(0, |d| d.as_secs())
+                );
+                ctx.set_status_info(&status);
+                tracing::info!(status);
+            }
 
             if !plan.is_final {
                 break;

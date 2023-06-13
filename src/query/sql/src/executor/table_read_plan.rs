@@ -184,6 +184,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                 let bound_column = BoundColumnRef {
                                     span: None,
                                     column: ColumnBinding {
+                                        column_position: None,
                                         database_name: None,
                                         table_name: None,
                                         table_index: None,
@@ -191,6 +192,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                         index: i,
                                         data_type: Box::new(data_type),
                                         visibility: Visibility::Visible,
+                                        virtual_computed_expr: None,
                                     },
                                 };
                                 let scalar_expr = ScalarExpr::BoundColumnRef(bound_column);
@@ -211,6 +213,7 @@ impl ToReadDataSourcePlan for dyn Table {
                                 &name_resolution_ctx,
                                 metadata,
                                 &aliases,
+                                false,
                             );
 
                             let scalar = type_checker.resolve(&ast_expr).await?;

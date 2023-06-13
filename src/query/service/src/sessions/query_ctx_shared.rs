@@ -25,7 +25,6 @@ use common_base::runtime::Runtime;
 use common_catalog::table_context::StageAttachment;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataBlock;
 use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
@@ -79,7 +78,6 @@ pub struct QueryContextShared {
     pub(in crate::sessions) catalog_manager: Arc<CatalogManager>,
     pub(in crate::sessions) data_operator: DataOperator,
     pub(in crate::sessions) executor: Arc<RwLock<Weak<PipelineExecutor>>>,
-    pub(in crate::sessions) precommit_blocks: Arc<RwLock<Vec<DataBlock>>>,
     pub(in crate::sessions) stage_attachment: Arc<RwLock<Option<StageAttachment>>>,
     pub(in crate::sessions) created_time: SystemTime,
     // DashMap<file_path, HashMap<ErrorCode::code, (ErrorCode, Number of occurrences)>>
@@ -118,7 +116,6 @@ impl QueryContextShared {
             tables_refs: Arc::new(Mutex::new(HashMap::new())),
             affect: Arc::new(Mutex::new(None)),
             executor: Arc::new(RwLock::new(Weak::new())),
-            precommit_blocks: Arc::new(RwLock::new(vec![])),
             stage_attachment: Arc::new(RwLock::new(None)),
             created_time: SystemTime::now(),
             on_error_map: Arc::new(RwLock::new(None)),
@@ -357,19 +354,6 @@ impl QueryContextShared {
                 Err(err)
             }
         }
-    }
-
-    pub fn push_precommit_block(&self, block: DataBlock) {
-        let mut blocks = self.precommit_blocks.write();
-        blocks.push(block);
-    }
-
-    pub fn consume_precommit_blocks(&self) -> Vec<DataBlock> {
-        let mut blocks = self.precommit_blocks.write();
-
-        let mut swapped_precommit_blocks = vec![];
-        std::mem::swap(&mut *blocks, &mut swapped_precommit_blocks);
-        swapped_precommit_blocks
     }
 
     pub fn get_stage_attachment(&self) -> Option<StageAttachment> {

@@ -43,6 +43,7 @@ use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
+use opendal::layers::TimeoutLayer;
 use opendal::layers::TracingLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
@@ -94,6 +95,15 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
+        .layer(
+            TimeoutLayer::new()
+                // Return timeout error if the operation failed to finish in
+                // 60s
+                .with_timeout(Duration::from_secs(60))
+                // Return timeout error if the request speed is less than
+                // 1 KiB/s.
+                .with_speed(1024),
+        )
         // Add retry
         .layer(RetryLayer::new().with_jitter())
         // Add metrics
@@ -270,13 +280,6 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(30);
         builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
-
-        // Timeout default to 120s.
-        let timeout = env::var("_DATABEND_INTERNAL_TIMEOUT")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(120);
-        builder = builder.timeout(Duration::from_secs(timeout));
 
         builder
     };

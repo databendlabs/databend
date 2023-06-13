@@ -60,10 +60,7 @@ pub fn run_agg_ast(
     let block = DataBlock::new(
         columns
             .iter()
-            .map(|(_, col)| BlockEntry {
-                data_type: col.data_type(),
-                value: Value::Column(col.clone()),
-            })
+            .map(|(_, col)| BlockEntry::new(col.data_type(), Value::Column(col.clone())))
             .collect::<Vec<_>>(),
         num_rows,
     );

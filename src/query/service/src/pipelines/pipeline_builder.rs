@@ -41,8 +41,8 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
-use common_pipeline_transforms::processors::transforms::try_add_multi_sort_merge;
-use common_pipeline_transforms::processors::transforms::try_create_transform_sort_merge;
+use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
+use common_pipeline_transforms::processors::ProfileWrapper;
 use common_profile::ProfSpanSetRef;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -56,11 +56,11 @@ use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
-use common_sql::executor::IEJoin;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
 use common_sql::executor::ProjectSet;
+use common_sql::executor::RangeJoin;
 use common_sql::executor::RowFetch;
 use common_sql::executor::RuntimeFilterSource;
 use common_sql::executor::Sort;
@@ -77,43 +77,35 @@ use petgraph::matrix_graph::Zero;
 
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
-use super::processors::ProfileWrapper;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
+use crate::interpreters::fill_missing_columns;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
-use crate::pipelines::processors::transforms::IEJoinState;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
-use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
+use crate::pipelines::processors::transforms::RangeJoinState;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformIEJoinLeft;
-use crate::pipelines::processors::transforms::TransformIEJoinRight;
-use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
-use crate::pipelines::processors::transforms::TransformRightJoin;
-use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
+use crate::pipelines::processors::transforms::TransformRangeJoinLeft;
+use crate::pipelines::processors::transforms::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::JoinHashTable;
-use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
-use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinBuild;
 use crate::pipelines::processors::TransformHashJoinProbe;
 use crate::pipelines::processors::TransformLimit;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::processors::TransformRuntimeFilter;
-use crate::pipelines::processors::TransformSortPartial;
 use crate::pipelines::Pipeline;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -199,26 +191,30 @@ impl PipelineBuilder {
             PhysicalPlan::RuntimeFilterSource(runtime_filter_source) => {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
-            PhysicalPlan::IEJoin(ie_join) => self.build_ie_join(ie_join),
+            PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
         }
     }
 
-    fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
-        let state = Arc::new(IEJoinState::new(self.ctx.clone(), ie_join));
-        self.expand_right_side_pipeline(ie_join, state.clone())?;
-        self.build_left_side(ie_join, state)
+    fn build_range_join(&mut self, range_join: &RangeJoin) -> Result<()> {
+        let state = Arc::new(RangeJoinState::new(self.ctx.clone(), range_join));
+        self.expand_right_side_pipeline(range_join, state.clone())?;
+        self.build_left_side(range_join, state)
     }
 
-    fn build_left_side(&mut self, ie_join: &IEJoin, state: Arc<IEJoinState>) -> Result<()> {
-        self.build_pipeline(&ie_join.left)?;
+    fn build_left_side(
+        &mut self,
+        range_join: &RangeJoin,
+        state: Arc<RangeJoinState>,
+    ) -> Result<()> {
+        self.build_pipeline(&range_join.left)?;
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
         self.main_pipeline.resize(max_threads)?;
         self.main_pipeline.add_transform(|input, output| {
-            let transform = TransformIEJoinLeft::create(input, output, state.clone());
+            let transform = TransformRangeJoinLeft::create(input, output, state.clone());
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    ie_join.plan_id,
+                    range_join.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
@@ -230,8 +226,8 @@ impl PipelineBuilder {
 
     fn expand_right_side_pipeline(
         &mut self,
-        ie_join: &IEJoin,
-        state: Arc<IEJoinState>,
+        range_join: &RangeJoin,
+        state: Arc<RangeJoinState>,
     ) -> Result<()> {
         let right_side_context = QueryContext::create_from(self.ctx.clone());
         let right_side_builder = PipelineBuilder::create(
@@ -239,16 +235,16 @@ impl PipelineBuilder {
             self.enable_profiling,
             self.prof_span_set.clone(),
         );
-        let mut right_res = right_side_builder.finalize(&ie_join.right)?;
+        let mut right_res = right_side_builder.finalize(&range_join.right)?;
         right_res.main_pipeline.add_sink(|input| {
-            let transform = Sinker::<TransformIEJoinRight>::create(
+            let transform = Sinker::<TransformRangeJoinRight>::create(
                 input,
-                TransformIEJoinRight::create(state.clone()),
+                TransformRangeJoinRight::create(state.clone()),
             );
             if self.enable_profiling {
                 Ok(ProcessorPtr::create(ProfileWrapper::create(
                     transform,
-                    ie_join.plan_id,
+                    range_join.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
@@ -906,7 +902,7 @@ impl PipelineBuilder {
 
             sort_desc.extend(order_by.clone());
 
-            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None)?;
+            self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None, false)?;
         }
         // `TransformWindow` is a pipeline breaker.
         self.main_pipeline.resize(1)?;
@@ -992,7 +988,13 @@ impl PipelineBuilder {
             })
             .collect::<Result<Vec<_>>>()?;
 
-        self.build_sort_pipeline(input_schema, sort_desc, sort.plan_id, sort.limit)
+        self.build_sort_pipeline(
+            input_schema,
+            sort_desc,
+            sort.plan_id,
+            sort.limit,
+            sort.after_exchange,
+        )
     }
 
     fn build_sort_pipeline(
@@ -1001,6 +1003,7 @@ impl PipelineBuilder {
         sort_desc: Vec<SortColumnDescription>,
         plan_id: u32,
         limit: Option<usize>,
+        after_exchange: bool,
     ) -> Result<()> {
         let block_size = self.ctx.get_settings().get_max_block_size()? as usize;
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
@@ -1009,51 +1012,20 @@ impl PipelineBuilder {
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
             self.main_pipeline.resize(max_threads)?;
         }
-        // Sort
-        self.main_pipeline.add_transform(|input, output| {
-            let transform =
-                TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
+        let prof_info = if self.enable_profiling {
+            Some((plan_id, self.prof_span_set.clone()))
+        } else {
+            None
+        };
 
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
-                    transform,
-                    plan_id,
-                    self.prof_span_set.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
-        })?;
-
-        // Merge
-        self.main_pipeline.add_transform(|input, output| {
-            let transform = try_create_transform_sort_merge(
-                input,
-                output,
-                input_schema.clone(),
-                block_size,
-                limit,
-                sort_desc.clone(),
-            )?;
-
-            if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
-                    transform,
-                    plan_id,
-                    self.prof_span_set.clone(),
-                )))
-            } else {
-                Ok(ProcessorPtr::create(transform))
-            }
-        })?;
-
-        // Concat merge in single thread
-        try_add_multi_sort_merge(
+        build_full_sort_pipeline(
             &mut self.main_pipeline,
             input_schema,
-            block_size,
-            limit,
             sort_desc,
+            limit,
+            block_size,
+            prof_info,
+            after_exchange,
         )
     }
 
@@ -1098,8 +1070,9 @@ impl PipelineBuilder {
                 self.ctx.clone(),
                 input,
                 output,
-                state.clone(),
-                join.output_schema()?,
+                TransformHashJoinProbe::attach(state.clone())?,
+                &join.join_type,
+                !join.non_equi_conditions.is_empty(),
             )?;
 
             if self.enable_profiling {
@@ -1112,30 +1085,6 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })?;
-
-        if (join.join_type == JoinType::Left
-            || join.join_type == JoinType::Full
-            || join.join_type == JoinType::Single)
-            && join.non_equi_conditions.is_empty()
-        {
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformLeftJoin::try_create(
-                    input,
-                    output,
-                    LeftJoinCompactor::create(state.clone()),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        join.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
 
         if join.join_type == JoinType::LeftMark {
             self.main_pipeline.resize(1)?;
@@ -1158,52 +1107,6 @@ impl PipelineBuilder {
             })?;
         }
 
-        if join.join_type == JoinType::Right || join.join_type == JoinType::Full {
-            self.main_pipeline.resize(1)?;
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformRightJoin::try_create(
-                    input,
-                    output,
-                    RightJoinCompactor::create(state.clone(), join.non_equi_conditions.is_empty()),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        join.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
-
-        if join.join_type == JoinType::RightAnti || join.join_type == JoinType::RightSemi {
-            self.main_pipeline.resize(1)?;
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformRightSemiAntiJoin::try_create(
-                    input,
-                    output,
-                    RightSemiAntiJoinCompactor::create(
-                        state.clone(),
-                        join.non_equi_conditions.is_empty()
-                            && join.join_type == JoinType::RightAnti,
-                    ),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        join.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
-
         Ok(())
     }
 
@@ -1212,6 +1115,7 @@ impl PipelineBuilder {
         let build_res = exchange_manager.get_fragment_source(
             &exchange_source.query_id,
             exchange_source.source_fragment_id,
+            self.enable_profiling,
             self.exchange_injector.clone(),
         )?;
 
@@ -1323,28 +1227,18 @@ impl PipelineBuilder {
             .get_catalog(&insert_select.catalog)?
             .get_table_by_info(&insert_select.table_info)?;
 
-        // Fill missing columns.
-        {
-            let source_schema = insert_schema;
-            if source_schema.fields().len() < table.schema().fields().len() {
-                self.main_pipeline.add_transform(
-                    |transform_input_port, transform_output_port| {
-                        TransformResortAddOn::try_create(
-                            self.ctx.clone(),
-                            transform_input_port,
-                            transform_output_port,
-                            source_schema.clone(),
-                            table.clone(),
-                        )
-                    },
-                )?;
-            }
-        }
+        let source_schema = insert_schema;
+        fill_missing_columns(
+            self.ctx.clone(),
+            table.clone(),
+            source_schema.clone(),
+            &mut self.main_pipeline,
+        )?;
+
         table.append_data(
             self.ctx.clone(),
             &mut self.main_pipeline,
             AppendMode::Normal,
-            true,
         )?;
 
         Ok(())

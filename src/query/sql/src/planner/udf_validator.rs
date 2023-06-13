@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
@@ -75,7 +76,7 @@ impl<'ast> Visitor<'ast> for UDFValidator {
         _span: Span,
         _database: &'ast Option<Identifier>,
         _table: &'ast Option<Identifier>,
-        column: &'ast Identifier,
+        column: &'ast ColumnID,
     ) {
         self.expr_params.insert(column.to_string());
     }

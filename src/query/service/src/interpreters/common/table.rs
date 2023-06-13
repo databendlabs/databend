@@ -14,33 +14,56 @@
 
 use std::sync::Arc;
 
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
-use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::DataSchemaRef;
+use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 
+use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
-fn fill_missing_columns(
+pub fn fill_missing_columns(
     ctx: Arc<QueryContext>,
-    source_schema: &DataSchemaRef,
     table: Arc<dyn Table>,
+    source_schema: DataSchemaRef,
     pipeline: &mut Pipeline,
 ) -> Result<()> {
-    pipeline.add_transform(|transform_input_port, transform_output_port| {
-        TransformResortAddOn::try_create(
-            ctx.clone(),
-            transform_input_port,
-            transform_output_port,
-            source_schema.clone(),
-            table.clone(),
-        )
-    })?;
+    let table_default_schema = &table.schema().remove_computed_fields();
+    let table_computed_schema = &table.schema().remove_virtual_computed_fields();
+    let default_schema: DataSchemaRef = Arc::new(table_default_schema.into());
+    let computed_schema: DataSchemaRef = Arc::new(table_computed_schema.into());
+
+    // Fill missing default columns and resort the columns.
+    if source_schema != default_schema {
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformResortAddOn::try_create(
+                ctx.clone(),
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                default_schema.clone(),
+                table.clone(),
+            )
+        })?;
+    }
+
+    // Fill computed columns.
+    if default_schema != computed_schema {
+        pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformAddComputedColumns::try_create(
+                ctx.clone(),
+                transform_input_port,
+                transform_output_port,
+                default_schema.clone(),
+                computed_schema.clone(),
+            )
+        })?;
+    }
+
     Ok(())
 }
 
@@ -49,44 +72,20 @@ pub fn append2table(
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
     build_res: &mut PipelineBuildResult,
+    copied_files: Option<UpsertTableCopiedFileReq>,
     overwrite: bool,
-    need_commit: bool,
     append_mode: AppendMode,
 ) -> Result<()> {
     fill_missing_columns(
         ctx.clone(),
-        &source_schema,
         table.clone(),
+        source_schema,
         &mut build_res.main_pipeline,
     )?;
 
-    table.append_data(
-        ctx.clone(),
-        &mut build_res.main_pipeline,
-        append_mode,
-        false,
-    )?;
+    table.append_data(ctx.clone(), &mut build_res.main_pipeline, append_mode)?;
 
-    if need_commit {
-        build_res.main_pipeline.set_on_finished(move |may_error| {
-            // capture out variable
-            let overwrite = overwrite;
-            let ctx = ctx.clone();
-            let table = table.clone();
-
-            if may_error.is_none() {
-                let append_entries = ctx.consume_precommit_blocks();
-                // We must put the commit operation to global runtime, which will avoid the "dispatch dropped without returning error" in tower
-                return GlobalIORuntime::instance().block_on(async move {
-                    table
-                        .commit_insertion(ctx, append_entries, None, overwrite)
-                        .await
-                });
-            }
-
-            Err(may_error.as_ref().unwrap().clone())
-        });
-    }
+    table.commit_insertion(ctx, &mut build_res.main_pipeline, copied_files, overwrite)?;
 
     Ok(())
 }

@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 
+use common_ast::ast::ColumnID as AstColumnID;
 use common_ast::ast::CopyStmt;
 use common_ast::ast::CopyUnit;
 use common_ast::ast::Expr;
@@ -99,7 +100,7 @@ impl<'a> Binder {
                 let required_values_schema: DataSchemaRef = Arc::new(
                     match columns {
                         Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => table.schema(),
+                        None => self.schema_project(&table.schema(), &[])?,
                     }
                     .into(),
                 );
@@ -120,6 +121,7 @@ impl<'a> Binder {
                         files_info,
                         stage_info,
                         files_to_copy: None,
+                        is_select: false,
                     },
                     values_consts: vec![],
                     required_source_schema: required_values_schema.clone(),
@@ -177,7 +179,7 @@ impl<'a> Binder {
                 let required_values_schema: DataSchemaRef = Arc::new(
                     match columns {
                         Some(cols) => self.schema_project(&table.schema(), cols)?,
-                        None => table.schema(),
+                        None => self.schema_project(&table.schema(), &[])?,
                     }
                     .into(),
                 );
@@ -194,6 +196,7 @@ impl<'a> Binder {
                         files_info,
                         stage_info,
                         files_to_copy: None,
+                        is_select: false,
                     },
                     values_consts: vec![],
                     required_source_schema: required_values_schema.clone(),
@@ -337,6 +340,7 @@ impl<'a> Binder {
                         files_info,
                         stage_info,
                         files_to_copy: None,
+                        is_select: false,
                     },
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
@@ -374,11 +378,11 @@ impl<'a> Binder {
                         span: None,
                         database: None,
                         table: None,
-                        column: Identifier {
+                        column: AstColumnID::Name(Identifier {
                             name: f.name().to_string(),
                             quote: None,
                             span: None,
-                        },
+                        }),
                     }),
                     alias: None,
                 })
@@ -455,6 +459,7 @@ impl<'a> Binder {
                 files_info,
                 stage_info,
                 files_to_copy: None,
+                is_select: false,
             },
             write_mode,
             query: None,

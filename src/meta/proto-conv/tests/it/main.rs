@@ -47,3 +47,5 @@ mod v039_data_mask;
 mod v040_table_meta;
 mod v041_virtual_column;
 mod v042_s3_stage_new_field;
+mod v043_table_statistics;
+mod v044_table_meta;

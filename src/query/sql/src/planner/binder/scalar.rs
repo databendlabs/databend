@@ -33,6 +33,7 @@ pub struct ScalarBinder<'a> {
     name_resolution_ctx: &'a NameResolutionContext,
     metadata: MetadataRef,
     aliases: &'a [(String, ScalarExpr)],
+    allow_pushdown: bool,
 }
 
 impl<'a> ScalarBinder<'a> {
@@ -49,7 +50,12 @@ impl<'a> ScalarBinder<'a> {
             name_resolution_ctx,
             metadata,
             aliases,
+            allow_pushdown: false,
         }
+    }
+
+    pub fn allow_pushdown(&mut self) {
+        self.allow_pushdown = true;
     }
 
     #[async_backtrace::framed]
@@ -60,6 +66,7 @@ impl<'a> ScalarBinder<'a> {
             self.name_resolution_ctx,
             self.metadata.clone(),
             self.aliases,
+            self.allow_pushdown,
         );
         Ok(*type_checker.resolve(expr).await?)
     }

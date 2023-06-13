@@ -23,7 +23,6 @@ use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataBlock;
 use common_expression::FunctionContext;
 use common_io::prelude::FormatSettings;
 use common_meta_app::principal::FileFormatParams;
@@ -138,8 +137,6 @@ pub trait TableContext: Send + Sync {
 
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;
-    fn push_precommit_block(&self, block: DataBlock);
-    fn consume_precommit_blocks(&self) -> Vec<DataBlock>;
 
     async fn get_file_format(&self, name: &str) -> Result<FileFormatParams>;
 

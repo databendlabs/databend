@@ -8,8 +8,8 @@ output         : 1
 
 
 ast            : abs(-1)
-raw expr       : abs(-1)
-checked expr   : abs<Int64>(to_int64<Int8>(-1_i8))
+raw expr       : abs(minus(1))
+checked expr   : abs<Int64>(to_int64<Int16>(minus<UInt8>(1_u8)))
 optimized expr : 1_u64
 output type    : UInt64
 output domain  : {1..=1}
@@ -57,8 +57,8 @@ output         : 1
 
 
 ast            : sign(-1)
-raw expr       : sign(-1)
-checked expr   : sign<Float64>(to_float64<Int8>(-1_i8))
+raw expr       : sign(minus(1))
+checked expr   : sign<Float64>(to_float64<Int16>(minus<UInt8>(1_u8)))
 optimized expr : -1_i8
 output type    : Int8
 output domain  : {-1..=-1}
@@ -133,8 +133,8 @@ output         : 0.463647609
 
 
 ast            : cot(-1.0)
-raw expr       : cot(-1.0)
-checked expr   : cot<Float64>(to_float64<Decimal(2, 1)>(-1.0_d128(2,1)))
+raw expr       : cot(minus(1.0))
+checked expr   : cot<Float64>(to_float64<Decimal(2, 1)>(minus<Decimal(2, 1)>(1.0_d128(2,1))))
 optimized expr : -0.6420926159_f64
 output type    : Float64
 output domain  : {-0.6420926159..=-0.6420926159}
@@ -240,8 +240,8 @@ output         : 7.3890560989
 
 
 ast            : exp(-2)
-raw expr       : exp(-2)
-checked expr   : exp<Int8>(-2_i8)
+raw expr       : exp(minus(2))
+checked expr   : exp<Int16>(minus<UInt8>(2_u8))
 optimized expr : 0.1353352832_f64
 output type    : Float64
 output domain  : {0.1353352832..=0.1353352832}
@@ -280,8 +280,8 @@ evaluation (internal):
 
 
 ast            : round(-1.23)
-raw expr       : round(-1.23)
-checked expr   : round<Float32>(to_float32<Decimal(3, 2)>(-1.23_d128(3,2)))
+raw expr       : round(minus(1.23))
+checked expr   : round<Float32>(to_float32<Decimal(3, 2)>(minus<Decimal(3, 2)>(1.23_d128(3,2))))
 optimized expr : -1_f64
 output type    : Float64
 output domain  : {-1..=-1}
@@ -307,8 +307,8 @@ output         : 1
 
 
 ast            : round(23.298, -1)
-raw expr       : round(23.298, -1)
-checked expr   : round<Float32, Int64>(to_float32<Decimal(5, 3)>(23.298_d128(5,3)), to_int64<Int8>(-1_i8))
+raw expr       : round(23.298, minus(1))
+checked expr   : round<Float32, Int64>(to_float32<Decimal(5, 3)>(23.298_d128(5,3)), to_int64<Int16>(minus<UInt8>(1_u8)))
 optimized expr : 20_f64
 output type    : Float64
 output domain  : {20..=20}
@@ -436,8 +436,8 @@ output         : 1.9
 
 
 ast            : truncate(122, -2)
-raw expr       : truncate(122, -2)
-checked expr   : truncate<UInt8, Int64>(122_u8, to_int64<Int8>(-2_i8))
+raw expr       : truncate(122, minus(2))
+checked expr   : truncate<UInt8, Int64>(122_u8, to_int64<Int16>(minus<UInt8>(2_u8)))
 optimized expr : 100_f64
 output type    : Float64
 output domain  : {100..=100}

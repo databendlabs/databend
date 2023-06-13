@@ -37,9 +37,9 @@ Medium)
     yq -i '.cluster_size = "16"' -o json result.json
     yq -i '.machine = "Medium"' -o json result.json
     ;;
-Large)
+XLarge)
     yq -i '.cluster_size = "64"' -o json result.json
-    yq -i '.machine = "Large"' -o json result.json
+    yq -i '.machine = "XLarge"' -o json result.json
     ;;
 *)
     echo "Unsupported benchmark size: ${BENCHMARK_SIZE}"
