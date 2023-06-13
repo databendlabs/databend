@@ -466,6 +466,85 @@ select * from t8 order by a
 
 
 statement ok
+create table t9(a int) cluster by(abs(a))
+
+statement ok
+insert into t9 values(-5)
+
+statement ok
+insert into t9 values(2)
+
+statement ok
+insert into t9 values(4)
+
+statement ok
+optimize table t9 compact
+
+query I
+select a from t9
+----
+2
+4
+-5
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't9') limit 2
+----
+1 1
+3 3
+
+statement ok
+insert into t9 values(1)
+
+statement ok
+alter table t9 recluster
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't9') limit 2
+----
+1 1
+2 2
+
+query I
+select a from t9
+----
+1
+2
+4
+-5
+
+statement ok
+insert into t9 values(-3)
+
+statement ok
+optimize table t9 compact
+
+statement ok
+insert into t9 values(6)
+
+statement ok
+optimize table t9 compact
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't9') limit 3
+----
+1 2
+3 3
+2 2
+
+query I
+select a from t9 order by a
+----
+-5
+-3
+1
+2
+4
+6
+
+
+
+statement ok
 DROP TABLE m
 
 statement ok
@@ -494,6 +573,9 @@ DROP TABLE t7
 
 statement ok
 DROP TABLE t8
+
+statement ok
+DROP TABLE t9
 
 statement ok
 DROP DATABASE db_09_0008
