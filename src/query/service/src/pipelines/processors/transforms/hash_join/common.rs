@@ -35,7 +35,9 @@ use common_hashtable::MarkerKind;
 use common_hashtable::RowPtr;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
+use super::HashJoinState;
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
+use crate::pipelines::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
 
@@ -238,142 +240,8 @@ impl JoinHashTable {
         }
     }
 
-    pub(crate) fn find_unmatched_build_indexes(
-        &self,
-        row_state: &[Vec<usize>],
-    ) -> Result<Vec<RowPtr>> {
-        // For right/full join, build side will appear at least once in the joined table
-        // Find the unmatched rows in build side
-        let mut unmatched_build_indexes = vec![];
-        for (chunk_index, chunk) in self.row_space.chunks.read().iter().enumerate() {
-            for row_index in 0..chunk.num_rows() {
-                if row_state[chunk_index][row_index] == 0 {
-                    unmatched_build_indexes.push(RowPtr::new(chunk_index, row_index));
-                }
-            }
-        }
-        Ok(unmatched_build_indexes)
-    }
-
-    // For unmatched build index, the method will produce null probe block
-    // Then merge null_probe_block with unmatched_build_block
-    pub(crate) fn null_blocks_for_right_join(
-        &self,
-        unmatched_build_indexes: &Vec<RowPtr>,
-    ) -> Result<DataBlock> {
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
-
-        let mut unmatched_build_block =
-            self.row_space
-                .gather(unmatched_build_indexes, &data_blocks, &num_rows)?;
-        if self.hash_join_desc.join_type == JoinType::Full {
-            let num_rows = unmatched_build_block.num_rows();
-            let nullable_unmatched_build_columns = unmatched_build_block
-                .columns()
-                .iter()
-                .map(|c| {
-                    let mut probe_validity = MutableBitmap::new();
-                    probe_validity.extend_constant(num_rows, true);
-                    let probe_validity: Bitmap = probe_validity.into();
-                    Self::set_validity(c, num_rows, &probe_validity)
-                })
-                .collect::<Vec<_>>();
-            unmatched_build_block = DataBlock::new(nullable_unmatched_build_columns, num_rows);
-        };
-        // Create null chunk for unmatched rows in probe side
-        let null_probe_block = DataBlock::new(
-            self.probe_schema
-                .fields()
-                .iter()
-                .map(|df| BlockEntry::new(df.data_type().clone(), Value::Scalar(Scalar::Null)))
-                .collect(),
-            unmatched_build_indexes.len(),
-        );
-        self.merge_eq_block(&unmatched_build_block, &null_probe_block)
-    }
-
-    // Final row_state for right join
-    // Record row in build side that is matched how many rows in probe side.
-    pub(crate) fn row_state_for_right_join(&self) -> Result<Vec<Vec<usize>>> {
-        let build_indexes = self.hash_join_desc.join_state.build_indexes.read();
-        let chunks = self.row_space.chunks.read();
-        let mut row_state = Vec::with_capacity(chunks.len());
-        for chunk in chunks.iter() {
-            let mut rows = Vec::with_capacity(chunk.num_rows());
-            for _row_index in 0..chunk.num_rows() {
-                rows.push(0);
-            }
-            row_state.push(rows);
-        }
-
-        for row_ptr in build_indexes.iter() {
-            if self.hash_join_desc.join_type == JoinType::Full
-                && row_ptr.marker == Some(MarkerKind::False)
-            {
-                continue;
-            }
-            row_state[row_ptr.chunk_index][row_ptr.row_index] += 1;
-        }
-        Ok(row_state)
-    }
-
-    pub(crate) fn rest_block(&self) -> Result<DataBlock> {
-        let data_blocks = self.row_space.chunks.read();
-        let data_blocks = data_blocks
-            .iter()
-            .map(|c| &c.data_block)
-            .collect::<Vec<_>>();
-        let num_rows = data_blocks
-            .iter()
-            .fold(0, |acc, chunk| acc + chunk.num_rows());
-
-        let mut rest_pairs = self.hash_join_desc.join_state.rest_pairs.write();
-        if rest_pairs.0.is_empty() {
-            return Ok(DataBlock::empty());
-        }
-        let probe_block = DataBlock::concat(&rest_pairs.0)?;
-        rest_pairs.0.clear();
-        let mut build_block = self
-            .row_space
-            .gather(&rest_pairs.1, &data_blocks, &num_rows)?;
-        rest_pairs.1.clear();
-        // For left join, wrap nullable for build block
-        if matches!(
-            self.hash_join_desc.join_type,
-            JoinType::Left | JoinType::Single | JoinType::Full
-        ) {
-            let mut validity_state = self.hash_join_desc.join_state.validity.write();
-            let validity: Bitmap = (*validity_state).clone().into();
-            validity_state.clear();
-            let num_rows = validity.len();
-            let nullable_columns = if self.row_space.datablocks().is_empty() {
-                build_block
-                    .columns()
-                    .iter()
-                    .map(|c| BlockEntry::new(c.data_type.clone(), Value::Scalar(Scalar::Null)))
-                    .collect::<Vec<_>>()
-            } else {
-                build_block
-                    .columns()
-                    .iter()
-                    .map(|c| Self::set_validity(c, num_rows, &validity))
-                    .collect::<Vec<_>>()
-            };
-            build_block = DataBlock::new(nullable_columns, num_rows);
-        }
-        self.merge_eq_block(&build_block, &probe_block)
-    }
-
     // Add `data_block` for build table to `row_space`
     pub(crate) fn add_build_block(&self, data_block: DataBlock) -> Result<()> {
-        let func_ctx = self.ctx.get_function_context()?;
         let mut data_block = data_block;
         if matches!(
             self.hash_join_desc.join_type,
@@ -390,23 +258,21 @@ impl JoinHashTable {
                 .collect::<Vec<_>>();
             data_block = DataBlock::new(nullable_columns, data_block.num_rows());
         }
-        let evaluator = Evaluator::new(&data_block, &func_ctx, &BUILTIN_FUNCTIONS);
 
-        let build_cols = self
-            .hash_join_desc
-            .build_keys
-            .iter()
-            .map(|expr| {
-                let return_type = expr.data_type();
-                Ok((
-                    evaluator
-                        .run(expr)?
-                        .convert_to_full_column(return_type, data_block.num_rows()),
-                    return_type.clone(),
-                ))
-            })
-            .collect::<Result<_>>()?;
+        let chunk = Chunk {
+            data_block,
+            keys_state: None,
+        };
 
-        self.row_space.push_cols(data_block, build_cols)
+        {
+            // Acquire write lock in current scope
+            let mut chunks = self.row_space.chunks.write();
+            if self.need_outer_scan() {
+                let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+                outer_scan_bitmap.push(MutableBitmap::from_len_zeroed(chunk.num_rows()));
+            }
+            chunks.push(chunk);
+        }
+        Ok(())
     }
 }

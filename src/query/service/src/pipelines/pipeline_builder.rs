@@ -87,25 +87,19 @@ use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
 use crate::pipelines::processors::transforms::HashJoinDesc;
 use crate::pipelines::processors::transforms::PartialSingleStateAggregator;
 use crate::pipelines::processors::transforms::RangeJoinState;
-use crate::pipelines::processors::transforms::RightSemiAntiJoinCompactor;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformLeftJoin;
 use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
 use crate::pipelines::processors::transforms::TransformRangeJoinLeft;
 use crate::pipelines::processors::transforms::TransformRangeJoinRight;
-use crate::pipelines::processors::transforms::TransformRightJoin;
-use crate::pipelines::processors::transforms::TransformRightSemiAntiJoin;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::JoinHashTable;
-use crate::pipelines::processors::LeftJoinCompactor;
 use crate::pipelines::processors::MarkJoinCompactor;
-use crate::pipelines::processors::RightJoinCompactor;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinBuild;
@@ -1076,8 +1070,9 @@ impl PipelineBuilder {
                 self.ctx.clone(),
                 input,
                 output,
-                state.clone(),
-                join.output_schema()?,
+                TransformHashJoinProbe::attach(state.clone())?,
+                &join.join_type,
+                !join.non_equi_conditions.is_empty(),
             )?;
 
             if self.enable_profiling {
@@ -1091,30 +1086,6 @@ impl PipelineBuilder {
             }
         })?;
 
-        if (join.join_type == JoinType::Left
-            || join.join_type == JoinType::Full
-            || join.join_type == JoinType::Single)
-            && join.non_equi_conditions.is_empty()
-        {
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformLeftJoin::try_create(
-                    input,
-                    output,
-                    LeftJoinCompactor::create(state.clone()),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        join.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
-
         if join.join_type == JoinType::LeftMark {
             self.main_pipeline.resize(1)?;
             self.main_pipeline.add_transform(|input, output| {
@@ -1122,52 +1093,6 @@ impl PipelineBuilder {
                     input,
                     output,
                     MarkJoinCompactor::create(state.clone()),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        join.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
-
-        if join.join_type == JoinType::Right || join.join_type == JoinType::Full {
-            self.main_pipeline.resize(1)?;
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformRightJoin::try_create(
-                    input,
-                    output,
-                    RightJoinCompactor::create(state.clone(), join.non_equi_conditions.is_empty()),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        join.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
-
-        if join.join_type == JoinType::RightAnti || join.join_type == JoinType::RightSemi {
-            self.main_pipeline.resize(1)?;
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformRightSemiAntiJoin::try_create(
-                    input,
-                    output,
-                    RightSemiAntiJoinCompactor::create(
-                        state.clone(),
-                        join.non_equi_conditions.is_empty()
-                            && join.join_type == JoinType::RightAnti,
-                    ),
                 )?;
 
                 if self.enable_profiling {
