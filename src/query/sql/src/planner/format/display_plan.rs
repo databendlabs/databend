@@ -12,9 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::Result;
 
+use crate::optimizer::SExpr;
+use crate::plans::Filter;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
+use crate::plans::Scan;
 
 impl Plan {
     pub fn format_indent(&self) -> Result<String> {
@@ -101,7 +107,45 @@ impl Plan {
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),
             Plan::Replace(replace) => Ok(format!("{:?}", replace)),
-            Plan::Delete(delete) => Ok(format!("{:?}", delete)),
+            Plan::Delete(delete) => {
+                let mut predicates = vec![];
+                if let Some(selection) = &delete.selection {
+                   predicates.push(selection.clone());
+                }
+                let filter = RelOperator::Filter(Filter {
+                    predicates,
+                    is_having: false,
+                });
+                let s_expr = if let Some(subquery_desc) = &delete.subquery_desc {
+                    SExpr::create_unary(
+                        Arc::new(filter),
+                        Arc::new(subquery_desc.input_expr.clone()),
+                    )
+                } else {
+                    let table_index = delete
+                        .metadata
+                        .read()
+                        .get_table_index(
+                            Some(delete.database_name.as_str()),
+                            delete.table_name.as_str(),
+                        )
+                        .unwrap();
+                    let scan = RelOperator::Scan(Scan {
+                        table_index,
+                        columns: Default::default(),
+                        push_down_predicates: None,
+                        limit: None,
+                        order_by: None,
+                        prewhere: None,
+                        agg_index: None,
+                        statistics: Default::default(),
+                    });
+                    let scan_expr = SExpr::create_leaf(Arc::new(scan));
+                    SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr))
+                };
+                let res = s_expr.to_format_tree(&delete.metadata).format_pretty()?;
+                Ok(format!("DeletePlan:\n{res}"))
+            }
             Plan::Update(update) => Ok(format!("{:?}", update)),
 
             // Stages

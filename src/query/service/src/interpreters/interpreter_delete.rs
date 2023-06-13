@@ -64,6 +64,7 @@ impl DeleteInterpreter {
     /// Create filter from subquery
     async fn subquery_filter(&self, input_expr: &SExpr) -> Result<RemoteExpr<String>> {
         // Select `_row_id` column
+        let subquery_desc = self.plan.subquery_desc.as_ref().unwrap();
         let table_index = self.plan.metadata.read().get_table_index(
             Some(self.plan.database_name.as_str()),
             self.plan.table_name.as_str(),
@@ -74,7 +75,7 @@ impl DeleteInterpreter {
             column_position: None,
             table_index,
             column_name: ROW_ID_COL_NAME.to_string(),
-            index: self.plan.index.unwrap(),
+            index: subquery_desc.index,
             data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
             visibility: Visibility::InVisible,
             virtual_computed_expr: None,
@@ -218,16 +219,9 @@ impl Interpreter for DeleteInterpreter {
 
             let col_indices = scalar.used_columns().into_iter().collect();
             (Some(filter), col_indices)
-        } else if let Some(input_expr) = &self.plan.input_expr {
-            let filter = self.subquery_filter(input_expr).await?;
-            let col_indices = self
-                .plan
-                .outer_columns
-                .as_ref()
-                .unwrap()
-                .clone()
-                .into_iter()
-                .collect();
+        } else if let Some(subquery_desc) = &self.plan.subquery_desc {
+            let filter = self.subquery_filter(&subquery_desc.input_expr).await?;
+            let col_indices = subquery_desc.outer_columns.clone().into_iter().collect();
             (Some(filter), col_indices)
         } else {
             (None, vec![])
@@ -238,7 +232,7 @@ impl Interpreter for DeleteInterpreter {
             self.ctx.clone(),
             filter,
             col_indices,
-            self.plan.index.is_some(),
+            self.plan.subquery_desc.is_some(),
             &mut build_res.main_pipeline,
         )
         .await?;
