@@ -5,7 +5,7 @@ statement ok
 create table t_distributed_topn (a int, b float, c string, d tuple(a int, b int), e date)
 
 statement ok
-set lazy_topn_threshold = 0;
+set lazy_read_threshold = 0;
 
 query T
 explain select * from t_distributed_topn order by a desc limit 2

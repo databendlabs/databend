@@ -1,5 +1,5 @@
 statement ok
-set lazy_topn_threshold=100
+set lazy_read_threshold=100
 
 statement ok
 drop table if exists t_lazy

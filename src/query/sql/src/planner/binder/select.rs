@@ -605,7 +605,7 @@ impl Binder {
             return Ok(());
         }
 
-        let limit_threadhold = self.ctx.get_settings().get_lazy_topn_threshold()? as usize;
+        let limit_threadhold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
 
         if !(!order_by.is_empty() && limit > 0 && limit <= limit_threadhold) {
             return Ok(());

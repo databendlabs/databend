@@ -326,12 +326,12 @@ impl Settings {
         Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
     }
 
-    pub fn set_lazy_topn_threshold(&self, value: u64) -> Result<()> {
-        self.try_set_u64("lazy_topn_threshold", value)
+    pub fn set_lazy_read_threshold(&self, value: u64) -> Result<()> {
+        self.try_set_u64("lazy_read_threshold", value)
     }
 
-    pub fn get_lazy_topn_threshold(&self) -> Result<u64> {
-        self.try_get_u64("lazy_topn_threshold")
+    pub fn get_lazy_read_threshold(&self) -> Result<u64> {
+        self.try_get_u64("lazy_read_threshold")
     }
 
     pub fn set_parquet_fast_read_bytes(&self, value: u64) -> Result<()> {
