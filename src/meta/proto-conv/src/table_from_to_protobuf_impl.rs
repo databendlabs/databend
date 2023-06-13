@@ -15,6 +15,7 @@
 //! This mod is the key point about compatibility.
 //! Everytime update anything in this file, update the `VER` and let the tests pass.
 
+use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::sync::Arc;
 
@@ -221,6 +222,11 @@ impl FromToProto for mt::TableMeta {
                 .transpose()?
                 .unwrap_or_default(),
             shared_by: BTreeSet::from_iter(p.shared_by.into_iter()),
+            column_mask_policy: if p.column_mask_policy.is_empty() {
+                None
+            } else {
+                Some(p.column_mask_policy)
+            },
         };
         Ok(v)
     }
@@ -256,6 +262,10 @@ impl FromToProto for mt::TableMeta {
             field_comments: self.field_comments.clone(),
             statistics: Some(self.statistics.to_pb()?),
             shared_by: Vec::from_iter(self.shared_by.clone().into_iter()),
+            column_mask_policy: match &self.column_mask_policy {
+                Some(column_mask_policy) => column_mask_policy.clone(),
+                None => BTreeMap::new(),
+            },
         };
         Ok(p)
     }
@@ -274,6 +284,8 @@ impl FromToProto for mt::TableStatistics {
             data_bytes: p.data_bytes,
             compressed_data_bytes: p.compressed_data_bytes,
             index_data_bytes: p.index_data_bytes,
+            number_of_segments: p.number_of_segments,
+            number_of_blocks: p.number_of_blocks,
         };
 
         Ok(v)
@@ -287,6 +299,8 @@ impl FromToProto for mt::TableStatistics {
             data_bytes: self.data_bytes,
             compressed_data_bytes: self.compressed_data_bytes,
             index_data_bytes: self.index_data_bytes,
+            number_of_segments: self.number_of_segments,
+            number_of_blocks: self.number_of_blocks,
         };
         Ok(p)
     }

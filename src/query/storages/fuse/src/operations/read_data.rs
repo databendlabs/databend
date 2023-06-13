@@ -18,18 +18,25 @@ use common_base::runtime::Runtime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::plan::TopK;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::BUILTIN_FUNCTIONS;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
+use common_sql::evaluator::BlockOperator;
+use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::AggIndexReader;
 use crate::io::BlockReader;
-use crate::operations::fuse_source::build_fuse_source_pipeline;
+use crate::operations::read::build_fuse_parquet_source_pipeline;
+use crate::operations::read::fuse_source::build_fuse_native_source_pipeline;
 use crate::pruning::SegmentLocation;
+use crate::FuseStorageFormat;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -72,6 +79,50 @@ impl FuseTable {
             // For blocking fs, we don't want this to be too large
             Ok(std::cmp::min(max_threads, max_io_requests).clamp(1, 48))
         }
+    }
+
+    fn apply_data_mask_policy_if_needed(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        if let Some(data_mask_policy) = &plan.data_mask_policy {
+            let num_input_columns = plan.schema().num_fields();
+            let mut exprs = Vec::with_capacity(num_input_columns);
+            let mut projection = Vec::with_capacity(num_input_columns);
+            let mut mask_count = 0;
+            for i in 0..num_input_columns {
+                if let Some(raw_expr) = data_mask_policy.get(&i) {
+                    let expr = raw_expr.as_expr(&BUILTIN_FUNCTIONS);
+                    exprs.push(expr.project_column_ref(|_col_id| i));
+                    projection.push(mask_count + num_input_columns);
+                    mask_count += 1;
+                } else {
+                    projection.push(i);
+                }
+            }
+
+            let ops = vec![BlockOperator::Map { exprs }, BlockOperator::Project {
+                projection,
+            }];
+
+            let query_ctx = ctx.clone();
+            let func_ctx = query_ctx.get_function_context()?;
+
+            pipeline.add_transform(|input, output| {
+                let transform = CompoundBlockOperator::create(
+                    input,
+                    output,
+                    num_input_columns,
+                    func_ctx.clone(),
+                    ops.clone(),
+                );
+                Ok(ProcessorPtr::create(transform))
+            })?;
+        }
+
+        Ok(())
     }
 
     #[inline]
@@ -149,8 +200,8 @@ impl FuseTable {
                 .transpose()?,
         );
 
-        build_fuse_source_pipeline(
-            ctx,
+        Self::build_fuse_source_pipeline(
+            ctx.clone(),
             pipeline,
             self.storage_format,
             block_reader,
@@ -158,6 +209,45 @@ impl FuseTable {
             topk,
             max_io_requests,
             index_reader,
-        )
+        )?;
+
+        // replace the column which has data mask if needed
+        self.apply_data_mask_policy_if_needed(ctx, plan, pipeline)?;
+
+        Ok(())
+    }
+
+    fn build_fuse_source_pipeline(
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
+        storage_format: FuseStorageFormat,
+        block_reader: Arc<BlockReader>,
+        plan: &DataSourcePlan,
+        top_k: Option<TopK>,
+        max_io_requests: usize,
+        index_reader: Arc<Option<AggIndexReader>>,
+    ) -> Result<()> {
+        let max_threads = ctx.get_settings().get_max_threads()? as usize;
+
+        match storage_format {
+            FuseStorageFormat::Native => build_fuse_native_source_pipeline(
+                ctx,
+                pipeline,
+                block_reader,
+                max_threads,
+                plan,
+                top_k,
+                max_io_requests,
+            ),
+            FuseStorageFormat::Parquet => build_fuse_parquet_source_pipeline(
+                ctx,
+                pipeline,
+                block_reader,
+                plan,
+                max_threads,
+                max_io_requests,
+                index_reader,
+            ),
+        }
     }
 }

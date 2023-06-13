@@ -23,8 +23,6 @@ use common_expression::Scalar;
 use itertools::Itertools;
 
 use crate::binder::split_conjunctions;
-use crate::optimizer::HeuristicOptimizer;
-use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
@@ -43,7 +41,6 @@ use crate::ScalarExpr;
 use crate::Visibility;
 
 pub fn try_rewrite(
-    optimizer: &HeuristicOptimizer,
     base_columns: &[ColumnEntry],
     s_expr: &SExpr,
     index_plans: &[(u64, String, SExpr)],
@@ -67,8 +64,7 @@ pub fn try_rewrite(
 
     // Search all index plans, find the first matched index to rewrite the query.
     for (index_id, _, plan) in index_plans.iter() {
-        let plan = optimizer.optimize_expression(plan, &[RuleID::FoldConstant])?;
-        let plan = rewrite_index_plan(&col_index_map, &plan);
+        let plan = rewrite_index_plan(&col_index_map, plan);
 
         let index_info = collect_information(&plan)?;
         debug_assert!(index_info.can_apply_index());
@@ -379,11 +375,13 @@ impl<'a> Range<'a> {
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: format!("index_col_{index}"),
                 index,
                 data_type: Box::new(data_type.clone()),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             },
         };
         match (self.min, self.max) {
@@ -825,11 +823,13 @@ fn try_create_column_binding(
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: format!("index_col_{index}"),
                 index: *index,
                 data_type: Box::new(ty.clone()),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             },
         })
     } else {
@@ -906,7 +906,7 @@ fn push_down_index_scan(s_expr: &SExpr, agg_info: AggIndexInfo) -> Result<SExpr>
         RelOperator::Scan(scan) => {
             let mut new_scan = scan.clone();
             new_scan.agg_index = Some(agg_info);
-            s_expr.replace_plan(new_scan.into())
+            s_expr.replace_plan(Arc::new(new_scan.into()))
         }
         _ => {
             let child = push_down_index_scan(s_expr.child(0)?, agg_info)?;

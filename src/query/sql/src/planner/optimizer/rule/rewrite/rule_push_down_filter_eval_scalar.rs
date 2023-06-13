@@ -29,6 +29,7 @@ use crate::plans::EvalScalar;
 use crate::plans::Filter;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::PatternPlan;
 use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
@@ -111,9 +112,9 @@ impl RulePushDownFilterEvalScalar {
                             display_name: agg.display_name.clone(),
                         })
                     }
-                    WindowFuncType::Lag(lag) => {
-                        let new_arg = Self::replace_predicate(&lag.arg, items)?;
-                        let new_default = match lag
+                    WindowFuncType::LagLead(ll) => {
+                        let new_arg = Self::replace_predicate(&ll.arg, items)?;
+                        let new_default = match ll
                             .default
                             .clone()
                             .map(|d| Self::replace_predicate(&d, items))
@@ -121,28 +122,20 @@ impl RulePushDownFilterEvalScalar {
                             None => None,
                             Some(d) => Some(Box::new(d?)),
                         };
-                        WindowFuncType::Lag(LagLeadFunction {
+                        WindowFuncType::LagLead(LagLeadFunction {
+                            is_lag: ll.is_lag,
                             arg: Box::new(new_arg),
-                            offset: lag.offset,
+                            offset: ll.offset,
                             default: new_default,
-                            return_type: lag.return_type.clone(),
+                            return_type: ll.return_type.clone(),
                         })
                     }
-                    WindowFuncType::Lead(lead) => {
-                        let new_arg = Self::replace_predicate(&lead.arg, items)?;
-                        let new_default = match lead
-                            .default
-                            .clone()
-                            .map(|d| Self::replace_predicate(&d, items))
-                        {
-                            None => None,
-                            Some(d) => Some(Box::new(d?)),
-                        };
-                        WindowFuncType::Lead(LagLeadFunction {
+                    WindowFuncType::NthValue(func) => {
+                        let new_arg = Self::replace_predicate(&func.arg, items)?;
+                        WindowFuncType::NthValue(NthValueFunction {
+                            n: func.n,
                             arg: Box::new(new_arg),
-                            offset: lead.offset,
-                            default: new_default,
-                            return_type: lead.return_type.clone(),
+                            return_type: func.return_type.clone(),
                         })
                     }
                     func => func.clone(),

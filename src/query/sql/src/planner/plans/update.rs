@@ -12,19 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::ComputedExpr;
+use common_expression::ConstantFolder;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
+use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_functions::BUILTIN_FUNCTIONS;
 
+use crate::binder::wrap_cast_scalar;
+use crate::parse_computed_exprs;
 use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::BindContext;
@@ -48,6 +55,7 @@ impl UpdatePlan {
 
     pub fn generate_update_list(
         &self,
+        ctx: Arc<dyn TableContext>,
         schema: DataSchema,
         col_indices: Vec<usize>,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
@@ -56,11 +64,13 @@ impl UpdatePlan {
             column: ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: "_predicate".to_string(),
                 index: schema.num_fields(),
                 data_type: Box::new(DataType::Boolean),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             },
         });
 
@@ -68,12 +78,10 @@ impl UpdatePlan {
             Vec::with_capacity(self.update_list.len()),
             |mut acc, (index, scalar)| {
                 let field = schema.field(*index);
-                let left = ScalarExpr::CastExpr(CastExpr {
-                    span: scalar.span(),
-                    is_try: false,
-                    argument: Box::new(scalar.clone()),
-                    target_type: Box::new(field.data_type().clone()),
-                });
+                let data_type = scalar.data_type()?;
+                let target_type = field.data_type();
+                let left = wrap_cast_scalar(scalar, &data_type, target_type)?;
+
                 let scalar = if col_indices.is_empty() {
                     // The condition is always true.
                     // Replace column to the result of the following expression:
@@ -105,15 +113,57 @@ impl UpdatePlan {
                         arguments: vec![predicate.clone(), left, right],
                     })
                 };
-                acc.push((
-                    *index,
-                    scalar
-                        .as_expr()?
-                        .project_column_ref(|col| col.column_name.clone())
-                        .as_remote_expr(),
-                ));
+                let expr = scalar
+                    .as_expr()?
+                    .project_column_ref(|col| col.column_name.clone());
+                let (expr, _) =
+                    ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+                acc.push((*index, expr.as_remote_expr()));
                 Ok::<_, ErrorCode>(acc)
             },
         )
+    }
+
+    pub fn generate_stored_computed_list(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        schema: DataSchemaRef,
+    ) -> Result<BTreeMap<FieldIndex, RemoteExpr<String>>> {
+        let mut remote_exprs = BTreeMap::new();
+        for (i, f) in schema.fields().iter().enumerate() {
+            if let Some(ComputedExpr::Stored(stored_expr)) = f.computed_expr() {
+                let mut expr = parse_computed_exprs(ctx.clone(), schema.clone(), stored_expr)?;
+                let mut expr = expr.remove(0);
+                if expr.data_type() != f.data_type() {
+                    expr = Expr::Cast {
+                        span: None,
+                        is_try: f.data_type().is_nullable(),
+                        expr: Box::new(expr),
+                        dest_type: f.data_type().clone(),
+                    };
+                }
+
+                // If related column has updated, the stored computed column need to regenerate.
+                let mut need_update = false;
+                let field_indices = expr.column_refs();
+                for (field_index, _) in field_indices.iter() {
+                    if self.update_list.contains_key(field_index) {
+                        need_update = true;
+                        break;
+                    }
+                }
+                if need_update {
+                    let expr =
+                        expr.project_column_ref(|index| schema.field(*index).name().to_string());
+                    let (expr, _) = ConstantFolder::fold(
+                        &expr,
+                        &ctx.get_function_context()?,
+                        &BUILTIN_FUNCTIONS,
+                    );
+                    remote_exprs.insert(i, expr.as_remote_expr());
+                }
+            }
+        }
+        Ok(remote_exprs)
     }
 }

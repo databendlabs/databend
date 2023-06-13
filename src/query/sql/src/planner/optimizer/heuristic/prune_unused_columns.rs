@@ -24,7 +24,6 @@ use crate::plans::Aggregate;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
 use crate::plans::RelOperator;
-use crate::plans::WindowFuncType;
 use crate::ColumnEntry;
 use crate::MetadataRef;
 
@@ -160,9 +159,7 @@ impl UnusedColumnPruner {
                 let mut used = vec![];
                 for item in &p.aggregate_functions {
                     if required.contains(&item.index) {
-                        for c in item.scalar.used_columns() {
-                            required.insert(c);
-                        }
+                        required.extend(item.scalar.used_columns());
                         used.push(item.clone());
                     }
                 }
@@ -196,25 +193,16 @@ impl UnusedColumnPruner {
             }
             RelOperator::Window(p) => {
                 if required.contains(&p.index) {
-                    match &p.function {
-                        WindowFuncType::Aggregate(agg) => {
-                            agg.args.iter().for_each(|item| {
-                                required.extend(item.used_columns());
-                            });
-                        }
-                        WindowFuncType::Lag(f) | WindowFuncType::Lead(f) => {
-                            required.extend(f.arg.used_columns());
-                            if let Some(default) = &f.default {
-                                required.extend(default.used_columns());
-                            }
-                        }
-                        _ => {}
-                    }
+                    // The scalar items in window function is not replaced yet.
+                    // The will be replaced in physical plan builder.
+                    p.arguments.iter().for_each(|item| {
+                        required.extend(item.scalar.used_columns());
+                    });
                     p.partition_by.iter().for_each(|item| {
-                        required.insert(item.index);
+                        required.extend(item.scalar.used_columns());
                     });
                     p.order_by.iter().for_each(|item| {
-                        required.insert(item.order_by_item.index);
+                        required.extend(item.order_by_item.scalar.used_columns());
                     });
                 }
 

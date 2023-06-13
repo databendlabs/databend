@@ -82,10 +82,7 @@ impl HivePartitionFiller {
         for (i, field) in self.partition_fields.iter().enumerate() {
             let value = &data_values[i];
             let column = self.generate_value(num_rows, value.clone(), field)?;
-            columns.push(BlockEntry {
-                data_type: field.data_type().into(),
-                value: column,
-            });
+            columns.push(BlockEntry::new(field.data_type().into(), column));
         }
 
         Ok(DataBlock::new(columns, num_rows))

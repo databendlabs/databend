@@ -157,11 +157,13 @@ impl Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: name.clone(),
                 index: column_index,
                 data_type: Box::new(srf_expr.data_type().clone()),
                 visibility: Visibility::InVisible,
+                virtual_computed_expr: None,
             };
 
             let item = SrfItem {

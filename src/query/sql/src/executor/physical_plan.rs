@@ -34,7 +34,7 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::IEJoinCondition;
+use crate::executor::RangeJoinCondition;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
@@ -144,12 +144,12 @@ impl EvalScalar {
         let input_schema = self.input.output_schema()?;
         let mut fields = input_schema.fields().clone();
         for (expr, index) in self.exprs.iter() {
+            let name = index.to_string();
             if let RemoteExpr::ColumnRef { id, .. } = expr {
-                if index == id {
+                if name == fields[*id].name().as_str() {
                     continue;
                 }
             }
-            let name = index.to_string();
             let data_type = expr.as_expr(&BUILTIN_FUNCTIONS).data_type().clone();
             fields.push(DataField::new(&name, data_type));
         }
@@ -308,8 +308,8 @@ pub enum WindowFunction {
     Rank,
     DenseRank,
     PercentRank,
-    Lag(LagLeadFunctionDesc),
-    Lead(LagLeadFunctionDesc),
+    LagLead(LagLeadFunctionDesc),
+    NthValue(NthValueFunctionDesc),
 }
 
 impl WindowFunction {
@@ -320,7 +320,8 @@ impl WindowFunction {
                 Ok(DataType::Number(NumberDataType::UInt64))
             }
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
-            WindowFunction::Lag(f) | WindowFunction::Lead(f) => Ok(f.sig.return_type.clone()),
+            WindowFunction::LagLead(f) => Ok(f.return_type.clone()),
+            WindowFunction::NthValue(f) => Ok(f.return_type.clone()),
         }
     }
 }
@@ -333,8 +334,9 @@ impl Display for WindowFunction {
             WindowFunction::Rank => write!(f, "rank"),
             WindowFunction::DenseRank => write!(f, "dense_rank"),
             WindowFunction::PercentRank => write!(f, "percent_rank"),
-            WindowFunction::Lag(_) => write!(f, "lag"),
-            WindowFunction::Lead(_) => write!(f, "lead"),
+            WindowFunction::LagLead(lag_lead) if lag_lead.is_lag => write!(f, "lag"),
+            WindowFunction::LagLead(_) => write!(f, "lead"),
+            WindowFunction::NthValue(_) => write!(f, "nth_value"),
         }
     }
 }
@@ -373,6 +375,9 @@ pub struct Sort {
     pub order_by: Vec<SortDesc>,
     // limit = Limit.limit + Limit.offset
     pub limit: Option<usize>,
+
+    // If the sort plan is after the exchange plan
+    pub after_exchange: bool,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -537,7 +542,13 @@ impl HashJoin {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct IEJoin {
+pub enum RangeJoinType {
+    IEJoin,
+    Merge,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RangeJoin {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
@@ -545,17 +556,18 @@ pub struct IEJoin {
     pub right: Box<PhysicalPlan>,
     /// The first two conditions: (>, >=, <, <=)
     /// Condition's left/right side only contains one table's column
-    pub conditions: Vec<IEJoinCondition>,
+    pub conditions: Vec<RangeJoinCondition>,
     /// The other conditions
     pub other_conditions: Vec<RemoteExpr>,
     /// Now only support inner join, will support left/right join later
     pub join_type: JoinType,
+    pub range_join_type: RangeJoinType,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl IEJoin {
+impl RangeJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.left.output_schema()?.fields().clone();
         fields.extend(self.right.output_schema()?.fields().clone());
@@ -658,10 +670,7 @@ pub struct DistributedInsertSelect {
 
 impl DistributedInsertSelect {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        Ok(DataSchemaRefExt::create(vec![
-            DataField::new("seg_loc", DataType::String),
-            DataField::new("seg_info", DataType::String),
-        ]))
+        Ok(DataSchemaRef::default())
     }
 }
 
@@ -701,7 +710,7 @@ pub enum PhysicalPlan {
     Limit(Limit),
     RowFetch(RowFetch),
     HashJoin(HashJoin),
-    IEJoin(IEJoin),
+    RangeJoin(RangeJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
     RuntimeFilterSource(RuntimeFilterSource),
@@ -744,7 +753,7 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
-            PhysicalPlan::IEJoin(plan) => plan.output_schema(),
+            PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
         }
     }
 
@@ -769,7 +778,7 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
-            PhysicalPlan::IEJoin(_) => "IEJoin".to_string(),
+            PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
         }
     }
 
@@ -803,7 +812,7 @@ impl PhysicalPlan {
                 std::iter::once(plan.left_side.as_ref())
                     .chain(std::iter::once(plan.right_side.as_ref())),
             ),
-            PhysicalPlan::IEJoin(plan) => Box::new(
+            PhysicalPlan::RangeJoin(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
         }
@@ -828,7 +837,7 @@ impl PhysicalPlan {
             | PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
-            | PhysicalPlan::IEJoin(_)
+            | PhysicalPlan::RangeJoin(_)
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_) => None,
@@ -852,18 +861,17 @@ pub enum LagLeadDefault {
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct LagLeadFunctionDesc {
-    pub sig: LagLeadFunctionSignature,
-    pub output_column: IndexType,
+    pub is_lag: bool,
+    pub offset: u64,
     pub arg: usize,
+    pub return_type: DataType,
     pub default: LagLeadDefault,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
-pub struct LagLeadFunctionSignature {
-    pub name: String,
-    pub arg: DataType,
-    pub offset: u64,
-    pub default: Option<DataType>,
+pub struct NthValueFunctionDesc {
+    pub n: Option<u64>,
+    pub arg: usize,
     pub return_type: DataType,
 }
 

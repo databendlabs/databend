@@ -21,6 +21,7 @@ mod stage;
 mod table;
 mod udf;
 mod view;
+mod virtual_column;
 
 pub use account::*;
 pub use catalog::*;
@@ -31,3 +32,4 @@ pub use stage::*;
 pub use table::*;
 pub use udf::*;
 pub use view::*;
+pub use virtual_column::*;

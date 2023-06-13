@@ -28,6 +28,7 @@ use common_meta_app::app_error::UnknownShareEndpointId;
 use common_meta_app::app_error::UnknownShareId;
 use common_meta_app::app_error::UnknownTable;
 use common_meta_app::app_error::UnknownTableId;
+use common_meta_app::app_error::VirtualColumnNotFound;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
 use common_meta_app::schema::DBIdTableName;
@@ -44,6 +45,8 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
+use common_meta_app::schema::VirtualColumnMeta;
+use common_meta_app::schema::VirtualColumnNameIdent;
 use common_meta_app::share::*;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
@@ -1194,4 +1197,37 @@ pub async fn get_index_metas_by_ids(
     }
 
     Ok(index_metas)
+}
+
+/// Get `virtual_column_meta_seq` and [`VirtualColumnMeta`] by [`VirtualColumnNameIdent`],
+/// or return [`AppError::VirtualColumnNotFound`] error wrapped in a [`KVAppError`] if not found.
+pub async fn get_virtual_column_by_id_or_err(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_ident: &VirtualColumnNameIdent,
+    ctx: impl Display + Copy,
+) -> Result<(u64, VirtualColumnMeta), KVAppError> {
+    let (seq, virtual_column_meta): (_, Option<VirtualColumnMeta>) =
+        get_pb_value(kv_api, name_ident).await?;
+    if virtual_column_meta.is_none() {
+        return Err(KVAppError::AppError(AppError::VirtualColumnNotFound(
+            VirtualColumnNotFound::new(
+                name_ident.table_id,
+                format!(
+                    "get virtual column with tenant: {} table_id: {}",
+                    name_ident.tenant, name_ident.table_id
+                ),
+            ),
+        )));
+    }
+
+    let virtual_column_meta = virtual_column_meta.unwrap();
+
+    debug!(
+        ident = display(name_ident),
+        table_meta = debug(&virtual_column_meta),
+        "{}",
+        ctx
+    );
+
+    Ok((seq, virtual_column_meta))
 }

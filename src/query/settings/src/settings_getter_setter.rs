@@ -357,4 +357,13 @@ impl Settings {
     pub fn set_enterprise_license(&self, val: String) -> Result<()> {
         self.set_setting("enterprise_license".to_string(), val)
     }
+
+    pub fn get_deduplicate_label(&self) -> Result<Option<String>> {
+        let deduplicate_label = self.try_get_string("deduplicate_label")?;
+        if deduplicate_label.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(deduplicate_label))
+        }
+    }
 }

@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
@@ -46,8 +47,8 @@ impl UDFValidator {
         let expr_params = &self.expr_params;
         let parameters = self.parameters.iter().cloned().collect::<HashSet<_>>();
 
-        let params_not_declared: HashSet<_> = parameters.difference(expr_params).collect();
-        let params_not_used: HashSet<_> = expr_params.difference(&parameters).collect();
+        let params_not_declared: HashSet<_> = expr_params.difference(&parameters).collect();
+        let params_not_used: HashSet<_> = parameters.difference(expr_params).collect();
 
         if params_not_declared.is_empty() && params_not_used.is_empty() {
             return Ok(());
@@ -75,7 +76,7 @@ impl<'ast> Visitor<'ast> for UDFValidator {
         _span: Span,
         _database: &'ast Option<Identifier>,
         _table: &'ast Option<Identifier>,
-        column: &'ast Identifier,
+        column: &'ast ColumnID,
     ) {
         self.expr_params.insert(column.to_string());
     }

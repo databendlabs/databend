@@ -140,6 +140,10 @@ pub fn walk_identifier_mut<V: VisitorMut>(visitor: &mut V, ident: &mut Identifie
     visitor.visit_identifier(ident);
 }
 
+pub fn walk_column_id_mut<V: VisitorMut>(visitor: &mut V, ident: &mut ColumnID) {
+    visitor.visit_column_id(ident);
+}
+
 pub fn walk_query_mut<V: VisitorMut>(visitor: &mut V, query: &mut Query) {
     let Query {
         with,
@@ -201,7 +205,7 @@ pub fn walk_select_target_mut<V: VisitorMut>(visitor: &mut V, target: &mut Selec
             }
             if let Some(cols) = exclude {
                 for ident in cols {
-                    visitor.visit_identifier(ident);
+                    visitor.visit_column_id(ident);
                 }
             }
         }
@@ -358,6 +362,10 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
+        Statement::CreateVirtualColumns(stmt) => visitor.visit_create_virtual_columns(stmt),
+        Statement::AlterVirtualColumns(stmt) => visitor.visit_alter_virtual_columns(stmt),
+        Statement::DropVirtualColumns(stmt) => visitor.visit_drop_virtual_columns(stmt),
+        Statement::GenerateVirtualColumns(stmt) => visitor.visit_generate_virtual_columns(stmt),
         Statement::ShowUsers => visitor.visit_show_users(),
         Statement::ShowRoles => visitor.visit_show_roles(),
         Statement::CreateUser(stmt) => visitor.visit_create_user(stmt),

@@ -20,6 +20,7 @@ use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use common_sql::binder::INTERNAL_COLUMN_FACTORY;
+use common_sql::field_default_value;
 use common_sql::plans::AddTableColumnPlan;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
@@ -76,23 +77,17 @@ impl Interpreter for AddTableColumnInterpreter {
 
             let catalog = self.ctx.get_catalog(catalog_name)?;
             let mut new_table_meta = table.get_table_info().meta.clone();
-            let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
-            for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
-                let field =
-                    if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
-                        field.with_default_expr(Some(default_expr.clone()))
-                    } else {
-                        field
-                    };
-
+            let fields = self.plan.schema.fields().clone();
+            for field in fields.iter() {
+                if field.default_expr().is_some() {
+                    let _ = field_default_value(self.ctx.clone(), field)?;
+                }
                 if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
                     return Err(ErrorCode::TableWithInternalColumnName(format!(
                         "Cannot alter table to add a column with the same name as internal column: {}",
                         field.name()
                     )));
                 }
-
-                fields.push(field)
             }
             new_table_meta.add_columns(&fields, &self.plan.field_comments)?;
 
@@ -104,6 +99,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 seq: MatchSeq::Exact(table_version),
                 new_table_meta,
                 copied_files: None,
+                deduplicated_label: None,
             };
 
             let res = catalog.update_table_meta(table_info, req).await?;

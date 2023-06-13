@@ -21,19 +21,23 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::ColumnId;
 use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::TableSchemaRef;
 use common_io::constants::DEFAULT_BLOCK_BUFFER_SIZE;
+use common_io::constants::DEFAULT_BLOCK_INDEX_BUFFER_SIZE;
 use opendal::Operator;
 use storages_common_blocks::blocks_to_parquet;
+use storages_common_index::BloomIndex;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterStatistics;
 use storages_common_table_meta::meta::ColumnMeta;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::table::TableCompression;
 
 use crate::fuse_table::FuseStorageFormat;
 use crate::io::write::WriteSettings;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::util;
-use crate::operations::BloomIndexState;
 use crate::statistics::gen_columns_statistics;
 use crate::statistics::ClusterStatsGenerator;
 
@@ -44,11 +48,12 @@ pub fn serialize_block(
     block: DataBlock,
     buf: &mut Vec<u8>,
 ) -> Result<(u64, HashMap<ColumnId, ColumnMeta>)> {
+    let schema = Arc::new(schema.remove_virtual_computed_fields());
     match write_settings.storage_format {
         FuseStorageFormat::Parquet => {
             let result =
-                blocks_to_parquet(schema, vec![block], buf, write_settings.table_compression)?;
-            let meta = util::column_parquet_metas(&result.1, schema)?;
+                blocks_to_parquet(&schema, vec![block], buf, write_settings.table_compression)?;
+            let meta = util::column_parquet_metas(&result.1, &schema)?;
             Ok((result.0, meta))
         }
         FuseStorageFormat::Native => {
@@ -68,7 +73,7 @@ pub fn serialize_block(
             writer.write(&batch)?;
             writer.finish()?;
 
-            let leaf_column_ids = schema.to_leaf_column_ids();
+            let leaf_column_ids = &schema.to_leaf_column_ids();
             let mut metas = HashMap::with_capacity(writer.metas.len());
             for (idx, meta) in writer.metas.iter().enumerate() {
                 // use column id as key instead of index
@@ -87,6 +92,49 @@ pub async fn write_data(data: Vec<u8>, data_accessor: &Operator, location: &str)
     data_accessor.write(location, data).await?;
 
     Ok(())
+}
+
+pub struct BloomIndexState {
+    pub(crate) data: Vec<u8>,
+    pub(crate) size: u64,
+    pub(crate) location: Location,
+    pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
+}
+
+impl BloomIndexState {
+    pub fn try_create(
+        ctx: Arc<dyn TableContext>,
+        source_schema: TableSchemaRef,
+        block: &DataBlock,
+        location: Location,
+    ) -> Result<Option<Self>> {
+        // write index
+        let maybe_bloom_index =
+            BloomIndex::try_create(ctx.get_function_context()?, source_schema, location.1, &[
+                block,
+            ])?;
+        if let Some(bloom_index) = maybe_bloom_index {
+            let index_block = bloom_index.serialize_to_data_block()?;
+            let filter_schema = bloom_index.filter_schema;
+            let column_distinct_count = bloom_index.column_distinct_count;
+            let mut data = Vec::with_capacity(DEFAULT_BLOCK_INDEX_BUFFER_SIZE);
+            let index_block_schema = &filter_schema;
+            let (size, _) = blocks_to_parquet(
+                index_block_schema,
+                vec![index_block],
+                &mut data,
+                TableCompression::None,
+            )?;
+            Ok(Some(Self {
+                data,
+                size,
+                location,
+                column_distinct_count,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 pub struct BlockSerialization {

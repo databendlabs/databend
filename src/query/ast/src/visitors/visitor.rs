@@ -37,6 +37,19 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_identifier(&mut self, _ident: &'ast Identifier) {}
 
+    fn visit_column_id(&mut self, column: &'ast ColumnID) {
+        match column {
+            ColumnID::Name(ident) => {
+                self.visit_identifier(ident);
+            }
+            ColumnID::Position(pos) => {
+                self.visit_column_position(pos);
+            }
+        }
+    }
+
+    fn visit_column_position(&mut self, _column: &'ast ColumnPosition) {}
+
     fn visit_database_ref(
         &mut self,
         catalog: &'ast Option<Identifier>,
@@ -75,7 +88,7 @@ pub trait Visitor<'ast>: Sized {
         _span: Span,
         database: &'ast Option<Identifier>,
         table: &'ast Option<Identifier>,
-        column: &'ast Identifier,
+        column: &'ast ColumnID,
     ) {
         if let Some(database) = database {
             walk_identifier(self, database);
@@ -85,7 +98,7 @@ pub trait Visitor<'ast>: Sized {
             walk_identifier(self, table);
         }
 
-        walk_identifier(self, column);
+        self.visit_column_id(column);
     }
 
     fn visit_is_null(&mut self, _span: Span, expr: &'ast Expr, _not: bool) {
@@ -461,7 +474,16 @@ pub trait Visitor<'ast>: Sized {
     fn visit_drop_view(&mut self, _stmt: &'ast DropViewStmt) {}
 
     fn visit_create_index(&mut self, _stmt: &'ast CreateIndexStmt) {}
+
     fn visit_drop_index(&mut self, _stmt: &'ast DropIndexStmt) {}
+
+    fn visit_create_virtual_columns(&mut self, _stmt: &'ast CreateVirtualColumnsStmt) {}
+
+    fn visit_alter_virtual_columns(&mut self, _stmt: &'ast AlterVirtualColumnsStmt) {}
+
+    fn visit_drop_virtual_columns(&mut self, _stmt: &'ast DropVirtualColumnsStmt) {}
+
+    fn visit_generate_virtual_columns(&mut self, _stmt: &'ast GenerateVirtualColumnsStmt) {}
 
     fn visit_show_users(&mut self) {}
 

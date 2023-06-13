@@ -80,7 +80,7 @@ impl SessionManager {
 
     #[async_backtrace::framed]
     pub async fn create_session(&self, typ: SessionType) -> Result<Arc<Session>> {
-        {
+        if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
             let sessions = self.active_sessions.read();
             self.validate_max_active_sessions(sessions.len(), "active sessions")?;
         }
@@ -129,7 +129,9 @@ impl SessionManager {
         let session = Session::try_create(id.clone(), typ.clone(), session_ctx, mysql_conn_id)?;
 
         let mut sessions = self.active_sessions.write();
-        self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+        if !matches!(typ, SessionType::Dummy | SessionType::FlightRPC) {
+            self.validate_max_active_sessions(sessions.len(), "active sessions")?;
+        }
 
         let config = GlobalConfig::instance();
         label_counter(

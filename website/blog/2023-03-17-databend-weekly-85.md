@@ -78,7 +78,7 @@ This feature avoids storing pre-transformed data in temporary tables and support
 
 If you're interested, check the following documentation:
 
-- [Docs | Transforming Data During a Load](https://databend.rs/doc/load-data/data-load-transform)
+- [Docs | Transforming Data During a Load](https://databend.rs/doc/load-data/transform/data-load-transform)
 - [PR | feat(storage): Map data type support bloom filter](https://github.com/datafuselabs/databend/pull/10457)
 
 ## Code Corner

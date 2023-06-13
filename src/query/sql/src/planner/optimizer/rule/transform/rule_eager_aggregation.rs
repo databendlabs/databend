@@ -400,8 +400,10 @@ impl Rule for RuleEagerAggregation {
         };
 
         let join: Join = join_expr.plan().clone().try_into()?;
-        // Only supports inner join and cross join.
-        if !matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+        // Only supports inner/cross join and equal conditions.
+        if !matches!(join.join_type, JoinType::Inner | JoinType::Cross)
+            | !join.non_equi_conditions.is_empty()
+        {
             return Ok(());
         }
 
@@ -803,7 +805,7 @@ impl Rule for RuleEagerAggregation {
                         )),
                         Arc::new(join_expr.child(1)?.clone()),
                     ]))])
-                    .replace_plan(eager_groupby_count_count_sum.try_into()?)
+                    .replace_plan(Arc::new(eager_groupby_count_count_sum.try_into()?))
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -827,7 +829,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(eager_groupby_count_count_sum.try_into()?)
+                    .replace_plan(Arc::new(eager_groupby_count_count_sum.try_into()?))
             });
 
             // Apply eager split on d and d^1.
@@ -889,7 +891,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                         )),
                     ]))])
-                    .replace_plan(eager_split_count_sum.try_into()?),
+                    .replace_plan(Arc::new(eager_split_count_sum.try_into()?)),
             );
         } else if can_push_down[d] && eager_aggregations[d ^ 1].is_empty() {
             // (1) Try to apply eager group-by on d.
@@ -1121,7 +1123,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(eager_count_sum.try_into()?)
+                        .replace_plan(Arc::new(eager_count_sum.try_into()?))
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -1134,7 +1136,7 @@ impl Rule for RuleEagerAggregation {
                             )),
                             Arc::new(join_expr.child(1)?.clone()),
                         ]))])
-                        .replace_plan(eager_count_sum.try_into()?)
+                        .replace_plan(Arc::new(eager_count_sum.try_into()?))
                 });
 
                 // Apply double eager on d and d^1.
@@ -1176,7 +1178,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(double_eager_count_sum.try_into()?)
+                        .replace_plan(Arc::new(double_eager_count_sum.try_into()?))
                 } else {
                     eval_scalar_expr
                         .replace_children(vec![Arc::new(join_expr.replace_children(vec![
@@ -1204,7 +1206,7 @@ impl Rule for RuleEagerAggregation {
                                 )),
                             )),
                         ]))])
-                        .replace_plan(double_eager_count_sum.try_into()?)
+                        .replace_plan(Arc::new(double_eager_count_sum.try_into()?))
                 });
             }
         }
@@ -1227,19 +1229,19 @@ impl Rule for RuleEagerAggregation {
                 .replace_children(vec![Arc::new(
                     final_agg_partial_expr
                         .replace_children(vec![Arc::new(join_exprs[idx].clone())])
-                        .replace_plan(final_agg_partials[idx].clone().try_into()?),
+                        .replace_plan(Arc::new(final_agg_partials[idx].clone().try_into()?)),
                 )])
-                .replace_plan(final_agg_finals[idx].clone().try_into()?);
+                .replace_plan(Arc::new(final_agg_finals[idx].clone().try_into()?));
             let mut result = if has_sort {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(
                         sort_expr.replace_children(vec![Arc::new(temp_final_agg_expr)]),
                     )])
-                    .replace_plan(final_eval_scalars[idx].clone().try_into()?)
+                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().try_into()?))
             } else {
                 eval_scalar_expr
                     .replace_children(vec![Arc::new(temp_final_agg_expr)])
-                    .replace_plan(final_eval_scalars[idx].clone().try_into()?)
+                    .replace_plan(Arc::new(final_eval_scalars[idx].clone().try_into()?))
             };
             result.set_applied_rule(&self.id);
             state.add_result(result);
@@ -1327,11 +1329,13 @@ fn modify_final_aggregate_function(agg: &mut AggregateFunction, args_index: usiz
         column: ColumnBinding {
             database_name: None,
             table_name: None,
+            column_position: None,
             table_index: None,
             column_name: "_eager".to_string(),
             index: args_index,
             data_type: agg.return_type.clone(),
             visibility: Visibility::Visible,
+            virtual_computed_expr: None,
         },
     });
     if agg.args.is_empty() {
@@ -1389,11 +1393,13 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    column_position: None,
                     table_index: None,
                     column_name: "_eager_final_sum".to_string(),
                     index: left_index,
                     data_type: Box::new(DataType::Number(NumberDataType::Float64)),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
             }),
             wrap_cast(
@@ -1402,6 +1408,7 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: "_eager_final_count".to_string(),
                         index: right_index,
@@ -1409,6 +1416,7 @@ fn create_avg_scalar_item(left_index: usize, right_index: usize) -> ScalarExpr {
                             NumberDataType::UInt64,
                         )))),
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     },
                 }),
                 &DataType::Number(NumberDataType::UInt64),
@@ -1596,6 +1604,7 @@ fn create_eager_count_multiply_scalar_item(
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            column_position: None,
                             table_index: None,
                             column_name: "_eager_count".to_string(),
                             index: eager_count_index,
@@ -1603,6 +1612,7 @@ fn create_eager_count_multiply_scalar_item(
                                 NumberDataType::UInt64,
                             )))),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         },
                     }),
                     &DataType::Number(NumberDataType::UInt64),

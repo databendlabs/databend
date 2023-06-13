@@ -116,10 +116,10 @@ impl AccumulatingTransform for PartialSingleStateAggregator {
 
                 let mut data = Vec::with_capacity(4);
                 func.serialize(place, &mut data)?;
-                columns.push(BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(data)),
-                });
+                columns.push(BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(data)),
+                ));
             }
 
             generate_data_block = vec![DataBlock::new(columns, 1)];

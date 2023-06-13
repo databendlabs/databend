@@ -347,7 +347,7 @@ impl Operator for Join {
         RelOp::Join
     }
 
-    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<RelationalProperty> {
+    fn derive_relational_prop(&self, rel_expr: &RelExpr) -> Result<Arc<RelationalProperty>> {
         let left_prop = rel_expr.derive_relational_prop_child(0)?;
         let right_prop = rel_expr.derive_relational_prop_child(1)?;
         // Derive output columns
@@ -379,14 +379,14 @@ impl Operator for Join {
 
         // Derive used columns
         let mut used_columns = self.used_columns()?;
-        used_columns.extend(left_prop.used_columns);
-        used_columns.extend(right_prop.used_columns);
+        used_columns.extend(left_prop.used_columns.clone());
+        used_columns.extend(right_prop.used_columns.clone());
 
-        Ok(RelationalProperty {
+        Ok(Arc::new(RelationalProperty {
             output_columns,
             outer_columns,
             used_columns,
-        })
+        }))
     }
 
     fn derive_physical_prop(&self, rel_expr: &RelExpr) -> Result<PhysicalProperty> {
@@ -411,13 +411,17 @@ impl Operator for Join {
         }
     }
 
-    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<StatInfo> {
+    fn derive_cardinality(&self, rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
         let left_stat_info = rel_expr.derive_cardinality_child(0)?;
         let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-        let (mut left_cardinality, mut left_statistics) =
-            (left_stat_info.cardinality, left_stat_info.statistics);
-        let (mut right_cardinality, mut right_statistics) =
-            (right_stat_info.cardinality, right_stat_info.statistics);
+        let (mut left_cardinality, mut left_statistics) = (
+            left_stat_info.cardinality,
+            left_stat_info.statistics.clone(),
+        );
+        let (mut right_cardinality, mut right_statistics) = (
+            right_stat_info.cardinality,
+            right_stat_info.statistics.clone(),
+        );
         // Evaluating join cardinality using histograms.
         // If histogram is None, will evaluate using NDV.
         let inner_join_cardinality = self.inner_join_cardinality(
@@ -449,13 +453,13 @@ impl Operator for Join {
             column_stats.extend(right_statistics.column_stats);
             column_stats
         };
-        Ok(StatInfo {
+        Ok(Arc::new(StatInfo {
             cardinality,
             statistics: Statistics {
                 precise_cardinality: None,
                 column_stats,
             },
-        })
+        }))
     }
 
     fn compute_required_prop_child(

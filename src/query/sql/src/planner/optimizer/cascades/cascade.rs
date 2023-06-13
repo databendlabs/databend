@@ -47,10 +47,13 @@ pub struct CascadesOptimizer {
 }
 
 impl CascadesOptimizer {
-    pub fn create(ctx: Arc<dyn TableContext>, metadata: MetadataRef) -> Result<Self> {
-        let enable_bushy_join = ctx.get_settings().get_enable_bushy_join()? != 0;
+    pub fn create(
+        ctx: Arc<dyn TableContext>,
+        metadata: MetadataRef,
+        optimized: bool,
+    ) -> Result<Self> {
         let explore_rule_set = if ctx.get_settings().get_enable_cbo()? {
-            get_explore_rule_set(enable_bushy_join)
+            get_explore_rule_set(optimized)
         } else {
             RuleSet::create()
         };
@@ -89,7 +92,7 @@ impl CascadesOptimizer {
         self.find_optimal_plan(root_index)
     }
 
-    pub fn insert_from_transform_state(
+    pub(crate) fn insert_from_transform_state(
         &mut self,
         group_index: IndexType,
         state: TransformResult,
@@ -101,6 +104,15 @@ impl CascadesOptimizer {
         Ok(())
     }
 
+    /// Insert a new `SExpr` into the memo. This will recursively insert all of its children.
+    /// When inserting a new expression, we will first check if it is already in the memo. If it is,
+    /// we will return the existing group index. Otherwise, we will create a new group and return
+    /// its index.
+    /// Currently, we can only check if the inserted expression is already in the memo by its
+    /// `SExpr::original_group` field, which is set by the `PatternExtractor` when extracting
+    /// candidates from memo. But sometimes, it's possible to insert the generated expression
+    /// into a existed group, we'd better find a way to do this in the future to reduce duplicated
+    /// groups.
     fn insert_expression(&mut self, group_index: IndexType, expression: &SExpr) -> Result<()> {
         self.memo.insert(Some(group_index), expression.clone())?;
 

@@ -30,24 +30,20 @@ use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
 use common_exception::Result;
+use common_meta_app::data_mask::CreateDatamaskReq;
 use common_meta_app::data_mask::DatamaskMeta;
+use common_meta_app::data_mask::DropDatamaskReq;
 use common_meta_store::MetaStore;
-use common_sql::plans::data_mask::CreateDatamaskPolicyPlan;
-use common_sql::plans::DropDatamaskPolicyPlan;
 
 #[async_trait::async_trait]
 pub trait DatamaskHandler: Sync + Send {
     async fn create_data_mask(
         &self,
         meta_api: Arc<MetaStore>,
-        plan: CreateDatamaskPolicyPlan,
+        req: CreateDatamaskReq,
     ) -> Result<()>;
 
-    async fn drop_data_mask(
-        &self,
-        meta_api: Arc<MetaStore>,
-        plan: DropDatamaskPolicyPlan,
-    ) -> Result<()>;
+    async fn drop_data_mask(&self, meta_api: Arc<MetaStore>, req: DropDatamaskReq) -> Result<()>;
 
     async fn get_data_mask(
         &self,
@@ -69,17 +65,17 @@ impl DatamaskHandlerWrapper {
     pub async fn create_data_mask(
         &self,
         meta_api: Arc<MetaStore>,
-        plan: CreateDatamaskPolicyPlan,
+        req: CreateDatamaskReq,
     ) -> Result<()> {
-        self.handler.create_data_mask(meta_api, plan).await
+        self.handler.create_data_mask(meta_api, req).await
     }
 
     pub async fn drop_data_mask(
         &self,
         meta_api: Arc<MetaStore>,
-        plan: DropDatamaskPolicyPlan,
+        req: DropDatamaskReq,
     ) -> Result<()> {
-        self.handler.drop_data_mask(meta_api, plan).await
+        self.handler.drop_data_mask(meta_api, req).await
     }
 
     pub async fn get_data_mask(

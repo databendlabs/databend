@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::vec;
 
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::IntervalKind as ASTIntervalKind;
@@ -28,18 +29,20 @@ use common_ast::ast::SubqueryModifier;
 use common_ast::ast::TrimWhere;
 use common_ast::ast::TypeName;
 use common_ast::ast::UnaryOperator;
+use common_ast::ast::Window;
 use common_ast::ast::WindowFrame;
 use common_ast::ast::WindowFrameBound;
 use common_ast::ast::WindowFrameUnits;
-use common_ast::ast::WindowSpec;
 use common_ast::parser::parse_expr;
 use common_ast::parser::tokenize_sql;
+use common_ast::Dialect;
 use common_catalog::catalog::CatalogManager;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
 use common_expression::infer_schema_type;
+use common_expression::shrink_scalar;
 use common_expression::type_check;
 use common_expression::type_check::check_number;
 use common_expression::types::decimal::DecimalDataType;
@@ -48,6 +51,7 @@ use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::types::NumberScalar;
+use common_expression::ColumnIndex;
 use common_expression::ConstantFolder;
 use common_expression::FunctionContext;
 use common_expression::FunctionKind;
@@ -76,6 +80,8 @@ use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
 use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
+use crate::plans::LagLeadFunction;
+use crate::plans::NthValueFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -118,8 +124,7 @@ pub struct TypeChecker<'a> {
     // true if current expr is inside an window function.
     // This is used to allow aggregation function in window's aggregate function.
     in_window_function: bool,
-
-    allow_ambiguous: bool,
+    allow_pushdown: bool,
 }
 
 impl<'a> TypeChecker<'a> {
@@ -129,7 +134,7 @@ impl<'a> TypeChecker<'a> {
         name_resolution_ctx: &'a NameResolutionContext,
         metadata: MetadataRef,
         aliases: &'a [(String, ScalarExpr)],
-        allow_ambiguous: bool,
+        allow_pushdown: bool,
     ) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
         Self {
@@ -141,7 +146,7 @@ impl<'a> TypeChecker<'a> {
             aliases,
             in_aggregate_function: false,
             in_window_function: false,
-            allow_ambiguous,
+            allow_pushdown,
         }
     }
 
@@ -182,26 +187,42 @@ impl<'a> TypeChecker<'a> {
                 let table = table
                     .as_ref()
                     .map(|ident| normalize_identifier(ident, self.name_resolution_ctx).name);
-                let column = normalize_identifier(ident, self.name_resolution_ctx).name;
-                let result = self.bind_context.resolve_name(
-                    database.as_deref(),
-                    table.as_deref(),
-                    column.as_str(),
-                    ident.span,
-                    self.aliases,
-                    self.allow_ambiguous,
-                )?;
+                let result = match ident {
+                    ColumnID::Name(ident) => {
+                        let column = normalize_identifier(ident, self.name_resolution_ctx).name;
+                        self.bind_context.resolve_name(
+                            database.as_deref(),
+                            table.as_deref(),
+                            column.as_str(),
+                            ident.span,
+                            self.aliases,
+                        )?
+                    }
+                    ColumnID::Position(pos) => self.bind_context.search_column_position(
+                        pos.span,
+                        database.as_deref(),
+                        table.as_deref(),
+                        pos.pos,
+                    )?,
+                };
+
                 let (scalar, data_type) = match result {
                     NameResolutionResult::Column(column) => {
-                        let data_type = *column.data_type.clone();
-                        (
-                            BoundColumnRef {
-                                span: *span,
-                                column,
-                            }
-                            .into(),
-                            data_type,
-                        )
+                        if let Some(virtual_computed_expr) = column.virtual_computed_expr {
+                            let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
+                            let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
+                            return self.resolve(&expr).await;
+                        } else {
+                            let data_type = *column.data_type.clone();
+                            (
+                                BoundColumnRef {
+                                    span: *span,
+                                    column,
+                                }
+                                .into(),
+                                data_type,
+                            )
+                        }
                     }
                     NameResolutionResult::InternalColumn(column) => {
                         // add internal column binding into `BindContext`
@@ -465,7 +486,7 @@ impl<'a> TypeChecker<'a> {
             Expr::Cast {
                 expr, target_type, ..
             } => {
-                let box (scalar, _) = self.resolve(expr).await?;
+                let box (scalar, data_type) = self.resolve(expr).await?;
                 let raw_expr = RawExpr::Cast {
                     span: expr.span(),
                     is_try: false,
@@ -474,15 +495,26 @@ impl<'a> TypeChecker<'a> {
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
+
+                if let Some(constant) = self.try_fold_constant(&checked_expr) {
+                    return Ok(constant);
+                }
+                // if the source type is nullable, cast target type should also be nullable.
+                let target_type = if data_type.is_nullable() {
+                    checked_expr.data_type().wrap_nullable()
+                } else {
+                    checked_expr.data_type().clone()
+                };
+
                 Box::new((
                     CastExpr {
                         span: expr.span(),
                         is_try: false,
                         argument: Box::new(scalar),
-                        target_type: Box::new(checked_expr.data_type().clone()),
+                        target_type: Box::new(target_type.clone()),
                     }
                     .into(),
-                    checked_expr.data_type().clone(),
+                    target_type,
                 ))
             }
 
@@ -498,6 +530,11 @@ impl<'a> TypeChecker<'a> {
                 };
                 let registry = &BUILTIN_FUNCTIONS;
                 let checked_expr = type_check::check(&raw_expr, registry)?;
+
+                if let Some(constant) = self.try_fold_constant(&checked_expr) {
+                    return Ok(constant);
+                }
+
                 Box::new((
                     CastExpr {
                         span: expr.span(),
@@ -666,10 +703,7 @@ impl<'a> TypeChecker<'a> {
                     }
                     let func = self.resolve_general_window_function(&name, &args).await?;
                     let window = window.as_ref().unwrap();
-                    // WindowReference already rewritten by `SelectRewriter` before.
-                    let window = window.as_window_spec().unwrap();
                     let display_name = format!("{:#}", expr);
-
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else if AggregateFunctionFactory::instance().contains(&name) {
@@ -683,8 +717,6 @@ impl<'a> TypeChecker<'a> {
                         // aggregate window function
                         let display_name = format!("{:#}", expr);
                         let func = WindowFuncType::Aggregate(new_agg_func);
-                        // WindowReference already rewritten by `SelectRewriter` before.
-                        let window = window.as_window_spec().unwrap();
                         self.resolve_window(*span, display_name, window, func)
                             .await?
                     } else {
@@ -728,8 +760,6 @@ impl<'a> TypeChecker<'a> {
                     // aggregate window function
                     let display_name = format!("{:#}", expr);
                     let func = WindowFuncType::Aggregate(new_agg_func);
-                    // WindowReference already rewritten by `SelectRewriter` before.
-                    let window = window.as_window_spec().unwrap();
                     self.resolve_window(*span, display_name, window, func)
                         .await?
                 } else {
@@ -902,7 +932,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         display_name: String,
-        window: &WindowSpec,
+        window: &Window,
         func: WindowFuncType,
     ) -> Result<Box<(ScalarExpr, DataType)>> {
         if self.in_window_function {
@@ -913,14 +943,31 @@ impl<'a> TypeChecker<'a> {
             )
             .set_span(span));
         }
-        let mut partitions = Vec::with_capacity(window.partition_by.len());
-        for p in window.partition_by.iter() {
+
+        let spec = match window {
+            Window::WindowSpec(spec) => spec.clone(),
+            Window::WindowReference(w) => self
+                .bind_context
+                .window_definitions
+                .get(&w.window_name.name)
+                .ok_or_else(|| {
+                    ErrorCode::SyntaxException(format!(
+                        "Window definition {} not found",
+                        w.window_name.name
+                    ))
+                })?
+                .value()
+                .clone(),
+        };
+
+        let mut partitions = Vec::with_capacity(spec.partition_by.len());
+        for p in spec.partition_by.iter() {
             let box (part, _part_type) = self.resolve(p).await?;
             partitions.push(part);
         }
-        let mut order_by = Vec::with_capacity(window.order_by.len());
+        let mut order_by = Vec::with_capacity(spec.order_by.len());
 
-        for o in window.order_by.iter() {
+        for o in spec.order_by.iter() {
             let box (order, _) = self.resolve(&o.expr).await?;
             order_by.push(WindowOrderBy {
                 expr: order,
@@ -929,7 +976,7 @@ impl<'a> TypeChecker<'a> {
             })
         }
         let frame = self
-            .resolve_window_frame(span, &func, &mut order_by, window.window_frame.clone())
+            .resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())
             .await?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
@@ -1080,25 +1127,25 @@ impl<'a> TypeChecker<'a> {
                     end_bound: WindowFuncFrameBound::Following(None),
                 });
             }
-            WindowFuncType::Lag(lag) => {
+            WindowFuncType::LagLead(lag_lead) if lag_lead.is_lag => {
                 return Ok(WindowFuncFrame {
                     units: WindowFuncFrameUnits::Rows,
                     start_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
-                        NumberScalar::UInt64(lag.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                     end_bound: WindowFuncFrameBound::Preceding(Some(Scalar::Number(
-                        NumberScalar::UInt64(lag.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                 });
             }
-            WindowFuncType::Lead(lead) => {
+            WindowFuncType::LagLead(lag_lead) => {
                 return Ok(WindowFuncFrame {
                     units: WindowFuncFrameUnits::Rows,
                     start_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
-                        NumberScalar::UInt64(lead.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                     end_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
-                        NumberScalar::UInt64(lead.offset),
+                        NumberScalar::UInt64(lag_lead.offset),
                     ))),
                 });
             }
@@ -1138,9 +1185,11 @@ impl<'a> TypeChecker<'a> {
         func_name: &str,
         args: &[&Expr],
     ) -> Result<WindowFuncType> {
-        if args.is_empty() {
-            return WindowFuncType::from_name(func_name);
+        // try to resolve window function without arguments first
+        if let Ok(window_func) = WindowFuncType::from_name(func_name) {
+            return Ok(window_func);
         }
+
         self.in_window_function = true;
         let mut arguments = vec![];
         let mut arg_types = vec![];
@@ -1150,14 +1199,40 @@ impl<'a> TypeChecker<'a> {
             arg_types.push(arg_type);
         }
         self.in_window_function = false;
-        debug_assert!(!arguments.is_empty());
-        debug_assert!(!arg_types.is_empty());
 
-        let offset = if arguments.len() >= 2 {
+        match func_name {
+            "lag" | "lead" => {
+                self.resolve_lag_lead_window_function(func_name, &arguments, &arg_types)
+                    .await
+            }
+            "first_value" | "first" | "last_value" | "last" | "nth_value" => {
+                self.resolve_nth_value_window_function(func_name, &arguments, &arg_types)
+                    .await
+            }
+            _ => Err(ErrorCode::UnknownFunction(format!(
+                "Unknown window function: {func_name}"
+            ))),
+        }
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_lag_lead_window_function(
+        &mut self,
+        func_name: &str,
+        args: &[ScalarExpr],
+        arg_types: &[DataType],
+    ) -> Result<WindowFuncType> {
+        if args.is_empty() || args.len() > 3 {
+            return Err(ErrorCode::InvalidArgument(
+                "Argument number is invalid".to_string(),
+            ));
+        }
+
+        let offset = if args.len() >= 2 {
             let off = ScalarExpr::CastExpr(CastExpr {
-                span: arguments[1].span(),
-                is_try: true,
-                argument: Box::new(arguments[1].clone()),
+                span: args[1].span(),
+                is_try: false,
+                argument: Box::new(args[1].clone()),
                 target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
             })
             .as_expr()?;
@@ -1171,39 +1246,103 @@ impl<'a> TypeChecker<'a> {
             None
         };
 
-        let default = if arguments.len() == 3 {
-            Some(arguments[2].clone())
+        let default = if args.len() == 3 {
+            Some(args[2].clone())
         } else {
             None
         };
+
         let return_type = match default {
             Some(_) => arg_types[0].clone(),
             None => arg_types[0].wrap_nullable(),
         };
 
-        let cast_default = default
-            .map(|d| match d.clone() {
-                ScalarExpr::BoundColumnRef(_)
-                | ScalarExpr::CastExpr(_)
-                | ScalarExpr::ConstantExpr(_) => Ok(ScalarExpr::CastExpr(CastExpr {
-                    span: d.span(),
-                    is_try: true,
-                    argument: Box::new(d),
-                    target_type: Box::new(return_type.clone()),
-                })),
-                _ => Err(ErrorCode::SemanticError(
-                    "default value just support literal value and column, or ignore it",
-                )),
-            })
-            .transpose()?;
+        let cast_default = default.map(|d| {
+            Box::new(ScalarExpr::CastExpr(CastExpr {
+                span: d.span(),
+                is_try: true,
+                argument: Box::new(d),
+                target_type: Box::new(return_type.clone()),
+            }))
+        });
 
-        WindowFuncType::get_general_window_func(
-            func_name,
-            arguments[0].clone(),
-            offset,
-            cast_default,
-            return_type,
-        )
+        Ok(WindowFuncType::LagLead(LagLeadFunction {
+            is_lag: func_name == "lag",
+            arg: Box::new(args[0].clone()),
+            offset: offset.unwrap_or(1),
+            default: cast_default,
+            return_type: Box::new(return_type),
+        }))
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_nth_value_window_function(
+        &mut self,
+        func_name: &str,
+        args: &[ScalarExpr],
+        arg_types: &[DataType],
+    ) -> Result<WindowFuncType> {
+        Ok(match func_name {
+            "first_value" | "first" => {
+                if args.len() != 1 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Argument number is invalid".to_string(),
+                    ));
+                }
+                let return_type = arg_types[0].wrap_nullable();
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: Some(1),
+                    arg: Box::new(args[0].clone()),
+                    return_type: Box::new(return_type),
+                })
+            }
+            "last_value" | "last" => {
+                if args.len() != 1 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Argument number is invalid".to_string(),
+                    ));
+                }
+                let return_type = arg_types[0].wrap_nullable();
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: None,
+                    arg: Box::new(args[0].clone()),
+                    return_type: Box::new(return_type),
+                })
+            }
+            _ => {
+                // nth_value
+                if args.len() != 2 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "Argument number is invalid".to_string(),
+                    ));
+                }
+                let return_type = arg_types[0].wrap_nullable();
+                let n_expr = ScalarExpr::CastExpr(CastExpr {
+                    span: args[1].span(),
+                    is_try: false,
+                    argument: Box::new(args[1].clone()),
+                    target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+                })
+                .as_expr()?;
+                let n = check_number::<_, u64>(
+                    n_expr.span(),
+                    &self.func_ctx,
+                    &n_expr,
+                    &BUILTIN_FUNCTIONS,
+                )?;
+                if n == 0 {
+                    return Err(ErrorCode::InvalidArgument(
+                        "nth_value should count from 1".to_string(),
+                    ));
+                }
+
+                WindowFuncType::NthValue(NthValueFunction {
+                    n: Some(n),
+                    arg: Box::new(args[0].clone()),
+                    return_type: Box::new(return_type),
+                })
+            }
+        })
     }
 
     /// Resolve aggregation function call.
@@ -1390,11 +1529,14 @@ impl<'a> TypeChecker<'a> {
             params: params.clone(),
             args: arguments,
         };
-        let registry = &BUILTIN_FUNCTIONS;
-        let expr = type_check::check(&raw_expr, registry)?;
+        let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
 
         if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
             self.ctx.set_cacheable(false);
+        }
+
+        if let Some(constant) = self.try_fold_constant(&expr) {
+            return Ok(constant);
         }
 
         Ok(Box::new((
@@ -1454,34 +1596,6 @@ impl<'a> TypeChecker<'a> {
                     vec![left, right],
                 )
                 .await
-            }
-            BinaryOperator::Gt
-            | BinaryOperator::Lt
-            | BinaryOperator::Gte
-            | BinaryOperator::Lte
-            | BinaryOperator::Eq
-            | BinaryOperator::NotEq => {
-                let op = ComparisonOp::try_from(op)?;
-                let box (left, _) = self.resolve(left).await?;
-                let box (right, _) = self.resolve(right).await?;
-
-                let (_, data_type) = *self
-                    .resolve_scalar_function_call(span, op.to_func_name(), vec![], vec![
-                        left.clone(),
-                        right.clone(),
-                    ])
-                    .await?;
-
-                Ok(Box::new((
-                    FunctionCall {
-                        span,
-                        func_name: op.to_func_name().to_string(),
-                        params: vec![],
-                        arguments: vec![left, right],
-                    }
-                    .into(),
-                    data_type,
-                )))
             }
             BinaryOperator::Like => {
                 // Convert `Like` to compare function , such as `p_type like PROMO%` will be converted to `p_type >= PROMO and p_type < PROMP`
@@ -1717,7 +1831,7 @@ impl<'a> TypeChecker<'a> {
             projection_index: None,
             data_type: data_type.clone(),
             typ,
-            outer_columns: rel_prop.outer_columns,
+            outer_columns: rel_prop.outer_columns.clone(),
         };
 
         let data_type = subquery_expr.data_type();
@@ -1904,7 +2018,6 @@ impl<'a> TypeChecker<'a> {
                 let args_ref: Vec<&Expr> = new_args.iter().collect();
                 Some(self.resolve_function(span, "if", vec![], &args_ref).await)
             }
-
             ("last_query_id", args) => {
                 // last_query_id(index) returns query_id in current session by index
                 let res: Result<i64> = try {
@@ -1938,6 +2051,9 @@ impl<'a> TypeChecker<'a> {
             }
             // Try convert get function of Variant data type into a virtual column
             ("get", args) => {
+                if !self.allow_pushdown {
+                    return None;
+                }
                 let mut paths = VecDeque::new();
                 let mut get_args = args.to_vec();
                 loop {
@@ -2111,37 +2227,7 @@ impl<'a> TypeChecker<'a> {
         literal: &common_ast::ast::Literal,
     ) -> Result<Box<(Scalar, DataType)>> {
         let value = match literal {
-            Literal::UInt64(uint) => {
-                // how to use match range?
-                if *uint <= u8::MAX as u64 {
-                    Scalar::Number(NumberScalar::UInt8(*uint as u8))
-                } else if *uint <= u16::MAX as u64 {
-                    Scalar::Number(NumberScalar::UInt16(*uint as u16))
-                } else if *uint <= u32::MAX as u64 {
-                    Scalar::Number(NumberScalar::UInt32(*uint as u32))
-                } else {
-                    Scalar::Number(NumberScalar::UInt64(*uint))
-                }
-            }
-            Literal::Int64(int) => {
-                if *int >= i8::MIN as i64 && *int <= i8::MAX as i64 {
-                    Scalar::Number(NumberScalar::Int8(*int as i8))
-                } else if *int >= i16::MIN as i64 && *int <= i16::MAX as i64 {
-                    Scalar::Number(NumberScalar::Int16(*int as i16))
-                } else if *int >= i32::MIN as i64 && *int <= i32::MAX as i64 {
-                    Scalar::Number(NumberScalar::Int32(*int as i32))
-                } else {
-                    Scalar::Number(NumberScalar::Int64(*int))
-                }
-            }
-            Literal::Decimal128 {
-                value,
-                precision,
-                scale,
-            } => Scalar::Decimal(DecimalScalar::Decimal128(*value, DecimalSize {
-                precision: *precision,
-                scale: *scale,
-            })),
+            Literal::UInt64(value) => Scalar::Number(NumberScalar::UInt64(*value)),
             Literal::Decimal256 {
                 value,
                 precision,
@@ -2150,14 +2236,15 @@ impl<'a> TypeChecker<'a> {
                 precision: *precision,
                 scale: *scale,
             })),
-            Literal::Float(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
+            Literal::Float64(float) => Scalar::Number(NumberScalar::Float64((*float).into())),
             Literal::String(string) => Scalar::String(string.as_bytes().to_vec()),
             Literal::Boolean(boolean) => Scalar::Boolean(*boolean),
             Literal::Null => Scalar::Null,
-            _ => Err(ErrorCode::SemanticError(format!(
+            Literal::CurrentTimestamp => Err(ErrorCode::SemanticError(format!(
                 "Unsupported literal value: {literal}"
             )))?,
         };
+        let value = shrink_scalar(value);
         let data_type = value.as_ref().infer_data_type();
         Ok(Box::new((value, data_type)))
     }
@@ -2307,7 +2394,7 @@ impl<'a> TypeChecker<'a> {
         let udf_expr = self
             .clone_expr_with_replacement(&expr, &|nest_expr| {
                 if let Expr::ColumnRef { column, .. } = nest_expr {
-                    if let Some(arg) = args_map.get(&column.name) {
+                    if let Some(arg) = args_map.get(&column.name().to_string()) {
                         return Ok(Some(arg.clone()));
                     }
                 }
@@ -2335,27 +2422,29 @@ impl<'a> TypeChecker<'a> {
             if let ColumnEntry::BaseTableColumn(BaseTableColumn { data_type, .. }) = column_entry {
                 table_data_type = data_type;
             }
-            match table_data_type.remove_nullable() {
-                TableDataType::Tuple { .. } => {
-                    let box (inner_scalar, _inner_data_type) = self
-                        .resolve_tuple_map_access_pushdown(
-                            expr.span(),
-                            column.clone(),
-                            &mut table_data_type,
-                            &mut paths,
-                        )
-                        .await?;
-                    scalar = inner_scalar;
-                }
-                TableDataType::Variant => {
-                    if let Some(result) = self
-                        .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
-                        .await
-                    {
-                        return result;
+            if self.allow_pushdown {
+                match table_data_type.remove_nullable() {
+                    TableDataType::Tuple { .. } => {
+                        let box (inner_scalar, _inner_data_type) = self
+                            .resolve_tuple_map_access_pushdown(
+                                expr.span(),
+                                column.clone(),
+                                &mut table_data_type,
+                                &mut paths,
+                            )
+                            .await?;
+                        scalar = inner_scalar;
                     }
+                    TableDataType::Variant => {
+                        if let Some(result) = self
+                            .resolve_variant_map_access_pushdown(column.clone(), &mut paths)
+                            .await
+                        {
+                            return result;
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
         }
 
@@ -2501,7 +2590,6 @@ impl<'a> TypeChecker<'a> {
             inner_column_name.as_str(),
             span,
             self.aliases,
-            self.allow_ambiguous,
         ) {
             Ok(result) => {
                 let (scalar, data_type) = match result {
@@ -2558,25 +2646,23 @@ impl<'a> TypeChecker<'a> {
         }
 
         let mut name = String::new();
-        name.push('_');
         name.push_str(&column.column_name);
         let mut json_paths = Vec::with_capacity(paths.len());
         while let Some((_, path)) = paths.pop_front() {
-            name.push('[');
             let json_path = match path {
                 Literal::UInt64(idx) => {
+                    name.push('[');
                     name.push_str(&idx.to_string());
+                    name.push(']');
                     Scalar::Number(NumberScalar::UInt64(idx))
                 }
                 Literal::String(field) => {
-                    name.push('\'');
+                    name.push(':');
                     name.push_str(field.as_ref());
-                    name.push('\'');
                     Scalar::String(field.into_bytes())
                 }
                 _ => unreachable!(),
             };
-            name.push(']');
             json_paths.push(json_path);
         }
 
@@ -2609,11 +2695,13 @@ impl<'a> TypeChecker<'a> {
         let virtual_column = ColumnBinding {
             database_name: column.database_name.clone(),
             table_name: column.table_name.clone(),
+            column_position: None,
             table_index: Some(table_index),
             column_name: name,
             index,
             data_type: Box::new(data_type.clone()),
             visibility: Visibility::InVisible,
+            virtual_computed_expr: None,
         };
         let scalar = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,
@@ -2898,6 +2986,30 @@ impl<'a> TypeChecker<'a> {
             && names.contains(&name);
         Ok(result)
     }
+
+    fn try_fold_constant<Index: ColumnIndex>(
+        &self,
+        expr: &common_expression::Expr<Index>,
+    ) -> Option<Box<(ScalarExpr, DataType)>> {
+        if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+            if let (common_expression::Expr::Constant { scalar, .. }, _) =
+                ConstantFolder::fold(expr, &self.func_ctx, &BUILTIN_FUNCTIONS)
+            {
+                let scalar = shrink_scalar(scalar);
+                let ty = scalar.as_ref().infer_data_type();
+                return Some(Box::new((
+                    ConstantExpr {
+                        span: expr.span(),
+                        value: scalar,
+                    }
+                    .into(),
+                    ty,
+                )));
+            }
+        }
+
+        None
+    }
 }
 
 pub fn resolve_type_name_by_str(name: &str) -> Result<TableDataType> {
@@ -2979,6 +3091,9 @@ pub fn resolve_type_name(type_name: &TypeName) -> Result<TableDataType> {
                 .map(resolve_type_name)
                 .collect::<Result<Vec<_>>>()?,
         },
+        TypeName::Nullable(inner_type @ box TypeName::Nullable(_)) => {
+            resolve_type_name(inner_type)?
+        }
         TypeName::Nullable(inner_type) => {
             TableDataType::Nullable(Box::new(resolve_type_name(inner_type)?))
         }

@@ -200,6 +200,12 @@ pub struct TableStatistics {
     pub compressed_data_bytes: u64,
     /// Size of index data in bytes
     pub index_data_bytes: u64,
+
+    /// number of segments
+    pub number_of_segments: Option<u64>,
+
+    /// number of blocks
+    pub number_of_blocks: Option<u64>,
 }
 
 /// The essential state that defines what a table is.
@@ -230,6 +236,7 @@ pub struct TableMeta {
     pub statistics: TableStatistics,
     // shared by share_id
     pub shared_by: BTreeSet<u64>,
+    pub column_mask_policy: Option<BTreeMap<String, String>>,
 }
 
 impl TableMeta {
@@ -326,6 +333,7 @@ impl Default for TableMeta {
             drop_on: None,
             statistics: Default::default(),
             shared_by: BTreeSet::new(),
+            column_mask_policy: None,
         }
     }
 }
@@ -568,6 +576,7 @@ pub struct UpdateTableMetaReq {
     pub seq: MatchSeq,
     pub new_table_meta: TableMeta,
     pub copied_files: Option<UpsertTableCopiedFileReq>,
+    pub deduplicated_label: Option<String>,
 }
 
 impl UpsertTableOptionReq {

@@ -20,6 +20,7 @@ use std::hash::Hasher;
 use std::ops::Range;
 use std::sync::Arc;
 
+use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
 use common_exception::ErrorCode;
@@ -30,11 +31,12 @@ use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::ColumnMeta;
 use storages_common_table_meta::meta::Compression;
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug)]
 pub struct FusePartInfo {
     pub location: String,
     pub nums_rows: usize,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
+    pub virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
     pub compression: Compression,
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
@@ -62,10 +64,12 @@ impl PartInfo for FusePartInfo {
 }
 
 impl FusePartInfo {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         location: String,
         rows_count: u64,
         columns_meta: HashMap<ColumnId, ColumnMeta>,
+        virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
@@ -73,6 +77,7 @@ impl FusePartInfo {
         Arc::new(Box::new(FusePartInfo {
             location,
             columns_meta,
+            virtual_columns_meta,
             nums_rows: rows_count as usize,
             compression,
             sort_min_max,
@@ -105,4 +110,11 @@ impl FusePartInfo {
             .map(|meta| meta.page_size)
             .unwrap_or(self.nums_rows)
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Debug, Clone)]
+pub struct VirtualColumnMeta {
+    pub index: usize,
+    pub meta: ColumnMeta,
+    pub desc: ColumnDescriptor,
 }
