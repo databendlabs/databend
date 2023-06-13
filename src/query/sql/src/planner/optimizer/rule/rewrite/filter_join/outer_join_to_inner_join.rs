@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#[cfg(feature = "z3-prove")]
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -38,8 +39,14 @@ pub fn outer_to_inner(s_expr: &SExpr) -> Result<SExpr> {
             crate::optimizer::ConstraintSet::new(&mut filter.predicates)
         {
             let join_expr = RelExpr::with_s_expr(s_expr.child(0)?);
-            let left_columns = join_expr.derive_relational_prop_child(0)?.output_columns;
-            let right_columns = join_expr.derive_relational_prop_child(1)?.output_columns;
+            let left_columns = join_expr
+                .derive_relational_prop_child(0)?
+                .output_columns
+                .clone();
+            let right_columns = join_expr
+                .derive_relational_prop_child(1)?
+                .output_columns
+                .clone();
 
             let eliminate_left_null = left_columns
                 .iter()

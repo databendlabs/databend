@@ -72,11 +72,13 @@ impl<'a> WindowChecker<'a> {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: win.display_name.clone(),
                         index: window_info.index,
                         data_type: Box::new(window_info.func.return_type()),
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     };
                     return Ok(BoundColumnRef {
                         span: None,

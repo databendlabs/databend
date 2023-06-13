@@ -18,6 +18,8 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_base::base::Progress;
+use common_base::base::ProgressValues;
 use common_catalog::catalog::StorageDescription;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::PartStatistics;
@@ -36,10 +38,13 @@ use common_expression::DataBlock;
 use common_expression::Value;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
+use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
-use common_pipeline_sinks::ContextSink;
+use common_pipeline_sinks::Sink;
+use common_pipeline_sinks::Sinker;
 use common_pipeline_sources::SyncSource;
 use common_pipeline_sources::SyncSourcer;
 use common_storage::StorageMetrics;
@@ -57,6 +62,7 @@ pub type InMemoryData<K> = HashMap<K, Arc<RwLock<Vec<DataBlock>>>>;
 static IN_MEMORY_DATA: Lazy<Arc<RwLock<InMemoryData<u64>>>> =
     Lazy::new(|| Arc::new(Default::default()));
 
+#[derive(Clone)]
 pub struct MemoryTable {
     table_info: TableInfo,
     blocks: Arc<RwLock<Vec<DataBlock>>>,
@@ -229,40 +235,30 @@ impl Table for MemoryTable {
 
     fn append_data(
         &self,
-        ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
+        _ctx: Arc<dyn TableContext>,
+        _pipeline: &mut Pipeline,
         _: AppendMode,
-        _: bool,
     ) -> Result<()> {
-        pipeline.add_sink(|input| {
-            Ok(ProcessorPtr::create(ContextSink::create(
-                input,
-                ctx.clone(),
-            )))
-        })
+        Ok(())
     }
 
-    #[async_backtrace::framed]
-    async fn commit_insertion(
+    fn commit_insertion(
         &self,
-        _: Arc<dyn TableContext>,
-        operations: Vec<DataBlock>,
+        ctx: Arc<dyn TableContext>,
+        pipeline: &mut Pipeline,
         _copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        let written_bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
+        pipeline.resize(1)?;
 
-        self.data_metrics.inc_write_bytes(written_bytes);
-
-        if overwrite {
-            let mut blocks = self.blocks.write();
-            blocks.clear();
-        }
-        let mut blocks = self.blocks.write();
-        for block in operations {
-            blocks.push(block);
-        }
-        Ok(())
+        pipeline.add_sink(|input| {
+            Ok(ProcessorPtr::create(MemoryTableSink::create(
+                input,
+                ctx.clone(),
+                Arc::new(self.clone()),
+                overwrite,
+            )))
+        })
     }
 
     #[async_backtrace::framed]
@@ -335,10 +331,7 @@ impl MemoryTableSource {
                 let inner_columns = col.into_tuple().unwrap();
                 let mut values = Vec::with_capacity(inner_tys.len());
                 for (col, ty) in inner_columns.iter().zip(inner_tys.iter()) {
-                    values.push(BlockEntry {
-                        data_type: ty.clone(),
-                        value: Value::Column(col.clone()),
-                    })
+                    values.push(BlockEntry::new(ty.clone(), Value::Column(col.clone())));
                 }
                 Self::traverse_paths(&values[..], &path[1..])
             }
@@ -359,5 +352,57 @@ impl SyncSource for MemoryTableSource {
             None => Ok(None),
             Some(data_block) => self.projection(data_block),
         }
+    }
+}
+
+struct MemoryTableSink {
+    table: Arc<MemoryTable>,
+    write_progress: Arc<Progress>,
+    operations: Vec<DataBlock>,
+    overwrite: bool,
+}
+
+impl MemoryTableSink {
+    pub fn create(
+        input: Arc<InputPort>,
+        ctx: Arc<dyn TableContext>,
+        table: Arc<MemoryTable>,
+        overwrite: bool,
+    ) -> Box<dyn Processor> {
+        Sinker::create(input, MemoryTableSink {
+            table,
+            write_progress: ctx.get_write_progress(),
+            operations: vec![],
+            overwrite,
+        })
+    }
+}
+
+impl Sink for MemoryTableSink {
+    const NAME: &'static str = "MemoryTableSink";
+
+    fn consume(&mut self, block: DataBlock) -> Result<()> {
+        self.operations.push(block);
+        Ok(())
+    }
+
+    fn on_finish(&mut self) -> Result<()> {
+        let operations = std::mem::take(&mut self.operations);
+
+        let bytes: usize = operations.iter().map(|b| b.memory_size()).sum();
+        let rows: usize = operations.iter().map(|b| b.num_rows()).sum();
+        let progress_values = ProgressValues { rows, bytes };
+        self.write_progress.incr(&progress_values);
+        self.table.data_metrics.inc_write_bytes(bytes);
+
+        let mut blocks = self.table.blocks.write();
+        if self.overwrite {
+            blocks.clear();
+        }
+        for block in operations {
+            blocks.push(block);
+        }
+
+        Ok(())
     }
 }

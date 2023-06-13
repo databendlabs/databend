@@ -183,6 +183,8 @@ impl CreateTableInterpreter {
                     data_bytes: snapshot.summary.uncompressed_byte_size,
                     compressed_data_bytes: snapshot.summary.compressed_byte_size,
                     index_data_bytes: snapshot.summary.index_size,
+                    number_of_segments: Some(snapshot.segments.len() as u64),
+                    number_of_blocks: Some(snapshot.summary.block_count),
                 });
             }
         }
@@ -196,24 +198,17 @@ impl CreateTableInterpreter {
     /// - Rebuild `DataSchema` with default exprs.
     /// - Update cluster key of table meta.
     fn build_request(&self, statistics: Option<TableStatistics>) -> Result<CreateTableReq> {
-        let mut fields = Vec::with_capacity(self.plan.schema.num_fields());
-        for (idx, field) in self.plan.schema.fields().clone().into_iter().enumerate() {
-            let field = if let Some(Some(default_expr)) = &self.plan.field_default_exprs.get(idx) {
-                let field = field.with_default_expr(Some(default_expr.clone()));
-                let _ = field_default_value(self.ctx.clone(), &field)?;
-                field
-            } else {
-                field
-            };
-
+        let fields = self.plan.schema.fields().clone();
+        for field in fields.iter() {
+            if field.default_expr().is_some() {
+                let _ = field_default_value(self.ctx.clone(), field)?;
+            }
             if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
                 return Err(ErrorCode::TableWithInternalColumnName(format!(
                     "Cannot create table has column with the same name as internal column: {}",
                     field.name()
                 )));
             }
-
-            fields.push(field);
         }
         let schema = TableSchemaRefExt::create(fields);
 

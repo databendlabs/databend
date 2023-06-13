@@ -147,6 +147,7 @@ fn test_decode_v33_table_meta() -> anyhow::Result<()> {
         drop_on: None,
         statistics: Default::default(),
         shared_by: btreeset! {1},
+        column_mask_policy: None,
     };
 
     common::test_pb_from_to(func_name!(), want())?;

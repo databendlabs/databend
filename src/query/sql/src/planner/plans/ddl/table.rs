@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_ast::ast::Engine;
+use common_ast::ast::ModifyColumnAction;
 use common_catalog::table::NavigationPoint;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
@@ -45,7 +46,6 @@ pub struct CreateTablePlan {
     pub storage_params: Option<StorageParams>,
     pub part_prefix: String,
     pub options: TableOptions,
-    pub field_default_exprs: Vec<Option<String>>,
     pub field_comments: Vec<String>,
     pub cluster_key: Option<String>,
     pub as_select: Option<Box<Plan>>,
@@ -174,7 +174,6 @@ pub struct AddTableColumnPlan {
     pub database: String,
     pub table: String,
     pub schema: TableSchemaRef,
-    pub field_default_exprs: Vec<Option<String>>,
     pub field_comments: Vec<String>,
 }
 
@@ -194,6 +193,22 @@ pub struct DropTableColumnPlan {
 }
 
 impl DropTableColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Table modify column
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModifyTableColumnPlan {
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub column: String,
+    pub action: ModifyColumnAction,
+}
+
+impl ModifyTableColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

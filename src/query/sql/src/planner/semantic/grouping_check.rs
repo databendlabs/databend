@@ -48,11 +48,13 @@ impl<'a> GroupingChecker<'a> {
                 ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    column_position: None,
                     table_index: None,
                     column_name: "group_item".to_string(),
                     index: column.index,
                     data_type: Box::new(column.scalar.data_type()?),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 }
             };
 
@@ -139,11 +141,13 @@ impl<'a> GroupingChecker<'a> {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: win.display_name.clone(),
                         index: window_info.index,
                         data_type: Box::new(window_info.func.return_type()),
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     };
                     Ok(BoundColumnRef {
                         span: None,
@@ -166,11 +170,13 @@ impl<'a> GroupingChecker<'a> {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: agg.display_name.clone(),
                         index: agg_func.index,
                         data_type: Box::new(agg_func.scalar.data_type()?),
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     };
                     return Ok(BoundColumnRef {
                         span: None,

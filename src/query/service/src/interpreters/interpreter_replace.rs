@@ -25,13 +25,14 @@ use common_sql::plans::Plan;
 use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
 
+use crate::interpreters::common::check_deduplicate_label;
+use crate::interpreters::fill_missing_columns;
 use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::interpreter_insert::ValueSource;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterPtr;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::TransformCastSchema;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
@@ -55,6 +56,10 @@ impl Interpreter for ReplaceInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
+        if check_deduplicate_label(self.ctx.clone()).await? {
+            return Ok(PipelineBuildResult::create());
+        }
+
         self.check_on_conflicts()?;
 
         let plan = &self.plan;
@@ -71,17 +76,12 @@ impl Interpreter for ReplaceInterpreter {
             return Ok(pipeline);
         }
 
-        pipeline
-            .main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformResortAddOn::try_create(
-                    self.ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    self.plan.schema(),
-                    table.clone(),
-                )
-            })?;
+        fill_missing_columns(
+            self.ctx.clone(),
+            table.clone(),
+            self.plan.schema(),
+            &mut pipeline.main_pipeline,
+        )?;
 
         let on_conflict_fields = plan.on_conflict_fields.clone();
         table

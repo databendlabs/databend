@@ -94,7 +94,7 @@ Feel free to integrate it with your data science workflow.
 
 Here are some noteworthy items recorded here, perhaps you can find something that interests you.
 
-- Read the two new tutorials added to [Transform Data During Load](https://databend.rs/doc/load-data/data-load-transform) to learn how to perform arithmetic operations during loading and load data into a table with additional columns.
+- Read the two new tutorials added to [Transform Data During Load](https://databend.rs/doc/load-data/transform/data-load-transform) to learn how to perform arithmetic operations during loading and load data into a table with additional columns.
 - Read [Working with Stages](https://databend.rs/doc/load-data/stage/whystage) to gain a deeper understanding and learn how to manage and use it effectively.
 - Added functions: `date_format`, `str_to_date` and `str_to_timestamp`.
 

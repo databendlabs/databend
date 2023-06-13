@@ -4,31 +4,19 @@ sidebar_label: Analyzing Nginx Access Logs
 description: Analyzing Nginx Access Logs with Databend
 ---
 
-<p align="center">
-<img src="https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/integration-databend-vector.png" width="550"/>
-</p>
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-Systems are producing all kinds metrics and logs time by time, do you want to gather them and analyze the logs in real time? 
+<FunctionDescription description="Introduced: v1.1.55"/>
 
-Databend provides [integration with Vector](../11-integrations/10-data-tool/00-vector.md), easy to do it now!
+Databend can be integrated as a sink for Vector, allowing for real-time gathering and analysis of Nginx access logs. This guide offers detailed, step-by-step instructions on how to utilize Databend and Vector for this purpose. For more information about the integration with Vector, see [Integrating Databend as a Sink for Vector](../11-integrations/10-data-tool/00-vector.md).
 
-Let's load and analyze the  Nginx access logs into Databend from Vector step by step.
+## Step 1. Deploy Databend
 
+### 1.1 Install Databend
 
-## Step 1. Databend
+Follow the [Docker and Local Deployments](../10-deploy/05-deploying-local.md) guide to deploy a local Databend.
 
-### 1.1 Deploy Databend
-
-Make sure you have installed Databend, if not please see:
-
-* [How to Deploy Databend](../01-guides/index.md#deployment)
-
-### 1.2 Create a Database and Table
-
-Connect to Databend server with MySQL client:
-```shell
-mysql -h127.0.0.1 -uroot -P3307 
-```
+### 1.2 Create a Database and a Table
 
 ```sql
 CREATE DATABASE nginx;
@@ -58,26 +46,23 @@ CREATE TABLE nginx.access_logs (
 
 ### 1.3 Create a User for Vector Auth
 
-Connect to Databend server with MySQL client:
-```shell
-mysql -h127.0.0.1 -uroot -P3307 
-```
-
 Create a user:
+
 ```sql
 CREATE USER user1 IDENTIFIED BY 'abc123';
 ```
 
 Grant privileges for the user:
+
 ```sql
 GRANT INSERT ON nginx.* TO user1;
 ```
 
-## Step 2. Nginx
+## Step 2. Deploy Nginx
 
 ### 2.1 Install Nginx
 
-If you don't install Nginx, please refer to [How to Install Nginx](https://www.nginx.com/resources/wiki/start/topics/tutorials/install/).
+If you haven't install Nginx, please refer to [How to Install Nginx](https://www.nginx.com/resources/wiki/start/topics/tutorials/install/).
 
 ### 2.2 Configure Nginx
 
@@ -110,7 +95,7 @@ This is how the log message looks:
 
 Use the new `nginx.conf` replace your Nginx configuration and restart the Nginx server.
 
-## Step 3. Vector
+## Step 3. Deploy Vector
 
 ### 3.1 Install Vector
 
@@ -201,15 +186,14 @@ source = """
 
 
 [sinks.nginx_access_log_to_databend]
-  type = "clickhouse"
+  type = "databend"
   inputs = ["nginx_access_log_parser"]
   // highlight-next-line
   database = "nginx" #Your database
   // highlight-next-line
   table = "access_logs" #Your table
-  #Databend ClickHouse REST API: http://{http_handler_host}:{http_handler_port}/clickhouse
   // highlight-next-line
-  endpoint = "http://localhost:8124/"
+  endpoint = "http://localhost:8000/"
   compression = "gzip"
 
 
@@ -263,10 +247,9 @@ no_outputs_from = ["nginx_access_log_parser"]
 insert_at = "nginx_access_log_parser"
 type = "raw"
 value = 'I am not access log'
-
 ```
 
-### 3.3 Configuration Validation
+### 3.3 Validate Configuration
 
 Check the `nginx_access_log_parser` transform works or not:
 
@@ -274,7 +257,8 @@ Check the `nginx_access_log_parser` transform works or not:
 vector test ./vector.toml
 ```
 
-If it works the output is:
+If it works, the output is:
+
 ```shell
 Running tests
 test extract fields from access log ... passed
@@ -298,17 +282,13 @@ Reload the home page at `http://localhost/xx/yy?mm=nn` many times, or using the 
 wrk -t12 -c400 -d30s http://localhost
 ```
 
-### 4.2 Analyzing the Nginx Access Logs in Databend
-
-```shell
-mysql -h127.0.0.1 -uroot -P3307 
-```
+### 4.2 Analyze Nginx Access Logs in Databend
 
 - __Top 10 Request Status__
+
 ```sql
 SELECT count() AS count, status FROM nginx.access_logs GROUP BY status LIMIT 10;
-```
-```sql
+
 +-----------+--------+
 | count     | status |
 +-----------+--------+
@@ -316,12 +296,11 @@ SELECT count() AS count, status FROM nginx.access_logs GROUP BY status LIMIT 10;
 +-----------+--------+
 ```
 
-- __Top 10 Request Method__ 
-```sql
-SELECT count() AS count, request_method FROM nginx.access_logs GROUP BY request_method LIMIT 10;
-```
+- __Top 10 Request Methods__ 
 
 ```sql
+SELECT count() AS count, request_method FROM nginx.access_logs GROUP BY request_method LIMIT 10;
+
 +-----------+----------------+
 | count     | request_method |
 +-----------+----------------+
@@ -330,11 +309,10 @@ SELECT count() AS count, request_method FROM nginx.access_logs GROUP BY request_
 ```
 
 - __Top 10 Request IPs__
-```sql
-SELECT count(*) AS count, remote_addr AS client FROM nginx.access_logs GROUP BY client ORDER BY count DESC LIMIT 10;
-```
 
 ```sql
+SELECT count(*) AS count, remote_addr AS client FROM nginx.access_logs GROUP BY client ORDER BY count DESC LIMIT 10;
+
 +----------+-----------+
 | count    | client    |
 +----------+-----------+
@@ -344,12 +322,10 @@ SELECT count(*) AS count, remote_addr AS client FROM nginx.access_logs GROUP BY 
 ```
 
 - __Top 10 Request Pages__
+
 ```sql
 SELECT count(*) AS count, request_uri AS uri FROM nginx.access_logs GROUP BY uri ORDER BY count DESC LIMIT 10;
 
-```
-
-```sql
 +----------+--------------------+
 | count    | uri                |
 +----------+--------------------+
@@ -362,11 +338,10 @@ SELECT count(*) AS count, request_uri AS uri FROM nginx.access_logs GROUP BY uri
 
 
 - __Top 10 HTTP 404 Pages__
-```sql
-SELECT count_if(status=404) AS count, request_uri AS uri FROM nginx.access_logs GROUP BY uri ORDER BY count DESC LIMIT 10;
-```
 
 ```sql
+SELECT count_if(status=404) AS count, request_uri AS uri FROM nginx.access_logs GROUP BY uri ORDER BY count DESC LIMIT 10;
+
 +----------+--------------------+
 | count    | uri                |
 +----------+--------------------+
@@ -378,11 +353,10 @@ SELECT count_if(status=404) AS count, request_uri AS uri FROM nginx.access_logs 
 ```
 
 - __Top 10 Requests__
-```sql
-SELECT count(*) AS count, request_uri AS request FROM nginx.access_logs GROUP BY request ORDER BY count DESC LIMIT 10;
-```
 
 ```sql
+SELECT count(*) AS count, request_uri AS request FROM nginx.access_logs GROUP BY request ORDER BY count DESC LIMIT 10;
+
 +--------+-----------------------------------------------------------------------------------------------------+
 | count  | request                                                                                             |
 +--------+-----------------------------------------------------------------------------------------------------+

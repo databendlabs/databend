@@ -12,10 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// we use "frozen" types of table meta, to make sure that the type we used for
+// bincode deserialization is compatible with the type we used for bincode serialization.
+mod frozen;
 mod segment;
 mod snapshot;
 
-pub use segment::CompactSegmentInfo;
 pub use segment::SegmentInfo;
 pub use snapshot::TableSnapshot;
-pub use snapshot::TableSnapshotLite;

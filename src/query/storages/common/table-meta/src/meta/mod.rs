@@ -16,7 +16,6 @@
 mod statistics;
 
 mod compression;
-/// Re-exports meta data structures of current version, i.e. v1
 mod current;
 mod format;
 mod utils;
@@ -24,14 +23,15 @@ mod v0;
 mod v1;
 mod v2;
 mod v3;
+mod v4;
 mod versions;
 
 pub use compression::Compression;
+// table meta types of current version
 pub use current::*;
-pub use format::decode;
-pub use format::decompress;
-pub use format::Compression as MetaCompression;
-pub use format::Encoding;
+pub(crate) use format::load_json;
+pub(crate) use format::MetaCompression;
+pub(crate) use format::MetaEncoding;
 pub use statistics::ClusterKey;
 pub use statistics::ClusterStatistics;
 pub use statistics::ColumnStatistics;
@@ -40,9 +40,23 @@ pub use statistics::Location;
 pub use statistics::SnapshotId;
 pub use statistics::Statistics;
 pub use statistics::StatisticsOfColumns;
-pub use utils::*;
+// export legacy versioned table meta types locally,
+// currently, used by versioned readers only
+pub(crate) use testing::*;
+pub(crate) use utils::*;
 pub use versions::testify_version;
 pub use versions::SegmentInfoVersion;
 pub use versions::SnapshotVersion;
 pub use versions::TableSnapshotStatisticsVersion;
 pub use versions::Versioned;
+
+// - export legacy versioned table meta types for testing purposes
+//   currently, only used by crate `test_kits`
+// - export meta encoding to benchmarking tests
+pub mod testing {
+    pub use super::format::MetaEncoding;
+    pub use super::v2::SegmentInfo as SegmentInfoV2;
+    pub use super::v2::TableSnapshot as TableSnapshotV2;
+    pub use super::v3::SegmentInfo as SegmentInfoV3;
+    pub use super::v3::TableSnapshot as TableSnapshotV3;
+}

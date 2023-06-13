@@ -13,13 +13,7 @@
 // limitations under the License.
 
 mod meta_readers;
-pub mod segment_reader;
-pub mod snapshot_reader;
-mod versioned_reader;
 
 pub use meta_readers::CompactSegmentInfoReader;
 pub use meta_readers::MetaReaders;
 pub use meta_readers::TableSnapshotReader;
-pub use segment_reader::load_segment_v3;
-pub use snapshot_reader::load_snapshot_v3;
-pub use versioned_reader::VersionedReader;

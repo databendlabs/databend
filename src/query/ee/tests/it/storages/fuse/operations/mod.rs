@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod vacuum;
+mod virtual_columns;

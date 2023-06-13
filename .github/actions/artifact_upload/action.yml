@@ -15,10 +15,6 @@ inputs:
     description: "default/hive"
     required: false
     default: default
-outputs:
-  src:
-    description: ""
-    value: ${{ steps.info.outputs.src }}
 runs:
   using: "composite"
   steps:
@@ -26,12 +22,6 @@ runs:
       id: info
       shell: bash
       run: |
-        if [[ "${RUNNER_PROVIDER}" == "aws" ]]; then
-          src="s3"
-        else
-          src="github"
-        fi
-        echo "src=${src}" >> $GITHUB_OUTPUT
         if [[ -z "${{ inputs.path }}" ]]; then
           upload_path="./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}"
         else
@@ -41,21 +31,21 @@ runs:
         echo "path=${upload_path}" >> $GITHUB_OUTPUT
 
     - name: Upload artifact to github
-      if: steps.info.outputs.src == 'github'
+      if: env.RUNNER_PROVIDER == 'github'
       uses: actions/upload-artifact@v3
       with:
         name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
         path: ${{ steps.info.outputs.path }}/databend-*
 
     - name: Upload open-sharing to github
-      if: steps.info.outputs.src == 'github' && inputs.category == 'default'
+      if: env.RUNNER_PROVIDER == 'github' && inputs.category == 'default'
       uses: actions/upload-artifact@v3
       with:
         name: ${{ env.BUILD_PROFILE }}-${{ inputs.sha }}-${{ inputs.target }}-${{ inputs.category }}
         path: ${{ steps.info.outputs.path }}/open-sharing
 
     - name: Upload artifacts to s3
-      if: steps.info.outputs.src == 's3'
+      if: env.RUNNER_PROVIDER == 'aws'
       shell: bash
       run: |
         aws s3 sync ./target/${{ inputs.target }}/${{ env.BUILD_PROFILE }}/ \

@@ -28,6 +28,7 @@ use common_expression::types::NumberDataType;
 use itertools::Itertools;
 
 use super::prune_by_children;
+use super::ExprContext;
 use crate::binder::scalar::ScalarBinder;
 use crate::binder::select::SelectList;
 use crate::binder::Binder;
@@ -237,11 +238,13 @@ impl<'a> AggregateRewriter<'a> {
 
                     // TODO(leiysky): use a more reasonable name, since aggregate arguments
                     // can not be referenced, the name is only for debug
+                    column_position: None,
                     table_index: None,
                     column_name: name,
                     index,
                     data_type: Box::new(arg.data_type()?),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 };
                 replaced_args.push(
                     BoundColumnRef {
@@ -379,6 +382,7 @@ impl Binder {
             }
         }
 
+        bind_context.set_expr_context(ExprContext::GroupClaue);
         match group_by {
             GroupBy::Normal(exprs) => {
                 self.resolve_group_items(
@@ -417,7 +421,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_aggregate(
+    pub async fn bind_aggregate(
         &mut self,
         bind_context: &mut BindContext,
         child: SExpr,
@@ -706,7 +710,7 @@ impl Binder {
                 ..
             } = expr
             {
-                if col_name.eq_ignore_ascii_case(column.name.as_str()) {
+                if col_name.eq_ignore_ascii_case(column.name()) {
                     result.push(i);
                 }
             }

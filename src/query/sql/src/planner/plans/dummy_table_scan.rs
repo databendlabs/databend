@@ -24,6 +24,7 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::RelationalProperty;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
+use crate::DUMMY_COLUMN_INDEX;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DummyTableScan;
@@ -42,12 +43,12 @@ impl Operator for DummyTableScan {
     fn derive_relational_prop(
         &self,
         _rel_expr: &crate::optimizer::RelExpr,
-    ) -> Result<RelationalProperty> {
-        Ok(RelationalProperty {
-            output_columns: ColumnSet::new(),
+    ) -> Result<Arc<RelationalProperty>> {
+        Ok(Arc::new(RelationalProperty {
+            output_columns: ColumnSet::from([DUMMY_COLUMN_INDEX]),
             outer_columns: ColumnSet::new(),
             used_columns: ColumnSet::new(),
-        })
+        }))
     }
 
     fn derive_physical_prop(
@@ -59,14 +60,14 @@ impl Operator for DummyTableScan {
         })
     }
 
-    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<StatInfo> {
-        Ok(StatInfo {
+    fn derive_cardinality(&self, _rel_expr: &RelExpr) -> Result<Arc<StatInfo>> {
+        Ok(Arc::new(StatInfo {
             cardinality: 1.0,
             statistics: Statistics {
                 precise_cardinality: Some(1),
                 column_stats: Default::default(),
             },
-        })
+        }))
     }
 
     fn compute_required_prop_child(

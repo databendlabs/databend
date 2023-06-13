@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
@@ -33,6 +34,7 @@ use common_ast::parser::tokenize_sql;
 use common_ast::Dialect;
 use common_catalog::catalog_kind::CATALOG_DEFAULT;
 use common_catalog::plan::ParquetReadOptions;
+use common_catalog::plan::StageTableInfo;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::NavigationPoint;
 use common_catalog::table::Table;
@@ -46,9 +48,13 @@ use common_expression::ColumnId;
 use common_expression::ConstantFolder;
 use common_expression::FunctionKind;
 use common_expression::Scalar;
+use common_expression::TableDataType;
+use common_expression::TableField;
+use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
@@ -60,6 +66,7 @@ use common_storages_parquet::ParquetTable;
 use common_storages_result_cache::ResultCacheMetaManager;
 use common_storages_result_cache::ResultCacheReader;
 use common_storages_result_cache::ResultScan;
+use common_storages_stage::StageTable;
 use common_storages_view::view_table::QUERY;
 use common_users::UserApiProvider;
 use dashmap::DashMap;
@@ -87,12 +94,12 @@ use crate::VirtualColumn;
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_one_table(
+    pub async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &SelectStmt,
+        select_list: &Vec<SelectTarget>,
     ) -> Result<(SExpr, BindContext)> {
-        for select_target in &stmt.select_list {
+        for select_target in select_list {
             if let SelectTarget::QualifiedName {
                 qualified: names, ..
             } = select_target
@@ -146,7 +153,7 @@ impl Binder {
 
     #[async_recursion]
     #[async_backtrace::framed]
-    async fn bind_single_table(
+    pub(crate) async fn bind_single_table(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,
@@ -500,7 +507,10 @@ impl Binder {
                 let (mut stage_info, path) =
                     parse_file_location(&self.ctx, location, options.connection.clone()).await?;
                 if let Some(f) = &options.file_format {
-                    stage_info.file_format_params = self.ctx.get_file_format(f).await?;
+                    stage_info.file_format_params = match StageFileFormatType::from_str(f) {
+                        Ok(t) => FileFormatParams::default_by_type(t)?,
+                        _ => self.ctx.get_file_format(f).await?,
+                    }
                 }
                 let files_info = StageFilesInfo {
                     path,
@@ -523,43 +533,59 @@ impl Binder {
         alias: &Option<TableAlias>,
         files_to_copy: Option<Vec<StageFileInfo>>,
     ) -> Result<(SExpr, BindContext)> {
-        if matches!(stage_info.file_format_params, FileFormatParams::Parquet(..)) {
-            let read_options = ParquetReadOptions::default();
+        let table = match stage_info.file_format_params {
+            FileFormatParams::Parquet(..) => {
+                let read_options = ParquetReadOptions::default();
 
-            let table =
                 ParquetTable::create(stage_info.clone(), files_info, read_options, files_to_copy)
-                    .await?;
-
-            let table_alias_name = if let Some(table_alias) = alias {
-                Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
-            } else {
-                None
-            };
-
-            let table_index = self.metadata.write().add_table(
-                CATALOG_DEFAULT.to_string(),
-                "system".to_string(),
-                table.clone(),
-                table_alias_name,
-                false,
-            );
-
-            let (s_expr, mut bind_context) = self
-                .bind_base_table(bind_context, "system", table_index)
-                .await?;
-            if let Some(alias) = alias {
-                bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
+                    .await?
             }
-            Ok((s_expr, bind_context))
+            FileFormatParams::NdJson(..) => {
+                let schema = Arc::new(TableSchema::new(vec![TableField::new(
+                    "_$1", // TODO: this name should be in visible
+                    TableDataType::Variant,
+                )]));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy: None,
+                    is_select: true,
+                };
+                StageTable::try_create(info)?
+            }
+            _ => {
+                return Err(ErrorCode::Unimplemented(
+                    "stage table function only support parquet/NDJson format for now",
+                ));
+            }
+        };
+
+        let table_alias_name = if let Some(table_alias) = alias {
+            Some(normalize_identifier(&table_alias.name, &self.name_resolution_ctx).name)
         } else {
-            Err(ErrorCode::Unimplemented(
-                "stage table function only support parquet format for now",
-            ))
+            None
+        };
+
+        let table_index = self.metadata.write().add_table(
+            CATALOG_DEFAULT.to_string(),
+            "system".to_string(),
+            table.clone(),
+            table_alias_name,
+            false,
+        );
+
+        let (s_expr, mut bind_context) = self
+            .bind_base_table(bind_context, "system", table_index)
+            .await?;
+        if let Some(alias) = alias {
+            bind_context.apply_table_alias(alias, &self.name_resolution_ctx)?;
         }
+        Ok((s_expr, bind_context))
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_table_reference(
+    pub async fn bind_table_reference(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,
@@ -692,7 +718,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn bind_base_table(
+    pub(crate) async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -713,6 +739,8 @@ impl Binder {
                     data_type,
                     leaf_index,
                     table_index,
+                    column_position,
+                    virtual_computed_expr,
                     ..
                 }) => {
                     let column_binding = ColumnBinding {
@@ -720,6 +748,7 @@ impl Binder {
                         table_name: Some(table.name().to_string()),
                         table_index: Some(*table_index),
                         column_name: column_name.clone(),
+                        column_position: *column_position,
                         index: *column_index,
                         data_type: Box::new(DataType::from(data_type)),
                         visibility: if path_indices.is_some() {
@@ -727,9 +756,10 @@ impl Binder {
                         } else {
                             Visibility::Visible
                         },
+                        virtual_computed_expr: virtual_computed_expr.clone(),
                     };
                     bind_context.add_column_binding(column_binding);
-                    if path_indices.is_none() {
+                    if path_indices.is_none() && virtual_computed_expr.is_none() {
                         if let Some(col_id) = *leaf_index {
                             let col_stat =
                                 statistics_provider.column_statistics(col_id as ColumnId);
@@ -780,7 +810,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_data_source(
+    pub(crate) async fn resolve_data_source(
         &self,
         tenant: &str,
         catalog_name: &str,

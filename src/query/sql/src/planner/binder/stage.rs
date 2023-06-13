@@ -35,14 +35,13 @@ use common_expression::Value;
 use common_pipeline_transforms::processors::transforms::Transform;
 
 use crate::binder::wrap_cast;
+use crate::binder::wrap_cast_scalar;
 use crate::evaluator::BlockOperator;
 use crate::evaluator::CompoundBlockOperator;
-use crate::plans::FunctionCall;
 use crate::BindContext;
 use crate::MetadataRef;
 use crate::NameResolutionContext;
 use crate::ScalarBinder;
-use crate::ScalarExpr;
 
 impl BindContext {
     pub async fn exprs_to_scalar(
@@ -69,47 +68,16 @@ impl BindContext {
         for (i, expr) in exprs.iter().enumerate() {
             // `DEFAULT` in insert values will be parsed as `Expr::ColumnRef`.
             if let AExpr::ColumnRef { column, .. } = expr {
-                if column.name.eq_ignore_ascii_case("default") {
+                if column.name().eq_ignore_ascii_case("default") {
                     let field = schema.field(i);
                     fill_default_value(&mut scalar_binder, &mut map_exprs, field, schema).await?;
                     continue;
                 }
             }
 
-            let (mut scalar, data_type) = scalar_binder.bind(expr).await?;
-            let field_data_type = schema.field(i).data_type();
-            scalar = if field_data_type.remove_nullable() == DataType::Variant {
-                match data_type.remove_nullable() {
-                    DataType::Boolean
-                    | DataType::Number(_)
-                    | DataType::Decimal(_)
-                    | DataType::Timestamp
-                    | DataType::Date
-                    | DataType::Bitmap
-                    | DataType::Variant => wrap_cast(&scalar, field_data_type),
-                    DataType::String => {
-                        // parse string to JSON value
-                        ScalarExpr::FunctionCall(FunctionCall {
-                            span: None,
-                            func_name: "parse_json".to_string(),
-                            params: vec![],
-                            arguments: vec![scalar],
-                        })
-                    }
-                    _ => {
-                        if data_type == DataType::Null && field_data_type.is_nullable() {
-                            scalar
-                        } else {
-                            return Err(ErrorCode::BadBytes(format!(
-                                "unable to cast type `{}` to type `{}`",
-                                data_type, field_data_type
-                            )));
-                        }
-                    }
-                }
-            } else {
-                wrap_cast(&scalar, field_data_type)
-            };
+            let (scalar, data_type) = scalar_binder.bind(expr).await?;
+            let target_type = schema.field(i).data_type();
+            let scalar = wrap_cast_scalar(&scalar, &data_type, target_type)?;
             let expr = scalar
                 .as_expr()?
                 .project_column_ref(|col| schema.index_of(&col.index.to_string()).unwrap());
@@ -120,10 +88,10 @@ impl BindContext {
         operators.push(BlockOperator::Map { exprs: map_exprs });
 
         let one_row_chunk = DataBlock::new(
-            vec![BlockEntry {
-                data_type: DataType::Number(NumberDataType::UInt8),
-                value: Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
-            }],
+            vec![BlockEntry::new(
+                DataType::Number(NumberDataType::UInt8),
+                Value::Scalar(Scalar::Number(NumberScalar::UInt8(1))),
+            )],
             1,
         );
         let func_ctx = ctx.get_function_context()?;

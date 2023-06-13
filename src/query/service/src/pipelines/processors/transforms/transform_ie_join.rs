@@ -24,48 +24,52 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::Sink;
 
-use crate::pipelines::processors::transforms::IEJoinState;
+use crate::pipelines::processors::transforms::RangeJoinState;
 
-enum IEJoinStep {
+enum RangeJoinStep {
     Sink,
     Merging,
     // Execute ie_join algo,
     Execute,
 }
 
-pub struct TransformIEJoinLeft {
+pub struct TransformRangeJoinLeft {
     input_port: Arc<InputPort>,
     output_port: Arc<OutputPort>,
     input_data: Option<DataBlock>,
     output_data_blocks: VecDeque<DataBlock>,
-    state: Arc<IEJoinState>,
-    step: IEJoinStep,
+    state: Arc<RangeJoinState>,
+    step: RangeJoinStep,
     execute_finished: bool,
 }
 
-impl TransformIEJoinLeft {
+impl TransformRangeJoinLeft {
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
-        ie_join_state: Arc<IEJoinState>,
+        ie_join_state: Arc<RangeJoinState>,
     ) -> Box<dyn Processor> {
         ie_join_state.left_attach();
-        Box::new(TransformIEJoinLeft {
+        Box::new(TransformRangeJoinLeft {
             input_port,
             output_port,
             input_data: None,
             output_data_blocks: Default::default(),
             state: ie_join_state,
-            step: IEJoinStep::Sink,
+            step: RangeJoinStep::Sink,
             execute_finished: false,
         })
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for TransformIEJoinLeft {
+impl Processor for TransformRangeJoinLeft {
     fn name(&self) -> String {
-        "TransformIEJoinLeft".to_string()
+        if self.state.ie_join_state.is_some() {
+            "TransformIEJoinLeft".to_string()
+        } else {
+            "TransformMergeJoinLeft".to_string()
+        }
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -74,13 +78,12 @@ impl Processor for TransformIEJoinLeft {
 
     fn event(&mut self) -> Result<Event> {
         match self.step {
-            IEJoinStep::Sink => {
+            RangeJoinStep::Sink => {
                 if self.input_data.is_some() {
                     return Ok(Event::Sync);
                 }
                 if self.input_port.is_finished() {
-                    self.state.left_detach()?;
-                    self.step = IEJoinStep::Merging;
+                    self.step = RangeJoinStep::Merging;
                     return Ok(Event::Async);
                 }
                 match self.input_port.has_data() {
@@ -94,7 +97,7 @@ impl Processor for TransformIEJoinLeft {
                     }
                 }
             }
-            IEJoinStep::Execute => {
+            RangeJoinStep::Execute => {
                 if !self.output_data_blocks.is_empty() {
                     let data = self.output_data_blocks.pop_front().unwrap();
                     self.output_port.push_data(Ok(data));
@@ -112,15 +115,18 @@ impl Processor for TransformIEJoinLeft {
 
     fn process(&mut self) -> Result<()> {
         match self.step {
-            IEJoinStep::Sink => {
+            RangeJoinStep::Sink => {
                 if let Some(data_block) = self.input_data.take() {
                     self.state.sink_left(data_block)?;
                 }
             }
-            IEJoinStep::Execute => {
+            RangeJoinStep::Execute => {
                 let task_id = self.state.task_id();
                 if let Some(task_id) = task_id {
-                    let res = self.state.ie_join(task_id)?;
+                    let res = match self.state.ie_join_state {
+                        Some(ref _ie_join_state) => self.state.ie_join(task_id)?,
+                        None => self.state.merge_join(task_id)?,
+                    };
                     if !res.is_empty() {
                         self.output_data_blocks.push_back(res);
                     }
@@ -134,32 +140,33 @@ impl Processor for TransformIEJoinLeft {
     }
 
     async fn async_process(&mut self) -> Result<()> {
-        if let IEJoinStep::Merging = self.step {
+        if let RangeJoinStep::Merging = self.step {
+            self.state.left_detach()?;
             self.state.wait_merge_finish().await?;
-            self.step = IEJoinStep::Execute;
+            self.step = RangeJoinStep::Execute;
         }
         Ok(())
     }
 }
 
-pub struct TransformIEJoinRight {
-    state: Arc<IEJoinState>,
+pub struct TransformRangeJoinRight {
+    state: Arc<RangeJoinState>,
 }
 
-impl TransformIEJoinRight {
-    pub fn create(ie_join_state: Arc<IEJoinState>) -> Self {
+impl TransformRangeJoinRight {
+    pub fn create(ie_join_state: Arc<RangeJoinState>) -> Self {
         ie_join_state.right_attach();
-        TransformIEJoinRight {
+        TransformRangeJoinRight {
             state: ie_join_state,
         }
     }
 }
 
-impl Sink for TransformIEJoinRight {
-    const NAME: &'static str = "TransformIEJoinRight";
+impl Sink for TransformRangeJoinRight {
+    const NAME: &'static str = "TransformRangeJoinRight";
 
     fn on_finish(&mut self) -> Result<()> {
-        self.state.right_detach();
+        self.state.right_detach()?;
         Ok(())
     }
 

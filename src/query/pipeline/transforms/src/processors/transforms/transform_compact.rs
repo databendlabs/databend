@@ -48,7 +48,7 @@ pub trait Compactor {
     }
 
     /// `compact_final` is called when all the blocks are pushed to finish the compaction
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
 }
 
 impl<T: Compactor + Send + 'static> TransformCompact<T> {
@@ -121,7 +121,7 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
             ProcessorState::Compacting(_) => Err(ErrorCode::Internal("It's a bug.")),
             ProcessorState::Compacted(state) => {
                 if state.output_port.is_finished() {
-                    state.input_port.finish();
+                    debug_assert!(state.input_port.is_finished());
                     return Ok(Event::Finished);
                 }
 
