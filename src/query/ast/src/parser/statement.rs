@@ -1864,7 +1864,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let set_table_options = map(
         rule! {
-            SET ~ OPTIONS ~ "(" ~ #table_option ~ ")"
+            SET ~ OPTIONS ~ "(" ~ #set_table_option ~ ")"
         },
         |(_, _, _, set_options, _)| AlterTableAction::SetOptions { set_options },
     );
@@ -2019,6 +2019,22 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
                 opts.iter()
                     .map(|(k, _, v)| (k.name.to_lowercase(), v.clone())),
             )
+        },
+    )(i)
+}
+
+pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! {
+           ( #ident ~ "=" ~ #parameter_to_string ) ~ ("," ~ #ident ~ "=" ~ #parameter_to_string )*
+        },
+        |(key, _, value, opts)| {
+            let mut options = BTreeMap::from_iter(
+                opts.iter()
+                    .map(|(_, k, _, v)| (k.name.to_lowercase(), v.clone())),
+            );
+            options.insert(key.name.to_lowercase(), value.clone());
+            options
         },
     )(i)
 }
