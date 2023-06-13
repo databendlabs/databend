@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_meta_app::background::BackgroundJobInfo;
+use common_meta_app::background::{BackgroundJobInfo, UpdateBackgroundJobParamsReq, UpdateBackgroundJobStatusReq};
 use common_meta_app::background::BackgroundTaskInfo;
 use common_meta_app::background::CreateBackgroundJobReply;
 use common_meta_app::background::CreateBackgroundJobReq;
@@ -42,6 +42,17 @@ pub trait BackgroundApi: Send + Sync {
         &self,
         req: DeleteBackgroundJobReq,
     ) -> Result<DeleteBackgroundJobReply, KVAppError>;
+
+    async fn update_background_job_status(
+        &self,
+        req: UpdateBackgroundJobStatusReq,
+    ) -> Result<UpdateBackgroundJobReply, KVAppError>;
+
+    async fn update_background_job_params(
+        &self,
+        req: UpdateBackgroundJobParamsReq,
+    ) -> Result<UpdateBackgroundJobReply, KVAppError>;
+
     async fn update_background_job(
         &self,
         req: UpdateBackgroundJobReq,

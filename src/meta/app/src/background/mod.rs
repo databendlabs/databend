@@ -32,6 +32,8 @@ pub use background_job::GetBackgroundJobReq;
 pub use background_job::ListBackgroundJobsReq;
 pub use background_job::UpdateBackgroundJobReply;
 pub use background_job::UpdateBackgroundJobReq;
+pub use background_job::UpdateBackgroundJobParamsReq;
+pub use background_job::UpdateBackgroundJobStatusReq;
 
 pub use background_task::BackgroundTaskId;
 pub use background_task::BackgroundTaskIdent;

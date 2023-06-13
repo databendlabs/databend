@@ -17,7 +17,7 @@ use std::fmt::Display;
 use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::BackgroundJobAlreadyExists;
 use common_meta_app::app_error::UnknownBackgroundJob;
-use common_meta_app::background::BackgroundJobId;
+use common_meta_app::background::{BackgroundJobId, UpdateBackgroundJobParamsReq, UpdateBackgroundJobStatusReq};
 use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundTaskId;
@@ -181,6 +181,30 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             }
         };
         reply
+    }
+
+
+    async fn update_background_job_status(&self, req: UpdateBackgroundJobStatusReq) -> Result<UpdateBackgroundJobReply, KVAppError> {
+        let name = &req.job_name;
+        let (_, mut resp) = get_background_job_or_error(self, name, "failed to get background job").await?;
+        resp.job_status = Some(req.status);
+        let req = UpdateBackgroundJobReq{
+            job_name: name.clone(),
+            info: resp,
+        };
+        self.update_background_job(req).await
+    }
+
+
+    async fn update_background_job_params(&self, req: UpdateBackgroundJobParamsReq) -> Result<UpdateBackgroundJobReply, KVAppError> {
+        let name = &req.job_name;
+        let (_, mut resp) = get_background_job_or_error(self, name, "failed to get background job").await?;
+        resp.job_params = Some(req.params);
+        let req = UpdateBackgroundJobReq{
+            job_name: name.clone(),
+            info: resp,
+        };
+        self.update_background_job(req).await
     }
 
     async fn get_background_job(

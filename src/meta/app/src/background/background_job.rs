@@ -238,11 +238,6 @@ impl Display for UpdateBackgroundJobStatusReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpdateBackgroundJobStatusReply {
-    pub id: u64,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundJobParamsReq {
     pub job_name: BackgroundJobIdent,
     pub params: BackgroundJobParams,
@@ -256,11 +251,6 @@ impl Display for UpdateBackgroundJobParamsReq {
             self.job_name.name, self.params
         )
     }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
-pub struct UpdateBackgroundJobParamsReply {
-    pub id: u64,
 }
 
 

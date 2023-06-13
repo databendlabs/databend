@@ -1,10 +1,10 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::background::{BackgroundJobIdent, BackgroundJobParams, BackgroundJobStatus};
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobParams, BackgroundJobStatus, UpdateBackgroundJobParamsReq, UpdateBackgroundJobStatusReq};
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobState;
-use common_meta_app::background::BackgroundJobType::ONESHOT;
+use common_meta_app::background::BackgroundJobType::{INTERVAL, ONESHOT};
 use common_meta_app::background::BackgroundTaskIdent;
 use common_meta_app::background::BackgroundTaskInfo;
 use common_meta_app::background::BackgroundTaskState;
@@ -18,6 +18,7 @@ use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_kvapi::kvapi;
 use common_meta_types::MetaError;
 use tracing::info;
+use common_meta_app::background::BackgroundJobState::FAILED;
 
 use crate::background_api::BackgroundApi;
 use crate::SchemaApi;
@@ -241,6 +242,70 @@ impl BackgroundApiTestSuite {
                 "first state is started"
             );
         }
+
+        info!("--- update a background job params");
+        {
+            let req = UpdateBackgroundJobParamsReq {
+                job_name: job_ident.clone(),
+                params: BackgroundJobParams{
+                    job_type: INTERVAL,
+                    scheduled_job_interval_seconds: 3600,
+                    scheduled_job_cron: "".to_string(),
+                    scheduled_job_timezone: None,
+                }
+            };
+
+            let res = mt.update_background_job_params(req).await;
+            info!("update log res: {:?}", res);
+            let res = mt
+                .get_background_job(GetBackgroundJobReq {
+                    name: job_ident.clone(),
+                })
+                .await;
+            info!("get log res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(
+                INTERVAL,
+                res.info.job_params.clone().unwrap().job_type,
+                "first state is started"
+            );
+            assert_eq!(
+                3600,
+                res.info.job_params.unwrap().scheduled_job_interval_seconds
+            )
+        }
+
+        info!("--- update a background job params");
+        {
+            let req = UpdateBackgroundJobStatusReq {
+                job_name: job_ident.clone(),
+                status: BackgroundJobStatus{
+                    job_state: FAILED,
+                    last_task_id: Some("newid".to_string()),
+                    last_task_run_at: None,
+                }
+            };
+
+            let res = mt.update_background_job_status(req).await;
+            info!("update log res: {:?}", res);
+            let res = mt
+                .get_background_job(GetBackgroundJobReq {
+                    name: job_ident.clone(),
+                })
+                .await;
+            info!("get log res: {:?}", res);
+            let res = res.unwrap();
+            assert_eq!(
+                FAILED,
+                res.info.job_status.clone().unwrap().job_state,
+                "first state is started"
+            );
+            assert_eq!(
+                Some("newid".to_string()),
+                res.info.job_status.unwrap().last_task_id
+            )
+        }
+
         info!("--- list background jobs when their is 1 tasks");
         {
             let req = ListBackgroundJobsReq {
@@ -252,8 +317,13 @@ impl BackgroundApiTestSuite {
             let resp = res.unwrap();
             assert_eq!(1, resp.len());
             assert_eq!(
-                BackgroundJobState::SUSPENDED,
+                BackgroundJobState::FAILED,
                 resp[0].1.job_status.clone().unwrap().job_state,
+                "first state is started"
+            );
+            assert_eq!(
+                INTERVAL,
+                resp[0].1.job_params.clone().unwrap().job_type,
                 "first state is started"
             );
         }
