@@ -578,6 +578,8 @@ impl Table for FuseTable {
             data_size: Some(s.data_bytes),
             data_size_compressed: Some(s.compressed_data_bytes),
             index_size: Some(s.index_data_bytes),
+            number_of_blocks: s.number_of_blocks,
+            number_of_segments: s.number_of_segments,
         }))
     }
 

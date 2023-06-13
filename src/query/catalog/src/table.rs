@@ -417,6 +417,8 @@ pub struct TableStatistics {
     pub data_size: Option<u64>,
     pub data_size_compressed: Option<u64>,
     pub index_size: Option<u64>,
+    pub number_of_blocks: Option<u64>,
+    pub number_of_segments: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
