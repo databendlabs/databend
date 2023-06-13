@@ -545,6 +545,41 @@ select a from t9 order by a
 
 
 statement ok
+create table t10(a int) row_per_block=3
+
+statement ok
+insert into t10 values(-5),(3),(2)
+
+statement ok
+ALTER TABLE t10 cluster by(abs(a))
+
+query I
+select a from t10
+----
+-5
+3
+2
+
+statement ok
+insert into t10 values(1),(2),(3)
+
+statement ok
+optimize table t10 compact
+
+query II
+select segment_count, block_count from fuse_snapshot('db_09_0008', 't10') limit 2
+----
+1 2
+2 2
+
+query TIIFFT
+select * from clustering_information('db_09_0008','t10')
+----
+(abs(a)) 2 0 1.0 2.0 {"00002":2}
+
+
+
+statement ok
 DROP TABLE m
 
 statement ok
@@ -576,6 +611,9 @@ DROP TABLE t8
 
 statement ok
 DROP TABLE t9
+
+statement ok
+DROP TABLE t10
 
 statement ok
 DROP DATABASE db_09_0008
