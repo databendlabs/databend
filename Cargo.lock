@@ -1850,6 +1850,7 @@ name = "common-expression"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-ord",
  "arrow-schema",
  "base64 0.21.0",
  "chrono",
@@ -2401,7 +2402,6 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
- "common-arrow",
  "common-base",
  "common-exception",
  "common-expression",
