@@ -60,7 +60,7 @@ The FILES option, on the other hand, enables you to explicitly specify one or mo
 
 ### $<col_position>
 
-You can use column positions when you SELECT FROM a staged file. At present, the feature to utilize column positions for SELECT operations from staged files is limited to NDJSON file format. It is important to note that when working with NDJSON, only $1 is allowed, representing the entire row and having the data type Variant.
+You can use column positions when you SELECT FROM a staged file. At present, the feature to utilize column positions for SELECT operations from staged files is limited to Parquet and NDJSON file formats. It is important to note that when working with NDJSON, only $1 is allowed, representing the entire row and having the data type Variant.
 
 ```sql
 -- Select the entire row using column position:
