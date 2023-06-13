@@ -23,25 +23,46 @@ use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_transforms::processors::transforms::{AsyncTransform, BlockMetaAccumulatingTransform, Transform};
+use common_pipeline_transforms::processors::transforms::AsyncTransform;
+use common_pipeline_transforms::processors::transforms::BlockMetaAccumulatingTransform;
+use common_pipeline_transforms::processors::transforms::BlockMetaAccumulatingTransformer;
+use common_pipeline_transforms::processors::transforms::Transform;
+use common_pipeline_transforms::processors::transforms::Transformer;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 use storages_common_pruner::RangePruner;
-use crate::index_analyzer::segment_result_meta::SegmentFilterResult;
 
 use crate::index_analyzer::segment_info_meta::CompactSegmentInfoMeta;
 use crate::index_analyzer::segment_location_meta::SegmentLocationMetaInfo;
+use crate::index_analyzer::segment_result_meta::SegmentFilterResult;
 use crate::io::MetaReaders;
-use crate::metrics::{metrics_inc_bytes_segment_range_pruning_after, metrics_inc_bytes_segment_range_pruning_before, metrics_inc_segments_range_pruning_after, metrics_inc_segments_range_pruning_before};
+use crate::metrics::metrics_inc_bytes_segment_range_pruning_after;
+use crate::metrics::metrics_inc_bytes_segment_range_pruning_before;
+use crate::metrics::metrics_inc_segments_range_pruning_after;
+use crate::metrics::metrics_inc_segments_range_pruning_before;
 use crate::pruning::FusePruningStatistics;
+use crate::pruning::PruningContext;
 
 pub struct SegmentFilterTransform {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-
     pruning_stats: Arc<FusePruningStatistics>,
     range_pruner: Arc<dyn RangePruner + Sync + Send>,
+}
+
+impl SegmentFilterTransform {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        ctx: Arc<PruningContext>,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(
+            BlockMetaAccumulatingTransformer::create(input, output, SegmentFilterTransform {
+                range_pruner: ctx.range_pruner.clone(),
+                pruning_stats: ctx.pruning_stats.clone(),
+            }),
+        ))
+    }
 }
 
 impl BlockMetaAccumulatingTransform<CompactSegmentInfoMeta> for SegmentFilterTransform {
@@ -57,7 +78,10 @@ impl BlockMetaAccumulatingTransform<CompactSegmentInfoMeta> for SegmentFilterTra
             self.pruning_stats.set_segments_range_pruning_before(1);
         }
 
-        if self.range_pruner.should_keep(&meta.info.summary.col_stats, None) {
+        if self
+            .range_pruner
+            .should_keep(&meta.info.summary.col_stats, None)
+        {
             // Perf.
             {
                 metrics_inc_segments_range_pruning_after(1);
@@ -67,10 +91,9 @@ impl BlockMetaAccumulatingTransform<CompactSegmentInfoMeta> for SegmentFilterTra
             }
 
             let blocks_meta = meta.info.block_metas()?;
-            return Ok(Some(DataBlock::empty_with_meta(SegmentFilterResult::create(
-                meta.segment_location,
-                blocks_meta
-            ))));
+            return Ok(Some(DataBlock::empty_with_meta(
+                SegmentFilterResult::create(meta.segment_location, blocks_meta),
+            )));
         }
 
         Ok(None)

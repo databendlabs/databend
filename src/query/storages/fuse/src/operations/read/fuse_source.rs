@@ -130,48 +130,31 @@ pub fn build_fuse_parquet_source_pipeline(
     (max_threads, max_io_requests) =
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
 
-    let mut source_builder = SourcePipeBuilder::create();
-
     match block_reader.support_blocking_api() {
         true => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
-
-            for i in 0..max_threads {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadParquetDataSource::<true>::create(
-                        i,
-                        ctx.clone(),
-                        output,
-                        block_reader.clone(),
-                        partitions.clone(),
-                    )?,
-                );
-            }
-            pipeline.add_pipe(source_builder.finalize());
+            pipeline.add_transform(|input, output| {
+                ReadParquetDataSource::<true>::create(
+                    ctx.clone(),
+                    input,
+                    output,
+                    block_reader.clone(),
+                )
+            })?;
         }
         false => {
             info!("read block data adjust max io requests:{}", max_io_requests);
 
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let partitions = StealablePartitions::new(partitions, ctx.clone());
+            pipeline.resize(max_io_requests)?;
 
-            for i in 0..max_io_requests {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadParquetDataSource::<false>::create(
-                        i,
-                        ctx.clone(),
-                        output,
-                        block_reader.clone(),
-                        partitions.clone(),
-                    )?,
-                );
-            }
-            pipeline.add_pipe(source_builder.finalize());
+            pipeline.add_transform(|input, output| {
+                ReadParquetDataSource::<false>::create(
+                    ctx.clone(),
+                    input,
+                    output,
+                    block_reader.clone(),
+                )
+            })?;
+
             pipeline.resize(std::cmp::min(max_threads, max_io_requests))?;
 
             info!(

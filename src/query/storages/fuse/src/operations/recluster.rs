@@ -118,7 +118,6 @@ impl FuseTable {
             .map(|meta| (None, meta.clone()))
             .collect();
         let (statistics, parts) = self.read_partitions_with_metas(
-            self.table_info.schema(),
             None,
             &block_metas,
             partitions_total,

@@ -18,6 +18,7 @@ use common_base::runtime::Runtime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -28,8 +29,14 @@ use storages_common_index::RangeIndex;
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
 use crate::operations::fuse_source::build_fuse_source_pipeline;
+use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
+use crate::BlockRangeFilterTransform;
 use crate::FuseTable;
+use crate::SnapshotReadSource;
+use crate::PartInfoConvertTransform;
+use crate::SegmentFilterTransform;
+use crate::SegmentReadTransform;
 
 impl FuseTable {
     pub fn create_block_reader(
@@ -80,6 +87,7 @@ impl FuseTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let max_io_requests = self.adjust_io_request(&ctx)?;
         let snapshot_loc = plan.statistics.snapshot.clone();
         let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
 
@@ -94,43 +102,10 @@ impl FuseTable {
         }
 
         if !lazy_init_segments.is_empty() {
-            let table = self.clone();
-            let table_info = self.table_info.clone();
-            let push_downs = plan.push_downs.clone();
-            let query_ctx = ctx.clone();
-            let dal = self.operator.clone();
-
-            // TODO: need refactor
-        //     pipeline.set_on_init(move || {
-        //         let table = table.clone();
-        //         let table_info = table_info.clone();
-        //         let ctx = query_ctx.clone();
-        //         let dal = dal.clone();
-        //         let push_downs = push_downs.clone();
-        //         // let lazy_init_segments = lazy_init_segments.clone();
-        //
-        //         let partitions = Runtime::with_worker_threads(2, None)?.block_on(async move {
-        //             let (_statistics, partitions) = table
-        //                 .prune_snapshot_blocks(
-        //                     ctx,
-        //                     dal,
-        //                     push_downs,
-        //                     table_info,
-        //                     lazy_init_segments,
-        //                     0,
-        //                 )
-        //                 .await?;
-        //
-        //             Result::<_, ErrorCode>::Ok(partitions)
-        //         })?;
-        //
-        //         query_ctx.set_partitions(partitions)?;
-        //         Ok(())
-        //     });
-        // }
+            self.index_analyzer(&ctx, &plan, pipeline)?;
+        }
 
         let block_reader = self.build_block_reader(plan, ctx.clone())?;
-        let max_io_requests = self.adjust_io_request(&ctx)?;
 
         let topk = plan.push_downs.as_ref().and_then(|x| {
             x.top_k(
@@ -149,5 +124,63 @@ impl FuseTable {
             topk,
             max_io_requests,
         )
+    }
+
+    fn index_analyzer(
+        &self,
+        ctx: &Arc<dyn TableContext>,
+        plan: &&DataSourcePlan,
+        pipeline: &mut Pipeline,
+    ) -> Result<()> {
+        let snapshot_loc = plan.statistics.snapshot.clone();
+        let operator = self.operator.clone();
+        let table_schema = self.table_info.schema();
+        let snapshot_loc = snapshot_loc.clone().unwrap();
+
+        // TODO: remove
+        let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
+            FusePruner::create(
+                &ctx,
+                operator.clone(),
+                self.table_info.schema(),
+                &plan.push_downs,
+            )?
+        } else {
+            let cluster_keys = self.cluster_keys(ctx.clone());
+
+            FusePruner::create_with_pages(
+                &ctx,
+                operator.clone(),
+                self.table_info.schema(),
+                &plan.push_downs,
+                self.cluster_key_meta.clone(),
+                cluster_keys,
+            )?
+        };
+
+        pipeline.add_source(
+            |output| SnapshotReadSource::create(ctx.clone(), output, snapshot_loc.clone()),
+            1,
+        )?;
+
+        pipeline.add_transform(|input, output| {
+            SegmentReadTransform::create(input, output, operator.clone(), table_schema.clone())
+        })?;
+
+        pipeline.add_transform(|input, output| {
+            SegmentFilterTransform::create(input, output, pruner.pruning_ctx.clone())
+        })?;
+
+        pipeline.add_transform(|input, output| {
+            BlockRangeFilterTransform::create(pruner.pruning_ctx.clone(), input, output)
+        })?;
+
+        return pipeline.add_transform(|input, output| {
+            Ok(PartInfoConvertTransform::create(
+                input,
+                output,
+                self.table_info.schema(),
+            ))
+        });
     }
 }

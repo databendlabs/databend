@@ -57,4 +57,5 @@ mod pipelines {
     }
 }
 
+pub use index_analyzer::*;
 pub use storages_common_index as index;

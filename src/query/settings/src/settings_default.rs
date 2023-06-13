@@ -310,6 +310,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_pipeline_index_analyzer", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(0),
+                    desc: "Enable index analyzer with pipeline, default value: 0",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

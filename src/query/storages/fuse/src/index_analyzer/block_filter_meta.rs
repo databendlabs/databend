@@ -22,50 +22,55 @@ use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
 use storages_common_pruner::BlockMetaIndex;
-use storages_common_table_meta::meta::{BlockMeta, CompactSegmentInfo};
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 
 use crate::pruning::SegmentLocation;
 
 pub struct BlockFilterMeta {
     pub meta_index: BlockMetaIndex,
     pub block_meta: Arc<BlockMeta>,
+    pub segment_location: Arc<SegmentLocation>,
 }
 
-pub struct BlocksFilterMeta {
-    pub metas: Vec<BlockFilterMeta>,
-    pub segment_location: SegmentLocation,
-}
-
-impl BlocksFilterMeta {
-    pub fn create(location: SegmentLocation, metas: Vec<BlockFilterMeta>) -> BlockMetaInfoPtr {
-        Box::new(BlocksFilterMeta { segment_location: location, metas })
+impl BlockFilterMeta {
+    pub fn create(
+        location: Arc<SegmentLocation>,
+        block_meta: Arc<BlockMeta>,
+        meta_index: BlockMetaIndex,
+    ) -> BlockMetaInfoPtr {
+        Box::new(BlockFilterMeta {
+            meta_index,
+            block_meta,
+            segment_location: location,
+        })
     }
 }
 
-impl Debug for BlocksFilterMeta {
+impl Debug for BlockFilterMeta {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BlocksFilterMeta")
+        f.debug_struct("BlockFilterMeta")
             .field("location", &self.segment_location)
             .finish()
     }
 }
 
-impl serde::Serialize for BlocksFilterMeta {
+impl serde::Serialize for BlockFilterMeta {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where S: Serializer {
         unimplemented!("Unimplemented serialize BlockFilterMeta")
     }
 }
 
-impl<'de> serde::Deserialize<'de> for BlocksFilterMeta {
+impl<'de> serde::Deserialize<'de> for BlockFilterMeta {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de> {
+    where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize BlockFilterMeta")
     }
 }
 
-#[typetag::serde(name = "block_bloom_filter")]
-impl BlockMetaInfo for BlocksFilterMeta {
+#[typetag::serde(name = "block_filter_meta")]
+impl BlockMetaInfo for BlockFilterMeta {
     fn as_any(&self) -> &dyn Any {
         self
     }

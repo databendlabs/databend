@@ -357,4 +357,8 @@ impl Settings {
     pub fn set_enterprise_license(&self, val: String) -> Result<()> {
         self.set_setting("enterprise_license".to_string(), val)
     }
+
+    pub fn get_enable_pipeline_index_analyzer(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_pipeline_index_analyzer")? != 0)
+    }
 }

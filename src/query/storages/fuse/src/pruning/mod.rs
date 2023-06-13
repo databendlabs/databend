@@ -13,7 +13,6 @@
 // limitations under the License.
 
 mod block_pruner;
-mod bloom_filter_reader;
 mod bloom_pruner;
 mod fuse_pruner;
 mod pruner_location;
@@ -22,7 +21,11 @@ mod segment_info_meta;
 mod segment_pruner;
 mod segment_reader;
 
+pub use block_pruner::BlockMetaPruner;
 pub use block_pruner::BlockPruner;
+pub use block_pruner::InternalBlockMetaPruner;
+pub use block_pruner::LimitBlockMetaPruner;
+pub use block_pruner::RangeBlockMetaPruner;
 pub use bloom_pruner::BloomPruner;
 pub use bloom_pruner::BloomPrunerCreator;
 pub use fuse_pruner::FusePruner;
@@ -30,7 +33,3 @@ pub use fuse_pruner::PruningContext;
 pub use pruner_location::create_segment_location_vector;
 pub use pruner_location::SegmentLocation;
 pub use pruning_statistics::FusePruningStatistics;
-pub use block_pruner::LimitBlockMetaPruner;
-pub use block_pruner::RangeBlockMetaPruner;
-pub use block_pruner::InternalBlockMetaPruner;
-pub use block_pruner::BlockMetaPruner;

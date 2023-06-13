@@ -21,7 +21,8 @@ use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoPtr;
 use serde::Deserializer;
 use serde::Serializer;
-use storages_common_table_meta::meta::{BlockMeta, CompactSegmentInfo};
+use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::CompactSegmentInfo;
 
 use crate::pruning::SegmentLocation;
 
@@ -32,7 +33,10 @@ pub struct SegmentFilterResult {
 
 impl SegmentFilterResult {
     pub fn create(location: SegmentLocation, metas: Vec<Arc<BlockMeta>>) -> BlockMetaInfoPtr {
-        Box::new(SegmentFilterResult { segment_location: location, metas })
+        Box::new(SegmentFilterResult {
+            segment_location: location,
+            metas,
+        })
     }
 }
 
@@ -46,14 +50,14 @@ impl Debug for SegmentFilterResult {
 
 impl serde::Serialize for SegmentFilterResult {
     fn serialize<S>(&self, _: S) -> Result<S::Ok, S::Error>
-        where S: Serializer {
+    where S: Serializer {
         unimplemented!("Unimplemented serialize SegmentFilterResult")
     }
 }
 
 impl<'de> serde::Deserialize<'de> for SegmentFilterResult {
     fn deserialize<D>(_: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de> {
+    where D: Deserializer<'de> {
         unimplemented!("Unimplemented deserialize SegmentFilterResult")
     }
 }

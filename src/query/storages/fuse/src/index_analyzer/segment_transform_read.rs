@@ -23,8 +23,11 @@ use common_expression::TableSchemaRef;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
+use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::AsyncTransform;
+use common_pipeline_transforms::processors::transforms::AsyncTransformer;
+use common_pipeline_transforms::processors::transforms::Transformer;
 use opendal::Operator;
 use storages_common_cache::LoadParams;
 
@@ -33,11 +36,26 @@ use crate::index_analyzer::segment_location_meta::SegmentLocationMetaInfo;
 use crate::io::MetaReaders;
 
 pub struct SegmentReadTransform {
-    input: Arc<InputPort>,
-    output: Arc<OutputPort>,
-
     operator: Operator,
     table_schema: TableSchemaRef,
+}
+
+impl SegmentReadTransform {
+    pub fn create(
+        input: Arc<InputPort>,
+        output: Arc<OutputPort>,
+        operator: Operator,
+        table_schema: TableSchemaRef,
+    ) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(AsyncTransformer::create(
+            input,
+            output,
+            SegmentReadTransform {
+                operator,
+                table_schema,
+            },
+        )))
+    }
 }
 
 #[async_trait::async_trait]

@@ -69,8 +69,10 @@ impl FuseTable {
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
 
                 let settings = ctx.get_settings();
-                if (settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty())
-                    || is_lazy
+                if (
+                    // settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty()
+                    true
+                ) || is_lazy
                 {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
@@ -90,7 +92,6 @@ impl FuseTable {
                 }
 
                 let snapshot_loc = Some(snapshot_loc);
-                let table_info = self.table_info.clone();
                 let summary = snapshot.summary.block_count as usize;
                 let mut segments_location = Vec::with_capacity(snapshot.segments.len());
                 for (idx, segment_location) in snapshot.segments.iter().enumerate() {
@@ -105,7 +106,6 @@ impl FuseTable {
                     ctx.clone(),
                     self.operator.clone(),
                     push_downs.clone(),
-                    table_info,
                     segments_location,
                     summary,
                 )
@@ -123,7 +123,6 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         dal: Operator,
         push_downs: Option<PushDownInfo>,
-        table_info: TableInfo,
         segments_location: Vec<SegmentLocation>,
         summary: usize,
     ) -> Result<(PartStatistics, Partitions)> {
@@ -160,14 +159,14 @@ impl FuseTable {
         }
 
         let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
-            FusePruner::create(&ctx, dal, table_info.schema(), &push_downs)?
+            FusePruner::create(&ctx, dal, self.table_info.schema(), &push_downs)?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
 
             FusePruner::create_with_pages(
                 &ctx,
                 dal,
-                table_info.schema(),
+                self.table_info.schema(),
                 &push_downs,
                 self.cluster_key_meta.clone(),
                 cluster_keys,
@@ -188,13 +187,8 @@ impl FuseTable {
             .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
-        let result = self.read_partitions_with_metas(
-            table_info.schema(),
-            push_downs,
-            &block_metas,
-            summary,
-            pruning_stats,
-        )?;
+        let result =
+            self.read_partitions_with_metas(push_downs, &block_metas, summary, pruning_stats)?;
 
         if let Some(cache_key) = derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
@@ -206,12 +200,12 @@ impl FuseTable {
 
     pub fn read_partitions_with_metas(
         &self,
-        schema: TableSchemaRef,
         push_downs: Option<PushDownInfo>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
         partitions_total: usize,
         pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
+        let schema = self.table_info.schema();
         let arrow_schema = schema.to_arrow();
         let column_nodes = ColumnNodes::new_from_schema(&arrow_schema, Some(&schema));
 
