@@ -343,11 +343,6 @@ impl CompactTaskBuilder {
         std::mem::take(&mut self.blocks)
     }
 
-    fn check_column_ids(&self, block: &Arc<BlockMeta>) -> bool {
-        let column_ids: HashSet<ColumnId> = block.col_metas.keys().cloned().collect();
-        self.column_ids == column_ids
-    }
-
     fn add(&mut self, block: &Arc<BlockMeta>, thresholds: BlockThresholds) -> (bool, bool) {
         if let Some(default_cluster_key) = self.cluster_key_id {
             if block.cluster_stats.as_ref().map_or(false, |v| {
@@ -383,12 +378,27 @@ impl CompactTaskBuilder {
         blocks: Vec<Arc<BlockMeta>>,
     ) -> bool {
         let mut flag = false;
-        if blocks.len() == 1 && self.check_column_ids(&blocks[0]) {
+        if blocks.len() == 1 && !self.check_compact(&blocks[0]) {
             unchanged_blocks.insert(block_idx, blocks[0].clone());
             flag = true;
         } else {
             tasks.push_back((block_idx, blocks));
         }
         flag
+    }
+
+    fn check_compact(&self, block: &Arc<BlockMeta>) -> bool {
+        let column_ids: HashSet<ColumnId> = block.col_metas.keys().cloned().collect();
+        if self.column_ids == column_ids {
+            // Check if the block needs to be resort.
+            self.cluster_key_id.map_or(false, |key| {
+                block
+                    .cluster_stats
+                    .as_ref()
+                    .map_or(true, |v| v.cluster_key_id != key)
+            })
+        } else {
+            true
+        }
     }
 }

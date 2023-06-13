@@ -112,18 +112,6 @@ pub fn metrics_inc_compact_block_read_milliseconds(c: u64) {
     increment_gauge!(key!("compact_block_read_milliseconds"), c as f64);
 }
 
-pub fn metrics_inc_compact_block_write_nums(c: u64) {
-    increment_gauge!(key!("compact_block_write_nums"), c as f64);
-}
-
-pub fn metrics_inc_compact_block_write_bytes(c: u64) {
-    increment_gauge!(key!("compact_block_write_bytes"), c as f64);
-}
-
-pub fn metrics_inc_compact_block_write_milliseconds(c: u64) {
-    increment_gauge!(key!("compact_block_write_milliseconds"), c as f64);
-}
-
 /// Pruning metrics.
 pub fn metrics_inc_segments_range_pruning_before(c: u64) {
     increment_gauge!(key!("segments_range_pruning_before"), c as f64);

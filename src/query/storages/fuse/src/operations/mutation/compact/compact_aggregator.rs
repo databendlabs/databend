@@ -97,7 +97,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
                     MutationLogEntry::Replacement(entry) => {
                         match &entry.op {
                             Replacement::Replaced(meta) => {
-                                self.abort_operation.add_block(&meta);
+                                self.abort_operation.add_block(meta);
                                 self.merge_blocks
                                     .entry(entry.index.segment_idx)
                                     .and_modify(|v| {
