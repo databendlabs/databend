@@ -285,7 +285,7 @@ impl DefaultSettings {
                 }),
                 ("lazy_read_threshold", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1000),
-                    desc: "Enable lazy materialization and set the limit threshold of queries with limit. Set the value to 0 to disable this setting.",
+                    desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
