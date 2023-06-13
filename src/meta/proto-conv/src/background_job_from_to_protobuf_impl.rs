@@ -91,7 +91,7 @@ impl FromToProto for mt::background::BackgroundJobParams {
     }
 }
 
-impl FromToProto for mt::background::BackgroundJobStatus {
+impl FromToProto for BackgroundJobStatus {
     type PB = pb::BackgroundJobStatus;
     fn get_pb_ver(p: &Self::PB) -> u64 {
         p.ver
@@ -106,6 +106,7 @@ impl FromToProto for mt::background::BackgroundJobStatus {
             })?,
             last_task_id: p.last_task_id,
             last_task_run_at: p.last_task_run_at.and_then(|t| DateTime::<Utc>::from_pb(t).ok()),
+            next_task_scheduled_time: p.next_task_scheduled_time.and_then(|t| DateTime::<Utc>::from_pb(t).ok()),
         })
     }
 
@@ -116,6 +117,7 @@ impl FromToProto for mt::background::BackgroundJobStatus {
             job_state: self.job_state.clone() as i32,
             last_task_id: self.last_task_id.clone(),
             last_task_run_at: self.last_task_run_at.clone().map(|t| t.to_pb()).transpose()?,
+            next_task_scheduled_time: self.next_task_scheduled_time.clone().map(|t| t.to_pb()).transpose()?,
         })
     }
 }

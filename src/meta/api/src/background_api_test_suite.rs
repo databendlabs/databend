@@ -56,6 +56,7 @@ fn new_background_job(state: BackgroundJobState, created_at: DateTime<Utc>) -> B
             job_state: state,
             last_task_id: None,
             last_task_run_at: None,
+            next_task_scheduled_time: None,
         }),
     }
 }
@@ -283,6 +284,7 @@ impl BackgroundApiTestSuite {
                     job_state: FAILED,
                     last_task_id: Some("newid".to_string()),
                     last_task_run_at: None,
+                    next_task_scheduled_time: None,
                 }
             };
 

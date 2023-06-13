@@ -109,6 +109,8 @@ message BackgroundJobStatus {
     BackgroundJobState job_state = 2;
     optional string last_task_id = 4;
     optional string last_task_run_at = 5;
+
+    optional string next_task_scheduled_time = 6;
 }
 
 message BackgroundJobInfo {

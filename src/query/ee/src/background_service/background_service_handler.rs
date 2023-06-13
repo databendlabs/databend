@@ -17,7 +17,7 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
 use background_service::BackgroundServiceHandler;
-use common_base::base::{GlobalInstance, tokio};
+use common_base::base::{GlobalInstance, };
 use common_catalog::table_context::TableContext;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
@@ -26,13 +26,14 @@ use common_expression::DataBlock;
 use common_meta_app::principal::{UserIdentity};
 use common_meta_app::principal::UserInfo;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::servers::flight_sql::flight_sql_service::FlightSqlServiceImpl;
 use databend_query::sessions::{Session, SessionManager, SessionType};
 use databend_query::sql::Planner;
 use futures_util::StreamExt;
 use tracing::{error, info, Instrument};
-use common_base::runtime::TrySpawn;
+use common_base::base::tokio::sync::mpsc::Sender;
+use common_base::base::tokio::sync::Mutex;
 use common_license::license_manager::get_license_manager;
+use common_meta_app::background::{BackgroundJobInfo, };
 use common_meta_store::MetaStore;
 use common_users::{BUILTIN_ROLE_ACCOUNT_ADMIN, UserApiProvider};
 use databend_query::servers::ShutdownHandle;
@@ -84,12 +85,13 @@ impl BackgroundServiceHandler for RealBackgroundService {
 
     #[async_backtrace::framed]
     async fn start(&self, shutdown_handler: &mut ShutdownHandle) -> Result<()> {
-        let settings = SessionManager::create(&conf).create_session(SessionType::Dummy).await.unwrap().get_settings();
+        let settings = SessionManager::create(&self.conf).create_session(SessionType::Dummy).await.unwrap().get_settings();
         // check for valid license
         let enterprise_enabled = get_license_manager()
             .manager
             .check_enterprise_enabled(
                 &settings,
+                self.conf.query.tenant_id.clone(),
                 "background_service".to_string(),
             )
             .is_ok();
@@ -111,9 +113,10 @@ impl RealBackgroundService {
         session.set_authed_user(user.clone(), Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string())).await?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let mut scheduler = JobScheduler::new();
-        let finish_tx = scheduler.finish_tx.clone();
-        let job = CompactionJob::create(&conf, format!("{}-{}-compactor-job", conf.query.tenant_id, conf.query.cluster_id), finish_tx).await;
-        let scheduler = scheduler.add_one_shot_job(job.clone());
+
+        let compactor_job = RealBackgroundService::get_compactor_job(conf, &user.identity(), scheduler.finish_tx.clone()).await;
+        scheduler.add_job(compactor_job).await?;
+
         let rm = RealBackgroundService {
             conf: conf.clone(),
             session: session.clone(),
@@ -123,6 +126,17 @@ impl RealBackgroundService {
         };
         Ok(rm)
     }
+
+    async fn get_compactor_job(conf: &InnerConfig, creator: &UserIdentity, finish_tx: Arc<Mutex<Sender<u64>>>) -> CompactionJob  {
+        // background compactor job
+        let name = format!("{}-{}-compactor-job", conf.query.tenant_id, conf.query.cluster_id);
+        let params = conf.background.compaction.params.clone();
+        let info = BackgroundJobInfo::new_compactor_job(params.clone(), creator.clone());
+        let job = CompactionJob::create(&conf, name, info, finish_tx).await;
+        job
+    }
+
+
     pub async fn init(conf: &InnerConfig) -> Result<()> {
         let rm = RealBackgroundService::new(conf).await?;
         let wrapper = BackgroundServiceHandlerWrapper::new(Box::new(rm));

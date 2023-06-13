@@ -12,17 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::process;
-use std::process::exit;
 use std::sync::Arc;
-use futures_util::future::join_all;
-use futures_util::TryFutureExt;
+use chrono::{DateTime, Utc};
 use tracing::info;
-use common_base::base::tokio::runtime::Handle;
-use common_base::base::{DummySignalStream, signal_stream, SignalType, tokio};
-use common_base::base::tokio::sync::{futures, Mutex, RwLock};
+use common_base::base::{tokio};
+use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::sync::mpsc::{Receiver, Sender};
 use common_exception::Result;
+use common_meta_app::background::{BackgroundJobInfo, BackgroundJobState, BackgroundJobType};
 
 use crate::background_service::job::BoxedJob;
 use crate::background_service::job::Job;
@@ -31,7 +28,7 @@ use databend_query::servers::ShutdownHandle;
 
 pub struct JobScheduler {
     one_shot_jobs: Vec<BoxedJob>,
-    interval_jobs: Vec<BoxedJob>,
+    scheduled_jobs: Vec<BoxedJob>,
     pub finish_tx: Arc<Mutex<Sender<u64>>>,
     pub finish_rx: Arc<Mutex<Receiver<u64>>>
 }
@@ -42,21 +39,27 @@ impl JobScheduler {
         let (finish_tx, finish_rx) = tokio::sync::mpsc::channel(100);
         Self {
             one_shot_jobs: Vec::new(),
-            interval_jobs: Vec::new(),
+            scheduled_jobs: Vec::new(),
             finish_tx: Arc::new(Mutex::new(finish_tx)),
             finish_rx: Arc::new(Mutex::new(finish_rx)),
         }
     }
-    /// Adds a job to the scheduler
-    pub fn add_one_shot_job(mut self, job: impl Job + Send + Sync + Clone + 'static) -> Self {
-        self.one_shot_jobs.push(Box::new(job) as BoxedJob);
-        self
+
+    pub async fn add_job(&mut self, job: impl Job + Send + Sync + Clone + 'static) -> Result<()> {
+        if job.get_info().await.job_params.is_none() {
+            return Ok(())
+        }
+        match job.get_info().await.job_params.unwrap().job_type  {
+            BackgroundJobType::ONESHOT => {
+                self.one_shot_jobs.push(Box::new(job) as BoxedJob);
+            }
+            BackgroundJobType::CRON | BackgroundJobType::INTERVAL => {
+                self.scheduled_jobs.push(Box::new(job) as BoxedJob);
+            }
+        }
+        Ok(())
     }
 
-    pub fn add_interval_job(mut self, job: impl Job + Send + Sync + Clone + 'static) -> Self {
-        self.interval_jobs.push(Box::new(job) as BoxedJob);
-        self
-    }
     pub async fn start(&self, handler: &mut ShutdownHandle) -> Result<()> {
         let one_shot_jobs = Arc::new(&self.one_shot_jobs);
         self.check_and_run_jobs(one_shot_jobs.clone()).await;
@@ -67,6 +70,11 @@ impl JobScheduler {
                 break;
             }
         }
+
+        info!(background = true, "start scheduled jobs");
+        let scheduled_jobs = Arc::new(&self.scheduled_jobs);
+        let scheduled_jobs_clone = scheduled_jobs.clone();
+
         Ok(())
     }
     async fn check_and_run_jobs(&self, jobs: Arc<&Vec<BoxedJob>>) {
@@ -88,5 +96,41 @@ impl JobScheduler {
             job.run().await;
         });
         Ok(())
+    }
+
+    // returns true if the job should be run
+    pub fn should_run_job(job_info: &BackgroundJobInfo, time: DateTime<Utc>) -> bool {
+        if job_info.job_status.clone().is_none() || job_info.job_params.clone().is_none() {
+            return false;
+        }
+
+        let job_params = &job_info.job_params.clone().unwrap();
+        let job_status = &job_info.job_status.clone().unwrap();
+        if job_status.job_state == BackgroundJobState::FAILED || job_status.job_state == BackgroundJobState::SUSPENDED {
+            return false;
+        }
+        return match job_params.job_type {
+            BackgroundJobType::INTERVAL => {
+                match job_status.next_task_scheduled_time {
+                    None => {
+                        true
+                    }
+                    Some(expected) => {
+                        expected < time
+                    }
+                }
+            }
+            BackgroundJobType::CRON => {
+                match job_status.next_task_scheduled_time {
+                    None => {
+                        true
+                    }
+                    Some(expected) => {
+                        expected < time
+                    }
+                }
+            }
+            BackgroundJobType::ONESHOT => { true }
+        }
     }
 }

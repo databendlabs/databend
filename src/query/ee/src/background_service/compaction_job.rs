@@ -26,7 +26,7 @@ use serde::de::Unexpected::Str;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
 use common_config::{InnerConfig};
 use common_exception::Result;
-use common_meta_app::background::{BackgroundJobIdent, BackgroundTaskIdent, BackgroundTaskInfo, BackgroundTaskState, UpdateBackgroundTaskReq};
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobInfo, BackgroundJobParams, BackgroundJobStatus, BackgroundTaskIdent, BackgroundTaskInfo, BackgroundTaskState, UpdateBackgroundJobStatusReq, UpdateBackgroundTaskReq};
 use common_meta_app::schema::TableStatistics;
 use tracing::{debug, error, info};
 use background_service::get_background_service_handler;
@@ -64,13 +64,29 @@ pub struct CompactionJob {
     conf: InnerConfig,
     meta_api: Arc<MetaStore>,
     creator: BackgroundJobIdent,
+    info: BackgroundJobInfo,
+
     finish_tx: Arc<Mutex<Sender<u64>>>,
+
 }
 
 #[async_trait::async_trait]
 impl Job for CompactionJob {
     async fn run(&self) {
         self.do_compaction_job().await.expect("TODO: panic message");
+    }
+
+    async fn get_info(&self) -> BackgroundJobInfo {
+        return self.info.clone()
+    }
+
+    async fn update_job_status(&mut self, status: BackgroundJobStatus) -> Result<()> {
+        self.meta_api.update_background_job_status(UpdateBackgroundJobStatusReq{
+            job_name: self.creator.clone(),
+            status: status.clone(),
+        }).await?;
+        self.info.job_status = Some(status);
+        Ok(())
     }
 }
 
@@ -93,7 +109,7 @@ pub fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) 
 // optimize table limit
 // vacuum
 impl CompactionJob {
-    pub async fn create(config: &InnerConfig, name: String, finish_tx: Arc<Mutex<Sender<u64>>>) -> Self{
+    pub async fn create(config: &InnerConfig, name: String, info: BackgroundJobInfo, finish_tx: Arc<Mutex<Sender<u64>>>) -> Self{
         let tenant = config.query.tenant_id.clone();
         let creator = BackgroundJobIdent{ tenant, name };
         let meta_api = UserApiProvider::instance().get_meta_store_client();
@@ -101,6 +117,7 @@ impl CompactionJob {
             conf: config.clone(),
             meta_api,
             creator,
+            info,
             finish_tx
         }
     }

@@ -121,7 +121,8 @@ fn test_decode_v44_background_job() -> anyhow::Result<()> {
         job_status: Some(BackgroundJobStatus{
             job_state: BackgroundJobState::RUNNING,
             last_task_id: Some("test".to_string()),
-            last_task_run_at: Some((Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap()))
+            last_task_run_at: Some((Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap())),
+            next_task_scheduled_time: None,
         }),
     };
 

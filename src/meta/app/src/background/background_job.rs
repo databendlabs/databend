@@ -13,11 +13,13 @@
 // limitations under the License.
 
 use std::fmt;
-use std::fmt::Display;
+use std::fmt::{Display, };
 use std::fmt::Formatter;
+use std::str::FromStr;
 
-use chrono::DateTime;
+use chrono::{DateTime, TimeZone};
 use chrono::Utc;
+use cron::Schedule;
 
 use crate::background::BackgroundTaskType;
 use crate::principal::UserIdentity;
@@ -84,6 +86,49 @@ pub struct BackgroundJobParams {
     pub scheduled_job_timezone: Option<chrono_tz::Tz>,
 }
 
+impl BackgroundJobParams {
+    pub fn new_one_shot_job() -> Self {
+        Self {
+            job_type: BackgroundJobType::ONESHOT,
+            ..Default::default()
+        }
+    }
+
+    pub fn new_interval_job(interval_seconds: u64) -> Self {
+        Self {
+            job_type: BackgroundJobType::INTERVAL,
+            scheduled_job_interval_seconds: interval_seconds,
+            ..Default::default()
+        }
+    }
+
+    pub fn new_cron_job(cron: String, timezone: Option<chrono_tz::Tz>) -> Self {
+        Self {
+            job_type: BackgroundJobType::CRON,
+            scheduled_job_cron: cron,
+            scheduled_job_timezone: timezone,
+            ..Default::default()
+        }
+    }
+
+    pub fn get_next_running_time(&self, last_run_at: DateTime<Utc> ) -> Option<DateTime<Utc>> {
+        match self.job_type {
+            BackgroundJobType::ONESHOT => None,
+            BackgroundJobType::INTERVAL => Some(last_run_at + chrono::Duration::seconds(self.scheduled_job_interval_seconds as i64)),
+            BackgroundJobType::CRON => {
+                let schedule = Schedule::from_str(self.scheduled_job_cron.as_str()).expect(&*format!("invalid cron expression {}", self.scheduled_job_cron));
+                if let Some(tz) = self.scheduled_job_timezone {
+                    let mut upcoming = schedule.after(&last_run_at).next().unwrap();
+                    Some(upcoming.with_timezone(&Utc))
+                } else {
+                    let mut upcoming = schedule.after(&last_run_at).next().unwrap();
+                    Some(upcoming.with_timezone(&Utc))
+                }
+            }
+        }
+    }
+}
+
 impl Display for BackgroundJobParams {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.job_type {
@@ -108,6 +153,9 @@ pub struct BackgroundJobStatus {
     pub job_state: BackgroundJobState,
     pub last_task_id: Option<String>,
     pub last_task_run_at: Option<DateTime<Utc>>,
+
+    pub next_task_scheduled_time: Option<DateTime<Utc>>,
+
 }
 
 impl Display for BackgroundJobStatus {
@@ -125,11 +173,16 @@ impl Display for BackgroundJobStatus {
 }
 
 impl BackgroundJobStatus {
-    pub fn new() -> Self {
+    pub fn new(params: &BackgroundJobParams) -> Self {
         Self {
             job_state: BackgroundJobState::RUNNING,
             last_task_id: None,
             last_task_run_at: None,
+            next_task_scheduled_time: match params.job_type {
+                BackgroundJobType::ONESHOT => None,
+                BackgroundJobType::INTERVAL => Some(Utc::now()),
+                BackgroundJobType::CRON => None,
+                }
         }
     }
 }
@@ -161,8 +214,8 @@ pub struct BackgroundJobInfo {
 impl BackgroundJobInfo {
     pub fn new_compactor_job(job_params: BackgroundJobParams, creator: UserIdentity) -> Self {
         Self {
+            job_status: Option::from(BackgroundJobStatus::new(&job_params)),
             job_params: Some(job_params),
-            job_status: Option::from(BackgroundJobStatus::new()),
             task_type: BackgroundTaskType::COMPACTION,
             last_updated: Some(Utc::now()),
             message: "".to_string(),

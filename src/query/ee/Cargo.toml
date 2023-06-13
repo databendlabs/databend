@@ -51,6 +51,8 @@ futures-util = "0.3.24"
 jwt-simple = "0.11.0"
 tracing = "0.1.36"
 arrow-array = { version = "37.0.0" }
+cron = "0.12.0"
+chrono-tz = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }

@@ -13,7 +13,8 @@
 // limitations under the License.
 
 use async_trait::async_trait;
-
+use common_meta_app::background::{BackgroundJobInfo, BackgroundJobStatus};
+use common_exception::Result;
 /// A trait for implementing a background job
 ///
 /// Example implementation:
@@ -41,6 +42,8 @@ use async_trait::async_trait;
 pub trait Job: JobClone {
     /// Runs the job
     async fn run(&self);
+    async fn get_info(&self) -> BackgroundJobInfo;
+    async fn update_job_status(&mut self, status: BackgroundJobStatus) -> Result<()>;
 }
 
 pub trait JobClone {
