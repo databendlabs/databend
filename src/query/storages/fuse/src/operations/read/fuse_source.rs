@@ -53,54 +53,31 @@ pub fn build_fuse_native_source_pipeline(
         max_io_requests = max_io_requests.min(16);
     }
 
-    let mut source_builder = SourcePipeBuilder::create();
-
     match block_reader.support_blocking_api() {
         true => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
-            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+            // let partitions = dispatch_partitions(ctx.clone(), plan, max_threads);
+            // let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+            //
+            // if topk.is_some() {
+            //     partitions.disable_steal();
+            // }
 
-            if topk.is_some() {
-                partitions.disable_steal();
-            }
-
-            for i in 0..max_threads {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadNativeDataSource::<true>::create(
-                        i,
-                        ctx.clone(),
-                        output,
-                        block_reader.clone(),
-                        partitions.clone(),
-                    )?,
-                );
-            }
-            pipeline.add_pipe(source_builder.finalize());
+            pipeline.add_transform(|input, output| {
+                ReadNativeDataSource::<true>::create(input, output, block_reader.clone())
+            })?;
         }
         false => {
-            let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
-            let mut partitions = StealablePartitions::new(partitions, ctx.clone());
+            // let partitions = dispatch_partitions(ctx.clone(), plan, max_io_requests);
+            // let mut partitions = StealablePartitions::new(partitions, ctx.clone());
 
-            if topk.is_some() {
-                partitions.disable_steal();
-            }
+            // if topk.is_some() {
+            //     partitions.disable_steal();
+            // }
 
-            for i in 0..max_io_requests {
-                let output = OutputPort::create();
-                source_builder.add_source(
-                    output.clone(),
-                    ReadNativeDataSource::<false>::create(
-                        i,
-                        ctx.clone(),
-                        output,
-                        block_reader.clone(),
-                        partitions.clone(),
-                    )?,
-                );
-            }
-            pipeline.add_pipe(source_builder.finalize());
+            pipeline.resize(max_io_requests)?;
+            pipeline.add_transform(|input, output| {
+                ReadNativeDataSource::<false>::create(input, output, block_reader.clone())
+            })?;
             pipeline.resize(max_threads)?;
         }
     };

@@ -33,10 +33,10 @@ use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::BlockRangeFilterTransform;
 use crate::FuseTable;
-use crate::SnapshotReadSource;
 use crate::PartInfoConvertTransform;
 use crate::SegmentFilterTransform;
 use crate::SegmentReadTransform;
+use crate::SnapshotReadSource;
 
 impl FuseTable {
     pub fn create_block_reader(
