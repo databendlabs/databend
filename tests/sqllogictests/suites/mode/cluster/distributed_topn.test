@@ -33,3 +33,37 @@ EvalScalar
                     ├── partitions scanned: 0
                     ├── push downs: [filters: [], limit: 2]
                     └── estimated rows: 0.00
+
+statement ok
+set lazy_read_threshold = 100;
+
+query T
+explain select * from t_distributed_topn order by a desc limit 2
+----
+EvalScalar
+├── expressions: [t_distributed_topn.a (#0), t_distributed_topn.b (#1), t_distributed_topn.c (#2), t_distributed_topn.d (#3), t_distributed_topn.e (#6)]
+├── estimated rows: 0.00
+└── RowFetch
+    ├── columns to fetch: [b, c, d, e]
+    ├── estimated rows: 0.00
+    └── Limit
+        ├── limit: 2
+        ├── offset: 0
+        ├── estimated rows: 0.00
+        └── Sort
+            ├── sort keys: [a DESC NULLS LAST]
+            ├── estimated rows: 0.00
+            └── Exchange
+                ├── exchange type: Merge
+                └── Sort
+                    ├── sort keys: [a DESC NULLS LAST]
+                    ├── estimated rows: 0.00
+                    └── TableScan
+                        ├── table: default.default.t_distributed_topn
+                        ├── read rows: 0
+                        ├── read bytes: 0
+                        ├── partitions total: 0
+                        ├── partitions scanned: 0
+                        ├── push downs: [filters: [], limit: 2]
+                        ├── output columns: [a, _row_id]
+                        └── estimated rows: 0.00

@@ -222,7 +222,7 @@ impl PhysicalPlanBuilder {
         }
     }
 
-    fn try_build_row_fetch_on_limit(
+    fn build_limit(
         &mut self,
         input_plan: PhysicalPlan,
         limit: &planner::plans::Limit,
@@ -239,6 +239,9 @@ impl PhysicalPlanBuilder {
                 stat_info: Some(stat_info),
             }));
         }
+
+        // If `lazy_columns` is not empty, build a `RowFetch` plan on top of the `Limit` plan.
+
         let input_schema = input_plan.output_schema()?;
 
         // Lazy materialization is enabled.
@@ -738,17 +741,7 @@ impl PhysicalPlanBuilder {
 
             RelOperator::Limit(limit) => {
                 let input_plan = self.build(s_expr.child(0)?).await?;
-                if let PhysicalPlan::Sort(_) = input_plan {
-                    self.try_build_row_fetch_on_limit(input_plan, limit, stat_info)
-                } else {
-                    Ok(PhysicalPlan::Limit(Limit {
-                        plan_id: self.next_plan_id(),
-                        input: Box::new(input_plan),
-                        limit: limit.limit,
-                        offset: limit.offset,
-                        stat_info: Some(stat_info),
-                    }))
-                }
+                self.build_limit(input_plan, limit, stat_info)
             }
 
             RelOperator::Exchange(exchange) => {
