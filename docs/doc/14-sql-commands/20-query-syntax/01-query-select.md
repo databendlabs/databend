@@ -10,7 +10,7 @@ Retrieves data from a table.
 [WITH]
 SELECT
     [ALL | DISTINCT]
-    <select_expr> [[AS] alias], ...
+    <select_expr> | <col_name> [[AS] alias] | $<col_position> [, ...]
     [EXCLUDE (<col_name1> [, <col_name2>, <col_name3>, ...] ) ]
     [FROM table_references
     [AT ...]
@@ -145,6 +145,23 @@ SELECT * EXCLUDE (id,lastname) FROM allemployees;
 | Lily      | F      |
 | Noah      | M      |
 | Macy      | F      |
+```
+
+### Column Position
+
+By using $N, you can represent a column within the SELECT clause. For example, $2 represents the second column:
+
+```sql
+CREATE TABLE IF NOT EXISTS t1(a int, b varchar);
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b');
+SELECT a, $2 FROM t1;
+
++---+-------+
+| a | $2    |
++---+-------+
+| 1 | a     |
+| 2 | b     |
++---+-------+
 ```
 
 ## FROM Clause
