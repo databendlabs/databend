@@ -279,9 +279,10 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
+        query_internal_columns: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
+        let (_, _, _, _, _) = (ctx, filter, col_indices, pipeline, query_internal_columns);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support DELETE FROM",

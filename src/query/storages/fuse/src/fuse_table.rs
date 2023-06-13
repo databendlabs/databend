@@ -634,9 +634,11 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
+        query_internal_columns: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete(ctx, filter, col_indices, pipeline).await
+        self.do_delete(ctx, filter, col_indices, query_internal_columns, pipeline)
+            .await
     }
 
     #[async_backtrace::framed]
