@@ -21,7 +21,7 @@ common-meta-app = { path = "../../meta/app" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
-common-proto-conv = { path = "../../common/proto-conv" }
+common-proto-conv = { path = "../../meta/proto-conv" }
 common-protos = { path = "../../common/protos" }
 
 async-backtrace = { workspace = true }
