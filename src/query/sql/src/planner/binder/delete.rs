@@ -139,16 +139,32 @@ impl Binder {
             Scan(scan) => scan.clone(),
             _ => unreachable!(),
         };
-        // Add row_id column to metadata
-        let internal_column = INTERNAL_COLUMN_FACTORY
-            .get_internal_column(ROW_ID_COL_NAME)
-            .unwrap();
-        let index = self
+        // Check if metadata contains row_id column
+        let mut row_id_index = None;
+        for col in self
             .metadata
-            .write()
-            .add_internal_column(scan.table_index, internal_column.clone());
+            .read()
+            .columns_by_table_index(scan.table_index)
+            .iter()
+        {
+            if col.name() == ROW_ID_COL_NAME {
+                row_id_index = Some(col.index());
+                break;
+            }
+        }
+        if row_id_index.is_none() {
+            // Add row_id column to metadata
+            let internal_column = INTERNAL_COLUMN_FACTORY
+                .get_internal_column(ROW_ID_COL_NAME)
+                .unwrap();
+            row_id_index = Some(
+                self.metadata
+                    .write()
+                    .add_internal_column(scan.table_index, internal_column.clone()),
+            );
+        }
         // Add row_id column to scan's column set
-        scan.columns.insert(index);
+        scan.columns.insert(row_id_index.unwrap());
         table_expr.plan = Arc::new(Scan(scan));
         let filter_expr = SExpr::create_unary(Arc::new(filter.into()), Arc::new(table_expr));
         let mut rewriter = SubqueryRewriter::new(self.metadata.clone());
@@ -156,7 +172,7 @@ impl Binder {
 
         Ok(SubqueryDesc {
             input_expr: filter_expr,
-            index,
+            index: row_id_index.unwrap(),
             outer_columns,
         })
     }

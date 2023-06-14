@@ -274,6 +274,37 @@ statement ok
 insert into t1 values(1), (2), (3), (8);
 
 statement ok
+delete from t1 where a = any(select b from t2 where t1.a = t2.b) or a != any(select b from t2 where t1.a = t2.b);
+
+query I
+select * from t1 order by a;
+----
+1
+8
+
+statement ok
+insert into t1 values(2), (3);
+
+statement ok
+delete from t1 where a = any(select b from t2 where t1.a = t2.b) or a > 1;
+
+query I
+select * from t1;
+----
+1
+
+statement ok
+insert into t1 values(2), (3), (8);
+
+statement ok
+delete from t1 where a = any(select b from t2 where t1.a = t2.b) or a < any(select b from t2);
+
+query I
+select * from t1 order by a;
+----
+8
+
+statement ok
 drop table t1;
 
 

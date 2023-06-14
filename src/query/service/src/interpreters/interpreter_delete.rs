@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -140,27 +141,28 @@ impl DeleteInterpreter {
         let stream_blocks = PullingExecutorStream::create(pulling_executor)?
             .try_collect::<Vec<DataBlock>>()
             .await?;
-
-        let block = if !stream_blocks.is_empty() {
-            DataBlock::concat(&stream_blocks)?
+        let row_id_array = if !stream_blocks.is_empty() {
+            let block = DataBlock::concat(&stream_blocks)?;
+            let row_id_col = block.columns()[0].value.convert_to_full_column(
+                &DataType::Number(NumberDataType::UInt64),
+                block.num_rows(),
+            );
+            // Make a selection: `_row_id` IN (row_id_col)
+            // Construct array function for `row_id_col`
+            let mut row_id_array = Vec::with_capacity(row_id_col.len());
+            for row_id in row_id_col.iter() {
+                let scalar = row_id.to_owned();
+                let constant_scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: scalar,
+                });
+                row_id_array.push(constant_scalar_expr);
+            }
+            row_id_array
         } else {
-            return Err(ErrorCode::EmptyData("Delete input is empty"));
+            vec![]
         };
 
-        let row_id_col = block.columns()[0]
-            .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), block.num_rows());
-        // Make a selection: `_row_id` IN (row_id_col)
-        // Construct array function for `row_id_col`
-        let mut row_id_array = Vec::with_capacity(row_id_col.len());
-        for row_id in row_id_col.iter() {
-            let scalar = row_id.to_owned();
-            let constant_scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr {
-                span: None,
-                value: scalar,
-            });
-            row_id_array.push(constant_scalar_expr);
-        }
         let array_raw_expr = ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "array".to_string(),
@@ -220,7 +222,7 @@ impl Interpreter for DeleteInterpreter {
             }
             // Traverse `selection` and put `filters` into `selection`.
             let mut selection = self.plan.selection.clone().unwrap();
-            replace_subquery(filters, &mut selection)?;
+            replace_subquery(&mut filters, &mut selection)?;
             Some(selection)
         } else {
             self.plan.selection.clone()
@@ -240,21 +242,15 @@ impl Interpreter for DeleteInterpreter {
                     "Delete must have deterministic predicate",
                 ));
             }
-
-            let col_indices: Vec<usize> = scalar
-                .used_columns()
-                .into_iter()
-                .filter_map(|index| {
-                    if !self.plan.subquery_desc.is_empty() {
-                        if index != self.plan.subquery_desc[0].index {
-                            return Some(index);
-                        }
-                    } else {
-                        return Some(index);
-                    }
-                    None
-                })
-                .collect();
+            let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
+                let mut col_indices = HashSet::new();
+                for subquery_desc in &self.plan.subquery_desc {
+                    col_indices.extend(subquery_desc.outer_columns.iter());
+                }
+                col_indices.into_iter().collect()
+            } else {
+                scalar.used_columns().into_iter().collect()
+            };
             (Some(filter), col_indices)
         } else {
             (None, vec![])
@@ -287,15 +283,15 @@ impl Interpreter for DeleteInterpreter {
     }
 }
 
-fn replace_subquery(mut filters: VecDeque<ScalarExpr>, selection: &mut ScalarExpr) -> Result<()> {
+fn replace_subquery(filters: &mut VecDeque<ScalarExpr>, selection: &mut ScalarExpr) -> Result<()> {
     match selection {
         ScalarExpr::FunctionCall(func) => {
             for arg in &mut func.arguments {
-                replace_subquery(filters.clone(), arg)?;
+                replace_subquery(filters, arg)?;
             }
         }
         ScalarExpr::SubqueryExpr { .. } => {
-            let filter = filters.pop_front().unwrap();
+            let filter = filters.pop_back().unwrap();
             *selection = filter;
         }
         _ => {}
