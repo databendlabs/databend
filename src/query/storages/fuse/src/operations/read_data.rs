@@ -226,7 +226,6 @@ impl FuseTable {
         let snapshot_loc = plan.statistics.snapshot.clone();
         let operator = self.operator.clone();
         let table_schema = self.table_info.schema();
-        let snapshot_loc = snapshot_loc.clone().unwrap();
 
         // TODO: remove
         let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {

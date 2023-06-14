@@ -51,11 +51,11 @@ impl SnapshotReadSource {
     pub fn create(
         ctx: Arc<dyn TableContext>,
         output: Arc<OutputPort>,
-        snapshot_loc: String,
+        snapshot_loc: Option<String>,
     ) -> Result<ProcessorPtr> {
         SyncSourcer::create(ctx.clone(), output, SnapshotReadSource {
             ctx,
-            snapshot_loc: Some(snapshot_loc),
+            snapshot_loc,
         })
     }
 }
