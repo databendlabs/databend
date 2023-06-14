@@ -55,7 +55,7 @@ impl Interpreter for SetOptionsInterpreter {
         is_valid_block_per_segment(&self.plan.set_options)?;
         // check storage_format
         let error_str = "invalid opt for fuse table in alter table statement";
-        if let Some(_) = self.plan.set_options.get(OPT_KEY_STORAGE_FORMAT) {
+        if self.plan.set_options.get(OPT_KEY_STORAGE_FORMAT).is_some() {
             error!(error_str);
             return Err(ErrorCode::TableOptionInvalid(format!(
                 "can't change {} for alter table statement",
