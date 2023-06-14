@@ -270,6 +270,10 @@ query I
 select * from t1;
 ----
 
+statement ok
+insert into t1 values(1), (2), (3), (8);
+
+
 
 statement ok
 drop table t1;
