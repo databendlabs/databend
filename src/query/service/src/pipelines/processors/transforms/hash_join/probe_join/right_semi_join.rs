@@ -42,7 +42,6 @@ impl JoinHashTable {
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
         let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -66,8 +65,11 @@ impl JoinHashTable {
                         ));
                     }
 
-                    for row_ptr in local_build_indexes.iter() {
-                        outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                    {
+                        let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
+                        for row_ptr in local_build_indexes.iter() {
+                            outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                        }
                     }
 
                     occupied = 0;
@@ -97,6 +99,7 @@ impl JoinHashTable {
             }
         }
 
+        let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
         for row_ptr in local_build_indexes.iter().take(occupied) {
             outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
         }
@@ -132,7 +135,6 @@ impl JoinHashTable {
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -175,10 +177,12 @@ impl JoinHashTable {
                         )?;
 
                         if all_true {
+                            let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
                             for row_ptr in local_build_indexes.iter() {
                                 outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
                             }
                         } else if !all_false {
+                            let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
                             // Safe to unwrap.
                             let validity = bm.unwrap();
                             let mut idx = 0;
@@ -241,10 +245,12 @@ impl JoinHashTable {
             )?;
 
             if all_true {
+                let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
                 for row_ptr in local_build_indexes.iter().take(occupied) {
                     outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
                 }
             } else if !all_false {
+                let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
                 // Safe to unwrap.
                 let validity = bm.unwrap();
                 let mut idx = 0;

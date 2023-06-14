@@ -268,7 +268,7 @@ impl JoinHashTable {
             // Acquire write lock in current scope
             let mut chunks = self.row_space.chunks.write();
             if self.need_outer_scan() {
-                let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+                let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
                 outer_scan_bitmap.push(MutableBitmap::from_len_zeroed(chunk.num_rows()));
             }
             chunks.push(chunk);

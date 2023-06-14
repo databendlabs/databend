@@ -81,7 +81,6 @@ impl JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
 
         // Start to probe hash table.
         for (i, key) in keys_iter.enumerate() {
@@ -207,6 +206,7 @@ impl JoinHashTable {
                         if !WITH_OTHER_CONJUNCT {
                             result_blocks.push(merged_block);
                             if self.hash_join_desc.join_type == JoinType::Full {
+                                let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
                                 for row_ptr in local_build_indexes.iter().take(matched_num) {
                                     outer_scan_bitmap[row_ptr.chunk_index]
                                         .set(row_ptr.row_index, true);
@@ -221,6 +221,7 @@ impl JoinHashTable {
                             if all_true {
                                 result_blocks.push(merged_block);
                                 if self.hash_join_desc.join_type == JoinType::Full {
+                                    let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
                                     for row_ptr in local_build_indexes.iter().take(matched_num) {
                                         outer_scan_bitmap[row_ptr.chunk_index]
                                             .set(row_ptr.row_index, true);
@@ -236,6 +237,7 @@ impl JoinHashTable {
                                 // Safe to unwrap.
                                 let validity = bm.unwrap();
                                 if self.hash_join_desc.join_type == JoinType::Full {
+                                    let mut outer_scan_bitmap = self.outer_scan_bitmap.write();
                                     let mut idx = 0;
                                     while idx < matched_num {
                                         let valid = unsafe { validity.get_bit_unchecked(idx) };
