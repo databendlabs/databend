@@ -142,22 +142,22 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let max_io_requests = self.adjust_io_request(&ctx)?;
-        let snapshot_loc = plan.statistics.snapshot.clone();
-        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
+        // let snapshot_loc = plan.statistics.snapshot.clone();
+        // let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
+        //
+        // for part in &plan.parts.partitions {
+        //     if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
+        //         lazy_init_segments.push(SegmentLocation {
+        //             segment_idx: lazy_part_info.segment_index,
+        //             location: lazy_part_info.segment_location.clone(),
+        //             snapshot_loc: snapshot_loc.clone(),
+        //         });
+        //     }
+        // }`
 
-        for part in &plan.parts.partitions {
-            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
-                lazy_init_segments.push(SegmentLocation {
-                    segment_idx: lazy_part_info.segment_index,
-                    location: lazy_part_info.segment_location.clone(),
-                    snapshot_loc: snapshot_loc.clone(),
-                });
-            }
-        }
-
-        if !lazy_init_segments.is_empty() {
-            self.index_analyzer(&ctx, &plan, pipeline)?;
-        }
+        // if !lazy_init_segments.is_empty() {
+        self.index_analyzer(&ctx, &plan, pipeline)?;
+        // }
 
         let block_reader = self.build_block_reader(plan, ctx.clone())?;
 

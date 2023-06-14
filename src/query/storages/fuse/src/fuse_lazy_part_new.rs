@@ -29,32 +29,32 @@ pub struct NewFuseLazyPartInfo {
     pub segments_range: Range<usize>,
 }
 
-#[typetag::serde(name = "fuse_lazy")]
-impl PartInfo for NewFuseLazyPartInfo {
-    fn as_any(&self) -> &dyn Any {
-        self
-    }
+// #[typetag::serde(name = "fuse_lazy")]
+// impl PartInfo for NewFuseLazyPartInfo {
+//     fn as_any(&self) -> &dyn Any {
+//         self
+//     }
+//
+//     fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
+//         match info.as_any().downcast_ref::<NewFuseLazyPartInfo>() {
+//             None => false,
+//             Some(other) => self == other,
+//         }
+//     }
+//
+//     fn hash(&self) -> u64 {
+//         0
+//         // let mut s = DefaultHasher::new();
+//         // self.segment_location.0.hash(&mut s);
+//         // s.finish()
+//     }
+// }
 
-    fn equals(&self, info: &Box<dyn PartInfo>) -> bool {
-        match info.as_any().downcast_ref::<NewFuseLazyPartInfo>() {
-            None => false,
-            Some(other) => self == other,
-        }
-    }
-
-    fn hash(&self) -> u64 {
-        0
-        // let mut s = DefaultHasher::new();
-        // self.segment_location.0.hash(&mut s);
-        // s.finish()
-    }
-}
-
-impl NewFuseLazyPartInfo {
-    pub fn create(idx: usize, snapshot_location: Location, range: Range<usize>) -> PartInfoPtr {
-        Arc::new(Box::new(NewFuseLazyPartInfo {
-            snapshot_location,
-            segments_range: range,
-        }))
-    }
-}
+// impl NewFuseLazyPartInfo {
+//     pub fn create(idx: usize, snapshot_location: Location, range: Range<usize>) -> PartInfoPtr {
+//         Arc::new(Box::new(NewFuseLazyPartInfo {
+//             snapshot_location,
+//             segments_range: range,
+//         }))
+//     }
+// }
