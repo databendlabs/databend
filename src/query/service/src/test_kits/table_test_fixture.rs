@@ -94,7 +94,7 @@ impl TestFixture {
         let tmp_dir = TempDir::new().unwrap();
         let mut conf = ConfigBuilder::create().config();
 
-        // make sure we are suing `fs` storage
+        // make sure we are using `fs` storage
         conf.storage.params = StorageParams::Fs(StorageFsConfig {
             // use `TempDir` as root path (auto clean)
             root: tmp_dir.path().to_str().unwrap().to_string(),
