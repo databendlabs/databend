@@ -77,16 +77,16 @@ impl ReclusterMutator {
             let mut total_bytes = 0;
             let mut points_map: BTreeMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
             for (i, (_, meta)) in block_metas.iter().enumerate() {
-                let stats = meta.cluster_stats.clone().unwrap();
-                points_map
-                    .entry(stats.min.clone())
-                    .and_modify(|v| v.0.push(i))
-                    .or_insert((vec![i], vec![]));
-                points_map
-                    .entry(stats.max.clone())
-                    .and_modify(|v| v.1.push(i))
-                    .or_insert((vec![], vec![i]));
-
+                if let Some(stats) = &meta.cluster_stats {
+                    points_map
+                        .entry(stats.min.clone())
+                        .and_modify(|v| v.0.push(i))
+                        .or_insert((vec![i], vec![]));
+                    points_map
+                        .entry(stats.max.clone())
+                        .and_modify(|v| v.1.push(i))
+                        .or_insert((vec![], vec![i]));
+                }
                 total_rows += meta.row_count;
                 total_bytes += meta.block_size;
             }
@@ -108,27 +108,30 @@ impl ReclusterMutator {
                             .push(MutationLogEntry::Replacement(entry));
                         block_meta
                     })
-                    .collect::<Vec<_>>();
+                    .collect();
                 self.level = level;
 
                 return Ok(true);
             }
 
             let mut max_depth = 0;
+            let mut max_points = Vec::new();
             let mut block_depths = Vec::new();
             let mut point_overlaps: Vec<Vec<usize>> = Vec::new();
             let mut unfinished_parts: HashMap<usize, usize> = HashMap::new();
-            for (start, end) in points_map.values() {
-                // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
-                let point_depth =
-                    if unfinished_parts.len() == 1 && start.len() == 1 && end.len() == 1 {
-                        1
-                    } else {
-                        unfinished_parts.len() + start.len()
-                    };
+            for (i, (_, (start, end))) in points_map.into_iter().enumerate() {
+                let point_depth = if unfinished_parts.len() == 1 && Self::check_point(&start, &end)
+                {
+                    1
+                } else {
+                    unfinished_parts.len() + start.len()
+                };
 
                 if point_depth > max_depth {
                     max_depth = point_depth;
+                    max_points = vec![i];
+                } else if point_depth == max_depth {
+                    max_points.push(i);
                 }
 
                 for (_, val) in unfinished_parts.iter_mut() {
@@ -141,12 +144,14 @@ impl ReclusterMutator {
 
                 point_overlaps.push(unfinished_parts.keys().cloned().collect());
 
-                end.iter().for_each(|&idx| {
-                    let stat = unfinished_parts.remove(&idx).unwrap();
-                    block_depths.push(stat);
+                end.iter().for_each(|idx| {
+                    if let Some(v) = unfinished_parts.remove(idx) {
+                        block_depths.push(v);
+                    }
                 });
             }
-            assert_eq!(unfinished_parts.len(), 0);
+            assert!(unfinished_parts.is_empty());
+            assert!(!max_points.is_empty());
 
             let sum_depth: usize = block_depths.iter().sum();
             // round the float to 4 decimal places.
@@ -163,17 +168,9 @@ impl ReclusterMutator {
 
             // find the max point, gather the blocks.
             let mut selected_idx = HashSet::new();
-            let mut find = false;
-            for overlap in point_overlaps {
-                if overlap.len() == max_depth {
-                    overlap.iter().for_each(|&idx| {
-                        selected_idx.insert(idx);
-                    });
-                    find = true;
-                } else if find {
-                    break;
-                }
-            }
+            point_overlaps[max_points[0]].iter().for_each(|idx| {
+                selected_idx.insert(*idx);
+            });
 
             self.selected_blocks = selected_idx
                 .iter()
@@ -195,5 +192,15 @@ impl ReclusterMutator {
         }
 
         Ok(false)
+    }
+
+    // block1: [1, 2], block2: [2, 3]. The depth of point '2' is 1.
+    fn check_point(start: &[usize], end: &[usize]) -> bool {
+        if start.len() + end.len() > 3 {
+            return false;
+        }
+
+        let set: HashSet<usize> = HashSet::from_iter(start.iter().chain(end.iter()).cloned());
+        set.len() == 2
     }
 }

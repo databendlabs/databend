@@ -25,6 +25,7 @@ use common_exception::Result;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
+use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
@@ -43,6 +44,7 @@ use crate::pruning::FusePruner;
 use crate::FuseTable;
 use crate::DEFAULT_AVG_DEPTH_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
+use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
     #[async_backtrace::framed]
@@ -72,7 +74,7 @@ impl FuseTable {
 
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
         let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();
-        block_metas.iter().for_each(|(idx, b)| {
+        block_metas.into_iter().for_each(|(idx, b)| {
             if let Some(stats) = &b.cluster_stats {
                 if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
                     blocks_map.entry(stats.level).or_default().push((
@@ -80,7 +82,7 @@ impl FuseTable {
                             segment_idx: idx.segment_idx,
                             block_idx: idx.block_idx,
                         },
-                        b.clone(),
+                        b,
                     ));
                 }
             }
@@ -156,7 +158,7 @@ impl FuseTable {
         }
 
         // sort
-        let block_size = ctx.get_settings().get_max_block_size()? as usize;
+        let block_size = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
         // construct output fields
         let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
         let schema = DataSchemaRefExt::create(output_fields);
