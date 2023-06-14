@@ -29,7 +29,7 @@ unsafe impl Send for TestGlobalServices {}
 unsafe impl Sync for TestGlobalServices {}
 
 impl TestGlobalServices {
-    pub async fn setup(config: InnerConfig) -> Result<TestGuard> {
+    pub async fn setup(config: InnerConfig, public_key: String) -> Result<TestGuard> {
         set_panic_hook();
         std::env::set_var("UNIT_TEST", "TRUE");
 
@@ -42,7 +42,7 @@ impl TestGlobalServices {
         common_base::base::GlobalInstance::init_testing(&thread_name);
 
         GlobalServices::init_with(config.clone()).await?;
-        MockServices::init(config.clone()).await?;
+        MockServices::init(config.clone(), public_key).await?;
 
         // Cluster register.
         {

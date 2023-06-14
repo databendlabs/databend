@@ -12,22 +12,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
+use common_base::base::GlobalInstance;
 use common_config::InnerConfig;
 use common_exception::Result;
-use common_license::license_manager::LicenseManager;
+use common_license::license_manager::LicenseManagerWrapper;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
 use crate::data_mask::RealDatamaskHandler;
+use crate::license::RealLicenseManager;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::table_lock::RealTableLockHandler;
-use crate::test_kits::mock_licnese_mgr::MockLicenseManager;
 use crate::virtual_column::RealVirtualColumnsHandler;
 
 pub struct MockServices;
 impl MockServices {
     #[async_backtrace::framed]
-    pub async fn init(_config: InnerConfig) -> Result<()> {
-        MockLicenseManager::init()?;
+    pub async fn init(_config: InnerConfig, public_key: String) -> Result<()> {
+        let rm = RealLicenseManager::new(public_key);
+        let wrapper = LicenseManagerWrapper {
+            manager: Box::new(rm),
+        };
+        GlobalInstance::set(Arc::new(wrapper));
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealTableLockHandler::init()?;

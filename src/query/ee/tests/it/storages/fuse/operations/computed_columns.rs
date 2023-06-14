@@ -14,28 +14,15 @@
 
 use common_base::base::tokio;
 use common_exception::Result;
-use common_meta_app::storage::StorageFsConfig;
-use common_meta_app::storage::StorageParams;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::expects_ok;
 use databend_query::test_kits::table_test_fixture::TestFixture;
-use databend_query::test_kits::ConfigBuilder;
-use enterprise_query::test_kits::context::create_query_context_with_config;
+use enterprise_query::test_kits::context::create_ee_query_context;
 use futures::TryStreamExt;
-use tempfile::TempDir;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_computed_column() -> Result<()> {
-    let tmp_dir = TempDir::new().unwrap();
-    let mut conf = ConfigBuilder::create().config();
-    conf.query.databend_enterprise_license = Some("test".to_string());
-    // make sure we are suing `fs` storage
-    conf.storage.params = StorageParams::Fs(StorageFsConfig {
-        // use `TempDir` as root path (auto clean)
-        root: tmp_dir.path().to_str().unwrap().to_string(),
-    });
-
-    let (_guard, ctx) = create_query_context_with_config(conf, None).await.unwrap();
+    let (_guard, ctx) = create_ee_query_context(None).await.unwrap();
 
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
     let db = fixture.default_db_name();

@@ -14,26 +14,58 @@
 
 use std::sync::Arc;
 
-use common_config::InnerConfig;
 use common_exception::Result;
+use common_license::license::LicenseInfo;
 use common_meta_app::principal::AuthInfo;
 use common_meta_app::principal::GrantObject;
 use common_meta_app::principal::PasswordHashMethod;
 use common_meta_app::principal::UserInfo;
 use common_meta_app::principal::UserPrivilegeSet;
+use common_meta_app::storage::StorageFsConfig;
+use common_meta_app::storage::StorageParams;
 use databend_query::sessions::QueryContext;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sessions::TableContext;
+use databend_query::test_kits::ConfigBuilder;
 use databend_query::test_kits::TestGuard;
+use jwt_simple::algorithms::ECDSAP256KeyPairLike;
+use jwt_simple::prelude::Claims;
+use jwt_simple::prelude::Duration;
+use jwt_simple::prelude::ES256KeyPair;
+use tempfile::TempDir;
 
 use crate::test_kits::sessions::TestGlobalServices;
 
-pub async fn create_query_context_with_config(
-    config: InnerConfig,
+fn build_custom_claims(license_type: String, org: String) -> LicenseInfo {
+    LicenseInfo {
+        r#type: Some(license_type),
+        org: Some(org),
+        tenants: Some(vec!["test".to_string()]),
+    }
+}
+
+pub async fn create_ee_query_context(
     mut current_user: Option<UserInfo>,
 ) -> Result<(TestGuard, Arc<QueryContext>)> {
-    let guard = TestGlobalServices::setup(config).await?;
+    let key_pair = ES256KeyPair::generate();
+    let claims = Claims::with_custom_claims(
+        build_custom_claims("trial".to_string(), "databend".to_string()),
+        Duration::from_hours(2),
+    );
+    let token = key_pair.sign(claims)?;
+    let public_key = key_pair.public_key().to_pem().unwrap();
+
+    let tmp_dir = TempDir::new().unwrap();
+    let mut conf = ConfigBuilder::create().config();
+    conf.query.databend_enterprise_license = Some(token);
+    // make sure we are suing `fs` storage
+    conf.storage.params = StorageParams::Fs(StorageFsConfig {
+        // use `TempDir` as root path (auto clean)
+        root: tmp_dir.path().to_str().unwrap().to_string(),
+    });
+
+    let guard = TestGlobalServices::setup(conf, public_key).await?;
 
     let dummy_session = SessionManager::instance()
         .create_session(SessionType::Dummy)

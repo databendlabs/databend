@@ -13,6 +13,5 @@
 // limitations under the License.
 
 pub mod context;
-pub mod mock_licnese_mgr;
 pub mod mock_services;
 pub mod sessions;
