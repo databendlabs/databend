@@ -30,6 +30,7 @@ mod runtime_filter;
 pub mod s_expr;
 mod util;
 
+pub use cascades::CascadesOptimizer;
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::SubqueryRewriter;
 pub use heuristic::DEFAULT_REWRITE_RULES;

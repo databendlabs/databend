@@ -34,5 +34,5 @@ pub struct DeletePlan {
     pub table_name: String,
     pub metadata: MetadataRef,
     pub selection: Option<ScalarExpr>,
-    pub subquery_desc: Option<SubqueryDesc>,
+    pub subquery_desc: Vec<SubqueryDesc>,
 }
