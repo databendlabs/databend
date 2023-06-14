@@ -22,16 +22,20 @@ use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::Pipeline;
 use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 
+use crate::bloom_fields;
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::io::BlockReader;
 use crate::operations::fuse_source::build_fuse_source_pipeline;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::BlockRangeFilterTransform;
+use crate::BloomFilterReadTransform;
+use crate::BloomFilterTransform;
 use crate::FuseTable;
 use crate::PartInfoConvertTransform;
 use crate::SegmentFilterTransform;
@@ -174,6 +178,37 @@ impl FuseTable {
         pipeline.add_transform(|input, output| {
             BlockRangeFilterTransform::create(pruner.pruning_ctx.clone(), input, output)
         })?;
+
+        let filter_expr = plan
+            .push_downs
+            .as_ref()
+            .and_then(|extra| extra.filter.as_ref().map(|f| f.as_expr(&BUILTIN_FUNCTIONS)));
+
+        if let Some(filter_expr) = filter_expr {
+            let index_fields = bloom_fields(&filter_expr, &table_schema)?;
+
+            if !index_fields.is_empty() {
+                pipeline.add_transform(|input, output| {
+                    BloomFilterReadTransform::create(
+                        input,
+                        output,
+                        operator.clone(),
+                        index_fields.clone(),
+                    )
+                })?;
+
+                let func_ctx = ctx.get_function_context()?;
+                pipeline.add_transform(|input, output| {
+                    BloomFilterTransform::create(
+                        input,
+                        output,
+                        func_ctx.clone(),
+                        table_schema.clone(),
+                        filter_expr.clone(),
+                    )
+                })?;
+            }
+        }
 
         return pipeline.add_transform(|input, output| {
             Ok(PartInfoConvertTransform::create(

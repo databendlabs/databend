@@ -24,6 +24,9 @@ mod segment_transform_filter;
 mod segment_transform_read;
 mod snapshot_read_source;
 
+pub use block_transform_bloom_filter::bloom_fields;
+pub use block_transform_bloom_filter::BloomFilterReadTransform;
+pub use block_transform_bloom_filter::BloomFilterTransform;
 pub use block_transform_range_filter::BlockRangeFilterTransform;
 pub use convert_part_info_transform::FusePartMeta;
 pub use convert_part_info_transform::PartInfoConvertTransform;
