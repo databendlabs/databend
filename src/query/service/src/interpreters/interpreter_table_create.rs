@@ -294,10 +294,7 @@ pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<
         let error_str = "invalid block_per_segment option, can't be over 1000";
         if blocks_per_segment > 1000 {
             error!(error_str);
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "{}",
-                error_str.to_string()
-            )));
+            return Err(ErrorCode::TableOptionInvalid(error_str));
         }
     }
     Ok(())
