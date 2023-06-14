@@ -33,4 +33,11 @@ echo "set timezone='America/Toronto'; select /*+SET_VAR(timezone='Asia/Shanghai'
 echo "create table set_var.t(c1 timestamp)" | $MYSQL_CLIENT_CONNECT
 # Toronto and Shanghai time diff is 13 hours.
 echo "set timezone='America/Toronto'; insert /*+SET_VAR(timezone='Asia/Shanghai') */ into set_var.t values('2022-02-02 03:00:00'); select /*+SET_VAR(timezone='Asia/Shanghai') */ * from set_var.t; select * from set_var.t;" | $MYSQL_CLIENT_CONNECT
+
+echo "drop stage if exists s2" | | $MYSQL_CLIENT_CONNECT
+echo "create stage s2" | | $MYSQL_CLIENT_CONNECT
+echo "copy  /*+SET_VAR(timezone='Asia/Shanghai') */ into @s2 from (select timezone()); " | | $MYSQL_CLIENT_CONNECT
+echo "select * from @s2 " | | $MYSQL_CLIENT_CONNECT
+echo "drop stage s2" | | $MYSQL_CLIENT_CONNECT
+
 echo "drop database set_var;" | $MYSQL_CLIENT_CONNECT
