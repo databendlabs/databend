@@ -260,11 +260,13 @@ impl Transform for CompoundBlockOperator {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        if let Some(meta) = data_block.get_meta() {
-            if AggIndexMeta::downcast_ref_from(meta).is_some() {
-                // Is from aggregating index.
-                return Ok(data_block);
-            }
+        if data_block
+            .get_meta()
+            .and_then(AggIndexMeta::downcast_ref_from)
+            .is_some()
+        {
+            // It's from aggregating index.
+            return Ok(data_block);
         }
 
         self.operators

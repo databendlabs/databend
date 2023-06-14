@@ -217,6 +217,7 @@ impl FuseTable {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_fuse_source_pipeline(
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,

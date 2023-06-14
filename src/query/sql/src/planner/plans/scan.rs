@@ -61,6 +61,7 @@ pub struct AggIndexInfo {
     pub schema: DataSchema,
     pub selection: Vec<ScalarItem>,
     pub predicates: Vec<ScalarExpr>,
+    pub agg_func_indices: Vec<IndexType>,
 }
 
 #[derive(Clone, Debug, Default)]

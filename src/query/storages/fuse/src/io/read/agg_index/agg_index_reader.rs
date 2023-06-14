@@ -48,6 +48,9 @@ pub struct AggIndexReader {
     selection: Vec<(Expr, Option<usize>)>,
     filter: Option<Expr>,
 
+    /// The offsets of aggregate function column in `selection`.
+    agg_func_indices: Vec<usize>,
+
     /// The size of the output fields of a table scan plan without the index.
     pub actual_table_field_len: usize,
 }
@@ -74,6 +77,7 @@ impl AggIndexReader {
             selection,
             filter,
             actual_table_field_len: agg.actual_table_field_len,
+            agg_func_indices: agg.agg_func_indices.clone(),
         })
     }
 
@@ -143,10 +147,17 @@ impl AggIndexReader {
             self.actual_table_field_len
         ];
         let evaluator = Evaluator::new(&block, &self.func_ctx, &BUILTIN_FUNCTIONS);
-        for (expr, offset) in &self.selection {
+        let mut agg_funcs = Vec::with_capacity(self.agg_func_indices.len());
+        for (idx, (expr, offset)) in self.selection.iter().enumerate() {
             let data_type = expr.data_type().clone();
             let value = evaluator.run(expr)?;
             let col = BlockEntry { data_type, value };
+
+            if self.agg_func_indices.contains(&idx) {
+                debug_assert!(offset.is_none());
+                agg_funcs.push(output_columns.len());
+            }
+
             if let Some(pos) = offset {
                 output_columns[*pos] = col;
             } else {
@@ -157,7 +168,7 @@ impl AggIndexReader {
         Ok(DataBlock::new_with_meta(
             output_columns,
             block.num_rows(),
-            Some(AggIndexMeta::create()),
+            Some(AggIndexMeta::create(agg_funcs)),
         ))
     }
 }

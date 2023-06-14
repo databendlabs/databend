@@ -39,17 +39,23 @@ pub struct AggIndexInfo {
     pub filter: Option<RemoteExpr>,
     pub schema: DataSchema,
 
+    /// The offsets of aggregate function column in `selection`.
+    pub agg_func_indices: Vec<usize>,
+
     /// The size of the output fields of a table scan plan without the index.
     pub actual_table_field_len: usize,
 }
 
 /// This meta just indicate the block is from aggregating index.
 #[derive(Debug)]
-pub struct AggIndexMeta {}
+pub struct AggIndexMeta {
+    /// The column offsets of aggregation functions in the agg index block.
+    pub agg_funcs: Vec<usize>,
+}
 
 impl AggIndexMeta {
-    pub fn create() -> BlockMetaInfoPtr {
-        Box::new(Self {})
+    pub fn create(agg_funcs: Vec<usize>) -> BlockMetaInfoPtr {
+        Box::new(Self { agg_funcs })
     }
 }
 

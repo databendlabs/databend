@@ -88,6 +88,13 @@ pub fn try_rewrite(
 
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
+        let mut agg_func_indices = Vec::with_capacity(
+            query_info
+                .aggregation
+                .as_ref()
+                .map(|(a, _)| a.aggregate_functions.len())
+                .unwrap_or(0),
+        );
 
         if let Some((query_agg, _)) = query_info.aggregation {
             // If the query is an aggregation query, the index selection is to rewrite the input `EvalScalar` operator of `Aggregate` operators.
@@ -99,6 +106,7 @@ pub fn try_rewrite(
                     &index_selection,
                     &query_info.format_scalar(&agg.scalar),
                 ) {
+                    agg_func_indices.push(agg.index);
                     new_selection.push(ScalarItem {
                         index: agg.index,
                         scalar: rewritten.into(),
@@ -200,6 +208,7 @@ pub fn try_rewrite(
             selection: new_selection,
             predicates: new_predicates,
             schema: DataSchema::new(index_fields),
+            agg_func_indices,
         })?;
         return Ok(Some(result));
     }
