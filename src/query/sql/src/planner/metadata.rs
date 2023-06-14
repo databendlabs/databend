@@ -116,6 +116,10 @@ impl Metadata {
     }
 
     pub fn add_lazy_columns(&mut self, indices: HashSet<usize>) {
+        if !self.lazy_columns.is_empty() {
+            // `lazy_columns` is only allowed to be set once.
+            return;
+        }
         debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
         self.lazy_columns.extend(indices);
     }
