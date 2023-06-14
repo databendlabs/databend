@@ -13,11 +13,11 @@
 // limitations under the License.
 
 use std::fmt;
-use std::fmt::{Display, };
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::str::FromStr;
 
-use chrono::{DateTime};
+use chrono::DateTime;
 use chrono::Utc;
 use cron::Schedule;
 
@@ -81,7 +81,7 @@ impl Display for BackgroundJobType {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct BackgroundJobParams {
     pub job_type: BackgroundJobType,
-    pub scheduled_job_interval_seconds: u64,
+    pub scheduled_job_interval: std::time::Duration,
     pub scheduled_job_cron: String,
     pub scheduled_job_timezone: Option<chrono_tz::Tz>,
 }
@@ -94,10 +94,10 @@ impl BackgroundJobParams {
         }
     }
 
-    pub fn new_interval_job(interval_seconds: u64) -> Self {
+    pub fn new_interval_job(interval_seconds: std::time::Duration) -> Self {
         Self {
             job_type: BackgroundJobType::INTERVAL,
-            scheduled_job_interval_seconds: interval_seconds,
+            scheduled_job_interval: interval_seconds,
             ..Default::default()
         }
     }
@@ -111,12 +111,17 @@ impl BackgroundJobParams {
         }
     }
 
-    pub fn get_next_running_time(&self, last_run_at: DateTime<Utc> ) -> Option<DateTime<Utc>> {
+    pub fn get_next_running_time(&self, last_run_at: DateTime<Utc>) -> Option<DateTime<Utc>> {
         match self.job_type {
             BackgroundJobType::ONESHOT => None,
-            BackgroundJobType::INTERVAL => Some(last_run_at + chrono::Duration::seconds(self.scheduled_job_interval_seconds as i64)),
+            BackgroundJobType::INTERVAL => {
+                Some(last_run_at + chrono::Duration::from_std(self.scheduled_job_interval).unwrap())
+            }
             BackgroundJobType::CRON => {
-                let schedule = Schedule::from_str(self.scheduled_job_cron.as_str()).expect(&*format!("invalid cron expression {}", self.scheduled_job_cron));
+                let schedule =
+                    Schedule::from_str(self.scheduled_job_cron.as_str()).unwrap_or_else(|_| {
+                        panic!("invalid cron expression {}", self.scheduled_job_cron)
+                    });
                 let upcoming = schedule.after(&last_run_at).next().unwrap();
                 Some(upcoming.with_timezone(&Utc))
             }
@@ -128,16 +133,16 @@ impl Display for BackgroundJobParams {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self.job_type {
             BackgroundJobType::ONESHOT => write!(f, "ONESHOT"),
-            BackgroundJobType::INTERVAL => write!(
-                f,
-                "INTERVAL: {} seconds",
-                self.scheduled_job_interval_seconds
-            ),
+            BackgroundJobType::INTERVAL => {
+                write!(f, "INTERVAL: {:?} seconds", self.scheduled_job_interval)
+            }
             BackgroundJobType::CRON => write!(
                 f,
                 "CRON: {} {}",
                 self.scheduled_job_cron,
-                self.scheduled_job_timezone.as_ref().unwrap_or(&chrono_tz::UTC)
+                self.scheduled_job_timezone
+                    .as_ref()
+                    .unwrap_or(&chrono_tz::UTC)
             ),
         }
     }
@@ -150,7 +155,6 @@ pub struct BackgroundJobStatus {
     pub last_task_run_at: Option<DateTime<Utc>>,
 
     pub next_task_scheduled_time: Option<DateTime<Utc>>,
-
 }
 
 impl Display for BackgroundJobStatus {
@@ -180,7 +184,7 @@ impl BackgroundJobStatus {
                 BackgroundJobType::ONESHOT => None,
                 BackgroundJobType::INTERVAL => Some(Utc::now()),
                 BackgroundJobType::CRON => params.get_next_running_time(Utc::now()),
-                }
+            },
         }
     }
 }
@@ -309,7 +313,6 @@ impl Display for UpdateBackgroundJobParamsReq {
         )
     }
 }
-
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundJobReq {

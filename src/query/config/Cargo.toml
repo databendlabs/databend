@@ -17,6 +17,7 @@ hive = ["common-hive-meta-store", "thrift", "storage-hdfs", "common-meta-app/sto
 ignored = ["thrift", "common-hive-meta-store", "strum"]
 
 [dependencies]
+chrono-tz = { workspace = true }
 common-base = { path = "../../common/base" }
 common-exception = { path = "../../common/exception" }
 common-grpc = { path = "../../common/grpc" }
@@ -25,7 +26,6 @@ common-meta-app = { path = "../../meta/app" }
 common-storage = { path = "../../common/storage" }
 common-tracing = { path = "../../common/tracing" }
 common-users = { path = "../users" }
-chrono-tz = { workspace = true }
 
 clap = { workspace = true }
 hex = "0.4.3"

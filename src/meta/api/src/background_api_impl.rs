@@ -13,12 +13,12 @@
 // limitations under the License.
 
 use std::fmt::Display;
-use chrono::Utc;
 
+use chrono::Utc;
 use common_meta_app::app_error::AppError;
 use common_meta_app::app_error::BackgroundJobAlreadyExists;
 use common_meta_app::app_error::UnknownBackgroundJob;
-use common_meta_app::background::{BackgroundJobId, UpdateBackgroundJobParamsReq, UpdateBackgroundJobStatusReq};
+use common_meta_app::background::BackgroundJobId;
 use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundTaskId;
@@ -34,8 +34,10 @@ use common_meta_app::background::GetBackgroundTaskReply;
 use common_meta_app::background::GetBackgroundTaskReq;
 use common_meta_app::background::ListBackgroundJobsReq;
 use common_meta_app::background::ListBackgroundTasksReq;
+use common_meta_app::background::UpdateBackgroundJobParamsReq;
 use common_meta_app::background::UpdateBackgroundJobReply;
 use common_meta_app::background::UpdateBackgroundJobReq;
+use common_meta_app::background::UpdateBackgroundJobStatusReq;
 use common_meta_app::background::UpdateBackgroundTaskReply;
 use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_kvapi::kvapi;
@@ -104,7 +106,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             );
 
             {
-                let meta: BackgroundJobInfo = req.job_info.clone().into();
+                let meta: BackgroundJobInfo = req.job_info.clone();
                 let condition = vec![txn_cond_seq(name_key, Eq, 0)];
                 let if_then = vec![
                     txn_op_put(name_key, serialize_u64(id)?), // name -> background_job_id
@@ -152,7 +154,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
 
-        let reply = loop {
+        loop {
             trials.next().unwrap()?;
             let (seq, id) = get_u64_value(self, name_key).await?;
             debug!(seq, id, ?name_key, "update_background_job");
@@ -176,44 +178,43 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             };
             let (succ, _responses) = send_txn(self, txn_req).await?;
             if succ {
-                break Ok(UpdateBackgroundJobReply {
-                    id: id_key.id.clone(),
-                });
+                break Ok(UpdateBackgroundJobReply { id: id_key.id });
             }
-        };
-        reply
+        }
     }
 
-
-    async fn update_background_job_status(&self, req: UpdateBackgroundJobStatusReq) -> Result<UpdateBackgroundJobReply, KVAppError> {
+    async fn update_background_job_status(
+        &self,
+        req: UpdateBackgroundJobStatusReq,
+    ) -> Result<UpdateBackgroundJobReply, KVAppError> {
         let name = &req.job_name;
-        let (id, mut resp) = get_background_job_or_error(self, name, "failed to get background job").await?;
+        let (id, mut resp) =
+            get_background_job_or_error(self, name, "failed to get background job").await?;
         if resp.job_status == Some(req.status.clone()) {
-            return Ok(UpdateBackgroundJobReply {
-                id,
-            });
+            return Ok(UpdateBackgroundJobReply { id });
         }
         resp.job_status = Some(req.status);
         resp.last_updated = Some(Utc::now());
-        let req = UpdateBackgroundJobReq{
+        let req = UpdateBackgroundJobReq {
             job_name: name.clone(),
             info: resp,
         };
         self.update_background_job(req).await
     }
 
-
-    async fn update_background_job_params(&self, req: UpdateBackgroundJobParamsReq) -> Result<UpdateBackgroundJobReply, KVAppError> {
+    async fn update_background_job_params(
+        &self,
+        req: UpdateBackgroundJobParamsReq,
+    ) -> Result<UpdateBackgroundJobReply, KVAppError> {
         let name = &req.job_name;
-        let (id, mut resp) = get_background_job_or_error(self, name, "failed to get background job").await?;
+        let (id, mut resp) =
+            get_background_job_or_error(self, name, "failed to get background job").await?;
         if resp.job_params == Some(req.params.clone()) {
-            return Ok(UpdateBackgroundJobReply {
-                id,
-            });
+            return Ok(UpdateBackgroundJobReply { id });
         }
         resp.job_params = Some(req.params);
         resp.last_updated = Some(Utc::now());
-        let req = UpdateBackgroundJobReq{
+        let req = UpdateBackgroundJobReq {
             job_name: name.clone(),
             info: resp,
         };
@@ -260,7 +261,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         let name_key = &req.task_name;
         let ctx = &func_name!();
         let mut trials = txn_trials(None, ctx);
-        let reply = loop {
+        loop {
             trials.next().unwrap()?;
             let (seq, id) = get_u64_value(self, name_key).await?;
             debug!(seq, id, ?name_key, "update_background_task");
@@ -285,13 +286,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             let (succ, _responses) = send_txn(self, txn_req).await?;
             if succ {
                 break Ok(UpdateBackgroundTaskReply {
-                    id: id_key.id.clone(),
+                    id: id_key.id,
                     last_updated: meta.last_updated.unwrap_or(Default::default()),
                     expire_at: req.expire_at,
                 });
             }
-        };
-        reply
+        }
     }
 
     async fn list_background_tasks(

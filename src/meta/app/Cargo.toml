@@ -22,6 +22,8 @@ common-meta-types = { path = "../types" }
 
 anyerror = { workspace = true }
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
+cron = "0.12.0"
 enumflags2 = { version = "0.7.7", features = ["serde"] }
 hex = "0.4.3"
 maplit = "1.0.2"
@@ -32,8 +34,6 @@ serde_json = { workspace = true }
 sha1 = "0.10.5"
 sha2 = "0.10.6"
 thiserror = { workspace = true }
-chrono-tz = { workspace = true }
-cron = "0.12.0"
 
 [dev-dependencies]
 anyhow = { workspace = true }

@@ -1,10 +1,12 @@
 use std::str::FromStr;
+
 use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app as mt;
+use common_meta_app::background::BackgroundJobParams;
+use common_meta_app::background::BackgroundJobStatus;
 use common_protos::pb;
 use num::FromPrimitive;
-use common_meta_app::background::{BackgroundJobParams, BackgroundJobStatus};
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -23,8 +25,12 @@ impl FromToProto for mt::background::BackgroundJobInfo {
     where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(Self {
-            job_params: p.job_params.and_then(|t| BackgroundJobParams::from_pb(t).ok()),
-            job_status: p.job_status.and_then(|t| BackgroundJobStatus::from_pb(t).ok()),
+            job_params: p
+                .job_params
+                .and_then(|t| BackgroundJobParams::from_pb(t).ok()),
+            job_status: p
+                .job_status
+                .and_then(|t| BackgroundJobStatus::from_pb(t).ok()),
             task_type: FromPrimitive::from_i32(p.task_type).ok_or_else(|| Incompatible {
                 reason: format!("invalid TaskType: {}", p.task_type),
             })?,
@@ -53,7 +59,7 @@ impl FromToProto for mt::background::BackgroundJobInfo {
             creator: self.creator.clone().and_then(|c| c.to_pb().ok()),
             created_at: self.created_at.to_pb()?,
         };
-        return Ok(p);
+        Ok(p)
     }
 }
 
@@ -63,18 +69,26 @@ impl FromToProto for mt::background::BackgroundJobParams {
         p.ver
     }
 
-    fn from_pb(p: Self::PB) -> Result<Self, Incompatible> where Self: Sized {
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(Self {
             job_type: FromPrimitive::from_i32(p.job_type).ok_or_else(|| Incompatible {
                 reason: format!("invalid job type: {}", p.job_type),
             })?,
-            scheduled_job_interval_seconds: p.scheduled_job_interval_seconds,
+            scheduled_job_interval: std::time::Duration::from_secs(
+                p.scheduled_job_interval_seconds,
+            ),
             scheduled_job_cron: p.scheduled_job_cron,
-            scheduled_job_timezone: p.scheduled_job_timezone.map(|t| chrono_tz::Tz::from_str(&t).map_err(|e| Incompatible {
-                reason: format!("invalid timezone: {}", e),
-            })).transpose()?,
+            scheduled_job_timezone: p
+                .scheduled_job_timezone
+                .map(|t| {
+                    chrono_tz::Tz::from_str(&t).map_err(|e| Incompatible {
+                        reason: format!("invalid timezone: {}", e),
+                    })
+                })
+                .transpose()?,
         })
     }
 
@@ -83,9 +97,9 @@ impl FromToProto for mt::background::BackgroundJobParams {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
             job_type: self.job_type.clone() as i32,
-            scheduled_job_interval_seconds: self.scheduled_job_interval_seconds,
+            scheduled_job_interval_seconds: self.scheduled_job_interval.as_secs(),
             scheduled_job_cron: self.scheduled_job_cron.clone(),
-            scheduled_job_timezone: self.scheduled_job_timezone.clone().map(|t| t.name().to_string()),
+            scheduled_job_timezone: self.scheduled_job_timezone.map(|t| t.name().to_string()),
         };
         Ok(p)
     }
@@ -97,7 +111,7 @@ impl FromToProto for BackgroundJobStatus {
         p.ver
     }
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
-        where Self: Sized {
+    where Self: Sized {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
         Ok(Self {
@@ -105,8 +119,12 @@ impl FromToProto for BackgroundJobStatus {
                 reason: format!("invalid JobState: {}", p.job_state),
             })?,
             last_task_id: p.last_task_id,
-            last_task_run_at: p.last_task_run_at.and_then(|t| DateTime::<Utc>::from_pb(t).ok()),
-            next_task_scheduled_time: p.next_task_scheduled_time.and_then(|t| DateTime::<Utc>::from_pb(t).ok()),
+            last_task_run_at: p
+                .last_task_run_at
+                .and_then(|t| DateTime::<Utc>::from_pb(t).ok()),
+            next_task_scheduled_time: p
+                .next_task_scheduled_time
+                .and_then(|t| DateTime::<Utc>::from_pb(t).ok()),
         })
     }
 
@@ -116,8 +134,11 @@ impl FromToProto for BackgroundJobStatus {
             min_reader_ver: MIN_READER_VER,
             job_state: self.job_state.clone() as i32,
             last_task_id: self.last_task_id.clone(),
-            last_task_run_at: self.last_task_run_at.clone().map(|t| t.to_pb()).transpose()?,
-            next_task_scheduled_time: self.next_task_scheduled_time.clone().map(|t| t.to_pb()).transpose()?,
+            last_task_run_at: self.last_task_run_at.map(|t| t.to_pb()).transpose()?,
+            next_task_scheduled_time: self
+                .next_task_scheduled_time
+                .map(|t| t.to_pb())
+                .transpose()?,
         })
     }
 }
@@ -131,7 +152,7 @@ impl FromToProto for mt::background::BackgroundJobIdent {
     where Self: Sized {
         Ok(Self {
             tenant: p.tenant.to_string(),
-            name: p.name.to_string(),
+            name: p.name,
         })
     }
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {

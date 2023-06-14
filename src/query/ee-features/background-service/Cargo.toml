@@ -13,17 +13,12 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-common-base = { path = "../../../common/base" }
-common-catalog = { path = "../../catalog" }
-common-config = { path = "../../config" }
-common-exception = { path = "../../../common/exception" }
-common-storages-fuse = { path = "../../storages/fuse" }
-databend-query = { path = "../../service"}
+arrow-array = { version = "37.0.0" }
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
-chrono = { workspace = true }
-arrow-array = { version = "37.0.0" }
-common-meta-app = { path = "../../../meta/app" }
+common-base = { path = "../../../common/base" }
+common-exception = { path = "../../../common/exception" }
+databend-query = { path = "../../service" }
 
 [build-dependencies]
 

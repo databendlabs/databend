@@ -14,17 +14,22 @@
 
 use std::sync::Arc;
 use std::time::Duration;
-use chrono::{DateTime, Utc};
-use tracing::info;
-use common_base::base::{tokio};
+
+use chrono::DateTime;
+use chrono::Utc;
+use common_base::base::tokio;
+use common_base::base::tokio::sync::mpsc::error::TryRecvError;
+use common_base::base::tokio::sync::mpsc::Receiver;
+use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
-use common_base::base::tokio::sync::mpsc::{Receiver, Sender, };
 use common_exception::Result;
-use common_meta_app::background::{BackgroundJobInfo, BackgroundJobState, BackgroundJobType};
+use common_meta_app::background::BackgroundJobInfo;
+use common_meta_app::background::BackgroundJobState;
+use common_meta_app::background::BackgroundJobType;
+use tracing::info;
 
 use crate::background_service::job::BoxedJob;
 use crate::background_service::job::Job;
-
 
 pub struct JobScheduler {
     one_shot_jobs: Vec<BoxedJob>,
@@ -34,7 +39,12 @@ pub struct JobScheduler {
     pub finish_rx: Arc<Mutex<Receiver<u64>>>,
     pub suspend_tx: Arc<Mutex<Sender<()>>>,
     pub suspend_rx: Arc<Mutex<Receiver<()>>>,
+}
 
+impl Default for JobScheduler {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl JobScheduler {
@@ -56,9 +66,9 @@ impl JobScheduler {
 
     pub fn add_job(&mut self, job: impl Job + Send + Sync + Clone + 'static) -> Result<()> {
         if job.get_info().job_params.is_none() {
-            return Ok(())
+            return Ok(());
         }
-        match job.get_info().job_params.unwrap().job_type  {
+        match job.get_info().job_params.unwrap().job_type {
             BackgroundJobType::ONESHOT => {
                 self.one_shot_jobs.push(Box::new(job) as BoxedJob);
             }
@@ -70,10 +80,10 @@ impl JobScheduler {
     }
 
     pub async fn start(&self) -> Result<()> {
-        let one_shot_jobs = Arc::new(&self.one_shot_jobs);
+        let one_shot_jobs = &self.one_shot_jobs;
         if !one_shot_jobs.is_empty() {
             info!(background = true, "start one_shot jobs");
-            Self::check_and_run_jobs(one_shot_jobs.clone()).await;
+            Self::check_and_run_jobs(one_shot_jobs).await;
             let mut finished_one_shot_jobs = vec![];
             while let Some(i) = self.finish_rx.clone().lock().await.recv().await {
                 finished_one_shot_jobs.push(i);
@@ -83,22 +93,38 @@ impl JobScheduler {
             }
         }
         info!(background = true, "start scheduled jobs");
-        Self::start_scheduled_jobs(Arc::new(&self.scheduled_jobs), std::time::Duration::from_secs(1)).await?;
+        self.start_scheduled_jobs(self.job_tick_interval).await?;
 
         Ok(())
     }
 
-    pub async fn start_scheduled_jobs(scheduled_jobs: Arc<&Vec<BoxedJob>>, tick_duration: std::time::Duration) -> Result<()> {
+    pub async fn start_scheduled_jobs(&self, tick_duration: std::time::Duration) -> Result<()> {
+        let scheduled_jobs = &self.scheduled_jobs;
         if scheduled_jobs.is_empty() {
-            return Ok(())
+            return Ok(());
         }
         let mut job_interval = tokio::time::interval(tick_duration);
         loop {
+            match self.suspend_rx.lock().await.try_recv() {
+                Ok(_) => {
+                    info!(background = true, "suspend scheduled jobs");
+                    break;
+                }
+                Err(TryRecvError::Disconnected) => {
+                    info!(
+                        background = true,
+                        "suspend channel closed, suspend scheduled jobs"
+                    );
+                    break;
+                }
+                _ => {}
+            }
             job_interval.tick().await;
-            Self::check_and_run_jobs(Arc::new(&scheduled_jobs)).await;
+            Self::check_and_run_jobs(scheduled_jobs).await;
         }
+        Ok(())
     }
-    async fn check_and_run_jobs(jobs: Arc<&Vec<BoxedJob>>) {
+    async fn check_and_run_jobs(jobs: &[BoxedJob]) {
         let job_futures = jobs
             .iter()
             .map(|job| {
@@ -109,7 +135,6 @@ impl JobScheduler {
         for job in job_futures {
             job.await.unwrap();
         }
-
     }
     // Checks and runs a single [Job](crate::Job)
     async fn check_and_run_job(mut job: BoxedJob) -> Result<()> {
@@ -122,9 +147,7 @@ impl JobScheduler {
         let mut status = info.job_status.unwrap();
         status.next_task_scheduled_time = params.get_next_running_time(Utc::now());
         job.update_job_status(status.clone()).await?;
-        tokio::spawn(async move {
-            job.run().await
-        });
+        tokio::spawn(async move { job.run().await });
         Ok(())
     }
 
@@ -136,22 +159,20 @@ impl JobScheduler {
 
         let job_params = &job_info.job_params.clone().unwrap();
         let job_status = &job_info.job_status.clone().unwrap();
-        if job_status.job_state == BackgroundJobState::FAILED || job_status.job_state == BackgroundJobState::SUSPENDED {
+        if job_status.job_state == BackgroundJobState::FAILED
+            || job_status.job_state == BackgroundJobState::SUSPENDED
+        {
             return false;
         }
-        return match job_params.job_type {
+        match job_params.job_type {
             BackgroundJobType::INTERVAL | BackgroundJobType::CRON => {
                 match job_status.next_task_scheduled_time {
-                    None => {
-                        true
-                    }
-                    Some(expected) => {
-                        expected < time
-                    }
+                    None => true,
+                    Some(expected) => expected < time,
                 }
             }
 
-            BackgroundJobType::ONESHOT => { true }
+            BackgroundJobType::ONESHOT => true,
         }
     }
 }

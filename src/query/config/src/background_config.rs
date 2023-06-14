@@ -5,11 +5,12 @@ use std::str::FromStr;
 use clap::Args;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_meta_app::background::BackgroundJobParams;
+use common_meta_app::background::BackgroundJobType;
 use serde::Deserialize;
 use serde::Serialize;
-use common_meta_app::background::{BackgroundJobParams, BackgroundJobType};
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
+#[derive(Clone, Debug, PartialEq, Default, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct BackgroundConfig {
     #[clap(long = "enable-background-service")]
@@ -52,7 +53,7 @@ pub struct BackgroundScheduledConfig {
 
     // the cron expression for scheduled job,
     // by default it is scheduled with UTC timezone
-    #[clap(long)]
+    #[clap(long, default_value = "")]
     pub cron: String,
 
     #[clap(long)]
@@ -91,7 +92,6 @@ pub struct InnerBackgroundCompactionConfig {
     pub params: BackgroundJobParams,
 }
 
-
 impl TryInto<InnerBackgroundConfig> for BackgroundConfig {
     type Error = ErrorCode;
 
@@ -122,18 +122,33 @@ impl TryInto<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
             params: {
                 match self.compact_mode.as_str() {
                     "one_shot" => BackgroundJobParams::new_one_shot_job(),
-                    "interval" => BackgroundJobParams::new_interval_job(self.scheduled_config.duration_secs),
+                    "interval" => BackgroundJobParams::new_interval_job(
+                        std::time::Duration::from_secs(self.scheduled_config.duration_secs),
+                    ),
                     "cron" => {
                         if self.scheduled_config.cron.is_empty() {
-                            return Err(ErrorCode::InvalidArgument("cron expression is empty".to_string()));
+                            return Err(ErrorCode::InvalidArgument(
+                                "cron expression is empty".to_string(),
+                            ));
                         }
-                        let tz = self.scheduled_config.time_zone.clone().map(|x| chrono_tz::Tz::from_str(&x)).transpose().map_err(
-                            | e | ErrorCode::InvalidArgument(format!("invalid time_zone: {}", e))
-                        )?;
+                        let tz = self
+                            .scheduled_config
+                            .time_zone
+                            .clone()
+                            .map(|x| chrono_tz::Tz::from_str(&x))
+                            .transpose()
+                            .map_err(|e| {
+                                ErrorCode::InvalidArgument(format!("invalid time_zone: {}", e))
+                            })?;
                         BackgroundJobParams::new_cron_job(self.scheduled_config.cron, tz)
                     }
 
-                    _ => return Err(ErrorCode::InvalidArgument(format!("invalid compact_mode: {}", self.compact_mode))),
+                    _ => {
+                        return Err(ErrorCode::InvalidArgument(format!(
+                            "invalid compact_mode: {}",
+                            self.compact_mode
+                        )));
+                    }
                 }
             },
         })
@@ -152,34 +167,30 @@ impl From<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
             BackgroundJobType::ONESHOT => {
                 cfg.compact_mode = "one_shot".to_string();
             }
-            BackgroundJobType::INTERVAL  => {
+            BackgroundJobType::INTERVAL => {
                 cfg.compact_mode = "interval".to_string();
-                cfg.scheduled_config = BackgroundScheduledConfig::new_interval_job(inner.params.scheduled_job_interval_seconds);
+                cfg.scheduled_config = BackgroundScheduledConfig::new_interval_job(
+                    inner.params.scheduled_job_interval.as_secs(),
+                );
             }
             BackgroundJobType::CRON => {
                 cfg.compact_mode = "cron".to_string();
-                cfg.scheduled_config = BackgroundScheduledConfig::new_cron_job(inner.params.scheduled_job_cron, inner.params.scheduled_job_timezone.map(|x| x.to_string()));
+                cfg.scheduled_config = BackgroundScheduledConfig::new_cron_job(
+                    inner.params.scheduled_job_cron,
+                    inner.params.scheduled_job_timezone.map(|x| x.to_string()),
+                );
             }
         }
-        return cfg;
+        cfg
     }
 }
 
 impl From<BackgroundJobParams> for BackgroundScheduledConfig {
     fn from(inner: BackgroundJobParams) -> Self {
         Self {
-            duration_secs: inner.scheduled_job_interval_seconds,
+            duration_secs: inner.scheduled_job_interval.as_secs(),
             cron: inner.scheduled_job_cron.clone(),
-            time_zone: inner.scheduled_job_timezone.clone().map(|x| x.to_string()),
-        }
-    }
-}
-
-impl Default for BackgroundConfig {
-    fn default() -> Self {
-        Self {
-            enable: false,
-            compaction: Default::default(),
+            time_zone: inner.scheduled_job_timezone.map(|x| x.to_string()),
         }
     }
 }

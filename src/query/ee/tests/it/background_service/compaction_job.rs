@@ -2,8 +2,9 @@ use core::default::Default;
 
 use common_base::base::tokio;
 use common_exception::Result;
-use enterprise_query::background_service::{CompactionJob, should_continue_compaction};
 use common_meta_app::schema::TableStatistics;
+use enterprise_query::background_service::should_continue_compaction;
+use enterprise_query::background_service::CompactionJob;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_compaction_advice_sql() -> Result<()> {
@@ -53,33 +54,33 @@ async fn test_get_block_compaction_sql() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_should_continue_compaction() -> Result<()> {
-    let old = TableStatistics{
+    let old = TableStatistics {
         number_of_blocks: None,
         ..Default::default()
     };
-    let new = TableStatistics{
+    let new = TableStatistics {
         number_of_blocks: Some(100),
         ..Default::default()
     };
     assert_eq!(should_continue_compaction(&old, &new), (false, false));
-    let old = TableStatistics{
+    let old = TableStatistics {
         number_of_blocks: Some(100),
         number_of_segments: Some(10),
         ..Default::default()
     };
-    let new = TableStatistics{
+    let new = TableStatistics {
         number_of_blocks: Some(100),
         number_of_segments: Some(9),
         ..Default::default()
     };
     assert_eq!(should_continue_compaction(&old, &new), (true, false));
-    let old = TableStatistics{
+    let old = TableStatistics {
         number_of_blocks: Some(100),
         number_of_segments: Some(10),
         data_bytes: 100,
         ..Default::default()
     };
-    let new = TableStatistics{
+    let new = TableStatistics {
         number_of_blocks: Some(90),
         number_of_segments: Some(9),
         data_bytes: 100,

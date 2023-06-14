@@ -14,6 +14,7 @@
 
 use std::env;
 
+use background_service::get_background_service_handler;
 use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_base::set_alloc_error_hook;
@@ -37,7 +38,6 @@ use databend_query::servers::Server;
 use databend_query::servers::ShutdownHandle;
 use databend_query::GlobalServices;
 use tracing::info;
-use background_service::get_background_service_handler;
 
 use crate::local;
 
@@ -341,7 +341,9 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     info!("Ready for connections.");
     if conf.background.enable {
         println!("Start background service");
-        get_background_service_handler().start(&mut shutdown_handle).await?;
+        get_background_service_handler()
+            .start(&mut shutdown_handle)
+            .await?;
         // for one shot background service, we need to drop it manually.
         drop(shutdown_handle);
     } else {

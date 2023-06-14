@@ -15,17 +15,17 @@ test = false
 # Workspace dependencies
 aggregating-index = { path = "../ee-features/aggregating-index" }
 async-backtrace = { workspace = true }
-serde = { workspace = true }
+background-service = { path = "../ee-features/background-service" }
 common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
+common-expression = { path = "../expression" }
 common-io = { path = "../../common/io" }
 common-license = { path = "../../common/license" }
 common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
-common-expression = { path = "../expression" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
@@ -40,19 +40,16 @@ storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
-background-service = { path = "../ee-features/background-service" }
 virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
 
+arrow-array = { version = "37.0.0" }
 async-trait = "0.1.57"
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 dashmap = "5.4"
-futures = "0.3.24"
 futures-util = "0.3.24"
 jwt-simple = "0.11.0"
 tracing = "0.1.36"
-arrow-array = { version = "37.0.0" }
-cron = "0.12.0"
-chrono-tz = { workspace = true }
 
 [build-dependencies]
 common-building = { path = "../../common/building" }

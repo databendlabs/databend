@@ -1,10 +1,13 @@
-
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::background::{BackgroundJobIdent, BackgroundJobParams, BackgroundJobStatus, UpdateBackgroundJobParamsReq, UpdateBackgroundJobStatusReq};
+use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
+use common_meta_app::background::BackgroundJobParams;
 use common_meta_app::background::BackgroundJobState;
-use common_meta_app::background::BackgroundJobType::{INTERVAL, ONESHOT};
+use common_meta_app::background::BackgroundJobState::FAILED;
+use common_meta_app::background::BackgroundJobStatus;
+use common_meta_app::background::BackgroundJobType::INTERVAL;
+use common_meta_app::background::BackgroundJobType::ONESHOT;
 use common_meta_app::background::BackgroundTaskIdent;
 use common_meta_app::background::BackgroundTaskInfo;
 use common_meta_app::background::BackgroundTaskState;
@@ -13,12 +16,13 @@ use common_meta_app::background::GetBackgroundJobReq;
 use common_meta_app::background::GetBackgroundTaskReq;
 use common_meta_app::background::ListBackgroundJobsReq;
 use common_meta_app::background::ListBackgroundTasksReq;
+use common_meta_app::background::UpdateBackgroundJobParamsReq;
 use common_meta_app::background::UpdateBackgroundJobReq;
+use common_meta_app::background::UpdateBackgroundJobStatusReq;
 use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_kvapi::kvapi;
 use common_meta_types::MetaError;
 use tracing::info;
-use common_meta_app::background::BackgroundJobState::FAILED;
 
 use crate::background_api::BackgroundApi;
 use crate::SchemaApi;
@@ -41,9 +45,9 @@ fn new_background_task(
 
 fn new_background_job(state: BackgroundJobState, created_at: DateTime<Utc>) -> BackgroundJobInfo {
     BackgroundJobInfo {
-        job_params: Some(BackgroundJobParams{
+        job_params: Some(BackgroundJobParams {
             job_type: ONESHOT,
-            scheduled_job_interval_seconds: 0,
+            scheduled_job_interval: std::time::Duration::from_secs(0),
             scheduled_job_timezone: None,
             scheduled_job_cron: "".to_string(),
         }),
@@ -52,7 +56,7 @@ fn new_background_job(state: BackgroundJobState, created_at: DateTime<Utc>) -> B
         message: "".to_string(),
         creator: None,
         created_at,
-        job_status: Some(BackgroundJobStatus{
+        job_status: Some(BackgroundJobStatus {
             job_state: state,
             last_task_id: None,
             last_task_run_at: None,
@@ -248,12 +252,12 @@ impl BackgroundApiTestSuite {
         {
             let req = UpdateBackgroundJobParamsReq {
                 job_name: job_ident.clone(),
-                params: BackgroundJobParams{
+                params: BackgroundJobParams {
                     job_type: INTERVAL,
-                    scheduled_job_interval_seconds: 3600,
+                    scheduled_job_interval: std::time::Duration::from_secs(3600),
                     scheduled_job_cron: "".to_string(),
                     scheduled_job_timezone: None,
-                }
+                },
             };
 
             let res = mt.update_background_job_params(req).await;
@@ -271,8 +275,8 @@ impl BackgroundApiTestSuite {
                 "first state is started"
             );
             assert_eq!(
-                3600,
-                res.info.job_params.unwrap().scheduled_job_interval_seconds
+                std::time::Duration::from_secs(3600),
+                res.info.job_params.unwrap().scheduled_job_interval
             )
         }
 
@@ -280,12 +284,12 @@ impl BackgroundApiTestSuite {
         {
             let req = UpdateBackgroundJobStatusReq {
                 job_name: job_ident.clone(),
-                status: BackgroundJobStatus{
+                status: BackgroundJobStatus {
                     job_state: FAILED,
                     last_task_id: Some("newid".to_string()),
                     last_task_run_at: None,
                     next_task_scheduled_time: None,
-                }
+                },
             };
 
             let res = mt.update_background_job_status(req).await;

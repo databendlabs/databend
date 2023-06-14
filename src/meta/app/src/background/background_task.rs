@@ -139,7 +139,13 @@ pub struct BackgroundTaskInfo {
 }
 
 impl BackgroundTaskInfo {
-    pub fn new_compaction_task(creator: BackgroundJobIdent, db_id: u64, tb_id: u64, tb_stats: TableStatistics, message: String) -> Self {
+    pub fn new_compaction_task(
+        creator: BackgroundJobIdent,
+        db_id: u64,
+        tb_id: u64,
+        tb_stats: TableStatistics,
+        message: String,
+    ) -> Self {
         let now = Utc::now();
         Self {
             last_updated: Some(now),

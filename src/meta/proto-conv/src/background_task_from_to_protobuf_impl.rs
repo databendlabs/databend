@@ -64,7 +64,7 @@ impl FromToProto for mt::background::BackgroundTaskInfo {
             creator: self.creator.as_ref().and_then(|c| c.to_pb().ok()),
             created_at: self.created_at.to_pb()?,
         };
-        return Ok(p);
+        Ok(p)
     }
 }
 
@@ -108,9 +108,7 @@ impl FromToProto for mt::background::CompactionStats {
                 .after_compaction_stats
                 .clone()
                 .and_then(|t| t.to_pb().ok()),
-            total_compaction_time_secs: self
-                .total_compaction_time
-                .and_then(|t| Some(t.as_secs_f32())),
+            total_compaction_time_secs: self.total_compaction_time.map(|t| t.as_secs_f32()),
         };
         Ok(p)
     }
@@ -146,7 +144,7 @@ impl FromToProto for mt::background::BackgroundTaskIdent {
     where Self: Sized {
         Ok(Self {
             tenant: p.tenant.to_string(),
-            task_id: p.task_id.to_string(),
+            task_id: p.task_id,
         })
     }
     fn to_pb(&self) -> Result<Self::PB, Incompatible> {
