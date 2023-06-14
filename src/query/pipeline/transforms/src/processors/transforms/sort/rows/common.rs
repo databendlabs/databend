@@ -12,33 +12,41 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_arrow::arrow::compute::sort::row::Row as ArrowRow;
-use common_arrow::arrow::compute::sort::row::RowConverter as ArrowRowConverter;
-use common_arrow::arrow::compute::sort::row::Rows as ArrowRows;
-use common_arrow::arrow::compute::sort::row::SortField as ArrowSortField;
-use common_arrow::arrow::compute::sort::SortOptions as ArrowSortOptions;
 use common_exception::Result;
-use common_expression::arrow::column_to_arrow_array;
+use common_expression::types::string::StringColumn;
 use common_expression::BlockEntry;
+use common_expression::Column;
+use common_expression::ColumnBuilder;
 use common_expression::DataSchemaRef;
+use common_expression::RowConverter as CommonRowConverter;
 use common_expression::SortColumnDescription;
+use common_expression::SortField;
+use common_expression::Value;
 
 use super::RowConverter;
 use super::Rows;
 
-impl Rows for ArrowRows {
-    type Item<'a> = ArrowRow<'a>;
+impl Rows for StringColumn {
+    type Item<'a> = &'a [u8];
 
     fn len(&self) -> usize {
         self.len()
     }
 
     fn row(&self, index: usize) -> Self::Item<'_> {
-        self.row_unchecked(index)
+        unsafe { self.index_unchecked(index) }
+    }
+
+    fn to_column(&self) -> Column {
+        Column::String(self.clone())
+    }
+
+    fn from_column(col: Column, _: &[SortColumnDescription]) -> Option<Self> {
+        col.as_string().cloned()
     }
 }
 
-impl RowConverter<ArrowRows> for ArrowRowConverter {
+impl RowConverter<StringColumn> for CommonRowConverter {
     fn create(
         sort_columns_descriptions: Vec<SortColumnDescription>,
         output_schema: DataSchemaRef,
@@ -47,23 +55,22 @@ impl RowConverter<ArrowRows> for ArrowRowConverter {
             .iter()
             .map(|d| {
                 let data_type = output_schema.field(d.offset).data_type();
-                Ok(ArrowSortField::new_with_options(
-                    data_type.into(),
-                    ArrowSortOptions {
-                        descending: !d.asc,
-                        nulls_first: d.nulls_first,
-                    },
-                ))
+                SortField::new_with_options(data_type.clone(), d.asc, d.nulls_first)
             })
-            .collect::<Result<Vec<_>>>()?;
-        Ok(ArrowRowConverter::new(sort_fields))
+            .collect::<Vec<_>>();
+        CommonRowConverter::new(sort_fields)
     }
 
-    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<ArrowRows> {
-        let arrays = columns
+    fn convert(&mut self, columns: &[BlockEntry], num_rows: usize) -> Result<StringColumn> {
+        let columns = columns
             .iter()
-            .map(|col| column_to_arrow_array(col, num_rows))
+            .map(|entry| match &entry.value {
+                Value::Scalar(s) => {
+                    ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
+                }
+                Value::Column(c) => c.clone(),
+            })
             .collect::<Vec<_>>();
-        Ok(self.convert_columns(&arrays)?)
+        Ok(self.convert_columns(&columns, num_rows))
     }
 }

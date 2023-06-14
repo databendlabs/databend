@@ -636,7 +636,7 @@ pub enum PatternType {
     PatternStr,
     // e.g. '%rrow'
     StartOfPercent,
-    // e.g. 'Arro%'
+    // e.g. 'Arrow%'
     EndOfPercent,
     // e.g. '%Arrow%'
     SurroundByPercent,

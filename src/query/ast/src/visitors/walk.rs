@@ -201,7 +201,7 @@ pub fn walk_select_target<'a, V: Visitor<'a>>(visitor: &mut V, target: &'a Selec
             }
             if let Some(cols) = exclude {
                 for ident in cols.iter() {
-                    visitor.visit_identifier(ident);
+                    visitor.visit_column_id(ident);
                 }
             }
         }

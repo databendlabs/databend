@@ -23,12 +23,12 @@ use crate::plans::JoinType;
 use crate::ScalarExpr;
 
 pub mod hash_join;
-pub mod ie_join;
+pub mod range_join;
 
 pub enum PhysicalJoinType {
     Hash,
-    IEJoin,
-    SortMerge,
+    // The first arg is range conditions, the second arg is other conditions
+    RangeJoin(Vec<ScalarExpr>, Vec<ScalarExpr>),
 }
 
 // Choose physical join type by join conditions
@@ -40,40 +40,41 @@ pub fn physical_join(join: &Join, s_expr: &SExpr) -> Result<PhysicalJoinType> {
 
     let left_prop = RelExpr::with_s_expr(s_expr.child(0)?).derive_relational_prop()?;
     let right_prop = RelExpr::with_s_expr(s_expr.child(1)?).derive_relational_prop()?;
-    let mut ie_num = 0;
-    let mut non_ie_num = 0;
+    let mut range_conditions = vec![];
+    let mut other_conditions = vec![];
     for condition in join.non_equi_conditions.iter() {
-        check_non_equi_condition(
+        check_condition(
             condition,
             &left_prop,
             &right_prop,
-            &mut ie_num,
-            &mut non_ie_num,
+            &mut range_conditions,
+            &mut other_conditions,
         )
     }
-    if ie_num >= 2 && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
-        // Contain more than 2 ie conditions, use ie join
-        return Ok(PhysicalJoinType::IEJoin);
-    }
 
-    if non_ie_num != 0 {
-        // Contain non ie conditions, use sort merge join
-        return Ok(PhysicalJoinType::SortMerge);
+    if !range_conditions.is_empty() && matches!(join.join_type, JoinType::Inner | JoinType::Cross) {
+        return Ok(PhysicalJoinType::RangeJoin(
+            range_conditions,
+            other_conditions,
+        ));
     }
 
     // Leverage hash join to execute nested loop join
     Ok(PhysicalJoinType::Hash)
 }
 
-fn check_non_equi_condition(
+fn check_condition(
     expr: &ScalarExpr,
     left_prop: &RelationalProperty,
     right_prop: &RelationalProperty,
-    ie_num: &mut usize,
-    non_ie_num: &mut usize,
+    range_conditions: &mut Vec<ScalarExpr>,
+    other_conditions: &mut Vec<ScalarExpr>,
 ) {
     if let ScalarExpr::FunctionCall(func) = expr {
-        if func.arguments.len() != 2 {
+        if func.arguments.len() != 2
+            || !matches!(func.func_name.as_str(), "gt" | "lt" | "gte" | "lte")
+        {
+            other_conditions.push(expr.clone());
             return;
         }
         let mut left = false;
@@ -89,10 +90,9 @@ fn check_non_equi_condition(
             }
         }
         if left && right {
-            *non_ie_num += 1;
-            if matches!(func.func_name.as_str(), "gt" | "lt" | "gte" | "lte") {
-                *ie_num += 1;
-            }
+            range_conditions.push(expr.clone());
+            return;
         }
     }
+    other_conditions.push(expr.clone());
 }

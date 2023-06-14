@@ -337,11 +337,13 @@ impl SubqueryRewriter {
                     column: ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name,
                         index: output_column.index,
                         data_type: output_column.data_type,
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     },
                 });
                 let child_expr = *subquery.child_expr.as_ref().unwrap().clone();
@@ -470,11 +472,13 @@ impl SubqueryRewriter {
                     let column_binding = ColumnBinding {
                         database_name: None,
                         table_name: None,
+                        column_position: None,
                         table_index: None,
                         column_name: column_entry.name(),
                         index: *derived_column,
                         data_type: Box::from(column_entry.data_type()),
                         visibility: Visibility::Visible,
+                        virtual_computed_expr: None,
                     };
                     items.push(ScalarItem {
                         scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
@@ -599,11 +603,13 @@ impl SubqueryRewriter {
                         ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            column_position: None,
                             table_index: None,
                             column_name: format!("subquery_{}", derived_column),
                             index: *derived_column,
                             data_type: Box::from(data_type.clone()),
                             visibility: Visibility::Visible,
+                            virtual_computed_expr: None,
                         }
                     };
                     group_items.push(ScalarItem {
@@ -724,11 +730,13 @@ impl SubqueryRewriter {
                         column: ColumnBinding {
                             database_name: None,
                             table_name: None,
+                            column_position: None,
                             table_index: None,
                             column_name: column_entry.name(),
                             index: *index,
                             data_type: Box::new(column_entry.data_type()),
                             visibility: column_binding.visibility,
+                            virtual_computed_expr: None,
                         },
                     }));
                 }
@@ -792,11 +800,13 @@ impl SubqueryRewriter {
                 column: ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    column_position: None,
                     table_index: None,
                     column_name: column_entry.name(),
                     index: *correlated_column,
                     data_type: Box::from(column_entry.data_type()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
             });
             let derive_column = self.derived_columns.get(correlated_column).unwrap();
@@ -807,10 +817,12 @@ impl SubqueryRewriter {
                     database_name: None,
                     table_name: None,
                     table_index: None,
+                    column_position: None,
                     column_name: column_entry.name(),
                     index: *derive_column,
                     data_type: Box::from(column_entry.data_type()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
             });
             left_conditions.push(left_column);

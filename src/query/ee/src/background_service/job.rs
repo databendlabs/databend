@@ -30,13 +30,10 @@ use common_meta_app::background::BackgroundJobStatus;
 ///
 /// #[async_trait]
 /// impl Job for CompactionJob {
-///     async fn run(&self) {
+///     async fn run(&mut self) {
 ///         do_compaction_job().await?;
 ///     }
 ///
-///     fn get_config(&self) -> &JobConfig {
-///         &self.config
-///     }
 /// }
 /// ```
 #[async_trait]

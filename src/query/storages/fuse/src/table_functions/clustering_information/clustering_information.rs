@@ -111,40 +111,38 @@ impl<'a> ClusteringInformation<'a> {
 
         Ok(DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Scalar(Scalar::Number(NumberScalar::UInt64(
-                        info.total_block_count,
-                    ))),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::UInt64),
-                    value: Value::Scalar(Scalar::Number(NumberScalar::UInt64(
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(info.total_block_count))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(
                         info.total_constant_block_count,
                     ))),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::Float64),
-                    value: Value::Scalar(Scalar::Number(NumberScalar::Float64(
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::Float64),
+                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
                         info.average_overlaps.into(),
                     ))),
-                },
-                BlockEntry {
-                    data_type: DataType::Number(NumberDataType::Float64),
-                    value: Value::Scalar(Scalar::Number(NumberScalar::Float64(
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::Float64),
+                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
                         info.average_depth.into(),
                     ))),
-                },
-                BlockEntry {
-                    data_type: DataType::Variant,
-                    value: Value::Scalar(Scalar::Variant(
+                ),
+                BlockEntry::new(
+                    DataType::Variant,
+                    Value::Scalar(Scalar::Variant(
                         JsonbValue::from(&info.block_depth_histogram).to_vec(),
                     )),
-                },
+                ),
             ],
             1,
         ))

@@ -43,15 +43,15 @@ use crate::common;
 fn test_decode_v44_background_task() -> anyhow::Result<()> {
     let bytes = vec![
         26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85,
-        84, 67, 40, 1, 50, 3, 49, 50, 51, 218, 5, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32,
-        48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 44, 168, 6, 24,
+        84, 67, 40, 1, 50, 4, 49, 49, 50, 51, 218, 5, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49,
+        32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 45, 168, 6, 24,
     ];
 
     let want = || common_meta_app::background::BackgroundTaskInfo {
         last_updated: Some(Utc.with_ymd_and_hms(2014, 11, 28, 12, 0, 9).unwrap()),
         task_type: BackgroundTaskType::COMPACTION,
         task_state: BackgroundTaskState::DONE,
-        message: "123".to_string(),
+        message: "1123".to_string(),
         compaction_task_stats: None,
         vacuum_stats: None,
         creator: None,
@@ -60,7 +60,7 @@ fn test_decode_v44_background_task() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), bytes.as_slice(), 44, want())
+    common::test_load_old(func_name!(), bytes.as_slice(), 45, want())
 }
 
 #[test]
@@ -68,13 +68,13 @@ fn test_decode_v40_background_task_case_2() -> anyhow::Result<()> {
     let bytes = vec![
         26, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85,
         84, 67, 32, 1, 50, 24, 100, 97, 116, 97, 98, 101, 110, 100, 32, 98, 97, 99, 107, 103, 114,
-        111, 117, 110, 100, 32, 116, 97, 115, 107, 58, 60, 8, 21, 16, 91, 26, 21, 8, 144, 78, 16,
-        160, 156, 1, 24, 30, 32, 40, 40, 10, 48, 11, 160, 6, 44, 168, 6, 24, 34, 20, 8, 232, 7, 16,
-        208, 15, 24, 3, 32, 4, 40, 5, 48, 6, 160, 6, 44, 168, 6, 24, 45, 0, 0, 200, 66, 160, 6, 44,
-        168, 6, 24, 66, 6, 160, 6, 44, 168, 6, 24, 210, 5, 28, 10, 5, 116, 101, 115, 116, 49, 18,
-        13, 99, 111, 109, 112, 97, 99, 116, 111, 114, 95, 106, 111, 98, 160, 6, 44, 168, 6, 24,
+        111, 117, 110, 100, 32, 116, 97, 115, 107, 58, 60, 8, 21, 16, 92, 26, 21, 8, 144, 78, 16,
+        160, 156, 1, 24, 30, 32, 40, 40, 10, 48, 11, 160, 6, 45, 168, 6, 24, 34, 20, 8, 232, 7, 16,
+        208, 15, 24, 3, 32, 4, 40, 5, 48, 6, 160, 6, 45, 168, 6, 24, 45, 0, 0, 200, 66, 160, 6, 45,
+        168, 6, 24, 66, 6, 160, 6, 45, 168, 6, 24, 210, 5, 28, 10, 5, 116, 101, 115, 116, 49, 18,
+        13, 99, 111, 109, 112, 97, 99, 116, 111, 114, 95, 106, 111, 98, 160, 6, 45, 168, 6, 24,
         218, 5, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49, 32, 48, 48, 58, 48, 48, 58, 48, 48, 32,
-        85, 84, 67, 160, 6, 44, 168, 6, 24,
+        85, 84, 67, 160, 6, 45, 168, 6, 24,
     ];
 
     let want = || common_meta_app::background::BackgroundTaskInfo {
@@ -84,7 +84,7 @@ fn test_decode_v40_background_task_case_2() -> anyhow::Result<()> {
         message: "databend background task".to_string(),
         compaction_task_stats: Some(CompactionStats {
             db_id: 21,
-            table_id: 91,
+            table_id: 92,
             before_compaction_stats: Some(TableStatistics {
                 number_of_rows: 10000,
                 data_bytes: 20000,
@@ -113,18 +113,18 @@ fn test_decode_v40_background_task_case_2() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), bytes.as_slice(), 44, want())
+    common::test_load_old(func_name!(), bytes.as_slice(), 45, want())
 }
 
 #[test]
 fn test_decode_v44_background_job() -> anyhow::Result<()> {
     let bytes = vec![
         10, 31, 8, 1, 16, 100, 34, 19, 65, 109, 101, 114, 105, 99, 97, 47, 76, 111, 115, 95, 65,
-        110, 103, 101, 108, 101, 115, 160, 6, 44, 168, 6, 24, 18, 37, 34, 4, 116, 101, 115, 116,
+        110, 103, 101, 108, 101, 115, 160, 6, 45, 168, 6, 24, 18, 37, 34, 4, 116, 101, 115, 116,
         42, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50, 58, 48, 48, 58, 48, 57, 32, 85,
-        84, 67, 160, 6, 44, 168, 6, 24, 42, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50,
+        84, 67, 160, 6, 45, 168, 6, 24, 42, 23, 50, 48, 49, 52, 45, 49, 49, 45, 50, 56, 32, 49, 50,
         58, 48, 48, 58, 48, 57, 32, 85, 84, 67, 218, 5, 23, 49, 57, 55, 48, 45, 48, 49, 45, 48, 49,
-        32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 44, 168, 6, 24,
+        32, 48, 48, 58, 48, 48, 58, 48, 48, 32, 85, 84, 67, 160, 6, 45, 168, 6, 24,
     ];
 
     let want = || common_meta_app::background::BackgroundJobInfo {
@@ -148,5 +148,5 @@ fn test_decode_v44_background_job() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), bytes.as_slice(), 44, want())
+    common::test_load_old(func_name!(), bytes.as_slice(), 45, want())
 }

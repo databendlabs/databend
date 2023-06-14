@@ -189,10 +189,10 @@ async fn materialize_virtual_columns(
             }
             .upcast(),
         ));
-        let virtual_column = BlockEntry {
-            data_type: DataType::Nullable(Box::new(DataType::Variant)),
-            value: Value::Column(column),
-        };
+        let virtual_column = BlockEntry::new(
+            DataType::Nullable(Box::new(DataType::Variant)),
+            Value::Column(column),
+        );
         virtual_columns.push(virtual_column);
     }
     let virtual_schema = TableSchemaRefExt::create(virtual_fields);

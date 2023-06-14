@@ -19,6 +19,7 @@ mod planner;
 mod semantic;
 
 pub mod binder;
+pub mod dataframe;
 mod expression_parser;
 pub mod optimizer;
 pub mod plans;

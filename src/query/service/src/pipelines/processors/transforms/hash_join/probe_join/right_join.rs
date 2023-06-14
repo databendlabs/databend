@@ -21,14 +21,12 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
-use common_sql::plans::JoinType;
 
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
 impl JoinHashTable {
-    /// Used by right join/right semi(anti) join
     pub(crate) fn probe_right_join<'a, H: HashJoinHashtableLike, IT>(
         &self,
         hash_table: &H,
@@ -41,23 +39,24 @@ impl JoinHashTable {
         H::Key: 'a,
     {
         let valids = &probe_state.valids;
-        // The right join will return multiple data blocks of similar size.
-        let mut occupied = 0;
-        let mut probed_blocks = vec![];
-        let mut probe_indexes_len = 0;
+        let true_validity = &probe_state.true_validity;
         let local_probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
-        let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
+
+        let mut matched_num = 0;
+        let mut probed_blocks = vec![];
+        let mut probe_indexes_len = 0;
 
         let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
             .iter()
             .map(|c| &c.data_block)
             .collect::<Vec<_>>();
-        let num_rows = data_blocks
+        let total_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
+        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -66,57 +65,85 @@ impl JoinHashTable {
                 valids,
                 i,
                 local_build_indexes_ptr,
-                occupied,
+                matched_num,
             );
             if match_count == 0 {
                 continue;
             }
-            occupied += match_count;
+            matched_num += match_count;
             local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
             probe_indexes_len += 1;
-            validity.extend_constant(match_count, true);
-            if occupied >= JOIN_MAX_BLOCK_SIZE {
+            if matched_num >= JOIN_MAX_BLOCK_SIZE {
                 loop {
+                    // The matched_num must be equal to JOIN_MAX_BLOCK_SIZE.
+                    debug_assert_eq!(matched_num, JOIN_MAX_BLOCK_SIZE);
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
                             "Aborted query, because the server is shutting down or the query was killed.",
                         ));
                     }
 
-                    {
-                        let mut build_indexes =
-                            self.hash_join_desc.join_state.build_indexes.write();
-                        build_indexes.extend_from_slice(local_build_indexes);
-                    }
-
-                    let build_block =
-                        self.row_space
-                            .gather(local_build_indexes, &data_blocks, &num_rows)?;
+                    let build_block = self.row_space.gather(
+                        local_build_indexes,
+                        &data_blocks,
+                        &total_num_rows,
+                    )?;
                     let mut probe_block = DataBlock::take_compacted_indices(
                         input,
                         &local_probe_indexes[0..probe_indexes_len],
-                        occupied,
+                        JOIN_MAX_BLOCK_SIZE,
                     )?;
 
-                    // If join type is right join, need to wrap nullable for probe side
-                    // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
-                    if self.hash_join_desc.join_type == JoinType::Right {
-                        let validity: Bitmap = validity.into();
-                        let nullable_columns = probe_block
-                            .columns()
-                            .iter()
-                            .map(|c| Self::set_validity(c, probe_block.num_rows(), &validity))
-                            .collect::<Vec<_>>();
-                        probe_block = DataBlock::new(nullable_columns, validity.len());
-                    }
+                    // The join type is right join, we need to wrap nullable for probe side.
+                    let nullable_columns = probe_block
+                        .columns()
+                        .iter()
+                        .map(|c| Self::set_validity(c, JOIN_MAX_BLOCK_SIZE, true_validity))
+                        .collect::<Vec<_>>();
+                    probe_block = DataBlock::new(nullable_columns, JOIN_MAX_BLOCK_SIZE);
 
                     if !probe_block.is_empty() {
-                        probed_blocks.push(self.merge_eq_block(&build_block, &probe_block)?);
+                        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+                        if self.hash_join_desc.other_predicate.is_none() {
+                            probed_blocks.push(merged_block);
+                            for row_ptr in local_build_indexes.iter() {
+                                outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                            }
+                        } else {
+                            let (bm, all_true, all_false) = self.get_other_filters(
+                                &merged_block,
+                                self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                            )?;
+
+                            if all_true {
+                                probed_blocks.push(merged_block);
+                                for row_ptr in local_build_indexes.iter() {
+                                    outer_scan_bitmap[row_ptr.chunk_index]
+                                        .set(row_ptr.row_index, true);
+                                }
+                            } else if !all_false {
+                                // Safe to unwrap.
+                                let validity = bm.unwrap();
+                                let mut idx = 0;
+                                while idx < JOIN_MAX_BLOCK_SIZE {
+                                    let valid = unsafe { validity.get_bit_unchecked(idx) };
+                                    if valid {
+                                        outer_scan_bitmap[local_build_indexes[idx].chunk_index]
+                                            .set(local_build_indexes[idx].row_index, true);
+                                    }
+                                    idx += 1;
+                                }
+                                let filtered_block =
+                                    DataBlock::filter_with_bitmap(merged_block, &validity)?;
+                                if !filtered_block.is_empty() {
+                                    probed_blocks.push(filtered_block);
+                                }
+                            }
+                        }
                     }
 
                     probe_indexes_len = 0;
-                    occupied = 0;
-                    validity = MutableBitmap::new();
+                    matched_num = 0;
 
                     if incomplete_ptr == 0 {
                         break;
@@ -125,51 +152,84 @@ impl JoinHashTable {
                         key,
                         incomplete_ptr,
                         local_build_indexes_ptr,
-                        occupied,
+                        matched_num,
                         JOIN_MAX_BLOCK_SIZE,
                     );
                     if match_count == 0 {
                         break;
                     }
 
-                    occupied += match_count;
+                    matched_num += match_count;
                     local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
-                    validity.extend_constant(match_count, true);
 
-                    if occupied < JOIN_MAX_BLOCK_SIZE {
+                    if matched_num < JOIN_MAX_BLOCK_SIZE {
                         break;
                     }
                 }
             }
         }
 
-        {
-            let mut build_indexes = self.hash_join_desc.join_state.build_indexes.write();
-            build_indexes.extend_from_slice(&local_build_indexes[0..occupied]);
-        }
-
+        let build_block = self.row_space.gather(
+            &local_build_indexes[0..matched_num],
+            &data_blocks,
+            &total_num_rows,
+        )?;
         let mut probe_block = DataBlock::take_compacted_indices(
             input,
             &local_probe_indexes[0..probe_indexes_len],
-            occupied,
+            matched_num,
         )?;
 
-        // If join type is right join, need to wrap nullable for probe side
-        // If join type is semi/anti right join, directly merge `build_block` and `probe_block`
-        if self.hash_join_desc.join_type == JoinType::Right {
-            let validity: Bitmap = validity.into();
-            let nullable_columns = probe_block
-                .columns()
-                .iter()
-                .map(|c| Self::set_validity(c, probe_block.num_rows(), &validity))
-                .collect::<Vec<_>>();
-            probe_block = DataBlock::new(nullable_columns, validity.len());
-        }
+        // The join type is right join, we need to wrap nullable for probe side.
+        let mut validity = MutableBitmap::new();
+        validity.extend_constant(matched_num, true);
+        let validity: Bitmap = validity.into();
+        let nullable_columns = probe_block
+            .columns()
+            .iter()
+            .map(|c| Self::set_validity(c, probe_block.num_rows(), &validity))
+            .collect::<Vec<_>>();
+        probe_block = DataBlock::new(nullable_columns, validity.len());
 
-        let mut rest_pairs = self.hash_join_desc.join_state.rest_pairs.write();
-        rest_pairs.0.push(probe_block);
-        rest_pairs.1.extend(&local_build_indexes[0..occupied]);
+        let merged_block = self.merge_eq_block(&build_block, &probe_block)?;
+
+        if !merged_block.is_empty() {
+            if self.hash_join_desc.other_predicate.is_none() {
+                probed_blocks.push(merged_block);
+                for row_ptr in local_build_indexes.iter().take(matched_num) {
+                    outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                }
+            } else {
+                let (bm, all_true, all_false) = self.get_other_filters(
+                    &merged_block,
+                    self.hash_join_desc.other_predicate.as_ref().unwrap(),
+                )?;
+
+                if all_true {
+                    probed_blocks.push(merged_block);
+                    for row_ptr in local_build_indexes.iter().take(matched_num) {
+                        outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                    }
+                } else if !all_false {
+                    // Safe to unwrap.
+                    let validity = bm.unwrap();
+                    let mut idx = 0;
+                    while idx < matched_num {
+                        let valid = unsafe { validity.get_bit_unchecked(idx) };
+                        if valid {
+                            outer_scan_bitmap[local_build_indexes[idx].chunk_index]
+                                .set(local_build_indexes[idx].row_index, true);
+                        }
+                        idx += 1;
+                    }
+                    let filtered_block = DataBlock::filter_with_bitmap(merged_block, &validity)?;
+                    if !filtered_block.is_empty() {
+                        probed_blocks.push(filtered_block);
+                    }
+                }
+            }
+        }
 
         Ok(probed_blocks)
     }

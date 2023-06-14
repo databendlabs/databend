@@ -45,7 +45,8 @@ impl FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<FieldIndex>,
-        update_list: Vec<(usize, RemoteExpr<String>)>,
+        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -79,6 +80,7 @@ impl FuseTable {
             filter,
             col_indices,
             update_list,
+            computed_list,
             &snapshot,
             pipeline,
         )
@@ -102,12 +104,14 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
+    #[allow(clippy::too_many_arguments)]
     async fn try_add_update_source(
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<FieldIndex>,
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         base_snapshot: &TableSnapshot,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
@@ -123,7 +127,10 @@ impl FuseTable {
                 pos += 1;
             });
 
-            (Projection::Columns(all_column_indices), schema.clone())
+            (
+                Projection::Columns(all_column_indices),
+                Arc::new(schema.remove_virtual_computed_fields()),
+            )
         } else {
             col_indices.iter().for_each(|&index| {
                 offset_map.insert(index, pos);
@@ -163,8 +170,13 @@ impl FuseTable {
             )
         };
 
-        let mut ops = Vec::with_capacity(update_list.len() + 1);
-        let mut exprs = Vec::with_capacity(update_list.len() + 1);
+        let mut cap = 2;
+        if !computed_list.is_empty() {
+            cap += 1;
+        }
+        let mut ops = Vec::with_capacity(cap);
+        let mut exprs = Vec::with_capacity(update_list.len());
+        let mut computed_exprs = Vec::with_capacity(computed_list.len());
 
         for (id, remote_expr) in update_list.into_iter() {
             let expr = remote_expr
@@ -174,9 +186,26 @@ impl FuseTable {
             offset_map.insert(id, pos);
             pos += 1;
         }
-
+        for (id, remote_expr) in computed_list.into_iter() {
+            let expr = remote_expr
+                .as_expr(&BUILTIN_FUNCTIONS)
+                .project_column_ref(|name| {
+                    let id = schema.index_of(name).unwrap();
+                    let pos = offset_map.get(&id).unwrap();
+                    *pos as FieldIndex
+                });
+            computed_exprs.push(expr);
+            offset_map.insert(id, pos);
+            pos += 1;
+        }
         if !exprs.is_empty() {
             ops.push(BlockOperator::Map { exprs });
+        }
+        // regenerate related stored computed columns.
+        if !computed_exprs.is_empty() {
+            ops.push(BlockOperator::Map {
+                exprs: computed_exprs,
+            });
         }
         ops.push(BlockOperator::Project {
             projection: offset_map.values().cloned().collect(),
@@ -216,6 +245,7 @@ impl FuseTable {
                         remain_reader.clone(),
                         ops.clone(),
                         self.storage_format,
+                        false,
                     )
                 },
                 max_threads,

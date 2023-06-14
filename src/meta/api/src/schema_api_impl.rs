@@ -2948,7 +2948,7 @@ async fn remove_table_copied_files(
     Ok(n)
 }
 
-/// List the copied file identies belonging to a table.
+/// List the copied file identities belonging to a table.
 async fn list_table_copied_files(
     kv_api: &impl kvapi::KVApi<Error = MetaError>,
     table_id: u64,

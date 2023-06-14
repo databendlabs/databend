@@ -1864,6 +1864,7 @@ name = "common-expression"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-ord",
  "arrow-schema",
  "base64 0.21.0",
  "chrono",
@@ -2415,11 +2416,13 @@ dependencies = [
 name = "common-pipeline-transforms"
 version = "0.1.0"
 dependencies = [
+ "async-backtrace",
  "async-trait-fn",
- "common-arrow",
+ "common-base",
  "common-exception",
  "common-expression",
  "common-pipeline-core",
+ "common-profile",
  "match-template",
 ]
 
@@ -2535,6 +2538,7 @@ dependencies = [
  "common-storage",
  "common-storages-parquet",
  "common-storages-result-cache",
+ "common-storages-stage",
  "common-storages-view",
  "common-users",
  "ctor",
@@ -6244,7 +6248,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.2.2"
-source = "git+https://github.com/datafuselabs/jsonb?rev=17b3659#17b3659abcd50807447027181e464b4df616ac1e"
+source = "git+https://github.com/datafuselabs/jsonb?rev=7ef2abe#7ef2abec9b8051c883e643e94fac3190d7df95b9"
 dependencies = [
  "byteorder",
  "fast-float",

@@ -10,7 +10,7 @@ Retrieves data from a table.
 [WITH]
 SELECT
     [ALL | DISTINCT]
-    <select_expr> [[AS] alias], ...
+    <select_expr> | <col_name> [[AS] alias] | $<col_position> [, ...]
     [EXCLUDE (<col_name1> [, <col_name2>, <col_name3>, ...] ) ]
     [FROM table_references
     [AT ...]
@@ -145,6 +145,23 @@ SELECT * EXCLUDE (id,lastname) FROM allemployees;
 | Lily      | F      |
 | Noah      | M      |
 | Macy      | F      |
+```
+
+### Column Position
+
+By using $N, you can represent a column within the SELECT clause. For example, $2 represents the second column:
+
+```sql
+CREATE TABLE IF NOT EXISTS t1(a int, b varchar);
+INSERT INTO t1 VALUES (1, 'a'), (2, 'b');
+SELECT a, $2 FROM t1;
+
++---+-------+
+| a | $2    |
++---+-------+
+| 1 | a     |
+| 2 | b     |
++---+-------+
 ```
 
 ## FROM Clause
@@ -354,7 +371,7 @@ SELECT number FROM numbers(100000) ORDER BY number LIMIT 2 OFFSET 10;
 +--------+
 ```
 
-For optimizing query performance with large result sets, you can enable the *lazy_topn_threshold* option. This option is specifically designed for queries that involve an ORDER BY clause and a LIMIT clause. When enabled, the optimization is activated for queries where the specified LIMIT number is smaller than the threshold value you set. 
+For optimizing query performance with large result sets, Databend has enabled the lazy_read_threshold option by default with a default value of 1,000. This option is specifically designed for queries that involve a LIMIT clause. When the lazy_read_threshold is enabled, the optimization is activated for queries where the specified LIMIT number is smaller than or equal to the threshold value you set. To disable the option, set it to 0.
 
 <details>
   <summary>How it works</summary>
@@ -363,13 +380,13 @@ For optimizing query performance with large result sets, you can enable the *laz
 
 ```sql
 MySQL [(none)]> SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
-Empty set (0.897 sec)
+Empty set (0.300 sec)
 
-MySQL [(none)]> set lazy_topn_threshold=100;
+MySQL [(none)]> set lazy_read_threshold=0;
 Query OK, 0 rows affected (0.004 sec)
 
 MySQL [(none)]> SELECT * FROM hits WHERE URL LIKE '%google%' ORDER BY EventTime LIMIT 10 ignore_result;
-Empty set (0.300 sec)
+Empty set (0.897 sec)
 ```
 
 ## OFFSET Clause

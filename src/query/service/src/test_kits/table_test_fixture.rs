@@ -24,10 +24,13 @@ use common_exception::Result;
 use common_expression::block_debug::assert_blocks_sorted_eq_with_name;
 use common_expression::infer_table_schema;
 use common_expression::types::number::Int32Type;
+use common_expression::types::number::Int64Type;
 use common_expression::types::string::StringColumnBuilder;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::types::StringType;
 use common_expression::Column;
+use common_expression::ComputedExpr;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchemaRef;
@@ -60,12 +63,12 @@ use tempfile::TempDir;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
+use crate::interpreters::fill_missing_columns;
 use crate::interpreters::CreateTableInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
-use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
@@ -91,7 +94,7 @@ impl TestFixture {
         let tmp_dir = TempDir::new().unwrap();
         let mut conf = ConfigBuilder::create().config();
 
-        // make sure we are suing `fs` storage
+        // make sure we are using `fs` storage
         conf.storage.params = StorageParams::Fs(StorageFsConfig {
             // use `TempDir` as root path (auto clean)
             root: tmp_dir.path().to_str().unwrap().to_string(),
@@ -178,7 +181,6 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_default_exprs: vec![],
             field_comments: vec![],
             as_select: None,
             cluster_key: Some("(id)".to_string()),
@@ -202,7 +204,6 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_default_exprs: vec![],
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
@@ -237,7 +238,49 @@ impl TestFixture {
                 (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
             ]
             .into(),
-            field_default_exprs: vec![],
+            field_comments: vec![],
+            as_select: None,
+            cluster_key: None,
+        }
+    }
+
+    pub fn computed_schema() -> DataSchemaRef {
+        DataSchemaRefExt::create(vec![
+            DataField::new("id", DataType::Number(NumberDataType::Int32)),
+            DataField::new("a1", DataType::String)
+                .with_computed_expr(Some(ComputedExpr::Virtual("reverse(c)".to_string()))),
+            DataField::new("a2", DataType::String)
+                .with_computed_expr(Some(ComputedExpr::Stored("upper(c)".to_string()))),
+            DataField::new("b1", DataType::Number(NumberDataType::Int64))
+                .with_computed_expr(Some(ComputedExpr::Virtual("(d + 2)".to_string()))),
+            DataField::new("b2", DataType::Number(NumberDataType::Int64))
+                .with_computed_expr(Some(ComputedExpr::Stored("((d + 1) * 3)".to_string()))),
+            DataField::new("c", DataType::String),
+            DataField::new("d", DataType::Number(NumberDataType::Int64)),
+        ])
+    }
+
+    pub fn computed_table_schema() -> TableSchemaRef {
+        infer_table_schema(&Self::computed_schema()).unwrap()
+    }
+
+    // create a table with computed column
+    pub fn computed_create_table_plan(&self) -> CreateTablePlan {
+        CreateTablePlan {
+            if_not_exists: false,
+            tenant: self.default_tenant(),
+            catalog: self.default_catalog_name(),
+            database: self.default_db_name(),
+            table: self.default_table_name(),
+            schema: TestFixture::computed_table_schema(),
+            engine: Engine::Fuse,
+            storage_params: None,
+            part_prefix: "".to_string(),
+            options: [
+                // database id is required for FUSE
+                (OPT_KEY_DATABASE_ID.to_owned(), "1".to_owned()),
+            ]
+            .into(),
             field_comments: vec![],
             as_select: None,
             cluster_key: None,
@@ -260,6 +303,13 @@ impl TestFixture {
 
     pub async fn create_variant_table(&self) -> Result<()> {
         let create_table_plan = self.variant_create_table_plan();
+        let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
+        interpreter.execute(self.ctx.clone()).await?;
+        Ok(())
+    }
+
+    pub async fn create_computed_table(&self) -> Result<()> {
+        let create_table_plan = self.computed_create_table_plan();
         let interpreter = CreateTableInterpreter::try_create(self.ctx.clone(), create_table_plan)?;
         interpreter.execute(self.ctx.clone()).await?;
         Ok(())
@@ -398,6 +448,57 @@ impl TestFixture {
         Box::pin(futures::stream::iter(blocks))
     }
 
+    pub fn gen_computed_sample_blocks(
+        num_of_blocks: usize,
+        start: i32,
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        Self::gen_computed_sample_blocks_ex(num_of_blocks, 3, start)
+    }
+
+    pub fn gen_computed_sample_blocks_ex(
+        num_of_block: usize,
+        rows_per_block: usize,
+        start: i32,
+    ) -> (TableSchemaRef, Vec<Result<DataBlock>>) {
+        let schema = Arc::new(Self::computed_table_schema().remove_computed_fields());
+        (
+            schema,
+            (0..num_of_block)
+                .map(|_| {
+                    let mut id_values = Vec::with_capacity(rows_per_block);
+                    let mut c_values = Vec::with_capacity(rows_per_block);
+                    let mut d_values = Vec::with_capacity(rows_per_block);
+                    for i in 0..rows_per_block {
+                        id_values.push(i as i32 + start * 3);
+                        c_values.push(format!("s-{}-{}", start, i).as_bytes().to_vec());
+                        d_values.push(i as i64 + (start * 10) as i64);
+                    }
+                    let column0 = Int32Type::from_data(id_values);
+                    let column1 = StringType::from_data(c_values);
+                    let column2 = Int64Type::from_data(d_values);
+                    let columns = vec![column0, column1, column2];
+
+                    Ok(DataBlock::new_from_columns(columns))
+                })
+                .collect(),
+        )
+    }
+
+    pub fn gen_computed_sample_blocks_stream(num: usize, start: i32) -> SendableDataBlockStream {
+        let (_, blocks) = Self::gen_computed_sample_blocks(num, start);
+        Box::pin(futures::stream::iter(blocks))
+    }
+
+    pub fn gen_computed_sample_blocks_stream_ex(
+        num_of_block: usize,
+        rows_perf_block: usize,
+        val_start_from: i32,
+    ) -> SendableDataBlockStream {
+        let (_, blocks) =
+            Self::gen_computed_sample_blocks_ex(num_of_block, rows_perf_block, val_start_from);
+        Box::pin(futures::stream::iter(blocks))
+    }
+
     pub async fn latest_default_table(&self) -> Result<Arc<dyn Table>> {
         self.ctx
             .get_catalog(CATALOG_DEFAULT)?
@@ -417,7 +518,7 @@ impl TestFixture {
         overwrite: bool,
         commit: bool,
     ) -> Result<()> {
-        let source_schema = table.schema();
+        let source_schema = &table.schema().remove_computed_fields();
         let mut build_res = PipelineBuildResult::create();
 
         let blocks = Arc::new(Mutex::new(VecDeque::from_iter(blocks)));
@@ -427,17 +528,12 @@ impl TestFixture {
         )?;
 
         let data_schema: DataSchemaRef = Arc::new(source_schema.into());
-        build_res
-            .main_pipeline
-            .add_transform(|transform_input_port, transform_output_port| {
-                TransformResortAddOn::try_create(
-                    self.ctx.clone(),
-                    transform_input_port,
-                    transform_output_port,
-                    data_schema.clone(),
-                    table.clone(),
-                )
-            })?;
+        fill_missing_columns(
+            self.ctx.clone(),
+            table.clone(),
+            data_schema,
+            &mut build_res.main_pipeline,
+        )?;
 
         table.append_data(
             self.ctx.clone(),
@@ -558,7 +654,13 @@ pub async fn do_deletion(
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut res = PipelineBuildResult::create();
     fuse_table
-        .delete(ctx.clone(), filter, col_indices, &mut res.main_pipeline)
+        .delete(
+            ctx.clone(),
+            filter,
+            col_indices,
+            false,
+            &mut res.main_pipeline,
+        )
         .await?;
 
     if !res.main_pipeline.is_empty() {
@@ -585,7 +687,10 @@ pub async fn do_update(
     } else {
         (None, vec![])
     };
-    let update_list = plan.generate_update_list(table.schema().into(), col_indices.clone())?;
+    let update_list =
+        plan.generate_update_list(ctx.clone(), table.schema().into(), col_indices.clone())?;
+    let computed_list =
+        plan.generate_stored_computed_list(ctx.clone(), Arc::new(table.schema().into()))?;
 
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let mut res = PipelineBuildResult::create();
@@ -595,6 +700,7 @@ pub async fn do_update(
             filter,
             col_indices,
             update_list,
+            computed_list,
             &mut res.main_pipeline,
         )
         .await?;
@@ -621,6 +727,16 @@ pub async fn append_sample_data_overwrite(
 
 pub async fn append_variant_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
     let stream = TestFixture::gen_variant_sample_blocks_stream(num_blocks, 1);
+    let table = fixture.latest_default_table().await?;
+
+    let blocks = stream.try_collect().await?;
+    fixture
+        .append_commit_blocks(table.clone(), blocks, true, true)
+        .await
+}
+
+pub async fn append_computed_sample_data(num_blocks: usize, fixture: &TestFixture) -> Result<()> {
+    let stream = TestFixture::gen_computed_sample_blocks_stream(num_blocks, 1);
     let table = fixture.latest_default_table().await?;
 
     let blocks = stream.try_collect().await?;

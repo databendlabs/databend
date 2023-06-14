@@ -149,11 +149,13 @@ fn replace_column_binding(
                 let new_column = ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    column_position: None,
                     table_index: None,
                     column_name: column.column.column_name.clone(),
                     index: *index_pairs.get(&index).unwrap(),
                     data_type: column.column.data_type,
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: column.column.virtual_computed_expr.clone(),
                 };
                 return Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
                     span: column.span,

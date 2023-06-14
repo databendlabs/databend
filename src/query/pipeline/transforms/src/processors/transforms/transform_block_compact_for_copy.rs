@@ -110,7 +110,7 @@ impl Compactor for BlockCompactorForCopy {
         Ok(res)
     }
 
-    fn compact_final(&self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
         let mut res = vec![];
         if self.accumulated_rows != 0 {
             if self.aborting.load(Ordering::Relaxed) {

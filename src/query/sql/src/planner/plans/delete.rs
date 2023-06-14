@@ -14,13 +14,25 @@
 
 use crate::optimizer::SExpr;
 use crate::plans::ScalarExpr;
+use crate::ColumnSet;
+use crate::IndexType;
+use crate::MetadataRef;
+
+#[derive(Clone, Debug)]
+pub struct SubqueryDesc {
+    // The s_expr is a plan tree after decorrelation subquery
+    pub input_expr: SExpr,
+    // `_row_id`'s index
+    pub index: IndexType,
+    pub outer_columns: ColumnSet,
+}
 
 #[derive(Clone, Debug)]
 pub struct DeletePlan {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
+    pub metadata: MetadataRef,
     pub selection: Option<ScalarExpr>,
-    // The case: selection is subquery
-    pub input_expr: Option<SExpr>,
+    pub subquery_desc: Option<SubqueryDesc>,
 }

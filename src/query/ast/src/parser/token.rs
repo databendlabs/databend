@@ -143,6 +143,9 @@ pub enum TokenKind {
     #[regex(r#"[_a-zA-Z][_$a-zA-Z0-9]*"#)]
     Ident,
 
+    #[regex(r#"\$[0-9]+"#)]
+    ColumnPosition,
+
     #[regex(r#"`[^`]*`"#)]
     #[regex(r#""([^"\\]|\\.|"")*""#)]
     #[regex(r#"'([^'\\]|\\.|'')*'"#)]
@@ -816,6 +819,8 @@ pub enum TokenKind {
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
     STATUS,
+    #[token("STORED", ignore(ascii_case))]
+    STORED,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]

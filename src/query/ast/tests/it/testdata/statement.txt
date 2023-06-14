@@ -380,13 +380,15 @@ Explain {
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "a",
-                                    quote: None,
-                                    span: Some(
-                                        24..25,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            24..25,
+                                        ),
+                                    },
+                                ),
                             },
                             alias: None,
                         },
@@ -454,13 +456,15 @@ Explain {
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "a",
-                                    quote: None,
-                                    span: Some(
-                                        24..25,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            24..25,
+                                        ),
+                                    },
+                                ),
                             },
                             alias: None,
                         },
@@ -576,7 +580,7 @@ CreateTable(
                             precision: 38,
                             scale: 0,
                         },
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -629,15 +633,17 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: Some(
-                            Literal {
-                                span: Some(
-                                    59..60,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        59..60,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
                         comment: None,
                     },
@@ -650,7 +656,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -703,15 +709,17 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: Some(
-                            Literal {
-                                span: Some(
-                                    50..51,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        50..51,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
                         comment: None,
                     },
@@ -724,7 +732,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -844,7 +852,7 @@ CreateTable(
                                 String,
                             ],
                         },
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -862,7 +870,262 @@ CreateTable(
                                 String,
                             ],
                         },
-                        default_expr: None,
+                        expr: None,
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a STRING NOT NULL, b STRING NOT NULL, c STRING NOT NULL AS (concat(a, ' ', b)) STORED)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    27..28,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Some(
+                29..30,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                32..33,
+                            ),
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                42..43,
+                            ),
+                        },
+                        data_type: String,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                52..53,
+                            ),
+                        },
+                        data_type: String,
+                        expr: Some(
+                            Stored(
+                                FunctionCall {
+                                    span: Some(
+                                        65..82,
+                                    ),
+                                    distinct: false,
+                                    name: Identifier {
+                                        name: "concat",
+                                        quote: None,
+                                        span: Some(
+                                            65..71,
+                                        ),
+                                    },
+                                    args: [
+                                        ColumnRef {
+                                            span: Some(
+                                                72..73,
+                                            ),
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    name: "a",
+                                                    quote: None,
+                                                    span: Some(
+                                                        72..73,
+                                                    ),
+                                                },
+                                            ),
+                                        },
+                                        Literal {
+                                            span: Some(
+                                                75..78,
+                                            ),
+                                            lit: String(
+                                                " ",
+                                            ),
+                                        },
+                                        ColumnRef {
+                                            span: Some(
+                                                80..81,
+                                            ),
+                                            database: None,
+                                            table: None,
+                                            column: Name(
+                                                Identifier {
+                                                    name: "b",
+                                                    quote: None,
+                                                    span: Some(
+                                                        80..81,
+                                                    ),
+                                                },
+                                            ),
+                                        },
+                                    ],
+                                    params: [],
+                                    window: None,
+                                },
+                            ),
+                        ),
+                        comment: None,
+                    },
+                ],
+            ),
+        ),
+        engine: None,
+        uri_location: None,
+        cluster_by: [],
+        table_options: {},
+        as_query: None,
+        transient: false,
+    },
+)
+
+
+---------- Input ----------
+create table if not exists a.b (a int, b int, c int as (a + b) virtual );
+---------- Output ---------
+CREATE TABLE IF NOT EXISTS a.b (a Int32 NOT NULL, b Int32 NOT NULL, c Int32 NOT NULL AS ((a + b)) VIRTUAL)
+---------- AST ------------
+CreateTable(
+    CreateTableStmt {
+        if_not_exists: true,
+        catalog: None,
+        database: Some(
+            Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    27..28,
+                ),
+            },
+        ),
+        table: Identifier {
+            name: "b",
+            quote: None,
+            span: Some(
+                29..30,
+            ),
+        },
+        source: Some(
+            Columns(
+                [
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "a",
+                            quote: None,
+                            span: Some(
+                                32..33,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "b",
+                            quote: None,
+                            span: Some(
+                                39..40,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: None,
+                        comment: None,
+                    },
+                    ColumnDefinition {
+                        name: Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                46..47,
+                            ),
+                        },
+                        data_type: Int32,
+                        expr: Some(
+                            Virtual(
+                                BinaryOp {
+                                    span: Some(
+                                        58..59,
+                                    ),
+                                    op: Plus,
+                                    left: ColumnRef {
+                                        span: Some(
+                                            56..57,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    56..57,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                    right: ColumnRef {
+                                        span: Some(
+                                            60..61,
+                                        ),
+                                        database: None,
+                                        table: None,
+                                        column: Name(
+                                            Identifier {
+                                                name: "b",
+                                                quote: None,
+                                                span: Some(
+                                                    60..61,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                },
+                            ),
+                        ),
                         comment: None,
                     },
                 ],
@@ -1013,7 +1276,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -1083,7 +1346,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -1444,7 +1707,7 @@ CreateTable(
                         data_type: Nullable(
                             Timestamp,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -1456,7 +1719,7 @@ CreateTable(
                             ),
                         },
                         data_type: Timestamp,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -1515,13 +1778,15 @@ CreateView(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "number",
-                                        quote: None,
-                                        span: Some(
-                                            24..30,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "number",
+                                            quote: None,
+                                            span: Some(
+                                                24..30,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 right: Literal {
                                     span: Some(
@@ -1626,13 +1891,15 @@ AlterView(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "number",
-                                        quote: None,
-                                        span: Some(
-                                            23..29,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "number",
+                                            quote: None,
+                                            span: Some(
+                                                23..29,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 right: Literal {
                                     span: Some(
@@ -1767,13 +2034,15 @@ CreateView(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "number",
-                                        quote: None,
-                                        span: Some(
-                                            29..35,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "number",
+                                            quote: None,
+                                            span: Some(
+                                                29..35,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 right: Literal {
                                     span: Some(
@@ -1886,13 +2155,15 @@ AlterView(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "number",
-                                        quote: None,
-                                        span: Some(
-                                            28..34,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "number",
+                                            quote: None,
+                                            span: Some(
+                                                28..34,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 right: Literal {
                                     span: Some(
@@ -2126,7 +2397,7 @@ CreateTable(
                         data_type: Nullable(
                             Int32,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2140,7 +2411,7 @@ CreateTable(
                         data_type: Nullable(
                             Int64,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2154,7 +2425,7 @@ CreateTable(
                         data_type: Nullable(
                             String,
                         ),
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2199,7 +2470,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2211,7 +2482,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int64,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                     ColumnDefinition {
@@ -2223,7 +2494,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2268,7 +2539,7 @@ CreateTable(
                             ),
                         },
                         data_type: String,
-                        default_expr: None,
+                        expr: None,
                         comment: None,
                     },
                 ],
@@ -2313,15 +2584,17 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: Some(
-                            Literal {
-                                span: Some(
-                                    30..31,
-                                ),
-                                lit: UInt64(
-                                    1,
-                                ),
-                            },
+                        expr: Some(
+                            Default(
+                                Literal {
+                                    span: Some(
+                                        30..31,
+                                    ),
+                                    lit: UInt64(
+                                        1,
+                                    ),
+                                },
+                            ),
                         ),
                         comment: None,
                     },
@@ -2582,13 +2855,15 @@ Query(
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "a",
-                                quote: None,
-                                span: Some(
-                                    16..17,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        16..17,
+                                    ),
+                                },
+                            ),
                         },
                         alias: None,
                     },
@@ -2639,13 +2914,15 @@ Query(
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "a",
-                                    quote: None,
-                                    span: Some(
-                                        41..42,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            41..42,
+                                        ),
+                                    },
+                                ),
                             },
                             right: Literal {
                                 span: Some(
@@ -2672,13 +2949,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "b",
-                                        quote: None,
-                                        span: Some(
-                                            51..52,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                51..52,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 right: Literal {
                                     span: Some(
@@ -2695,13 +2974,15 @@ Query(
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "a",
-                                    quote: None,
-                                    span: Some(
-                                        59..60,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            59..60,
+                                        ),
+                                    },
+                                ),
                             },
                         },
                     },
@@ -2715,13 +2996,15 @@ Query(
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "a",
-                                    quote: None,
-                                    span: Some(
-                                        70..71,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            70..71,
+                                        ),
+                                    },
+                                ),
                             },
                         ],
                     ),
@@ -2738,13 +3021,15 @@ Query(
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "a",
-                                quote: None,
-                                span: Some(
-                                    79..80,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        79..80,
+                                    ),
+                                },
+                            ),
                         },
                         right: Literal {
                             span: Some(
@@ -3123,15 +3408,17 @@ Query(
                             ),
                         },
                     ),
-                    column: Identifier {
-                        name: "c1",
-                        quote: Some(
-                            '"',
-                        ),
-                        span: Some(
-                            40..44,
-                        ),
-                    },
+                    column: Name(
+                        Identifier {
+                            name: "c1",
+                            quote: Some(
+                                '"',
+                            ),
+                            span: Some(
+                                40..44,
+                            ),
+                        },
+                    ),
                 },
                 asc: None,
                 nulls_first: None,
@@ -3201,13 +3488,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                28..29,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    28..29,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -3223,13 +3512,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                34..35,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    34..35,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -3343,13 +3634,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                39..40,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    39..40,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -3365,13 +3658,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                45..46,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    45..46,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -3485,13 +3780,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                40..41,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    40..41,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -3507,13 +3804,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                46..47,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    46..47,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -3627,13 +3926,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                38..39,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    38..39,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -3649,13 +3950,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                44..45,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    44..45,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -3769,13 +4072,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                33..34,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    33..34,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -3791,13 +4096,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                39..40,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    39..40,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -3911,13 +4218,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                38..39,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    38..39,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -3933,13 +4242,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                44..45,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    44..45,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -4053,13 +4364,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                33..34,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    33..34,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -4075,13 +4388,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                39..40,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    39..40,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -4195,13 +4510,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                39..40,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    39..40,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -4217,13 +4534,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                45..46,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    45..46,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -4337,13 +4656,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                39..40,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    39..40,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -4359,13 +4680,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                45..46,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    45..46,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -4479,13 +4802,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                39..40,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    39..40,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -4501,13 +4826,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                45..46,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    45..46,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -4621,13 +4948,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                34..35,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    34..35,
+                                                ),
+                                            },
+                                        ),
                                     },
                                     right: ColumnRef {
                                         span: Some(
@@ -4643,13 +4972,15 @@ Query(
                                                 ),
                                             },
                                         ),
-                                        column: Identifier {
-                                            name: "a",
-                                            quote: None,
-                                            span: Some(
-                                                40..41,
-                                            ),
-                                        },
+                                        column: Name(
+                                            Identifier {
+                                                name: "a",
+                                                quote: None,
+                                                span: Some(
+                                                    40..41,
+                                                ),
+                                            },
+                                        ),
                                     },
                                 },
                             ),
@@ -5180,13 +5511,15 @@ Query(
                                     ),
                                 },
                             ),
-                            column: Identifier {
-                                name: "a",
-                                quote: None,
-                                span: Some(
-                                    24..25,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                },
+                            ),
                         },
                         right: Subquery {
                             span: Some(
@@ -5223,13 +5556,15 @@ Query(
                                                             ),
                                                         },
                                                     ),
-                                                    column: Identifier {
-                                                        name: "a",
-                                                        quote: None,
-                                                        span: Some(
-                                                            42..43,
-                                                        ),
-                                                    },
+                                                    column: Name(
+                                                        Identifier {
+                                                            name: "a",
+                                                            quote: None,
+                                                            span: Some(
+                                                                42..43,
+                                                            ),
+                                                        },
+                                                    ),
                                                 },
                                                 alias: None,
                                             },
@@ -5351,13 +5686,15 @@ Query(
                                     ),
                                 },
                             ),
-                            column: Identifier {
-                                name: "a",
-                                quote: None,
-                                span: Some(
-                                    24..25,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                },
+                            ),
                         },
                         right: Subquery {
                             span: Some(
@@ -5394,13 +5731,15 @@ Query(
                                                             ),
                                                         },
                                                     ),
-                                                    column: Identifier {
-                                                        name: "a",
-                                                        quote: None,
-                                                        span: Some(
-                                                            42..43,
-                                                        ),
-                                                    },
+                                                    column: Name(
+                                                        Identifier {
+                                                            name: "a",
+                                                            quote: None,
+                                                            span: Some(
+                                                                42..43,
+                                                            ),
+                                                        },
+                                                    ),
                                                 },
                                                 alias: None,
                                             },
@@ -5522,13 +5861,15 @@ Query(
                                     ),
                                 },
                             ),
-                            column: Identifier {
-                                name: "a",
-                                quote: None,
-                                span: Some(
-                                    24..25,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                },
+                            ),
                         },
                         right: Subquery {
                             span: Some(
@@ -5565,13 +5906,15 @@ Query(
                                                             ),
                                                         },
                                                     ),
-                                                    column: Identifier {
-                                                        name: "a",
-                                                        quote: None,
-                                                        span: Some(
-                                                            43..44,
-                                                        ),
-                                                    },
+                                                    column: Name(
+                                                        Identifier {
+                                                            name: "a",
+                                                            quote: None,
+                                                            span: Some(
+                                                                43..44,
+                                                            ),
+                                                        },
+                                                    ),
                                                 },
                                                 alias: None,
                                             },
@@ -5693,13 +6036,15 @@ Query(
                                     ),
                                 },
                             ),
-                            column: Identifier {
-                                name: "a",
-                                quote: None,
-                                span: Some(
-                                    24..25,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "a",
+                                    quote: None,
+                                    span: Some(
+                                        24..25,
+                                    ),
+                                },
+                            ),
                         },
                         right: Subquery {
                             span: Some(
@@ -5734,13 +6079,15 @@ Query(
                                                             ),
                                                         },
                                                     ),
-                                                    column: Identifier {
-                                                        name: "a",
-                                                        quote: None,
-                                                        span: Some(
-                                                            38..39,
-                                                        ),
-                                                    },
+                                                    column: Name(
+                                                        Identifier {
+                                                            name: "a",
+                                                            quote: None,
+                                                            span: Some(
+                                                                38..39,
+                                                            ),
+                                                        },
+                                                    ),
                                                 },
                                                 alias: None,
                                             },
@@ -6644,13 +6991,15 @@ AlterTable(
                     ),
                     database: None,
                     table: None,
-                    column: Identifier {
-                        name: "c1",
-                        quote: None,
-                        span: Some(
-                            25..27,
-                        ),
-                    },
+                    column: Name(
+                        Identifier {
+                            name: "c1",
+                            quote: None,
+                            span: Some(
+                                25..27,
+                            ),
+                        },
+                    ),
                 },
             ],
         },
@@ -6729,13 +7078,15 @@ AlterTable(
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "c1",
-                            quote: None,
-                            span: Some(
-                                36..38,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "c1",
+                                quote: None,
+                                span: Some(
+                                    36..38,
+                                ),
+                            },
+                        ),
                     },
                     right: Literal {
                         span: Some(
@@ -6788,15 +7139,17 @@ AlterTable(
                     ),
                 },
                 data_type: Float32,
-                default_expr: Some(
-                    Literal {
-                        span: Some(
-                            41..44,
-                        ),
-                        lit: UInt64(
-                            101,
-                        ),
-                    },
+                expr: Some(
+                    Default(
+                        Literal {
+                            span: Some(
+                                41..44,
+                            ),
+                            lit: UInt64(
+                                101,
+                            ),
+                        },
+                    ),
                 ),
                 comment: Some(
                     "hello",
@@ -7112,7 +7465,7 @@ CreateTable(
                             ),
                         },
                         data_type: Int32,
-                        default_expr: None,
+                        expr: None,
                         comment: Some(
                             "col comment",
                         ),
@@ -9294,13 +9647,15 @@ Update(
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "a",
-                            quote: None,
-                            span: Some(
-                                23..24,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Some(
+                                    23..24,
+                                ),
+                            },
+                        ),
                     },
                     right: Literal {
                         span: Some(
@@ -9342,13 +9697,15 @@ Update(
                     ),
                     database: None,
                     table: None,
-                    column: Identifier {
-                        name: "c",
-                        quote: None,
-                        span: Some(
-                            42..43,
-                        ),
-                    },
+                    column: Name(
+                        Identifier {
+                            name: "c",
+                            quote: None,
+                            span: Some(
+                                42..43,
+                            ),
+                        },
+                    ),
                 },
                 right: Literal {
                     span: Some(
@@ -9512,13 +9869,15 @@ Query(
                                     ),
                                 },
                             ),
-                            column: Identifier {
-                                name: "c1",
-                                quote: None,
-                                span: Some(
-                                    9..11,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "c1",
+                                    quote: None,
+                                    span: Some(
+                                        9..11,
+                                    ),
+                                },
+                            ),
                         },
                         alias: None,
                     },
@@ -9611,13 +9970,15 @@ Query(
                                     ),
                                 },
                             ),
-                            column: Identifier {
-                                name: "c1",
-                                quote: None,
-                                span: Some(
-                                    14..16,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "c1",
+                                    quote: None,
+                                    span: Some(
+                                        14..16,
+                                    ),
+                                },
+                            ),
                         },
                         alias: None,
                     },
@@ -9636,13 +9997,15 @@ Query(
                                     ),
                                 },
                             ),
-                            column: Identifier {
-                                name: "c2",
-                                quote: None,
-                                span: Some(
-                                    25..27,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "c2",
+                                    quote: None,
+                                    span: Some(
+                                        25..27,
+                                    ),
+                                },
+                            ),
                         },
                         alias: None,
                     },
@@ -9752,13 +10115,15 @@ Query(
                             ),
                             database: None,
                             table: None,
-                            column: Identifier {
-                                name: "c1",
-                                quote: None,
-                                span: Some(
-                                    7..9,
-                                ),
-                            },
+                            column: Name(
+                                Identifier {
+                                    name: "c1",
+                                    quote: None,
+                                    span: Some(
+                                        7..9,
+                                    ),
+                                },
+                            ),
                         },
                         alias: None,
                     },
@@ -9909,13 +10274,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
-                                        span: Some(
-                                            40..41,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Some(
+                                                40..41,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                             [
@@ -9925,13 +10292,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "b",
-                                        quote: None,
-                                        span: Some(
-                                            43..44,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                43..44,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                             [
@@ -9941,13 +10310,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "c",
-                                        quote: None,
-                                        span: Some(
-                                            46..47,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "c",
+                                            quote: None,
+                                            span: Some(
+                                                46..47,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                             [
@@ -9957,13 +10328,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "d",
-                                        quote: None,
-                                        span: Some(
-                                            49..50,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "d",
+                                            quote: None,
+                                            span: Some(
+                                                49..50,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                         ],
@@ -10042,13 +10415,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
-                                        span: Some(
-                                            40..41,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Some(
+                                                40..41,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                             [
@@ -10058,13 +10433,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "b",
-                                        quote: None,
-                                        span: Some(
-                                            43..44,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                43..44,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                             [
@@ -10074,13 +10451,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "c",
-                                        quote: None,
-                                        span: Some(
-                                            47..48,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "c",
+                                            quote: None,
+                                            span: Some(
+                                                47..48,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 ColumnRef {
                                     span: Some(
@@ -10088,13 +10467,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "d",
-                                        quote: None,
-                                        span: Some(
-                                            50..51,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "d",
+                                            quote: None,
+                                            span: Some(
+                                                50..51,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                         ],
@@ -10173,13 +10554,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
-                                        span: Some(
-                                            41..42,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Some(
+                                                41..42,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 ColumnRef {
                                     span: Some(
@@ -10187,13 +10570,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "b",
-                                        quote: None,
-                                        span: Some(
-                                            44..45,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                44..45,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                             [
@@ -10203,13 +10588,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "c",
-                                        quote: None,
-                                        span: Some(
-                                            49..50,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "c",
+                                            quote: None,
+                                            span: Some(
+                                                49..50,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                             [
@@ -10219,13 +10606,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "d",
-                                        quote: None,
-                                        span: Some(
-                                            54..55,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "d",
+                                            quote: None,
+                                            span: Some(
+                                                54..55,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 ColumnRef {
                                     span: Some(
@@ -10233,13 +10622,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "e",
-                                        quote: None,
-                                        span: Some(
-                                            57..58,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "e",
+                                            quote: None,
+                                            span: Some(
+                                                57..58,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                         ],
@@ -10318,13 +10709,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "a",
-                                        quote: None,
-                                        span: Some(
-                                            41..42,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "a",
+                                            quote: None,
+                                            span: Some(
+                                                41..42,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 ColumnRef {
                                     span: Some(
@@ -10332,13 +10725,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "b",
-                                        quote: None,
-                                        span: Some(
-                                            44..45,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "b",
+                                            quote: None,
+                                            span: Some(
+                                                44..45,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                             [],
@@ -10349,13 +10744,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "d",
-                                        quote: None,
-                                        span: Some(
-                                            53..54,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "d",
+                                            quote: None,
+                                            span: Some(
+                                                53..54,
+                                            ),
+                                        },
+                                    ),
                                 },
                                 ColumnRef {
                                     span: Some(
@@ -10363,13 +10760,15 @@ Query(
                                     ),
                                     database: None,
                                     table: None,
-                                    column: Identifier {
-                                        name: "e",
-                                        quote: None,
-                                        span: Some(
-                                            56..57,
-                                        ),
-                                    },
+                                    column: Name(
+                                        Identifier {
+                                            name: "e",
+                                            quote: None,
+                                            span: Some(
+                                                56..57,
+                                            ),
+                                        },
+                                    ),
                                 },
                             ],
                         ],
@@ -10447,13 +10846,15 @@ Query(
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "a",
-                                    quote: None,
-                                    span: Some(
-                                        31..32,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            31..32,
+                                        ),
+                                    },
+                                ),
                             },
                             ColumnRef {
                                 span: Some(
@@ -10461,13 +10862,15 @@ Query(
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "b",
-                                    quote: None,
-                                    span: Some(
-                                        34..35,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            34..35,
+                                        ),
+                                    },
+                                ),
                             },
                             ColumnRef {
                                 span: Some(
@@ -10475,13 +10878,15 @@ Query(
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "c",
-                                    quote: None,
-                                    span: Some(
-                                        37..38,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "c",
+                                        quote: None,
+                                        span: Some(
+                                            37..38,
+                                        ),
+                                    },
+                                ),
                             },
                         ],
                     ),
@@ -10558,13 +10963,15 @@ Query(
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "a",
-                                    quote: None,
-                                    span: Some(
-                                        33..34,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "a",
+                                        quote: None,
+                                        span: Some(
+                                            33..34,
+                                        ),
+                                    },
+                                ),
                             },
                             ColumnRef {
                                 span: Some(
@@ -10572,13 +10979,15 @@ Query(
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "b",
-                                    quote: None,
-                                    span: Some(
-                                        36..37,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "b",
+                                        quote: None,
+                                        span: Some(
+                                            36..37,
+                                        ),
+                                    },
+                                ),
                             },
                             ColumnRef {
                                 span: Some(
@@ -10586,13 +10995,15 @@ Query(
                                 ),
                                 database: None,
                                 table: None,
-                                column: Identifier {
-                                    name: "c",
-                                    quote: None,
-                                    span: Some(
-                                        39..40,
-                                    ),
-                                },
+                                column: Name(
+                                    Identifier {
+                                        name: "c",
+                                        quote: None,
+                                        span: Some(
+                                            39..40,
+                                        ),
+                                    },
+                                ),
                             },
                         ],
                     ),
@@ -10672,13 +11083,15 @@ CreateDatamaskPolicy(
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "VAL",
-                            quote: None,
-                            span: Some(
-                                111..114,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "VAL",
+                                quote: None,
+                                span: Some(
+                                    111..114,
+                                ),
+                            },
+                        ),
                     },
                 ],
                 else_result: Some(
@@ -10731,13 +11144,15 @@ CreateVirtualColumns(
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "a",
-                            quote: None,
-                            span: Some(
-                                24..25,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Some(
+                                    24..25,
+                                ),
+                            },
+                        ),
                     },
                     accessor: Bracket {
                         key: Literal {
@@ -10775,13 +11190,15 @@ CreateVirtualColumns(
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "b",
-                            quote: None,
-                            span: Some(
-                                39..40,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "b",
+                                quote: None,
+                                span: Some(
+                                    39..40,
+                                ),
+                            },
+                        ),
                     },
                     accessor: Bracket {
                         key: Literal {
@@ -10841,13 +11258,15 @@ AlterVirtualColumns(
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "a",
-                            quote: None,
-                            span: Some(
-                                23..24,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "a",
+                                quote: None,
+                                span: Some(
+                                    23..24,
+                                ),
+                            },
+                        ),
                     },
                     accessor: Bracket {
                         key: Literal {
@@ -10885,13 +11304,15 @@ AlterVirtualColumns(
                         ),
                         database: None,
                         table: None,
-                        column: Identifier {
-                            name: "b",
-                            quote: None,
-                            span: Some(
-                                38..39,
-                            ),
-                        },
+                        column: Name(
+                            Identifier {
+                                name: "b",
+                                quote: None,
+                                span: Some(
+                                    38..39,
+                                ),
+                            },
+                        ),
                     },
                     accessor: Bracket {
                         key: Literal {
