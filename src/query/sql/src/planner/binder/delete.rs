@@ -84,11 +84,6 @@ impl<'a> Binder {
                     outer_columns = child_expr.used_columns();
                 };
                 outer_columns.extend(subquery_expr.outer_columns.iter());
-                if outer_columns.is_empty() {
-                    return Err(ErrorCode::from_string(
-                        "The subquery is invalid in delete statement".to_string(),
-                    ));
-                }
 
                 let filter = Filter {
                     predicates: vec![scalar],

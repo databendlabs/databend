@@ -24,7 +24,7 @@ use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
-use common_sql::optimizer::SExpr;
+use common_sql::optimizer::{CascadesOptimizer, DEFAULT_REWRITE_RULES, HeuristicOptimizer, SExpr};
 use common_sql::plans::BoundColumnRef;
 use common_sql::plans::ConstantExpr;
 use common_sql::plans::EvalScalar;
@@ -93,6 +93,14 @@ impl DeleteInterpreter {
             })),
             Arc::new(input_expr.clone()),
         );
+        // Optimize expression
+        // BindContext is only used by pre_optimize and post_optimize, so we can use a mock one.
+        let mock_bind_context = Box::new(BindContext::new());
+        let heuristic_optimizer = HeuristicOptimizer::new(self.ctx.get_function_context()?, mock_bind_context, self.plan.metadata.clone());
+        let mut expr = heuristic_optimizer.optimize_expression(&expr, &DEFAULT_REWRITE_RULES)?;
+        let mut cascades = CascadesOptimizer::create(self.ctx.clone(), self.plan.metadata.clone(), false)?;
+        expr = cascades.optimize(expr)?;
+
         // Create `input_expr` pipeline and execute it to get `_row_id` data block.
         let select_interpreter = SelectInterpreter::try_create(
             self.ctx.clone(),

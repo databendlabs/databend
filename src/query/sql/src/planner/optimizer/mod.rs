@@ -33,6 +33,7 @@ mod util;
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::SubqueryRewriter;
 pub use heuristic::DEFAULT_REWRITE_RULES;
+pub use cascades::CascadesOptimizer;
 pub use m_expr::MExpr;
 pub use memo::Memo;
 pub use optimizer::optimize;
