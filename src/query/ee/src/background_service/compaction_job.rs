@@ -61,9 +61,9 @@ WHERE t.database != 'system'
     AND t.data_compressed_size > 0;
 ";
 
-const SEGMENT_SIZE: u64 = 0;
-const PER_SEGMENT_BLOCK: u64 = 1;
-const PER_BLOCK_SIZE: u64 = 1; // MB
+const SEGMENT_SIZE: u64 = 10;
+const PER_SEGMENT_BLOCK: u64 = 100;
+const PER_BLOCK_SIZE: u64 = 50; // MB
 
 const EXPIRE_SEC: u64 = 60 * 60 * 24 * 7; // 7 days
 
