@@ -212,7 +212,7 @@ impl Interpreter for DeleteInterpreter {
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
-        if !self.plan.subquery_desc.is_empty() {
+        let selection = if !self.plan.subquery_desc.is_empty() {
             let mut filters = VecDeque::new();
             for subquery_desc in &self.plan.subquery_desc {
                 let filter = self.subquery_filter(&subquery_desc).await?;
@@ -221,9 +221,12 @@ impl Interpreter for DeleteInterpreter {
             // Traverse `selection` and put `filters` into `selection`.
             let mut selection = self.plan.selection.clone().unwrap();
             replace_subquery(filters, &mut selection)?;
-        }
+            Some(selection)
+        } else {
+            self.plan.selection.clone()
+        };
 
-        let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
+        let (filter, col_indices) = if let Some(scalar) = selection {
             let filter = cast_expr_to_non_null_boolean(
                 scalar
                     .as_expr()?
@@ -238,7 +241,20 @@ impl Interpreter for DeleteInterpreter {
                 ));
             }
 
-            let col_indices = scalar.used_columns().into_iter().collect();
+            let col_indices: Vec<usize> = scalar
+                .used_columns()
+                .into_iter()
+                .filter_map(|index| {
+                    if !self.plan.subquery_desc.is_empty() {
+                        if index != self.plan.subquery_desc[0].index {
+                            return Some(index);
+                        }
+                    } else {
+                        return Some(index);
+                    }
+                    None
+                })
+                .collect();
             (Some(filter), col_indices)
         } else {
             (None, vec![])
