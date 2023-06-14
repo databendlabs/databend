@@ -14,8 +14,8 @@ common-meta-kvapi = { path = "../kvapi" }
 common-meta-raft-store = { path = "../raft-store" }
 common-meta-sled-store = { path = "../sled-store" }
 common-meta-types = { path = "../types" }
-common-proto-conv = { path = "../proto-conv" }
-common-protos = { path = "../protos" }
+common-proto-conv = { path = "../../common/proto-conv" }
+common-protos = { path = "../../common/protos" }
 common-tracing = { path = "../../common/tracing" }
 
 # Crates.io dependencies

@@ -28,6 +28,8 @@ members = [
     "src/common/profile",
     "src/common/vector",
     "src/common/license",
+    "src/common/protos",
+    "src/common/proto-conv",
     # Query
     "src/query/ast",
     "src/query/codegen",
@@ -89,9 +91,6 @@ members = [
     "src/meta/store",
     "src/meta/types",
     "src/meta/ee",
-    # meta proto
-    "src/meta/proto-conv",
-    "src/meta/protos",
     # databend-meta
     "src/meta/service",
     # sqllogictest
