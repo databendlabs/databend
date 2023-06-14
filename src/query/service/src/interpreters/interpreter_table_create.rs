@@ -291,11 +291,10 @@ pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<
     // check block_per_segment is not over 1000.
     if let Some(value) = options.get(FUSE_OPT_KEY_BLOCK_PER_SEGMENT) {
         let blocks_per_segment = value.parse::<u64>()?;
+        let error_str = "invalid block_per_segment option, can't be over 1000";
         if blocks_per_segment > 1000 {
-            error!("invalid block_per_segment option, can't be over 1000");
-            return Err(ErrorCode::TableOptionInvalid(format!(
-                "invalid block_per_segment option, can't be over 1000"
-            )));
+            error!(error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!("{}", error_str)));
         }
     }
     Ok(())
