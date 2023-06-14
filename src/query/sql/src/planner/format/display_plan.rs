@@ -185,14 +185,14 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
             delete.table_name.as_str(),
         )
         .unwrap();
-    let s_expr = if let Some(subquery_desc) = &delete.subquery_desc {
+    let s_expr = if !delete.subquery_desc.is_empty() {
         let row_id_column_binding = ColumnBinding {
             database_name: Some(delete.database_name.clone()),
             table_name: Some(delete.table_name.clone()),
             column_position: None,
             table_index: Some(table_index),
             column_name: ROW_ID_COL_NAME.to_string(),
-            index: subquery_desc.index,
+            index: delete.subquery_desc[0].index,
             data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
             visibility: Visibility::InVisible,
             virtual_computed_expr: None,
@@ -207,7 +207,7 @@ fn format_delete(delete: &DeletePlan) -> Result<String> {
                     index: 0,
                 }],
             })),
-            Arc::new(subquery_desc.input_expr.clone()),
+            Arc::new(delete.subquery_desc[0].input_expr.clone()),
         )
     } else {
         let scan = RelOperator::Scan(Scan {
