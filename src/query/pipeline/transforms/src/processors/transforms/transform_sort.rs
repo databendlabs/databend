@@ -17,7 +17,7 @@ use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::Pipeline;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
 
 use super::transform_multi_sort_merge::try_add_multi_sort_merge;
 use super::transform_sort_merge::try_create_transform_sort_merge;
@@ -33,7 +33,7 @@ pub fn build_full_sort_pipeline(
     limit: Option<usize>,
     partial_block_size: usize,
     final_block_size: usize,
-    prof_info: Option<(u32, ProfSpanSetRef)>,
+    prof_info: Option<(u32, SharedProcessorProfiles)>,
     after_exchange: bool,
 ) -> Result<()> {
     // Partial sort

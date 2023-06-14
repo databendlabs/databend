@@ -17,14 +17,15 @@ use std::time::Instant;
 use common_exception::Result;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::Processor;
-use common_profile::ProfSpanBuilder;
-use common_profile::ProfSpanSetRef;
+use common_profile::ProcessorProfile;
+use common_profile::SharedProcessorProfiles;
 
 pub struct ProfileWrapper<T> {
     inner: T,
     prof_span_id: u32,
-    prof_span_set: ProfSpanSetRef,
-    prof_span_builder: ProfSpanBuilder,
+    prof_span_set: SharedProcessorProfiles,
+
+    prof: ProcessorProfile,
 }
 
 impl<T> ProfileWrapper<T>
@@ -33,13 +34,13 @@ where T: Processor + 'static
     pub fn create(
         inner: T,
         prof_span_id: u32,
-        prof_span_set: ProfSpanSetRef,
+        prof_span_set: SharedProcessorProfiles,
     ) -> Box<dyn Processor> {
         Box::new(Self {
             inner,
             prof_span_id,
             prof_span_set,
-            prof_span_builder: ProfSpanBuilder::default(),
+            prof: ProcessorProfile::default(),
         })
     }
 }
@@ -62,7 +63,7 @@ where T: Processor + 'static
                 self.prof_span_set
                     .lock()
                     .unwrap()
-                    .update(self.prof_span_id, self.prof_span_builder.clone().finish());
+                    .update(self.prof_span_id, self.prof);
                 Ok(Event::Finished)
             }
             v => Ok(v),
@@ -73,8 +74,7 @@ where T: Processor + 'static
         let instant = Instant::now();
         self.inner.process()?;
         let elapsed = instant.elapsed();
-        self.prof_span_builder
-            .accumulate_process_time(elapsed.as_nanos() as u64);
+        self.prof = self.prof + ProcessorProfile { cpu_time: elapsed };
         Ok(())
     }
 

@@ -29,7 +29,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
 use common_sql::executor::PhysicalPlan;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -802,8 +802,11 @@ impl FragmentCoordinator {
             self.initialized = true;
 
             let pipeline_ctx = QueryContext::create_from(ctx);
-            let pipeline_builder =
-                PipelineBuilder::create(pipeline_ctx, enable_profiling, ProfSpanSetRef::default());
+            let pipeline_builder = PipelineBuilder::create(
+                pipeline_ctx,
+                enable_profiling,
+                SharedProcessorProfiles::default(),
+            );
             self.pipeline_build_res = Some(pipeline_builder.finalize(&self.physical_plan)?);
         }
 
