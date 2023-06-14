@@ -1,1 +1,2 @@
 1
+ERROR 1105 (HY000) at line 1: Code: 1301, Text = table option abc is invalid for create table statement.
