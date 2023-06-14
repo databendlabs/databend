@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::cmp;
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -127,11 +128,13 @@ impl ReclusterMutator {
                     unfinished_parts.len() + start.len()
                 };
 
-                if point_depth > max_depth {
-                    max_depth = point_depth;
-                    max_points = vec![i];
-                } else if point_depth == max_depth {
-                    max_points.push(i);
+                match point_depth.cmp(&max_depth) {
+                    Ordering::Greater => {
+                        max_depth = point_depth;
+                        max_points = vec![i];
+                    }
+                    Ordering::Equal => max_points.push(i),
+                    Ordering::Less => (),
                 }
 
                 for (_, val) in unfinished_parts.iter_mut() {
