@@ -23,6 +23,7 @@ use common_sql::plans::SetOptionsPlan;
 use common_storages_fuse::TableContext;
 use tracing::error;
 
+use super::interpreter_table_create::is_valid_block_per_segment;
 use super::interpreter_table_create::is_valid_create_opt;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -49,12 +50,13 @@ impl Interpreter for SetOptionsInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // valid_options_check and do request to meta_srv
         let mut options_map = HashMap::new();
+        is_valid_block_per_segment(&self.plan.set_options)?;
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
             if !is_valid_create_opt(&key) {
-                error!("invalid opt for fuse table in create table statement");
+                error!("invalid opt for fuse table in alter table statement");
                 return Err(ErrorCode::TableOptionInvalid(format!(
-                    "table option {key} is invalid for create table statement",
+                    "table option {key} is invalid for alter table statement",
                 )));
             }
             options_map.insert(key, Some(table_option.1.clone()));
