@@ -1049,9 +1049,7 @@ impl PipelineBuilder {
     }
 
     fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
-        debug_assert!(
-            matches!(&*row_fetch.input, PhysicalPlan::Limit(limit) if matches!(*limit.input, PhysicalPlan::Sort(_)))
-        );
+        debug_assert!(matches!(&*row_fetch.input, PhysicalPlan::Limit(_)));
         self.build_pipeline(&row_fetch.input)?;
         build_row_fetcher_pipeline(
             self.ctx.clone(),
