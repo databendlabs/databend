@@ -160,7 +160,7 @@ impl Binder {
             row_id_index = Some(
                 self.metadata
                     .write()
-                    .add_internal_column(scan.table_index, internal_column.clone()),
+                    .add_internal_column(scan.table_index, internal_column),
             );
         }
         // Add row_id column to scan's column set

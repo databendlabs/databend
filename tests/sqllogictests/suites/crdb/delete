@@ -305,6 +305,16 @@ select * from t1 order by a;
 8
 
 statement ok
+insert into t1 values(1), (2), (3);
+
+statement ok
+delete from t1 where exists(select b from t2 where a = b);
+
+query I
+select * from t1 order by a;
+----
+1
+8
+
+statement ok
 drop table t1;
-
-

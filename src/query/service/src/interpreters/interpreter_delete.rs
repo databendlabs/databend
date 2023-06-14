@@ -217,7 +217,7 @@ impl Interpreter for DeleteInterpreter {
         let selection = if !self.plan.subquery_desc.is_empty() {
             let mut filters = VecDeque::new();
             for subquery_desc in &self.plan.subquery_desc {
-                let filter = self.subquery_filter(&subquery_desc).await?;
+                let filter = self.subquery_filter(subquery_desc).await?;
                 filters.push_front(filter);
             }
             // Traverse `selection` and put `filters` into `selection`.
