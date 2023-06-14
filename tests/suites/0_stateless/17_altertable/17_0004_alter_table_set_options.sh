@@ -14,3 +14,7 @@ echo "alter table t2 set options(snapshot_location = '$SNAPSHOT_LOCATION',block_
 echo "select * from t2;" | $MYSQL_CLIENT_CONNECT
 # valid key check
 echo "alter table t2 set options(abc = '1')" | $MYSQL_CLIENT_CONNECT
+
+#drop table
+echo "drop table if exists t" | $MYSQL_CLIENT_CONNECT
+echo "drop table if exists t2" | $MYSQL_CLIENT_CONNECT
