@@ -29,6 +29,7 @@ use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
+use crate::operations::delete::MutationTaskInfo;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
@@ -227,7 +228,7 @@ impl FuseTable {
             (Arc::new(None), None)
         };
 
-        let total_tasks = self
+        let MutationTaskInfo { total_tasks, .. } = self
             .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
             .await?;
         if total_tasks != 0 {

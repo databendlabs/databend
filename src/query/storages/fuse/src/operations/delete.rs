@@ -28,12 +28,15 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
+use common_expression::ColumnIndex;
 use common_expression::ComputedExpr;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
+use common_expression::Expr;
 use common_expression::FieldIndex;
+use common_expression::FunctionID::Builtin;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableSchema;
@@ -41,6 +44,9 @@ use common_expression::Value;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
+use storages_common_index::RangeIndex;
+use storages_common_pruner::RangePruner;
+use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
@@ -52,6 +58,11 @@ use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::FuseTable;
+
+pub struct MutationTaskInfo {
+    pub(crate) total_tasks: usize,
+    pub(crate) num_whole_block_mutation: usize,
+}
 
 impl FuseTable {
     /// The flow of Pipeline is as follows:
@@ -87,18 +98,20 @@ impl FuseTable {
         }
 
         // check if unconditional deletion
-        if filter.is_none() {
-            let progress_values = ProgressValues {
-                rows: snapshot.summary.row_count as usize,
-                bytes: snapshot.summary.uncompressed_byte_size as usize,
-            };
-            ctx.get_write_progress().incr(&progress_values);
-            // deleting the whole table... just a truncate
-            let purge = false;
-            return self.do_truncate(ctx.clone(), purge).await;
-        }
+        let filter_expr = match filter {
+            None => {
+                let progress_values = ProgressValues {
+                    rows: snapshot.summary.row_count as usize,
+                    bytes: snapshot.summary.uncompressed_byte_size as usize,
+                };
+                ctx.get_write_progress().incr(&progress_values);
+                // deleting the whole table... just a truncate
+                let purge = false;
+                return self.do_truncate(ctx.clone(), purge).await;
+            }
+            Some(filter) => filter,
+        };
 
-        let filter_expr = filter.unwrap();
         if col_indices.is_empty() && !query_row_id_col {
             // here the situation: filter_expr is not null, but col_indices in empty, which
             // indicates the expr being evaluated is unrelated to the value of rows:
@@ -193,7 +206,17 @@ impl FuseTable {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
-        let total_tasks = self
+
+        {
+            let status = "delete: begin pruning".to_string();
+            ctx.set_status_info(&status);
+            info!(status);
+        }
+
+        let MutationTaskInfo {
+            total_tasks,
+            num_whole_block_mutation: num_whole_block_need_to_mutated,
+        } = self
             .mutation_block_pruning(
                 ctx.clone(),
                 Some(filter.clone()),
@@ -201,6 +224,7 @@ impl FuseTable {
                 base_snapshot,
             )
             .await?;
+
         if total_tasks == 0 {
             return Ok(());
         }
@@ -208,8 +232,8 @@ impl FuseTable {
         // Status.
         {
             let status = format!(
-                "delete: begin to run delete tasks, total tasks: {}",
-                total_tasks
+                "delete: begin to run delete tasks, total tasks: {},  number of complete deletion detected: {}",
+                total_tasks, num_whole_block_need_to_mutated
             );
             ctx.set_status_info(&status);
             info!(status);
@@ -284,7 +308,7 @@ impl FuseTable {
         filter: Option<RemoteExpr<String>>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
-    ) -> Result<usize> {
+    ) -> Result<MutationTaskInfo> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
             filter,
@@ -301,11 +325,53 @@ impl FuseTable {
 
         let segment_locations = create_segment_location_vector(segment_locations, None);
         let block_metas = pruner.pruning(segment_locations).await?;
+        eprintln!("filter is {:?}", push_down);
+
+        let mut whole_block_deletions = std::collections::HashSet::new();
+
+        if !block_metas.is_empty() {
+            // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
+            //
+            // let's try pruning the blocks further to get the blocks that need to be deleted completely, so that
+            // later during mutation, we need not to load the data of these blocks:
+            //
+            // 1. invert the filter expression
+            // 2. apply the inverse filter expression to the block metas that have need to be deleted completely or partially
+            //
+            //  - for those blocks that need to be deleted completely, they will be filtered out.
+            //  - for those blocks that need to be deleted partially, they will NOT be filtered out.
+            //
+
+            if let Some(PushDownInfo {
+                filter: Some(remote_expr),
+                ..
+            }) = push_down
+            {
+                let inverse = Self::invert_expr(remote_expr.as_expr(&BUILTIN_FUNCTIONS));
+
+                let func_ctx = ctx.get_function_context()?;
+
+                let range_index = RangeIndex::try_create(
+                    func_ctx,
+                    &inverse,
+                    self.table_info.schema(),
+                    StatisticsOfColumns::default(), // TODO default values
+                )?;
+
+                for (block_meta_idx, block_meta) in &block_metas {
+                    if !range_index.should_keep(&block_meta.as_ref().col_stats, None) {
+                        // this block is completely deleted, we can skip it during mutation.
+                        whole_block_deletions
+                            .insert((block_meta_idx.segment_idx, block_meta_idx.block_idx));
+                    }
+                }
+            }
+        }
 
         let range_block_metas = block_metas
             .clone()
             .into_iter()
-            .map(|(a, b)| (Some(a), b))
+            .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
         let (_, inner_parts) = self.read_partitions_with_metas(
@@ -322,13 +388,25 @@ impl FuseTable {
             block_metas
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
-                .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
+                .map(|((block_meta_index, block_meta), c)| {
+                    let key = (block_meta_index.segment_idx, block_meta_index.block_idx);
+                    let whole_block_deletion = whole_block_deletions.contains(&key);
+                    MutationPartInfo::create(
+                        block_meta_index,
+                        block_meta.cluster_stats.clone(),
+                        c,
+                        whole_block_deletion,
+                    )
+                })
                 .collect(),
         );
 
         let part_num = parts.len();
         ctx.set_partitions(parts)?;
-        Ok(part_num)
+        Ok(MutationTaskInfo {
+            total_tasks: part_num,
+            num_whole_block_mutation: whole_block_deletions.len(),
+        })
     }
 
     pub fn all_column_indices(&self) -> Vec<FieldIndex> {
@@ -340,5 +418,28 @@ impl FuseTable {
             .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
             .map(|(i, _)| i)
             .collect::<Vec<FieldIndex>>()
+    }
+
+    fn invert_expr<T: ColumnIndex>(expr: Expr<T>) -> Expr<T> {
+        // is there already an expression combinator that can do this?
+        let logic_not = BUILTIN_FUNCTIONS
+            .funcs
+            .get("not")
+            .expect("built-in function 'not' not found");
+        let (function, id) = logic_not
+            .get(0)
+            .expect("at least one candidate for built-in function 'not' should exist")
+            .clone();
+        Expr::FunctionCall {
+            span: None,
+            id: Builtin {
+                id,
+                name: function.signature.name.clone(),
+            },
+            function,
+            args: vec![expr],
+            return_type: DataType::Boolean,
+            generics: vec![],
+        }
     }
 }
