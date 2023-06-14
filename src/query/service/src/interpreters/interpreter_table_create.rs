@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
@@ -229,6 +230,8 @@ impl CreateTableInterpreter {
             ..Default::default()
         };
 
+        is_valid_block_per_segment(&table_meta.options)?;
+
         for table_option in table_meta.options.iter() {
             let key = table_option.0.to_lowercase();
             if !is_valid_create_opt(&key) {
@@ -282,4 +285,17 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
 
 pub fn is_valid_create_opt<S: AsRef<str>>(opt_key: S) -> bool {
     CREATE_TABLE_OPTIONS.contains(opt_key.as_ref().to_lowercase().as_str())
+}
+
+pub fn is_valid_block_per_segment(options: &BTreeMap<String, String>) -> Result<()> {
+    // check block_per_segment is not over 1000.
+    if let Some(value) = options.get(FUSE_OPT_KEY_BLOCK_PER_SEGMENT) {
+        let blocks_per_segment = value.parse::<u64>()?;
+        let error_str = "invalid block_per_segment option, can't be over 1000";
+        if blocks_per_segment > 1000 {
+            error!(error_str);
+            return Err(ErrorCode::TableOptionInvalid(error_str));
+        }
+    }
+    Ok(())
 }
