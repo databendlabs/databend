@@ -14,7 +14,7 @@ This feature can be particularly useful for inspecting or viewing the contents o
 
 ```sql
 SELECT [<alias>.]<column> [, <column> ...] | [<alias>.]$<col_position> [, $<col_position> ...] FROM
-{@<stage_name>[/<path>] [<table_alias>] | '<uri>'} [(
+{@<stage_name>[/<path>] [<table_alias>] | '<uri>' [<table_alias>]} [(
   [ PATTERN => '<regex_pattern>']
   [ FILE_FORMAT => '<format_name>']
   [ FILES => ( 'file_name' [ , 'file_name' ... ] ) ]
@@ -58,9 +58,9 @@ The PATTERN option allows you to specify a [PCRE2](https://www.pcre.org/current/
 
 The FILES option, on the other hand, enables you to explicitly specify one or more file names separated by commas. This option allows you to directly filter and query data from specific files within a folder. For example, if you want to query data from the Parquet files "books-2023.parquet", "books-2022.parquet", and "books-2021.parquet", you can provide these file names within the FILES option.
 
-### <alias>
+### alias
 
-When working with a staged file in a SELECT statement where no table name is available, you can assign an alias to the file. This allows you to treat the file as a table, with its fields serving as columns within the table. This is useful when working with multiple tables within the SELECT statement or when selecting specific columns. Here's an example:
+When working with staged files in a SELECT statement where no table name is available, you can assign an alias to the files. This allows you to treat the files as a table, with its fields serving as columns within the table. This is useful when working with multiple tables within the SELECT statement or when selecting specific columns. Here's an example:
 
 ```sql
 -- The alias 't1' represents the staged file, while 't2' is a regular table
