@@ -125,9 +125,15 @@ pub enum Statement {
     AlterView(AlterViewStmt),
     DropView(DropViewStmt),
 
-    // indexes
+    // Indexes
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
+
+    // VirtualColumns
+    CreateVirtualColumns(CreateVirtualColumnsStmt),
+    AlterVirtualColumns(AlterVirtualColumnsStmt),
+    DropVirtualColumns(DropVirtualColumnsStmt),
+    GenerateVirtualColumns(GenerateVirtualColumnsStmt),
 
     // User
     ShowUsers,
@@ -216,6 +222,11 @@ pub enum Statement {
     ShowShares(ShowSharesStmt),
     ShowObjectGrantPrivileges(ShowObjectGrantPrivilegesStmt),
     ShowGrantsOfShare(ShowGrantsOfShareStmt),
+
+    // data mask
+    CreateDatamaskPolicy(CreateDatamaskPolicyStmt),
+    DropDatamaskPolicy(DropDatamaskPolicyStmt),
+    DescDatamaskPolicy(DescDatamaskPolicyStmt),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -378,6 +389,10 @@ impl Display for Statement {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateVirtualColumns(stmt) => write!(f, "{stmt}")?,
+            Statement::AlterVirtualColumns(stmt) => write!(f, "{stmt}")?,
+            Statement::DropVirtualColumns(stmt) => write!(f, "{stmt}")?,
+            Statement::GenerateVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::ShowUsers => write!(f, "SHOW USERS")?,
             Statement::ShowRoles => write!(f, "SHOW ROLES")?,
             Statement::CreateUser(stmt) => write!(f, "{stmt}")?,
@@ -518,6 +533,9 @@ impl Display for Statement {
             Statement::ShowShares(stmt) => write!(f, "{stmt}")?,
             Statement::ShowObjectGrantPrivileges(stmt) => write!(f, "{stmt}")?,
             Statement::ShowGrantsOfShare(stmt) => write!(f, "{stmt}")?,
+            Statement::CreateDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DropDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
+            Statement::DescDatamaskPolicy(stmt) => write!(f, "{stmt}")?,
         }
         Ok(())
     }

@@ -24,10 +24,10 @@ use common_ast::ast::Literal;
 use common_catalog::plan::InternalColumn;
 use common_catalog::table::Table;
 use common_expression::types::DataType;
+use common_expression::ComputedExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_meta_types::MetaId;
 use parking_lot::RwLock;
 
 use crate::optimizer::SExpr;
@@ -58,7 +58,7 @@ pub struct Metadata {
     columns: Vec<ColumnEntry>,
     //// Columns that are lazy materialized.
     lazy_columns: HashSet<usize>,
-    agg_indexes: HashMap<MetaId, Vec<(u64, SExpr)>>,
+    agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
 }
 
 impl Metadata {
@@ -115,6 +115,10 @@ impl Metadata {
     }
 
     pub fn add_lazy_columns(&mut self, indices: HashSet<usize>) {
+        if !self.lazy_columns.is_empty() {
+            // `lazy_columns` is only allowed to be set once.
+            return;
+        }
         debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
         self.lazy_columns.extend(indices);
     }
@@ -152,6 +156,7 @@ impl Metadata {
             .collect()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn add_base_table_column(
         &mut self,
         name: String,
@@ -159,15 +164,19 @@ impl Metadata {
         table_index: IndexType,
         path_indices: Option<Vec<IndexType>>,
         leaf_index: Option<IndexType>,
+        column_position: Option<usize>,
+        virtual_computed_expr: Option<String>,
     ) -> IndexType {
         let column_index = self.columns.len();
         let column_entry = ColumnEntry::BaseTableColumn(BaseTableColumn {
             column_name: name,
+            column_position,
             data_type,
             column_index,
             table_index,
             path_indices,
             leaf_index,
+            virtual_computed_expr,
         });
         self.columns.push(column_entry);
         column_index
@@ -221,15 +230,15 @@ impl Metadata {
         column_index
     }
 
-    pub fn add_agg_indexes(&mut self, table_id: MetaId, table_indexes: Vec<(u64, SExpr)>) {
+    pub fn add_agg_indexes(&mut self, table: String, agg_indexes: Vec<(u64, String, SExpr)>) {
         self.agg_indexes
-            .entry(table_id)
-            .and_modify(|indexes| indexes.extend_from_slice(&table_indexes))
-            .or_insert(table_indexes);
+            .entry(table)
+            .and_modify(|indexes| indexes.extend_from_slice(&agg_indexes))
+            .or_insert(agg_indexes);
     }
 
-    pub fn get_agg_indexes(&self, table_id: MetaId) -> Option<&[(u64, SExpr)]> {
-        self.agg_indexes.get(&table_id).map(|v| v.as_slice())
+    pub fn get_agg_indexes(&self, table: &str) -> Option<&[(u64, String, SExpr)]> {
+        self.agg_indexes.get(table).map(|v| v.as_slice())
     }
 
     pub fn add_table(
@@ -254,14 +263,32 @@ impl Metadata {
             source_of_view,
         };
         self.tables.push(table_entry);
-        let mut fields = VecDeque::new();
-        for (i, field) in table_meta.schema().fields().iter().enumerate() {
-            fields.push_back((vec![i], field.clone()));
+        let mut index = 0;
+        let mut fields = VecDeque::with_capacity(table_meta.schema().fields().len());
+        for field in table_meta.schema().fields().iter() {
+            if let Some(ComputedExpr::Virtual(_)) = field.computed_expr() {
+                fields.push_back((vec![], field.clone()));
+            } else {
+                fields.push_back((vec![index], field.clone()));
+                index += 1;
+            }
         }
 
         // build leaf index in DFS order for primitive columns.
         let mut leaf_index = 0;
         while let Some((indices, field)) = fields.pop_front() {
+            if indices.is_empty() {
+                self.add_base_table_column(
+                    field.name().clone(),
+                    field.data_type().clone(),
+                    table_index,
+                    None,
+                    None,
+                    None,
+                    Some(field.computed_expr().unwrap().expr().clone()),
+                );
+                continue;
+            }
             let path_indices = if indices.len() > 1 {
                 Some(indices.clone())
             } else {
@@ -279,6 +306,8 @@ impl Metadata {
                     field.data_type().clone(),
                     table_index,
                     path_indices,
+                    None,
+                    None,
                     None,
                 );
 
@@ -301,6 +330,8 @@ impl Metadata {
                     table_index,
                     path_indices,
                     Some(leaf_index),
+                    Some(indices[0] + 1),
+                    None,
                 );
                 leaf_index += 1;
             }
@@ -404,6 +435,8 @@ pub struct BaseTableColumn {
     pub table_index: IndexType,
     pub column_index: IndexType,
     pub column_name: String,
+    // column_position inside table schema
+    pub column_position: Option<usize>,
     pub data_type: TableDataType,
 
     /// Path indices for inner column of struct data type.
@@ -411,6 +444,8 @@ pub struct BaseTableColumn {
     /// Leaf index is the primitive column index in Parquet, constructed in DFS order.
     /// None if the data type of column is struct.
     pub leaf_index: Option<usize>,
+    /// Virtual computed expression, generated in query.
+    pub virtual_computed_expr: Option<String>,
 }
 
 #[derive(Clone, Debug)]

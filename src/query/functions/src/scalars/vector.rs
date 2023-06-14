@@ -65,12 +65,19 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
             let data = std::str::from_utf8(data).unwrap();
 
-            let api_base = ctx.func_ctx.openai_api_base_url.clone();
+            let api_base = ctx.func_ctx.openai_api_embedding_base_url.clone();
             let api_key = ctx.func_ctx.openai_api_key.clone();
+            let api_version = ctx.func_ctx.openai_api_version.clone();
             let embedding_model = ctx.func_ctx.openai_api_embedding_model.clone();
             let completion_model = ctx.func_ctx.openai_api_completion_model.clone();
 
-            let openai = OpenAI::create(api_base, api_key, embedding_model, completion_model);
+            let openai = OpenAI::create(
+                api_base,
+                api_key,
+                api_version,
+                embedding_model,
+                completion_model,
+            );
             let result = openai.embedding_request(&[data.to_string()]);
             match result {
                 Ok((embeddings, _)) => {
@@ -107,12 +114,19 @@ pub fn register(registry: &mut FunctionRegistry) {
             }
 
             let data = std::str::from_utf8(data).unwrap();
-            let api_base = ctx.func_ctx.openai_api_base_url.clone();
+            let api_base = ctx.func_ctx.openai_api_chat_base_url.clone();
             let api_key = ctx.func_ctx.openai_api_key.clone();
+            let api_version = ctx.func_ctx.openai_api_version.clone();
             let embedding_model = ctx.func_ctx.openai_api_embedding_model.clone();
             let completion_model = ctx.func_ctx.openai_api_completion_model.clone();
 
-            let openai = OpenAI::create(api_base, api_key, embedding_model, completion_model);
+            let openai = OpenAI::create(
+                api_base,
+                api_key,
+                api_version,
+                embedding_model,
+                completion_model,
+            );
             let result = openai.completion_text_request(data.to_string());
             match result {
                 Ok((resp, _)) => {

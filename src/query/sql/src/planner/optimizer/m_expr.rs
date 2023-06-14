@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_exception::ErrorCode;
 use common_exception::Result;
 
@@ -31,22 +33,22 @@ use crate::IndexType;
 #[derive(Clone)]
 pub struct MExpr {
     // index of current `Group`
-    pub group_index: IndexType,
+    pub(crate) group_index: IndexType,
     // index of current `MExpr` within a `Group`
-    pub index: IndexType,
+    pub(crate) index: IndexType,
 
-    pub plan: RelOperator,
-    pub children: Vec<IndexType>,
+    pub(crate) plan: Arc<RelOperator>,
+    pub(crate) children: Vec<IndexType>,
 
     // Disable rules for current `MExpr`
-    pub applied_rules: AppliedRules,
+    pub(crate) applied_rules: AppliedRules,
 }
 
 impl MExpr {
     pub fn create(
         group_index: IndexType,
         index: IndexType,
-        plan: RelOperator,
+        plan: Arc<RelOperator>,
         children: Vec<IndexType>,
         applied_rules: AppliedRules,
     ) -> Self {

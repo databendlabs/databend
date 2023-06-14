@@ -16,6 +16,10 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_arrow::arrow::io::ipc::read::deserialize_schema;
+use common_arrow::arrow::io::parquet::write::to_parquet_schema;
+use common_arrow::native::ColumnMeta as NativeColumnMeta;
+use common_arrow::native::PageMeta as NativePageMeta;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
@@ -24,6 +28,7 @@ use common_catalog::plan::Projection;
 use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::TopK;
+use common_catalog::plan::VirtualColumnInfo;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -39,11 +44,14 @@ use storages_common_index::Index;
 use storages_common_index::RangeIndex;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_table_meta::meta::BlockMeta;
+use storages_common_table_meta::meta::ColumnMeta;
 use tracing::debug;
 use tracing::info;
 
 use crate::fuse_lazy_part::FuseLazyPartInfo;
 use crate::fuse_part::FusePartInfo;
+use crate::fuse_part::VirtualColumnMeta;
+use crate::io::TableMetaLocationGenerator;
 use crate::pruning::FusePruner;
 use crate::pruning::SegmentLocation;
 use crate::FuseTable;
@@ -159,13 +167,13 @@ impl FuseTable {
         }
 
         let pruner = if !self.is_native() || self.cluster_key_meta.is_none() {
-            FusePruner::create(&ctx, dal, self.table_info.schema(), &push_downs)?
+            FusePruner::create(&ctx, dal.clone(), self.table_info.schema(), &push_downs)?
         } else {
             let cluster_keys = self.cluster_keys(ctx.clone());
 
             FusePruner::create_with_pages(
                 &ctx,
-                dal,
+                dal.clone(),
                 self.table_info.schema(),
                 &push_downs,
                 self.cluster_key_meta.clone(),
@@ -182,13 +190,33 @@ impl FuseTable {
             start.elapsed().as_secs()
         );
 
+        let virtual_columns_metas = if let Some(virtual_columns) =
+            PushDownInfo::virtual_columns_of_push_downs(&push_downs)
+        {
+            let mut virtual_columns_metas = Vec::with_capacity(block_metas.len());
+            for (_, block_meta) in &block_metas {
+                let virtual_columns_meta = self
+                    .get_virtual_columns_meta(dal.clone(), block_meta, &virtual_columns)
+                    .await?;
+                virtual_columns_metas.push(virtual_columns_meta);
+            }
+            Some(virtual_columns_metas)
+        } else {
+            None
+        };
+
         let block_metas = block_metas
             .into_iter()
             .map(|(block_meta_index, block_meta)| (Some(block_meta_index), block_meta))
             .collect::<Vec<_>>();
 
-        let result =
-            self.read_partitions_with_metas(push_downs, &block_metas, summary, pruning_stats)?;
+        let result = self.read_partitions_with_metas(
+            push_downs,
+            &block_metas,
+            virtual_columns_metas,
+            summary,
+            pruning_stats,
+        )?;
 
         if let Some(cache_key) = derterministic_cache_key {
             if let Some(cache) = CacheItem::cache() {
@@ -198,10 +226,87 @@ impl FuseTable {
         Ok(result)
     }
 
+    #[async_backtrace::framed]
+    async fn get_virtual_columns_meta(
+        &self,
+        dal: Operator,
+        block_meta: &Arc<BlockMeta>,
+        virtual_columns: &Vec<VirtualColumnInfo>,
+    ) -> Result<Option<HashMap<String, VirtualColumnMeta>>> {
+        // TODO: read parquet
+        let virtual_loc =
+            TableMetaLocationGenerator::gen_virtual_block_location(&block_meta.location.0);
+
+        // Read virtual column schema from file meta
+        let virtual_columns_meta = if let Ok(virtual_meta) = dal.stat(&virtual_loc).await {
+            let length = virtual_meta.content_length();
+            let schema_size_bytes = dal
+                .range_read(&virtual_loc, length - 16..length - 8)
+                .await?;
+            let schema_size =
+                u32::from_le_bytes(schema_size_bytes[0..4].try_into().unwrap()) as u64;
+            let meta_size = u32::from_le_bytes(schema_size_bytes[4..8].try_into().unwrap()) as u64;
+            let bytes = dal
+                .range_read(
+                    &virtual_loc,
+                    length - 16 - schema_size - meta_size..length - 16,
+                )
+                .await?;
+            let (virtual_schema, _) = deserialize_schema(&bytes)?;
+            let schema_descriptor = to_parquet_schema(&virtual_schema)?;
+
+            let mut off = schema_size as usize;
+            let meta_len = u64::from_le_bytes(bytes[off..off + 8].try_into().unwrap());
+            off += 8;
+            let mut native_metas = Vec::with_capacity(meta_len as usize);
+            for _ in 0..meta_len {
+                let offset = u64::from_le_bytes(bytes[off..off + 8].try_into().unwrap());
+                let page_num = u64::from_le_bytes(bytes[off + 8..off + 16].try_into().unwrap());
+                off += 16;
+                let mut pages = Vec::with_capacity(page_num as usize);
+                for _ in 0..page_num {
+                    let length = u64::from_le_bytes(bytes[off..off + 8].try_into().unwrap());
+                    let num_values =
+                        u64::from_le_bytes(bytes[off + 8..off + 16].try_into().unwrap());
+                    off += 16;
+                    pages.push(NativePageMeta { length, num_values });
+                }
+                native_metas.push(NativeColumnMeta { offset, pages })
+            }
+
+            let mut virtual_columns_meta = HashMap::new();
+            for virtual_column in virtual_columns {
+                for (i, field) in virtual_schema.fields.iter().enumerate() {
+                    if field.name == virtual_column.name {
+                        let name = virtual_column.name.clone();
+                        let native_meta = unsafe { native_metas.get_unchecked(i).clone() };
+                        let meta = ColumnMeta::Native(native_meta);
+                        let desc = schema_descriptor.columns()[i].clone();
+
+                        let virtual_column_meta = VirtualColumnMeta {
+                            index: i,
+                            meta,
+                            desc,
+                        };
+
+                        virtual_columns_meta.insert(name, virtual_column_meta);
+                        break;
+                    }
+                }
+            }
+            Some(virtual_columns_meta)
+        } else {
+            None
+        };
+
+        Ok(virtual_columns_meta)
+    }
+
     pub fn read_partitions_with_metas(
         &self,
         push_downs: Option<PushDownInfo>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        virtual_columns_metas: Option<Vec<Option<HashMap<String, VirtualColumnMeta>>>>,
         partitions_total: usize,
         pruning_stats: PruningStatistics,
     ) -> Result<(PartStatistics, Partitions)> {
@@ -221,8 +326,14 @@ impl FuseTable {
                 )
             })
             .unwrap_or_default();
-        let (mut statistics, parts) =
-            Self::to_partitions(Some(&schema), block_metas, &column_nodes, top_k, push_downs);
+        let (mut statistics, parts) = Self::to_partitions(
+            Some(&schema),
+            block_metas,
+            virtual_columns_metas,
+            &column_nodes,
+            top_k,
+            push_downs,
+        );
 
         // Update planner statistics.
         statistics.partitions_total = partitions_total;
@@ -241,11 +352,12 @@ impl FuseTable {
     pub fn to_partitions(
         schema: Option<&TableSchemaRef>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        virtual_columns_metas: Option<Vec<Option<HashMap<String, VirtualColumnMeta>>>>,
         column_nodes: &ColumnNodes,
         top_k: Option<TopK>,
-        push_down: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
     ) -> (PartStatistics, Partitions) {
-        let limit = push_down
+        let limit = push_downs
             .as_ref()
             .filter(|p| p.order_by.is_empty() && p.filter.is_none())
             .and_then(|p| p.limit)
@@ -265,12 +377,25 @@ impl FuseTable {
             });
         }
 
-        let (mut statistics, mut partitions) = match &push_down {
-            None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
+        let (mut statistics, mut partitions) = match &push_downs {
+            None => Self::all_columns_partitions(
+                schema,
+                &block_metas,
+                virtual_columns_metas,
+                top_k.clone(),
+                limit,
+            ),
             Some(extras) => match &extras.projection {
-                None => Self::all_columns_partitions(schema, &block_metas, top_k.clone(), limit),
+                None => Self::all_columns_partitions(
+                    schema,
+                    &block_metas,
+                    virtual_columns_metas,
+                    top_k.clone(),
+                    limit,
+                ),
                 Some(projection) => Self::projection_partitions(
                     &block_metas,
+                    virtual_columns_metas,
                     column_nodes,
                     projection,
                     top_k.clone(),
@@ -283,7 +408,7 @@ impl FuseTable {
             partitions.kind = PartitionsShuffleKind::Seq;
         }
 
-        statistics.is_exact = statistics.is_exact && Self::is_exact(&push_down);
+        statistics.is_exact = statistics.is_exact && Self::is_exact(&push_downs);
         (statistics, partitions)
     }
 
@@ -297,6 +422,7 @@ impl FuseTable {
     fn all_columns_partitions(
         schema: Option<&TableSchemaRef>,
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        virtual_columns_metas: Option<Vec<Option<HashMap<String, VirtualColumnMeta>>>>,
         top_k: Option<TopK>,
         limit: usize,
     ) -> (PartStatistics, Partitions) {
@@ -308,13 +434,20 @@ impl FuseTable {
         }
 
         let mut remaining = limit;
-        for (block_meta_index, block_meta) in block_metas.iter() {
+        for (i, (block_meta_index, block_meta)) in block_metas.iter().enumerate() {
+            let virtual_columns_meta =
+                if let Some(ref virtual_columns_metas) = virtual_columns_metas {
+                    unsafe { virtual_columns_metas.get_unchecked(i).clone() }
+                } else {
+                    None
+                };
             let rows = block_meta.row_count as usize;
             partitions.partitions.push(Self::all_columns_part(
                 schema,
                 block_meta_index,
                 &top_k,
                 block_meta,
+                virtual_columns_meta,
             ));
             statistics.read_rows += rows;
             statistics.read_bytes += block_meta.block_size as usize;
@@ -335,6 +468,7 @@ impl FuseTable {
 
     fn projection_partitions(
         block_metas: &[(Option<BlockMetaIndex>, Arc<BlockMeta>)],
+        virtual_columns_metas: Option<Vec<Option<HashMap<String, VirtualColumnMeta>>>>,
         column_nodes: &ColumnNodes,
         projection: &Projection,
         top_k: Option<TopK>,
@@ -350,11 +484,18 @@ impl FuseTable {
         let columns = projection.project_column_nodes(column_nodes).unwrap();
         let mut remaining = limit;
 
-        for (block_meta_index, block_meta) in block_metas {
+        for (i, (block_meta_index, block_meta)) in block_metas.iter().enumerate() {
+            let virtual_columns_meta =
+                if let Some(ref virtual_columns_metas) = virtual_columns_metas {
+                    unsafe { virtual_columns_metas.get_unchecked(i).clone() }
+                } else {
+                    None
+                };
             partitions.partitions.push(Self::projection_part(
                 block_meta,
                 block_meta_index,
                 column_nodes,
+                virtual_columns_meta,
                 top_k.clone(),
                 projection,
             ));
@@ -390,6 +531,7 @@ impl FuseTable {
         block_meta_index: &Option<BlockMetaIndex>,
         top_k: &Option<TopK>,
         meta: &BlockMeta,
+        virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
     ) -> PartInfoPtr {
         let mut columns_meta = HashMap::with_capacity(meta.col_metas.len());
 
@@ -421,6 +563,7 @@ impl FuseTable {
             format_version,
             rows_count,
             columns_meta,
+            virtual_columns_meta,
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
@@ -431,6 +574,7 @@ impl FuseTable {
         meta: &BlockMeta,
         block_meta_index: &Option<BlockMetaIndex>,
         column_nodes: &ColumnNodes,
+        virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
         top_k: Option<TopK>,
         projection: &Projection,
     ) -> PartInfoPtr {
@@ -463,6 +607,7 @@ impl FuseTable {
             format_version,
             rows_count,
             columns_meta,
+            virtual_columns_meta,
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),

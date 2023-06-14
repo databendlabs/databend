@@ -70,7 +70,7 @@ fn test_data_block(is_nullable: bool) -> Result<()> {
 
         let params =
             FileFormatParams::try_from_ast(FileFormatOptionsAst::new(options.clone()), false)?;
-        let mut options = FileFormatOptionsExt::create_from_settings(&settings)?;
+        let mut options = FileFormatOptionsExt::create_from_settings(&settings, false)?;
         let mut output_format = options.get_output_format(schema, params)?;
         let buffer = output_format.serialize_block(&block)?;
 
@@ -131,7 +131,7 @@ fn test_field_delimiter_with_ascii_control_code() -> Result<()> {
     options.insert("field_delimiter".to_string(), "\x01".to_string());
     options.insert("record_delimiter".to_string(), "\r\n".to_string());
     let params = FileFormatParams::try_from_ast(FileFormatOptionsAst::new(options.clone()), false)?;
-    let mut options = FileFormatOptionsExt::create_from_settings(&settings)?;
+    let mut options = FileFormatOptionsExt::create_from_settings(&settings, false)?;
     let mut output_format = options.get_output_format(schema, params)?;
     let buffer = output_format.serialize_block(&block)?;
 

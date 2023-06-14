@@ -25,6 +25,7 @@ use crate::normalize_identifier;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
+use crate::plans::CopyIntoTableMode;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
 use crate::plans::Replace;
@@ -106,9 +107,20 @@ impl Binder {
             InsertSource::Values { rest_str } => {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
                 match self.ctx.get_stage_attachment() {
-                    Some(mut attachment) => {
-                        attachment.values_str = values_str;
-                        Ok(InsertInputSource::Stage(Arc::new(attachment)))
+                    Some(attachment) => {
+                        let plan = self
+                            .bind_copy_from_attachment(
+                                bind_context,
+                                attachment,
+                                catalog_name.clone(),
+                                database_name.clone(),
+                                table_name.clone(),
+                                Arc::new(schema.clone().into()),
+                                &values_str,
+                                CopyIntoTableMode::Replace,
+                            )
+                            .await?;
+                        Ok(InsertInputSource::Stage(Box::new(plan)))
                     }
                     None => Ok(InsertInputSource::Values(values_str)),
                 }

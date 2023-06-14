@@ -16,7 +16,6 @@ use common_exception::Result;
 use common_expression::FunctionContext;
 
 use super::rewrite::RuleEliminateEvalScalar;
-use super::rewrite::RuleFoldConstant;
 use super::rewrite::RuleFoldCountAggregate;
 use super::rewrite::RuleNormalizeDisjunctiveFilter;
 use super::rewrite::RuleNormalizeScalarFilter;
@@ -57,10 +56,9 @@ impl RuleFactory {
     pub fn create_rule(
         id: RuleID,
         metadata: MetadataRef,
-        func_ctx: FunctionContext,
+        _func_ctx: FunctionContext,
     ) -> Result<RulePtr> {
         match id {
-            RuleID::FoldConstant => Ok(Box::new(RuleFoldConstant::new(func_ctx))),
             RuleID::EliminateEvalScalar => Ok(Box::new(RuleEliminateEvalScalar::new())),
             RuleID::PushDownFilterUnion => Ok(Box::new(RulePushDownFilterUnion::new())),
             RuleID::PushDownFilterEvalScalar => {

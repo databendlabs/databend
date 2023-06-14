@@ -14,6 +14,7 @@
 
 use std::collections::HashSet;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 
@@ -23,6 +24,7 @@ use crate::optimizer::RelationalProperty;
 use crate::plans::BoundColumnRef;
 use crate::plans::CastExpr;
 use crate::plans::ComparisonOp;
+use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::plans::WindowFuncType;
 
@@ -175,6 +177,14 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
                 WindowFuncType::Aggregate(agg) => {
                     agg.args.iter().all(|arg| prune_by_children(arg, columns))
                 }
+                WindowFuncType::LagLead(f) => {
+                    if let Some(default) = &f.default {
+                        prune_by_children(&f.arg, columns) & prune_by_children(default, columns)
+                    } else {
+                        prune_by_children(&f.arg, columns)
+                    }
+                }
+                WindowFuncType::NthValue(f) => prune_by_children(&f.arg, columns),
                 _ => false,
             };
             flag || scalar
@@ -197,6 +207,49 @@ pub fn prune_by_children(scalar: &ScalarExpr, columns: &HashSet<ScalarExpr>) -> 
         ScalarExpr::CastExpr(expr) => prune_by_children(expr.argument.as_ref(), columns),
         ScalarExpr::SubqueryExpr(_) => false,
     }
+}
+
+/// Wrap cast scalar to target type
+pub fn wrap_cast_scalar(
+    scalar: &ScalarExpr,
+    data_type: &DataType,
+    target_type: &DataType,
+) -> Result<ScalarExpr> {
+    let target_scalar = if target_type.remove_nullable() == DataType::Variant {
+        match data_type.remove_nullable() {
+            DataType::Boolean
+            | DataType::Number(_)
+            | DataType::Decimal(_)
+            | DataType::Timestamp
+            | DataType::Date
+            | DataType::Bitmap
+            | DataType::Variant => wrap_cast(scalar, target_type),
+            DataType::String => {
+                // parse string to JSON value
+                let func = ScalarExpr::FunctionCall(FunctionCall {
+                    span: None,
+                    func_name: "parse_json".to_string(),
+                    params: vec![],
+                    arguments: vec![scalar.clone()],
+                });
+                wrap_cast(&func, target_type)
+            }
+            _ => {
+                if data_type == &DataType::Null && target_type.is_nullable() {
+                    scalar.clone()
+                } else {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "unable to cast type `{}` to type `{}`",
+                        data_type, target_type
+                    )));
+                }
+            }
+        }
+    } else {
+        wrap_cast(scalar, target_type)
+    };
+
+    Ok(target_scalar)
 }
 
 /// Wrap a cast expression with given target type

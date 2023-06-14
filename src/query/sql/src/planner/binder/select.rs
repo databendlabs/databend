@@ -14,9 +14,11 @@
 
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::Arc;
 
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
+use common_ast::ast::ColumnID;
 use common_ast::ast::Expr;
 use common_ast::ast::Expr::Array;
 use common_ast::ast::GroupBy;
@@ -32,8 +34,6 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
-use common_ast::ast::Window;
-use common_ast::ast::WindowSpec;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -74,7 +74,7 @@ pub struct SelectItem<'a> {
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_select_stmt(
+    pub(crate) async fn bind_select_stmt(
         &mut self,
         bind_context: &mut BindContext,
         stmt: &SelectStmt,
@@ -90,7 +90,8 @@ impl Binder {
             }
         }
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
-            self.bind_one_table(bind_context, stmt).await?
+            let select_list = &stmt.select_list;
+            self.bind_one_table(bind_context, select_list).await?
         } else {
             let cross_joins = stmt
                 .from
@@ -114,9 +115,8 @@ impl Binder {
             from_context.all_column_bindings(),
             self.name_resolution_ctx.unquoted_ident_case_sensitive,
         );
-        let (new_stmt, new_order_by) = rewriter.rewrite(stmt, order_by)?;
+        let new_stmt = rewriter.rewrite(stmt)?;
         let stmt = new_stmt.as_ref().unwrap_or(stmt);
-        let order_by = new_order_by.as_deref().unwrap_or(order_by);
 
         // Collect set returning functions
         let set_returning_functions = {
@@ -133,6 +133,10 @@ impl Binder {
         s_expr = self
             .bind_project_set(&mut from_context, &set_returning_functions, s_expr)
             .await?;
+
+        // Try put window definitions into bind context.
+        // This operation should be before `normalize_select_list` because window functions can be used in select list.
+        self.analyze_window_definition(&mut from_context, &stmt.window_list)?;
 
         // Generate a analyzed select list with from context
         let mut select_list = self
@@ -171,7 +175,7 @@ impl Binder {
 
         // `analyze_projection` should behind `analyze_aggregate_select` because `analyze_aggregate_select` will rewrite `grouping`.
         let (mut scalar_items, projections) =
-            self.analyze_projection(&from_context, &select_list)?;
+            self.analyze_projection(&from_context.aggregate_info, &select_list)?;
 
         let having = if let Some(having) = &stmt.having {
             Some(
@@ -354,7 +358,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_where(
+    pub async fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
@@ -371,12 +375,13 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
+        scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
             is_having: false,
         };
-        let new_expr = SExpr::create_unary(filter_plan.into(), child);
+        let new_expr = SExpr::create_unary(Arc::new(filter_plan.into()), Arc::new(child));
         bind_context.set_expr_context(last_expr_context);
         Ok((new_expr, scalar))
     }
@@ -448,7 +453,7 @@ impl Binder {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bind_union(
+    pub fn bind_union(
         &mut self,
         left_span: Span,
         _right_span: Span,
@@ -466,7 +471,11 @@ impl Binder {
             .collect();
 
         let union_plan = UnionAll { pairs };
-        let mut new_expr = SExpr::create_binary(union_plan.into(), left_expr, right_expr);
+        let mut new_expr = SExpr::create_binary(
+            Arc::new(union_plan.into()),
+            Arc::new(left_expr),
+            Arc::new(right_expr),
+        );
 
         if distinct {
             new_expr = self.bind_distinct(
@@ -481,7 +490,7 @@ impl Binder {
         Ok((new_expr, left_context))
     }
 
-    fn bind_intersect(
+    pub fn bind_intersect(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -501,7 +510,7 @@ impl Binder {
         )
     }
 
-    fn bind_except(
+    pub fn bind_except(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -522,7 +531,7 @@ impl Binder {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bind_intersect_or_except(
+    pub fn bind_intersect_or_except(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -583,8 +592,9 @@ impl Binder {
         order_by: &[OrderItem],
         limit: usize,
     ) -> Result<()> {
-        // Only simple single table Top-N query is supported.
+        // Only simple single table queries with limit are supported.
         // e.g.
+        // SELECT ... FROM t WHERE ... LIMIT ...
         // SELECT ... FROM t WHERE ... ORDER BY ... LIMIT ...
         if stmt.group_by.is_some()
             || stmt.having.is_some()
@@ -596,9 +606,15 @@ impl Binder {
             return Ok(());
         }
 
-        let limit_threadhold = self.ctx.get_settings().get_lazy_topn_threshold()? as usize;
+        let limit_threadhold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
 
-        if !(!order_by.is_empty() && limit > 0 && limit <= limit_threadhold) {
+        let where_cols = where_scalar
+            .as_ref()
+            .map(|w| w.used_columns())
+            .unwrap_or_default();
+
+        if limit == 0 || limit > limit_threadhold || (order_by.is_empty() && where_cols.is_empty())
+        {
             return Ok(());
         }
 
@@ -641,11 +657,6 @@ impl Binder {
             }
         }
 
-        let where_cols = where_scalar
-            .as_ref()
-            .map(|w| w.used_columns())
-            .unwrap_or_default();
-
         let internal_cols = cols
             .iter()
             .filter(|col| matches!(col, ColumnEntry::InternalColumn(_)))
@@ -671,7 +682,6 @@ impl Binder {
 struct SelectRewriter<'a> {
     column_binding: &'a [ColumnBinding],
     new_stmt: Option<SelectStmt>,
-    new_order_by: Option<Vec<OrderByExpr>>,
     is_unquoted_ident_case_sensitive: bool,
 }
 
@@ -703,7 +713,7 @@ impl<'a> SelectRewriter<'a> {
         Expr::BinaryOp {
             span: None,
             left: Box::new(Expr::ColumnRef {
-                column: col,
+                column: ColumnID::Name(col),
                 span: None,
                 database: None,
                 table: None,
@@ -751,7 +761,7 @@ impl<'a> SelectRewriter<'a> {
                 .into_iter()
                 .map(|expr| Expr::ColumnRef {
                     span: None,
-                    column: expr,
+                    column: ColumnID::Name(expr),
                     database: None,
                     table: None,
                 })
@@ -776,20 +786,14 @@ impl<'a> SelectRewriter<'a> {
         SelectRewriter {
             column_binding,
             new_stmt: None,
-            new_order_by: None,
             is_unquoted_ident_case_sensitive,
         }
     }
 
-    fn rewrite(
-        &mut self,
-        stmt: &SelectStmt,
-        order_by: &[OrderByExpr],
-    ) -> Result<(Option<SelectStmt>, Option<Vec<OrderByExpr>>)> {
-        self.rewrite_window_references(stmt, order_by)?;
+    fn rewrite(&mut self, stmt: &SelectStmt) -> Result<Option<SelectStmt>> {
         self.rewrite_pivot(stmt)?;
         self.rewrite_unpivot(stmt)?;
-        Ok((self.new_stmt.take(), self.new_order_by.take()))
+        Ok(self.new_stmt.take())
     }
 
     fn rewrite_pivot(&mut self, stmt: &SelectStmt) -> Result<()> {
@@ -808,7 +812,7 @@ impl<'a> SelectRewriter<'a> {
             .ok_or_else(|| ErrorCode::SyntaxException("Aggregate column not found"))?;
         let aggregate_column_names = aggregate_columns
             .iter()
-            .map(|col| col.name.as_str())
+            .map(|col| col.name())
             .collect::<Vec<_>>();
         let new_group_by = stmt.group_by.clone().unwrap_or_else(|| {
             GroupBy::Normal(
@@ -832,7 +836,7 @@ impl<'a> SelectRewriter<'a> {
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
             let mut exclude_columns = aggregate_columns;
-            exclude_columns.push(pivot.value_column.clone());
+            exclude_columns.push(ColumnID::Name(pivot.value_column.clone()));
             star.exclude(exclude_columns);
         };
         let new_aggregate_name = Identifier {
@@ -874,7 +878,13 @@ impl<'a> SelectRewriter<'a> {
         let unpivot = stmt.from[0].unpivot().unwrap();
         let mut new_select_list = stmt.select_list.clone();
         if let Some(star) = new_select_list.iter_mut().find(|target| target.is_star()) {
-            star.exclude(unpivot.names.clone());
+            star.exclude(
+                unpivot
+                    .names
+                    .iter()
+                    .map(|ident| ColumnID::Name(ident.clone()))
+                    .collect(),
+            );
         };
         new_select_list.push(Self::target_func_from_name_args(
             Self::ident_from_string("unnest"),
@@ -900,200 +910,5 @@ impl<'a> SelectRewriter<'a> {
             });
         };
         Ok(())
-    }
-
-    fn rewrite_window_references(
-        &mut self,
-        stmt: &SelectStmt,
-        order_by: &[OrderByExpr],
-    ) -> Result<()> {
-        if stmt.window_list.is_none() {
-            return Ok(());
-        }
-        let (window_specs, mut resolved_window_specs) = self.extract_window_definitions(stmt)?;
-
-        let mut window_definitions = HashMap::with_capacity(window_specs.len());
-
-        for (name, spec) in window_specs.iter() {
-            let new_spec = Self::rewrite_inherited_window_spec(
-                spec,
-                &window_specs,
-                &mut resolved_window_specs,
-            )?;
-            window_definitions.insert(name.clone(), new_spec);
-        }
-
-        let mut new_select_list = stmt.select_list.clone();
-        for target in &mut new_select_list {
-            match target {
-                SelectTarget::AliasedExpr { expr, .. } => match expr {
-                    box Expr::FunctionCall { window, .. } => {
-                        if let Some(window) = window {
-                            match window {
-                                Window::WindowReference(reference) => {
-                                    let window_spec = window_definitions
-                                        .get(&reference.window_name.name)
-                                        .ok_or_else(|| {
-                                            ErrorCode::SyntaxException("Window not found")
-                                        })?;
-                                    *window = Window::WindowSpec(WindowSpec {
-                                        existing_window_name: None,
-                                        partition_by: window_spec.partition_by.clone(),
-                                        order_by: window_spec.order_by.clone(),
-                                        window_frame: window_spec.window_frame.clone(),
-                                    });
-                                }
-                                Window::WindowSpec(_) => continue,
-                            }
-                        }
-                    }
-                    _ => continue,
-                },
-                SelectTarget::QualifiedName { .. } => {}
-            }
-        }
-
-        if !order_by.is_empty() {
-            let mut new_order_by = order_by.to_vec();
-            for order in &mut new_order_by {
-                match &mut order.expr {
-                    Expr::FunctionCall { window, .. } => {
-                        if let Some(window) = window {
-                            match window {
-                                Window::WindowReference(reference) => {
-                                    let window_spec = window_definitions
-                                        .get(&reference.window_name.name)
-                                        .ok_or_else(|| {
-                                            ErrorCode::SyntaxException("Window not found")
-                                        })?;
-                                    *window = Window::WindowSpec(WindowSpec {
-                                        existing_window_name: None,
-                                        partition_by: window_spec.partition_by.clone(),
-                                        order_by: window_spec.order_by.clone(),
-                                        window_frame: window_spec.window_frame.clone(),
-                                    });
-                                }
-                                Window::WindowSpec(_) => continue,
-                            }
-                        }
-                    }
-                    _ => continue,
-                }
-            }
-            self.new_order_by = Some(new_order_by);
-        }
-
-        if let Some(ref mut new_stmt) = self.new_stmt {
-            new_stmt.select_list = new_select_list;
-        } else {
-            self.new_stmt = Some(SelectStmt {
-                select_list: new_select_list,
-                ..stmt.clone()
-            });
-        };
-        Ok(())
-    }
-
-    fn extract_window_definitions(
-        &mut self,
-        stmt: &SelectStmt,
-    ) -> Result<(HashMap<String, WindowSpec>, HashMap<String, WindowSpec>)> {
-        let mut window_specs = HashMap::new();
-        let mut resolved_window_specs = HashMap::new();
-        for window in stmt.window_list.as_ref().unwrap() {
-            window_specs.insert(window.name.name.clone(), window.spec.clone());
-            if window.spec.existing_window_name.is_none() {
-                resolved_window_specs.insert(window.name.name.clone(), window.spec.clone());
-            }
-        }
-        if let Some(ref mut new_stmt) = self.new_stmt {
-            new_stmt.window_list = None;
-        } else {
-            self.new_stmt = Some(SelectStmt {
-                window_list: None,
-                ..stmt.clone()
-            });
-        };
-        Ok((window_specs, resolved_window_specs))
-    }
-
-    fn rewrite_inherited_window_spec(
-        window_spec: &WindowSpec,
-        window_list: &HashMap<String, WindowSpec>,
-        resolved_window: &mut HashMap<String, WindowSpec>,
-    ) -> Result<WindowSpec> {
-        if window_spec.existing_window_name.is_some() {
-            let referenced_name = window_spec
-                .existing_window_name
-                .as_ref()
-                .unwrap()
-                .name
-                .clone();
-            // check if spec is resolved first, so that we no need to resolve again.
-            let referenced_window_spec = {
-                resolved_window.get(&referenced_name).unwrap_or(
-                    window_list
-                        .get(&referenced_name)
-                        .ok_or_else(|| ErrorCode::SyntaxException("Referenced window not found"))?,
-                )
-            }
-            .clone();
-
-            let resolved_spec = match referenced_window_spec.existing_window_name.clone() {
-                Some(_) => Self::rewrite_inherited_window_spec(
-                    &referenced_window_spec,
-                    window_list,
-                    resolved_window,
-                )?,
-                None => referenced_window_spec.clone(),
-            };
-
-            // add to resolved.
-            resolved_window.insert(referenced_name, resolved_spec.clone());
-
-            // check semantic
-            if !window_spec.partition_by.is_empty() {
-                return Err(ErrorCode::SemanticError(
-                    "WINDOW specification with named WINDOW reference cannot specify PARTITION BY",
-                ));
-            }
-            if !window_spec.order_by.is_empty() && !resolved_spec.order_by.is_empty() {
-                return Err(ErrorCode::SemanticError(
-                    "Cannot specify ORDER BY if referenced named WINDOW specifies ORDER BY",
-                ));
-            }
-            if resolved_spec.window_frame.is_some() {
-                return Err(ErrorCode::SemanticError(
-                    "Cannot reference named WINDOW containing frame specification",
-                ));
-            }
-
-            // resolve referenced window
-            let mut partition_by = window_spec.partition_by.clone();
-            if !resolved_spec.partition_by.is_empty() {
-                partition_by = resolved_spec.partition_by.clone();
-            }
-
-            let mut order_by = window_spec.order_by.clone();
-            if order_by.is_empty() && !resolved_spec.order_by.is_empty() {
-                order_by = resolved_spec.order_by.clone();
-            }
-
-            let mut window_frame = window_spec.window_frame.clone();
-            if window_frame.is_none() && resolved_spec.window_frame.is_some() {
-                window_frame = resolved_spec.window_frame;
-            }
-
-            // replace with new window spec
-            let new_window_spec = WindowSpec {
-                existing_window_name: None,
-                partition_by,
-                order_by,
-                window_frame,
-            };
-            Ok(new_window_spec)
-        } else {
-            Ok(window_spec.clone())
-        }
     }
 }

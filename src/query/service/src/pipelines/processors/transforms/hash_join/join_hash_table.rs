@@ -13,12 +13,11 @@
 // limitations under the License.
 
 use std::cell::SyncUnsafeCell;
+use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::AtomicI32;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use std::sync::Mutex;
 
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
@@ -43,6 +42,7 @@ use common_hashtable::RowPtr;
 use common_hashtable::StringHashJoinHashMap;
 use common_sql::plans::JoinType;
 use ethnum::U256;
+use parking_lot::Mutex;
 use parking_lot::RwLock;
 
 use super::ProbeState;
@@ -82,14 +82,18 @@ pub enum HashJoinHashTable {
 
 pub struct JoinHashTable {
     pub(crate) ctx: Arc<QueryContext>,
+    pub(crate) data_block_size_limit: Arc<usize>,
     /// Reference count
     pub(crate) build_count: Mutex<usize>,
     pub(crate) finalize_count: Mutex<usize>,
-    pub(crate) is_built: Mutex<bool>,
-    pub(crate) is_finalized: Mutex<bool>,
+    pub(crate) probe_count: Mutex<usize>,
+    pub(crate) build_done: Mutex<bool>,
+    pub(crate) finalize_done: Mutex<bool>,
+    pub(crate) probe_done: Mutex<bool>,
     /// Notifier
-    pub(crate) built_notify: Arc<Notify>,
-    pub(crate) finalized_notify: Arc<Notify>,
+    pub(crate) build_done_notify: Arc<Notify>,
+    pub(crate) finalize_done_notify: Arc<Notify>,
+    pub(crate) probe_done_notify: Arc<Notify>,
     /// A shared big hash table stores all the rows from build side
     pub(crate) hash_table: Arc<SyncUnsafeCell<HashJoinHashTable>>,
     pub(crate) method: Arc<HashMethodKind>,
@@ -100,10 +104,13 @@ pub struct JoinHashTable {
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
     pub(crate) interrupt: Arc<AtomicBool>,
+    /// OuterScan bitmap
+    pub(crate) outer_scan_bitmap: Arc<SyncUnsafeCell<Vec<MutableBitmap>>>,
     /// Finalize tasks
-    pub(crate) worker_num: Arc<AtomicU32>,
-    pub(crate) finalize_tasks: Arc<RwLock<Vec<(usize, usize)>>>,
-    pub(crate) unfinished_task_num: Arc<AtomicI32>,
+    pub(crate) build_worker_num: Arc<AtomicU32>,
+    pub(crate) finalize_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
+    /// OuterScan tasks
+    pub(crate) outer_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
 }
 
 impl JoinHashTable {
@@ -149,13 +156,17 @@ impl JoinHashTable {
         }
         Ok(Self {
             row_space: RowSpace::new(ctx.clone(), build_data_schema)?,
+            data_block_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
             ctx,
             build_count: Mutex::new(0),
             finalize_count: Mutex::new(0),
-            is_built: Mutex::new(false),
-            is_finalized: Mutex::new(false),
-            built_notify: Arc::new(Notify::new()),
-            finalized_notify: Arc::new(Notify::new()),
+            probe_count: Mutex::new(0),
+            build_done: Mutex::new(false),
+            finalize_done: Mutex::new(false),
+            probe_done: Mutex::new(false),
+            build_done_notify: Arc::new(Notify::new()),
+            finalize_done_notify: Arc::new(Notify::new()),
+            probe_done_notify: Arc::new(Notify::new()),
             hash_table: Arc::new(SyncUnsafeCell::new(HashJoinHashTable::Null)),
             method: Arc::new(method),
             entry_size: Arc::new(AtomicUsize::new(0)),
@@ -164,9 +175,10 @@ impl JoinHashTable {
             row_ptrs: RwLock::new(vec![]),
             probe_schema: probe_data_schema,
             interrupt: Arc::new(AtomicBool::new(false)),
-            worker_num: Arc::new(AtomicU32::new(0)),
-            finalize_tasks: Arc::new(RwLock::new(vec![])),
-            unfinished_task_num: Arc::new(AtomicI32::new(0)),
+            outer_scan_bitmap: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            build_worker_num: Arc::new(AtomicU32::new(0)),
+            finalize_tasks: Arc::new(RwLock::new(VecDeque::new())),
+            outer_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
         })
     }
 
@@ -175,7 +187,6 @@ impl JoinHashTable {
         input: &DataBlock,
         probe_state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>> {
-        let func_ctx = self.ctx.get_function_context()?;
         let mut input = (*input).clone();
         if matches!(
             self.hash_join_desc.join_type,
@@ -193,7 +204,7 @@ impl JoinHashTable {
                 .collect::<Vec<_>>();
             input = DataBlock::new(nullable_columns, input.num_rows());
         }
-        let evaluator = Evaluator::new(&input, &func_ctx, &BUILTIN_FUNCTIONS);
+        let evaluator = Evaluator::new(&input, &probe_state.func_ctx, &BUILTIN_FUNCTIONS);
 
         let probe_keys = self
             .hash_join_desc

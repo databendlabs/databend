@@ -285,6 +285,10 @@ pub enum AlterTableAction {
     AddColumn {
         column: ColumnDefinition,
     },
+    ModifyColumn {
+        column: Identifier,
+        action: ModifyColumnAction,
+    },
     DropColumn {
         column: Identifier,
     },
@@ -309,6 +313,9 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::AddColumn { column } => {
                 write!(f, "ADD COLUMN {column}")
+            }
+            AlterTableAction::ModifyColumn { column, action } => {
+                write!(f, "MODIFY COLUMN {column} {action}")
             }
             AlterTableAction::DropColumn { column } => {
                 write!(f, "DROP COLUMN {column}")
@@ -579,10 +586,34 @@ impl Display for OptimizeTableAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ColumnExpr {
+    Default(Box<Expr>),
+    Virtual(Box<Expr>),
+    Stored(Box<Expr>),
+}
+
+impl Display for ColumnExpr {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ColumnExpr::Default(expr) => {
+                write!(f, " DEFAULT {expr}")?;
+            }
+            ColumnExpr::Virtual(expr) => {
+                write!(f, " AS ({expr}) VIRTUAL")?;
+            }
+            ColumnExpr::Stored(expr) => {
+                write!(f, " AS ({expr}) STORED")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
-    pub default_expr: Option<Box<Expr>>,
+    pub expr: Option<ColumnExpr>,
     pub comment: Option<String>,
 }
 
@@ -594,12 +625,27 @@ impl Display for ColumnDefinition {
             write!(f, " NOT NULL")?;
         }
 
-        if let Some(default_expr) = &self.default_expr {
-            write!(f, " DEFAULT {default_expr}")?;
+        if let Some(expr) = &self.expr {
+            write!(f, "{expr}")?;
         }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT '{comment}'")?;
         }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ModifyColumnAction {
+    SetMaskingPolicy(String),
+}
+
+impl Display for ModifyColumnAction {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match &self {
+            ModifyColumnAction::SetMaskingPolicy(name) => write!(f, "SET MASKING POLICY {}", name)?,
+        }
+
         Ok(())
     }
 }

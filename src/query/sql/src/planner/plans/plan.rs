@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
@@ -22,10 +23,15 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
+use super::data_mask::CreateDatamaskPolicyPlan;
+use super::CopyIntoTableMode;
 use super::CreateIndexPlan;
 use super::CreateShareEndpointPlan;
+use super::DescDatamaskPolicyPlan;
+use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
+use super::ModifyTableColumnPlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
@@ -46,6 +52,7 @@ use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AlterUDFPlan;
 use crate::plans::AlterUserPlan;
 use crate::plans::AlterViewPlan;
+use crate::plans::AlterVirtualColumnsPlan;
 use crate::plans::AnalyzeTablePlan;
 use crate::plans::CallPlan;
 use crate::plans::CreateCatalogPlan;
@@ -57,6 +64,7 @@ use crate::plans::CreateTablePlan;
 use crate::plans::CreateUDFPlan;
 use crate::plans::CreateUserPlan;
 use crate::plans::CreateViewPlan;
+use crate::plans::CreateVirtualColumnsPlan;
 use crate::plans::DeletePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropCatalogPlan;
@@ -70,7 +78,9 @@ use crate::plans::DropTablePlan;
 use crate::plans::DropUDFPlan;
 use crate::plans::DropUserPlan;
 use crate::plans::DropViewPlan;
+use crate::plans::DropVirtualColumnsPlan;
 use crate::plans::ExistsTablePlan;
+use crate::plans::GenerateVirtualColumnsPlan;
 use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::KillPlan;
@@ -155,6 +165,7 @@ pub enum Plan {
     RenameTable(Box<RenameTablePlan>),
     AddTableColumn(Box<AddTableColumnPlan>),
     DropTableColumn(Box<DropTableColumnPlan>),
+    ModifyTableColumn(Box<ModifyTableColumnPlan>),
     AlterTableClusterKey(Box<AlterTableClusterKeyPlan>),
     DropTableClusterKey(Box<DropTableClusterKeyPlan>),
     ReclusterTable(Box<ReclusterTablePlan>),
@@ -179,6 +190,12 @@ pub enum Plan {
     // Indexes
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
+
+    // Virtual Columns
+    CreateVirtualColumns(Box<CreateVirtualColumnsPlan>),
+    AlterVirtualColumns(Box<AlterVirtualColumnsPlan>),
+    DropVirtualColumns(Box<DropVirtualColumnsPlan>),
+    GenerateVirtualColumns(Box<GenerateVirtualColumnsPlan>),
 
     // Account
     AlterUser(Box<AlterUserPlan>),
@@ -232,6 +249,11 @@ pub enum Plan {
     ShowShares(Box<ShowSharesPlan>),
     ShowObjectGrantPrivileges(Box<ShowObjectGrantPrivilegesPlan>),
     ShowGrantTenantsOfShare(Box<ShowGrantTenantsOfSharePlan>),
+
+    // Data mask
+    CreateDatamaskPolicy(Box<CreateDatamaskPolicyPlan>),
+    DropDatamaskPolicy(Box<DropDatamaskPolicyPlan>),
+    DescDatamaskPolicy(Box<DescDatamaskPolicyPlan>),
 }
 
 #[derive(Clone, Debug)]
@@ -262,7 +284,13 @@ impl Display for Plan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Plan::Query { .. } => write!(f, "Query"),
-            Plan::Copy(_) => write!(f, "Copy"),
+            Plan::Copy(plan) => match plan.deref() {
+                CopyPlan::IntoTable(copy_plan) => match copy_plan.write_mode {
+                    CopyIntoTableMode::Insert { .. } => write!(f, "Insert"),
+                    _ => write!(f, "Copy"),
+                },
+                _ => write!(f, "Copy"),
+            },
             Plan::Explain { .. } => write!(f, "Explain"),
             Plan::ExplainAnalyze { .. } => write!(f, "ExplainAnalyze"),
             Plan::ShowCreateCatalog(_) => write!(f, "ShowCreateCatalog"),
@@ -281,6 +309,7 @@ impl Display for Plan {
             Plan::UndropTable(_) => write!(f, "UndropTable"),
             Plan::RenameTable(_) => write!(f, "RenameTable"),
             Plan::AddTableColumn(_) => write!(f, "AddTableColumn"),
+            Plan::ModifyTableColumn(_) => write!(f, "ModifyTableColumn"),
             Plan::DropTableColumn(_) => write!(f, "DropTableColumn"),
             Plan::AlterTableClusterKey(_) => write!(f, "AlterTableClusterKey"),
             Plan::DropTableClusterKey(_) => write!(f, "DropTableClusterKey"),
@@ -295,6 +324,10 @@ impl Display for Plan {
             Plan::DropView(_) => write!(f, "DropView"),
             Plan::CreateIndex(_) => write!(f, "CreateIndex"),
             Plan::DropIndex(_) => write!(f, "DropIndex"),
+            Plan::CreateVirtualColumns(_) => write!(f, "CreateVirtualColumns"),
+            Plan::AlterVirtualColumns(_) => write!(f, "AlterVirtualColumns"),
+            Plan::DropVirtualColumns(_) => write!(f, "DropVirtualColumns"),
+            Plan::GenerateVirtualColumns(_) => write!(f, "GenerateVirtualColumns"),
             Plan::AlterUser(_) => write!(f, "AlterUser"),
             Plan::CreateUser(_) => write!(f, "CreateUser"),
             Plan::DropUser(_) => write!(f, "DropUser"),
@@ -340,6 +373,15 @@ impl Display for Plan {
             Plan::ExplainAst { .. } => write!(f, "ExplainAst"),
             Plan::ExplainSyntax { .. } => write!(f, "ExplainSyntax"),
             Plan::RevertTable(..) => write!(f, "RevertTable"),
+            Plan::CreateDatamaskPolicy(..) => {
+                write!(f, "Create Data Mask Policy")
+            }
+            Plan::DropDatamaskPolicy(..) => {
+                write!(f, "Drop Data Mask Policy")
+            }
+            Plan::DescDatamaskPolicy(..) => {
+                write!(f, "Desc Data Mask Policy")
+            }
         }
     }
 }
@@ -380,7 +422,9 @@ impl Plan {
             Plan::DescShare(plan) => plan.schema(),
             Plan::ShowShares(plan) => plan.schema(),
             Plan::ShowGrantTenantsOfShare(plan) => plan.schema(),
-
+            Plan::CreateDatamaskPolicy(plan) => plan.schema(),
+            Plan::DropDatamaskPolicy(plan) => plan.schema(),
+            Plan::DescDatamaskPolicy(plan) => plan.schema(),
             other => {
                 debug_assert!(!other.has_result_set());
                 Arc::new(DataSchema::empty())
@@ -410,6 +454,7 @@ impl Plan {
                 | Plan::ShowGrants(_)
                 | Plan::Presign(_)
                 | Plan::VacuumTable(_)
+                | Plan::DescDatamaskPolicy(_)
         )
     }
 }

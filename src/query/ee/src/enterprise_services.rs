@@ -17,9 +17,11 @@ use common_exception::Result;
 use common_license::license_manager::LicenseManager;
 
 use crate::aggregating_index::RealAggregatingIndexHandler;
+use crate::data_mask::RealDatamaskHandler;
 use crate::license::license_mgr::RealLicenseManager;
 use crate::storages::fuse::operations::RealVacuumHandler;
 use crate::table_lock::RealTableLockHandler;
+use crate::virtual_column::RealVirtualColumnsHandler;
 
 pub struct EnterpriseServices;
 impl EnterpriseServices {
@@ -29,6 +31,8 @@ impl EnterpriseServices {
         RealVacuumHandler::init()?;
         RealAggregatingIndexHandler::init()?;
         RealTableLockHandler::init()?;
+        RealDatamaskHandler::init()?;
+        RealVirtualColumnsHandler::init()?;
         Ok(())
     }
 }

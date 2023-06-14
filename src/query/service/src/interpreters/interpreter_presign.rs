@@ -24,7 +24,6 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_storages_stage::StageTable;
 use jsonb::Value as JsonbValue;
-use opendal::ops::OpWrite;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -68,12 +67,11 @@ impl Interpreter for PresignInterpreter {
         let presigned_req = match self.plan.action {
             PresignAction::Download => op.presign_read(&self.plan.path, self.plan.expire).await?,
             PresignAction::Upload => {
-                let mut presign_args = OpWrite::new();
+                let mut fut = op.presign_write_with(&self.plan.path, self.plan.expire);
                 if let Some(content_type) = &self.plan.content_type {
-                    presign_args = presign_args.with_content_type(content_type);
+                    fut = fut.content_type(content_type);
                 }
-                op.presign_write_with(&self.plan.path, presign_args, self.plan.expire)
-                    .await?
+                fut.await?
             }
         };
 
@@ -97,22 +95,22 @@ impl Interpreter for PresignInterpreter {
 
         let block = DataBlock::new(
             vec![
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(
                         presigned_req.method().as_str().as_bytes().to_vec(),
                     )),
-                },
-                BlockEntry {
-                    data_type: DataType::Variant,
-                    value: Value::Scalar(Scalar::Variant(header.to_vec())),
-                },
-                BlockEntry {
-                    data_type: DataType::String,
-                    value: Value::Scalar(Scalar::String(
+                ),
+                BlockEntry::new(
+                    DataType::Variant,
+                    Value::Scalar(Scalar::Variant(header.to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(
                         presigned_req.uri().to_string().as_bytes().to_vec(),
                     )),
-                },
+                ),
             ],
             1,
         );

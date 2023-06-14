@@ -18,6 +18,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_catalog::plan::block_idx_in_segment;
 use common_catalog::plan::split_prefix;
 use common_catalog::plan::split_row_id;
 use common_catalog::plan::PartInfoPtr;
@@ -151,12 +152,14 @@ impl<const BLOCKING_IO: bool> NativeRowsFetcher<BLOCKING_IO> {
                 .await?;
 
             let blocks = compact_segment_info.block_metas()?;
-            let block_meta = &blocks[block as usize];
+            let block_idx = block_idx_in_segment(blocks.len(), block as usize);
+            let block_meta = &blocks[block_idx];
             let page_size = block_meta.page_size();
             let part_info = FuseTable::projection_part(
                 block_meta,
                 &None,
                 &column_nodes,
+                None,
                 None,
                 &self.projection,
             );

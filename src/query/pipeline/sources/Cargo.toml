@@ -40,4 +40,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = "0.1.36"
 typetag = "0.2.3"
-xml-rs = "0.8.4"
+xml-rs = "0.8.14"

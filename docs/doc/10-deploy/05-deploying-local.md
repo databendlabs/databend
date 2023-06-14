@@ -1,6 +1,6 @@
 ---
-title: Local and Docker Deployments
-sidebar_label: Local and Docker Deployments
+title: Docker and Local Deployments
+sidebar_label: Docker and Local Deployments
 description:
   Deploying Databend locally or with Docker
 ---
@@ -12,86 +12,6 @@ To assess Databend and gain practical expertise, you have two deployment choices
 
 - It is not recommended to deploy Databend on top of MinIO for production environments or performance testing purposes.
 :::
-
-## Deploying a local Databend
-
-The following steps will guide you through the process of locally deploying Databend.
-
-### Step 1. Downloading Databend
-
-1. Go to https://databend.rs/download and download the installation package for your platform.
-
-2. Extract the installation package to a local directory.
-
-### Step 2. Starting Databend
-
-1. Open a terminal and navigate to the folder where the extracted files and folders are stored.
-
-2. Run the script **start.sh** in the folder **scripts**:
-
-    MacOS might prompt an error saying "*databend-meta can't be opened because Apple cannot check it for malicious software.*". To proceed, open **System Settings** on your Mac, select **Privacy & Security** on the left menu, and click **Open Anyway** for databend-meta in the **Security** section on the right side. Do the same for the error on databend-query.
-
-```shell
-./scripts/start.sh
-```
-
-:::tip
-In case you encounter the subsequent error messages while attempting to start Databend:
-
-```shell
-==> query.log <==
-: No getcpu support: percpu_arena:percpu
-: option background_thread currently supports pthread only
-Databend Query start failure, cause: Code: 1104, Text = failed to create appender: Os { code: 13, kind: PermissionDenied, message: "Permission denied" }.
-```
-Run the following commands and try starting Databend again:
-
-```shell
-sudo mkdir /var/log/databend
-sudo mkdir /var/lib/databend
-sudo chown -R $USER /var/log/databend
-sudo chown -R $USER /var/lib/databend
-```
-:::
-
-3. Run the following command to verify Databend has started successfully:
-
-```shell
-ps aux | grep databend
-
----
-eric             12789   0.0  0.0 408495808   1040 s003  U+    2:16pm   0:00.00 grep databend
-eric             12781   0.0  0.5 408790416  38896 s003  S     2:15pm   0:00.05 bin/databend-query --config-file=configs/databend-query.toml
-eric             12776   0.0  0.3 408654368  24848 s003  S     2:15pm   0:00.06 bin/databend-meta --config-file=configs/databend-meta.toml
-```
-
-### Step 3. Connecting to Databend
-
-To establish a connection with Databend, you'll use the BendSQL CLI tool in this step. For instructions on how to install and operate BendSQL, see [BendSQL](../11-integrations/30-access-tool/01-bendsql.md).
-
-1. To establish a connection with a local Databend, execute the following command:
-
-```shell
-(base) eric@Erics-iMac ~ % bendsql connect
-Connected to Databend on Host: localhost
-Version: DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z)
-```
-
-2. Query the Databend version to verify the connection:
-
-```shell
-(base) eric@Erics-iMac ~ % bendsql query
-Connected with driver databend (DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z))
-Type "help" for help.
-
-dd:root@localhost/default=> SELECT VERSION();
-+---------------------------------------------------------------------------------------------------------------------------+
-|                                                         version()                                                         |
-+---------------------------------------------------------------------------------------------------------------------------+
-| DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z) |
-+---------------------------------------------------------------------------------------------------------------------------+
-(1 row)
-```
 
 ## Deploying Databend on Docker
 
@@ -154,6 +74,9 @@ Pull and run the Databend image as a container with the following command:
 docker run \
     -p 8000:8000 \
     -p 3307:3307 \
+    -v meta_storage_dir:/var/lib/databend/meta \
+    -v query_storage_dir:/var/lib/databend/query \
+    -v log_dir:/var/log/databend \
     -e QUERY_DEFAULT_USER=databend \
     -e QUERY_DEFAULT_PASSWORD=databend \
     -e QUERY_STORAGE_TYPE=s3 \
@@ -173,7 +96,7 @@ To establish a connection with Databend, you'll use the BendSQL CLI tool in this
 1. To establish a connection with Databend using the SQL user (databend/databend), run the following command:
 
 ```shell
-(base) eric@Erics-iMac Downloads % bendsql connect -u databend -p databend
+(base) eric@Erics-iMac Downloads % bendsql -u databend -p databend
 Connected to Databend on Host: localhost
 Version: DatabendQuery v1.0.26-nightly-d9b7f4a8080b54d2b4c4a515296ee7557fc135f1(rust-1.70.0-nightly-2023-03-21T04:39:27.097687988Z)
 ```
@@ -199,3 +122,83 @@ INSERT
 As the table data is stored in the bucket, you will notice an increase in the bucket size from 0.
 
 ![Alt text](../../public/img/deploy/minio-deployment-verify.png)
+
+## Deploying a Local Databend
+
+The following steps will guide you through the process of locally deploying Databend.
+
+### Step 1. Downloading Databend
+
+1. Go to https://databend.rs/download and download the installation package for your platform.
+
+2. Extract the installation package to a local directory.
+
+### Step 2. Starting Databend
+
+1. Open a terminal and navigate to the folder where the extracted files and folders are stored.
+
+2. Run the script **start.sh** in the folder **scripts**:
+
+    MacOS might prompt an error saying "*databend-meta can't be opened because Apple cannot check it for malicious software.*". To proceed, open **System Settings** on your Mac, select **Privacy & Security** on the left menu, and click **Open Anyway** for databend-meta in the **Security** section on the right side. Do the same for the error on databend-query.
+
+```shell
+./scripts/start.sh
+```
+
+:::tip
+In case you encounter the subsequent error messages while attempting to start Databend:
+
+```shell
+==> query.log <==
+: No getcpu support: percpu_arena:percpu
+: option background_thread currently supports pthread only
+Databend Query start failure, cause: Code: 1104, Text = failed to create appender: Os { code: 13, kind: PermissionDenied, message: "Permission denied" }.
+```
+Run the following commands and try starting Databend again:
+
+```shell
+sudo mkdir /var/log/databend
+sudo mkdir /var/lib/databend
+sudo chown -R $USER /var/log/databend
+sudo chown -R $USER /var/lib/databend
+```
+:::
+
+3. Run the following command to verify Databend has started successfully:
+
+```shell
+ps aux | grep databend
+
+---
+eric             12789   0.0  0.0 408495808   1040 s003  U+    2:16pm   0:00.00 grep databend
+eric             12781   0.0  0.5 408790416  38896 s003  S     2:15pm   0:00.05 bin/databend-query --config-file=configs/databend-query.toml
+eric             12776   0.0  0.3 408654368  24848 s003  S     2:15pm   0:00.06 bin/databend-meta --config-file=configs/databend-meta.toml
+```
+
+### Step 3. Connecting to Databend
+
+To establish a connection with Databend, you'll use the BendSQL CLI tool in this step. For instructions on how to install and operate BendSQL, see [BendSQL](../11-integrations/30-access-tool/01-bendsql.md).
+
+1. To establish a connection with a local Databend, execute the following command:
+
+```shell
+(base) eric@Erics-iMac ~ % bendsql
+Connected to Databend on Host: localhost
+Version: DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z)
+```
+
+2. Query the Databend version to verify the connection:
+
+```shell
+(base) eric@Erics-iMac ~ % bendsql query
+Connected with driver databend (DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z))
+Type "help" for help.
+
+dd:root@localhost/default=> SELECT VERSION();
++---------------------------------------------------------------------------------------------------------------------------+
+|                                                         version()                                                         |
++---------------------------------------------------------------------------------------------------------------------------+
+| DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z) |
++---------------------------------------------------------------------------------------------------------------------------+
+(1 row)
+```

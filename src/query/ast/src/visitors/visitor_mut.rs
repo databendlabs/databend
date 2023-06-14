@@ -28,6 +28,7 @@ use super::walk_mut::walk_statement_mut;
 use super::walk_mut::walk_table_reference_mut;
 use super::walk_time_travel_point_mut;
 use crate::ast::*;
+use crate::visitors::walk_column_id_mut;
 
 pub trait VisitorMut: Sized {
     fn visit_expr(&mut self, expr: &mut Expr) {
@@ -35,6 +36,19 @@ pub trait VisitorMut: Sized {
     }
 
     fn visit_identifier(&mut self, _ident: &mut Identifier) {}
+
+    fn visit_column_id(&mut self, column: &mut ColumnID) {
+        match column {
+            ColumnID::Name(ident) => {
+                self.visit_identifier(ident);
+            }
+            ColumnID::Position(pos) => {
+                self.visit_column_position(pos);
+            }
+        }
+    }
+
+    fn visit_column_position(&mut self, _ident: &mut ColumnPosition) {}
 
     fn visit_database_ref(&mut self, catalog: &mut Option<Identifier>, database: &mut Identifier) {
         if let Some(catalog) = catalog {
@@ -66,7 +80,7 @@ pub trait VisitorMut: Sized {
         _span: Span,
         database: &mut Option<Identifier>,
         table: &mut Option<Identifier>,
-        column: &mut Identifier,
+        column: &mut ColumnID,
     ) {
         if let Some(database) = database {
             walk_identifier_mut(self, database);
@@ -76,7 +90,7 @@ pub trait VisitorMut: Sized {
             walk_identifier_mut(self, table);
         }
 
-        walk_identifier_mut(self, column);
+        walk_column_id_mut(self, column);
     }
 
     fn visit_is_null(&mut self, _span: Span, expr: &mut Expr, _not: bool) {
@@ -193,7 +207,28 @@ pub trait VisitorMut: Sized {
 
     fn visit_literal(&mut self, _span: Span, _lit: &mut Literal) {}
 
-    fn visit_count_all(&mut self, _span: Span) {}
+    fn visit_count_all(&mut self, _span: Span, window: &mut Option<Window>) {
+        if let Some(window) = window {
+            match window {
+                Window::WindowReference(reference) => {
+                    self.visit_identifier(&mut reference.window_name);
+                }
+                Window::WindowSpec(spec) => {
+                    spec.partition_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, expr));
+                    spec.order_by
+                        .iter_mut()
+                        .for_each(|expr| walk_expr_mut(self, &mut expr.expr));
+
+                    if let Some(frame) = &mut spec.window_frame {
+                        self.visit_frame_bound(&mut frame.start_bound);
+                        self.visit_frame_bound(&mut frame.end_bound);
+                    }
+                }
+            }
+        }
+    }
 
     fn visit_tuple(&mut self, _span: Span, elements: &mut [Expr]) {
         for elem in elements.iter_mut() {
@@ -454,7 +489,16 @@ pub trait VisitorMut: Sized {
     fn visit_drop_view(&mut self, _stmt: &mut DropViewStmt) {}
 
     fn visit_create_index(&mut self, _stmt: &mut CreateIndexStmt) {}
+
     fn visit_drop_index(&mut self, _stmt: &mut DropIndexStmt) {}
+
+    fn visit_create_virtual_columns(&mut self, _stmt: &mut CreateVirtualColumnsStmt) {}
+
+    fn visit_alter_virtual_columns(&mut self, _stmt: &mut AlterVirtualColumnsStmt) {}
+
+    fn visit_drop_virtual_columns(&mut self, _stmt: &mut DropVirtualColumnsStmt) {}
+
+    fn visit_generate_virtual_columns(&mut self, _stmt: &mut GenerateVirtualColumnsStmt) {}
 
     fn visit_show_users(&mut self) {}
 
@@ -546,6 +590,12 @@ pub trait VisitorMut: Sized {
     fn visit_show_object_grant_privileges(&mut self, _stmt: &mut ShowObjectGrantPrivilegesStmt) {}
 
     fn visit_show_grants_of_share(&mut self, _stmt: &mut ShowGrantsOfShareStmt) {}
+
+    fn visit_create_data_mask_policy(&mut self, _stmt: &mut CreateDatamaskPolicyStmt) {}
+
+    fn visit_drop_data_mask_policy(&mut self, _stmt: &mut DropDatamaskPolicyStmt) {}
+
+    fn visit_desc_data_mask_policy(&mut self, _stmt: &mut DescDatamaskPolicyStmt) {}
 
     fn visit_with(&mut self, with: &mut With) {
         let With { ctes, .. } = with;

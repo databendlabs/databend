@@ -23,7 +23,7 @@ use common_exception::Result;
 use common_expression::types::NumberScalar;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
-use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
@@ -46,7 +46,6 @@ use crate::plan::PushDownInfo;
 use crate::table::column_stats_provider_impls::DummyColumnStatisticsProvider;
 use crate::table_args::TableArgs;
 use crate::table_context::TableContext;
-use crate::table_mutator::TableMutator;
 
 #[async_trait::async_trait]
 pub trait Table: Sync + Send {
@@ -190,9 +189,8 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         append_mode: AppendMode,
-        need_output: bool,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, pipeline, append_mode, need_output);
+        let (_, _, _) = (ctx, pipeline, append_mode);
 
         Err(ErrorCode::Unimplemented(format!(
             "append_data operation for table {} is not implemented. table engine : {}",
@@ -217,15 +215,14 @@ pub trait Table: Sync + Send {
         )))
     }
 
-    #[async_backtrace::framed]
-    async fn commit_insertion(
+    fn commit_insertion(
         &self,
         ctx: Arc<dyn TableContext>,
-        operations: Vec<DataBlock>,
+        pipeline: &mut Pipeline,
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, operations, copied_files, overwrite);
+        let (_, _, _, _) = (ctx, copied_files, pipeline, overwrite);
 
         Ok(())
     }
@@ -282,9 +279,10 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
+        query_internal_columns: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
+        let (_, _, _, _, _) = (ctx, filter, col_indices, pipeline, query_internal_columns);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support DELETE FROM",
@@ -298,11 +296,19 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
-        update_list: Vec<(usize, RemoteExpr<String>)>,
+        col_indices: Vec<FieldIndex>,
+        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _, _) = (ctx, filter, col_indices, update_list, pipeline);
+        let (_, _, _, _, _, _) = (
+            ctx,
+            filter,
+            col_indices,
+            update_list,
+            computed_list,
+            pipeline,
+        );
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support UPDATE",
@@ -347,7 +353,7 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<Option<Box<dyn TableMutator>>> {
+    ) -> Result<()> {
         let (_, _, _) = (ctx, pipeline, push_downs);
 
         Err(ErrorCode::Unimplemented(format!(
@@ -411,6 +417,8 @@ pub struct TableStatistics {
     pub data_size: Option<u64>,
     pub data_size_compressed: Option<u64>,
     pub index_size: Option<u64>,
+    pub number_of_blocks: Option<u64>,
+    pub number_of_segments: Option<u64>,
 }
 
 #[derive(Debug, Clone)]

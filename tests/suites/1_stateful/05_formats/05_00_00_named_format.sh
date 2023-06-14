@@ -61,3 +61,5 @@ echo "---infer_schema use format my_parquet"
 echo "select * from infer_schema(location => '@stage_05_00_00', pattern => '.*parquet' , FILE_FORMAT => 'my_parquet')" | $MYSQL_CLIENT_CONNECT
 echo "---infer_schema use format parquet"
 echo "select * from infer_schema(location => '@stage_05_00_00', pattern => '.*parquet' , FILE_FORMAT => 'parquet')" | $MYSQL_CLIENT_CONNECT
+
+

@@ -32,10 +32,9 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
-use common_expression::DataBlock;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
-use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_pipeline_sources::input_formats::InputContext;
 use common_pipeline_sources::input_formats::SplitInfo;
@@ -78,14 +77,7 @@ impl StageTable {
         stage_info: &StageTableInfo,
         max_files: Option<usize>,
     ) -> Result<Vec<StageFileInfo>> {
-        let op = Self::get_op(&stage_info.stage_info)?;
-        let infos = stage_info
-            .files_info
-            .list(&op, false, max_files)
-            .await?
-            .into_iter()
-            .collect::<Vec<_>>();
-        Ok(infos)
+        stage_info.list_files(max_files).await
     }
 
     fn get_block_compact_thresholds_with_default(&self) -> BlockThresholds {
@@ -171,7 +163,14 @@ impl Table for StageTable {
 
         //  Build copy pipeline.
         let settings = ctx.get_settings();
-        let schema = stage_table_info.schema.clone();
+        let fields = stage_table_info
+            .schema
+            .fields()
+            .iter()
+            .filter(|f| f.computed_expr().is_none())
+            .cloned()
+            .collect::<Vec<_>>();
+        let schema = TableSchemaRefExt::create(fields);
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();
@@ -192,6 +191,7 @@ impl Table for StageTable {
             ctx.get_scan_progress(),
             compact_threshold,
             on_error_map,
+            self.table_info.is_select,
         )?);
 
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
@@ -203,7 +203,6 @@ impl Table for StageTable {
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         _: AppendMode,
-        _: bool,
     ) -> Result<()> {
         let single = self.table_info.stage_info.copy_options.single;
         let op = StageTable::get_op(&self.table_info.stage_info)?;
@@ -243,18 +242,6 @@ impl Table for StageTable {
                 gid,
             )
         })
-    }
-
-    // TODO use tmp file_name & rename to have atomic commit
-    #[async_backtrace::framed]
-    async fn commit_insertion(
-        &self,
-        _ctx: Arc<dyn TableContext>,
-        _operations: Vec<DataBlock>,
-        _copied_files: Option<UpsertTableCopiedFileReq>,
-        _overwrite: bool,
-    ) -> Result<()> {
-        Ok(())
     }
 
     // Truncate the stage file.

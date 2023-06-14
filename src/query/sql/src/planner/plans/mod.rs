@@ -15,6 +15,7 @@
 mod aggregate;
 mod call;
 mod copy;
+pub mod data_mask;
 mod ddl;
 mod delete;
 mod dummy_table_scan;
@@ -46,8 +47,10 @@ mod window;
 pub use aggregate::*;
 pub use call::CallPlan;
 pub use copy::*;
+pub use data_mask::*;
 pub use ddl::*;
 pub use delete::DeletePlan;
+pub use delete::SubqueryDesc;
 pub use dummy_table_scan::DummyTableScan;
 pub use eval_scalar::*;
 pub use exchange::*;

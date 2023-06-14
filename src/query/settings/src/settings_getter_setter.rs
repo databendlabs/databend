@@ -326,12 +326,12 @@ impl Settings {
         Ok(self.try_get_u64("efficiently_memory_group_by")? == 1)
     }
 
-    pub fn set_lazy_topn_threshold(&self, value: u64) -> Result<()> {
-        self.try_set_u64("lazy_topn_threshold", value)
+    pub fn set_lazy_read_threshold(&self, value: u64) -> Result<()> {
+        self.try_set_u64("lazy_read_threshold", value)
     }
 
-    pub fn get_lazy_topn_threshold(&self) -> Result<u64> {
-        self.try_get_u64("lazy_topn_threshold")
+    pub fn get_lazy_read_threshold(&self) -> Result<u64> {
+        self.try_get_u64("lazy_read_threshold")
     }
 
     pub fn set_parquet_fast_read_bytes(&self, value: u64) -> Result<()> {
@@ -360,5 +360,14 @@ impl Settings {
 
     pub fn get_enable_pipeline_index_analyzer(&self) -> Result<bool> {
         Ok(self.try_get_u64("enable_pipeline_index_analyzer")? != 0)
+    }
+
+    pub fn get_deduplicate_label(&self) -> Result<Option<String>> {
+        let deduplicate_label = self.try_get_string("deduplicate_label")?;
+        if deduplicate_label.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(deduplicate_label))
+        }
     }
 }

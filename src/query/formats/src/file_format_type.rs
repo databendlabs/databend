@@ -44,10 +44,14 @@ pub struct FileFormatOptionsExt {
     pub json_strings: bool,
     pub disable_variant_check: bool,
     pub timezone: Tz,
+    pub is_select: bool,
 }
 
 impl FileFormatOptionsExt {
-    pub fn create_from_settings(settings: &Settings) -> Result<FileFormatOptionsExt> {
+    pub fn create_from_settings(
+        settings: &Settings,
+        is_select: bool,
+    ) -> Result<FileFormatOptionsExt> {
         let timezone = parse_timezone(settings)?;
         let options = FileFormatOptionsExt {
             ident_case_sensitive: false,
@@ -56,6 +60,7 @@ impl FileFormatOptionsExt {
             json_strings: false,
             disable_variant_check: false,
             timezone,
+            is_select,
         };
         Ok(options)
     }
@@ -72,6 +77,7 @@ impl FileFormatOptionsExt {
             json_strings: false,
             disable_variant_check: false,
             timezone,
+            is_select: false,
         };
         let suf = &clickhouse_type.suffixes;
         options.headers = suf.headers;

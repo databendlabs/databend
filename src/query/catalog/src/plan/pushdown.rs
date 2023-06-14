@@ -66,6 +66,14 @@ pub struct PrewhereInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
+pub struct AggIndexInfo {
+    pub index_id: u64,
+    // The index in aggregating index is the offset in the output list.
+    pub selection: Vec<RemoteExpr>,
+    pub filter: Option<RemoteExpr>,
+}
+
 /// Extras is a wrapper for push down items.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Default, Debug, PartialEq, Eq)]
 pub struct PushDownInfo {
@@ -91,6 +99,8 @@ pub struct PushDownInfo {
     pub virtual_columns: Option<Vec<VirtualColumnInfo>>,
     /// If lazy materialization is enabled in this query.
     pub lazy_materialization: bool,
+    /// Aggregating index information.
+    pub agg_index: Option<AggIndexInfo>,
 }
 
 /// TopK is a wrapper for topk push down items.
@@ -178,6 +188,38 @@ impl PushDownInfo {
         } else {
             let indices = (0..schema.fields().len()).collect::<Vec<usize>>();
             Projection::Columns(indices)
+        }
+    }
+
+    pub fn virtual_columns_of_push_downs(
+        push_downs: &Option<PushDownInfo>,
+    ) -> Option<Vec<VirtualColumnInfo>> {
+        if let Some(PushDownInfo {
+            virtual_columns,
+            prewhere,
+            ..
+        }) = push_downs
+        {
+            if let Some(PrewhereInfo {
+                virtual_columns: prewhere_virtual_columns,
+                ..
+            }) = prewhere
+            {
+                match (virtual_columns, prewhere_virtual_columns) {
+                    (Some(virtual_columns), Some(prewhere_virtual_columns)) => {
+                        let mut virtual_columns = virtual_columns.clone();
+                        let mut prewhere_virtual_columns = prewhere_virtual_columns.clone();
+                        virtual_columns.append(&mut prewhere_virtual_columns);
+                        Some(virtual_columns)
+                    }
+                    (None, Some(_)) => prewhere_virtual_columns.clone(),
+                    (_, _) => virtual_columns.clone(),
+                }
+            } else {
+                virtual_columns.clone()
+            }
+        } else {
+            None
         }
     }
 }

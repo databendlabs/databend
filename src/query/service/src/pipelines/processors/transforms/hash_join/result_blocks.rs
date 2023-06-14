@@ -43,8 +43,29 @@ impl JoinHashTable {
             JoinType::LeftAnti => {
                 self.probe_left_anti_semi_join(hash_table, probe_state, keys_iter, input)
             }
-            JoinType::RightSemi | JoinType::RightAnti => {
-                self.probe_right_join::<_, _>(hash_table, probe_state, keys_iter, input)
+            JoinType::RightSemi => {
+                if self.hash_join_desc.other_predicate.is_none() {
+                    self.probe_right_semi_join::<_, _>(hash_table, probe_state, keys_iter)
+                } else {
+                    self.probe_right_semi_join_with_conjunct::<_, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )
+                }
+            }
+            JoinType::RightAnti => {
+                if self.hash_join_desc.other_predicate.is_none() {
+                    self.probe_right_anti_join::<_, _>(hash_table, probe_state, keys_iter)
+                } else {
+                    self.probe_right_anti_join_with_conjunct::<_, _>(
+                        hash_table,
+                        probe_state,
+                        keys_iter,
+                        input,
+                    )
+                }
             }
             // Single join is similar to left join, but the result is a single row.
             JoinType::Left | JoinType::Single | JoinType::Full => {

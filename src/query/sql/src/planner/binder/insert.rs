@@ -18,6 +18,7 @@ use common_ast::ast::Identifier;
 use common_ast::ast::InsertSource;
 use common_ast::ast::InsertStmt;
 use common_ast::ast::Statement;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRefExt;
@@ -28,6 +29,7 @@ use crate::normalize_identifier;
 use crate::optimizer::optimize;
 use crate::optimizer::OptimizerConfig;
 use crate::optimizer::OptimizerContext;
+use crate::plans::CopyIntoTableMode;
 use crate::plans::Insert;
 use crate::plans::InsertInputSource;
 use crate::plans::Plan;
@@ -38,14 +40,31 @@ impl Binder {
         schema: &Arc<TableSchema>,
         columns: &[Identifier],
     ) -> Result<Arc<TableSchema>> {
-        let fields = columns
-            .iter()
-            .map(|ident| {
-                schema
-                    .field_with_name(&normalize_identifier(ident, &self.name_resolution_ctx).name)
-                    .map(|v| v.clone())
-            })
-            .collect::<Result<Vec<_>>>()?;
+        let fields = if columns.is_empty() {
+            schema
+                .fields()
+                .iter()
+                .filter(|f| f.computed_expr().is_none())
+                .cloned()
+                .collect::<Vec<_>>()
+        } else {
+            columns
+                .iter()
+                .map(|ident| {
+                    let field = schema.field_with_name(
+                        &normalize_identifier(ident, &self.name_resolution_ctx).name,
+                    )?;
+                    if field.computed_expr().is_some() {
+                        Err(ErrorCode::BadArguments(format!(
+                            "The value specified for computed column '{}' is not allowed",
+                            field.name()
+                        )))
+                    } else {
+                        Ok(field.clone())
+                    }
+                })
+                .collect::<Result<Vec<_>>>()?
+        };
         Ok(TableSchemaRefExt::create(fields))
     }
 
@@ -71,12 +90,7 @@ impl Binder {
             .get_table(&catalog_name, &database_name, &table_name)
             .await?;
         let table_id = table.get_id();
-
-        let schema = if columns.is_empty() {
-            table.schema()
-        } else {
-            self.schema_project(&table.schema(), columns)?
-        };
+        let schema = self.schema_project(&table.schema(), columns)?;
 
         let input_source: Result<InsertInputSource> = match source.clone() {
             InsertSource::Streaming {
@@ -100,9 +114,21 @@ impl Binder {
             InsertSource::Values { rest_str } => {
                 let values_str = rest_str.trim_end_matches(';').trim_start().to_owned();
                 match self.ctx.get_stage_attachment() {
-                    Some(mut attachment) => {
-                        attachment.values_str = values_str;
-                        Ok(InsertInputSource::Stage(Arc::new(attachment)))
+                    Some(attachment) => {
+                        return self
+                            .bind_copy_from_attachment(
+                                bind_context,
+                                attachment,
+                                catalog_name,
+                                database_name,
+                                table_name,
+                                Arc::new(schema.into()),
+                                &values_str,
+                                CopyIntoTableMode::Insert {
+                                    overwrite: *overwrite,
+                                },
+                            )
+                            .await;
                     }
                     None => Ok(InsertInputSource::Values(values_str)),
                 }

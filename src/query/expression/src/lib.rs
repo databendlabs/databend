@@ -32,6 +32,7 @@
 #![allow(clippy::len_without_is_empty)]
 #![allow(clippy::needless_lifetimes)]
 #![allow(incomplete_features)]
+#![feature(int_roundings)]
 
 #[allow(dead_code)]
 mod block;
@@ -44,6 +45,7 @@ mod function;
 mod kernels;
 mod property;
 mod register;
+pub mod row;
 pub mod schema;
 pub mod type_check;
 pub mod types;
@@ -59,6 +61,7 @@ pub use crate::function::*;
 pub use crate::kernels::*;
 pub use crate::property::*;
 pub use crate::register::*;
+pub use crate::row::*;
 pub use crate::schema::*;
 pub use crate::utils::block_thresholds::BlockThresholds;
 pub use crate::utils::*;

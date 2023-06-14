@@ -88,6 +88,6 @@ This is permitted under ELv2, because you are not providing the software as a ma
 **I am a Managed Service Provider running Databend for my customers**
 
 If your customers do not access Databend. this is permitted under ELv2. 
-if your customers do have access to substantial portions of functionality of Databend as part of your service, this may not be permitted.
+If your customers do have access to substantial portions of functionality of Databend as part of your service, this may not be permitted.
 
-If you have questions about your scenarios or want more flexible license options, please [contact us](https://www.databend.com/contact-us)
+If you have questions about your scenarios or want more flexible license options, please [contact us](https://www.databend.com/contact-us).

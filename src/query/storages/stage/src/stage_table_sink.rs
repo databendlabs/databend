@@ -70,7 +70,8 @@ impl StageTableSink {
         uuid: String,
         group_id: usize,
     ) -> Result<ProcessorPtr> {
-        let mut options_ext = FileFormatOptionsExt::create_from_settings(&ctx.get_settings())?;
+        let mut options_ext =
+            FileFormatOptionsExt::create_from_settings(&ctx.get_settings(), false)?;
         let output_format = options_ext.get_output_format(
             table_info.schema(),
             table_info.stage_info.file_format_params.clone(),

@@ -37,13 +37,13 @@ use common_storages_fuse::FUSE_TBL_SEGMENT_PREFIX;
 use futures_util::TryStreamExt;
 use opendal::Operator;
 use serde::Serialize;
+use storages_common_table_meta::meta::testing::SegmentInfoV2;
+use storages_common_table_meta::meta::testing::TableSnapshotV2;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
-use storages_common_table_meta::meta::SegmentInfoV2;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use storages_common_table_meta::meta::TableSnapshotV2;
 use storages_common_table_meta::meta::Versioned;
 use uuid::Uuid;
 
@@ -95,7 +95,7 @@ pub async fn generate_segments_v2(
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
         let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
-        let summary = reduce_block_metas(&block_metas, BlockThresholds::default())?;
+        let summary = reduce_block_metas(&block_metas, BlockThresholds::default());
         let segment_info = SegmentInfoV2::new(block_metas, summary);
         let uuid = Uuid::new_v4();
         let location = format!(
@@ -120,7 +120,7 @@ pub async fn generate_segments(
     for _ in 0..number_of_segments {
         let dal = fuse_table.get_operator_ref();
         let block_metas = generate_blocks(fuse_table, blocks_per_segment).await?;
-        let summary = reduce_block_metas(&block_metas, BlockThresholds::default())?;
+        let summary = reduce_block_metas(&block_metas, BlockThresholds::default());
         let segment_info = SegmentInfo::new(block_metas, summary);
         let segment_writer = SegmentWriter::new(dal, fuse_table.meta_location_generator());
         let segment_location = segment_writer.write_segment_no_cache(&segment_info).await?;
@@ -202,7 +202,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
         None,
     );
     snapshot_1.timestamp = Some(now - Duration::hours(12));
-    snapshot_1.summary = merge_statistics(&snapshot_0.summary, &segments_v3[0].1.summary)?;
+    snapshot_1.summary = merge_statistics(&snapshot_0.summary, &segments_v3[0].1.summary);
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&snapshot_1.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_1
@@ -218,7 +218,7 @@ pub async fn generate_snapshots(fixture: &TestFixture) -> Result<()> {
     let mut snapshot_2 = TableSnapshot::from_previous(&snapshot_1);
     snapshot_2.segments = locations;
     snapshot_2.timestamp = Some(now);
-    snapshot_2.summary = merge_statistics(&snapshot_1.summary, &segments_v3[1].1.summary)?;
+    snapshot_2.summary = merge_statistics(&snapshot_1.summary, &segments_v3[1].1.summary);
     let new_snapshot_location = location_gen
         .snapshot_location_from_uuid(&snapshot_2.snapshot_id, TableSnapshot::VERSION)?;
     snapshot_2

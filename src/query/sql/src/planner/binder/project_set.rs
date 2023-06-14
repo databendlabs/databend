@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
+
 use common_ast::ast::Expr;
 use common_ast::ast::Identifier;
 use common_ast::ast::Literal;
@@ -155,11 +157,13 @@ impl Binder {
             let column = ColumnBinding {
                 database_name: None,
                 table_name: None,
+                column_position: None,
                 table_index: None,
                 column_name: name.clone(),
                 index: column_index,
                 data_type: Box::new(srf_expr.data_type().clone()),
                 visibility: Visibility::InVisible,
+                virtual_computed_expr: None,
             };
 
             let item = SrfItem {
@@ -186,6 +190,9 @@ impl Binder {
 
         let project_set = ProjectSet { srfs: items };
 
-        Ok(SExpr::create_unary(project_set.into(), s_expr))
+        Ok(SExpr::create_unary(
+            Arc::new(project_set.into()),
+            Arc::new(s_expr),
+        ))
     }
 }

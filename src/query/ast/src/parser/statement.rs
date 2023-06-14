@@ -32,6 +32,7 @@ use nom::Slice;
 
 use crate::ast::*;
 use crate::input::Input;
+use crate::parser::data_mask::data_mask_policy;
 use crate::parser::expr::subexpr;
 use crate::parser::expr::*;
 use crate::parser::query::*;
@@ -41,7 +42,6 @@ use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
-
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
     ShareGrantObjectName(ShareGrantObjectName),
@@ -719,6 +719,60 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let create_virtual_columns = map(
+        rule! {
+            CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+            Statement::CreateVirtualColumns(CreateVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+                virtual_columns,
+            })
+        },
+    );
+
+    let alter_virtual_columns = map(
+        rule! {
+            ALTER ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, virtual_columns, _, _, (catalog, database, table))| {
+            Statement::AlterVirtualColumns(AlterVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+                virtual_columns,
+            })
+        },
+    );
+
+    let drop_virtual_columns = map(
+        rule! {
+            DROP ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, table))| {
+            Statement::DropVirtualColumns(DropVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
+    let generate_virtual_columns = map(
+        rule! {
+            GENERATE ~ VIRTUAL ~ COLUMNS ~ FOR ~ #period_separated_idents_1_to_3
+        },
+        |(_, _, _, _, (catalog, database, table))| {
+            Statement::GenerateVirtualColumns(GenerateVirtualColumnsStmt {
+                catalog,
+                database,
+                table,
+            })
+        },
+    );
+
     let show_users = value(Statement::ShowUsers, rule! { SHOW ~ USERS });
     let create_user = map(
         rule! {
@@ -965,12 +1019,14 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     let copy_into = map(
         rule! {
             COPY
+            ~ #hint?
             ~ INTO ~ #copy_unit
             ~ FROM ~ #copy_unit
             ~ ( #copy_option )*
         },
-        |(_, _, dst, _, src, opts)| {
+        |(_, opt_hints, _, dst, _, src, opts)| {
             let mut copy_stmt = CopyStmt {
+                hints: opt_hints,
                 src,
                 dst,
                 files: Default::default(),
@@ -1173,6 +1229,43 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
 
     let show_file_formats = value(Statement::ShowFileFormats, rule! { SHOW ~ FILE ~ FORMATS });
 
+    // data mark policy
+    let create_data_mask_policy = map(
+        rule! {
+            CREATE ~ MASKING ~ POLICY ~ ( IF ~ NOT ~ EXISTS )? ~ #ident ~ #data_mask_policy
+        },
+        |(_, _, _, opt_if_not_exists, name, policy)| {
+            let stmt = CreateDatamaskPolicyStmt {
+                if_not_exists: opt_if_not_exists.is_some(),
+                name: name.to_string(),
+                policy,
+            };
+            Statement::CreateDatamaskPolicy(stmt)
+        },
+    );
+    let drop_data_mask_policy = map(
+        rule! {
+            DROP ~ MASKING ~ POLICY ~ ( IF ~ EXISTS )? ~ #ident
+        },
+        |(_, _, _, opt_if_exists, name)| {
+            let stmt = DropDatamaskPolicyStmt {
+                if_exists: opt_if_exists.is_some(),
+                name: name.to_string(),
+            };
+            Statement::DropDatamaskPolicy(stmt)
+        },
+    );
+    let describe_data_mask_policy = map(
+        rule! {
+            ( DESC | DESCRIBE ) ~ MASKING ~ POLICY ~ #ident
+        },
+        |(_, _, _, name)| {
+            Statement::DescDatamaskPolicy(DescDatamaskPolicyStmt {
+                name: name.to_string(),
+            })
+        },
+    );
+
     let statement_body = alt((
         rule!(
             #map(query, |query| Statement::Query(Box::new(query)))
@@ -1234,6 +1327,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
         ),
         rule!(
+            #create_virtual_columns: "`CREATE VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
+            | #alter_virtual_columns: "`ALTER VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
+            | #drop_virtual_columns: "`DROP VIRTUAL COLUMNS FOR [<database>.]<table>`"
+            | #generate_virtual_columns: "`GENERATE VIRTUAL COLUMNS FOR [<database>.]<table>`"
+        ),
+        rule!(
             #show_users : "`SHOW USERS`"
             | #create_user : "`CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`"
             | #alter_user : "`ALTER USER ('<username>'@'hostname' | USER()) [IDENTIFIED [WITH <auth_type>] [BY <password>]] [WITH <user_option>, ...]`"
@@ -1280,6 +1379,12 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         ),
         rule!(
             #presign: "`PRESIGN [{DOWNLOAD | UPLOAD}] <location> [EXPIRE = 3600]`"
+        ),
+        // data mask
+        rule!(
+            #create_data_mask_policy: "`CREATE MASKING POLICY [IF NOT EXISTS] mask_name as (val1 val_type1 [, val type]) return type -> case`"
+            | #drop_data_mask_policy: "`DROP MASKING POLICY [IF EXISTS] mask_name`"
+            | #describe_data_mask_policy: "`DESC MASKING POLICY mask_name`"
         ),
         // share
         rule!(
@@ -1420,18 +1525,34 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     enum ColumnConstraint {
         Nullable(bool),
         DefaultExpr(Box<Expr>),
+        VirtualExpr(Box<Expr>),
+        StoredExpr(Box<Expr>),
     }
 
     let nullable = alt((
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
         value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
     ));
-    let default_expr = map(
-        rule! {
-            DEFAULT ~ ^#subexpr(NOT_PREC)
-        },
-        |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
-    );
+    let expr = alt((
+        map(
+            rule! {
+                DEFAULT ~ ^#subexpr(NOT_PREC)
+            },
+            |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
+        ),
+        map(
+            rule! {
+                AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
+            },
+            |(_, _, virtual_expr, _, _)| ColumnConstraint::VirtualExpr(Box::new(virtual_expr)),
+        ),
+        map(
+            rule! {
+                AS ~ "(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
+            },
+            |(_, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
+        ),
+    ));
 
     let comment = map(
         rule! {
@@ -1444,26 +1565,32 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         rule! {
             #ident
             ~ #type_name
-            ~ ( #nullable | #default_expr )*
+            ~ ( #nullable | #expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`"
+            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`"
         },
         |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
-                default_expr: None,
+                expr: None,
                 comment,
             };
             for constraint in constraints {
                 match constraint {
-                    ColumnConstraint::DefaultExpr(default_expr) => {
-                        def.default_expr = Some(default_expr)
-                    }
                     ColumnConstraint::Nullable(nullable) => {
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
                         }
+                    }
+                    ColumnConstraint::DefaultExpr(default_expr) => {
+                        def.expr = Some(ColumnExpr::Default(default_expr))
+                    }
+                    ColumnConstraint::VirtualExpr(virtual_expr) => {
+                        def.expr = Some(ColumnExpr::Virtual(virtual_expr))
+                    }
+                    ColumnConstraint::StoredExpr(stored_expr) => {
+                        def.expr = Some(ColumnExpr::Stored(stored_expr))
                     }
                 }
             }
@@ -1689,6 +1816,15 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, column)| AlterTableAction::AddColumn { column },
     );
+    let modify_column = map(
+        rule! {
+            MODIFY ~ COLUMN ~ #ident ~ SET ~ MASKING ~ POLICY ~ #ident
+        },
+        |(_, _, column, _, _, _, mask_name)| AlterTableAction::ModifyColumn {
+            column,
+            action: ModifyColumnAction::SetMaskingPolicy(mask_name.to_string()),
+        },
+    );
     let drop_column = map(
         rule! {
             DROP ~ COLUMN ~ #ident
@@ -1730,6 +1866,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         #rename_table
         | #add_column
         | #drop_column
+        | #modify_column
         | #alter_table_cluster_key
         | #drop_table_cluster_key
         | #recluster_table
@@ -1867,9 +2004,14 @@ pub fn show_limit(i: Input) -> IResult<ShowLimit> {
 pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
     map(
         rule! {
-           ( #ident_to_string ~ "=" ~ #parameter_to_string )*
+           ( #ident ~ "=" ~ #parameter_to_string )*
         },
-        |opts| BTreeMap::from_iter(opts.iter().map(|(k, _, v)| (k.to_lowercase(), v.clone()))),
+        |opts| {
+            BTreeMap::from_iter(
+                opts.iter()
+                    .map(|(k, _, v)| (k.name.to_lowercase(), v.clone())),
+            )
+        },
     )(i)
 }
 

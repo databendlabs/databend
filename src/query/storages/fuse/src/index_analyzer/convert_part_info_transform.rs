@@ -131,6 +131,7 @@ impl BlockMetaAccumulatingTransform<BlockFilterMeta> for PartInfoConvertTransfor
                 format_version,
                 rows_count,
                 columns_meta,
+                None, // TODO:
                 block_meta.compression(),
                 None,
                 Some(data.meta_index.to_owned()),

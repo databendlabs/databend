@@ -24,10 +24,6 @@ use common_expression::Expr;
 use common_expression::RawExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 
-use crate::plans::BoundColumnRef;
-use crate::plans::CastExpr;
-use crate::plans::ConstantExpr;
-use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
@@ -199,11 +195,13 @@ impl ScalarExpr {
                 id: ColumnBinding {
                     database_name: None,
                     table_name: None,
+                    column_position: None,
                     table_index: None,
                     column_name: win.display_name.clone(),
                     index: usize::MAX,
                     data_type: Box::new(win.func.return_type()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
                 data_type: win.func.return_type(),
                 display_name: win.display_name.clone(),
@@ -214,10 +212,12 @@ impl ScalarExpr {
                     database_name: None,
                     table_name: None,
                     table_index: None,
+                    column_position: None,
                     column_name: agg.display_name.clone(),
                     index: usize::MAX,
                     data_type: Box::new((*agg.return_type).clone()),
                     visibility: Visibility::Visible,
+                    virtual_computed_expr: None,
                 },
                 data_type: (*agg.return_type).clone(),
                 display_name: agg.display_name.clone(),
@@ -246,51 +246,18 @@ impl ScalarExpr {
     pub fn as_expr(&self) -> Result<Expr<ColumnBinding>> {
         self.as_raw_expr().type_check()
     }
-
-    pub fn from_expr(expr: &Expr<ColumnBinding>) -> Result<ScalarExpr> {
-        match expr {
-            Expr::ColumnRef { span, id, .. } => Ok(ScalarExpr::BoundColumnRef(BoundColumnRef {
-                span: *span,
-                column: id.clone(),
-            })),
-            Expr::Constant { span, scalar, .. } => Ok(ScalarExpr::ConstantExpr(ConstantExpr {
-                span: *span,
-                value: scalar.clone(),
-            })),
-            Expr::FunctionCall { span, id, args, .. } => {
-                Ok(ScalarExpr::FunctionCall(FunctionCall {
-                    span: *span,
-                    func_name: id.name().into(),
-                    params: id.params().into(),
-                    arguments: args
-                        .iter()
-                        .map(ScalarExpr::from_expr)
-                        .collect::<Result<Vec<_>>>()?,
-                }))
-            }
-            Expr::Cast {
-                span,
-                is_try,
-                expr,
-                dest_type,
-            } => Ok(ScalarExpr::CastExpr(CastExpr {
-                span: *span,
-                is_try: *is_try,
-                argument: Box::new(ScalarExpr::from_expr(expr)?),
-                target_type: Box::new(dest_type.clone()),
-            })),
-        }
-    }
 }
 
 fn new_dummy_column(data_type: DataType) -> ColumnBinding {
     ColumnBinding {
         database_name: None,
         table_name: None,
+        column_position: None,
         table_index: None,
         column_name: "DUMMY".to_string(),
         index: usize::MAX,
         data_type: Box::new(data_type),
         visibility: Visibility::Visible,
+        virtual_computed_expr: None,
     }
 }

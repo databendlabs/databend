@@ -1169,7 +1169,7 @@ impl Column {
         }
     }
 
-    fn set_validity(
+    pub fn set_validity(
         arrow_array: Box<dyn common_arrow::arrow::array::Array>,
         validity: &Bitmap,
     ) -> Box<dyn common_arrow::arrow::array::Array> {
@@ -2443,7 +2443,11 @@ impl ColumnBuilder {
                     field.append_column(other_field);
                 }
             }
-            (this, other) => unreachable!("unable append {other:?} into {this:?}"),
+            (this, other) => unreachable!(
+                "unable append column(data type: {:?}) into builder(data type: {:?})",
+                other.data_type(),
+                this.data_type()
+            ),
         }
     }
 

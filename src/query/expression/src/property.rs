@@ -30,6 +30,7 @@ use crate::types::ArgType;
 use crate::types::BooleanType;
 use crate::types::DataType;
 use crate::types::DateType;
+use crate::types::DecimalDataType;
 use crate::types::NumberDataType;
 use crate::types::NumberType;
 use crate::types::StringType;
@@ -165,12 +166,11 @@ impl Domain {
             DataType::Number(NumberDataType::Float64) => {
                 Domain::Number(NumberDomain::Float64(NumberType::<F64>::full_domain()))
             }
-            // useless domain, we don't support min/max index for decimal type
             DataType::Decimal(x) => match x {
-                crate::types::DecimalDataType::Decimal128(x) => {
+                DecimalDataType::Decimal128(x) => {
                     Domain::Decimal(DecimalDomain::Decimal128(Decimal128Type::full_domain(), *x))
                 }
-                crate::types::DecimalDataType::Decimal256(x) => {
+                DecimalDataType::Decimal256(x) => {
                     Domain::Decimal(DecimalDomain::Decimal256(Decimal256Type::full_domain(), *x))
                 }
             },

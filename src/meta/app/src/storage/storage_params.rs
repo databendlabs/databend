@@ -38,6 +38,7 @@ pub enum StorageParams {
     S3(StorageS3Config),
     Redis(StorageRedisConfig),
     Webhdfs(StorageWebhdfsConfig),
+    Cos(StorageCosConfig),
 
     /// None means this storage type is none.
     ///
@@ -72,6 +73,7 @@ impl StorageParams {
             StorageParams::Gcs(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::Redis(_) => false,
             StorageParams::Webhdfs(v) => v.endpoint_url.starts_with("https://"),
+            StorageParams::Cos(v) => v.endpoint_url.starts_with("https://"),
             StorageParams::None => false,
         }
     }
@@ -94,6 +96,7 @@ impl StorageParams {
             StorageParams::Gcs(v) => v.root = f(&v.root),
             StorageParams::Redis(v) => v.root = f(&v.root),
             StorageParams::Webhdfs(v) => v.root = f(&v.root),
+            StorageParams::Cos(v) => v.root = f(&v.root),
             StorageParams::None => {}
         };
 
@@ -143,6 +146,11 @@ impl Display for StorageParams {
             StorageParams::Oss(v) => write!(
                 f,
                 "oss | bucket={},root={},endpoint={}",
+                v.bucket, v.root, v.endpoint_url
+            ),
+            StorageParams::Cos(v) => write!(
+                f,
+                "cos | bucket={},root={},endpoint={}",
                 v.bucket, v.root, v.endpoint_url
             ),
             StorageParams::S3(v) => {
@@ -314,6 +322,8 @@ pub struct StorageS3Config {
     pub role_arn: String,
     /// The ExternalId that used for AssumeRole.
     pub external_id: String,
+    /// Allow anonymous access to S3 if credential not loaded.
+    pub allow_anonymous: bool,
 }
 
 impl Default for StorageS3Config {
@@ -331,6 +341,7 @@ impl Default for StorageS3Config {
             enable_virtual_host_style: false,
             role_arn: "".to_string(),
             external_id: "".to_string(),
+            allow_anonymous: false,
         }
     }
 }
@@ -353,6 +364,7 @@ impl Debug for StorageS3Config {
             )
             .field("security_token", &mask_string(&self.security_token, 3))
             .field("master_key", &mask_string(&self.master_key, 3))
+            .field("allow_anonymous", &self.allow_anonymous)
             .finish()
     }
 }
@@ -471,7 +483,7 @@ impl Debug for StorageRedisConfig {
             d.field("username", &mask_string(username, 3));
         }
         if let Some(password) = &self.password {
-            d.field("usernpasswordame", &mask_string(password, 3));
+            d.field("password", &mask_string(password, 3));
         }
 
         d.finish()
@@ -498,6 +510,30 @@ impl Debug for StorageWebhdfsConfig {
         ds.finish()
     }
 }
+
+#[derive(Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StorageCosConfig {
+    pub secret_id: String,
+    pub secret_key: String,
+    pub bucket: String,
+    pub endpoint_url: String,
+    pub root: String,
+}
+
+impl Debug for StorageCosConfig {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut ds = f.debug_struct("StorageCosConfig");
+
+        ds.field("bucket", &self.bucket);
+        ds.field("endpoint_url", &self.endpoint_url);
+        ds.field("root", &self.root);
+        ds.field("secret_id", &mask_string(&self.secret_id, 3));
+        ds.field("secret_key", &mask_string(&self.secret_key, 3));
+
+        ds.finish()
+    }
+}
+
 /// Mask a string by "******", but keep `unmask_len` of suffix.
 ///
 /// Copied from `common-base` so that we don't need to depend on it.

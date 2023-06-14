@@ -43,7 +43,7 @@ jobs:
         with:
           fetch-depth: 0
       - uses: actions/checkout@v3
-        if: github.event_name != 'pull_request_target'
+        if: github.event_name == 'pull_request_target'
         with:
           fetch-depth: 0
           ref: "refs/pull/${{ github.event.number }}/merge"
@@ -187,9 +187,9 @@ jobs:
       matrix:
         include:
           - { dataset: hits, size: Medium }
-          - { dataset: hits, size: Large }
+          - { dataset: hits, size: XLarge }
           - { dataset: tpch, size: Medium }
-          - { dataset: tpch, size: Large }
+          - { dataset: tpch, size: XLarge }
       fail-fast: true
       max-parallel: 1
     steps:
@@ -269,7 +269,7 @@ jobs:
           number: ${{ needs.build.outputs.source_id }}
           token: ${{ github.token }}
           body: |
-            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Large&color=blue&logo=icloud)
+            ![local](https://img.shields.io/static/v1?label=AWS%20EC2&message=c5.4xlarge&color=orange&logo=amazonec2) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=Medium&color=blue&logo=icloud) ![cloud](https://img.shields.io/static/v1?label=Databend%20Cloud&message=XLarge&color=blue&logo=icloud)
             ## ClickBench Report
             * **hits**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.build.outputs.source_id }}/${{ needs.build.outputs.run_id }}/hits.html
             * **tpch**: https://repo.databend.rs/benchmark/clickbench/pr/${{ needs.build.outputs.source_id }}/${{ needs.build.outputs.run_id }}/tpch.html

@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::default::Default;
 use std::sync::Arc;
 
+use common_base::base::tokio::sync::Semaphore;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -22,24 +22,26 @@ use common_exception::Result;
 use common_expression::TableField;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
+use common_pipeline_core::processors::port::InputPort;
+use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_transforms::processors::transforms::create_dummy_item;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
+use rand::prelude::SliceRandom;
 use storages_common_table_meta::meta::Location;
-use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use uuid::Uuid;
 
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
-use crate::operations::merge_into::AppendTransform;
-use crate::operations::merge_into::BroadcastProcessor;
-use crate::operations::merge_into::CommitSink;
-use crate::operations::merge_into::MergeIntoOperationAggregator;
-use crate::operations::merge_into::OnConflictField;
-use crate::operations::merge_into::TableMutationAggregator;
+use crate::operations::common::AppendTransform;
+use crate::operations::common::CommitSink;
+use crate::operations::common::MutationGenerator;
+use crate::operations::common::TableMutationAggregator;
 use crate::operations::mutation::SegmentIndex;
-use crate::operations::replace_into::processor_replace_into::ReplaceIntoProcessor;
+use crate::operations::replace_into::BroadcastProcessor;
+use crate::operations::replace_into::MergeIntoOperationAggregator;
+use crate::operations::replace_into::OnConflictField;
+use crate::operations::replace_into::ReplaceIntoProcessor;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 
@@ -144,10 +146,9 @@ impl FuseTable {
         //    the "downstream" is supposed to be connected with a processor which can process MergeIntoOperations
         //    in our case, it is the broadcast processor
 
-        let base_snapshot = self
-            .read_table_snapshot()
-            .await?
-            .unwrap_or_else(|| Arc::new(self.new_empty_snapshot()));
+        let base_snapshot = self.read_table_snapshot().await?.unwrap_or_else(|| {
+            Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
+        });
 
         let empty_table = base_snapshot.segments.is_empty();
         let replace_into_processor =
@@ -156,23 +157,21 @@ impl FuseTable {
 
         // 3. connect to broadcast processor and append transform
 
-        let base_snapshot = self
-            .read_table_snapshot()
-            .await?
-            .unwrap_or_else(|| Arc::new(self.new_empty_snapshot()));
+        let base_snapshot = self.read_table_snapshot().await?.unwrap_or_else(|| {
+            Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
+        });
 
         let max_threads = ctx.get_settings().get_max_threads()?;
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
 
-        let append_transform = AppendTransform::try_create(
+        let append_transform = AppendTransform::new(
             ctx.clone(),
-            self.get_write_settings(),
-            self.operator.clone(),
-            self.meta_location_generator.clone(),
-            self.table_info.schema(),
-            self.get_block_thresholds(),
+            InputPort::create(),
+            OutputPort::create(),
+            self,
             cluster_stats_gen,
+            self.get_block_thresholds(),
         );
         let block_builder = append_transform.get_block_builder();
 
@@ -232,6 +231,9 @@ impl FuseTable {
             let dummy_item = create_dummy_item();
             pipe_items.push(dummy_item);
 
+            let max_io_request = ctx.get_settings().get_max_storage_io_requests()?;
+            let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));
+
             // setup the merge into operation aggregators
             let mut merge_into_operation_aggregators = self
                 .merge_into_mutators(
@@ -240,6 +242,7 @@ impl FuseTable {
                     block_builder,
                     on_conflicts.clone(),
                     &base_snapshot,
+                    io_request_semaphore,
                 )
                 .await?;
             assert_eq!(
@@ -273,10 +276,11 @@ impl FuseTable {
         block_builder: BlockBuilder,
         on_conflicts: Vec<OnConflictField>,
         table_snapshot: &TableSnapshot,
+        io_request_semaphore: Arc<Semaphore>,
     ) -> Result<Vec<PipeItem>> {
         let chunks = Self::partition_segments(&table_snapshot.segments, num_partition);
         let read_settings = ReadSettings::from_ctx(&ctx)?;
-        let mut items = vec![];
+        let mut items = Vec::with_capacity(num_partition);
         for chunk_of_segment_locations in chunks {
             let item = MergeIntoOperationAggregator::try_create(
                 ctx.clone(),
@@ -287,6 +291,7 @@ impl FuseTable {
                 self.get_write_settings(),
                 read_settings.clone(),
                 block_builder.clone(),
+                io_request_semaphore.clone(),
             )?;
             items.push(item.into_pipe_item());
         }
@@ -298,13 +303,16 @@ impl FuseTable {
         num_partition: usize,
     ) -> Vec<Vec<(SegmentIndex, Location)>> {
         let chunk_size = segments.len() / num_partition;
-        // caller site guarantees this
         assert!(chunk_size >= 1);
 
-        let mut chunks = vec![];
-        for (chunk_idx, chunk) in segments.chunks(chunk_size).enumerate() {
-            let mut segment_chunk = (chunk_idx * chunk_size..)
-                .zip(chunk.to_vec())
+        let mut indexed_segment = segments.iter().enumerate().collect::<Vec<_>>();
+        indexed_segment.shuffle(&mut rand::thread_rng());
+
+        let mut chunks = Vec::with_capacity(num_partition);
+        for chunk in indexed_segment.chunks(chunk_size) {
+            let mut segment_chunk = chunk
+                .iter()
+                .map(|(segment_idx, location)| (*segment_idx, (*location).clone()))
                 .collect::<Vec<_>>();
             if chunks.len() < num_partition {
                 chunks.push(segment_chunk);
@@ -316,7 +324,7 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
-    async fn chain_mutation_pipes(
+    pub async fn chain_mutation_pipes(
         &self,
         ctx: &Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
@@ -350,23 +358,10 @@ impl FuseTable {
         })?;
 
         // b) append  CommitSink
-
+        let snapshot_gen = MutationGenerator::new(base_snapshot);
         pipeline.add_sink(|input| {
-            CommitSink::try_create(self, ctx.clone(), base_snapshot.clone(), input)
+            CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
         })?;
         Ok(())
-    }
-
-    fn new_empty_snapshot(&self) -> TableSnapshot {
-        TableSnapshot::new(
-            Uuid::new_v4(),
-            &None,
-            None,
-            self.table_info.meta.schema.as_ref().clone(),
-            Statistics::default(),
-            vec![],
-            None,
-            None,
-        )
     }
 }

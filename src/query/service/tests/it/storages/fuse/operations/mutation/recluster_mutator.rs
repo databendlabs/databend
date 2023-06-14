@@ -17,7 +17,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::tokio;
-use common_catalog::table_mutator::TableMutator;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
@@ -25,6 +24,7 @@ use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
+use common_storages_fuse::operations::BlockMetaIndex;
 use common_storages_fuse::pruning::create_segment_location_vector;
 use common_storages_fuse::pruning::FusePruner;
 use common_storages_fuse::statistics::reducers::reduce_block_metas;
@@ -68,7 +68,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         ));
 
         let statistics =
-            reduce_block_metas(&[test_block_meta.as_ref()], BlockThresholds::default())?;
+            reduce_block_metas(&[test_block_meta.as_ref()], BlockThresholds::default());
 
         let segment = SegmentInfo::new(vec![test_block_meta], statistics);
         Ok::<_, ErrorCode>((seg_writer.write_segment(segment).await?, location))
@@ -128,27 +128,22 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
     let block_metas = FusePruner::create(&ctx, data_accessor.clone(), schema, &None)?
         .pruning(segment_locations)
         .await?;
-    let mut blocks_map: BTreeMap<i32, Vec<(usize, Arc<BlockMeta>)>> = BTreeMap::new();
+    let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();
     block_metas.iter().for_each(|(idx, b)| {
         if let Some(stats) = &b.cluster_stats {
-            blocks_map
-                .entry(stats.level)
-                .or_default()
-                .push((idx.segment_idx, b.clone()));
+            blocks_map.entry(stats.level).or_default().push((
+                BlockMetaIndex {
+                    segment_idx: idx.segment_idx,
+                    block_idx: idx.block_idx,
+                },
+                b.clone(),
+            ));
         }
     });
 
-    let mut mutator = ReclusterMutator::try_create(
-        ctx,
-        location_generator,
-        base_snapshot,
-        1.0,
-        BlockThresholds::default(),
-        blocks_map,
-        data_accessor,
-    )?;
+    let mut mutator = ReclusterMutator::try_create(1.0, BlockThresholds::default())?;
 
-    let need_recluster = mutator.target_select().await?;
+    let need_recluster = mutator.target_select(blocks_map).await?;
     assert!(need_recluster);
     assert_eq!(mutator.selected_blocks().len(), 3);
 

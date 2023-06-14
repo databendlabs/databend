@@ -7,7 +7,7 @@ This document provides an overview of the cosine_distance function in Databend a
 
 :::info
 
-The cosine_distance function performs vector computations within Databend and does not rely on the OpenAI API. 
+The cosine_distance function performs vector computations within Databend and does not rely on the (Azure) OpenAI API. 
 
 :::
 

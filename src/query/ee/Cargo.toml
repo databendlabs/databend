@@ -15,22 +15,31 @@ test = false
 # Workspace dependencies
 aggregating-index = { path = "../ee-features/aggregating-index" }
 async-backtrace = { workspace = true }
+common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
 common-config = { path = "../config" }
 common-exception = { path = "../../common/exception" }
+common-expression = { path = "../expression" }
+common-io = { path = "../../common/io" }
 common-license = { path = "../../common/license" }
+common-meta-api = { path = "../../meta/api" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
+common-meta-store = { path = "../../meta/store" }
 common-meta-types = { path = "../../meta/types" }
 common-settings = { path = "../../query/settings" }
 common-storages-fuse = { path = "../storages/fuse" }
 common-users = { path = "../users" }
+data-mask-feature = { path = "../ee-features/data-mask" }
 databend-query = { path = "../service" }
+jsonb = { workspace = true }
+opendal = { workspace = true }
 storages-common-cache = { path = "../storages/common/cache" }
 storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
+virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
 
 async-trait = "0.1.57"
 chrono = { workspace = true }

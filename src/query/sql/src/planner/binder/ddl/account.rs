@@ -189,13 +189,21 @@ impl Binder {
 
         // None means no change to make
         let new_auth_info = if let Some(auth_option) = &auth_option {
-            let auth_info = user_info
-                .auth_info
-                .alter2(&auth_option.auth_type, &auth_option.password)?;
-            if user_info.auth_info == auth_info {
-                None
+            // allow root user alter password
+            if user_info.is_root() {
+                Some(AuthInfo::create2(
+                    &auth_option.auth_type,
+                    &auth_option.password,
+                )?)
             } else {
-                Some(auth_info)
+                let auth_info = user_info
+                    .auth_info
+                    .alter2(&auth_option.auth_type, &auth_option.password)?;
+                if user_info.auth_info == auth_info {
+                    None
+                } else {
+                    Some(auth_info)
+                }
             }
         } else {
             None

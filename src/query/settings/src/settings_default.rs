@@ -221,7 +221,7 @@ impl DefaultSettings {
                     display_in_show_settings: true,
                 }),
                 ("enable_bushy_join", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
+                    value: UserSettingValue::UInt64(0),
                     desc: "Enables generating a bushy join plan with the optimizer.",
                     possible_values: None,
                     display_in_show_settings: true,
@@ -283,9 +283,9 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("lazy_topn_threshold", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(0),
-                    desc: "Enable lazy materialization and set the limit threshold of Top-N queries. Set the value to 0 to disable this setting.",
+                ("lazy_read_threshold", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1000),
+                    desc: "Sets the maximum LIMIT in a query to enable lazy read optimization. Setting it to 0 disables the optimization.",
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
@@ -315,6 +315,12 @@ impl DefaultSettings {
                     desc: "Enable index analyzer with pipeline, default value: 0",
                     possible_values: None,
                     display_in_show_settings: true,
+                }),
+                ("deduplicate_label", DefaultSettingValue {
+                    value: UserSettingValue::String("".to_owned()),
+                    desc: "Sql duplicate label for deduplication.",
+                    possible_values: None,
+                    display_in_show_settings: false,
                 }),
             ]);
 

@@ -24,6 +24,7 @@ use common_base::runtime::GlobalIORuntime;
 use common_base::runtime::TrySpawn;
 use common_exception::ErrorCode;
 use common_meta_app::storage::StorageAzblobConfig;
+use common_meta_app::storage::StorageCosConfig;
 use common_meta_app::storage::StorageFsConfig;
 use common_meta_app::storage::StorageGcsConfig;
 #[cfg(feature = "storage-hdfs")]
@@ -42,6 +43,7 @@ use opendal::layers::ImmutableIndexLayer;
 use opendal::layers::LoggingLayer;
 use opendal::layers::MetricsLayer;
 use opendal::layers::RetryLayer;
+use opendal::layers::TimeoutLayer;
 use opendal::layers::TracingLayer;
 use opendal::raw::HttpClient;
 use opendal::services;
@@ -71,6 +73,7 @@ pub fn init_operator(cfg: &StorageParams) -> Result<Operator> {
         StorageParams::Oss(cfg) => build_operator(init_oss_operator(cfg)?)?,
         StorageParams::Redis(cfg) => build_operator(init_redis_operator(cfg)?)?,
         StorageParams::Webhdfs(cfg) => build_operator(init_webhdfs_operator(cfg)?)?,
+        StorageParams::Cos(cfg) => build_operator(init_cos_operator(cfg)?)?,
         v => {
             return Err(Error::new(
                 ErrorKind::InvalidInput,
@@ -92,6 +95,15 @@ pub fn build_operator<B: Builder>(builder: B) -> Result<Operator> {
         // storage operator so that all underlying storage operations
         // will send to storage runtime.
         .layer(RuntimeLayer::new(GlobalIORuntime::instance().inner()))
+        .layer(
+            TimeoutLayer::new()
+                // Return timeout error if the operation failed to finish in
+                // 60s
+                .with_timeout(Duration::from_secs(60))
+                // Return timeout error if the request speed is less than
+                // 1 KiB/s.
+                .with_speed(1024),
+        )
         // Add retry
         .layer(RetryLayer::new().with_jitter())
         // Add metrics
@@ -246,6 +258,11 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
         builder.enable_virtual_host_style();
     }
 
+    // Enable allow anonymous
+    if cfg.allow_anonymous {
+        builder.allow_anonymous();
+    }
+
     let http_builder = {
         let mut builder = reqwest::ClientBuilder::new();
 
@@ -263,13 +280,6 @@ fn init_s3_operator(cfg: &StorageS3Config) -> Result<impl Builder> {
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(30);
         builder = builder.connect_timeout(Duration::from_secs(connect_timeout));
-
-        // Timeout default to 120s.
-        let timeout = env::var("_DATABEND_INTERNAL_TIMEOUT")
-            .ok()
-            .and_then(|v| v.parse::<u64>().ok())
-            .unwrap_or(120);
-        builder = builder.timeout(Duration::from_secs(timeout));
 
         builder
     };
@@ -348,6 +358,20 @@ fn init_webhdfs_operator(v: &StorageWebhdfsConfig) -> Result<impl Builder> {
     builder.endpoint(&v.endpoint_url);
     builder.root(&v.root);
     builder.delegation(&v.delegation);
+
+    Ok(builder)
+}
+
+/// init_cos_operator will init an opendal COS operator with input oss config.
+fn init_cos_operator(cfg: &StorageCosConfig) -> Result<impl Builder> {
+    let mut builder = services::Cos::default();
+
+    builder
+        .endpoint(&cfg.endpoint_url)
+        .secret_id(&cfg.secret_id)
+        .secret_key(&cfg.secret_key)
+        .bucket(&cfg.bucket)
+        .root(&cfg.root);
 
     Ok(builder)
 }

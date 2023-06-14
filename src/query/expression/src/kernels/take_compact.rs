@@ -193,7 +193,7 @@ impl Column {
 
         let mut builder: Vec<T> = Vec::with_capacity(row_num);
         let builder_ptr = builder.as_mut_ptr();
-        let col_ptr = col.as_ptr();
+        let col_ptr = col.as_slice().as_ptr();
 
         let mut offset = 0;
         let mut remain;
@@ -293,7 +293,7 @@ impl Column {
         let mut res_data: Vec<u8> = Vec::with_capacity(data_capacity as usize);
         let res_data_ptr = res_data.as_mut_ptr();
 
-        let col_data_ptr = col.data.as_ptr();
+        let col_data_ptr = col.data.as_slice().as_ptr();
         let col_offset = &col.offsets;
 
         let mut offset = 0;
@@ -416,4 +416,40 @@ impl Column {
         }
         T::upcast_column(T::build_column(builder))
     }
+}
+
+#[test]
+fn test_take_primitive_types() {
+    let buffer: Buffer<u32> = vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9].into();
+    let buffer = buffer.sliced(5, 3);
+    let indices = [(0, 1), (1, 2), (2, 1)];
+    let row_num = indices.iter().fold(0, |acc, &(_, x)| acc + x as usize);
+    let result = Column::take_primitive_types(&buffer, &indices, row_num);
+    assert_eq!(result, vec![5, 6, 6, 7]);
+}
+
+#[test]
+fn test_take_string_types() {
+    use crate::types::string::StringColumnBuilder;
+    let mut builder = StringColumnBuilder::with_capacity(0, 0);
+    builder.put_str("Databend");
+    builder.commit_row();
+    builder.put_str("A");
+    builder.commit_row();
+    builder.put_str("modern");
+    builder.commit_row();
+    builder.put_str("cloud");
+    builder.commit_row();
+    builder.put_str("data");
+    builder.commit_row();
+    builder.put_str("warehouse");
+    builder.commit_row();
+    let column: StringColumn = builder.build().slice(2..5);
+    let indices = [(0, 1), (1, 2), (2, 1)];
+    let row_num = indices.iter().fold(0, |acc, &(_, x)| acc + x as usize);
+    let result = Column::take_string_types(&column, &indices, row_num);
+    assert_eq!(result.index(0).unwrap(), "modern".as_bytes());
+    assert_eq!(result.index(1).unwrap(), "cloud".as_bytes());
+    assert_eq!(result.index(2).unwrap(), "cloud".as_bytes());
+    assert_eq!(result.index(3).unwrap(), "data".as_bytes());
 }

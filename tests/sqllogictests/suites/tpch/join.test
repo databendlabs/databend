@@ -298,3 +298,39 @@ order by o_comment
  Tiresias about the blithely ironic a
  Tiresias about the blithely ironic a
  Tiresias above the carefully ironic packages nag about the pend
+
+statement ok
+set max_block_size = 1024;
+
+
+# Test iejoin with large dataset
+query I
+select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) as l, (select * from orders order by o_orderkey limit 5000) as o where l.l_orderkey > o.o_orderkey and l.l_partkey < o.o_custkey order by l_orderkey limit 10;
+----
+3
+3
+3
+3
+3
+3
+3
+4
+5
+5
+
+statement ok
+set max_block_size = 65536;
+
+query I
+select l_orderkey from (select * from lineitem order by l_orderkey limit 5000) as l, (select * from orders order by o_orderkey limit 5000) as o where l.l_orderkey > o.o_orderkey order by l_orderkey limit 10;
+----
+2
+3
+3
+3
+3
+3
+3
+3
+3
+3

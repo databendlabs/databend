@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #![allow(clippy::uninlined_format_args)]
-#![deny(unused_crate_dependencies)]
+#![feature(box_into_inner)]
 
 pub mod meta;
+pub mod readers;
 pub mod table;

@@ -145,6 +145,42 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
 
     registry.register_passthrough_nullable_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType, _, _>(
+        "bitmap_subset_limit",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
+            |b, range_start, limit, builder, ctx| match RoaringTreemap::deserialize_from(b) {
+                Ok(rb) => {
+                    let collection = rb.iter().filter(|x| x >= &range_start).take(limit as usize);
+                    let subset_bitmap = RoaringTreemap::from_iter(collection);
+                    subset_bitmap.serialize_into(&mut builder.data).unwrap();
+                    builder.commit_row();
+                }
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType, _, _>(
+        "bitmap_subset_in_range",
+        |_, _, _| FunctionDomain::MayThrow,
+        vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
+            |b, start, end, builder, ctx| match RoaringTreemap::deserialize_from(b) {
+                Ok(rb) => {
+                    let collection = rb.iter().filter(|x| x >= &start && x < &end);
+                    let subset_bitmap = RoaringTreemap::from_iter(collection);
+                    subset_bitmap.serialize_into(&mut builder.data).unwrap();
+                    builder.commit_row();
+                }
+                Err(e) => {
+                    ctx.set_error(builder.len(), e.to_string());
+                }
+            },
+        ),
+    );
+
+    registry.register_passthrough_nullable_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType, _, _>(
         "sub_bitmap",
         |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_3_arg::<BitmapType, UInt64Type, UInt64Type, BitmapType>(
