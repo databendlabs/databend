@@ -479,7 +479,7 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn generate_outer_scan_task(&self) -> Result<()> {
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_bitmap = self.outer_scan_bitmap.read();
         let bitmap_num = outer_scan_bitmap.len();
         if bitmap_num == 0 {
             return Ok(());
@@ -524,7 +524,7 @@ impl HashJoinState for JoinHashTable {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_bitmap = self.outer_scan_bitmap.read();
         let interrupt = self.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
@@ -603,7 +603,7 @@ impl HashJoinState for JoinHashTable {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_bitmap = self.outer_scan_bitmap.read();
         let interrupt = self.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
@@ -651,7 +651,7 @@ impl HashJoinState for JoinHashTable {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_bitmap = self.outer_scan_bitmap.read();
         let interrupt = self.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
