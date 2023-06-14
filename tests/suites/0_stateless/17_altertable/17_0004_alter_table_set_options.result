@@ -1,3 +1,4 @@
 1
 ERROR 1105 (HY000) at line 1: Code: 1301, Text = table option abc is invalid for alter table statement.
 ERROR 1105 (HY000) at line 1: Code: 1301, Text = invalid block_per_segment option, can't be over 1000.
+ERROR 1105 (HY000) at line 1: Code: 1301, Text = can't change storage_format for alter table statement.

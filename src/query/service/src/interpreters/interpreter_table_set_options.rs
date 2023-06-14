@@ -21,6 +21,7 @@ use common_meta_app::schema::UpsertTableOptionReq;
 use common_meta_types::MatchSeq;
 use common_sql::plans::SetOptionsPlan;
 use common_storages_fuse::TableContext;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
 use tracing::error;
 
 use super::interpreter_table_create::is_valid_block_per_segment;
@@ -50,11 +51,21 @@ impl Interpreter for SetOptionsInterpreter {
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         // valid_options_check and do request to meta_srv
         let mut options_map = HashMap::new();
+        // check block_per_segment
         is_valid_block_per_segment(&self.plan.set_options)?;
+        // check storage_format
+        let error_str = "invalid opt for fuse table in alter table statement";
+        if let Some(_) = self.plan.set_options.get(OPT_KEY_STORAGE_FORMAT) {
+            error!(error_str);
+            return Err(ErrorCode::TableOptionInvalid(format!(
+                "can't change {} for alter table statement",
+                OPT_KEY_STORAGE_FORMAT
+            )));
+        }
         for table_option in self.plan.set_options.iter() {
             let key = table_option.0.to_lowercase();
             if !is_valid_create_opt(&key) {
-                error!("invalid opt for fuse table in alter table statement");
+                error!(error_str);
                 return Err(ErrorCode::TableOptionInvalid(format!(
                     "table option {key} is invalid for alter table statement",
                 )));
