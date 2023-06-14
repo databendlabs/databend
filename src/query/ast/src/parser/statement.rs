@@ -2033,7 +2033,7 @@ pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
                 opts.iter()
                     .map(|(_, k, _, v)| (k.name.to_lowercase(), v.clone())),
             );
-            options.insert(key.name.to_lowercase(), value.clone());
+            options.insert(key.name.to_lowercase(), value);
             options
         },
     )(i)

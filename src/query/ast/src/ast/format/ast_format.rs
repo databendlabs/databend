@@ -1390,7 +1390,7 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
             }
             AlterTableAction::SetOptions { set_options } => {
                 let mut action_name = "Action Set Option: ".to_string();
-                for (key, value) in set_options.into_iter() {
+                for (key, value) in set_options.iter() {
                     action_name.push_str(format!("{key} to {value}").as_str());
                 }
                 let action_format_ctx = AstFormatContext::new(action_name);

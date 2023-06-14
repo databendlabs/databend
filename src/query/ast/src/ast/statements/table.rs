@@ -313,7 +313,7 @@ impl Display for AlterTableAction {
         match self {
             AlterTableAction::SetOptions { set_options } => {
                 write!(f, "SET OPTIONS: ").expect("Set Options Write Error ");
-                write_space_separated_map(f, set_options.into_iter())
+                write_space_separated_map(f, set_options.iter())
             }
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")
