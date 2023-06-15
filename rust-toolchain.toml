@@ -1,3 +1,4 @@
 [toolchain]
 channel = "stable"
+date = "2023-06-01"
 components = ["rustfmt", "clippy"]

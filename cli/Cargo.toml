@@ -11,7 +11,6 @@ repository = "https://github.com/datafuselabs/databend-client"
 [dependencies]
 anyhow = "1.0.70"
 async-trait = "0.1.68"
-atty = "0.2.14"
 chrono = { version = "0.4.24", default-features = false, features = ["clock"] }
 clap = { version = "4.1.0", features = ["derive", "env"] }
 comfy-table = "6.1.4"

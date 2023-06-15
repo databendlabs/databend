@@ -20,7 +20,10 @@ mod display;
 mod helper;
 mod session;
 
-use std::{collections::BTreeMap, io::stdin};
+use std::{
+    collections::BTreeMap,
+    io::{stdin, IsTerminal},
+};
 
 use anyhow::{anyhow, Result};
 use clap::{CommandFactory, Parser, ValueEnum};
@@ -264,8 +267,8 @@ pub async fn main() -> Result<()> {
         }
     };
     let mut settings = Settings::default();
-
-    let is_repl = atty::is(atty::Stream::Stdin) && !args.non_interactive && args.query.is_none();
+    let is_terminal = stdin().is_terminal();
+    let is_repl = is_terminal && !args.non_interactive && args.query.is_none();
     if is_repl {
         settings.display_pretty_sql = true;
         settings.show_progress = true;
