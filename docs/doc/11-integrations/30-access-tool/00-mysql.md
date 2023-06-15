@@ -5,6 +5,10 @@ description:
   Connect Databend from MySQL-compatible clients.
 ---
 
+import FunctionDescription from '@site/src/components/FunctionDescription';
+
+<FunctionDescription description="Introduced: v1.1.57"/>
+
 Databend provides support for MySQL compatible CLI and GUI clients where you can connect to Databend and execute queries from.
 
 :::note
