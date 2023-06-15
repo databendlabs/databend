@@ -17,7 +17,7 @@ echo "copy /*+SET_VAR(deduplicate_label='copy-test')*/ into @s0 from (select * f
 echo "select * from @s0;" | $MYSQL_CLINEENRT_CONNECT
 echo "CREATE STAGE s1;" | $MYSQL_CLINEENRT_CONNECT
 echo "copy /*+SET_VAR(deduplicate_label='copy-test')*/ into @s1 from (select * from t1);" | $MYSQL_CLINEENRT_CONNECT
-echo "select * from @s0;" | $MYSQL_CLINEENRT_CONNECT
+echo "select * from @s1;" | $MYSQL_CLINEENRT_CONNECT
 
 echo "UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t SET a = 20 WHERE b = false;" | $MYSQL_CLIENT_CONNECT
 echo "UPDATE /*+ SET_VAR(deduplicate_label='update-test') */ t SET a = 30 WHERE b = false;" | $MYSQL_CLIENT_CONNECT
