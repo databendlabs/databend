@@ -23,6 +23,7 @@ use super::interpreter_catalog_create::CreateCatalogInterpreter;
 use super::interpreter_index_create::CreateIndexInterpreter;
 use super::interpreter_index_drop::DropIndexInterpreter;
 use super::interpreter_share_desc::DescShareInterpreter;
+use super::interpreter_table_set_options::SetOptionsInterpreter;
 use super::interpreter_user_stage_drop::DropUserStageInterpreter;
 use super::*;
 use crate::interpreters::access::Accessor;
@@ -171,6 +172,10 @@ impl InterpreterFactory {
             Plan::RenameTable(rename_table) => Ok(Arc::new(RenameTableInterpreter::try_create(
                 ctx,
                 *rename_table.clone(),
+            )?)),
+            Plan::SetOptions(set_options) => Ok(Arc::new(SetOptionsInterpreter::try_create(
+                ctx,
+                *set_options.clone(),
             )?)),
             Plan::AddTableColumn(add_table_column) => Ok(Arc::new(
                 AddTableColumnInterpreter::try_create(ctx, *add_table_column.clone())?,
