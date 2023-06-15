@@ -38,7 +38,7 @@ Databend comes with four preconfigured root users that can be accessed from a lo
 - `default@127.0.0.1`
 - `default@localhost`
 
-For safety purposes, you can set or update passwords for these accounts with the [ALTER USER](../../14-sql-commands/00-ddl/30-user/03-user-alter-user.md) command. See [Example: Connect from MySQL Workbench](#example-connect-from-mysql-workbench).
+For safety purposes, you can set or update passwords for these accounts with the [ALTER USER](../../14-sql-commands/00-ddl/30-user/03-user-alter-user.md) command. See [Example 1: Connect from MySQL Workbench](#example-1-connect-from-mysql-workbench).
 
 ## Example 1: Connect from MySQL Workbench
 
