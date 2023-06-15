@@ -158,7 +158,10 @@ impl FuseTable {
         }
 
         // sort
-        let block_size = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
+        // block compact in multi merge sort.
+        let multi_sort_block_size =
+            self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
         // construct output fields
         let output_fields: Vec<DataField> = cluster_stats_gen.out_fields.clone();
         let schema = DataSchemaRefExt::create(output_fields);
@@ -173,7 +176,16 @@ impl FuseTable {
             })
             .collect();
 
-        build_full_sort_pipeline(pipeline, schema, sort_descs, None, block_size, None, false)?;
+        build_full_sort_pipeline(
+            pipeline,
+            schema,
+            sort_descs,
+            None,
+            block_size,
+            multi_sort_block_size,
+            None,
+            false,
+        )?;
 
         assert_eq!(pipeline.output_len(), 1);
 
