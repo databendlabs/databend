@@ -34,7 +34,6 @@ use common_expression::types::number::UInt64Type;
 use common_expression::types::number::UInt8Type;
 use common_expression::types::string::StringDomain;
 use common_expression::types::timestamp::check_timestamp;
-use common_expression::types::timestamp::microseconds_to_days;
 use common_expression::types::timestamp::string_to_timestamp;
 use common_expression::types::timestamp::timestamp_to_string;
 use common_expression::types::timestamp::MICROS_IN_A_MILLI;
@@ -339,8 +338,19 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
         val: ValueRef<TimestampType>,
         ctx: &mut EvalContext,
     ) -> Value<DateType> {
-        vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, _| {
-            output.push(microseconds_to_days(val));
+        vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, ctx| {
+            let tz = ctx.func_ctx.tz.tz;
+            let res = val
+                .to_timestamp(tz)
+                .naive_local()
+                .signed_duration_since(
+                    NaiveDate::from_ymd_opt(1970, 1, 1)
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap(),
+                )
+                .num_days() as i32;
+            output.push(res);
         })(val, ctx)
     }
 }
