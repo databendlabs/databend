@@ -127,6 +127,7 @@ impl AligningStateTextBased for AligningStateWholeFile {
             start_offset_in_split: 0,
             start_row_in_split: 0,
             start_row_of_split: Some(0),
+            num_fields: vec![],
         }])
     }
 }

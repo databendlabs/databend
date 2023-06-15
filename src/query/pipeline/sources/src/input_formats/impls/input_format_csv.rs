@@ -45,11 +45,45 @@ use crate::input_formats::InputFormatTextBase;
 use crate::input_formats::RowBatch;
 use crate::input_formats::SplitInfo;
 
+const MAX_CSV_COLUMNS: usize = 1024;
+
 pub struct InputFormatCSV {}
 
 impl InputFormatCSV {
     pub fn create() -> Self {
         Self {}
+    }
+
+    fn read_column(
+        builder: &mut ColumnBuilder,
+        field_decoder: &FieldDecoderCSV,
+        col_data: &[u8],
+        column_index: usize,
+        schema: &TableSchemaRef,
+    ) -> Result<()> {
+        let mut reader = Cursor::new(col_data);
+        if reader.eof() {
+            builder.push_default();
+            return Ok(());
+        }
+        if let Err(e) = field_decoder.read_field(builder, &mut reader, true) {
+            let err_msg = format_column_error(schema, column_index, col_data, &e.message());
+            return Err(ErrorCode::BadBytes(err_msg));
+        };
+        let mut next = [0u8; 1];
+        let readn = reader.read(&mut next[..])?;
+        if readn > 0 {
+            let remaining = col_data.len() - reader.position() as usize + 1;
+            let err_msg = format!(
+                "bad field end, remain {} bytes, next char is {}",
+                remaining,
+                verbose_char(next[0])
+            );
+
+            let err_msg = format_column_error(schema, column_index, col_data, &err_msg);
+            return Err(ErrorCode::BadBytes(err_msg));
+        }
+        Ok(())
     }
 
     fn read_row(
@@ -58,34 +92,27 @@ impl InputFormatCSV {
         columns: &mut [ColumnBuilder],
         schema: &TableSchemaRef,
         field_ends: &[usize],
+        columns_to_read: &Option<Vec<usize>>,
     ) -> Result<()> {
-        let mut field_start = 0;
-        for (c, column) in columns.iter_mut().enumerate() {
-            let field_end = field_ends[c];
-            let col_data = &buf[field_start..field_end];
-            let mut reader = Cursor::new(col_data);
-            if reader.eof() {
-                column.push_default();
-            } else {
-                if let Err(e) = field_decoder.read_field(column, &mut reader, true) {
-                    let err_msg = format_column_error(schema, c, col_data, &e.message());
-                    return Err(ErrorCode::BadBytes(err_msg));
-                };
-                let mut next = [0u8; 1];
-                let readn = reader.read(&mut next[..])?;
-                if readn > 0 {
-                    let remaining = col_data.len() - reader.position() as usize + 1;
-                    let err_msg = format!(
-                        "bad field end, remain {} bytes, next char is {}",
-                        remaining,
-                        verbose_char(next[0])
-                    );
-
-                    let err_msg = format_column_error(schema, c, col_data, &err_msg);
-                    return Err(ErrorCode::BadBytes(err_msg));
+        if let Some(columns_to_read) = columns_to_read {
+            for c in columns_to_read {
+                if *c >= field_ends.len() {
+                    columns[*c].push_default();
+                } else {
+                    let field_start = if *c == 0 { 0 } else { field_ends[c - 1] };
+                    let field_end = field_ends[*c];
+                    let col_data = &buf[field_start..field_end];
+                    Self::read_column(&mut columns[*c], field_decoder, col_data, *c, schema)?;
                 }
             }
-            field_start = field_end;
+        } else {
+            let mut field_start = 0;
+            for (c, column) in columns.iter_mut().enumerate() {
+                let field_end = field_ends[c];
+                let col_data = &buf[field_start..field_end];
+                Self::read_column(column, field_decoder, col_data, c, schema)?;
+                field_start = field_end;
+            }
         }
         Ok(())
     }
@@ -126,15 +153,21 @@ impl InputFormatTextBase for InputFormatCSV {
                 RecordDelimiter::Any(v) => csv_core::Terminator::Any(v),
             })
             .build();
+        let projection = ctx.projection.clone();
+        let max_fields = match &projection {
+            Some(p) => std::cmp::max(p.iter().copied().max().unwrap_or(1) + 1, MAX_CSV_COLUMNS),
+            None => ctx.schema.num_fields() + 6,
+        };
         Ok(CsvReaderState {
             common: AligningStateCommon::create(split_info, false, csv_params.headers as usize),
             ctx: ctx.clone(),
             split_info: split_info.clone(),
             reader,
             out: vec![],
-            field_ends: vec![0; ctx.schema.num_fields() + 6],
+            field_ends: vec![0; max_fields],
             n_end: 0,
             num_fields: ctx.schema.num_fields(),
+            projection,
         })
     }
 
@@ -154,13 +187,15 @@ impl InputFormatTextBase for InputFormatCSV {
             .downcast_ref::<FieldDecoderCSV>()
             .expect("must success");
         for (i, end) in batch.row_ends.iter().enumerate() {
+            let num_fields = batch.num_fields[i];
             let buf = &batch.data[start..*end];
             if let Err(e) = Self::read_row(
                 field_decoder,
                 buf,
                 columns,
                 &builder.ctx.schema,
-                &batch.field_ends[field_end_idx..field_end_idx + n_column],
+                &batch.field_ends[field_end_idx..field_end_idx + num_fields],
+                &builder.projection,
             ) {
                 match builder.ctx.on_error_mode {
                     OnErrorMode::Continue => {
@@ -180,7 +215,7 @@ impl InputFormatTextBase for InputFormatCSV {
                 }
             }
             start = *end;
-            field_end_idx += n_column;
+            field_end_idx += num_fields;
             num_rows += 1;
         }
         Ok(error_map)
@@ -200,10 +235,15 @@ pub struct CsvReaderState {
     pub n_end: usize,
 
     num_fields: usize,
+    projection: Option<Vec<usize>>,
 }
 
 impl CsvReaderState {
-    fn read_record(&mut self, input: &[u8], output: &mut [u8]) -> Result<(bool, usize, usize)> {
+    fn read_record(
+        &mut self,
+        input: &[u8],
+        output: &mut [u8],
+    ) -> Result<(Option<usize>, usize, usize)> {
         let (result, n_in, n_out, n_end) =
             self.reader
                 .read_record(input, output, &mut self.field_ends[self.n_end..]);
@@ -214,24 +254,27 @@ impl CsvReaderState {
                 if input.is_empty() {
                     Err(self.csv_error("unexpected eof"))
                 } else {
-                    Ok((false, n_in, n_out))
+                    Ok((None, n_in, n_out))
                 }
             }
             ReadRecordResult::OutputFull => Err(self.error_output_full()),
             ReadRecordResult::OutputEndsFull => Err(self.error_output_ends_full()),
             ReadRecordResult::Record => {
-                self.check_num_field()?;
+                if self.projection.is_none() {
+                    self.check_num_field()?;
+                }
 
                 self.common.rows += 1;
                 self.common.offset += n_in;
+                let n_end = self.n_end;
                 self.n_end = 0;
-                Ok((true, n_in, n_out))
+                Ok((Some(n_end), n_in, n_out))
             }
             ReadRecordResult::End => {
                 if !input.is_empty() {
                     Err(self.csv_error("unexpected eof"))
                 } else {
-                    Ok((false, n_in, n_out))
+                    Ok((None, n_in, n_out))
                 }
             }
         }
@@ -258,6 +301,7 @@ impl AligningStateTextBased for CsvReaderState {
             data: vec![],
             row_ends: vec![],
             field_ends: vec![],
+            num_fields: vec![],
             split_info: self.split_info.clone(),
             batch_id: self.common.batch_id,
             start_offset_in_split: self.common.offset,
@@ -265,15 +309,15 @@ impl AligningStateTextBased for CsvReaderState {
             start_row_of_split: Some(0),
         };
 
-        let num_fields = self.num_fields;
         while !buf.is_empty() {
-            let (has_record, n_in, n_out) = self.read_record(buf, &mut out_tmp[out_pos..])?;
+            let (num_fields, n_in, n_out) = self.read_record(buf, &mut out_tmp[out_pos..])?;
             buf = &buf[n_in..];
             out_pos += n_out;
-            if has_record {
+            if let Some(num_fields) = num_fields {
                 row_batch
                     .field_ends
                     .extend_from_slice(&self.field_ends[..num_fields]);
+                row_batch.num_fields.push(num_fields);
                 row_batch.row_ends.push(last_batch_remain_len + out_pos);
                 row_batch_end = out_pos;
             }
@@ -321,14 +365,15 @@ impl AligningStateTextBased for CsvReaderState {
             let _ = self.read_record(&in_tmp, &mut out_tmp)?;
         } else {
             let last_batch_remain_len = self.out.len();
-            let (has_record, _, n_out) = self.read_record(&in_tmp, &mut out_tmp)?;
-            if has_record {
+            let (num_fields, _, n_out) = self.read_record(&in_tmp, &mut out_tmp)?;
+            if let Some(num_fields) = num_fields {
                 let data = mem::take(&mut self.out);
 
                 let row_batch = RowBatch {
                     data,
                     row_ends: vec![last_batch_remain_len + n_out],
-                    field_ends: self.field_ends[..self.num_fields].to_vec(),
+                    field_ends: self.field_ends[..num_fields].to_vec(),
+                    num_fields: vec![num_fields],
                     split_info: self.split_info.clone(),
                     batch_id: self.common.batch_id,
                     start_offset_in_split: self.common.offset,
@@ -371,11 +416,18 @@ impl CsvReaderState {
     }
 
     fn error_output_ends_full(&self) -> ErrorCode {
-        self.csv_error(&format!(
-            "too many fields, expect {}, got more than {}",
-            self.num_fields,
-            self.field_ends.len()
-        ))
+        if self.projection.is_some() {
+            self.csv_error(&format!(
+                "too many fields, expect {}, got more than {}",
+                self.num_fields,
+                self.field_ends.len()
+            ))
+        } else {
+            self.csv_error(&format!(
+                "select from CSV allow at most {} fields",
+                MAX_CSV_COLUMNS
+            ))
+        }
     }
 
     fn csv_error(&self, msg: &str) -> ErrorCode {
