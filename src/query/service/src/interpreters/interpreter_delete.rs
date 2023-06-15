@@ -238,6 +238,13 @@ impl Interpreter for DeleteInterpreter {
             )?
             .as_remote_expr();
 
+            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
+            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+                return Err(ErrorCode::Unimplemented(
+                    "Delete must have deterministic predicate",
+                ));
+            }
+
             // prepare the inverse filter expression
             let inverted_filter = {
                 let inverse = ScalarExpr::FunctionCall(common_sql::planner::plans::FunctionCall {
@@ -253,13 +260,6 @@ impl Interpreter for DeleteInterpreter {
                 )?
                 .as_remote_expr()
             };
-
-            let expr = filter.as_expr(&BUILTIN_FUNCTIONS);
-            if !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
-                return Err(ErrorCode::Unimplemented(
-                    "Delete must have deterministic predicate",
-                ));
-            }
 
             let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
                 let mut col_indices = HashSet::new();
