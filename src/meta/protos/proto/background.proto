@@ -114,11 +114,6 @@ message BackgroundJobStatus {
 }
 
 message BackgroundJobInfo {
-    enum BackgroundJobState {
-        BACKGROUND_TASK_STATE_RUNNING = 0;
-        BACKGROUND_TASK_STATE_FAILED = 1;
-        BACKGROUND_TASK_STATE_SUSPENDED = 2;
-    }
 
     uint64 ver = 100;
     uint64 min_reader_ver = 101;
