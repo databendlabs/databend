@@ -25,12 +25,14 @@ use super::transform_sort_merge_limit::try_create_transform_sort_merge_limit;
 use super::TransformSortPartial;
 use crate::processors::ProfileWrapper;
 
+#[allow(clippy::too_many_arguments)]
 pub fn build_full_sort_pipeline(
     pipeline: &mut Pipeline,
     input_schema: DataSchemaRef,
     sort_desc: Vec<SortColumnDescription>,
     limit: Option<usize>,
-    block_size: usize,
+    partial_block_size: usize,
+    final_block_size: usize,
     prof_info: Option<(u32, ProfSpanSetRef)>,
     after_exchange: bool,
 ) -> Result<()> {
@@ -61,7 +63,7 @@ pub fn build_full_sort_pipeline(
                 output,
                 input_schema.clone(),
                 sort_desc.clone(),
-                block_size,
+                partial_block_size,
                 limit,
                 need_multi_merge,
             )?,
@@ -69,7 +71,7 @@ pub fn build_full_sort_pipeline(
                 input,
                 output,
                 input_schema.clone(),
-                block_size,
+                partial_block_size,
                 sort_desc.clone(),
                 need_multi_merge,
             )?,
@@ -88,7 +90,7 @@ pub fn build_full_sort_pipeline(
 
     if need_multi_merge {
         // Multi-pipelines merge sort
-        try_add_multi_sort_merge(pipeline, input_schema, block_size, limit, sort_desc)?;
+        try_add_multi_sort_merge(pipeline, input_schema, final_block_size, limit, sort_desc)?;
     }
 
     Ok(())

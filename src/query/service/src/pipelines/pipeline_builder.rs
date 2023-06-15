@@ -1024,6 +1024,7 @@ impl PipelineBuilder {
             sort_desc,
             limit,
             block_size,
+            block_size,
             prof_info,
             after_exchange,
         )
