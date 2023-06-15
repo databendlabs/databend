@@ -20,6 +20,7 @@ use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
 use common_catalog::plan::PruningStatistics;
 use common_catalog::plan::PushDownInfo;
+use common_catalog::table::DeletionFilters;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
@@ -28,7 +29,6 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
-use common_expression::ColumnIndex;
 use common_expression::ComputedExpr;
 use common_expression::DataBlock;
 use common_expression::DataField;
@@ -36,7 +36,6 @@ use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::Expr;
 use common_expression::FieldIndex;
-use common_expression::FunctionID::Builtin;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableSchema;
@@ -50,6 +49,8 @@ use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
+use crate::metrics::metrics_inc_deletion_block_range_pruned_nums;
+use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
@@ -77,7 +78,7 @@ impl FuseTable {
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
+        filters: Option<DeletionFilters>,
         col_indices: Vec<usize>,
         query_row_id_col: bool,
         pipeline: &mut Pipeline,
@@ -98,7 +99,7 @@ impl FuseTable {
         }
 
         // check if unconditional deletion
-        let filter_expr = match filter {
+        let deletion_filters = match filters {
             None => {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
@@ -109,7 +110,7 @@ impl FuseTable {
                 let purge = false;
                 return self.do_truncate(ctx.clone(), purge).await;
             }
-            Some(filter) => filter,
+            Some(filters) => filters,
         };
 
         if col_indices.is_empty() && !query_row_id_col {
@@ -121,7 +122,7 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            if self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr)? {
+            if self.try_eval_const(ctx.clone(), &self.schema(), &deletion_filters.filter)? {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
@@ -138,7 +139,7 @@ impl FuseTable {
 
         self.try_add_deletion_source(
             ctx.clone(),
-            &filter_expr,
+            deletion_filters,
             col_indices,
             &snapshot,
             query_row_id_col,
@@ -199,7 +200,7 @@ impl FuseTable {
     async fn try_add_deletion_source(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: &RemoteExpr<String>,
+        deletion_filters: DeletionFilters,
         col_indices: Vec<usize>,
         base_snapshot: &TableSnapshot,
         query_row_id_col: bool,
@@ -213,13 +214,16 @@ impl FuseTable {
             info!(status);
         }
 
+        let filter = deletion_filters.filter.clone();
+
         let MutationTaskInfo {
             total_tasks,
             num_whole_block_mutation,
         } = self
             .mutation_block_pruning(
                 ctx.clone(),
-                Some(filter.clone()),
+                Some(deletion_filters.filter),
+                Some(deletion_filters.inverted_filter),
                 projection.clone(),
                 base_snapshot,
                 true,
@@ -249,7 +253,8 @@ impl FuseTable {
                 1,
             );
         }
-        let filter = Arc::new(Some(
+
+        let filter_expr = Arc::new(Some(
             filter
                 .as_expr(&BUILTIN_FUNCTIONS)
                 .project_column_ref(|name| schema.index_of(name).unwrap()),
@@ -289,7 +294,7 @@ impl FuseTable {
                     ctx.clone(),
                     MutationAction::Deletion,
                     output,
-                    filter.clone(),
+                    filter_expr.clone(),
                     block_reader.clone(),
                     remain_reader.clone(),
                     ops.clone(),
@@ -307,13 +312,14 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
+        inverted_filter: Option<RemoteExpr<String>>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
         with_origin: bool,
     ) -> Result<MutationTaskInfo> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
-            filter,
+            filter: filter.clone(),
             ..PushDownInfo::default()
         });
 
@@ -331,23 +337,19 @@ impl FuseTable {
         let mut whole_block_deletions = std::collections::HashSet::new();
 
         if !block_metas.is_empty() {
-            // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
-            //
-            // let's try pruning the blocks further to get the blocks that need to be deleted completely, so that
-            // later during mutation, we need not to load the data of these blocks:
-            //
-            // 1. invert the filter expression
-            // 2. apply the inverse filter expression to the block metas, utilizing range index
-            //  - for those blocks that need to be deleted completely, they will be filtered out.
-            //  - for those blocks that need to be deleted partially, they will NOT be filtered out.
-            //
+            if let Some(inverse) = inverted_filter {
+                // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
+                //
+                // let's try pruning the blocks further to get the blocks that need to be deleted completely, so that
+                // later during mutation, we need not to load the data of these blocks:
+                //
+                // 1. invert the filter expression
+                // 2. apply the inverse filter expression to the block metas, utilizing range index
+                //  - for those blocks that need to be deleted completely, they will be filtered out.
+                //  - for those blocks that need to be deleted partially, they will NOT be filtered out.
+                //
 
-            if let Some(PushDownInfo {
-                filter: Some(remote_expr),
-                ..
-            }) = push_down
-            {
-                let inverse = Self::invert_expr(remote_expr.as_expr(&BUILTIN_FUNCTIONS));
+                let inverse: Expr<String> = inverse.as_expr(&BUILTIN_FUNCTIONS);
 
                 let func_ctx = ctx.get_function_context()?;
 
@@ -408,9 +410,16 @@ impl FuseTable {
 
         let part_num = parts.len();
         ctx.set_partitions(parts)?;
+
+        let num_whole_block_mutation = whole_block_deletions.len();
+
+        let block_nums = base_snapshot.summary.block_count;
+        metrics_inc_deletion_block_range_pruned_nums(block_nums - part_num as u64);
+        metrics_inc_deletion_block_range_pruned_whole_block_nums(num_whole_block_mutation as u64);
+
         Ok(MutationTaskInfo {
             total_tasks: part_num,
-            num_whole_block_mutation: whole_block_deletions.len(),
+            num_whole_block_mutation,
         })
     }
 
@@ -423,28 +432,5 @@ impl FuseTable {
             .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
             .map(|(i, _)| i)
             .collect::<Vec<FieldIndex>>()
-    }
-
-    fn invert_expr<T: ColumnIndex>(expr: Expr<T>) -> Expr<T> {
-        // is there already an expression combinator that can do this?
-        let logic_not = BUILTIN_FUNCTIONS
-            .funcs
-            .get("not")
-            .expect("built-in function 'not' not found");
-        let (function, id) = logic_not
-            .get(0)
-            .expect("at least one candidate for built-in function 'not' should exist")
-            .clone();
-        Expr::FunctionCall {
-            span: None,
-            id: Builtin {
-                id,
-                name: function.signature.name.clone(),
-            },
-            function,
-            args: vec![expr],
-            return_type: DataType::Boolean,
-            generics: vec![],
-        }
     }
 }

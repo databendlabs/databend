@@ -65,6 +65,7 @@ use walkdir::WalkDir;
 
 use crate::interpreters::fill_missing_columns;
 use crate::interpreters::CreateTableInterpreter;
+use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::executor::ExecutorSettings;
@@ -637,39 +638,42 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
 
 pub async fn do_deletion(
     ctx: Arc<QueryContext>,
-    table: Arc<dyn Table>,
+    _table: Arc<dyn Table>,
     plan: DeletePlan,
 ) -> Result<()> {
-    let (filter, col_indices) = if let Some(scalar) = &plan.selection {
-        (
-            Some(
-                scalar
-                    .as_expr()?
-                    .project_column_ref(|col| col.column_name.clone())
-                    .as_remote_expr(),
-            ),
-            scalar.used_columns().into_iter().collect(),
-        )
-    } else {
-        (None, vec![])
-    };
-
-    let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut res = PipelineBuildResult::create();
-    fuse_table
-        .delete(
-            ctx.clone(),
-            filter,
-            col_indices,
-            false,
-            &mut res.main_pipeline,
-        )
-        .await?;
-
-    if !res.main_pipeline.is_empty() {
-        execute_pipeline(ctx, res)?;
-    }
+    let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone())?;
+    delete_interpreter.execute(ctx).await?;
     Ok(())
+    // let (filter, col_indices) = if let Some(scalar) = &plan.selection {
+    //    (
+    //        Some(
+    //            scalar
+    //                .as_expr()?
+    //                .project_column_ref(|col| col.column_name.clone())
+    //                .as_remote_expr(),
+    //        ),
+    //        scalar.used_columns().into_iter().collect(),
+    //    )
+    //} else {
+    //    (None, vec![])
+    //};
+
+    // let fuse_table = FuseTable::try_from_table(table.as_ref())?;
+    // let mut res = PipelineBuildResult::create();
+    // fuse_table
+    //    .delete(
+    //        ctx.clone(),
+    //        filter,
+    //        col_indices,
+    //        false,
+    //        &mut res.main_pipeline,
+    //    )
+    //    .await?;
+
+    // if !res.main_pipeline.is_empty() {
+    //    execute_pipeline(ctx, res)?;
+    //}
+    // Ok(())
 }
 
 pub async fn do_update(

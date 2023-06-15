@@ -28,6 +28,7 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
+use common_catalog::table::DeletionFilters;
 use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -634,12 +635,12 @@ impl Table for FuseTable {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
+        filters: Option<DeletionFilters>,
         col_indices: Vec<usize>,
         query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete(ctx, filter, col_indices, query_row_id_col, pipeline)
+        self.do_delete(ctx, filters, col_indices, query_row_id_col, pipeline)
             .await
     }
 

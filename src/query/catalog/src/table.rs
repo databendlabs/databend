@@ -277,7 +277,10 @@ pub trait Table: Sync + Send {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
+        // - pass a ScalarExpr to Table::delete, and let the table's implementation of method `delete` do the
+        //   inversion will be more concise, unfortunately, using type ScalarExpr introduces cyclic dependency.
+        // - we can also pass a common_expression::Expr here, and later do the inversion at Expr level, but it is not recommended :(
+        filter: Option<DeletionFilters>,
         col_indices: Vec<usize>,
         query_row_id_col: bool,
         pipeline: &mut Pipeline,
@@ -523,4 +526,11 @@ mod column_stats_provider_impls {
 pub struct NavigationDescriptor {
     pub database_name: String,
     pub point: NavigationPoint,
+}
+
+pub struct DeletionFilters {
+    // the filter expression for the deletion
+    pub filter: RemoteExpr<String>,
+    // just "not(filter)"
+    pub inverted_filter: RemoteExpr<String>,
 }
