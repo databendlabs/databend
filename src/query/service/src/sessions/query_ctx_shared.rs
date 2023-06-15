@@ -389,7 +389,7 @@ impl Drop for QueryContextShared {
 pub fn short_sql(sql: String) -> String {
     use unicode_segmentation::UnicodeSegmentation;
     let query = sql.trim_start();
-    if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
+    if query.as_bytes().len() >= 64 && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT") {
         // keep first 64 graphemes
         String::from_utf8(
             query

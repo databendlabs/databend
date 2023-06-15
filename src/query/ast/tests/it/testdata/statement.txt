@@ -11381,3 +11381,97 @@ GenerateVirtualColumns(
 )
 
 
+---------- Input ----------
+--各环节转各环节转各环节转各环节转各
+  select 34343
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            56..68,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    56..68,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                63..68,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+-- xxxxx
+  select 34343;
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            11..23,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    11..23,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                18..23,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
