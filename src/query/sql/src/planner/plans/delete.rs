@@ -19,15 +19,20 @@ use crate::IndexType;
 use crate::MetadataRef;
 
 #[derive(Clone, Debug)]
+pub struct SubqueryDesc {
+    // The s_expr is a plan tree after decorrelation subquery
+    pub input_expr: SExpr,
+    // `_row_id`'s index
+    pub index: IndexType,
+    pub outer_columns: ColumnSet,
+}
+
+#[derive(Clone, Debug)]
 pub struct DeletePlan {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
     pub metadata: MetadataRef,
     pub selection: Option<ScalarExpr>,
-    // The case: selection is subquery
-    pub input_expr: Option<SExpr>,
-    // `_row_id`'s index
-    pub index: Option<IndexType>,
-    pub outer_columns: Option<ColumnSet>,
+    pub subquery_desc: Vec<SubqueryDesc>,
 }

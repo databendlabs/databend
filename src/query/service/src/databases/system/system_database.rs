@@ -40,6 +40,7 @@ use common_storages_system::OneTable;
 use common_storages_system::ProcessesTable;
 use common_storages_system::QueryCacheTable;
 use common_storages_system::QueryLogTable;
+use common_storages_system::QueryProfileTable;
 use common_storages_system::RolesTable;
 use common_storages_system::SettingsTable;
 use common_storages_system::StagesTable;
@@ -103,6 +104,7 @@ impl SystemDatabase {
             TableFunctionsTable::create(sys_db_meta.next_table_id()),
             CachesTable::create(sys_db_meta.next_table_id()),
             IndexesTable::create(sys_db_meta.next_table_id()),
+            QueryProfileTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

@@ -124,6 +124,7 @@ pub struct InputContext {
     pub on_error_mode: OnErrorMode,
     pub on_error_count: AtomicU64,
     pub on_error_map: Option<Arc<DashMap<String, HashMap<u16, InputError>>>>,
+    pub projection: Option<Vec<usize>>,
 }
 
 impl Debug for InputContext {
@@ -163,6 +164,7 @@ impl InputContext {
         block_compact_thresholds: BlockThresholds,
         on_error_map: Arc<DashMap<String, HashMap<u16, InputError>>>,
         is_select: bool,
+        projection: Option<Vec<usize>>,
     ) -> Result<Self> {
         let mut file_format_options_ext =
             FileFormatOptionsExt::create_from_settings(&settings, is_select)?;
@@ -190,6 +192,7 @@ impl InputContext {
             on_error_mode,
             on_error_count: AtomicU64::new(0),
             on_error_map: Some(on_error_map),
+            projection,
         })
     }
 
@@ -243,6 +246,7 @@ impl InputContext {
             on_error_mode: OnErrorMode::AbortNum(1),
             on_error_count: AtomicU64::new(0),
             on_error_map: None,
+            projection: None,
         })
     }
 
@@ -280,6 +284,7 @@ impl InputContext {
             on_error_mode: OnErrorMode::AbortNum(1),
             on_error_count: AtomicU64::new(0),
             on_error_map: None,
+            projection: None,
         })
     }
 

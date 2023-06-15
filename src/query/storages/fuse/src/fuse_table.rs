@@ -636,10 +636,10 @@ impl Table for FuseTable {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
-        query_internal_columns: bool,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete(ctx, filter, col_indices, query_internal_columns, pipeline)
+        self.do_delete(ctx, filter, col_indices, query_row_id_col, pipeline)
             .await
     }
 
@@ -651,6 +651,7 @@ impl Table for FuseTable {
         col_indices: Vec<FieldIndex>,
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_update(
@@ -659,6 +660,7 @@ impl Table for FuseTable {
             col_indices,
             update_list,
             computed_list,
+            query_row_id_col,
             pipeline,
         )
         .await

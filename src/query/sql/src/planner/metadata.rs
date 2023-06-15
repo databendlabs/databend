@@ -59,6 +59,7 @@ pub struct Metadata {
     //// Columns that are lazy materialized.
     lazy_columns: HashSet<usize>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
+    max_column_position: usize, // for CSV
 }
 
 impl Metadata {
@@ -115,6 +116,10 @@ impl Metadata {
     }
 
     pub fn add_lazy_columns(&mut self, indices: HashSet<usize>) {
+        if !self.lazy_columns.is_empty() {
+            // `lazy_columns` is only allowed to be set once.
+            return;
+        }
         debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
         self.lazy_columns.extend(indices);
     }
@@ -344,6 +349,13 @@ impl Metadata {
         if let ColumnEntry::DerivedColumn(column) = derived_column {
             column.alias = alias;
         }
+    }
+
+    pub fn set_max_column_position(&mut self, max_pos: usize) {
+        self.max_column_position = max_pos
+    }
+    pub fn get_max_column_position(&self) -> usize {
+        self.max_column_position
     }
 }
 

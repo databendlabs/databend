@@ -17,6 +17,7 @@ common-io = { path = "../../common/io" }
 common-meta-app = { path = "../../meta/app" }
 common-meta-types = { path = "../../meta/types" }
 common-pipeline-core = { path = "../pipeline/core" }
+common-profile = { path = "../profile" }
 common-settings = { path = "../settings" }
 common-storage = { path = "../../common/storage" }
 
