@@ -32,6 +32,7 @@ use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::ModifyTableColumnPlan;
+use super::SetOptionsPlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
@@ -175,6 +176,7 @@ pub enum Plan {
     VacuumTable(Box<VacuumTablePlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
+    SetOptions(Box<SetOptionsPlan>),
 
     // Insert
     Insert(Box<Insert>),
@@ -381,6 +383,9 @@ impl Display for Plan {
             }
             Plan::DescDatamaskPolicy(..) => {
                 write!(f, "Desc Data Mask Policy")
+            }
+            Plan::SetOptions(..) => {
+                write!(f, "SetOptions")
             }
         }
     }

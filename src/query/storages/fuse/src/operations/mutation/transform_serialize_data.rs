@@ -14,6 +14,7 @@
 
 use std::any::Any;
 use std::sync::Arc;
+use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -23,16 +24,22 @@ use common_expression::DataBlock;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use opendal::Operator;
-use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
+use crate::metrics::metrics_inc_block_index_write_bytes;
+use crate::metrics::metrics_inc_block_index_write_milliseconds;
+use crate::metrics::metrics_inc_block_index_write_nums;
+use crate::metrics::metrics_inc_block_write_bytes;
+use crate::metrics::metrics_inc_block_write_milliseconds;
+use crate::metrics::metrics_inc_block_write_nums;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::operations::common::Replacement;
 use crate::operations::common::ReplacementLogEntry;
+use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -42,7 +49,7 @@ use crate::FuseTable;
 
 enum State {
     Consume,
-    NeedSerialize(DataBlock, Option<ClusterStatistics>),
+    NeedSerialize(DataBlock, ClusterStatsGenType),
     Serialized(BlockSerialization),
     Output(Replacement),
 }
@@ -138,7 +145,7 @@ impl Processor for SerializeDataTransform {
             if input_data.is_empty() {
                 self.state = State::Output(Replacement::Deleted);
             } else {
-                self.state = State::NeedSerialize(input_data, meta.cluster_stats.clone());
+                self.state = State::NeedSerialize(input_data, meta.stats_type.clone());
             }
         } else {
             self.state = State::Output(Replacement::DoNothing);
@@ -148,12 +155,17 @@ impl Processor for SerializeDataTransform {
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::NeedSerialize(block, origin_stats) => {
-                let serialized = self.block_builder.build(block, |block, generator| {
-                    let cluster_stats =
-                        generator.gen_with_origin_stats(&block, origin_stats.clone())?;
-                    Ok((cluster_stats, block))
-                })?;
+            State::NeedSerialize(block, stats_type) => {
+                let serialized =
+                    self.block_builder
+                        .build(block, |block, generator| match &stats_type {
+                            ClusterStatsGenType::Generally => generator.gen_stats_for_append(block),
+                            ClusterStatsGenType::WithOrigin(origin_stats) => {
+                                let cluster_stats = generator
+                                    .gen_with_origin_stats(&block, origin_stats.clone())?;
+                                Ok((cluster_stats, block))
+                            }
+                        })?;
 
                 self.state = State::Serialized(serialized);
             }
@@ -176,20 +188,38 @@ impl Processor for SerializeDataTransform {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
             State::Serialized(serialized) => {
+                let start = Instant::now();
                 // write block data.
                 let raw_block_data = serialized.block_raw_data;
+                let data_size = raw_block_data.len();
                 let path = serialized.block_meta.location.0.as_str();
                 write_data(raw_block_data, &self.dal, path).await?;
+
+                // Perf.
+                {
+                    metrics_inc_block_write_nums(1);
+                    metrics_inc_block_write_bytes(data_size as u64);
+                    metrics_inc_block_write_milliseconds(start.elapsed().as_millis() as u64);
+                }
 
                 // write index data.
                 let bloom_index_state = serialized.bloom_index_state;
                 if let Some(bloom_index_state) = bloom_index_state {
+                    let index_size = bloom_index_state.data.len();
                     write_data(
                         bloom_index_state.data,
                         &self.dal,
                         &bloom_index_state.location.0,
                     )
                     .await?;
+                    // Perf.
+                    {
+                        metrics_inc_block_index_write_nums(1);
+                        metrics_inc_block_index_write_bytes(index_size as u64);
+                        metrics_inc_block_index_write_milliseconds(
+                            start.elapsed().as_millis() as u64
+                        );
+                    }
                 }
                 let block_meta = Arc::new(serialized.block_meta);
                 self.state = State::Output(Replacement::Replaced(block_meta));

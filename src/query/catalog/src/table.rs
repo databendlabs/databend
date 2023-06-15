@@ -279,9 +279,10 @@ pub trait Table: Sync + Send {
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
+        let (_, _, _, _, _) = (ctx, filter, col_indices, pipeline, query_row_id_col);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support DELETE FROM",
@@ -416,6 +417,8 @@ pub struct TableStatistics {
     pub data_size: Option<u64>,
     pub data_size_compressed: Option<u64>,
     pub index_size: Option<u64>,
+    pub number_of_blocks: Option<u64>,
+    pub number_of_segments: Option<u64>,
 }
 
 #[derive(Debug, Clone)]

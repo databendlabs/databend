@@ -24,6 +24,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
+use common_expression::TableField;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
@@ -167,14 +168,30 @@ impl RenameTablePlan {
     }
 }
 
-// Table add column
-#[derive(Clone, Debug, PartialEq)]
-pub struct AddTableColumnPlan {
+/// SetOptions
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SetOptionsPlan {
+    pub set_options: TableOptions,
     pub catalog: String,
     pub database: String,
     pub table: String,
-    pub schema: TableSchemaRef,
-    pub field_comments: Vec<String>,
+}
+
+impl SetOptionsPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Table add column
+#[derive(Clone, Debug, PartialEq)]
+pub struct AddTableColumnPlan {
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub field: TableField,
+    pub comment: String,
 }
 
 impl AddTableColumnPlan {

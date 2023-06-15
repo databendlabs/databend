@@ -171,7 +171,11 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'num_rows'                      | 'system'             | 'query_cache'         | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'num_rows'                      | 'system'             | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'num_rows'                      | 'system'             | 'tables_with_history' | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'number_of_blocks'              | 'system'             | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'number_of_blocks'              | 'system'             | 'tables_with_history' | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'number_of_files'               | 'system'             | 'stages'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'number_of_segments'            | 'system'             | 'tables'              | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
+| 'number_of_segments'            | 'system'             | 'tables_with_history' | 'Nullable(UInt64)' | 'BIGINT UNSIGNED'   | ''       | ''       | 'YES'    | ''       |
 | 'numeric_precision'             | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'numeric_precision_radix'       | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'numeric_scale'                 | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |

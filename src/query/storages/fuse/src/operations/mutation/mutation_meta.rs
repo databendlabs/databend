@@ -21,10 +21,16 @@ use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::operations::common::BlockMetaIndex;
 
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum ClusterStatsGenType {
+    Generally,
+    WithOrigin(Option<ClusterStatistics>),
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct SerializeDataMeta {
     pub index: BlockMetaIndex,
-    pub cluster_stats: Option<ClusterStatistics>,
+    pub stats_type: ClusterStatsGenType,
 }
 
 #[typetag::serde(name = "serialize_data_meta")]
@@ -46,13 +52,7 @@ impl BlockMetaInfo for SerializeDataMeta {
 }
 
 impl SerializeDataMeta {
-    pub fn create(
-        index: BlockMetaIndex,
-        cluster_stats: Option<ClusterStatistics>,
-    ) -> BlockMetaInfoPtr {
-        Box::new(SerializeDataMeta {
-            index,
-            cluster_stats,
-        })
+    pub fn create(index: BlockMetaIndex, stats_type: ClusterStatsGenType) -> BlockMetaInfoPtr {
+        Box::new(SerializeDataMeta { index, stats_type })
     }
 }

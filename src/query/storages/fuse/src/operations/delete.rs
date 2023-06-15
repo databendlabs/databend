@@ -25,6 +25,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ComputedExpr;
@@ -34,8 +35,10 @@ use common_expression::DataSchema;
 use common_expression::Evaluator;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
+use common_expression::TableDataType;
 use common_expression::TableSchema;
 use common_expression::Value;
+use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -52,19 +55,20 @@ use crate::FuseTable;
 
 impl FuseTable {
     /// The flow of Pipeline is as follows:
-    /// +---------------+      +-----------------------+
-    /// |MutationSource1| ---> |SerializeDataTransform1|   ------
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |     ...       | ---> |          ...          |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
-    /// +---------------+      +-----------------------+
+    /// +--------------+      +----------------------+
+    /// |MutationSource| ---> |SerializeDataTransform|   ------
+    /// +--------------+      +----------------------+         |      +-----------------------+      +----------+
+    /// |     ...      | ---> |          ...         |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
+    /// +--------------+      +----------------------+         |      +-----------------------+      +----------+
+    /// |MutationSource| ---> |SerializeDataTransform|   ------
+    /// +--------------+      +----------------------+
     #[async_backtrace::framed]
     pub async fn do_delete(
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
         col_indices: Vec<usize>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -95,7 +99,7 @@ impl FuseTable {
         }
 
         let filter_expr = filter.unwrap();
-        if col_indices.is_empty() {
+        if col_indices.is_empty() && !query_row_id_col {
             // here the situation: filter_expr is not null, but col_indices in empty, which
             // indicates the expr being evaluated is unrelated to the value of rows:
             //   e.g.
@@ -119,8 +123,15 @@ impl FuseTable {
             return Ok(());
         }
 
-        self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
-            .await?;
+        self.try_add_deletion_source(
+            ctx.clone(),
+            &filter_expr,
+            col_indices,
+            &snapshot,
+            query_row_id_col,
+            pipeline,
+        )
+        .await?;
         if pipeline.is_empty() {
             return Ok(());
         }
@@ -178,6 +189,7 @@ impl FuseTable {
         filter: &RemoteExpr<String>,
         col_indices: Vec<usize>,
         base_snapshot: &TableSnapshot,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
@@ -187,6 +199,7 @@ impl FuseTable {
                 Some(filter.clone()),
                 projection.clone(),
                 base_snapshot,
+                true,
             )
             .await?;
         if total_tasks == 0 {
@@ -204,7 +217,14 @@ impl FuseTable {
         }
 
         let block_reader = self.create_block_reader(projection, false, ctx.clone())?;
-        let schema = block_reader.schema();
+        let mut schema = block_reader.schema().as_ref().clone();
+        if query_row_id_col {
+            schema.add_internal_field(
+                ROW_ID_COL_NAME,
+                TableDataType::Number(NumberDataType::UInt64),
+                1,
+            );
+        }
         let filter = Arc::new(Some(
             filter
                 .as_expr(&BUILTIN_FUNCTIONS)
@@ -250,6 +270,7 @@ impl FuseTable {
                     remain_reader.clone(),
                     ops.clone(),
                     self.storage_format,
+                    query_row_id_col,
                 )
             },
             max_threads,
@@ -264,6 +285,7 @@ impl FuseTable {
         filter: Option<RemoteExpr<String>>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
+        with_origin: bool,
     ) -> Result<usize> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
@@ -302,7 +324,14 @@ impl FuseTable {
             block_metas
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
-                .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
+                .map(|(a, c)| {
+                    let cluster_stats = if with_origin {
+                        a.1.cluster_stats.clone()
+                    } else {
+                        None
+                    };
+                    MutationPartInfo::create(a.0, cluster_stats, c)
+                })
                 .collect(),
         );
 
