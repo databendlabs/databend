@@ -261,6 +261,10 @@ impl Processor for MutationSource {
                                 }
                             }
                             MutationAction::Update => {
+                                // Pop the row_id column
+                                if self.query_row_id_col {
+                                    data_block = data_block.pop_columns(1)?;
+                                }
                                 if self.remain_reader.is_none() {
                                     data_block.add_column(BlockEntry::new(
                                         DataType::Boolean,

@@ -291,6 +291,7 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn update(
         &self,
@@ -299,14 +300,16 @@ pub trait Table: Sync + Send {
         col_indices: Vec<FieldIndex>,
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _, _, _) = (
+        let (_, _, _, _, _, _, _) = (
             ctx,
             filter,
             col_indices,
             update_list,
             computed_list,
+            query_row_id_col,
             pipeline,
         );
 
