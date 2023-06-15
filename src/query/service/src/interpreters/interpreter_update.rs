@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
 use common_exception::Result;
+use common_license::license_manager::get_license_manager;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use table_lock::TableLockHandlerWrapper;
 
@@ -95,6 +96,15 @@ impl Interpreter for UpdateInterpreter {
         let computed_list = self
             .plan
             .generate_stored_computed_list(self.ctx.clone(), Arc::new(tbl.schema().into()))?;
+
+        if !computed_list.is_empty() {
+            let license_manager = get_license_manager();
+            license_manager.manager.check_enterprise_enabled(
+                &self.ctx.get_settings(),
+                self.ctx.get_tenant(),
+                "update_computed_column".to_string(),
+            )?;
+        }
 
         let mut build_res = PipelineBuildResult::create();
         tbl.update(

@@ -20,6 +20,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRefExt;
+use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
@@ -79,6 +80,21 @@ impl Interpreter for CreateTableInterpreter {
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
         let tenant = self.plan.tenant.clone();
+        let has_computed_column = self
+            .plan
+            .schema
+            .fields()
+            .iter()
+            .any(|f| f.computed_expr().is_some());
+        if has_computed_column {
+            let license_manager = get_license_manager();
+            license_manager.manager.check_enterprise_enabled(
+                &self.ctx.get_settings(),
+                tenant.clone(),
+                "create_table_with_computed_column".to_string(),
+            )?;
+        }
+
         let quota_api = UserApiProvider::instance().get_tenant_quota_api_client(&tenant)?;
         let quota = quota_api.get_quota(MatchSeq::GE(0)).await?.data;
         let engine = self.plan.engine;
