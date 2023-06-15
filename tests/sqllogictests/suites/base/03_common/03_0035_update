@@ -98,4 +98,94 @@ statement ok
 drop table t3 all
 
 statement ok
+create table t1(id1 int, val1 varchar(255));
+
+statement ok
+create table t2(id2 int, val2 varchar(255));
+
+statement ok
+insert into t1 values (1,'1'), (2, '2') ;
+
+statement ok
+insert into t2 values (1,'2'), (2, '3');
+
+statement ok
+update t1 set val1 = '3' where id1 in (select id2 from t2);
+
+query IT
+select * from t1 order by id1;
+----
+1 '3'
+2 '3'
+
+statement ok
+update t1 set val1 = '4' where exists(select * from t2 where t1.id1 = t2.id2);
+
+query IT
+select * from t1 order by id1;
+----
+1 '4'
+2 '4'
+
+statement ok
+update t1 set val1 = '5' where id1 < any(select id2 from t2);
+
+query IT
+select * from t1 order by id1;
+----
+1 '5'
+2 '4'
+
+statement ok
+update t1 set val1 = '6' where id1 = all(select id2 from t2);
+
+query IT
+select * from t1 order by id1;
+----
+1 '5'
+2 '4'
+
+statement ok
+update t1 set val1 = '7' where id1 in (select id2 from t2 where id1 + id2 > 2);
+
+query IT
+select * from t1 order by id1;
+----
+1 '5'
+2 '7'
+
+statement ok
+update t1 set val1 = '8' where id1 = any(select id2 from t2 where t1.id1 = t2.id2) or id1 != any(select id2 from t2 where t1.id1 = t2.id2);
+
+query IT
+select * from t1 order by id1;
+----
+1 '8'
+2 '8'
+
+statement ok
+update t1 set val1 = '9' where id1 = any(select id2 from t2 where t1.id1 = t2.id2) or id1 > 1;
+
+query IT
+select * from t1 order by id1;
+----
+1 '9'
+2 '9'
+
+statement ok
+update t1 set val1 = '10' where id1 = any(select id2 from t2 where t1.id1 = t2.id2) or id1 < any(select id2 from t2);
+
+query IT
+select * from t1 order by id1;
+----
+1 '10'
+2 '10'
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
 DROP DATABASE db1
