@@ -1,10 +1,10 @@
-// Copyright 2021 Datafuse Labs.
+// Copyright 2023 Databend Cloud
 //
-// Licensed under the Apache License, Version 2.0 (the "License");
+// Licensed under the Elastic License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+//     https://www.elastic.co/licensing/elastic-license
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,11 +17,14 @@ use common_exception::Result;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::expects_ok;
 use databend_query::test_kits::table_test_fixture::TestFixture;
+use enterprise_query::test_kits::context::create_ee_query_context;
 use futures::TryStreamExt;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_computed_column() -> Result<()> {
-    let fixture = TestFixture::new().await;
+    let (_guard, ctx) = create_ee_query_context(None).await.unwrap();
+
+    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
     let db = fixture.default_db_name();
     let tbl = fixture.default_table_name();
     let ctx = fixture.ctx();

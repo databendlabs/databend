@@ -665,6 +665,8 @@ pub enum TokenKind {
     ON,
     #[token("OPTIMIZE", ignore(ascii_case))]
     OPTIMIZE,
+    #[token("OPTIONS", ignore(ascii_case))]
+    OPTIONS,
     #[token("OR", ignore(ascii_case))]
     OR,
     #[token("ORDER", ignore(ascii_case))]

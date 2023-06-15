@@ -144,6 +144,7 @@ build_exceptions! {
     UnmatchColumnDataType(1114),
     VirtualColumnNotFound(1115),
     VirtualColumnAlreadyExists(1116),
+    ColumnReferencedByComputedColumn(1117),
 
     // Data Related Errors
 
