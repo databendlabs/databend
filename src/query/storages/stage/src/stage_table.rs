@@ -24,6 +24,7 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -147,6 +148,16 @@ impl Table for StageTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let projection = if let Some(PushDownInfo {
+            projection: Some(Projection::Columns(columns)),
+            ..
+        }) = &plan.push_downs
+        {
+            println!("projection: {:?}", columns);
+            Some(columns.clone())
+        } else {
+            None
+        };
         let stage_table_info =
             if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
                 stage_table_info
@@ -182,6 +193,7 @@ impl Table for StageTable {
                 m
             }
         };
+        // let projection = self.projection.lock().clone();
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             operator,
             settings,
@@ -192,6 +204,7 @@ impl Table for StageTable {
             compact_threshold,
             on_error_map,
             self.table_info.is_select,
+            projection,
         )?);
 
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;

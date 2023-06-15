@@ -128,10 +128,10 @@ impl PhysicalPlanBuilder {
         id
     }
 
-    fn build_projection(
+    fn build_projection<'a>(
         metadata: &Metadata,
         schema: &TableSchema,
-        columns: &ColumnSet,
+        columns: impl Iterator<Item = &'a IndexType>,
         has_inner_column: bool,
         ignore_internal_column: bool,
         add_virtual_source_column: bool,
@@ -140,7 +140,7 @@ impl PhysicalPlanBuilder {
         if !has_inner_column {
             let mut col_indices = Vec::new();
             let mut virtual_col_indices = HashSet::new();
-            for index in columns.iter() {
+            for index in columns {
                 if ignore_lazy_column && metadata.is_lazy_column(*index) {
                     continue;
                 }
@@ -180,7 +180,7 @@ impl PhysicalPlanBuilder {
             Projection::Columns(col_indices)
         } else {
             let mut col_indices = BTreeMap::new();
-            for index in columns.iter() {
+            for index in columns {
                 if ignore_lazy_column && metadata.is_lazy_column(*index) {
                     continue;
                 }
@@ -222,7 +222,7 @@ impl PhysicalPlanBuilder {
         }
     }
 
-    fn try_build_row_fetch_on_limit(
+    fn build_limit(
         &mut self,
         input_plan: PhysicalPlan,
         limit: &planner::plans::Limit,
@@ -239,6 +239,9 @@ impl PhysicalPlanBuilder {
                 stat_info: Some(stat_info),
             }));
         }
+
+        // If `lazy_columns` is not empty, build a `RowFetch` plan on top of the `Limit` plan.
+
         let input_schema = input_plan.output_schema()?;
 
         // Lazy materialization is enabled.
@@ -249,11 +252,31 @@ impl PhysicalPlanBuilder {
             .ok_or_else(|| ErrorCode::Internal("Internal column _row_id is not found"))?;
         let row_id_col_offset = input_schema.index_of(&row_id_col_index.to_string())?;
 
-        let mut has_inner_column = false;
-        let fetched_fields = metadata
+        // There may be more than one `LIMIT` plan, we don't need to fetch the same columns multiple times.
+        // See the case in tests/sqllogictests/suites/crdb/limit:
+        // SELECT * FROM (SELECT * FROM t_47283 ORDER BY k LIMIT 4) WHERE a > 5 LIMIT 1
+        let lazy_columns = metadata
             .lazy_columns()
             .iter()
             .sorted() // Needs sort because we need to make the order deterministic.
+            .filter(|index| !input_schema.has_field(&index.to_string())) // If the column is already in the input schema, we don't need to fetch it.
+            .cloned()
+            .collect::<Vec<_>>();
+
+        if lazy_columns.is_empty() {
+            // If there is no lazy column, we don't need to build a `RowFetch` plan.
+            return Ok(PhysicalPlan::Limit(Limit {
+                plan_id: next_plan_id,
+                input: Box::new(input_plan),
+                limit: limit.limit,
+                offset: limit.offset,
+                stat_info: Some(stat_info),
+            }));
+        }
+
+        let mut has_inner_column = false;
+        let fetched_fields = lazy_columns
+            .iter()
             .map(|index| {
                 let col = metadata.column(*index);
                 if let ColumnEntry::BaseTableColumn(c) = col {
@@ -272,7 +295,7 @@ impl PhysicalPlanBuilder {
         let cols_to_fetch = Self::build_projection(
             &metadata,
             &table_schema,
-            metadata.lazy_columns(),
+            lazy_columns.iter(),
             has_inner_column,
             true,
             true,
@@ -623,6 +646,7 @@ impl PhysicalPlanBuilder {
                                     .data_type();
 
                                 PhysicalPlan::Exchange(PhysicalExchange {
+                                    plan_id: self.next_plan_id(),
                                     kind,
                                     input: Box::new(PhysicalPlan::AggregatePartial(
                                         aggregate_partial,
@@ -794,17 +818,7 @@ impl PhysicalPlanBuilder {
 
             RelOperator::Limit(limit) => {
                 let input_plan = self.build(s_expr.child(0)?).await?;
-                if let PhysicalPlan::Sort(_) = input_plan {
-                    self.try_build_row_fetch_on_limit(input_plan, limit, stat_info)
-                } else {
-                    Ok(PhysicalPlan::Limit(Limit {
-                        plan_id: self.next_plan_id(),
-                        input: Box::new(input_plan),
-                        limit: limit.limit,
-                        offset: limit.offset,
-                        stat_info: Some(stat_info),
-                    }))
-                }
+                self.build_limit(input_plan, limit, stat_info)
             }
 
             RelOperator::Exchange(exchange) => {
@@ -830,6 +844,7 @@ impl PhysicalPlanBuilder {
                     Exchange::Merge => FragmentKind::Merge,
                 };
                 Ok(PhysicalPlan::Exchange(PhysicalExchange {
+                    plan_id: self.next_plan_id(),
                     input,
                     kind,
                     keys,
@@ -1315,7 +1330,7 @@ impl PhysicalPlanBuilder {
         let projection = Self::build_projection(
             &metadata,
             table_schema,
-            &scan.columns,
+            scan.columns.iter(),
             has_inner_column,
             // for projection, we need to ignore read data from internal column,
             // or else in read_partition when search internal column from table schema will core.
@@ -1328,7 +1343,7 @@ impl PhysicalPlanBuilder {
             Some(Self::build_projection(
                 &metadata,
                 table_schema,
-                &scan.columns,
+                scan.columns.iter(),
                 has_inner_column,
                 true,
                 false,
@@ -1390,7 +1405,7 @@ impl PhysicalPlanBuilder {
                 let output_columns = Self::build_projection(
                     &metadata,
                     table_schema,
-                    &prewhere.output_columns,
+                    prewhere.output_columns.iter(),
                     has_inner_column,
                     true,
                     false,
@@ -1399,7 +1414,7 @@ impl PhysicalPlanBuilder {
                 let prewhere_columns = Self::build_projection(
                     &metadata,
                     table_schema,
-                    &prewhere.prewhere_columns,
+                    prewhere.prewhere_columns.iter(),
                     has_inner_column,
                     true,
                     true,
@@ -1408,7 +1423,7 @@ impl PhysicalPlanBuilder {
                 let remain_columns = Self::build_projection(
                     &metadata,
                     table_schema,
-                    &remain_columns,
+                    remain_columns.iter(),
                     has_inner_column,
                     true,
                     true,

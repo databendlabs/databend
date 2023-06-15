@@ -16,7 +16,7 @@ use common_ast::ast::FormatTreeNode;
 use common_catalog::plan::PartStatistics;
 use common_exception::Result;
 use common_functions::BUILTIN_FUNCTIONS;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
 use itertools::Itertools;
 
 use super::AggregateExpand;
@@ -52,7 +52,7 @@ impl PhysicalPlan {
     pub fn format(
         &self,
         metadata: MetadataRef,
-        prof_span_set: ProfSpanSetRef,
+        prof_span_set: SharedProcessorProfiles,
     ) -> Result<FormatTreeNode<String>> {
         to_format_tree(self, &metadata, &prof_span_set)
     }
@@ -114,7 +114,7 @@ impl PhysicalPlan {
 fn to_format_tree(
     plan: &PhysicalPlan,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     match plan {
         PhysicalPlan::TableScan(plan) => table_scan_to_format_tree(plan, metadata),
@@ -149,6 +149,20 @@ fn to_format_tree(
             runtime_filter_source_to_format_tree(plan, metadata, prof_span_set)
         }
         PhysicalPlan::RangeJoin(plan) => range_join_to_format_tree(plan, metadata, prof_span_set),
+    }
+}
+
+/// Helper function to add profile info to the format tree.
+fn append_profile_info(
+    children: &mut Vec<FormatTreeNode<String>>,
+    prof_set: &SharedProcessorProfiles,
+    plan_id: u32,
+) {
+    if let Some(prof) = prof_set.lock().unwrap().get(&plan_id) {
+        children.push(FormatTreeNode::new(format!(
+            "total cpu time: {}ms",
+            prof.cpu_time.as_secs_f64() * 1000.0
+        )));
     }
 }
 
@@ -269,7 +283,7 @@ fn table_scan_to_format_tree(
 fn filter_to_format_tree(
     plan: &Filter,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let filter = plan
         .predicates
@@ -283,12 +297,7 @@ fn filter_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -301,7 +310,7 @@ fn filter_to_format_tree(
 fn project_to_format_tree(
     plan: &Project,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let columns = plan
         .columns
@@ -317,12 +326,7 @@ fn project_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -335,7 +339,7 @@ fn project_to_format_tree(
 fn eval_scalar_to_format_tree(
     plan: &EvalScalar,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let scalars = plan
         .exprs
@@ -350,12 +354,7 @@ fn eval_scalar_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -380,7 +379,7 @@ pub fn pretty_display_agg_desc(desc: &AggregateFunctionDesc, metadata: &Metadata
 fn aggregate_expand_to_format_tree(
     plan: &AggregateExpand,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let sets = plan
         .grouping_sets
@@ -402,12 +401,7 @@ fn aggregate_expand_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -420,7 +414,7 @@ fn aggregate_expand_to_format_tree(
 fn aggregate_partial_to_format_tree(
     plan: &AggregatePartial,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let group_by = plan
         .group_by
@@ -448,12 +442,7 @@ fn aggregate_partial_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -466,7 +455,7 @@ fn aggregate_partial_to_format_tree(
 fn aggregate_final_to_format_tree(
     plan: &AggregateFinal,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let group_by = plan
         .group_by
@@ -500,12 +489,7 @@ fn aggregate_final_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -518,7 +502,7 @@ fn aggregate_final_to_format_tree(
 fn window_to_format_tree(
     plan: &Window,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let partition_by = plan
         .partition_by
@@ -554,12 +538,7 @@ fn window_to_format_tree(
         FormatTreeNode::new(format!("frame: [{frame}]")),
     ];
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -572,7 +551,7 @@ fn window_to_format_tree(
 fn sort_to_format_tree(
     plan: &Sort,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let sort_keys = plan
         .order_by
@@ -600,12 +579,7 @@ fn sort_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -615,7 +589,7 @@ fn sort_to_format_tree(
 fn limit_to_format_tree(
     plan: &Limit,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![
         FormatTreeNode::new(format!(
@@ -631,12 +605,7 @@ fn limit_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -646,7 +615,7 @@ fn limit_to_format_tree(
 fn row_fetch_to_format_tree(
     plan: &RowFetch,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let table_schema = plan.source.source_info.schema();
     let projected_schema = plan.cols_to_fetch.project_schema(&table_schema);
@@ -662,12 +631,7 @@ fn row_fetch_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(to_format_tree(&plan.input, metadata, prof_span_set)?);
 
@@ -680,7 +644,7 @@ fn row_fetch_to_format_tree(
 fn range_join_to_format_tree(
     plan: &RangeJoin,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let range_join_conditions = plan
         .conditions
@@ -722,12 +686,7 @@ fn range_join_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(left_child);
     children.push(right_child);
@@ -744,7 +703,7 @@ fn range_join_to_format_tree(
 fn hash_join_to_format_tree(
     plan: &HashJoin,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let build_keys = plan
         .build_keys
@@ -783,12 +742,7 @@ fn hash_join_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.push(build_child);
     children.push(probe_child);
@@ -802,7 +756,7 @@ fn hash_join_to_format_tree(
 fn exchange_to_format_tree(
     plan: &Exchange,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::with_children("Exchange".to_string(), vec![
         FormatTreeNode::new(format!("exchange type: {}", match plan.kind {
@@ -825,7 +779,7 @@ fn exchange_to_format_tree(
 fn union_all_to_format_tree(
     plan: &UnionAll,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![];
 
@@ -834,12 +788,7 @@ fn union_all_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.extend(vec![
         to_format_tree(&plan.left, metadata, prof_span_set)?,
@@ -899,7 +848,7 @@ fn exchange_source_to_format_tree(plan: &ExchangeSource) -> Result<FormatTreeNod
 fn exchange_sink_to_format_tree(
     plan: &ExchangeSink,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![];
 
@@ -919,7 +868,7 @@ fn exchange_sink_to_format_tree(
 fn distributed_insert_to_format_tree(
     plan: &DistributedInsertSelect,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
 
@@ -932,7 +881,7 @@ fn distributed_insert_to_format_tree(
 fn project_set_to_format_tree(
     plan: &ProjectSet,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let mut children = vec![];
 
@@ -941,12 +890,7 @@ fn project_set_to_format_tree(
         children.extend(items);
     }
 
-    if let Some(prof_span) = prof_span_set.lock().unwrap().get(&plan.plan_id) {
-        let process_time = prof_span.process_time / 1000 / 1000; // milliseconds
-        children.push(FormatTreeNode::new(format!(
-            "total process time: {process_time}ms"
-        )));
-    }
+    append_profile_info(&mut children, prof_span_set, plan.plan_id);
 
     children.extend(vec![FormatTreeNode::new(format!(
         "set returning functions: {}",
@@ -968,7 +912,7 @@ fn project_set_to_format_tree(
 fn runtime_filter_source_to_format_tree(
     plan: &RuntimeFilterSource,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![
         to_format_tree(&plan.left_side, metadata, prof_span_set)?,

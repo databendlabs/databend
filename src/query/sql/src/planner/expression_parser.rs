@@ -14,8 +14,10 @@
 
 use std::sync::Arc;
 
+use common_ast::ast::Expr as AExpr;
 use common_ast::parser::parse_comma_separated_exprs;
 use common_ast::parser::tokenize_sql;
+use common_ast::walk_expr_mut;
 use common_ast::Dialect;
 use common_base::base::tokio::runtime::Handle;
 use common_base::base::tokio::task::block_in_place;
@@ -26,6 +28,7 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::types::DataType;
+use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Evaluator;
@@ -34,6 +37,7 @@ use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
+use common_expression::TableSchemaRef;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use common_settings::Settings;
@@ -42,10 +46,13 @@ use parking_lot::RwLock;
 use crate::planner::binder::BindContext;
 use crate::planner::semantic::NameResolutionContext;
 use crate::planner::semantic::TypeChecker;
+use crate::plans::CastExpr;
 use crate::BaseTableColumn;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
+use crate::IdentifierNormalizer;
 use crate::Metadata;
+use crate::ScalarExpr;
 use crate::Visibility;
 
 pub fn parse_exprs(
@@ -123,11 +130,36 @@ pub fn parse_exprs(
     Ok(exprs)
 }
 
-pub fn parse_computed_exprs(
+pub fn parse_to_remote_string_expr(
+    ctx: Arc<dyn TableContext>,
+    table_meta: Arc<dyn Table>,
+    sql: &str,
+) -> Result<RemoteExpr<String>> {
+    let schema = table_meta.schema();
+    let exprs = parse_exprs(ctx, table_meta, sql)?;
+    let exprs: Vec<RemoteExpr<String>> = exprs
+        .iter()
+        .map(|expr| {
+            expr.project_column_ref(|index| schema.field(*index).name().to_string())
+                .as_remote_expr()
+        })
+        .collect();
+
+    if exprs.len() == 1 {
+        Ok(exprs[0].clone())
+    } else {
+        Err(ErrorCode::BadDataValueType(format!(
+            "Expected single expr, but got {}",
+            exprs.len()
+        )))
+    }
+}
+
+pub fn parse_computed_expr(
     ctx: Arc<dyn TableContext>,
     schema: DataSchemaRef,
     sql: &str,
-) -> Result<Vec<Expr>> {
+) -> Result<Expr> {
     let settings = Settings::create("".to_string());
     let mut bind_context = BindContext::new();
     let mut metadata = Metadata::default();
@@ -168,43 +200,138 @@ pub fn parse_computed_exprs(
 
     let sql_dialect = Dialect::PostgreSQL;
     let tokens = tokenize_sql(sql)?;
-    let ast_exprs = parse_comma_separated_exprs(&tokens, sql_dialect)?;
-    let exprs = ast_exprs
-        .iter()
-        .map(|ast| {
-            let (scalar, _) =
-                *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
-            let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
-            Ok(expr)
-        })
-        .collect::<Result<_>>()?;
-
-    Ok(exprs)
+    let mut asts = parse_comma_separated_exprs(&tokens, sql_dialect)?;
+    if asts.len() != 1 {
+        return Err(ErrorCode::BadDataValueType(format!(
+            "Expected single expr, but got {}",
+            asts.len()
+        )));
+    }
+    let ast = asts.remove(0);
+    let (scalar, _) = *block_in_place(|| Handle::current().block_on(type_checker.resolve(&ast)))?;
+    let expr = scalar.as_expr()?.project_column_ref(|col| col.index);
+    Ok(expr)
 }
 
-pub fn parse_to_remote_string_expr(
+pub fn parse_default_expr_to_string(
     ctx: Arc<dyn TableContext>,
-    table_meta: Arc<dyn Table>,
-    sql: &str,
-) -> Result<RemoteExpr<String>> {
-    let schema = table_meta.schema();
-    let exprs = parse_exprs(ctx, table_meta, sql)?;
-    let exprs: Vec<RemoteExpr<String>> = exprs
-        .iter()
-        .map(|expr| {
-            expr.project_column_ref(|index| schema.field(*index).name().to_string())
-                .as_remote_expr()
-        })
-        .collect();
+    field: &TableField,
+    ast: &AExpr,
+    is_add_column: bool,
+) -> Result<String> {
+    let settings = Settings::create("".to_string());
+    let mut bind_context = BindContext::new();
+    let metadata = Metadata::default();
 
-    if exprs.len() == 1 {
-        Ok(exprs[0].clone())
-    } else {
-        Err(ErrorCode::BadDataValueType(format!(
-            "Expected single expr, but got {}",
-            exprs.len()
-        )))
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let mut type_checker = TypeChecker::new(
+        &mut bind_context,
+        ctx.clone(),
+        &name_resolution_ctx,
+        Arc::new(RwLock::new(metadata)),
+        &[],
+        false,
+    );
+
+    let (mut scalar, data_type) =
+        *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
+    let schema_data_type = DataType::from(field.data_type());
+    let is_try = schema_data_type.is_nullable();
+    if data_type != schema_data_type {
+        scalar = ScalarExpr::CastExpr(CastExpr {
+            span: ast.span(),
+            is_try,
+            target_type: Box::new(schema_data_type),
+            argument: Box::new(scalar.clone()),
+        });
     }
+    let expr = scalar.as_expr()?;
+
+    // Added columns are not allowed to use expressions,
+    // as the default values will be generated at at each query.
+    if is_add_column && !expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        return Err(ErrorCode::SemanticError(format!(
+            "default expression `{}` is not a valid constant. Please provide a valid constant expression as the default value.",
+            expr.sql_display(),
+        )));
+    }
+    let expr = if expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        let (fold_to_constant, _) =
+            ConstantFolder::fold(&expr, &ctx.get_function_context()?, &BUILTIN_FUNCTIONS);
+        fold_to_constant
+    } else {
+        expr
+    };
+    Ok(expr.sql_display())
+}
+
+pub fn parse_computed_expr_to_string(
+    ctx: Arc<dyn TableContext>,
+    table_schema: TableSchemaRef,
+    field: &TableField,
+    ast: &AExpr,
+) -> Result<String> {
+    let settings = Settings::create("".to_string());
+    let mut bind_context = BindContext::new();
+    let mut metadata = Metadata::default();
+    for (index, field) in table_schema.fields().iter().enumerate() {
+        bind_context.add_column_binding(ColumnBinding {
+            database_name: None,
+            table_name: None,
+            column_position: None,
+            table_index: None,
+            column_name: field.name().clone(),
+            index,
+            data_type: Box::new(field.data_type().into()),
+            visibility: Visibility::Visible,
+            virtual_computed_expr: None,
+        });
+        metadata.add_base_table_column(
+            field.name().clone(),
+            field.data_type().clone(),
+            0,
+            None,
+            None,
+            None,
+            None,
+        );
+    }
+
+    let name_resolution_ctx = NameResolutionContext::try_from(settings.as_ref())?;
+    let mut type_checker = TypeChecker::new(
+        &mut bind_context,
+        ctx,
+        &name_resolution_ctx,
+        Arc::new(RwLock::new(metadata)),
+        &[],
+        false,
+    );
+
+    let (scalar, data_type) =
+        *block_in_place(|| Handle::current().block_on(type_checker.resolve(ast)))?;
+    if data_type != DataType::from(field.data_type()) {
+        return Err(ErrorCode::SemanticError(format!(
+            "expected computed column expression have type {}, but `{}` has type {}.",
+            field.data_type(),
+            ast,
+            data_type,
+        )));
+    }
+    let computed_expr = scalar.as_expr()?;
+    if !computed_expr.is_deterministic(&BUILTIN_FUNCTIONS) {
+        return Err(ErrorCode::SemanticError(format!(
+            "computed column expression `{}` is not deterministic.",
+            computed_expr.sql_display(),
+        )));
+    }
+    let mut ast = ast.clone();
+    walk_expr_mut(
+        &mut IdentifierNormalizer {
+            ctx: &name_resolution_ctx,
+        },
+        &mut ast,
+    );
+    Ok(format!("{:#}", ast))
 }
 
 #[derive(Default)]

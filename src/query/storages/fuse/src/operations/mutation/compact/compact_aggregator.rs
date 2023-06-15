@@ -18,6 +18,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::BlockThresholds;
@@ -37,7 +38,9 @@ use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
-use crate::operations::mutation::compact::CompactSourceMeta;
+use crate::operations::common::MutationLogEntry;
+use crate::operations::common::MutationLogs;
+use crate::operations::common::Replacement;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
@@ -88,28 +91,40 @@ impl AsyncAccumulatingTransform for CompactAggregator {
     #[async_backtrace::framed]
     async fn transform(&mut self, data: DataBlock) -> Result<Option<DataBlock>> {
         // gather the input data.
-        if let Some(meta) = data
-            .get_meta()
-            .and_then(CompactSourceMeta::downcast_ref_from)
-        {
-            self.abort_operation.add_block(&meta.block);
-            self.merge_blocks
-                .entry(meta.index.segment_idx)
-                .and_modify(|v| {
-                    v.insert(meta.index.block_idx, meta.block.clone());
-                })
-                .or_insert(BTreeMap::from([(meta.index.block_idx, meta.block.clone())]));
+        if let Some(meta) = data.get_meta().and_then(MutationLogs::downcast_ref_from) {
+            for entry in &meta.entries {
+                match entry {
+                    MutationLogEntry::Replacement(entry) => {
+                        match &entry.op {
+                            Replacement::Replaced(meta) => {
+                                self.abort_operation.add_block(meta);
+                                self.merge_blocks
+                                    .entry(entry.index.segment_idx)
+                                    .and_modify(|v| {
+                                        v.insert(entry.index.block_idx, meta.clone());
+                                    })
+                                    .or_insert(BTreeMap::from([(
+                                        entry.index.block_idx,
+                                        meta.clone(),
+                                    )]));
 
-            // Refresh status
-            {
-                let status = format!(
-                    "compact: run compact tasks:{}/{}, cost:{} sec",
-                    self.abort_operation.blocks.len(),
-                    self.total_tasks,
-                    self.start_time.elapsed().as_secs()
-                );
-                self.ctx.set_status_info(&status);
-                info!(status);
+                                // Refresh status
+                                {
+                                    let status = format!(
+                                        "compact: run compact tasks:{}/{}, cost:{} sec",
+                                        self.abort_operation.blocks.len(),
+                                        self.total_tasks,
+                                        self.start_time.elapsed().as_secs()
+                                    );
+                                    self.ctx.set_status_info(&status);
+                                    info!(status);
+                                }
+                            }
+                            _ => return Err(ErrorCode::Internal("It's a bug.")),
+                        }
+                    }
+                    _ => return Err(ErrorCode::Internal("It's a bug.")),
+                }
             }
         }
         // no partial output

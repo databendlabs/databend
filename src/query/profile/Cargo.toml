@@ -9,3 +9,8 @@ edition = { workspace = true }
 [lib]
 doctest = false
 test = false
+
+[dependencies]
+common-base = { path = "../../common/base" }
+
+dashmap = "5.4"

@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
@@ -20,17 +22,20 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::DataBlock;
-use common_expression::RemoteExpr;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::executor::cast_expr_to_non_null_boolean;
+use common_sql::optimizer::CascadesOptimizer;
+use common_sql::optimizer::HeuristicOptimizer;
 use common_sql::optimizer::SExpr;
+use common_sql::optimizer::DEFAULT_REWRITE_RULES;
 use common_sql::plans::BoundColumnRef;
 use common_sql::plans::ConstantExpr;
 use common_sql::plans::EvalScalar;
 use common_sql::plans::FunctionCall;
 use common_sql::plans::RelOperator;
 use common_sql::plans::ScalarItem;
+use common_sql::plans::SubqueryDesc;
 use common_sql::BindContext;
 use common_sql::ColumnBinding;
 use common_sql::ScalarExpr;
@@ -62,8 +67,9 @@ impl DeleteInterpreter {
     }
 
     /// Create filter from subquery
-    async fn subquery_filter(&self, input_expr: &SExpr) -> Result<RemoteExpr<String>> {
+    async fn subquery_filter(&self, subquery_desc: &SubqueryDesc) -> Result<ScalarExpr> {
         // Select `_row_id` column
+        let input_expr = subquery_desc.input_expr.clone();
         let table_index = self.plan.metadata.read().get_table_index(
             Some(self.plan.database_name.as_str()),
             self.plan.table_name.as_str(),
@@ -74,7 +80,7 @@ impl DeleteInterpreter {
             column_position: None,
             table_index,
             column_name: ROW_ID_COL_NAME.to_string(),
-            index: self.plan.index.unwrap(),
+            index: subquery_desc.index,
             data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
             visibility: Visibility::InVisible,
             virtual_computed_expr: None,
@@ -90,8 +96,21 @@ impl DeleteInterpreter {
                     index: 0,
                 }],
             })),
-            Arc::new(input_expr.clone()),
+            Arc::new(input_expr),
         );
+        // Optimize expression
+        // BindContext is only used by pre_optimize and post_optimize, so we can use a mock one.
+        let mock_bind_context = Box::new(BindContext::new());
+        let heuristic_optimizer = HeuristicOptimizer::new(
+            self.ctx.get_function_context()?,
+            mock_bind_context,
+            self.plan.metadata.clone(),
+        );
+        let mut expr = heuristic_optimizer.optimize_expression(&expr, &DEFAULT_REWRITE_RULES)?;
+        let mut cascades =
+            CascadesOptimizer::create(self.ctx.clone(), self.plan.metadata.clone(), false)?;
+        expr = cascades.optimize(expr)?;
+
         // Create `input_expr` pipeline and execute it to get `_row_id` data block.
         let select_interpreter = SelectInterpreter::try_create(
             self.ctx.clone(),
@@ -122,27 +141,28 @@ impl DeleteInterpreter {
         let stream_blocks = PullingExecutorStream::create(pulling_executor)?
             .try_collect::<Vec<DataBlock>>()
             .await?;
-
-        let block = if !stream_blocks.is_empty() {
-            DataBlock::concat(&stream_blocks)?
+        let row_id_array = if !stream_blocks.is_empty() {
+            let block = DataBlock::concat(&stream_blocks)?;
+            let row_id_col = block.columns()[0].value.convert_to_full_column(
+                &DataType::Number(NumberDataType::UInt64),
+                block.num_rows(),
+            );
+            // Make a selection: `_row_id` IN (row_id_col)
+            // Construct array function for `row_id_col`
+            let mut row_id_array = Vec::with_capacity(row_id_col.len());
+            for row_id in row_id_col.iter() {
+                let scalar = row_id.to_owned();
+                let constant_scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr {
+                    span: None,
+                    value: scalar,
+                });
+                row_id_array.push(constant_scalar_expr);
+            }
+            row_id_array
         } else {
-            return Err(ErrorCode::EmptyData("Delete input is empty"));
+            vec![]
         };
 
-        let row_id_col = block.columns()[0]
-            .value
-            .convert_to_full_column(&DataType::Number(NumberDataType::UInt64), block.num_rows());
-        // Make a selection: `_row_id` IN (row_id_col)
-        // Construct array function for `row_id_col`
-        let mut row_id_array = Vec::with_capacity(row_id_col.len());
-        for row_id in row_id_col.iter() {
-            let scalar = row_id.to_owned();
-            let constant_scalar_expr = ScalarExpr::ConstantExpr(ConstantExpr {
-                span: None,
-                value: scalar,
-            });
-            row_id_array.push(constant_scalar_expr);
-        }
         let array_raw_expr = ScalarExpr::FunctionCall(FunctionCall {
             span: None,
             func_name: "array".to_string(),
@@ -155,19 +175,12 @@ impl DeleteInterpreter {
             column: row_id_column_binding,
         });
 
-        let filter = cast_expr_to_non_null_boolean(
-            ScalarExpr::FunctionCall(FunctionCall {
-                span: None,
-                func_name: "contains".to_string(),
-                params: vec![],
-                arguments: vec![array_raw_expr, row_id_expr],
-            })
-            .as_expr()?
-            .project_column_ref(|col| col.column_name.clone()),
-        )?
-        .as_remote_expr();
-
-        Ok(filter)
+        Ok(ScalarExpr::FunctionCall(FunctionCall {
+            span: None,
+            func_name: "contains".to_string(),
+            params: vec![],
+            arguments: vec![array_raw_expr, row_id_expr],
+        }))
     }
 }
 
@@ -201,7 +214,21 @@ impl Interpreter for DeleteInterpreter {
             .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
             .await?;
 
-        let (filter, col_indices) = if let Some(scalar) = &self.plan.selection {
+        let selection = if !self.plan.subquery_desc.is_empty() {
+            let mut filters = VecDeque::new();
+            for subquery_desc in &self.plan.subquery_desc {
+                let filter = self.subquery_filter(subquery_desc).await?;
+                filters.push_front(filter);
+            }
+            // Traverse `selection` and put `filters` into `selection`.
+            let mut selection = self.plan.selection.clone().unwrap();
+            replace_subquery(&mut filters, &mut selection)?;
+            Some(selection)
+        } else {
+            self.plan.selection.clone()
+        };
+
+        let (filter, col_indices) = if let Some(scalar) = selection {
             let filter = cast_expr_to_non_null_boolean(
                 scalar
                     .as_expr()?
@@ -215,19 +242,15 @@ impl Interpreter for DeleteInterpreter {
                     "Delete must have deterministic predicate",
                 ));
             }
-
-            let col_indices = scalar.used_columns().into_iter().collect();
-            (Some(filter), col_indices)
-        } else if let Some(input_expr) = &self.plan.input_expr {
-            let filter = self.subquery_filter(input_expr).await?;
-            let col_indices = self
-                .plan
-                .outer_columns
-                .as_ref()
-                .unwrap()
-                .clone()
-                .into_iter()
-                .collect();
+            let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
+                let mut col_indices = HashSet::new();
+                for subquery_desc in &self.plan.subquery_desc {
+                    col_indices.extend(subquery_desc.outer_columns.iter());
+                }
+                col_indices.into_iter().collect()
+            } else {
+                scalar.used_columns().into_iter().collect()
+            };
             (Some(filter), col_indices)
         } else {
             (None, vec![])
@@ -238,7 +261,7 @@ impl Interpreter for DeleteInterpreter {
             self.ctx.clone(),
             filter,
             col_indices,
-            self.plan.index.is_some(),
+            !self.plan.subquery_desc.is_empty(),
             &mut build_res.main_pipeline,
         )
         .await?;
@@ -258,4 +281,20 @@ impl Interpreter for DeleteInterpreter {
 
         Ok(build_res)
     }
+}
+
+fn replace_subquery(filters: &mut VecDeque<ScalarExpr>, selection: &mut ScalarExpr) -> Result<()> {
+    match selection {
+        ScalarExpr::FunctionCall(func) => {
+            for arg in &mut func.arguments {
+                replace_subquery(filters, arg)?;
+            }
+        }
+        ScalarExpr::SubqueryExpr { .. } => {
+            let filter = filters.pop_back().unwrap();
+            *selection = filter;
+        }
+        _ => {}
+    }
+    Ok(())
 }

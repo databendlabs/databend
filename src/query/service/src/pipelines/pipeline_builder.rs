@@ -43,7 +43,7 @@ use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
 use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
 use common_pipeline_transforms::processors::ProfileWrapper;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::AggregateExpand;
@@ -123,7 +123,7 @@ pub struct PipelineBuilder {
     pub index: Option<usize>,
 
     enable_profiling: bool,
-    prof_span_set: ProfSpanSetRef,
+    prof_span_set: SharedProcessorProfiles,
     exchange_injector: Arc<dyn ExchangeInjector>,
 }
 
@@ -131,7 +131,7 @@ impl PipelineBuilder {
     pub fn create(
         ctx: Arc<QueryContext>,
         enable_profiling: bool,
-        prof_span_set: ProfSpanSetRef,
+        prof_span_set: SharedProcessorProfiles,
     ) -> PipelineBuilder {
         PipelineBuilder {
             enable_profiling,
@@ -1024,6 +1024,7 @@ impl PipelineBuilder {
             sort_desc,
             limit,
             block_size,
+            block_size,
             prof_info,
             after_exchange,
         )
@@ -1049,9 +1050,7 @@ impl PipelineBuilder {
     }
 
     fn build_row_fetch(&mut self, row_fetch: &RowFetch) -> Result<()> {
-        debug_assert!(
-            matches!(&*row_fetch.input, PhysicalPlan::Limit(limit) if matches!(*limit.input, PhysicalPlan::Sort(_)))
-        );
+        debug_assert!(matches!(&*row_fetch.input, PhysicalPlan::Limit(_)));
         self.build_pipeline(&row_fetch.input)?;
         build_row_fetcher_pipeline(
             self.ctx.clone(),
