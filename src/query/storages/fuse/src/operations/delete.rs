@@ -34,7 +34,6 @@ use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Evaluator;
-use common_expression::Expr;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
@@ -349,7 +348,7 @@ impl FuseTable {
                 //  - for those blocks that need to be deleted partially, they will NOT be filtered out.
                 //
 
-                let inverse: Expr<String> = inverse.as_expr(&BUILTIN_FUNCTIONS);
+                let inverse = inverse.as_expr(&BUILTIN_FUNCTIONS);
 
                 let func_ctx = ctx.get_function_context()?;
 

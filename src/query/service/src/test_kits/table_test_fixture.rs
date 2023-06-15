@@ -636,44 +636,10 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
     table.analyze(fixture.ctx.clone()).await
 }
 
-pub async fn do_deletion(
-    ctx: Arc<QueryContext>,
-    _table: Arc<dyn Table>,
-    plan: DeletePlan,
-) -> Result<()> {
+pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
     let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone())?;
     delete_interpreter.execute(ctx).await?;
     Ok(())
-    // let (filter, col_indices) = if let Some(scalar) = &plan.selection {
-    //    (
-    //        Some(
-    //            scalar
-    //                .as_expr()?
-    //                .project_column_ref(|col| col.column_name.clone())
-    //                .as_remote_expr(),
-    //        ),
-    //        scalar.used_columns().into_iter().collect(),
-    //    )
-    //} else {
-    //    (None, vec![])
-    //};
-
-    // let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    // let mut res = PipelineBuildResult::create();
-    // fuse_table
-    //    .delete(
-    //        ctx.clone(),
-    //        filter,
-    //        col_indices,
-    //        false,
-    //        &mut res.main_pipeline,
-    //    )
-    //    .await?;
-
-    // if !res.main_pipeline.is_empty() {
-    //    execute_pipeline(ctx, res)?;
-    //}
-    // Ok(())
 }
 
 pub async fn do_update(
