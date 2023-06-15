@@ -17,6 +17,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
+use common_catalog::table::DeletionFilters;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -140,7 +141,8 @@ impl Interpreter for DeleteInterpreter {
             self.plan.selection.clone()
         };
 
-        let (filter, col_indices) = if let Some(scalar) = selection {
+        let (filters, col_indices) = if let Some(scalar) = selection {
+            // prepare the filter expression
             let filter = cast_expr_to_non_null_boolean(
                 scalar
                     .as_expr()?
@@ -154,6 +156,23 @@ impl Interpreter for DeleteInterpreter {
                     "Delete must have deterministic predicate",
                 ));
             }
+
+            // prepare the inverse filter expression
+            let inverted_filter = {
+                let inverse = ScalarExpr::FunctionCall(common_sql::planner::plans::FunctionCall {
+                    span: None,
+                    func_name: "not".to_string(),
+                    params: vec![],
+                    arguments: vec![scalar.clone()],
+                });
+                cast_expr_to_non_null_boolean(
+                    inverse
+                        .as_expr()?
+                        .project_column_ref(|col| col.column_name.clone()),
+                )?
+                .as_remote_expr()
+            };
+
             let col_indices: Vec<usize> = if !self.plan.subquery_desc.is_empty() {
                 let mut col_indices = HashSet::new();
                 for subquery_desc in &self.plan.subquery_desc {
@@ -163,7 +182,13 @@ impl Interpreter for DeleteInterpreter {
             } else {
                 scalar.used_columns().into_iter().collect()
             };
-            (Some(filter), col_indices)
+            (
+                Some(DeletionFilters {
+                    filter,
+                    inverted_filter,
+                }),
+                col_indices,
+            )
         } else {
             (None, vec![])
         };
@@ -171,7 +196,7 @@ impl Interpreter for DeleteInterpreter {
         let mut build_res = PipelineBuildResult::create();
         tbl.delete(
             self.ctx.clone(),
-            filter,
+            filters,
             col_indices,
             !self.plan.subquery_desc.is_empty(),
             &mut build_res.main_pipeline,
