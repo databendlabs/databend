@@ -195,6 +195,14 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             TimeTravelPoint::Snapshot(sid) => RcDoc::text(format!(" AT (SNAPSHOT => {sid})")),
             TimeTravelPoint::Timestamp(ts) => RcDoc::text(format!(" AT (TIMESTAMP => {ts})")),
         },
+        AlterTableAction::SetOptions { set_options } => {
+            let mut doc = RcDoc::line();
+            doc = doc.append(RcDoc::text("SET OPTIONS: "));
+            for (key, value) in set_options.into_iter() {
+                doc = doc.append(RcDoc::text(format!("{key} to {value} ")));
+            }
+            doc
+        }
     }
 }
 

@@ -554,9 +554,32 @@ impl Binder {
                 };
                 StageTable::try_create(info)?
             }
+            FileFormatParams::Csv(..) => {
+                let max_column_position = self.metadata.read().get_max_column_position();
+                if max_column_position == 0 {
+                    return Err(ErrorCode::SemanticError(
+                        "select columns from csv file must in the form of $<column_position>",
+                    ));
+                }
+
+                let mut fields = vec![];
+                for i in 1..(max_column_position + 1) {
+                    fields.push(TableField::new(&format!("_${}", i), TableDataType::String));
+                }
+
+                let schema = Arc::new(TableSchema::new(fields));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy: None,
+                    is_select: true,
+                };
+                StageTable::try_create(info)?
+            }
             _ => {
                 return Err(ErrorCode::Unimplemented(
-                    "stage table function only support parquet/NDJson format for now",
+                    "stage table function only support parquet/NDJson/CSV format for now",
                 ));
             }
         };

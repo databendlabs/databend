@@ -24,7 +24,7 @@ Databend enables the creation of bitmaps using two formats with the TO_BITMAP fu
 
 - uint64 format: You can also create a bitmap using a uint64 value. For example, TO_BITMAP(123) creates a bitmap with bits set according to the binary representation of the uint64 value 123.
 
-The bitmap data type in Databend is a binary type that differs from other supported types in terms of its representation and display in SELECT statements. Unlike other types, bitmaps cannot be directly shown in the result set of a SELECT statement. Instead, they require the use of [Bitmap Functions](../../15-sql-functions/05-bitmap-functions/index.md) for manipulation and interpretation:
+In Databend, a bitmap can store a maximum of 2^64 bits. The bitmap data type in Databend is a binary type that differs from other supported types in terms of its representation and display in SELECT statements. Unlike other types, bitmaps cannot be directly shown in the result set of a SELECT statement. Instead, they require the use of [Bitmap Functions](../../15-sql-functions/05-bitmap-functions/index.md) for manipulation and interpretation:
 
 ```sql
 SELECT TO_BITMAP('1,2,3')

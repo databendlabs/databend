@@ -7242,6 +7242,42 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);
+---------- Output ---------
+ALTER TABLE t SET OPTIONS: block_per_segment='500' snapshot_location='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk'
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: SetOptions {
+            set_options: {
+                "block_per_segment": "500",
+                "snapshot_location": "1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk",
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a;
 ---------- Output ---------
 ALTER DATABASE IF EXISTS ctl.c RENAME TO a

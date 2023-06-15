@@ -212,6 +212,9 @@ impl Interpreter for InsertInterpreter {
                         let input = exchange.input.clone();
                         exchange.input = Box::new(PhysicalPlan::DistributedInsertSelect(Box::new(
                             DistributedInsertSelect {
+                                // TODO(leiysky): we reuse the id of exchange here,
+                                // which is not correct. We should generate a new id for insert.
+                                plan_id: exchange.plan_id,
                                 input,
                                 catalog,
                                 table_info: table1.get_table_info().clone(),
@@ -226,6 +229,9 @@ impl Interpreter for InsertInterpreter {
                     other_plan => {
                         // insert should wait until all nodes finished
                         PhysicalPlan::DistributedInsertSelect(Box::new(DistributedInsertSelect {
+                            // TODO: we reuse the id of other plan here,
+                            // which is not correct. We should generate a new id for insert.
+                            plan_id: other_plan.get_id(),
                             input: Box::new(other_plan),
                             catalog,
                             table_info: table1.get_table_info().clone(),

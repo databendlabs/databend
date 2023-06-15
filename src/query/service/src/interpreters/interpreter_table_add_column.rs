@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
@@ -77,19 +78,28 @@ impl Interpreter for AddTableColumnInterpreter {
 
             let catalog = self.ctx.get_catalog(catalog_name)?;
             let mut new_table_meta = table.get_table_info().meta.clone();
-            let fields = self.plan.schema.fields().clone();
-            for field in fields.iter() {
-                if field.default_expr().is_some() {
-                    let _ = field_default_value(self.ctx.clone(), field)?;
-                }
-                if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
-                    return Err(ErrorCode::TableWithInternalColumnName(format!(
-                        "Cannot alter table to add a column with the same name as internal column: {}",
-                        field.name()
-                    )));
-                }
+            let field = self.plan.field.clone();
+            if field.computed_expr().is_some() {
+                let license_manager = get_license_manager();
+                license_manager.manager.check_enterprise_enabled(
+                    &self.ctx.get_settings(),
+                    self.plan.tenant.clone(),
+                    "add_computed_column".to_string(),
+                )?;
             }
-            new_table_meta.add_columns(&fields, &self.plan.field_comments)?;
+
+            if field.default_expr().is_some() {
+                let _ = field_default_value(self.ctx.clone(), &field)?;
+            }
+            if INTERNAL_COLUMN_FACTORY.exist(field.name()) {
+                return Err(ErrorCode::TableWithInternalColumnName(format!(
+                    "Cannot alter table to add a column with the same name as internal column: {}",
+                    field.name()
+                )));
+            }
+            let fields = vec![field];
+            let comments = vec![self.plan.comment.clone()];
+            new_table_meta.add_columns(&fields, &comments)?;
 
             let table_id = table_info.ident.table_id;
             let table_version = table_info.ident.seq;

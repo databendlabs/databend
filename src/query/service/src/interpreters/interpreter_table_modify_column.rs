@@ -136,6 +136,8 @@ impl Interpreter for ModifyTableColumnInterpreter {
         let catalog = self.ctx.get_catalog(catalog_name)?;
         let table_meta = table.get_table_info().meta.clone();
 
+        // NOTICE: if we support modify column data type,
+        // need to check whether this column is referenced by other computed columns.
         let new_table_meta = match &self.plan.action {
             ModifyColumnAction::SetMaskingPolicy(mask_name) => {
                 self.do_set_data_mask_policy(table, table_meta, mask_name.clone())
