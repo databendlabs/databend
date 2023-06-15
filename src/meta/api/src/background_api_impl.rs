@@ -41,9 +41,12 @@ use common_meta_app::background::UpdateBackgroundTaskReply;
 use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::ConditionResult::Eq;
+use common_meta_types::KVMeta;
+use common_meta_types::MatchSeq::Any;
 use common_meta_types::MetaError;
-use common_meta_types::MetaNetworkError;
+use common_meta_types::Operation;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
 use tracing::debug;
@@ -60,7 +63,6 @@ use crate::serialize_struct;
 use crate::serialize_u64;
 use crate::txn_cond_seq;
 use crate::txn_op_put;
-use crate::txn_op_put_with_expire;
 use crate::util::deserialize_u64;
 use crate::util::txn_trials;
 
@@ -166,8 +168,10 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 }
                 _ => BackgroundJobId { id },
             };
+            let (id_name_seq, _): (_, Option<BackgroundJobInfo>) =
+                get_pb_value(self, &id_key).await?;
             let meta = req.info.clone();
-            let condition = vec![txn_cond_seq(name_key, Eq, seq)];
+            let condition = vec![txn_cond_seq(&id_key, Eq, id_name_seq)];
             let if_then = vec![
                 txn_op_put(name_key, serialize_u64(id_key.id)?),
                 txn_op_put(&id_key, serialize_struct(&meta)?),
@@ -267,17 +271,18 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
             debug!(?name_key, "update_background_task");
 
             let meta = req.task_info.clone();
-            let if_then = vec![txn_op_put_with_expire(
-                name_key,
-                serialize_struct(&meta)?,
-                req.expire_at,
-            )];
-            let txn_req = TxnRequest {
-                condition: vec![],
-                if_then,
-                else_then: vec![],
-            };
-            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            let succ = self
+                .upsert_kv(UpsertKVReq::new(
+                    name_key.to_string_key().as_str(),
+                    Any,
+                    Operation::Update(serialize_struct(&meta)?),
+                    Some(KVMeta {
+                        expire_at: Some(req.expire_at),
+                    }),
+                ))
+                .await
+                .is_ok();
             if succ {
                 break Ok(UpdateBackgroundTaskReply {
                     last_updated: meta.last_updated.unwrap_or(Default::default()),
@@ -295,10 +300,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         let reply = self.prefix_list_kv(&prefix).await?;
         let mut res = vec![];
         for (_, v) in reply {
-            let val: Result<BackgroundTaskInfo, MetaNetworkError> = deserialize_struct(&v.data);
-            if let Ok(val) = val {
-                res.push((v.seq, val));
-            }
+            let val: BackgroundTaskInfo = deserialize_struct(&v.data)?;
+            res.push((v.seq, val));
         }
         Ok(res)
     }
