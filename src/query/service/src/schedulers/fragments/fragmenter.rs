@@ -160,8 +160,14 @@ impl PhysicalPlanReplacer for Fragmenter {
         let input = self.replace(plan.input.as_ref())?;
         let input_schema = input.output_schema()?;
 
+        let plan_id = plan.plan_id;
+
         let source_fragment_id = self.ctx.get_fragment_id();
         let plan = PhysicalPlan::ExchangeSink(ExchangeSink {
+            // TODO(leiysky): we reuse the plan id here,
+            // should generate a new one for the sink.
+            plan_id,
+
             input: Box::new(input),
             schema: input_schema.clone(),
             kind: plan.kind.clone(),
@@ -205,6 +211,10 @@ impl PhysicalPlanReplacer for Fragmenter {
         self.fragments.push(source_fragment);
 
         Ok(PhysicalPlan::ExchangeSource(ExchangeSource {
+            // TODO(leiysky): we reuse the plan id here,
+            // should generate a new one for the source.
+            plan_id,
+
             schema: input_schema,
             query_id: self.query_id.clone(),
 

@@ -12,5 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod span;
-pub use span::*;
+mod mgr;
+mod proc;
+mod prof;
+
+pub use mgr::QueryProfileManager;
+pub use proc::*;
+pub use prof::*;

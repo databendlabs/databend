@@ -1766,6 +1766,7 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
+ "common-profile",
  "common-settings",
  "common-storage",
  "dashmap",
@@ -2429,6 +2430,10 @@ dependencies = [
 [[package]]
 name = "common-profile"
 version = "0.1.0"
+dependencies = [
+ "common-base",
+ "dashmap",
+]
 
 [[package]]
 name = "common-proto-conv"
