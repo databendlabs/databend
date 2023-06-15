@@ -13,14 +13,17 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockRowIndex;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
+use common_expression::ScalarRef;
 use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::BLOCK_NAME_COL_NAME;
@@ -32,11 +35,14 @@ use common_sql::ColumnBinding;
 use opendal::Operator;
 
 use crate::io;
+use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 
 enum State {
     None,
     NeedSerialize(DataBlock),
+    PreProcess(DataBlock),
+    PostProcess,
     Serialized {
         data: Vec<u8>,
         idx_file_location: String,
@@ -53,6 +59,9 @@ pub struct AggIndexSink {
     source_schema: TableSchemaRef,
     projections: Vec<FieldIndex>,
     block_location: Option<FieldIndex>,
+    location_data: HashMap<String, Vec<BlockRowIndex>>,
+    blocks: Vec<DataBlock>,
+    finished: bool,
 }
 
 impl AggIndexSink {
@@ -97,18 +106,35 @@ impl AggIndexSink {
             source_schema: Arc::new(new_source_schema),
             projections,
             block_location,
+            location_data: HashMap::new(),
+            blocks: vec![],
+            finished: false,
         })))
     }
 
-    fn process_block(&self, block: &mut DataBlock) -> DataBlock {
+    fn process_block(&mut self, block: &mut DataBlock) {
         dbg!(&block.columns());
         let col = block.get_by_offset(self.block_location.unwrap());
-        dbg!(col.value.index(0).unwrap());
+        let block_id = self.blocks.len();
+        for i in 0..block.num_rows() {
+            let location = unsafe {
+                match col.value.index_unchecked(i) {
+                    ScalarRef::String(loc) => String::from_utf8_unchecked(loc.to_vec()),
+                    _ => unreachable!(),
+                }
+            };
+
+            self.location_data
+                .entry(location)
+                .and_modify(|idx_vec| idx_vec.push((block_id, i, 1)))
+                .or_insert(vec![(block_id, i, 1)]);
+        }
+        dbg!(&self.location_data);
         let mut result = DataBlock::new(vec![], block.num_rows());
         for index in self.projections.iter() {
             result.add_column(block.get_by_offset(*index).clone());
         }
-        result
+        self.blocks.push(result);
     }
 }
 
@@ -131,9 +157,14 @@ impl Processor for AggIndexSink {
             return Ok(Event::Async);
         }
 
-        if self.input.is_finished() {
+        if self.finished {
             self.state = State::Finished;
             return Ok(Event::Finished);
+        }
+
+        if self.input.is_finished() {
+            self.state = State::PostProcess;
+            return Ok(Event::Async);
         }
 
         if !self.input.has_data() {
@@ -148,31 +179,16 @@ impl Processor for AggIndexSink {
             // may generate empty data blocks
             Ok(Event::NeedData)
         } else {
-            self.state = State::NeedSerialize(data_block);
+            self.state = State::PreProcess(data_block);
             Ok(Event::Sync)
         }
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::NeedSerialize(mut block) => {
+            State::PreProcess(mut block) => {
                 let block = self.process_block(&mut block);
                 dbg!(&block);
-                // let fuse_part = FusePartInfo::from_part(&part)?;
-                // let idx_file_location =
-                //     TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                //         &fuse_part.location,
-                //         self.index_id,
-                //     );
-                let idx_file_location = "xxxx".to_string();
-
-                let mut data = vec![];
-                io::serialize_block(&self.write_settings, &self.source_schema, block, &mut data)?;
-
-                self.state = State::Serialized {
-                    data,
-                    idx_file_location,
-                };
             }
             _state => {
                 return Err(ErrorCode::Internal("Unknown state for fuse table sink"));
@@ -185,14 +201,27 @@ impl Processor for AggIndexSink {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
-            State::Serialized {
-                data,
-                idx_file_location,
-                ..
-            } => {
-                // todo(ariesdevil): collect metrics
-                // write data block
-                self.data_accessor.write(&idx_file_location, data).await?;
+            State::PostProcess => {
+                let blocks = self.blocks.iter().map(|b| b).collect::<Vec<_>>();
+                for (loc, indexes) in &self.location_data {
+                    let block = DataBlock::take_blocks(&blocks, indexes, indexes.len());
+                    let loc =
+                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                            loc,
+                            self.index_id,
+                        );
+                    dbg!(&loc);
+                    dbg!(&block);
+                    let mut data = vec![];
+                    io::serialize_block(
+                        &self.write_settings,
+                        &self.source_schema,
+                        block,
+                        &mut data,
+                    )?;
+                    self.data_accessor.write(&loc, data).await?;
+                }
+                self.finished = true;
             }
             _state => {
                 return Err(ErrorCode::Internal("Unknown state for fuse table sink."));

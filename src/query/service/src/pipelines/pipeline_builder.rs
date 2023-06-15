@@ -37,10 +37,8 @@ use common_functions::BUILTIN_FUNCTIONS;
 use common_pipeline_core::pipe::Pipe;
 use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use common_pipeline_core::SourcePipeBuilder;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
@@ -59,7 +57,6 @@ use common_sql::executor::ExchangeSink;
 use common_sql::executor::ExchangeSource;
 use common_sql::executor::Filter;
 use common_sql::executor::HashJoin;
-use common_sql::executor::IndexTableScan;
 use common_sql::executor::Limit;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::Project;
@@ -76,9 +73,7 @@ use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
-use common_storages_fuse::operations::AggIndexSource;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
-use common_storages_fuse::FuseTable;
 use petgraph::matrix_graph::Zero;
 
 use super::processors::transforms::FrameBound;
@@ -173,7 +168,6 @@ impl PipelineBuilder {
     fn build_pipeline(&mut self, plan: &PhysicalPlan) -> Result<()> {
         match plan {
             PhysicalPlan::TableScan(scan) => self.build_table_scan(scan),
-            PhysicalPlan::IndexTableScan(index_scan) => self.build_index_table_scan(index_scan),
             PhysicalPlan::Filter(filter) => self.build_filter(filter),
             PhysicalPlan::Project(project) => self.build_project(project),
             PhysicalPlan::EvalScalar(eval_scalar) => self.build_eval_scalar(eval_scalar),
@@ -406,35 +400,6 @@ impl PipelineBuilder {
                 )))
             })?;
         }
-
-        Ok(())
-    }
-
-    fn build_index_table_scan(&mut self, scan: &IndexTableScan) -> Result<()> {
-        let table = self.ctx.build_table_from_source_plan(&scan.source)?;
-        let fuse_table = FuseTable::do_create(table.get_table_info().clone())?;
-        let block_builder =
-            fuse_table.build_block_reader(scan.source.as_ref(), self.ctx.clone())?;
-        let partitions = scan.source.parts.clone();
-
-        let mut source_builder = SourcePipeBuilder::create();
-        for parts in partitions
-            .partitions
-            .chunks(scan.partition_chunk_size)
-            .map(|chunk| chunk.to_vec())
-        {
-            let output = OutputPort::create();
-            source_builder.add_source(
-                output.clone(),
-                AggIndexSource::create(
-                    self.ctx.clone(),
-                    output,
-                    parts.clone(),
-                    block_builder.clone(),
-                )?,
-            );
-        }
-        self.main_pipeline.add_pipe(source_builder.finalize());
 
         Ok(())
     }

@@ -18,6 +18,7 @@ use common_ast::ast::GroupBy;
 use common_ast::ast::Identifier;
 use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
+use common_ast::ast::TableReference;
 use common_ast::walk_select_target_mut;
 use common_ast::Dialect;
 use common_ast::VisitorMut;
@@ -54,20 +55,29 @@ impl VisitorMut for AggregatingIndexRewriter {
     fn visit_select_stmt(&mut self, stmt: &mut SelectStmt) {
         let SelectStmt {
             select_list,
+            from,
             group_by,
             ..
         } = stmt;
 
-        let block_name_expr = Expr::ColumnRef {
-            span: None,
-            database: None,
-            table: None,
-            column: ColumnID::Name(Identifier::from_name(BLOCK_NAME_COL_NAME)),
-        };
-
         for target in select_list.iter_mut() {
             walk_select_target_mut(self, target);
         }
+
+        let table = {
+            let table_ref = from.get(0).unwrap();
+            match table_ref {
+                TableReference::Table { table, .. } => table.clone(),
+                _ => unreachable!(),
+            }
+        };
+
+        let block_name_expr = Expr::ColumnRef {
+            span: None,
+            database: None,
+            table: Some(table),
+            column: ColumnID::Name(Identifier::from_name(BLOCK_NAME_COL_NAME)),
+        };
 
         // if select list already contains `BLOCK_NAME_COL_NAME`
         if select_list.iter().any(|target| match target {

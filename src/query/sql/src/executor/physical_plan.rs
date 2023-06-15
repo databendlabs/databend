@@ -74,36 +74,6 @@ impl TableScan {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct IndexTableScan {
-    /// A unique id of operator in a `PhysicalPlan` tree.
-    /// Only used for display.
-    pub plan_id: u32,
-
-    pub name_mapping: BTreeMap<String, IndexType>,
-    pub source: Box<DataSourcePlan>,
-    pub partition_chunk_size: usize,
-
-    /// Only used for display
-    pub table_index: IndexType,
-    pub stat_info: Option<PlanStatsInfo>,
-
-    pub internal_column: Option<BTreeMap<FieldIndex, InternalColumn>>,
-}
-
-impl IndexTableScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = Vec::with_capacity(self.name_mapping.len());
-        let schema = self.source.schema();
-        for (name, id) in self.name_mapping.iter() {
-            let orig_field = schema.field_with_name(name)?;
-            let data_type = DataType::from(orig_field.data_type());
-            fields.push(DataField::new(&id.to_string(), data_type));
-        }
-        Ok(DataSchemaRefExt::create(fields))
-    }
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Filter {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
@@ -780,9 +750,6 @@ pub enum PhysicalPlan {
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
-
-    // For aggregating index
-    IndexTableScan(IndexTableScan),
 }
 
 impl PhysicalPlan {
@@ -823,7 +790,6 @@ impl PhysicalPlan {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         match self {
             PhysicalPlan::TableScan(plan) => plan.output_schema(),
-            PhysicalPlan::IndexTableScan(plan) => plan.output_schema(),
             PhysicalPlan::Filter(plan) => plan.output_schema(),
             PhysicalPlan::Project(plan) => plan.output_schema(),
             PhysicalPlan::EvalScalar(plan) => plan.output_schema(),
@@ -849,7 +815,6 @@ impl PhysicalPlan {
     pub fn name(&self) -> String {
         match self {
             PhysicalPlan::TableScan(_) => "TableScan".to_string(),
-            PhysicalPlan::IndexTableScan(_) => "IndexTableScan".to_string(),
             PhysicalPlan::Filter(_) => "Filter".to_string(),
             PhysicalPlan::Project(_) => "Project".to_string(),
             PhysicalPlan::EvalScalar(_) => "EvalScalar".to_string(),
@@ -875,7 +840,6 @@ impl PhysicalPlan {
     pub fn children<'a>(&'a self) -> Box<dyn Iterator<Item = &'a PhysicalPlan> + 'a> {
         match self {
             PhysicalPlan::TableScan(_) => Box::new(std::iter::empty()),
-            PhysicalPlan::IndexTableScan(_) => Box::new(std::iter::empty()),
             PhysicalPlan::Filter(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::Project(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::EvalScalar(plan) => Box::new(std::iter::once(plan.input.as_ref())),
@@ -913,7 +877,6 @@ impl PhysicalPlan {
     pub fn try_find_single_data_source(&self) -> Option<&DataSourcePlan> {
         match self {
             PhysicalPlan::TableScan(scan) => Some(&scan.source),
-            PhysicalPlan::IndexTableScan(scan) => Some(&scan.source),
             PhysicalPlan::Filter(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::Project(plan) => plan.input.try_find_single_data_source(),
             PhysicalPlan::EvalScalar(plan) => plan.input.try_find_single_data_source(),

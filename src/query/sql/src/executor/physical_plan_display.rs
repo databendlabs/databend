@@ -30,7 +30,6 @@ use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::Filter;
 use crate::executor::HashJoin;
-use crate::executor::IndexTableScan;
 use crate::executor::Limit;
 use crate::executor::PhysicalPlan;
 use crate::executor::Project;
@@ -59,7 +58,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
 
         match self.node {
             PhysicalPlan::TableScan(scan) => write!(f, "{}", scan)?,
-            PhysicalPlan::IndexTableScan(scan) => write!(f, "{}", scan)?,
             PhysicalPlan::Filter(filter) => write!(f, "{}", filter)?,
             PhysicalPlan::Project(project) => write!(f, "{}", project)?,
             PhysicalPlan::EvalScalar(eval_scalar) => write!(f, "{}", eval_scalar)?,
@@ -93,12 +91,6 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
 impl Display for TableScan {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "TableScan: [{}]", self.source.source_info.desc())
-    }
-}
-
-impl Display for IndexTableScan {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "IndexTableScan: [{}]", self.source.source_info.desc())
     }
 }
 

@@ -41,7 +41,6 @@ use crate::executor::DistributedInsertSelect;
 use crate::executor::ExchangeSink;
 use crate::executor::ExchangeSource;
 use crate::executor::FragmentKind;
-use crate::executor::IndexTableScan;
 use crate::executor::RangeJoin;
 use crate::executor::RangeJoinType;
 use crate::executor::RuntimeFilterSource;
@@ -74,19 +73,6 @@ impl PhysicalPlan {
                 Ok(FormatTreeNode::with_children(
                     format!(
                         "Scan: {}, rows: {}",
-                        table_name, plan.source.statistics.read_rows
-                    ),
-                    vec![],
-                ))
-            }
-            PhysicalPlan::IndexTableScan(plan) => {
-                let table = metadata.read().table(plan.table_index).clone();
-                let table_name =
-                    format!("{}.{}.{}", table.catalog(), table.database(), table.name());
-
-                Ok(FormatTreeNode::with_children(
-                    format!(
-                        "Index Table Scan: {}, rows: {}",
                         table_name, plan.source.statistics.read_rows
                     ),
                     vec![],
@@ -132,7 +118,6 @@ fn to_format_tree(
 ) -> Result<FormatTreeNode<String>> {
     match plan {
         PhysicalPlan::TableScan(plan) => table_scan_to_format_tree(plan, metadata),
-        PhysicalPlan::IndexTableScan(plan) => index_table_scan_to_format_tree(plan, metadata),
         PhysicalPlan::Filter(plan) => filter_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::Project(plan) => project_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::EvalScalar(plan) => eval_scalar_to_format_tree(plan, metadata, prof_span_set),
@@ -292,16 +277,6 @@ fn table_scan_to_format_tree(
     Ok(FormatTreeNode::with_children(
         "TableScan".to_string(),
         children,
-    ))
-}
-
-fn index_table_scan_to_format_tree(
-    _plan: &IndexTableScan,
-    _metadata: &MetadataRef,
-) -> Result<FormatTreeNode<String>> {
-    Ok(FormatTreeNode::with_children(
-        "IndexTableScan".to_string(),
-        vec![],
     ))
 }
 
