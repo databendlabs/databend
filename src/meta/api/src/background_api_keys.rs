@@ -12,5 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub(crate) const ID_GEN_BACKGROUND_TASK: &str = "background_task";
 pub(crate) const ID_GEN_BACKGROUND_JOB: &str = "background_job";

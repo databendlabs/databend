@@ -21,7 +21,6 @@ use common_meta_app::app_error::UnknownBackgroundJob;
 use common_meta_app::background::BackgroundJobId;
 use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
-use common_meta_app::background::BackgroundTaskId;
 use common_meta_app::background::BackgroundTaskIdent;
 use common_meta_app::background::BackgroundTaskInfo;
 use common_meta_app::background::CreateBackgroundJobReply;
@@ -44,11 +43,13 @@ use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::MetaError;
+use common_meta_types::MetaNetworkError;
 use common_meta_types::TxnRequest;
 use common_tracing::func_name;
 use tracing::debug;
 
 use crate::background_api::BackgroundApi;
+use crate::deserialize_struct;
 use crate::fetch_id;
 use crate::get_pb_value;
 use crate::get_u64_value;
@@ -263,30 +264,22 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         let mut trials = txn_trials(None, ctx);
         loop {
             trials.next().unwrap()?;
-            let (seq, id) = get_u64_value(self, name_key).await?;
-            debug!(seq, id, ?name_key, "update_background_task");
-            let id_key = match seq {
-                0 => {
-                    let id = fetch_id(self, IdGenerator::background_task_id()).await?;
-                    BackgroundTaskId { id }
-                }
-                _ => BackgroundTaskId { id },
-            };
+            debug!(?name_key, "update_background_task");
+
             let meta = req.task_info.clone();
-            let condition = vec![txn_cond_seq(name_key, Eq, seq)];
-            let if_then = vec![
-                txn_op_put_with_expire(name_key, serialize_u64(id_key.id)?, req.expire_at),
-                txn_op_put_with_expire(&id_key, serialize_struct(&meta)?, req.expire_at),
-            ];
+            let if_then = vec![txn_op_put_with_expire(
+                name_key,
+                serialize_struct(&meta)?,
+                req.expire_at,
+            )];
             let txn_req = TxnRequest {
-                condition,
+                condition: vec![],
                 if_then,
                 else_then: vec![],
             };
             let (succ, _responses) = send_txn(self, txn_req).await?;
             if succ {
                 break Ok(UpdateBackgroundTaskReply {
-                    id: id_key.id,
                     last_updated: meta.last_updated.unwrap_or(Default::default()),
                     expire_at: req.expire_at,
                 });
@@ -302,11 +295,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         let reply = self.prefix_list_kv(&prefix).await?;
         let mut res = vec![];
         for (_, v) in reply {
-            let task_id = deserialize_u64(&v.data)?;
-            let r = get_background_task_by_id(self, &BackgroundTaskId { id: task_id.0 }).await?;
-            // filter none and get the task info
-            if let Some(task_info) = r.1 {
-                res.push((r.0, task_info));
+            let val: Result<BackgroundTaskInfo, MetaNetworkError> = deserialize_struct(&v.data);
+            if let Ok(val) = val {
+                res.push((v.seq, val));
             }
         }
         Ok(res)
@@ -318,7 +309,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
     ) -> Result<GetBackgroundTaskReply, KVAppError> {
         debug!(req = debug(&req), "BackgroundTaskApi: {}", func_name!());
         let name = &req.name;
-        let (_, resp) = get_background_task_or_none(self, name).await?;
+        let (_, resp) = get_background_task_by_name(self, name).await?;
         Ok(GetBackgroundTaskReply { task_info: resp })
     }
 }
@@ -368,22 +359,9 @@ async fn get_background_job_by_id(
     Ok((seq, res))
 }
 
-// Returns (id_seq, background_task_info)
-async fn get_background_task_or_none(
+async fn get_background_task_by_name(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    name_key: &BackgroundTaskIdent,
-) -> Result<(u64, Option<BackgroundTaskInfo>), KVAppError> {
-    let (id_seq, id) = get_u64_value(kv_api, name_key).await?;
-    let id_key = match id_seq {
-        0 => return Ok((0, None)),
-        _ => BackgroundTaskId { id },
-    };
-    get_background_task_by_id(kv_api, &id_key).await
-}
-
-async fn get_background_task_by_id(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    id: &BackgroundTaskId,
+    id: &BackgroundTaskIdent,
 ) -> Result<(u64, Option<BackgroundTaskInfo>), KVAppError> {
     let (seq, res) = get_pb_value(kv_api, id).await?;
     Ok((seq, res))

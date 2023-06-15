@@ -83,17 +83,6 @@ pub struct BackgroundTaskIdent {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
-pub struct BackgroundTaskId {
-    pub id: u64,
-}
-
-impl Display for BackgroundTaskIdent {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.task_id)
-    }
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
 pub struct CompactionStats {
     pub db_id: u64,
     pub table_id: u64,
@@ -177,7 +166,7 @@ impl Display for UpdateBackgroundTaskReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "update_background_task({}, {}, {}, {}, {:?})",
+            "update_background_task({:?}, {}, {}, {}, {:?})",
             self.task_name,
             self.task_info.task_type,
             self.task_info.task_state,
@@ -189,7 +178,6 @@ impl Display for UpdateBackgroundTaskReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateBackgroundTaskReply {
-    pub id: u64,
     pub last_updated: DateTime<Utc>,
     pub expire_at: u64,
 }
@@ -201,7 +189,7 @@ pub struct GetBackgroundTaskReq {
 
 impl Display for GetBackgroundTaskReq {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get_background_task({})", self.name)
+        write!(f, "get_background_task({:?})", self.name)
     }
 }
 
@@ -232,12 +220,11 @@ impl ListBackgroundTasksReq {
 mod kvapi_key_impl {
     use common_meta_kvapi::kvapi;
 
-    use crate::background::background_task::BackgroundTaskId;
     use crate::background::background_task::BackgroundTaskIdent;
-    const PREFIX_BACKGROUND: &str = "__fd_background_task";
-    const PREFIX_BACKGROUND_TASK_BY_ID: &str = "__fd_background_task_by_id";
+    const PREFIX_BACKGROUND: &str = "__fd_background_task_by_name";
 
-    /// <prefix>/<tenant>/<background_task_ident> -> <id>
+    // task is named by id, and will not encounter renaming issue.
+    /// <prefix>/<tenant>/<background_task_ident> -> info
     impl kvapi::Key for BackgroundTaskIdent {
         const PREFIX: &'static str = PREFIX_BACKGROUND;
 
@@ -259,25 +246,6 @@ mod kvapi_key_impl {
                 tenant,
                 task_id: id,
             })
-        }
-    }
-
-    impl kvapi::Key for BackgroundTaskId {
-        const PREFIX: &'static str = PREFIX_BACKGROUND_TASK_BY_ID;
-
-        fn to_string_key(&self) -> String {
-            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
-                .push_u64(self.id)
-                .done()
-        }
-
-        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
-            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
-
-            let id = p.next_u64()?;
-            p.done()?;
-
-            Ok(BackgroundTaskId { id })
         }
     }
 }
