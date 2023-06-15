@@ -215,7 +215,7 @@ impl FuseTable {
 
         let MutationTaskInfo {
             total_tasks,
-            num_whole_block_mutation: num_whole_block_need_to_mutated,
+            num_whole_block_mutation,
         } = self
             .mutation_block_pruning(
                 ctx.clone(),
@@ -233,8 +233,8 @@ impl FuseTable {
         // Status.
         {
             let status = format!(
-                "delete: begin to run delete tasks, total tasks: {},  number of complete deletion detected: {}",
-                total_tasks, num_whole_block_need_to_mutated
+                "delete: begin to run delete tasks, total tasks: {},  number of whole block deletion detected in pruning phase: {}",
+                total_tasks, num_whole_block_mutation
             );
             ctx.set_status_info(&status);
             info!(status);
@@ -327,7 +327,6 @@ impl FuseTable {
 
         let segment_locations = create_segment_location_vector(segment_locations, None);
         let block_metas = pruner.pruning(segment_locations).await?;
-        eprintln!("filter is {:?}", push_down);
 
         let mut whole_block_deletions = std::collections::HashSet::new();
 
@@ -338,8 +337,7 @@ impl FuseTable {
             // later during mutation, we need not to load the data of these blocks:
             //
             // 1. invert the filter expression
-            // 2. apply the inverse filter expression to the block metas that have need to be deleted completely or partially
-            //
+            // 2. apply the inverse filter expression to the block metas, utilizing range index
             //  - for those blocks that need to be deleted completely, they will be filtered out.
             //  - for those blocks that need to be deleted partially, they will NOT be filtered out.
             //
@@ -362,7 +360,7 @@ impl FuseTable {
 
                 for (block_meta_idx, block_meta) in &block_metas {
                     if !range_index.should_keep(&block_meta.as_ref().col_stats, None) {
-                        // this block is completely deleted, we can skip it during mutation.
+                        // this block should be deleted completely
                         whole_block_deletions
                             .insert((block_meta_idx.segment_idx, block_meta_idx.block_idx));
                     }

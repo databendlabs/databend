@@ -367,7 +367,7 @@ impl Processor for MutationSource {
                     };
                     self.ctx.get_write_progress().incr(&progress_values);
                     let meta =
-                        SerializeDataMeta::create(self.index.clone(), self.origin_stats.clone());
+                        SerializeDataMeta::create(self.index.clone(), self.stats_type.clone());
                     self.state =
                         State::Output(self.ctx.get_partition(), DataBlock::empty_with_meta(meta));
                 } else {
