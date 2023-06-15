@@ -8,7 +8,7 @@ const MAC_ARM = 'Mac Apple Chip (ARM, 64-bit)';
 const GITHUB_DOWNLOAD = 'https://github.com/datafuselabs/databend/releases/download';
 const GITHUB_REPO = 'https://api.github.com/repos/datafuselabs/databend';
 const DATABEND_RELEASES = 'https://api.github.com/repos/datafuselabs/databend/releases';
-const DATABEND_DOWNLOAD =  'https://repo.databend.rs/databend';
+const DATABEND_DOWNLOAD = 'https://repo.databend.rs/databend';
 
 const IGNORE_TEXT = /<!-- Release notes generated using configuration in .github\/release.yml at [\w.-]+ -->/;
 const REG = /https:\/\/github\.com\/datafuselabs\/databend\/pull\/(\d+)/g;
@@ -17,21 +17,30 @@ const REPLACE_TEXT = '[#$1](https://github.com/datafuselabs/databend/pull/$1)';
 module.exports = function fetchDatabendReleasesPlugin() {
   return {
     name: 'fetch-databend-releases',
-    async contentLoaded({_, actions}) {
+    async contentLoaded({ _, actions }) {
       const { setGlobalData } = actions;
-      const { data: releasesList } = await axios.get(DATABEND_RELEASES);
-      const { data: repoResource } = await axios.get(GITHUB_REPO);
+      let releasesList = [];
+      let repoResource = {};
+      try {
+        const { data } = await axios.get(DATABEND_RELEASES);
+        const { data: repo } = await axios.get(GITHUB_REPO);
+        releasesList = data;
+        repoResource = repo;
+      } catch (error) {
+        releasesList = [];
+        repoResource = { stargazers_count: 6500 };
+      }
       // Preprocessing data, Just part of it
-      const releases = releasesList?.filter(release=> release.assets?.length).slice(0, 21);
-      const processedData = releases.map(release=> {
+      const releases = releasesList?.filter(release => release.assets?.length).slice(0, 21);
+      const processedData = releases?.map(release => {
         const filterAssets = namesToMatch(release);
-        const afterProcessedAssets = 
+        const afterProcessedAssets =
           filterAssets
             .map(asset => {
               const isApple = asset.name.includes('apple');
               const isAarch64 = asset.name.includes('aarch64');
-              const osTypeDesc = isApple 
-                ? (isAarch64 ? MAC_ARM : MAC_X86) 
+              const osTypeDesc = isApple
+                ? (isAarch64 ? MAC_ARM : MAC_X86)
                 : (isAarch64 ? LINUX_GENERIC_ARM : LINUX_GENERIC_X86);
               return {
                 ...asset,
@@ -40,7 +49,7 @@ module.exports = function fetchDatabendReleasesPlugin() {
               }
             })
             .sort((systemLinux, systemMac) => systemMac.isApple - systemLinux.isApple)
-            .map(asset=> {
+            .map(asset => {
               return {
                 ...asset,
                 formatSize: bytes.format(asset?.size, { thousandsSeparator: ',', decimalPlaces: 1 }),
@@ -56,9 +65,9 @@ module.exports = function fetchDatabendReleasesPlugin() {
           originAssets: release.assets,
           assets: afterProcessedAssets,
           filterBody: release.body
-                  .replace(IGNORE_TEXT, '')
-                  .replace(REG, REPLACE_TEXT)
-                  .replace(/\@[\w\-]+/g, '**$&**')
+            .replace(IGNORE_TEXT, '')
+            .replace(REG, REPLACE_TEXT)
+            .replace(/\@[\w\-]+/g, '**$&**')
         }
       });
       // name match list
@@ -76,7 +85,7 @@ module.exports = function fetchDatabendReleasesPlugin() {
         return filteredAssets;
       }
       // Set global data
-      setGlobalData({releasesList: processedData, repoResource, stargazersCount: repoResource.stargazers_count});
+      setGlobalData({ releasesList: processedData, repoResource, stargazersCount: repoResource.stargazers_count });
     },
   };
 }
