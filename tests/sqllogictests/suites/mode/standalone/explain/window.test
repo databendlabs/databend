@@ -54,6 +54,5 @@ CompoundBlockOperator(Project) × 1 processor
                 SortMergeTransform × 4 processors
                   SortPartialTransform × 4 processors
                     Merge (CompoundBlockOperator(Map) × 1 processor) to (SortPartialTransform × 4)
-                      CompoundBlockOperator(Map) × 1 processor
-                        DeserializeDataTransform × 1 processor
-                          SyncReadParquetDataSource × 1 processor
+                      DeserializeDataTransform × 1 processor
+                        SyncReadParquetDataSource × 1 processor
