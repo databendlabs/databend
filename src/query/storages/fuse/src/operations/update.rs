@@ -19,11 +19,13 @@ use common_catalog::plan::Projection;
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::types::NumberDataType;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
+use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -39,6 +41,7 @@ use crate::FuseTable;
 impl FuseTable {
     /// UPDATE column = expression WHERE condition
     /// The flow of Pipeline is the same as that of deletion.
+    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     pub async fn do_update(
         &self,
@@ -47,6 +50,7 @@ impl FuseTable {
         col_indices: Vec<FieldIndex>,
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let snapshot_opt = self.read_table_snapshot().await?;
@@ -65,7 +69,7 @@ impl FuseTable {
         }
 
         let mut filter = filter;
-        if col_indices.is_empty() && filter.is_some() {
+        if col_indices.is_empty() && filter.is_some() && !query_row_id_col {
             let filter_expr = filter.clone().unwrap();
             if !self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr)? {
                 // The condition is always false, do nothing.
@@ -82,6 +86,7 @@ impl FuseTable {
             update_list,
             computed_list,
             &snapshot,
+            query_row_id_col,
             pipeline,
         )
         .await?;
@@ -117,6 +122,7 @@ impl FuseTable {
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
         base_snapshot: &TableSnapshot,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let all_column_indices = self.all_column_indices();
@@ -216,9 +222,16 @@ impl FuseTable {
         });
 
         let block_reader = self.create_block_reader(projection.clone(), false, ctx.clone())?;
+        let mut schema = block_reader.schema().as_ref().clone();
+        if query_row_id_col {
+            schema.add_internal_field(
+                ROW_ID_COL_NAME,
+                TableDataType::Number(NumberDataType::UInt64),
+                1,
+            );
+        }
         let remain_reader = Arc::new(remain_reader);
         let (filter_expr, filter) = if let Some(remote_expr) = filter {
-            let schema = block_reader.schema();
             (
                 Arc::new(Some(
                     remote_expr
@@ -249,7 +262,7 @@ impl FuseTable {
                         remain_reader.clone(),
                         ops.clone(),
                         self.storage_format,
-                        false,
+                        true,
                     )
                 },
                 max_threads,

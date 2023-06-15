@@ -212,12 +212,13 @@ impl<'a> ClusteringInformation<'a> {
                 unfinished_parts.insert(idx, (point_depth - 1, point_depth));
             });
 
-            end.iter().for_each(|&idx| {
-                let stat = unfinished_parts.remove(&idx).unwrap();
-                stats.push(stat);
+            end.iter().for_each(|idx| {
+                if let Some(v) = unfinished_parts.remove(idx) {
+                    stats.push(v);
+                }
             });
         }
-        assert_eq!(unfinished_parts.len(), 0);
+        assert!(unfinished_parts.is_empty());
 
         let mut sum_overlap = 0;
         let mut sum_depth = 0;

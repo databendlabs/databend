@@ -590,6 +590,7 @@ impl PhysicalPlanBuilder {
                                     .data_type();
 
                                 PhysicalPlan::Exchange(PhysicalExchange {
+                                    plan_id: self.next_plan_id(),
                                     kind,
                                     input: Box::new(PhysicalPlan::AggregatePartial(
                                         aggregate_partial,
@@ -787,6 +788,7 @@ impl PhysicalPlanBuilder {
                     Exchange::Merge => FragmentKind::Merge,
                 };
                 Ok(PhysicalPlan::Exchange(PhysicalExchange {
+                    plan_id: self.next_plan_id(),
                     input,
                     kind,
                     keys,

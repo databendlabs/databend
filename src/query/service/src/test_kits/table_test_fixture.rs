@@ -674,6 +674,7 @@ pub async fn do_update(
             col_indices,
             update_list,
             computed_list,
+            false,
             &mut res.main_pipeline,
         )
         .await?;
