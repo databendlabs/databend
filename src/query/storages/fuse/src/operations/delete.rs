@@ -66,13 +66,13 @@ pub struct MutationTaskInfo {
 
 impl FuseTable {
     /// The flow of Pipeline is as follows:
-    /// +---------------+      +-----------------------+
-    /// |MutationSource1| ---> |SerializeDataTransform1|   ------
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |     ...       | ---> |          ...          |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
-    /// +---------------+      +-----------------------+
+    /// +--------------+      +----------------------+
+    /// |MutationSource| ---> |SerializeDataTransform|   ------
+    /// +--------------+      +----------------------+         |      +-----------------------+      +----------+
+    /// |     ...      | ---> |          ...         |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
+    /// +--------------+      +----------------------+         |      +-----------------------+      +----------+
+    /// |MutationSource| ---> |SerializeDataTransform|   ------
+    /// +--------------+      +----------------------+
     #[async_backtrace::framed]
     pub async fn do_delete(
         &self,
@@ -222,6 +222,7 @@ impl FuseTable {
                 Some(filter.clone()),
                 projection.clone(),
                 base_snapshot,
+                true,
             )
             .await?;
 
@@ -308,6 +309,7 @@ impl FuseTable {
         filter: Option<RemoteExpr<String>>,
         projection: Projection,
         base_snapshot: &TableSnapshot,
+        with_origin: bool,
     ) -> Result<MutationTaskInfo> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
@@ -389,11 +391,16 @@ impl FuseTable {
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
                 .map(|((block_meta_index, block_meta), c)| {
+                    let cluster_stats = if with_origin {
+                        block_meta.cluster_stats.clone()
+                    } else {
+                        None
+                    };
                     let key = (block_meta_index.segment_idx, block_meta_index.block_idx);
                     let whole_block_deletion = whole_block_deletions.contains(&key);
                     MutationPartInfo::create(
                         block_meta_index,
-                        block_meta.cluster_stats.clone(),
+                        cluster_stats,
                         c,
                         whole_block_deletion,
                     )

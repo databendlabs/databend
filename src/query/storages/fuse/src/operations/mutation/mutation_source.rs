@@ -34,12 +34,12 @@ use common_expression::Value;
 use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
-use storages_common_table_meta::meta::ClusterStatistics;
 
 use crate::fuse_part::FusePartInfo;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
 use crate::operations::common::BlockMetaIndex;
+use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
@@ -87,7 +87,7 @@ pub struct MutationSource {
     query_row_id_col: bool,
 
     index: BlockMetaIndex,
-    origin_stats: Option<ClusterStatistics>,
+    stats_type: ClusterStatsGenType,
 }
 
 impl MutationSource {
@@ -111,11 +111,11 @@ impl MutationSource {
             block_reader,
             remain_reader,
             operators,
+            storage_format,
             action,
             query_row_id_col,
             index: BlockMetaIndex::default(),
-            origin_stats: None,
-            storage_format,
+            stats_type: ClusterStatsGenType::Generally,
         })))
     }
 }
@@ -239,7 +239,7 @@ impl Processor for MutationSource {
                                     // all the rows should be removed.
                                     let meta = SerializeDataMeta::create(
                                         self.index.clone(),
-                                        self.origin_stats.clone(),
+                                        self.stats_type.clone(),
                                     );
                                     self.state = State::Output(
                                         self.ctx.get_partition(),
@@ -333,7 +333,7 @@ impl Processor for MutationSource {
                     .operators
                     .iter()
                     .try_fold(data_block, |input, op| op.execute(&func_ctx, input))?;
-                let meta = SerializeDataMeta::create(self.index.clone(), self.origin_stats.clone());
+                let meta = SerializeDataMeta::create(self.index.clone(), self.stats_type.clone());
                 self.state = State::Output(self.ctx.get_partition(), block.add_meta(Some(meta))?);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
@@ -352,7 +352,10 @@ impl Processor for MutationSource {
                     segment_idx: part.index.segment_idx,
                     block_idx: part.index.block_idx,
                 };
-                self.origin_stats = part.cluster_stats.clone();
+                if matches!(self.action, MutationAction::Deletion) {
+                    self.stats_type = ClusterStatsGenType::WithOrigin(part.cluster_stats.clone());
+                }
+
                 let inner_part = part.inner_part.clone();
                 let fuse_part = FusePartInfo::from_part(&inner_part)?;
 

@@ -34,7 +34,6 @@ use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
 use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
-use crate::statistics::ClusterStatsGenerator;
 use crate::FuseTable;
 
 impl FuseTable {
@@ -90,14 +89,18 @@ impl FuseTable {
             return Ok(());
         }
 
-        // TODO(zhyass): support cluster stats generator.
+        let block_thresholds = self.get_block_thresholds();
+        // sort
+        let cluster_stats_gen =
+            self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
+
         pipeline.add_transform(|input, output| {
             SerializeDataTransform::try_create(
                 ctx.clone(),
                 input,
                 output,
                 self,
-                ClusterStatsGenerator::default(),
+                cluster_stats_gen.clone(),
             )
         })?;
 
@@ -229,7 +232,7 @@ impl FuseTable {
         };
 
         let MutationTaskInfo { total_tasks, .. } = self
-            .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
+            .mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot, false)
             .await?;
         if total_tasks != 0 {
             let max_threads =

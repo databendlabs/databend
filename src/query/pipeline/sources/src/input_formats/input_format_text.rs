@@ -23,6 +23,7 @@ use common_compress::DecompressDecoder;
 use common_compress::DecompressState;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::types::string::StringColumnBuilder;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
@@ -143,6 +144,7 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
             data: vec![],
             row_ends: vec![],
             field_ends: vec![],
+            num_fields: vec![],
             split_info: self.split_info.clone(),
             batch_id: self.common.batch_id,
             start_offset_in_split: self.common.offset,
@@ -190,6 +192,7 @@ impl AligningStateTextBased for AligningStateRowDelimiter {
                 data,
                 row_ends: vec![end],
                 field_ends: vec![],
+                num_fields: vec![],
                 split_info: self.split_info.clone(),
                 batch_id: self.common.batch_id,
                 start_offset_in_split: self.common.offset,
@@ -392,6 +395,7 @@ pub struct RowBatch {
     pub data: Vec<u8>,
     pub row_ends: Vec<usize>,
     pub field_ends: Vec<usize>,
+    pub num_fields: Vec<usize>,
 
     pub split_info: Arc<SplitInfo>,
     // for error info
@@ -481,6 +485,7 @@ pub struct BlockBuilder<T> {
     pub ctx: Arc<InputContext>,
     pub mutable_columns: Vec<ColumnBuilder>,
     pub num_rows: usize,
+    pub projection: Option<Vec<usize>>,
     phantom: PhantomData<T>,
 }
 
@@ -501,6 +506,7 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             .collect();
         let field_decoder =
             T::create_field_decoder(&ctx.file_format_params, &ctx.file_format_options_ext);
+        let projection = ctx.projection.clone();
 
         BlockBuilder {
             ctx,
@@ -508,6 +514,7 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             num_rows: 0,
             field_decoder,
             phantom: PhantomData,
+            projection,
         }
     }
 
@@ -522,6 +529,28 @@ impl<T: InputFormatTextBase> BlockBuilder<T> {
             })
             .collect();
 
+        let columns = if let Some(projection) = &self.projection {
+            columns
+                .into_iter()
+                .enumerate()
+                .map(|(i, c)| {
+                    if projection.contains(&i) {
+                        c
+                    } else {
+                        Column::String(
+                            StringColumnBuilder {
+                                need_estimated: false,
+                                data: vec![],
+                                offsets: vec![0; self.num_rows + 1],
+                            }
+                            .build(),
+                        )
+                    }
+                })
+                .collect::<Vec<_>>()
+        } else {
+            columns
+        };
         self.num_rows = 0;
 
         if columns.is_empty() || columns[0].len() == 0 {
