@@ -213,8 +213,13 @@ async fn test_safety() -> Result<()> {
         };
 
         eprintln!("running target select");
-        let mut block_compact_mutator =
-            BlockCompactMutator::new(ctx.clone(), threshold, compact_params, operator.clone());
+        let mut block_compact_mutator = BlockCompactMutator::new(
+            ctx.clone(),
+            threshold,
+            compact_params,
+            operator.clone(),
+            None,
+        );
         block_compact_mutator.target_select().await?;
         let selections = block_compact_mutator.compact_tasks;
         let mut blocks_number = 0;
