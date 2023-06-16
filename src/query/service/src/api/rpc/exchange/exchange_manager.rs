@@ -34,7 +34,6 @@ use common_sql::executor::PhysicalPlan;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
 use tonic::Status;
-use tracing::info;
 
 use crate::api::rpc::exchange::exchange_params::ExchangeParams;
 use crate::api::rpc::exchange::exchange_params::MergeExchangeParams;
@@ -198,12 +197,8 @@ impl DataExchangeManager {
         // TODO: When the query is not executed for a long time after submission, we need to remove it
         match queries_coordinator.get_mut(&packet.query_id) {
             None => Err(ErrorCode::Internal(format!(
-                "Query {} not found in cluster,invalid Query ids: {:?}.",
-                packet.query_id,
-                queries_coordinator
-                    .iter()
-                    .map(|(k, _)| k)
-                    .collect::<Vec<_>>()
+                "Query {} not found in cluster.",
+                packet.query_id
             ))),
             Some(query_coordinator) => {
                 query_coordinator.prepare_pipeline(ctx, packet.enable_profiling, packet)
@@ -293,10 +288,6 @@ impl DataExchangeManager {
             .commit(conf.as_ref(), timeout)
             .await?;
 
-        info!(
-            "local query fragments plan: {:?}",
-            local_query_fragments_plan_packet
-        );
         // Submit tasks to localhost
         self.init_query_fragments_plan(&ctx, &local_query_fragments_plan_packet)?;
 
@@ -640,11 +631,6 @@ impl QueryCoordinator {
 
             return Ok(build_res);
         }
-        info!("Subscribe fragment failed, fragment_id: {}", fragment_id);
-        info!(
-            "Invalid Fragments coordinator: {:?}",
-            self.fragments_coordinator.keys()
-        );
         Err(ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
     }
 
@@ -690,10 +676,6 @@ impl QueryCoordinator {
                 build_res.set_max_threads(max_threads as usize);
 
                 if !build_res.main_pipeline.is_pulling_pipeline()? {
-                    info!(
-                        "last pipe{:?}",
-                        build_res.main_pipeline.pipes.last().unwrap()
-                    );
                     return Err(ErrorCode::Internal("Logical error, It's a bug"));
                 }
 

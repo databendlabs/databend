@@ -79,7 +79,6 @@ use common_storages_fuse::operations::FillInternalColumnProcessor;
 use common_storages_fuse::operations::SerializeDataTransform;
 use common_storages_fuse::FuseTable;
 use petgraph::matrix_graph::Zero;
-use tracing::info;
 
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
@@ -1179,7 +1178,6 @@ impl PipelineBuilder {
             self.enable_profiling,
             self.exchange_injector.clone(),
         )?;
-        info!("build exchange source: {:?}", build_res.main_pipeline);
         self.main_pipeline = build_res.main_pipeline;
         self.pipelines.extend(build_res.sources_pipelines);
         Ok(())

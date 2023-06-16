@@ -223,11 +223,6 @@ impl QueryContext {
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
     }
-
-    pub fn take_all_partitions(&self) -> VecDeque<PartInfoPtr> {
-        let mut deque = self.partition_queue.write();
-        std::mem::take(&mut *deque)
-    }
 }
 
 #[async_trait::async_trait]

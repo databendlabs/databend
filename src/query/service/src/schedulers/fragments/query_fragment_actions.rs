@@ -377,11 +377,8 @@ impl QueryFragmentsActions {
 
 impl Debug for QueryFragmentsActions {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        for (i, fragment_actions) in self.fragments_actions.iter().enumerate() {
-            writeln!(f, "fragment_actions[{}]:", i)?;
-            writeln!(f, "{:?}", fragment_actions)?;
-            writeln!(f, "--------------------------------------")?;
-        }
-        Ok(())
+        f.debug_struct("QueryFragmentsActions")
+            .field("actions", &self.fragments_actions)
+            .finish()
     }
 }
