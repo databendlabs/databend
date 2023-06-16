@@ -848,7 +848,7 @@ impl PhysicalPlan {
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
-            PhysicalPlan::DeleteFinal(_) => "DistributedFinal".to_string(),
+            PhysicalPlan::DeleteFinal(_) => "DeleteFinal".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
         }
     }
