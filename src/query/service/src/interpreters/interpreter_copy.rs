@@ -186,7 +186,6 @@ impl CopyInterpreter {
         info!(status);
     }
 
-    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn build_read_stage(
         &self,
@@ -219,7 +218,6 @@ impl CopyInterpreter {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn build_copy_into_table_pipeline(
         &self,
@@ -386,7 +384,6 @@ impl CopyInterpreter {
         Ok(build_res)
     }
 
-    #[allow(clippy::too_many_arguments)]
     fn upsert_copied_files_request(
         ctx: Arc<QueryContext>,
         to_table: Arc<dyn Table>,

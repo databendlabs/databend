@@ -231,6 +231,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::Exchange(Exchange {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
@@ -245,6 +246,10 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::ExchangeSink(ExchangeSink {
+            // TODO(leiysky): we reuse the plan id of the Exchange node here,
+            // should generate a new one.
+            plan_id: plan.plan_id,
+
             input: Box::new(input),
             schema: plan.schema.clone(),
             kind: plan.kind.clone(),
@@ -273,6 +278,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::DistributedInsertSelect(Box::new(
             DistributedInsertSelect {
+                plan_id: plan.plan_id,
                 input: Box::new(input),
                 catalog: plan.catalog.clone(),
                 table_info: plan.table_info.clone(),

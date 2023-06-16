@@ -29,6 +29,7 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
+use common_profile::QueryProfileManager;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -48,14 +49,6 @@ use crate::storages::Table;
 type DatabaseAndTable = (String, String, String);
 
 /// Data that needs to be shared in a query context.
-/// This is very useful, for example, for queries:
-///     USE database_1;
-///     SELECT
-///         (SELECT scalar FROM table_name_1) AS scalar_1,
-///         (SELECT scalar FROM table_name_2) AS scalar_2,
-///         (SELECT scalar FROM table_name_3) AS scalar_3
-///     FROM table_name_4;
-/// For each subquery, they will share a runtime, session, progress, init_query_id
 pub struct QueryContextShared {
     /// total_scan_values for scan stats
     pub(in crate::sessions) total_scan_values: Arc<Progress>,
@@ -91,6 +84,8 @@ pub struct QueryContextShared {
     pub(in crate::sessions) cacheable: Arc<AtomicBool>,
     // Status info.
     pub(in crate::sessions) status: Arc<RwLock<String>>,
+    /// Query profile manager
+    pub(in crate::sessions) profile_mgr: Arc<QueryProfileManager>,
 }
 
 impl QueryContextShared {
@@ -123,6 +118,7 @@ impl QueryContextShared {
             partitions_shas: Arc::new(RwLock::new(vec![])),
             cacheable: Arc::new(AtomicBool::new(true)),
             status: Arc::new(RwLock::new("null".to_string())),
+            profile_mgr: QueryProfileManager::instance(),
         }))
     }
 
@@ -373,6 +369,10 @@ impl QueryContextShared {
         let status = self.status.read();
         status.clone()
     }
+
+    pub fn get_query_profile_manager(&self) -> Arc<QueryProfileManager> {
+        self.profile_mgr.clone()
+    }
 }
 
 impl Drop for QueryContextShared {
@@ -389,7 +389,7 @@ impl Drop for QueryContextShared {
 pub fn short_sql(sql: String) -> String {
     use unicode_segmentation::UnicodeSegmentation;
     let query = sql.trim_start();
-    if query.len() >= 64 && query[..6].eq_ignore_ascii_case("INSERT") {
+    if query.as_bytes().len() >= 64 && query.as_bytes()[..6].eq_ignore_ascii_case(b"INSERT") {
         // keep first 64 graphemes
         String::from_utf8(
             query
