@@ -264,32 +264,24 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
     ) -> Result<UpdateBackgroundTaskReply, KVAppError> {
         debug!(req = debug(&req), "BackgroundApi: {}", func_name!());
         let name_key = &req.task_name;
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
-        loop {
-            trials.next().unwrap()?;
-            debug!(?name_key, "update_background_task");
+        debug!(?name_key, "update_background_task");
 
-            let meta = req.task_info.clone();
+        let meta = req.task_info.clone();
 
-            let succ = self
-                .upsert_kv(UpsertKVReq::new(
-                    name_key.to_string_key().as_str(),
-                    Any,
-                    Operation::Update(serialize_struct(&meta)?),
-                    Some(KVMeta {
-                        expire_at: Some(req.expire_at),
-                    }),
-                ))
-                .await
-                .is_ok();
-            if succ {
-                break Ok(UpdateBackgroundTaskReply {
-                    last_updated: meta.last_updated.unwrap_or(Default::default()),
-                    expire_at: req.expire_at,
-                });
-            }
-        }
+        let _ = self
+            .upsert_kv(UpsertKVReq::new(
+                name_key.to_string_key().as_str(),
+                Any,
+                Operation::Update(serialize_struct(&meta)?),
+                Some(KVMeta {
+                    expire_at: Some(req.expire_at),
+                }),
+            ))
+            .await?;
+        Ok(UpdateBackgroundTaskReply {
+            last_updated: Utc::now(),
+            expire_at: req.expire_at,
+        })
     }
 
     async fn list_background_tasks(
