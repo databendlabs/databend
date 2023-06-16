@@ -12,12 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-pub mod aggregating_index;
-pub mod background_service;
-pub mod data_mask;
-pub mod enterprise_services;
-pub mod license;
-pub mod storages;
-pub mod table_lock;
-pub mod test_kits;
-pub mod virtual_column;
+use std::sync::Arc;
+
+use common_exception::Result;
+use databend_query::sessions::Session;
+use databend_query::sessions::SessionManager;
+use databend_query::sessions::SessionType;
+
+pub async fn create_session() -> Result<Arc<Session>> {
+    let session = SessionManager::instance()
+        .create_session(SessionType::FlightSQL)
+        .await?;
+    Ok(session)
+}
