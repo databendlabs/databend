@@ -41,5 +41,6 @@ pub use mutation::ReclusterMutator;
 pub use mutation::SegmentCompactMutator;
 pub use mutation::SegmentCompactionState;
 pub use mutation::SegmentCompactor;
+pub use mutation::SerializeDataTransform;
 pub use read::build_row_fetcher_pipeline;
 pub use util::column_parquet_metas;

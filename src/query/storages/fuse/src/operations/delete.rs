@@ -43,29 +43,20 @@ use tracing::info;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
-use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
 use crate::pruning::FusePruner;
 use crate::FuseTable;
 
 impl FuseTable {
-    /// The flow of Pipeline is as follows:
-    /// +---------------+      +-----------------------+
-    /// |MutationSource1| ---> |SerializeDataTransform1|   ------
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |     ...       | ---> |          ...          |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
-    /// +---------------+      +-----------------------+
+    /// return None if the deletion is done, otherwise return the partitions to be deleted
     #[async_backtrace::framed]
-    pub async fn do_delete(
+    pub async fn fast_delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
+        filter: Option<&RemoteExpr<String>>,
         col_indices: Vec<usize>,
-        pipeline: &mut Pipeline,
-    ) -> Result<()> {
+    ) -> Result<Option<(Partitions, TableSnapshot)>> {
         let snapshot_opt = self.read_table_snapshot().await?;
 
         // check if table is empty
@@ -73,12 +64,12 @@ impl FuseTable {
             val
         } else {
             // no snapshot, no deletion
-            return Ok(());
+            return Ok(None);
         };
 
         if snapshot.summary.row_count == 0 {
             // empty snapshot, no deletion
-            return Ok(());
+            return Ok(None);
         }
 
         // check if unconditional deletion
@@ -90,7 +81,7 @@ impl FuseTable {
             ctx.get_write_progress().incr(&progress_values);
             // deleting the whole table... just a truncate
             let purge = false;
-            return self.do_truncate(ctx.clone(), purge).await;
+            return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
         }
 
         let filter_expr = filter.unwrap();
@@ -103,7 +94,7 @@ impl FuseTable {
             // if the `filter_expr` is of "constant" nullary :
             //   for the whole block, whether all of the rows should be kept or dropped,
             //   we can just return from here, without accessing the block data
-            if self.try_eval_const(ctx.clone(), &self.schema(), &filter_expr)? {
+            if self.try_eval_const(ctx.clone(), &self.schema(), filter_expr)? {
                 let progress_values = ProgressValues {
                     rows: snapshot.summary.row_count as usize,
                     bytes: snapshot.summary.uncompressed_byte_size as usize,
@@ -112,31 +103,22 @@ impl FuseTable {
 
                 // deleting the whole table... just a truncate
                 let purge = false;
-                return self.do_truncate(ctx.clone(), purge).await;
+                return self.do_truncate(ctx.clone(), purge).await.map(|_| None);
             }
             // do nothing.
-            return Ok(());
+            return Ok(None);
         }
-
-        self.try_add_deletion_source(ctx.clone(), &filter_expr, col_indices, &snapshot, pipeline)
+        let projection = Projection::Columns(col_indices);
+        let partitions = self
+            .do_mutation_block_pruning(ctx.clone(), filter.cloned(), projection, &snapshot)
             .await?;
-        if pipeline.is_empty() {
-            return Ok(());
+        if partitions.is_empty() {
+            return Ok(None);
         }
-
-        let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), 0, self.get_block_thresholds())?;
-        pipeline.add_transform(|input, output| {
-            SerializeDataTransform::try_create(
-                ctx.clone(),
-                input,
-                output,
-                self,
-                cluster_stats_gen.clone(),
-            )
-        })?;
-
-        self.chain_mutation_pipes(&ctx, pipeline, snapshot).await
+        Ok(Some((
+            partitions,
+            TableSnapshot::from(snapshot.as_ref().clone()),
+        )))
     }
 
     pub fn try_eval_const(
@@ -170,28 +152,17 @@ impl FuseTable {
         })
     }
 
-    #[async_backtrace::framed]
-    async fn try_add_deletion_source(
+    pub fn add_deletion_source(
         &self,
         ctx: Arc<dyn TableContext>,
         filter: &RemoteExpr<String>,
         col_indices: Vec<usize>,
-        base_snapshot: &TableSnapshot,
         pipeline: &mut Pipeline,
+        parts: Partitions,
     ) -> Result<()> {
         let projection = Projection::Columns(col_indices.clone());
-        let total_tasks = self
-            .mutation_block_pruning(
-                ctx.clone(),
-                Some(filter.clone()),
-                projection.clone(),
-                base_snapshot,
-            )
-            .await?;
-        if total_tasks == 0 {
-            return Ok(());
-        }
-
+        let total_tasks = parts.len();
+        ctx.set_partitions(parts)?;
         // Status.
         {
             let status = format!(
@@ -264,6 +235,27 @@ impl FuseTable {
         projection: Projection,
         base_snapshot: &TableSnapshot,
     ) -> Result<usize> {
+        let parts = self
+            .do_mutation_block_pruning(ctx.clone(), filter, projection, base_snapshot)
+            .await?;
+
+        let part_num = parts.len();
+        ctx.set_partitions(parts)?;
+        Ok(part_num)
+    }
+
+    pub fn all_column_indices(&self) -> Vec<FieldIndex> {
+        (0..self.table_info.schema().fields().len()).collect::<Vec<FieldIndex>>()
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_mutation_block_pruning(
+        &self,
+        ctx: Arc<dyn TableContext>,
+        filter: Option<RemoteExpr<String>>,
+        projection: Projection,
+        base_snapshot: &TableSnapshot,
+    ) -> Result<Partitions> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
             filter,
@@ -296,21 +288,13 @@ impl FuseTable {
             PruningStatistics::default(),
         )?;
 
-        let parts = Partitions::create_nolazy(
-            PartitionsShuffleKind::Mod,
+        Ok(Partitions::create_nolazy(
+            PartitionsShuffleKind::Seq,
             block_metas
                 .into_iter()
                 .zip(inner_parts.partitions.into_iter())
                 .map(|(a, c)| MutationPartInfo::create(a.0, a.1.cluster_stats.clone(), c))
                 .collect(),
-        );
-
-        let part_num = parts.len();
-        ctx.set_partitions(parts)?;
-        Ok(part_num)
-    }
-
-    pub fn all_column_indices(&self) -> Vec<FieldIndex> {
-        (0..self.table_info.schema().fields().len()).collect::<Vec<FieldIndex>>()
+        ))
     }
 }

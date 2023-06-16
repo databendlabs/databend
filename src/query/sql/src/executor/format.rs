@@ -23,6 +23,8 @@ use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregatePartial;
+use super::DeleteFinal;
+use super::DeletePartial;
 use super::EvalScalar;
 use super::Exchange;
 use super::Filter;
@@ -142,6 +144,12 @@ fn to_format_tree(
         }
         PhysicalPlan::DistributedInsertSelect(plan) => {
             distributed_insert_to_format_tree(plan.as_ref(), metadata, prof_span_set)
+        }
+        PhysicalPlan::DeletePartial(plan) => {
+            delete_partial_to_format_tree(plan.as_ref(), metadata, prof_span_set)
+        }
+        PhysicalPlan::DeleteFinal(plan) => {
+            delete_final_to_format_tree(plan.as_ref(), metadata, prof_span_set)
         }
         PhysicalPlan::ProjectSet(plan) => project_set_to_format_tree(plan, metadata, prof_span_set),
         PhysicalPlan::RuntimeFilterSource(plan) => {
@@ -921,6 +929,26 @@ fn distributed_insert_to_format_tree(
 
     Ok(FormatTreeNode::with_children(
         "DistributedInsertSelect".to_string(),
+        children,
+    ))
+}
+
+fn delete_partial_to_format_tree(
+    _plan: &DeletePartial,
+    _metadata: &MetadataRef,
+    _prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    Ok(FormatTreeNode::new("DeletePartial".to_string()))
+}
+
+fn delete_final_to_format_tree(
+    plan: &DeleteFinal,
+    metadata: &MetadataRef,
+    prof_span_set: &ProfSpanSetRef,
+) -> Result<FormatTreeNode<String>> {
+    let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
+    Ok(FormatTreeNode::with_children(
+        "DeleteFinal".to_string(),
         children,
     ))
 }

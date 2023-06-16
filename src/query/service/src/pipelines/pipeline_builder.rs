@@ -50,6 +50,8 @@ use common_sql::executor::AggregateExpand;
 use common_sql::executor::AggregateFinal;
 use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
+use common_sql::executor::DeleteFinal;
+use common_sql::executor::DeletePartial;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -71,9 +73,13 @@ use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
+use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
+use common_storages_fuse::operations::SerializeDataTransform;
+use common_storages_fuse::FuseTable;
 use petgraph::matrix_graph::Zero;
+use tracing::info;
 
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
@@ -198,7 +204,64 @@ impl PipelineBuilder {
                 self.build_runtime_filter_source(runtime_filter_source)
             }
             PhysicalPlan::IEJoin(ie_join) => self.build_ie_join(ie_join),
+            PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
+            PhysicalPlan::DeleteFinal(delete) => self.build_delete_final(delete),
         }
+    }
+
+    /// The flow of Pipeline that build_delete_partial and build_delete_final build is as follows:
+    /// +---------------+      +-----------------------+
+    /// |MutationSource1| ---> |SerializeDataTransform1|   ------
+    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
+    /// |     ...       | ---> |          ...          |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
+    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
+    /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
+    /// +---------------+      +-----------------------+
+    fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
+        if delete.parts.is_empty() {
+            return Ok(());
+        }
+        let table =
+            self.ctx
+                .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        table.add_deletion_source(
+            self.ctx.clone(),
+            &delete.filter,
+            delete.col_indices.clone(),
+            &mut self.main_pipeline,
+            delete.parts.clone(),
+        )?;
+        let cluster_stats_gen =
+            table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
+        self.main_pipeline.add_transform(|input, output| {
+            SerializeDataTransform::try_create(
+                self.ctx.clone(),
+                input,
+                output,
+                table,
+                cluster_stats_gen.clone(),
+            )
+        })?;
+        Ok(())
+    }
+
+    fn build_delete_final(&mut self, delete: &DeleteFinal) -> Result<()> {
+        self.build_pipeline(&delete.input)?;
+        if self.main_pipeline.is_empty() {
+            return Ok(());
+        }
+        let table =
+            self.ctx
+                .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;
+        let table = FuseTable::try_from_table(table.as_ref())?;
+        let ctx: Arc<dyn TableContext> = self.ctx.clone();
+        table.chain_mutation_pipes(
+            &ctx,
+            &mut self.main_pipeline,
+            Arc::new(delete.snapshot.clone()),
+        )?;
+        Ok(())
     }
 
     fn build_ie_join(&mut self, ie_join: &IEJoin) -> Result<()> {
@@ -1188,7 +1251,7 @@ impl PipelineBuilder {
             exchange_source.source_fragment_id,
             self.exchange_injector.clone(),
         )?;
-
+        info!("build exchange source: {:?}", build_res.main_pipeline);
         self.main_pipeline = build_res.main_pipeline;
         self.pipelines.extend(build_res.sources_pipelines);
         Ok(())

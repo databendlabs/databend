@@ -17,6 +17,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_profile::ProfSpanSetRef;
+use tracing::info;
 
 use crate::pipelines::PipelineBuildResult;
 use crate::pipelines::PipelineBuilder;
@@ -87,6 +88,7 @@ pub async fn build_distributed_pipeline(
     let root_fragment = fragmenter.build_fragment(plan)?;
     let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
     root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
+    info!("fragments actions: {:?}", fragments_actions);
 
     let exchange_manager = ctx.get_exchange_manager();
 

@@ -61,12 +61,14 @@ use uuid::Uuid;
 use walkdir::WalkDir;
 
 use crate::interpreters::CreateTableInterpreter;
+use crate::interpreters::DeleteInterpreter;
 use crate::interpreters::Interpreter;
 use crate::interpreters::InterpreterFactory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::processors::TransformResortAddOn;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_local_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::Planner;
@@ -556,13 +558,26 @@ pub async fn do_deletion(
     };
 
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
-    let mut res = PipelineBuildResult::create();
-    fuse_table
-        .delete(ctx.clone(), filter, col_indices, &mut res.main_pipeline)
-        .await?;
+    let mut build_res = PipelineBuildResult::create();
+    if let Some((partitions, snapshot)) = fuse_table
+        .fast_delete(ctx.clone(), filter.as_ref(), col_indices.clone())
+        .await?
+    {
+        let filter = filter.unwrap();
+        let physical_plan = DeleteInterpreter::build_physical_plan(
+            filter,
+            partitions,
+            fuse_table.get_table_info().clone(),
+            col_indices,
+            snapshot,
+            "default".to_owned(),
+            false,
+        )?;
+        build_res = build_local_pipeline(&ctx, &physical_plan, false).await?
+    }
 
-    if !res.main_pipeline.is_empty() {
-        execute_pipeline(ctx, res)?;
+    if !build_res.main_pipeline.is_empty() {
+        execute_pipeline(ctx, build_res)?;
     }
     Ok(())
 }

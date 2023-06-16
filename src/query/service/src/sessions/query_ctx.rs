@@ -115,7 +115,7 @@ impl QueryContext {
     }
 
     // Build fuse/system normal table by table info.
-    fn build_table_by_table_info(
+    pub fn build_table_by_table_info(
         &self,
         catalog_name: &str,
         table_info: &TableInfo,
@@ -217,6 +217,11 @@ impl QueryContext {
 
     pub fn get_created_time(&self) -> SystemTime {
         self.shared.created_time
+    }
+
+    pub fn take_all_partitions(&self) -> VecDeque<PartInfoPtr> {
+        let mut deque = self.partition_queue.write();
+        std::mem::take(&mut *deque)
     }
 }
 
