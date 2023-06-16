@@ -407,6 +407,8 @@ fn test_statement() {
         r#"ALTER VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"DROP VIRTUAL COLUMNS FOR t"#,
         r#"GENERATE VIRTUAL COLUMNS FOR t"#,
+        "--各环节转各环节转各环节转各环节转各\n  select 34343",
+        "-- xxxxx\n  select 34343;",
     ];
 
     for case in cases {
