@@ -272,9 +272,15 @@ impl HttpQuery {
             }
         };
 
-        let session_id = session.get_id().clone();
-
+        let http_query_id = &ctx.query_id;
         let ctx = session.create_query_context().await?;
+
+        if let Some(id) = http_query_id {
+            ctx.set_id(id.clone());
+            ctx.get_settings().set_deduplicate_label(id.clone())?;
+        }
+
+        let session_id = session.get_id().clone();
         let id = ctx.get_id();
         let sql = &request.sql;
         tracing::info!("run query_id={id} in session_id={session_id}, sql='{sql}'");

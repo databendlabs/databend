@@ -24,11 +24,12 @@ use crate::sessions::SessionType;
 
 pub struct HttpQueryContext {
     session: Arc<Session>,
+    pub query_id: Option<String>,
 }
 
 impl HttpQueryContext {
-    pub fn new(session: Arc<Session>) -> Self {
-        HttpQueryContext { session }
+    pub fn new(session: Arc<Session>, query_id: Option<String>) -> Self {
+        HttpQueryContext { session, query_id }
     }
 
     pub fn get_session(&self, session_type: SessionType) -> Arc<Session> {

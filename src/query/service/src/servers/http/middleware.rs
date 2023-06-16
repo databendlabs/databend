@@ -36,6 +36,7 @@ use tracing::error;
 use tracing::info;
 
 use super::v1::HttpQueryContext;
+use super::v1::HEADER_QUERY_ID;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
@@ -171,7 +172,12 @@ impl<E> HTTPSessionEndpoint<E> {
             .auth(ctx.get_current_session(), &credential)
             .await?;
 
-        Ok(HttpQueryContext::new(session))
+        let query_id = req
+            .headers()
+            .get(HEADER_QUERY_ID)
+            .map(|id| id.to_str().unwrap().to_string());
+
+        Ok(HttpQueryContext::new(session, query_id))
     }
 }
 #[poem::async_trait]

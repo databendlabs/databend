@@ -24,6 +24,7 @@ pub use http_query_handlers::make_state_uri;
 pub use http_query_handlers::query_route;
 pub use http_query_handlers::QueryResponse;
 pub use http_query_handlers::QueryStats;
+pub use http_query_handlers::HEADER_QUERY_ID;
 pub(crate) use json_block::JsonBlock;
 pub use load::streaming_load;
 pub use load::LoadResponse;
