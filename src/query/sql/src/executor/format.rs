@@ -889,7 +889,7 @@ fn distributed_insert_to_format_tree(
 fn delete_partial_to_format_tree(
     _plan: &DeletePartial,
     _metadata: &MetadataRef,
-    _prof_span_set: &ProfSpanSetRef,
+    _prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     Ok(FormatTreeNode::new("DeletePartial".to_string()))
 }
@@ -897,7 +897,7 @@ fn delete_partial_to_format_tree(
 fn delete_final_to_format_tree(
     plan: &DeleteFinal,
     metadata: &MetadataRef,
-    prof_span_set: &ProfSpanSetRef,
+    prof_span_set: &SharedProcessorProfiles,
 ) -> Result<FormatTreeNode<String>> {
     let children = vec![to_format_tree(&plan.input, metadata, prof_span_set)?];
     Ok(FormatTreeNode::with_children(

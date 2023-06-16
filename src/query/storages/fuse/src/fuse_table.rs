@@ -635,9 +635,10 @@ impl Table for FuseTable {
     async fn delete(
         &self,
         _ctx: Arc<dyn TableContext>,
-        _filter: Option<RemoteExpr<String>>,
+        _filter: Option<DeletionFilters>,
         _col_indices: Vec<usize>,
-        _pipeline: &mut Pipeline,
+        _query_row_id_col: bool,
+        _ipeline: &mut Pipeline,
     ) -> Result<()> {
         panic!("deprecated")
     }

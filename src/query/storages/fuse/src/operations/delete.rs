@@ -161,7 +161,7 @@ impl FuseTable {
             )
         })?;
 
-        self.chain_mutation_pipes(&ctx, pipeline, snapshot).await
+        self.chain_mutation_pipes(&ctx, pipeline, snapshot)
     }
 
     pub fn try_eval_const(
