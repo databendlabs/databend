@@ -274,7 +274,20 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, ctx| {
             match int64_to_timestamp(val) {
-                Ok(ts) => output.push(ts),
+                Ok(ts) => {
+                    let res = ts
+                        .to_timestamp(ctx.func_ctx.tz.tz)
+                        .naive_local()
+                        .signed_duration_since(
+                            NaiveDate::from_ymd_opt(1970, 1, 1)
+                                .unwrap()
+                                .and_hms_micro_opt(0, 0, 0, 0)
+                                .unwrap(),
+                        )
+                        .num_microseconds()
+                        .unwrap();
+                    output.push(res);
+                }
                 Err(e) => {
                     ctx.set_error(output.len(), e);
                     output.push(0);
