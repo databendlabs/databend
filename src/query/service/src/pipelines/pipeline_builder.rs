@@ -220,6 +220,7 @@ impl PipelineBuilder {
             self.ctx.clone(),
             &delete.filter,
             delete.col_indices.clone(),
+            delete.query_row_id_col,
             &mut self.main_pipeline,
             delete.parts.clone(),
         )?;

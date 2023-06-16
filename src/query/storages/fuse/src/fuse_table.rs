@@ -638,7 +638,7 @@ impl Table for FuseTable {
         _filter: Option<DeletionFilters>,
         _col_indices: Vec<usize>,
         _query_row_id_col: bool,
-        _ipeline: &mut Pipeline,
+        _pipeline: &mut Pipeline,
     ) -> Result<()> {
         panic!("deprecated")
     }

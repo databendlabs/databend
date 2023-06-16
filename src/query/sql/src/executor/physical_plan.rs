@@ -708,6 +708,7 @@ pub struct DeletePartial {
     pub table_info: TableInfo,
     pub catalog_name: String,
     pub col_indices: Vec<usize>,
+    pub query_row_id_col: bool,
 }
 
 impl DeletePartial {
