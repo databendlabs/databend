@@ -30,6 +30,7 @@ use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::RoleInfo;
 use common_meta_app::principal::UserInfo;
 use common_pipeline_core::InputError;
+use common_profile::QueryProfileManager;
 use common_settings::ChangeValue;
 use common_settings::Settings;
 use common_storage::DataOperator;
@@ -134,6 +135,8 @@ pub trait TableContext: Send + Sync {
 
     fn apply_changed_settings(&self, changes: HashMap<String, ChangeValue>) -> Result<()>;
     fn get_changed_settings(&self) -> HashMap<String, ChangeValue>;
+
+    fn get_query_profile_manager(&self) -> Arc<QueryProfileManager>;
 
     // Get the storage data accessor operator from the session manager.
     fn get_data_operator(&self) -> Result<DataOperator>;

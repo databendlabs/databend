@@ -318,3 +318,6 @@ select * from t1 order by a;
 
 statement ok
 drop table t1;
+
+statement ok
+drop table t2;
