@@ -26,7 +26,6 @@ use common_meta_app::background::ListBackgroundJobsReq;
 use common_meta_app::background::ListBackgroundTasksReq;
 use common_meta_app::background::UpdateBackgroundJobParamsReq;
 use common_meta_app::background::UpdateBackgroundJobReply;
-use common_meta_app::background::UpdateBackgroundJobReq;
 use common_meta_app::background::UpdateBackgroundJobStatusReq;
 use common_meta_app::background::UpdateBackgroundTaskReply;
 use common_meta_app::background::UpdateBackgroundTaskReq;
@@ -55,10 +54,6 @@ pub trait BackgroundApi: Send + Sync {
         req: UpdateBackgroundJobParamsReq,
     ) -> Result<UpdateBackgroundJobReply, KVAppError>;
 
-    async fn update_background_job(
-        &self,
-        req: UpdateBackgroundJobReq,
-    ) -> Result<UpdateBackgroundJobReply, KVAppError>;
     async fn get_background_job(
         &self,
         req: GetBackgroundJobReq,

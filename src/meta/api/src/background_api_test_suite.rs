@@ -31,7 +31,6 @@ use common_meta_app::background::GetBackgroundTaskReq;
 use common_meta_app::background::ListBackgroundJobsReq;
 use common_meta_app::background::ListBackgroundTasksReq;
 use common_meta_app::background::UpdateBackgroundJobParamsReq;
-use common_meta_app::background::UpdateBackgroundJobReq;
 use common_meta_app::background::UpdateBackgroundJobStatusReq;
 use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_kvapi::kvapi;
@@ -235,28 +234,6 @@ impl BackgroundApiTestSuite {
             let res = res.unwrap();
             assert_eq!(
                 BackgroundJobState::RUNNING,
-                res.info.job_status.unwrap().job_state,
-                "first state is started"
-            );
-        }
-        info!("--- update a background job");
-        {
-            let req = UpdateBackgroundJobReq {
-                job_name: job_ident.clone(),
-                info: new_background_job(BackgroundJobState::SUSPENDED, create_on),
-            };
-
-            let res = mt.update_background_job(req).await;
-            info!("update log res: {:?}", res);
-            let res = mt
-                .get_background_job(GetBackgroundJobReq {
-                    name: job_ident.clone(),
-                })
-                .await;
-            info!("get log res: {:?}", res);
-            let res = res.unwrap();
-            assert_eq!(
-                BackgroundJobState::SUSPENDED,
                 res.info.job_status.unwrap().job_state,
                 "first state is started"
             );

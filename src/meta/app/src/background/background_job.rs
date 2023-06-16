@@ -318,6 +318,7 @@ impl Display for UpdateBackgroundJobParamsReq {
 pub struct UpdateBackgroundJobReq {
     pub job_name: BackgroundJobIdent,
     pub info: BackgroundJobInfo,
+    pub job_id_seq: u64,
 }
 
 impl Display for UpdateBackgroundJobReq {

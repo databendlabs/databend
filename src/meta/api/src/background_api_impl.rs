@@ -35,7 +35,6 @@ use common_meta_app::background::ListBackgroundJobsReq;
 use common_meta_app::background::ListBackgroundTasksReq;
 use common_meta_app::background::UpdateBackgroundJobParamsReq;
 use common_meta_app::background::UpdateBackgroundJobReply;
-use common_meta_app::background::UpdateBackgroundJobReq;
 use common_meta_app::background::UpdateBackgroundJobStatusReq;
 use common_meta_app::background::UpdateBackgroundTaskReply;
 use common_meta_app::background::UpdateBackgroundTaskReq;
@@ -44,6 +43,7 @@ use common_meta_kvapi::kvapi::Key;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::ConditionResult::Eq;
 use common_meta_types::KVMeta;
+use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeq::Any;
 use common_meta_types::MetaError;
 use common_meta_types::Operation;
@@ -148,63 +148,22 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         todo!()
     }
 
-    async fn update_background_job(
-        &self,
-        req: UpdateBackgroundJobReq,
-    ) -> Result<UpdateBackgroundJobReply, KVAppError> {
-        debug!(req = debug(&req), "BackgroundApi: {}", func_name!());
-        let name_key = &req.job_name;
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
-
-        loop {
-            trials.next().unwrap()?;
-            let (seq, id) = get_u64_value(self, name_key).await?;
-            debug!(seq, id, ?name_key, "update_background_job");
-            let id_key = match seq {
-                0 => {
-                    let id = fetch_id(self, IdGenerator::background_job_id()).await?;
-                    BackgroundJobId { id }
-                }
-                _ => BackgroundJobId { id },
-            };
-            let (id_name_seq, _): (_, Option<BackgroundJobInfo>) =
-                get_pb_value(self, &id_key).await?;
-            let meta = req.info.clone();
-            let condition = vec![txn_cond_seq(&id_key, Eq, id_name_seq)];
-            let if_then = vec![
-                txn_op_put(name_key, serialize_u64(id_key.id)?),
-                txn_op_put(&id_key, serialize_struct(&meta)?),
-            ];
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-            if succ {
-                break Ok(UpdateBackgroundJobReply { id: id_key.id });
-            }
-        }
-    }
-
     async fn update_background_job_status(
         &self,
         req: UpdateBackgroundJobStatusReq,
     ) -> Result<UpdateBackgroundJobReply, KVAppError> {
         let name = &req.job_name;
-        let (id, mut resp) =
+        let (id, _, resp) =
             get_background_job_or_error(self, name, "failed to get background job").await?;
-        if resp.job_status == Some(req.status.clone()) {
+        if resp.job_status.as_ref() == Some(&req.status) {
             return Ok(UpdateBackgroundJobReply { id });
         }
-        resp.job_status = Some(req.status);
-        resp.last_updated = Some(Utc::now());
-        let req = UpdateBackgroundJobReq {
-            job_name: name.clone(),
-            info: resp,
-        };
-        self.update_background_job(req).await
+
+        update_background_job(self, name, |info| {
+            info.job_status = Some(req.status);
+            info.last_updated = Some(Utc::now());
+        })
+        .await
     }
 
     async fn update_background_job_params(
@@ -212,18 +171,16 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         req: UpdateBackgroundJobParamsReq,
     ) -> Result<UpdateBackgroundJobReply, KVAppError> {
         let name = &req.job_name;
-        let (id, mut resp) =
+        let (id, _, resp) =
             get_background_job_or_error(self, name, "failed to get background job").await?;
-        if resp.job_params == Some(req.params.clone()) {
+        if resp.job_params.as_ref() == Some(&req.params) {
             return Ok(UpdateBackgroundJobReply { id });
         }
-        resp.job_params = Some(req.params);
-        resp.last_updated = Some(Utc::now());
-        let req = UpdateBackgroundJobReq {
-            job_name: name.clone(),
-            info: resp,
-        };
-        self.update_background_job(req).await
+        update_background_job(self, name, |info| {
+            info.job_params = Some(req.params);
+            info.last_updated = Some(Utc::now());
+        })
+        .await
     }
 
     async fn get_background_job(
@@ -234,7 +191,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
 
         let name_key = &req.name;
 
-        let (id, job) =
+        let (id, _, job) =
             get_background_job_or_error(self, name_key, format!("get_: {:?}", name_key)).await?;
 
         Ok(GetBackgroundJobReply { id, info: job })
@@ -268,7 +225,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
 
         let meta = req.task_info.clone();
 
-        let _ = self
+        let resp = self
             .upsert_kv(UpsertKVReq::new(
                 name_key.to_string_key().as_str(),
                 Any,
@@ -278,6 +235,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
                 }),
             ))
             .await?;
+        // confirm a successful update
+        assert!(resp.is_changed());
         Ok(UpdateBackgroundTaskReply {
             last_updated: Utc::now(),
             expire_at: req.expire_at,
@@ -309,19 +268,26 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
     }
 }
 
+async fn get_background_job_id(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name_key: &BackgroundJobIdent,
+) -> Result<BackgroundJobId, KVAppError> {
+    let (id_seq, id) = get_u64_value(kv_api, name_key).await?;
+    background_job_has_to_exist(id_seq, name_key)?;
+    Ok(BackgroundJobId { id })
+}
+
 async fn get_background_job_or_error(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name_key: &BackgroundJobIdent,
-    msg: impl Display,
-) -> Result<(u64, BackgroundJobInfo), KVAppError> {
-    let (id_seq, id) = get_u64_value(kv_api, name_key).await?;
-    background_job_has_to_exist(id_seq, name_key, &msg)?;
-    let id_key = BackgroundJobId { id };
-
+    _msg: impl Display,
+) -> Result<(u64, u64, BackgroundJobInfo), KVAppError> {
+    let id_key = get_background_job_id(kv_api, name_key).await?;
     let (id_seq, job_info) = get_pb_value(kv_api, &id_key).await?;
-    background_job_has_to_exist(id_seq, name_key, msg)?;
+    background_job_has_to_exist(id_seq, name_key)?;
 
     Ok((
+        id_key.id,
         id_seq,
         // Safe unwrap(): background_job_seq > 0 implies background_job is not None.
         job_info.unwrap(),
@@ -334,12 +300,11 @@ async fn get_background_job_or_error(
 pub fn background_job_has_to_exist(
     seq: u64,
     name_ident: &BackgroundJobIdent,
-    msg: impl Display,
 ) -> Result<(), KVAppError> {
     if seq == 0 {
         debug!(seq, ?name_ident, "background job does not exist");
         Err(KVAppError::AppError(AppError::UnknownBackgroundJob(
-            UnknownBackgroundJob::new(&name_ident.name, format!("{}: {:?}", msg, name_ident)),
+            UnknownBackgroundJob::new(&name_ident.name, format!("{:?}", name_ident)),
         )))
     } else {
         Ok(())
@@ -360,4 +325,25 @@ async fn get_background_task_by_name(
 ) -> Result<(u64, Option<BackgroundTaskInfo>), KVAppError> {
     let (seq, res) = get_pb_value(kv_api, id).await?;
     Ok((seq, res))
+}
+
+async fn update_background_job<F: FnOnce(&mut BackgroundJobInfo)>(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    name: &BackgroundJobIdent,
+    mutation: F,
+) -> Result<UpdateBackgroundJobReply, KVAppError> {
+    debug!(req = debug(name), "BackgroundApi: {}", func_name!());
+    let (id, id_val_seq, mut info) =
+        get_background_job_or_error(kv_api, name, "update_background_job").await?;
+    mutation(&mut info);
+    let resp = kv_api
+        .upsert_kv(UpsertKVReq::new(
+            BackgroundJobId { id }.to_string_key().as_str(),
+            MatchSeq::Exact(id_val_seq),
+            Operation::Update(serialize_struct(&info)?),
+            None,
+        ))
+        .await?;
+    assert!(resp.is_changed());
+    Ok(UpdateBackgroundJobReply { id })
 }
