@@ -1,0 +1,20 @@
+statement ok
+drop table if exists t_distributed_delete;
+
+statement ok
+create table t_distributed_delete (a int, b int);
+
+statement ok
+insert into t_distributed_delete values (1, 1), (2, 2), (3, 3), (4, 4), (5, 5);
+
+statement ok
+delete from t_distributed_delete where a > 2 and a < 5;
+
+query II
+select * from t_distributed_delete order by a;
+----
+1	1
+2	2
+5	5
+
+
