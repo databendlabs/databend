@@ -153,15 +153,14 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         req: UpdateBackgroundJobStatusReq,
     ) -> Result<UpdateBackgroundJobReply, KVAppError> {
         let name = &req.job_name;
-        let (id, _, resp) =
-            get_background_job_or_error(self, name, "failed to get background job").await?;
-        if resp.job_status.as_ref() == Some(&req.status) {
-            return Ok(UpdateBackgroundJobReply { id });
-        }
 
         update_background_job(self, name, |info| {
+            if info.job_status.as_ref() == Some(&req.status) {
+                return false;
+            }
             info.job_status = Some(req.status);
             info.last_updated = Some(Utc::now());
+            true
         })
         .await
     }
@@ -171,14 +170,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> BackgroundApi for KV {
         req: UpdateBackgroundJobParamsReq,
     ) -> Result<UpdateBackgroundJobReply, KVAppError> {
         let name = &req.job_name;
-        let (id, _, resp) =
-            get_background_job_or_error(self, name, "failed to get background job").await?;
-        if resp.job_params.as_ref() == Some(&req.params) {
-            return Ok(UpdateBackgroundJobReply { id });
-        }
         update_background_job(self, name, |info| {
+            if info.job_params.as_ref() == Some(&req.params) {
+                return false;
+            }
             info.job_params = Some(req.params);
             info.last_updated = Some(Utc::now());
+            true
         })
         .await
     }
@@ -327,7 +325,7 @@ async fn get_background_task_by_name(
     Ok((seq, res))
 }
 
-async fn update_background_job<F: FnOnce(&mut BackgroundJobInfo)>(
+async fn update_background_job<F: FnOnce(&mut BackgroundJobInfo) -> bool>(
     kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
     name: &BackgroundJobIdent,
     mutation: F,
@@ -335,7 +333,10 @@ async fn update_background_job<F: FnOnce(&mut BackgroundJobInfo)>(
     debug!(req = debug(name), "BackgroundApi: {}", func_name!());
     let (id, id_val_seq, mut info) =
         get_background_job_or_error(kv_api, name, "update_background_job").await?;
-    mutation(&mut info);
+    let should_update = mutation(&mut info);
+    if !should_update {
+        return Ok(UpdateBackgroundJobReply { id });
+    }
     let resp = kv_api
         .upsert_kv(UpsertKVReq::new(
             BackgroundJobId { id }.to_string_key().as_str(),
