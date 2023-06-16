@@ -26,6 +26,7 @@ use common_expression::Scalar;
 use common_expression::SortColumnDescription;
 use common_expression::SortField;
 use common_expression::Value;
+use jsonb::convert_to_comparable;
 
 use super::RowConverter;
 use super::Rows;
@@ -71,8 +72,9 @@ impl RowConverter<StringColumn> for CommonRowConverter {
             .map(|entry| match &entry.value {
                 Value::Scalar(s) => match s {
                     Scalar::Variant(val) => {
+                        // convert variant value to comparable format.
                         let mut buf = Vec::new();
-                        jsonb::convert_to_comparable(val, &mut buf);
+                        convert_to_comparable(val, &mut buf);
                         let s = Scalar::Variant(buf);
                         ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
                     }
@@ -82,29 +84,29 @@ impl RowConverter<StringColumn> for CommonRowConverter {
                     let data_type = c.data_type();
                     match data_type.remove_nullable() {
                         DataType::Variant => {
-                            let (_, bitmap) = c.validity();
+                            // convert variant value to comparable format.
+                            let (_, validity) = c.validity();
                             let col = c.remove_nullable();
                             let col = col.as_variant().unwrap();
                             let mut builder =
                                 StringColumnBuilder::with_capacity(col.len(), col.data.len());
                             for (i, val) in col.iter().enumerate() {
-                                if let Some(bitmap) = bitmap {
-                                    if unsafe { !bitmap.get_bit_unchecked(i) } {
+                                if let Some(validity) = validity {
+                                    if unsafe { !validity.get_bit_unchecked(i) } {
                                         builder.commit_row();
                                         continue;
                                     }
                                 }
-                                jsonb::convert_to_comparable(val, &mut builder.data);
+                                convert_to_comparable(val, &mut builder.data);
                                 builder.commit_row();
                             }
-                            let col = builder.build();
                             if data_type.is_nullable() {
                                 Column::Nullable(Box::new(NullableColumn {
-                                    column: Column::Variant(col),
-                                    validity: bitmap.unwrap().clone(),
+                                    column: Column::Variant(builder.build()),
+                                    validity: validity.unwrap().clone(),
                                 }))
                             } else {
-                                Column::Variant(col)
+                                Column::Variant(builder.build())
                             }
                         }
                         _ => c.clone(),
