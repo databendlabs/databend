@@ -232,15 +232,7 @@ fn encode_column(out: &mut StringColumnBuilder, column: &Column, asc: bool, null
         Column::Timestamp(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::Date(col) => fixed::encode(out, col, validity, asc, nulls_first),
         Column::String(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
-        Column::Variant(col) => {
-            let mut builder = StringColumnBuilder::with_capacity(col.len(), col.data.len());
-            for val in col.iter() {
-                jsonb::convert_to_comparable(val, &mut builder.data);
-                builder.commit_row();
-            }
-            let row_col = builder.build();
-            variable::encode(out, row_col.iter(), validity, asc, nulls_first)
-        }
+        Column::Variant(col) => variable::encode(out, col.iter(), validity, asc, nulls_first),
         _ => unimplemented!(),
     }
 }

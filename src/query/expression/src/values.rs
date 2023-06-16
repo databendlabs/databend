@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::hash::Hash;
 use std::io::Read;
@@ -1572,11 +1571,7 @@ impl Column {
     }
 
     pub fn random(ty: &DataType, len: usize) -> Self {
-        use jsonb::Number as JsonbNumber;
-        use jsonb::Object as JsonbObject;
-        use jsonb::Value as JsonbValue;
         use rand::distributions::Alphanumeric;
-        use rand::distributions::DistString;
         use rand::rngs::SmallRng;
         use rand::Rng;
         use rand::SeedableRng;
@@ -1676,41 +1671,7 @@ impl Column {
             DataType::Variant => {
                 let mut data = Vec::with_capacity(len);
                 for _ in 0..len {
-                    let opt = SmallRng::from_entropy().gen_range(0..=6);
-                    let val = match opt {
-                        0 => JsonbValue::Null,
-                        1 => JsonbValue::Bool(true),
-                        2 => JsonbValue::Bool(false),
-                        3 => {
-                            let s = Alphanumeric.sample_string(&mut rand::thread_rng(), 5);
-                            JsonbValue::String(Cow::from(s))
-                        }
-                        4 => {
-                            let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
-                            JsonbValue::Number(JsonbNumber::Int64(num))
-                        }
-                        5 => {
-                            let arr_len = SmallRng::from_entropy().gen_range(0..=5);
-                            let mut values = Vec::with_capacity(arr_len);
-                            for _ in 0..arr_len {
-                                let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
-                                values.push(JsonbValue::Number(JsonbNumber::Int64(num)))
-                            }
-                            JsonbValue::Array(values)
-                        }
-                        6 => {
-                            let obj_len = SmallRng::from_entropy().gen_range(0..=5);
-                            let mut obj = JsonbObject::new();
-                            for _ in 0..obj_len {
-                                let k = Alphanumeric.sample_string(&mut rand::thread_rng(), 5);
-                                let num = SmallRng::from_entropy().gen_range(i64::MIN..=i64::MAX);
-                                let v = JsonbValue::Number(JsonbNumber::Int64(num));
-                                obj.insert(k, v);
-                            }
-                            JsonbValue::Object(obj)
-                        }
-                        _ => JsonbValue::Null,
-                    };
+                    let val = jsonb::rand_value();
                     data.push(val.to_vec());
                 }
                 VariantType::from_data(data)
