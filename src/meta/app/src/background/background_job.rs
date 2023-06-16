@@ -43,11 +43,7 @@ pub enum BackgroundJobState {
 
 impl Display for BackgroundJobState {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            BackgroundJobState::RUNNING => write!(f, "RUNNING"),
-            BackgroundJobState::FAILED => write!(f, "FAILED"),
-            BackgroundJobState::SUSPENDED => write!(f, "SUSPENDED"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 
@@ -70,11 +66,7 @@ pub enum BackgroundJobType {
 
 impl Display for BackgroundJobType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            BackgroundJobType::ONESHOT => write!(f, "ONESHOT"),
-            BackgroundJobType::INTERVAL => write!(f, "INTERVAL"),
-            BackgroundJobType::CRON => write!(f, "CRON"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 

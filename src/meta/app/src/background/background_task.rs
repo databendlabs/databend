@@ -42,11 +42,7 @@ pub enum BackgroundTaskState {
 
 impl Display for BackgroundTaskState {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            BackgroundTaskState::STARTED => write!(f, "STARTED"),
-            BackgroundTaskState::DONE => write!(f, "DONE"),
-            BackgroundTaskState::FAILED => write!(f, "FAILED"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 
@@ -69,10 +65,7 @@ pub enum BackgroundTaskType {
 
 impl Display for BackgroundTaskType {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            BackgroundTaskType::COMPACTION => write!(f, "COMPACTION"),
-            BackgroundTaskType::VACUUM => write!(f, "VACUUM"),
-        }
+        write!(f, "{:?}", self)
     }
 }
 
