@@ -43,9 +43,9 @@ pub struct Fragmenter {
 }
 
 /// A state to track if is visiting a source fragment, useful when building fragments.
-/// 
+///
 /// SelectLeaf: visiting a source fragment of select statement.
-/// 
+///
 /// DeleteLeaf: visiting a source fragment of delete statement.
 enum State {
     SelectLeaf,
