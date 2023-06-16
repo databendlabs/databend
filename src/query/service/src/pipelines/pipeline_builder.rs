@@ -481,6 +481,10 @@ impl PipelineBuilder {
             .map(|(scalar, _)| scalar.as_expr(&BUILTIN_FUNCTIONS))
             .collect::<Vec<_>>();
 
+        if exprs.is_empty() {
+            return Ok(());
+        }
+
         let op = BlockOperator::Map { exprs };
 
         let func_ctx = self.ctx.get_function_context()?;
