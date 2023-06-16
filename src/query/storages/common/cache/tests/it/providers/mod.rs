@@ -13,3 +13,4 @@
 // limitations under the License.
 
 mod disk_cache;
+mod rocksdb_cache;

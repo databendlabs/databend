@@ -31,6 +31,7 @@ pub use providers::InMemoryItemCacheHolder;
 pub use providers::LruDiskCache;
 pub use providers::LruDiskCacheBuilder;
 pub use providers::LruDiskCacheHolder;
+pub use providers::RocksDbCache;
 pub use providers::TableDataCache;
 pub use providers::TableDataCacheBuilder;
 pub use providers::TableDataCacheKey;

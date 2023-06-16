@@ -336,3 +336,9 @@ impl From<ErrorCode> for tonic::Status {
         }
     }
 }
+
+impl From<rocksdb::Error> for ErrorCode {
+    fn from(e: rocksdb::Error) -> ErrorCode {
+        ErrorCode::Internal(format!("rocksdb error: {:?}", e))
+    }
+}
