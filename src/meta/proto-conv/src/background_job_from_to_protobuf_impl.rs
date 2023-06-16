@@ -164,6 +164,7 @@ impl FromToProto for mt::background::BackgroundJobIdent {
     }
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(Self {
             tenant: p.tenant.to_string(),
             name: p.name,

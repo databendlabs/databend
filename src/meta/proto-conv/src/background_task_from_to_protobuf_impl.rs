@@ -91,6 +91,7 @@ impl FromToProto for mt::background::CompactionStats {
 
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(Self {
             db_id: p.db_id,
             table_id: p.table_id,
@@ -135,8 +136,9 @@ impl FromToProto for mt::background::VacuumStats {
         p.ver
     }
 
-    fn from_pb(_p: Self::PB) -> Result<Self, Incompatible>
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(Self {})
     }
 
@@ -156,6 +158,7 @@ impl FromToProto for mt::background::BackgroundTaskIdent {
     }
     fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
     where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
         Ok(Self {
             tenant: p.tenant.to_string(),
             task_id: p.task_id,
