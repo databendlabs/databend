@@ -28,8 +28,12 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::ColumnId;
+use common_expression::ComputedExpr;
+use common_expression::DataBlock;
+use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_expression::TableSchema;
+use common_sql::evaluator::BlockOperator;
 use opendal::Operator;
 use siphasher::sip128;
 use siphasher::sip128::Hasher128;
@@ -59,11 +63,12 @@ use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoO
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
 use crate::operations::replace_into::OnConflictField;
-
 struct AggregationContext {
     segment_locations: HashMap<SegmentIndex, Location>,
     on_conflict_fields: Vec<OnConflictField>,
+    remain_column_field_ids: Vec<FieldIndex>,
     block_reader: Arc<BlockReader>,
+    remain_block_reader: Arc<BlockReader>,
     data_accessor: Operator,
     write_settings: WriteSettings,
     read_settings: ReadSettings,
@@ -94,22 +99,54 @@ impl MergeIntoOperationAggregator {
         let deletion_accumulator = DeletionAccumulator::default();
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
-        let indices = (0..table_schema.fields().len()).collect::<Vec<usize>>();
-        let projection = Projection::Columns(indices);
-        let block_reader = BlockReader::create(
-            data_accessor.clone(),
-            table_schema,
-            projection,
-            ctx.clone(),
-            false,
-        )?;
+
+        let all_field_indexes = table_schema
+            .fields()
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+            .map(|(i, _)| i)
+            .collect::<Vec<FieldIndex>>();
+
+        let on_conflict_field_indexes: HashSet<FieldIndex> =
+            on_conflict_fields.iter().map(|i| i.field_index).collect();
+
+        let remain_column_field_ids: Vec<FieldIndex> = all_field_indexes
+            .into_iter()
+            .filter(|index| !on_conflict_field_indexes.contains(index))
+            .collect();
+
+        let block_reader = {
+            let projection =
+                Projection::Columns(on_conflict_field_indexes.iter().copied().collect());
+            BlockReader::create(
+                data_accessor.clone(),
+                table_schema.clone(),
+                projection,
+                ctx.clone(),
+                false,
+            )
+        }?;
+
+        let remain_block_reader = {
+            let projection = Projection::Columns(remain_column_field_ids.clone());
+            BlockReader::create(
+                data_accessor.clone(),
+                table_schema,
+                projection,
+                ctx.clone(),
+                false,
+            )
+        }?;
 
         Ok(Self {
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
                 segment_locations: HashMap::from_iter(segment_locations.into_iter()),
                 on_conflict_fields,
+                remain_column_field_ids,
                 block_reader,
+                remain_block_reader,
                 data_accessor,
                 write_settings,
                 read_settings,
@@ -252,44 +289,15 @@ impl AggregationContext {
             return Ok(None);
         }
 
-        let reader = &self.block_reader;
+        let on_conflict_columns_data = self.read_block(&self.block_reader, block_meta).await?;
+
+        let num_rows = on_conflict_columns_data.num_rows();
+
         let on_conflict_fields = &self.on_conflict_fields;
-
-        let merged_io_read_result = reader
-            .read_columns_data_by_merge_io(
-                &self.read_settings,
-                &block_meta.location.0,
-                &block_meta.col_metas,
-            )
-            .await?;
-
-        // deserialize block data
-        // cpu intensive task, send them to dedicated thread pool
-        let data_block = {
-            let storage_format = self.write_settings.storage_format;
-            let block_meta_ptr = block_meta.clone();
-            let reader = reader.clone();
-            GlobalIORuntime::instance()
-                .spawn_blocking(move || {
-                    let column_chunks = merged_io_read_result.columns_chunks()?;
-                    reader.deserialize_chunks(
-                        block_meta_ptr.location.0.as_str(),
-                        block_meta_ptr.row_count as usize,
-                        &block_meta_ptr.compression,
-                        &block_meta_ptr.col_metas,
-                        column_chunks,
-                        &storage_format,
-                    )
-                })
-                .await?
-        };
-
-        let num_rows = data_block.num_rows();
-
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
         for field in on_conflict_fields {
             let on_conflict_field_index = field.field_index;
-            let key_column = data_block
+            let key_column = on_conflict_columns_data
                 .columns()
                 .get(on_conflict_field_index)
                 .ok_or_else(|| {
@@ -355,7 +363,32 @@ impl AggregationContext {
         }
 
         let bitmap = bitmap.into();
-        let new_block = data_block.filter_with_bitmap(&bitmap)?;
+        let mut merge_block = on_conflict_columns_data.filter_with_bitmap(&bitmap)?;
+
+        // read the remaining columns
+        let remain_columns_data_block = self
+            .read_block(&self.remain_block_reader, block_meta)
+            .await?;
+        // remove the deleted rows
+        let remain_block = remain_columns_data_block.filter_with_bitmap(&bitmap)?;
+
+        // merge the remaining columns
+        for col in remain_block.columns() {
+            merge_block.add_column(col.clone());
+        }
+
+        // resort the block
+        let col_indexes = self
+            .on_conflict_fields
+            .iter()
+            .map(|f| f.field_index)
+            .chain(self.remain_column_field_ids.iter().copied())
+            .collect::<Vec<_>>();
+        let mut projection = (0..col_indexes.len()).collect::<Vec<_>>();
+        projection.sort_by_key(|&i| col_indexes[i]);
+        let func_ctx = self.block_builder.ctx.get_function_context()?;
+        let new_block = BlockOperator::Project { projection }.execute(&func_ctx, merge_block)?;
+
         info!("number of row deleted: {}", delete_nums);
 
         // serialization and compression is cpu intensive, send them to dedicated thread pool
@@ -445,6 +478,35 @@ impl AggregationContext {
         } else {
             false
         }
+    }
+
+    async fn read_block(&self, reader: &BlockReader, block_meta: &BlockMeta) -> Result<DataBlock> {
+        let merged_io_read_result = reader
+            .read_columns_data_by_merge_io(
+                &self.read_settings,
+                &block_meta.location.0,
+                &block_meta.col_metas,
+            )
+            .await?;
+
+        // deserialize block data
+        // cpu intensive task, send them to dedicated thread pool
+        let storage_format = self.write_settings.storage_format;
+        let block_meta_ptr = block_meta.clone();
+        let reader = reader.clone();
+        GlobalIORuntime::instance()
+            .spawn_blocking(move || {
+                let column_chunks = merged_io_read_result.columns_chunks()?;
+                reader.deserialize_chunks(
+                    block_meta_ptr.location.0.as_str(),
+                    block_meta_ptr.row_count as usize,
+                    &block_meta_ptr.compression,
+                    &block_meta_ptr.col_metas,
+                    column_chunks,
+                    &storage_format,
+                )
+            })
+            .await
     }
 }
 
