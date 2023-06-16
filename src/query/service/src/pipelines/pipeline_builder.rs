@@ -218,9 +218,6 @@ impl PipelineBuilder {
     /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
     /// +---------------+      +-----------------------+
     fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
-        if delete.parts.is_empty() {
-            return Ok(());
-        }
         let table =
             self.ctx
                 .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;
@@ -248,9 +245,6 @@ impl PipelineBuilder {
 
     fn build_delete_final(&mut self, delete: &DeleteFinal) -> Result<()> {
         self.build_pipeline(&delete.input)?;
-        if self.main_pipeline.is_empty() {
-            return Ok(());
-        }
         let table =
             self.ctx
                 .build_table_by_table_info(&delete.catalog_name, &delete.table_info, None)?;

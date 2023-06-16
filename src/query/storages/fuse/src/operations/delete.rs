@@ -115,10 +115,7 @@ impl FuseTable {
         if partitions.is_empty() {
             return Ok(None);
         }
-        Ok(Some((
-            partitions,
-            TableSnapshot::from(snapshot.as_ref().clone()),
-        )))
+        Ok(Some((partitions, snapshot.as_ref().clone())))
     }
 
     pub fn try_eval_const(
@@ -208,6 +205,7 @@ impl FuseTable {
 
         let max_threads =
             std::cmp::min(ctx.get_settings().get_max_threads()? as usize, total_tasks);
+        let max_threads = std::cmp::max(max_threads, 1);
         // Add source pipe.
         pipeline.add_source(
             |output| {
