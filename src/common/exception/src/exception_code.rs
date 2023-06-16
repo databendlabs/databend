@@ -177,7 +177,10 @@ build_exceptions! {
     /// LicenseKeyInvalid is used when license key verification error occurs
     ///
     /// For example: license key is expired
-    LicenseKeyInvalid(1402)
+    LicenseKeyInvalid(1402),
+
+    BackgroundJobAlreadyExists(1501),
+    UnknownBackgroundJob(1502)
 }
 
 // Meta service errors [2001, 3000].

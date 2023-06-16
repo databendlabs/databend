@@ -60,6 +60,8 @@
 //! - `reader.MIN_MSG_VER` is the minimal message version this program can read.
 //! - `message.MIN_READER_VER` is the minimal reader(program) version that can read this message.
 
+mod background_job_from_to_protobuf_impl;
+mod background_task_from_to_protobuf_impl;
 mod config_from_to_protobuf_impl;
 mod data_mask_from_to_protobuf_impl;
 mod database_from_to_protobuf_impl;
