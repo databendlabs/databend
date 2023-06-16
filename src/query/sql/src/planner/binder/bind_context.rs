@@ -469,7 +469,7 @@ impl BindContext {
     fn get_internal_column_table_index(
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
-    ) -> (IndexType, Option<String>, Option<String>) {
+    ) -> Result<(IndexType, Option<String>, Option<String>)> {
         let metadata = metadata.read();
         let (database_name, table_name) =
             match (&column_binding.database_name, &column_binding.table_name) {
@@ -478,13 +478,25 @@ impl BindContext {
                 }
                 (None, Some(table_name)) => (None, Some(table_name.clone())),
                 (database_name, None) => {
-                    // If table_name is None, assert that metadata.tables has only one table
-                    debug_assert!(metadata.tables().len() == 1);
-                    return (metadata.table(0).index(), database_name.clone(), None);
+                    let tables = metadata
+                        .tables()
+                        .iter()
+                        .filter(|t| !t.is_source_of_index())
+                        .collect::<Vec<_>>();
+                    debug_assert!(tables.len() >= 1);
+
+                    if tables.len() > 1 {
+                        return Err(ErrorCode::SemanticError(format!(
+                            "The table of the internal column `{}` is ambiguous",
+                            column_binding.internal_column.column_name()
+                        )));
+                    }
+
+                    return Ok((tables[0].index(), database_name.clone(), None));
                 }
             };
 
-        (
+        Ok((
             metadata
                 .get_table_index(
                     database_name.as_deref(),
@@ -493,7 +505,7 @@ impl BindContext {
                 .unwrap(),
             database_name,
             table_name,
-        )
+        ))
     }
 
     // Add internal column binding into `BindContext`
@@ -502,7 +514,7 @@ impl BindContext {
         &mut self,
         column_binding: &InternalColumnBinding,
         metadata: MetadataRef,
-    ) -> ColumnBinding {
+    ) -> Result<ColumnBinding> {
         let column_id = column_binding.internal_column.column_id();
         if let std::collections::btree_map::Entry::Vacant(e) =
             self.bound_internal_columns.entry(column_id)
@@ -511,7 +523,7 @@ impl BindContext {
             debug_assert_eq!(column_binding.index, self.columns.len());
 
             let (table_index, database_name, table_name) =
-                BindContext::get_internal_column_table_index(column_binding, metadata.clone());
+                BindContext::get_internal_column_table_index(column_binding, metadata.clone())?;
 
             let mut metadata = metadata.write();
             metadata.add_internal_column(table_index, column_binding.internal_column.clone());
@@ -529,7 +541,7 @@ impl BindContext {
 
             e.insert((table_index, column_binding.index));
         }
-        self.columns[column_binding.index].clone()
+        Ok(self.columns[column_binding.index].clone())
     }
 
     pub fn add_internal_column_into_expr(&self, s_expr: SExpr) -> SExpr {
