@@ -303,11 +303,18 @@ pub enum AlterTableAction {
     RevertTo {
         point: TimeTravelPoint,
     },
+    SetOptions {
+        set_options: BTreeMap<String, String>,
+    },
 }
 
 impl Display for AlterTableAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            AlterTableAction::SetOptions { set_options } => {
+                write!(f, "SET OPTIONS: ").expect("Set Options Write Error ");
+                write_space_separated_map(f, set_options.iter())
+            }
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")
             }
@@ -586,10 +593,34 @@ impl Display for OptimizeTableAction {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ColumnExpr {
+    Default(Box<Expr>),
+    Virtual(Box<Expr>),
+    Stored(Box<Expr>),
+}
+
+impl Display for ColumnExpr {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            ColumnExpr::Default(expr) => {
+                write!(f, " DEFAULT {expr}")?;
+            }
+            ColumnExpr::Virtual(expr) => {
+                write!(f, " AS ({expr}) VIRTUAL")?;
+            }
+            ColumnExpr::Stored(expr) => {
+                write!(f, " AS ({expr}) STORED")?;
+            }
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct ColumnDefinition {
     pub name: Identifier,
     pub data_type: TypeName,
-    pub default_expr: Option<Box<Expr>>,
+    pub expr: Option<ColumnExpr>,
     pub comment: Option<String>,
 }
 
@@ -601,8 +632,8 @@ impl Display for ColumnDefinition {
             write!(f, " NOT NULL")?;
         }
 
-        if let Some(default_expr) = &self.default_expr {
-            write!(f, " DEFAULT {default_expr}")?;
+        if let Some(expr) = &self.expr {
+            write!(f, "{expr}")?;
         }
         if let Some(comment) = &self.comment {
             write!(f, " COMMENT '{comment}'")?;

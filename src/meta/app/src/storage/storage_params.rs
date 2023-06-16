@@ -322,7 +322,7 @@ pub struct StorageS3Config {
     pub role_arn: String,
     /// The ExternalId that used for AssumeRole.
     pub external_id: String,
-    /// Allow anonymous access to S3 if credentail not loaded.
+    /// Allow anonymous access to S3 if credential not loaded.
     pub allow_anonymous: bool,
 }
 

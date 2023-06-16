@@ -64,9 +64,8 @@ jobs:
           else
             GIT_TAG=${{ inputs.tag }}
           fi
-          echo "building version: $GIT_TAG"
-          VERSION=${GIT_TAG/v/}
-          VERSION=${VERSION/-nightly/}
+          VERSION=`echo ${GIT_TAG} | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+'`
+          echo "building tag and version: $GIT_TAG $VERSION"
           sed -i "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml
 
       - name: Get Toolchain

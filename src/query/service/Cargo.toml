@@ -76,7 +76,7 @@ common-pipeline-core = { path = "../pipeline/core" }
 common-pipeline-sinks = { path = "../pipeline/sinks" }
 common-pipeline-sources = { path = "../pipeline/sources" }
 common-pipeline-transforms = { path = "../pipeline/transforms" }
-common-profile = { path = "../../common/profile" }
+common-profile = { path = "../profile" }
 common-settings = { path = "../settings" }
 common-sharing = { path = "../sharing" }
 common-sql = { path = "../sql" }

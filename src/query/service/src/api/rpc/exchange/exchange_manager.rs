@@ -29,7 +29,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_grpc::ConnectionFactory;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
 use common_sql::executor::PhysicalPlan;
 use parking_lot::Mutex;
 use parking_lot::ReentrantMutex;
@@ -205,7 +205,9 @@ impl DataExchangeManager {
                     .map(|(k, _)| k)
                     .collect::<Vec<_>>()
             ))),
-            Some(query_coordinator) => query_coordinator.prepare_pipeline(ctx, packet),
+            Some(query_coordinator) => {
+                query_coordinator.prepare_pipeline(ctx, packet.enable_profiling, packet)
+            }
         }
     }
 
@@ -268,6 +270,7 @@ impl DataExchangeManager {
     pub async fn commit_actions(
         &self,
         ctx: Arc<QueryContext>,
+        enable_profiling: bool,
         actions: QueryFragmentsActions,
     ) -> Result<PipelineBuildResult> {
         let settings = ctx.get_settings();
@@ -298,7 +301,7 @@ impl DataExchangeManager {
         self.init_query_fragments_plan(&ctx, &local_query_fragments_plan_packet)?;
 
         // Get local pipeline of local task
-        let build_res = self.get_root_pipeline(ctx, root_actions)?;
+        let build_res = self.get_root_pipeline(ctx, enable_profiling, root_actions)?;
 
         actions
             .get_execute_partial_query_packets()?
@@ -310,6 +313,7 @@ impl DataExchangeManager {
     fn get_root_pipeline(
         &self,
         ctx: Arc<QueryContext>,
+        enable_profiling: bool,
         root_actions: &QueryFragmentActions,
     ) -> Result<PipelineBuildResult> {
         let query_id = ctx.get_id();
@@ -323,8 +327,12 @@ impl DataExchangeManager {
             Some(query_coordinator) => {
                 assert!(query_coordinator.fragment_exchanges.is_empty());
                 let injector = DefaultExchangeInjector::create();
-                let mut build_res =
-                    query_coordinator.subscribe_fragment(&ctx, fragment_id, injector)?;
+                let mut build_res = query_coordinator.subscribe_fragment(
+                    &ctx,
+                    enable_profiling,
+                    fragment_id,
+                    injector,
+                )?;
 
                 let exchanges = std::mem::take(&mut query_coordinator.statistics_exchanges);
                 let statistics_receiver = StatisticsReceiver::spawn_receiver(&ctx, exchanges)?;
@@ -374,6 +382,7 @@ impl DataExchangeManager {
         &self,
         query_id: &str,
         fragment_id: usize,
+        enable_profiling: bool,
         injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
         let queries_coordinator_guard = self.queries_coordinator.lock();
@@ -389,7 +398,12 @@ impl DataExchangeManager {
                     .query_ctx
                     .clone();
 
-                query_coordinator.subscribe_fragment(&query_ctx, fragment_id, injector)
+                query_coordinator.subscribe_fragment(
+                    &query_ctx,
+                    enable_profiling,
+                    fragment_id,
+                    injector,
+                )
             }
         }
     }
@@ -546,6 +560,7 @@ impl QueryCoordinator {
     pub fn prepare_pipeline(
         &mut self,
         ctx: &Arc<QueryContext>,
+        enable_profiling: bool,
         packet: &QueryFragmentsPlanPacket,
     ) -> Result<()> {
         self.info = Some(QueryInfo {
@@ -565,7 +580,7 @@ impl QueryCoordinator {
         for fragment in &packet.fragments {
             let fragment_id = fragment.fragment_id;
             if let Some(coordinator) = self.fragments_coordinator.get_mut(&fragment_id) {
-                coordinator.prepare_pipeline(ctx.clone())?;
+                coordinator.prepare_pipeline(ctx.clone(), enable_profiling)?;
             }
         }
 
@@ -575,13 +590,14 @@ impl QueryCoordinator {
     pub fn subscribe_fragment(
         &mut self,
         ctx: &Arc<QueryContext>,
+        enable_profiling: bool,
         fragment_id: usize,
         injector: Arc<dyn ExchangeInjector>,
     ) -> Result<PipelineBuildResult> {
         // Merge pipelines if exist locally pipeline
         if let Some(mut fragment_coordinator) = self.fragments_coordinator.remove(&fragment_id) {
             let info = self.info.as_ref().expect("QueryInfo is none");
-            fragment_coordinator.prepare_pipeline(ctx.clone())?;
+            fragment_coordinator.prepare_pipeline(ctx.clone(), enable_profiling)?;
 
             if fragment_coordinator.pipeline_build_res.is_none() {
                 return Err(ErrorCode::Internal(
@@ -794,13 +810,20 @@ impl FragmentCoordinator {
         Err(ErrorCode::Internal("Cannot find data exchange."))
     }
 
-    pub fn prepare_pipeline(&mut self, ctx: Arc<QueryContext>) -> Result<()> {
+    pub fn prepare_pipeline(
+        &mut self,
+        ctx: Arc<QueryContext>,
+        enable_profiling: bool,
+    ) -> Result<()> {
         if !self.initialized {
             self.initialized = true;
 
             let pipeline_ctx = QueryContext::create_from(ctx);
-            let pipeline_builder =
-                PipelineBuilder::create(pipeline_ctx, false, ProfSpanSetRef::default());
+            let pipeline_builder = PipelineBuilder::create(
+                pipeline_ctx,
+                enable_profiling,
+                SharedProcessorProfiles::default(),
+            );
             self.pipeline_build_res = Some(pipeline_builder.finalize(&self.physical_plan)?);
         }
 

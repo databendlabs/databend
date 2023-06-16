@@ -71,6 +71,11 @@ impl FromToProto for ex::TableField {
     fn from_pb(p: pb::DataField) -> Result<Self, Incompatible> {
         reader_check_msg(p.ver, p.min_reader_ver)?;
 
+        let computed_expr = match p.computed_expr {
+            Some(computed_expr) => Some(ex::ComputedExpr::from_pb(computed_expr)?),
+            None => None,
+        };
+
         let v = ex::TableField::new_from_column_id(
             &p.name,
             ex::TableDataType::from_pb(p.data_type.ok_or_else(|| Incompatible {
@@ -78,11 +83,16 @@ impl FromToProto for ex::TableField {
             })?)?,
             p.column_id,
         )
-        .with_default_expr(p.default_expr);
+        .with_default_expr(p.default_expr)
+        .with_computed_expr(computed_expr);
         Ok(v)
     }
 
     fn to_pb(&self) -> Result<pb::DataField, Incompatible> {
+        let computed_expr = match self.computed_expr() {
+            Some(computed_expr) => Some(computed_expr.to_pb()?),
+            None => None,
+        };
         let p = pb::DataField {
             ver: VER,
             min_reader_ver: MIN_READER_VER,
@@ -90,8 +100,52 @@ impl FromToProto for ex::TableField {
             default_expr: self.default_expr().cloned(),
             data_type: Some(self.data_type().to_pb()?),
             column_id: self.column_id(),
+            computed_expr,
         };
         Ok(p)
+    }
+}
+
+impl FromToProto for ex::ComputedExpr {
+    type PB = pb::ComputedExpr;
+
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+
+    fn from_pb(p: pb::ComputedExpr) -> Result<Self, Incompatible> {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+
+        let computed_expr = match p.computed_expr {
+            None => {
+                return Err(Incompatible {
+                    reason: "Invalid ComputedExpr: .computed_expr can not be None".to_string(),
+                });
+            }
+            Some(x) => x,
+        };
+
+        let x = match computed_expr {
+            pb::computed_expr::ComputedExpr::Virtual(expr) => Self::Virtual(expr),
+            pb::computed_expr::ComputedExpr::Stored(expr) => Self::Stored(expr),
+        };
+        Ok(x)
+    }
+
+    fn to_pb(&self) -> Result<pb::ComputedExpr, Incompatible> {
+        let x = match self {
+            ex::ComputedExpr::Virtual(expr) => {
+                pb::computed_expr::ComputedExpr::Virtual(expr.clone())
+            }
+            ex::ComputedExpr::Stored(expr) => pb::computed_expr::ComputedExpr::Stored(expr.clone()),
+        };
+
+        Ok(pb::ComputedExpr {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+
+            computed_expr: Some(x),
+        })
     }
 }
 

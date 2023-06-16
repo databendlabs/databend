@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_expression::types::ArgType;
 use common_expression::types::ValueType;
 use common_expression::BlockEntry;
+use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataSchemaRef;
 use common_expression::SortColumnDescription;
@@ -99,6 +100,18 @@ where
             inner: T::to_owned_scalar(inner),
             desc: self.desc,
         }
+    }
+
+    fn to_column(&self) -> Column {
+        T::upcast_column(self.inner.clone())
+    }
+
+    fn from_column(col: Column, desc: &[SortColumnDescription]) -> Option<Self> {
+        let inner = T::try_downcast_column(&col)?;
+        Some(Self {
+            inner,
+            desc: !desc[0].asc,
+        })
     }
 }
 

@@ -23,6 +23,7 @@ use common_exception::Result;
 use common_expression::types::NumberScalar;
 use common_expression::BlockThresholds;
 use common_expression::ColumnId;
+use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
@@ -276,11 +277,15 @@ pub trait Table: Sync + Send {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
+        // - pass a ScalarExpr to Table::delete, and let the table's implementation of method `delete` do the
+        //   inversion will be more concise, unfortunately, using type ScalarExpr introduces cyclic dependency.
+        // - we can also pass a common_expression::Expr here, and later do the inversion at Expr level, but it is not recommended :(
+        filter: Option<DeletionFilters>,
         col_indices: Vec<usize>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _) = (ctx, filter, col_indices, pipeline);
+        let (_, _, _, _, _) = (ctx, filter, col_indices, pipeline, query_row_id_col);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {}, engine type {}, does not support DELETE FROM",
@@ -289,16 +294,27 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    #[allow(clippy::too_many_arguments)]
     #[async_backtrace::framed]
     async fn update(
         &self,
         ctx: Arc<dyn TableContext>,
         filter: Option<RemoteExpr<String>>,
-        col_indices: Vec<usize>,
-        update_list: Vec<(usize, RemoteExpr<String>)>,
+        col_indices: Vec<FieldIndex>,
+        update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
+        computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _, _, _) = (ctx, filter, col_indices, update_list, pipeline);
+        let (_, _, _, _, _, _, _) = (
+            ctx,
+            filter,
+            col_indices,
+            update_list,
+            computed_list,
+            query_row_id_col,
+            pipeline,
+        );
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support UPDATE",
@@ -407,6 +423,8 @@ pub struct TableStatistics {
     pub data_size: Option<u64>,
     pub data_size_compressed: Option<u64>,
     pub index_size: Option<u64>,
+    pub number_of_blocks: Option<u64>,
+    pub number_of_segments: Option<u64>,
 }
 
 #[derive(Debug, Clone)]
@@ -511,4 +529,11 @@ mod column_stats_provider_impls {
 pub struct NavigationDescriptor {
     pub database_name: String,
     pub point: NavigationPoint,
+}
+
+pub struct DeletionFilters {
+    // the filter expression for the deletion
+    pub filter: RemoteExpr<String>,
+    // just "not(filter)"
+    pub inverted_filter: RemoteExpr<String>,
 }

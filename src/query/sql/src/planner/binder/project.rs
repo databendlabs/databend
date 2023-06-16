@@ -20,6 +20,9 @@ use common_ast::ast::Identifier;
 use common_ast::ast::Indirection;
 use common_ast::ast::QualifiedName;
 use common_ast::ast::SelectTarget;
+use common_ast::parser::parse_expr;
+use common_ast::parser::tokenize_sql;
+use common_ast::Dialect;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -47,7 +50,7 @@ use crate::IndexType;
 use crate::WindowChecker;
 
 impl Binder {
-    pub(super) fn analyze_projection(
+    pub fn analyze_projection(
         &mut self,
         agg_info: &AggregateInfo,
         select_list: &SelectList,
@@ -116,7 +119,7 @@ impl Binder {
         Ok((scalars, columns))
     }
 
-    pub(super) fn bind_projection(
+    pub fn bind_projection(
         &mut self,
         bind_context: &mut BindContext,
         columns: &[ColumnBinding],
@@ -174,7 +177,7 @@ impl Binder {
     /// them in `Metadata`. And notice that, the semantic of aggregate expressions won't be checked
     /// in this function.
     #[async_backtrace::framed]
-    pub(super) async fn normalize_select_list<'a>(
+    pub async fn normalize_select_list<'a>(
         &mut self,
         input_context: &mut BindContext,
         select_list: &'a [SelectTarget],
@@ -210,22 +213,28 @@ impl Binder {
                         _ => None,
                     };
                     match names.len() {
-                        1 | 2 => self.resolve_qualified_name_without_database_name(
-                            span,
-                            input_context,
-                            names,
-                            exclude_cols,
-                            select_target,
-                            &mut output,
-                        )?,
-                        3 => self.resolve_qualified_name_with_database_name(
-                            span,
-                            input_context,
-                            names,
-                            exclude_cols,
-                            select_target,
-                            &mut output,
-                        )?,
+                        1 | 2 => {
+                            self.resolve_qualified_name_without_database_name(
+                                span,
+                                input_context,
+                                names,
+                                exclude_cols,
+                                select_target,
+                                &mut output,
+                            )
+                            .await?
+                        }
+                        3 => {
+                            self.resolve_qualified_name_with_database_name(
+                                span,
+                                input_context,
+                                names,
+                                exclude_cols,
+                                select_target,
+                                &mut output,
+                            )
+                            .await?
+                        }
                         _ => return Err(ErrorCode::SemanticError("Unsupported indirection type")),
                     };
                 }
@@ -237,6 +246,7 @@ impl Binder {
                         self.metadata.clone(),
                         &prev_aliases,
                     );
+                    scalar_binder.allow_pushdown();
                     let (bound_expr, _) = scalar_binder.bind(expr).await?;
 
                     // If alias is not specified, we will generate a name for the scalar expression.
@@ -259,7 +269,45 @@ impl Binder {
         Ok(output)
     }
 
-    fn resolve_qualified_name_without_database_name<'a>(
+    #[async_backtrace::framed]
+    async fn build_select_item<'a>(
+        &self,
+        span: Span,
+        input_context: &BindContext,
+        select_target: &'a SelectTarget,
+        column_binding: ColumnBinding,
+    ) -> Result<SelectItem<'a>> {
+        let scalar = match column_binding.virtual_computed_expr {
+            Some(virtual_computed_expr) => {
+                let mut input_context = input_context.clone();
+                let mut scalar_binder = ScalarBinder::new(
+                    &mut input_context,
+                    self.ctx.clone(),
+                    &self.name_resolution_ctx,
+                    self.metadata.clone(),
+                    &[],
+                );
+                let sql_tokens = tokenize_sql(virtual_computed_expr.as_str())?;
+                let expr = parse_expr(&sql_tokens, Dialect::PostgreSQL)?;
+
+                let (scalar, _) = scalar_binder.bind(&expr).await?;
+                scalar
+            }
+            None => ScalarExpr::BoundColumnRef(BoundColumnRef {
+                span,
+                column: column_binding.clone(),
+            }),
+        };
+
+        Ok(SelectItem {
+            select_target,
+            scalar,
+            alias: column_binding.column_name.clone(),
+        })
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_qualified_name_without_database_name<'a>(
         &self,
         span: Span,
         input_context: &BindContext,
@@ -285,18 +333,25 @@ impl Binder {
             let push_item =
                 empty_exclude || exclude_cols.get(&column_binding.column_name).is_none();
             if star {
+                if column_binding.column_name.starts_with('_')
+                    && column_binding.database_name == Some("system".to_string())
+                {
+                    return Err(ErrorCode::SemanticError(
+                        "can not select * from csv/ndjson file",
+                    ));
+                }
                 // Expands wildcard star, for example we have a table `t(a INT, b INT)`:
                 // The query `SELECT * FROM t` will be expanded into `SELECT t.a, t.b FROM t`
                 if push_item {
-                    output.items.push(SelectItem {
-                        select_target,
-                        scalar: BoundColumnRef {
+                    let item = self
+                        .build_select_item(
                             span,
-                            column: column_binding.clone(),
-                        }
-                        .into(),
-                        alias: column_binding.column_name.clone(),
-                    });
+                            input_context,
+                            select_target,
+                            column_binding.clone(),
+                        )
+                        .await?;
+                    output.items.push(item);
                 }
             } else if let Some(name) = &column_binding.table_name {
                 if push_item
@@ -306,16 +361,23 @@ impl Binder {
                         &self.name_resolution_ctx,
                     )
                 {
+                    if column_binding.column_name.starts_with('_')
+                        && column_binding.database_name == Some("system".to_string())
+                    {
+                        return Err(ErrorCode::SemanticError(
+                            "can not select * from csv/ndjson file",
+                        ));
+                    }
                     match_table = true;
-                    output.items.push(SelectItem {
-                        select_target,
-                        scalar: BoundColumnRef {
+                    let item = self
+                        .build_select_item(
                             span,
-                            column: column_binding.clone(),
-                        }
-                        .into(),
-                        alias: column_binding.column_name.clone(),
-                    });
+                            input_context,
+                            select_target,
+                            column_binding.clone(),
+                        )
+                        .await?;
+                    output.items.push(item);
                 }
             }
         }
@@ -329,7 +391,8 @@ impl Binder {
         Ok(())
     }
 
-    fn resolve_qualified_name_with_database_name<'a>(
+    #[async_backtrace::framed]
+    async fn resolve_qualified_name_with_database_name<'a>(
         &self,
         span: Span,
         input_context: &BindContext,
@@ -375,15 +438,15 @@ impl Binder {
                             || exclude_cols.get(&column_binding.column_name).is_none())
                     {
                         match_table = true;
-                        output.items.push(SelectItem {
-                            select_target,
-                            scalar: BoundColumnRef {
+                        let item = self
+                            .build_select_item(
                                 span,
-                                column: column_binding.clone(),
-                            }
-                            .into(),
-                            alias: column_binding.column_name.clone(),
-                        });
+                                input_context,
+                                select_target,
+                                column_binding.clone(),
+                            )
+                            .await?;
+                        output.items.push(item);
                     }
                 }
                 if !match_table {

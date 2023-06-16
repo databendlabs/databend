@@ -20,8 +20,6 @@ use common_expression::types::DataType;
 use common_expression::Scalar;
 
 use crate::binder::split_conjunctions;
-use crate::optimizer::HeuristicOptimizer;
-use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::AggIndexInfo;
 use crate::plans::Aggregate;
@@ -39,7 +37,6 @@ use crate::ScalarExpr;
 use crate::Visibility;
 
 pub fn try_rewrite(
-    optimizer: &HeuristicOptimizer,
     base_columns: &[ColumnEntry],
     s_expr: &SExpr,
     index_plans: &[(u64, String, SExpr)],
@@ -63,8 +60,7 @@ pub fn try_rewrite(
 
     // Search all index plans, find the first matched index to rewrite the query.
     for (index_id, _, plan) in index_plans.iter() {
-        let plan = optimizer.optimize_expression(plan, &[RuleID::FoldConstant])?;
-        let plan = rewrite_index_plan(&col_index_map, &plan);
+        let plan = rewrite_index_plan(&col_index_map, plan);
 
         let index_info = collect_information(&plan)?;
         debug_assert!(index_info.can_apply_index());
@@ -324,6 +320,7 @@ impl<'a> Range<'a> {
                 index,
                 data_type: Box::new(data_type.clone()),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             },
         };
         match (self.min, self.max) {
@@ -765,6 +762,7 @@ fn try_create_column_binding(
                 index: *index,
                 data_type: Box::new(scalar.data_type().ok()?),
                 visibility: Visibility::Visible,
+                virtual_computed_expr: None,
             },
         })
     } else {

@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
 use tracing::info;
 
 use crate::pipelines::PipelineBuildResult;
@@ -47,7 +47,7 @@ pub async fn build_query_pipeline(
                 "Query profiling is not supported in distributed mode",
             ));
         }
-        build_distributed_pipeline(ctx, plan).await
+        build_distributed_pipeline(ctx, plan, enable_profiling).await
     }?;
 
     let input_schema = plan.output_schema()?;
@@ -68,8 +68,11 @@ pub async fn build_local_pipeline(
     plan: &PhysicalPlan,
     enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
-    let pipeline =
-        PipelineBuilder::create(ctx.clone(), enable_profiling, ProfSpanSetRef::default());
+    let pipeline = PipelineBuilder::create(
+        ctx.clone(),
+        enable_profiling,
+        SharedProcessorProfiles::default(),
+    );
     let mut build_res = pipeline.finalize(plan)?;
 
     let settings = ctx.get_settings();
@@ -82,18 +85,19 @@ pub async fn build_local_pipeline(
 pub async fn build_distributed_pipeline(
     ctx: &Arc<QueryContext>,
     plan: &PhysicalPlan,
+    enable_profiling: bool,
 ) -> Result<PipelineBuildResult> {
     let fragmenter = Fragmenter::try_create(ctx.clone())?;
 
     let root_fragment = fragmenter.build_fragment(plan)?;
-    let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
+    let mut fragments_actions = QueryFragmentsActions::create(ctx.clone(), enable_profiling);
     root_fragment.get_actions(ctx.clone(), &mut fragments_actions)?;
     info!("fragments actions: {:?}", fragments_actions);
 
     let exchange_manager = ctx.get_exchange_manager();
 
     let mut build_res = exchange_manager
-        .commit_actions(ctx.clone(), fragments_actions)
+        .commit_actions(ctx.clone(), enable_profiling, fragments_actions)
         .await?;
 
     let settings = ctx.get_settings();

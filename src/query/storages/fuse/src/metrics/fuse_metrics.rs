@@ -112,18 +112,6 @@ pub fn metrics_inc_compact_block_read_milliseconds(c: u64) {
     increment_gauge!(key!("compact_block_read_milliseconds"), c as f64);
 }
 
-pub fn metrics_inc_compact_block_write_nums(c: u64) {
-    increment_gauge!(key!("compact_block_write_nums"), c as f64);
-}
-
-pub fn metrics_inc_compact_block_write_bytes(c: u64) {
-    increment_gauge!(key!("compact_block_write_bytes"), c as f64);
-}
-
-pub fn metrics_inc_compact_block_write_milliseconds(c: u64) {
-    increment_gauge!(key!("compact_block_write_milliseconds"), c as f64);
-}
-
 /// Pruning metrics.
 pub fn metrics_inc_segments_range_pruning_before(c: u64) {
     increment_gauge!(key!("segments_range_pruning_before"), c as f64);
@@ -181,6 +169,17 @@ pub fn metrics_inc_pruning_milliseconds(c: u64) {
     increment_gauge!(key!("pruning_milliseconds"), c as f64);
 }
 
+pub fn metrics_inc_deletion_block_range_pruned_nums(c: u64) {
+    increment_gauge!(key!("deletion_block_range_pruned_nums"), c as f64);
+}
+
+pub fn metrics_inc_deletion_block_range_pruned_whole_block_nums(c: u64) {
+    increment_gauge!(
+        key!("deletion_block_range_pruned_whole_block_nums"),
+        c as f64
+    );
+}
+
 pub fn metrics_reset() {
     let c = 0 as f64;
 
@@ -208,9 +207,6 @@ pub fn metrics_reset() {
     gauge!(key!("compact_block_read_nums"), c);
     gauge!(key!("compact_block_read_bytes"), c);
     gauge!(key!("compact_block_read_milliseconds"), c);
-    gauge!(key!("compact_block_write_nums"), c);
-    gauge!(key!("compact_block_write_bytes"), c);
-    gauge!(key!("compact_block_write_milliseconds"), c);
 
     // Pruning metrics.
     gauge!(key!("pruning_prewhere_nums"), c);
@@ -228,4 +224,6 @@ pub fn metrics_reset() {
     gauge!(key!("bytes_block_bloom_pruning_after"), c);
     gauge!(key!("bytes_block_range_pruning_before"), c);
     gauge!(key!("bytes_block_range_pruning_after"), c);
+    gauge!(key!("deletion_block_range_pruned_nums"), c);
+    gauge!(key!("deletion_block_range_pruned_whole_block_nums"), c);
 }

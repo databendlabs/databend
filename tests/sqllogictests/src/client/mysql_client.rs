@@ -58,7 +58,6 @@ impl MySQLClient {
         if self.debug {
             println!("Running sql with mysql client: [{sql}] ({elapsed:?})");
         };
-        let types = vec![DefaultColumnType::Any; rows.len()];
         let mut parsed_rows = Vec::with_capacity(rows.len());
         for row in rows.into_iter() {
             let mut parsed_row = Vec::new();
@@ -73,6 +72,10 @@ impl MySQLClient {
                 }
             }
             parsed_rows.push(parsed_row);
+        }
+        let mut types = vec![];
+        if !parsed_rows.is_empty() {
+            types = vec![DefaultColumnType::Any; parsed_rows[0].len()];
         }
         // Todo: add types to compare
         Ok(DBOutput::Rows {

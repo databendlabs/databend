@@ -27,6 +27,7 @@ pub struct MutationPartInfo {
     pub index: BlockMetaIndex,
     pub cluster_stats: Option<ClusterStatistics>,
     pub inner_part: PartInfoPtr,
+    pub whole_block_mutation: bool,
 }
 
 #[typetag::serde(name = "mutation")]
@@ -52,11 +53,13 @@ impl MutationPartInfo {
         index: BlockMetaIndex,
         cluster_stats: Option<ClusterStatistics>,
         inner_part: PartInfoPtr,
+        whole_block_mutation: bool,
     ) -> PartInfoPtr {
         Arc::new(Box::new(MutationPartInfo {
             index,
             cluster_stats,
             inner_part,
+            whole_block_mutation,
         }))
     }
 

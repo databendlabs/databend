@@ -79,6 +79,7 @@ mod interpreter_table_optimize;
 mod interpreter_table_recluster;
 mod interpreter_table_rename;
 mod interpreter_table_revert;
+mod interpreter_table_set_options;
 mod interpreter_table_show_create;
 mod interpreter_table_truncate;
 mod interpreter_table_undrop;
@@ -105,6 +106,7 @@ mod interpreter_virtual_columns_generate;
 
 pub use access::ManagementModeAccess;
 pub use common::append2table;
+pub use common::fill_missing_columns;
 pub use interpreter::Interpreter;
 pub use interpreter::InterpreterPtr;
 pub use interpreter_call::CallInterpreter;

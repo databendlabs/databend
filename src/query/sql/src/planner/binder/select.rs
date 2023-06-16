@@ -19,6 +19,7 @@ use std::sync::Arc;
 use async_recursion::async_recursion;
 use common_ast::ast::BinaryOperator;
 use common_ast::ast::ColumnID;
+use common_ast::ast::ColumnPosition;
 use common_ast::ast::Expr;
 use common_ast::ast::Expr::Array;
 use common_ast::ast::GroupBy;
@@ -34,6 +35,7 @@ use common_ast::ast::SelectTarget;
 use common_ast::ast::SetExpr;
 use common_ast::ast::SetOperator;
 use common_ast::ast::TableReference;
+use common_ast::Visitor;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
@@ -74,7 +76,7 @@ pub struct SelectItem<'a> {
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_select_stmt(
+    pub(crate) async fn bind_select_stmt(
         &mut self,
         bind_context: &mut BindContext,
         stmt: &SelectStmt,
@@ -90,8 +92,15 @@ impl Binder {
             }
         }
         let (mut s_expr, mut from_context) = if stmt.from.is_empty() {
-            self.bind_one_table(bind_context, stmt).await?
+            let select_list = &stmt.select_list;
+            self.bind_one_table(bind_context, select_list).await?
         } else {
+            let mut max_column_position = MaxColumnPosition::new();
+            max_column_position.visit_select_stmt(stmt);
+            self.metadata
+                .write()
+                .set_max_column_position(max_column_position.max_pos);
+
             let cross_joins = stmt
                 .from
                 .iter()
@@ -357,7 +366,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_where(
+    pub async fn bind_where(
         &mut self,
         bind_context: &mut BindContext,
         aliases: &[(String, ScalarExpr)],
@@ -374,6 +383,7 @@ impl Binder {
             self.metadata.clone(),
             aliases,
         );
+        scalar_binder.allow_pushdown();
         let (scalar, _) = scalar_binder.bind(expr).await?;
         let filter_plan = Filter {
             predicates: split_conjunctions(&scalar),
@@ -451,7 +461,7 @@ impl Binder {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bind_union(
+    pub fn bind_union(
         &mut self,
         left_span: Span,
         _right_span: Span,
@@ -488,7 +498,7 @@ impl Binder {
         Ok((new_expr, left_context))
     }
 
-    fn bind_intersect(
+    pub fn bind_intersect(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -508,7 +518,7 @@ impl Binder {
         )
     }
 
-    fn bind_except(
+    pub fn bind_except(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -529,7 +539,7 @@ impl Binder {
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn bind_intersect_or_except(
+    pub fn bind_intersect_or_except(
         &mut self,
         left_span: Span,
         right_span: Span,
@@ -590,8 +600,9 @@ impl Binder {
         order_by: &[OrderItem],
         limit: usize,
     ) -> Result<()> {
-        // Only simple single table Top-N query is supported.
+        // Only simple single table queries with limit are supported.
         // e.g.
+        // SELECT ... FROM t WHERE ... LIMIT ...
         // SELECT ... FROM t WHERE ... ORDER BY ... LIMIT ...
         if stmt.group_by.is_some()
             || stmt.having.is_some()
@@ -603,9 +614,15 @@ impl Binder {
             return Ok(());
         }
 
-        let limit_threadhold = self.ctx.get_settings().get_lazy_topn_threshold()? as usize;
+        let limit_threadhold = self.ctx.get_settings().get_lazy_read_threshold()? as usize;
 
-        if !(!order_by.is_empty() && limit > 0 && limit <= limit_threadhold) {
+        let where_cols = where_scalar
+            .as_ref()
+            .map(|w| w.used_columns())
+            .unwrap_or_default();
+
+        if limit == 0 || limit > limit_threadhold || (order_by.is_empty() && where_cols.is_empty())
+        {
             return Ok(());
         }
 
@@ -647,11 +664,6 @@ impl Binder {
                 order_by_cols.insert(o.index);
             }
         }
-
-        let where_cols = where_scalar
-            .as_ref()
-            .map(|w| w.used_columns())
-            .unwrap_or_default();
 
         let internal_cols = cols
             .iter()
@@ -906,5 +918,23 @@ impl<'a> SelectRewriter<'a> {
             });
         };
         Ok(())
+    }
+}
+
+pub struct MaxColumnPosition {
+    pub max_pos: usize,
+}
+
+impl MaxColumnPosition {
+    pub fn new() -> Self {
+        Self { max_pos: 0 }
+    }
+}
+
+impl<'a> Visitor<'a> for MaxColumnPosition {
+    fn visit_column_position(&mut self, pos: &ColumnPosition) {
+        if pos.pos > self.max_pos {
+            self.max_pos = pos.pos;
+        }
     }
 }

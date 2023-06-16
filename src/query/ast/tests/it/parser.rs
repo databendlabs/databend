@@ -88,6 +88,8 @@ fn test_statement() {
         r#"create table if not exists a.b (c integer not null default 1, b varchar);"#,
         r#"create table if not exists a.b (c integer default 1 not null, b varchar) as select * from t;"#,
         r#"create table if not exists a.b (c tuple(m integer, n string), d tuple(integer, string));"#,
+        r#"create table if not exists a.b (a string, b string, c string as (concat(a, ' ', b)) stored );"#,
+        r#"create table if not exists a.b (a int, b int, c int as (a + b) virtual );"#,
         r#"create table a.b like c.d;"#,
         r#"create table t like t2 engine = memory;"#,
         r#"create table if not exists a.b (a int) 's3://testbucket/admin/data/' connection=(aws_key_id='minioadmin' aws_secret_key='minioadmin' endpoint_url='http://127.0.0.1:9900');"#,
@@ -178,6 +180,7 @@ fn test_statement() {
         r#"ALTER TABLE t ADD COLUMN a float default 101 COMMENT 'hello';"#,
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
+        r#"ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);"#,
         r#"ALTER DATABASE IF EXISTS ctl.c RENAME TO a;"#,
         r#"ALTER DATABASE c RENAME TO a;"#,
         r#"ALTER DATABASE ctl.c RENAME TO a;"#,
@@ -404,6 +407,8 @@ fn test_statement() {
         r#"ALTER VIRTUAL COLUMNS (a['k1']['k2'], b[0][1]) FOR t"#,
         r#"DROP VIRTUAL COLUMNS FOR t"#,
         r#"GENERATE VIRTUAL COLUMNS FOR t"#,
+        "--各环节转各环节转各环节转各环节转各\n  select 34343",
+        "-- xxxxx\n  select 34343;",
     ];
 
     for case in cases {

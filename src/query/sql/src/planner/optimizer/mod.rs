@@ -27,9 +27,10 @@ mod pattern_extractor;
 mod property;
 mod rule;
 mod runtime_filter;
-mod s_expr;
+pub mod s_expr;
 mod util;
 
+pub use cascades::CascadesOptimizer;
 pub use heuristic::HeuristicOptimizer;
 pub use heuristic::SubqueryRewriter;
 pub use heuristic::DEFAULT_REWRITE_RULES;

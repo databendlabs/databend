@@ -35,7 +35,7 @@ use common_meta_app::schema::TableInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::IEJoinCondition;
+use crate::executor::RangeJoinCondition;
 use crate::optimizer::ColumnSet;
 use crate::plans::JoinType;
 use crate::plans::RuntimeFilterId;
@@ -536,7 +536,13 @@ impl HashJoin {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct IEJoin {
+pub enum RangeJoinType {
+    IEJoin,
+    Merge,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RangeJoin {
     /// A unique id of operator in a `PhysicalPlan` tree.
     /// Only used for display.
     pub plan_id: u32,
@@ -544,17 +550,18 @@ pub struct IEJoin {
     pub right: Box<PhysicalPlan>,
     /// The first two conditions: (>, >=, <, <=)
     /// Condition's left/right side only contains one table's column
-    pub conditions: Vec<IEJoinCondition>,
+    pub conditions: Vec<RangeJoinCondition>,
     /// The other conditions
     pub other_conditions: Vec<RemoteExpr>,
     /// Now only support inner join, will support left/right join later
     pub join_type: JoinType,
+    pub range_join_type: RangeJoinType,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
 
-impl IEJoin {
+impl RangeJoin {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = self.left.output_schema()?.fields().clone();
         fields.extend(self.right.output_schema()?.fields().clone());
@@ -564,6 +571,9 @@ impl IEJoin {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Exchange {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub kind: FragmentKind,
     pub keys: Vec<RemoteExpr>,
@@ -577,6 +587,9 @@ impl Exchange {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSource {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    pub plan_id: u32,
+
     /// Output schema of exchanged data
     pub schema: DataSchemaRef,
 
@@ -604,6 +617,9 @@ pub enum FragmentKind {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct ExchangeSink {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     /// Input schema of exchanged data
     pub schema: DataSchemaRef,
@@ -646,6 +662,9 @@ impl UnionAll {
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct DistributedInsertSelect {
+    /// A unique id of operator in a `PhysicalPlan` tree.
+    pub plan_id: u32,
+
     pub input: Box<PhysicalPlan>,
     pub catalog: String,
     pub table_info: TableInfo,
@@ -726,7 +745,7 @@ pub enum PhysicalPlan {
     Limit(Limit),
     RowFetch(RowFetch),
     HashJoin(HashJoin),
-    IEJoin(IEJoin),
+    RangeJoin(RangeJoin),
     Exchange(Exchange),
     UnionAll(UnionAll),
     RuntimeFilterSource(RuntimeFilterSource),
@@ -752,6 +771,32 @@ impl PhysicalPlan {
             )
     }
 
+    /// Get the id of the plan node
+    pub fn get_id(&self) -> u32 {
+        match self {
+            PhysicalPlan::TableScan(v) => v.plan_id,
+            PhysicalPlan::Filter(v) => v.plan_id,
+            PhysicalPlan::Project(v) => v.plan_id,
+            PhysicalPlan::EvalScalar(v) => v.plan_id,
+            PhysicalPlan::ProjectSet(v) => v.plan_id,
+            PhysicalPlan::AggregateExpand(v) => v.plan_id,
+            PhysicalPlan::AggregatePartial(v) => v.plan_id,
+            PhysicalPlan::AggregateFinal(v) => v.plan_id,
+            PhysicalPlan::Window(v) => v.plan_id,
+            PhysicalPlan::Sort(v) => v.plan_id,
+            PhysicalPlan::Limit(v) => v.plan_id,
+            PhysicalPlan::RowFetch(v) => v.plan_id,
+            PhysicalPlan::HashJoin(v) => v.plan_id,
+            PhysicalPlan::RangeJoin(v) => v.plan_id,
+            PhysicalPlan::Exchange(v) => v.plan_id,
+            PhysicalPlan::UnionAll(v) => v.plan_id,
+            PhysicalPlan::RuntimeFilterSource(v) => v.plan_id,
+            PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
+            PhysicalPlan::ExchangeSource(v) => v.plan_id,
+            PhysicalPlan::ExchangeSink(v) => v.plan_id,
+        }
+    }
+
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         match self {
             PhysicalPlan::TableScan(plan) => plan.output_schema(),
@@ -773,9 +818,9 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
-            PhysicalPlan::IEJoin(plan) => plan.output_schema(),
             PhysicalPlan::DeletePartial(plan) => plan.output_schema(),
             PhysicalPlan::DeleteFinal(plan) => plan.output_schema(),
+            PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
         }
     }
 
@@ -800,9 +845,9 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
-            PhysicalPlan::IEJoin(_) => "IEJoin".to_string(),
             PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
             PhysicalPlan::DeleteFinal(_) => "DistributedFinal".to_string(),
+            PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
         }
     }
 
@@ -838,7 +883,7 @@ impl PhysicalPlan {
                 std::iter::once(plan.left_side.as_ref())
                     .chain(std::iter::once(plan.right_side.as_ref())),
             ),
-            PhysicalPlan::IEJoin(plan) => Box::new(
+            PhysicalPlan::RangeJoin(plan) => Box::new(
                 std::iter::once(plan.left.as_ref()).chain(std::iter::once(plan.right.as_ref())),
             ),
         }
@@ -863,7 +908,7 @@ impl PhysicalPlan {
             | PhysicalPlan::UnionAll(_)
             | PhysicalPlan::ExchangeSource(_)
             | PhysicalPlan::HashJoin(_)
-            | PhysicalPlan::IEJoin(_)
+            | PhysicalPlan::RangeJoin(_)
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
             | PhysicalPlan::AggregatePartial(_)

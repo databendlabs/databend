@@ -83,7 +83,7 @@ public class demo {
 
         String ct_sql = "CREATE TABLE IF NOT EXISTS books(title VARCHAR, author VARCHAR, date VARCHAR)";
         stmt.execute(ct_sql);
-        // Close conn
+        stmt.close();
         conn.close();
         System.exit(0);
 ```
@@ -107,6 +107,8 @@ pstmt.setString(2, "test2");
 pstmt.addBatch();
 
 int[] count = pstmt.executeBatch(); // After execution, count[0]=1, count[1]=1
+...
+pstmt.close();
 ```
 
 ### Example: Uploading Files to an Internal Stage

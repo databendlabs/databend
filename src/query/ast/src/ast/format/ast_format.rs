@@ -1388,6 +1388,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::with_children(action_name, 1);
                 FormatTreeNode::with_children(action_format_ctx, vec![point_node])
             }
+            AlterTableAction::SetOptions { set_options } => {
+                let mut action_name = "Action Set Option: ".to_string();
+                for (key, value) in set_options.iter() {
+                    action_name.push_str(format!("{key} to {value}").as_str());
+                }
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
         };
 
         let name = "AlterTable".to_string();

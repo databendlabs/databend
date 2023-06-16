@@ -264,30 +264,29 @@ EvalScalar
         ├── group by: []
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
-        └── HashJoin
+        └── MergeJoin
             ├── join type: INNER
-            ├── build keys: []
-            ├── probe keys: []
-            ├── filters: [t1.a (#0) > t2.a (#1)]
+            ├── range join conditions: [t2.a (#1) "lt" t1.a (#0)]
+            ├── other conditions: []
             ├── estimated rows: 1000.00
-            ├── TableScan(Build)
-            │   ├── table: default.default.t1
-            │   ├── read rows: 10
-            │   ├── read bytes: 54
+            ├── TableScan(Left)
+            │   ├── table: default.default.t2
+            │   ├── read rows: 100
+            │   ├── read bytes: 414
             │   ├── partitions total: 1
             │   ├── partitions scanned: 1
             │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
             │   ├── push downs: [filters: [], limit: NONE]
-            │   └── estimated rows: 10.00
-            └── TableScan(Probe)
-                ├── table: default.default.t2
-                ├── read rows: 100
-                ├── read bytes: 414
+            │   └── estimated rows: 100.00
+            └── TableScan(Right)
+                ├── table: default.default.t1
+                ├── read rows: 10
+                ├── read bytes: 54
                 ├── partitions total: 1
                 ├── partitions scanned: 1
                 ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
                 ├── push downs: [filters: [], limit: NONE]
-                └── estimated rows: 100.00
+                └── estimated rows: 10.00
 
 
 statement ok

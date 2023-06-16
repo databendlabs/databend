@@ -665,6 +665,8 @@ pub enum TokenKind {
     ON,
     #[token("OPTIMIZE", ignore(ascii_case))]
     OPTIMIZE,
+    #[token("OPTIONS", ignore(ascii_case))]
+    OPTIONS,
     #[token("OR", ignore(ascii_case))]
     OR,
     #[token("ORDER", ignore(ascii_case))]
@@ -819,6 +821,8 @@ pub enum TokenKind {
     SUPER,
     #[token("STATUS", ignore(ascii_case))]
     STATUS,
+    #[token("STORED", ignore(ascii_case))]
+    STORED,
     #[token("STRING", ignore(ascii_case))]
     STRING,
     #[token("SUBSTRING", ignore(ascii_case))]

@@ -105,13 +105,15 @@ impl QueryFragmentActions {
 
 pub struct QueryFragmentsActions {
     ctx: Arc<QueryContext>,
+    enable_profiling: bool,
     pub fragments_actions: Vec<QueryFragmentActions>,
 }
 
 impl QueryFragmentsActions {
-    pub fn create(ctx: Arc<QueryContext>) -> QueryFragmentsActions {
+    pub fn create(ctx: Arc<QueryContext>, enable_profiling: bool) -> QueryFragmentsActions {
         QueryFragmentsActions {
             ctx,
+            enable_profiling,
             fragments_actions: Vec::new(),
         }
     }
@@ -181,6 +183,7 @@ impl QueryFragmentsActions {
             nodes_info.clone(),
             changed_settings.clone(),
             cluster.local_id(),
+            self.enable_profiling,
         );
 
         for (executor, fragments) in fragments_packets.into_iter() {
@@ -194,6 +197,7 @@ impl QueryFragmentsActions {
                 executors_info,
                 changed_settings.clone(),
                 cluster.local_id(),
+                self.enable_profiling,
             ));
         }
 

@@ -42,7 +42,6 @@ use crate::parser::token::*;
 use crate::rule;
 use crate::util::*;
 use crate::ErrorKind;
-
 pub enum ShowGrantOption {
     PrincipalIdentity(PrincipalIdentity),
     ShareGrantObjectName(ShareGrantObjectName),
@@ -1526,18 +1525,34 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
     enum ColumnConstraint {
         Nullable(bool),
         DefaultExpr(Box<Expr>),
+        VirtualExpr(Box<Expr>),
+        StoredExpr(Box<Expr>),
     }
 
     let nullable = alt((
         value(ColumnConstraint::Nullable(true), rule! { NULL }),
         value(ColumnConstraint::Nullable(false), rule! { NOT ~ ^NULL }),
     ));
-    let default_expr = map(
-        rule! {
-            DEFAULT ~ ^#subexpr(NOT_PREC)
-        },
-        |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
-    );
+    let expr = alt((
+        map(
+            rule! {
+                DEFAULT ~ ^#subexpr(NOT_PREC)
+            },
+            |(_, default_expr)| ColumnConstraint::DefaultExpr(Box::new(default_expr)),
+        ),
+        map(
+            rule! {
+                AS ~ ^"(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ VIRTUAL
+            },
+            |(_, _, virtual_expr, _, _)| ColumnConstraint::VirtualExpr(Box::new(virtual_expr)),
+        ),
+        map(
+            rule! {
+                AS ~ "(" ~ ^#subexpr(NOT_PREC) ~ ^")" ~ STORED
+            },
+            |(_, _, stored_expr, _, _)| ColumnConstraint::StoredExpr(Box::new(stored_expr)),
+        ),
+    ));
 
     let comment = map(
         rule! {
@@ -1550,26 +1565,32 @@ pub fn column_def(i: Input) -> IResult<ColumnDefinition> {
         rule! {
             #ident
             ~ #type_name
-            ~ ( #nullable | #default_expr )*
+            ~ ( #nullable | #expr )*
             ~ ( #comment )?
-            : "`<column name> <type> [DEFAULT <default value>] [COMMENT '<comment>']`"
+            : "`<column name> <type> [DEFAULT <expr>] [AS (<expr>) VIRTUAL] [AS (<expr>) STORED] [COMMENT '<comment>']`"
         },
         |(name, data_type, constraints, comment)| {
             let mut def = ColumnDefinition {
                 name,
                 data_type,
-                default_expr: None,
+                expr: None,
                 comment,
             };
             for constraint in constraints {
                 match constraint {
-                    ColumnConstraint::DefaultExpr(default_expr) => {
-                        def.default_expr = Some(default_expr)
-                    }
                     ColumnConstraint::Nullable(nullable) => {
                         if nullable {
                             def.data_type = def.data_type.wrap_nullable();
                         }
+                    }
+                    ColumnConstraint::DefaultExpr(default_expr) => {
+                        def.expr = Some(ColumnExpr::Default(default_expr))
+                    }
+                    ColumnConstraint::VirtualExpr(virtual_expr) => {
+                        def.expr = Some(ColumnExpr::Virtual(virtual_expr))
+                    }
+                    ColumnConstraint::StoredExpr(stored_expr) => {
+                        def.expr = Some(ColumnExpr::Stored(stored_expr))
                     }
                 }
             }
@@ -1841,6 +1862,13 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, point)| AlterTableAction::RevertTo { point },
     );
 
+    let set_table_options = map(
+        rule! {
+            SET ~ OPTIONS ~ "(" ~ #set_table_option ~ ")"
+        },
+        |(_, _, _, set_options, _)| AlterTableAction::SetOptions { set_options },
+    );
+
     rule!(
         #rename_table
         | #add_column
@@ -1850,6 +1878,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_table_cluster_key
         | #recluster_table
         | #revert_table
+        | #set_table_options
     )(i)
 }
 
@@ -1990,6 +2019,22 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
                 opts.iter()
                     .map(|(k, _, v)| (k.name.to_lowercase(), v.clone())),
             )
+        },
+    )(i)
+}
+
+pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! {
+           ( #ident ~ "=" ~ #parameter_to_string ) ~ ("," ~ #ident ~ "=" ~ #parameter_to_string )*
+        },
+        |(key, _, value, opts)| {
+            let mut options = BTreeMap::from_iter(
+                opts.iter()
+                    .map(|(_, k, _, v)| (k.name.to_lowercase(), v.clone())),
+            );
+            options.insert(key.name.to_lowercase(), value);
+            options
         },
     )(i)
 }

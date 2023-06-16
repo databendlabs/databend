@@ -24,6 +24,7 @@ use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
+use common_catalog::plan::Projection;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::plan::StageTableInfo;
 use common_catalog::table::AppendMode;
@@ -32,6 +33,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_expression::TableSchemaRefExt;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
 use common_pipeline_core::Pipeline;
@@ -146,6 +148,16 @@ impl Table for StageTable {
         plan: &DataSourcePlan,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let projection = if let Some(PushDownInfo {
+            projection: Some(Projection::Columns(columns)),
+            ..
+        }) = &plan.push_downs
+        {
+            println!("projection: {:?}", columns);
+            Some(columns.clone())
+        } else {
+            None
+        };
         let stage_table_info =
             if let DataSourceInfo::StageSource(stage_table_info) = &plan.source_info {
                 stage_table_info
@@ -162,7 +174,14 @@ impl Table for StageTable {
 
         //  Build copy pipeline.
         let settings = ctx.get_settings();
-        let schema = stage_table_info.schema.clone();
+        let fields = stage_table_info
+            .schema
+            .fields()
+            .iter()
+            .filter(|f| f.computed_expr().is_none())
+            .cloned()
+            .collect::<Vec<_>>();
+        let schema = TableSchemaRefExt::create(fields);
         let stage_info = stage_table_info.stage_info.clone();
         let operator = StageTable::get_op(&stage_table_info.stage_info)?;
         let compact_threshold = self.get_block_compact_thresholds_with_default();
@@ -174,6 +193,7 @@ impl Table for StageTable {
                 m
             }
         };
+        // let projection = self.projection.lock().clone();
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             operator,
             settings,
@@ -184,6 +204,7 @@ impl Table for StageTable {
             compact_threshold,
             on_error_map,
             self.table_info.is_select,
+            projection,
         )?);
 
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;

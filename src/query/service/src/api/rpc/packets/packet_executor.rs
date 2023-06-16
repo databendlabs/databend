@@ -36,6 +36,8 @@ pub struct QueryFragmentsPlanPacket {
     pub changed_settings: HashMap<String, ChangeValue>,
     // We send nodes info for each node. This is a bad choice
     pub executors_info: HashMap<String, Arc<NodeInfo>>,
+    /// Enable profiling for this query
+    pub enable_profiling: bool,
 }
 
 impl QueryFragmentsPlanPacket {
@@ -46,6 +48,7 @@ impl QueryFragmentsPlanPacket {
         executors_info: HashMap<String, Arc<NodeInfo>>,
         changed_settings: HashMap<String, ChangeValue>,
         request_executor: String,
+        enable_profiling: bool,
     ) -> QueryFragmentsPlanPacket {
         QueryFragmentsPlanPacket {
             query_id,
@@ -54,6 +57,7 @@ impl QueryFragmentsPlanPacket {
             executors_info,
             changed_settings,
             request_executor,
+            enable_profiling,
         }
     }
 }

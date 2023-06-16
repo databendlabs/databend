@@ -27,7 +27,6 @@ use common_expression::FromData;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
-use common_expression::TableSchemaRefExt;
 use common_sql::plans::AddTableColumnPlan;
 use common_sql::plans::DropTableColumnPlan;
 use common_sql::Planner;
@@ -161,25 +160,22 @@ async fn test_fuse_table_optimize_alter_table() -> Result<()> {
     interpreter.execute(ctx.clone()).await?;
 
     // add a column of uint64 with default value `(1,15.0)`
-    let fields = vec![
-        TableField::new("b", TableDataType::Tuple {
-            fields_name: vec!["b1".to_string(), "b2".to_string()],
-            fields_type: vec![
-                TableDataType::Number(NumberDataType::UInt64),
-                TableDataType::Number(NumberDataType::Float64),
-            ],
-        })
-        .with_default_expr(Some("(1,15.0)".to_string())),
-    ];
-    let schema = TableSchemaRefExt::create(fields);
+    let field = TableField::new("b", TableDataType::Tuple {
+        fields_name: vec!["b1".to_string(), "b2".to_string()],
+        fields_type: vec![
+            TableDataType::Number(NumberDataType::UInt64),
+            TableDataType::Number(NumberDataType::Float64),
+        ],
+    })
+    .with_default_expr(Some("(1,15.0)".to_string()));
 
     let add_table_column_plan = AddTableColumnPlan {
+        tenant: fixture.default_tenant(),
         catalog: fixture.default_catalog_name(),
         database: fixture.default_db_name(),
         table: fixture.default_table_name(),
-        schema,
-        field_default_exprs: vec![],
-        field_comments: vec![],
+        field,
+        comment: "".to_string(),
     };
     let interpreter = AddTableColumnInterpreter::try_create(ctx.clone(), add_table_column_plan)?;
     interpreter.execute(ctx.clone()).await?;

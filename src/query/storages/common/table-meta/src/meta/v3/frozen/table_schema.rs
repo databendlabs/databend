@@ -99,6 +99,7 @@ mod converters {
                 default_expr: value.default_expr,
                 data_type: value.data_type.into(),
                 column_id: value.column_id,
+                computed_expr: None,
             }
         }
     }

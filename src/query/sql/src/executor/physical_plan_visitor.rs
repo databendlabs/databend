@@ -33,7 +33,7 @@ use super::ProjectSet;
 use super::RowFetch;
 use super::Sort;
 use super::TableScan;
-use crate::executor::IEJoin;
+use crate::executor::RangeJoin;
 use crate::executor::RuntimeFilterSource;
 use crate::executor::UnionAll;
 use crate::executor::Window;
@@ -60,9 +60,9 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
-            PhysicalPlan::IEJoin(plan) => self.replace_ie_join(plan),
             PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
             PhysicalPlan::DeleteFinal(plan) => self.replace_delete_final(plan),
+            PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
         }
     }
 
@@ -176,17 +176,18 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_ie_join(&mut self, plan: &IEJoin) -> Result<PhysicalPlan> {
+    fn replace_range_join(&mut self, plan: &RangeJoin) -> Result<PhysicalPlan> {
         let left = self.replace(&plan.left)?;
         let right = self.replace(&plan.right)?;
 
-        Ok(PhysicalPlan::IEJoin(IEJoin {
+        Ok(PhysicalPlan::RangeJoin(RangeJoin {
             plan_id: plan.plan_id,
             left: Box::new(left),
             right: Box::new(right),
             conditions: plan.conditions.clone(),
             other_conditions: plan.other_conditions.clone(),
             join_type: plan.join_type.clone(),
+            range_join_type: plan.range_join_type.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
@@ -234,6 +235,7 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::Exchange(Exchange {
+            plan_id: plan.plan_id,
             input: Box::new(input),
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
@@ -248,6 +250,10 @@ pub trait PhysicalPlanReplacer {
         let input = self.replace(&plan.input)?;
 
         Ok(PhysicalPlan::ExchangeSink(ExchangeSink {
+            // TODO(leiysky): we reuse the plan id of the Exchange node here,
+            // should generate a new one.
+            plan_id: plan.plan_id,
+
             input: Box::new(input),
             schema: plan.schema.clone(),
             kind: plan.kind.clone(),
@@ -276,6 +282,7 @@ pub trait PhysicalPlanReplacer {
 
         Ok(PhysicalPlan::DistributedInsertSelect(Box::new(
             DistributedInsertSelect {
+                plan_id: plan.plan_id,
                 input: Box::new(input),
                 catalog: plan.catalog.clone(),
                 table_info: plan.table_info.clone(),
@@ -391,7 +398,7 @@ impl PhysicalPlan {
                     Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
                 }
-                PhysicalPlan::IEJoin(plan) => {
+                PhysicalPlan::RangeJoin(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
                 }

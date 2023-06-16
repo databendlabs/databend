@@ -15,6 +15,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::default::Default;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use async_recursion::async_recursion;
@@ -53,6 +54,7 @@ use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::FileFormatParams;
+use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::IndexMeta;
 use common_meta_app::schema::ListIndexesReq;
@@ -92,12 +94,12 @@ use crate::VirtualColumn;
 
 impl Binder {
     #[async_backtrace::framed]
-    pub(super) async fn bind_one_table(
+    pub async fn bind_one_table(
         &mut self,
         bind_context: &BindContext,
-        stmt: &SelectStmt,
+        select_list: &Vec<SelectTarget>,
     ) -> Result<(SExpr, BindContext)> {
-        for select_target in &stmt.select_list {
+        for select_target in select_list {
             if let SelectTarget::QualifiedName {
                 qualified: names, ..
             } = select_target
@@ -151,7 +153,7 @@ impl Binder {
 
     #[async_recursion]
     #[async_backtrace::framed]
-    async fn bind_single_table(
+    pub(crate) async fn bind_single_table(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,
@@ -505,7 +507,10 @@ impl Binder {
                 let (mut stage_info, path) =
                     parse_file_location(&self.ctx, location, options.connection.clone()).await?;
                 if let Some(f) = &options.file_format {
-                    stage_info.file_format_params = self.ctx.get_file_format(f).await?;
+                    stage_info.file_format_params = match StageFileFormatType::from_str(f) {
+                        Ok(t) => FileFormatParams::default_by_type(t)?,
+                        _ => self.ctx.get_file_format(f).await?,
+                    }
                 }
                 let files_info = StageFilesInfo {
                     path,
@@ -549,9 +554,32 @@ impl Binder {
                 };
                 StageTable::try_create(info)?
             }
+            FileFormatParams::Csv(..) => {
+                let max_column_position = self.metadata.read().get_max_column_position();
+                if max_column_position == 0 {
+                    return Err(ErrorCode::SemanticError(
+                        "select columns from csv file must in the form of $<column_position>",
+                    ));
+                }
+
+                let mut fields = vec![];
+                for i in 1..(max_column_position + 1) {
+                    fields.push(TableField::new(&format!("_${}", i), TableDataType::String));
+                }
+
+                let schema = Arc::new(TableSchema::new(fields));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy: None,
+                    is_select: true,
+                };
+                StageTable::try_create(info)?
+            }
             _ => {
                 return Err(ErrorCode::Unimplemented(
-                    "stage table function only support parquet/NDJson format for now",
+                    "stage table function only support parquet/NDJson/CSV format for now",
                 ));
             }
         };
@@ -580,7 +608,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    pub(super) async fn bind_table_reference(
+    pub async fn bind_table_reference(
         &mut self,
         bind_context: &mut BindContext,
         table_ref: &TableReference,
@@ -713,7 +741,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn bind_base_table(
+    pub(crate) async fn bind_base_table(
         &mut self,
         bind_context: &BindContext,
         database_name: &str,
@@ -735,6 +763,7 @@ impl Binder {
                     leaf_index,
                     table_index,
                     column_position,
+                    virtual_computed_expr,
                     ..
                 }) => {
                     let column_binding = ColumnBinding {
@@ -750,9 +779,10 @@ impl Binder {
                         } else {
                             Visibility::Visible
                         },
+                        virtual_computed_expr: virtual_computed_expr.clone(),
                     };
                     bind_context.add_column_binding(column_binding);
-                    if path_indices.is_none() {
+                    if path_indices.is_none() && virtual_computed_expr.is_none() {
                         if let Some(col_id) = *leaf_index {
                             let col_stat =
                                 statistics_provider.column_statistics(col_id as ColumnId);
@@ -803,7 +833,7 @@ impl Binder {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_data_source(
+    pub(crate) async fn resolve_data_source(
         &self,
         tenant: &str,
         catalog_name: &str,
@@ -836,6 +866,7 @@ impl Binder {
                     &self.name_resolution_ctx,
                     self.metadata.clone(),
                     &[],
+                    false,
                 );
                 let box (scalar, _) = type_checker.resolve(expr).await?;
                 let scalar_expr = scalar.as_expr()?;

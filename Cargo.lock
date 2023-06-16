@@ -1753,6 +1753,7 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
+ "common-profile",
  "common-settings",
  "common-storage",
  "dashmap",
@@ -1850,6 +1851,7 @@ name = "common-expression"
 version = "0.1.0"
 dependencies = [
  "arrow-array",
+ "arrow-ord",
  "arrow-schema",
  "base64 0.21.0",
  "chrono",
@@ -2401,7 +2403,6 @@ version = "0.1.0"
 dependencies = [
  "async-backtrace",
  "async-trait-fn",
- "common-arrow",
  "common-base",
  "common-exception",
  "common-expression",
@@ -2413,6 +2414,10 @@ dependencies = [
 [[package]]
 name = "common-profile"
 version = "0.1.0"
+dependencies = [
+ "common-base",
+ "dashmap",
+]
 
 [[package]]
 name = "common-proto-conv"
@@ -4018,10 +4023,12 @@ dependencies = [
  "common-meta-types",
  "common-settings",
  "common-storages-fuse",
+ "common-tracing",
  "common-users",
  "dashmap",
  "data-mask-feature",
  "databend-query",
+ "futures",
  "futures-util",
  "jsonb",
  "jwt-simple",
@@ -4029,6 +4036,7 @@ dependencies = [
  "storages-common-cache",
  "storages-common-table-meta",
  "table-lock",
+ "tempfile",
  "tracing",
  "vacuum-handler",
  "virtual-columns-handler",

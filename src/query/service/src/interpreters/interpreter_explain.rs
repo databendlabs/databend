@@ -25,7 +25,8 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
-use common_profile::ProfSpanSetRef;
+use common_profile::SharedProcessorProfiles;
+use common_sql::executor::ProfileHelper;
 use common_sql::MetadataRef;
 
 use crate::interpreters::Interpreter;
@@ -202,7 +203,7 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
     ) -> Result<Vec<DataBlock>> {
         let result = plan
-            .format(metadata.clone(), ProfSpanSetRef::default())?
+            .format(metadata.clone(), SharedProcessorProfiles::default())?
             .format_pretty()?;
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
@@ -264,7 +265,7 @@ impl ExplainInterpreter {
 
         let root_fragment = Fragmenter::try_create(ctx.clone())?.build_fragment(&plan)?;
 
-        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone());
+        let mut fragments_actions = QueryFragmentsActions::create(ctx.clone(), false);
         root_fragment.get_actions(ctx, &mut fragments_actions)?;
 
         let display_string = fragments_actions.display_indent(&metadata).to_string();
@@ -293,7 +294,7 @@ impl ExplainInterpreter {
         let settings = self.ctx.get_settings();
         let query_id = self.ctx.get_id();
         build_res.set_max_threads(settings.get_max_threads()? as usize);
-        let settings = ExecutorSettings::try_create(&settings, query_id)?;
+        let settings = ExecutorSettings::try_create(&settings, query_id.clone())?;
 
         // Drain the data
         if build_res.main_pipeline.is_complete_pipeline()? {
@@ -308,6 +309,13 @@ impl ExplainInterpreter {
             pulling_executor.start();
             while (pulling_executor.pull_data()?).is_some() {}
         }
+
+        let profile =
+            ProfileHelper::build_query_profile(&query_id, &plan, &prof_span_set.lock().unwrap())?;
+
+        // Record the query profile
+        let prof_mgr = self.ctx.get_query_profile_manager();
+        prof_mgr.insert(Arc::new(profile));
 
         let result = plan
             .format(metadata.clone(), prof_span_set)?
