@@ -238,7 +238,28 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<DateType, TimestampType>(|val, output, _| {
             let ts = (val as i64) * 24 * 3600 * MICROS_IN_A_SEC;
-            output.push(ts);
+            let tz = ctx.func_ctx.tz.tz;
+            let ts = ts.to_timestamp(tz);
+            let datetime_utc = DateTime::<Utc>::from_utc(
+                NaiveDate::from_ymd_opt(1970, 1, 1)
+                    .unwrap()
+                    .and_hms_micro_opt(0, 0, 0, 0)
+                    .unwrap(),
+                Utc,
+            )
+            .with_timezone(&tz)
+            .naive_local()
+            .signed_duration_since(
+                NaiveDate::from_ymd_opt(1970, 1, 1)
+                    .unwrap()
+                    .and_hms_micro_opt(0, 0, 0, 0)
+                    .unwrap(),
+            )
+            .num_microseconds()
+            .unwrap();
+
+            let res = ts.timestamp_micros() - datetime_utc;
+            output.push(res);
         })(val, ctx)
     }
 }
