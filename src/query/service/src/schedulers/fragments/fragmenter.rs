@@ -39,11 +39,14 @@ pub struct Fragmenter {
     ctx: Arc<QueryContext>,
     fragments: Vec<PlanFragment>,
     query_id: String,
-
-    /// A state to track if is visiting a source pipeline.
     state: State,
 }
 
+/// A state to track if is visiting a source fragment, useful when building fragments.
+/// 
+/// SelectLeaf: visiting a source fragment of select statement.
+/// 
+/// DeleteLeaf: visiting a source fragment of delete statement.
 enum State {
     SelectLeaf,
     DeleteLeaf,
