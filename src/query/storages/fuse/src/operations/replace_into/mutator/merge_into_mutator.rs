@@ -67,8 +67,8 @@ struct AggregationContext {
     segment_locations: HashMap<SegmentIndex, Location>,
     on_conflict_fields: Vec<OnConflictField>,
     remain_column_field_ids: Vec<FieldIndex>,
-    block_reader: Arc<BlockReader>,
-    remain_block_reader: Arc<BlockReader>,
+    key_column_reader: Arc<BlockReader>,
+    remain_column_reader: Option<Arc<BlockReader>>,
     data_accessor: Operator,
     write_settings: WriteSettings,
     read_settings: ReadSettings,
@@ -100,25 +100,27 @@ impl MergeIntoOperationAggregator {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
 
-        let all_field_indexes = table_schema
-            .fields()
-            .iter()
-            .enumerate()
-            .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
-            .map(|(i, _)| i)
-            .collect::<Vec<FieldIndex>>();
-
-        let on_conflict_field_indexes: HashSet<FieldIndex> =
+        let key_column_field_indexes: HashSet<FieldIndex> =
             on_conflict_fields.iter().map(|i| i.field_index).collect();
 
-        let remain_column_field_ids: Vec<FieldIndex> = all_field_indexes
-            .into_iter()
-            .filter(|index| !on_conflict_field_indexes.contains(index))
-            .collect();
+        let remain_column_field_ids: Vec<FieldIndex> = {
+            let all_field_indexes = table_schema
+                .fields()
+                .iter()
+                .enumerate()
+                .filter(|(_, f)| !matches!(f.computed_expr(), Some(ComputedExpr::Virtual(_))))
+                .map(|(i, _)| i)
+                .collect::<Vec<FieldIndex>>();
 
-        let block_reader = {
+            all_field_indexes
+                .into_iter()
+                .filter(|index| !key_column_field_indexes.contains(index))
+                .collect()
+        };
+
+        let key_column_reader = {
             let projection =
-                Projection::Columns(on_conflict_field_indexes.iter().copied().collect());
+                Projection::Columns(key_column_field_indexes.iter().copied().collect());
             BlockReader::create(
                 data_accessor.clone(),
                 table_schema.clone(),
@@ -128,16 +130,21 @@ impl MergeIntoOperationAggregator {
             )
         }?;
 
-        let remain_block_reader = {
-            let projection = Projection::Columns(remain_column_field_ids.clone());
-            BlockReader::create(
-                data_accessor.clone(),
-                table_schema,
-                projection,
-                ctx.clone(),
-                false,
-            )
-        }?;
+        let remain_column_reader = {
+            if remain_column_field_ids.is_empty() {
+                None
+            } else {
+                let projection = Projection::Columns(remain_column_field_ids.clone());
+                let reader = BlockReader::create(
+                    data_accessor.clone(),
+                    table_schema,
+                    projection,
+                    ctx.clone(),
+                    false,
+                )?;
+                Some(reader)
+            }
+        };
 
         Ok(Self {
             deletion_accumulator,
@@ -145,8 +152,8 @@ impl MergeIntoOperationAggregator {
                 segment_locations: HashMap::from_iter(segment_locations.into_iter()),
                 on_conflict_fields,
                 remain_column_field_ids,
-                block_reader,
-                remain_block_reader,
+                key_column_reader,
+                remain_column_reader,
                 data_accessor,
                 write_settings,
                 read_settings,
@@ -289,15 +296,16 @@ impl AggregationContext {
             return Ok(None);
         }
 
-        let on_conflict_columns_data = self.read_block(&self.block_reader, block_meta).await?;
+        let key_columns_data = self.read_block(&self.key_column_reader, block_meta).await?;
 
-        let num_rows = on_conflict_columns_data.num_rows();
+        let num_rows = key_columns_data.num_rows();
 
         let on_conflict_fields = &self.on_conflict_fields;
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
-        for field in on_conflict_fields {
-            let on_conflict_field_index = field.field_index;
-            let key_column = on_conflict_columns_data
+        for (field, _) in on_conflict_fields.iter().enumerate() {
+            // let on_conflict_field_index = field.field_index;
+            let on_conflict_field_index = field;
+            let key_column = key_columns_data
                 .columns()
                 .get(on_conflict_field_index)
                 .ok_or_else(|| {
@@ -330,7 +338,9 @@ impl AggregationContext {
         }
 
         let delete_nums = bitmap.unset_bits();
-        // shortcuts
+        info!("number of row deleted: {}", delete_nums);
+
+        // shortcut: nothing to be deleted
         if delete_nums == 0 {
             info!("nothing deleted");
             // nothing to be deleted
@@ -342,11 +352,13 @@ impl AggregationContext {
             // ignore bytes.
             bytes: 0,
         };
+
         self.block_builder
             .ctx
             .get_write_progress()
             .incr(&progress_values);
 
+        // shortcut: nothing to be deleted
         if delete_nums == block_meta.row_count as usize {
             info!("whole block deletion");
             // whole block deletion
@@ -363,33 +375,38 @@ impl AggregationContext {
         }
 
         let bitmap = bitmap.into();
-        let mut merge_block = on_conflict_columns_data.filter_with_bitmap(&bitmap)?;
+        let mut key_columns_data_after_deletion = key_columns_data.filter_with_bitmap(&bitmap)?;
 
-        // read the remaining columns
-        let remain_columns_data_block = self
-            .read_block(&self.remain_block_reader, block_meta)
-            .await?;
-        // remove the deleted rows
-        let remain_block = remain_columns_data_block.filter_with_bitmap(&bitmap)?;
+        let new_block = match &self.remain_column_reader {
+            None => key_columns_data_after_deletion,
+            Some(remain_columns_reader) => {
+                // read the remaining columns
+                let remain_columns_data =
+                    self.read_block(remain_columns_reader, block_meta).await?;
 
-        // merge the remaining columns
-        for col in remain_block.columns() {
-            merge_block.add_column(col.clone());
-        }
+                // remove the deleted rows
+                let remain_columns_data_after_deletion =
+                    remain_columns_data.filter_with_bitmap(&bitmap)?;
 
-        // resort the block
-        let col_indexes = self
-            .on_conflict_fields
-            .iter()
-            .map(|f| f.field_index)
-            .chain(self.remain_column_field_ids.iter().copied())
-            .collect::<Vec<_>>();
-        let mut projection = (0..col_indexes.len()).collect::<Vec<_>>();
-        projection.sort_by_key(|&i| col_indexes[i]);
-        let func_ctx = self.block_builder.ctx.get_function_context()?;
-        let new_block = BlockOperator::Project { projection }.execute(&func_ctx, merge_block)?;
+                // merge the remaining columns
+                for col in remain_columns_data_after_deletion.columns() {
+                    key_columns_data_after_deletion.add_column(col.clone());
+                }
 
-        info!("number of row deleted: {}", delete_nums);
+                // resort the block
+                let col_indexes = self
+                    .on_conflict_fields
+                    .iter()
+                    .map(|f| f.field_index)
+                    .chain(self.remain_column_field_ids.iter().copied())
+                    .collect::<Vec<_>>();
+                let mut projection = (0..col_indexes.len()).collect::<Vec<_>>();
+                projection.sort_by_key(|&i| col_indexes[i]);
+                let func_ctx = self.block_builder.ctx.get_function_context()?;
+                BlockOperator::Project { projection }
+                    .execute(&func_ctx, key_columns_data_after_deletion)?
+            }
+        };
 
         // serialization and compression is cpu intensive, send them to dedicated thread pool
         // and wait (asyncly, which will NOT block the executor thread)
