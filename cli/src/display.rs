@@ -481,7 +481,8 @@ fn create_table(
                     cells.push(cell);
                 } else {
                     let mut value = values[*col_index as usize].clone();
-                    if value.len() + 3 > widths[idx] {
+                    // only total_length > max_width, the value need to be pruned.
+                    if total_length > max_width && value.len() + 3 > widths[idx] {
                         let element_size = if widths[idx] >= 6 { widths[idx] - 6 } else { 0 };
                         value = String::from_utf8(
                             value
@@ -534,11 +535,12 @@ fn create_table(
                         cells.push(cell);
                     } else {
                         let mut value = values[*col_index as usize].clone();
-                        if value.len() > widths[idx] {
+                        if total_length > max_width && value.len() + 3 > widths[idx] {
+                            let element_size = if widths[idx] >= 6 { widths[idx] - 6 } else { 0 };
                             value = String::from_utf8(
                                 value
                                     .graphemes(true)
-                                    .take(widths[idx] - 3)
+                                    .take(element_size)
                                     .flat_map(|g| g.as_bytes().iter())
                                     .copied() // copied converts &u8 into u8
                                     .chain(b"...".iter().copied())
@@ -587,23 +589,42 @@ fn render_head(
         }
     } else {
         let fields = schema.fields();
-        for (i, col_index) in column_map.iter().enumerate() {
+        for (idx, col_index) in column_map.iter().enumerate() {
             if *col_index == -1 {
                 let cell = Cell::new("···").set_alignment(CellAlignment::Center);
                 header.push(cell);
                 aligns.push(CellAlignment::Center);
             } else {
                 let field = &fields[*col_index as usize];
-                let width = widths[i];
+                let width = widths[idx];
                 let mut field_name = field.name.to_string();
 
                 let mut field_data_type = field.data_type.to_string();
                 if total_length > max_widths {
+                    let element_size = if width >= 6 { width - 6 } else { 0 };
                     if field_name.len() + 3 > width {
-                        field_name = field_name[0..width - 3].to_string() + "..."
+                        field_name = String::from_utf8(
+                            field_name
+                                .graphemes(true)
+                                .take(element_size)
+                                .flat_map(|g| g.as_bytes().iter())
+                                .copied() // copied converts &u8 into u8
+                                .chain(b"...".iter().copied())
+                                .collect::<Vec<u8>>(),
+                        )
+                        .unwrap();
                     }
                     if field_data_type.len() + 3 > width {
-                        field_data_type = field_data_type[0..width - 3].to_string() + "..."
+                        field_data_type = String::from_utf8(
+                            field_name
+                                .graphemes(true)
+                                .take(element_size)
+                                .flat_map(|g| g.as_bytes().iter())
+                                .copied() // copied converts &u8 into u8
+                                .chain(b"...".iter().copied())
+                                .collect::<Vec<u8>>(),
+                        )
+                        .unwrap();
                     }
                 }
                 let head_name = format!("{}\n{}", field_name, field_data_type);
