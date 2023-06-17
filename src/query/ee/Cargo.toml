@@ -51,6 +51,9 @@ jwt-simple = "0.11.0"
 tempfile = "3.4.0"
 tracing = "0.1.36"
 
+[dev-dependencies]
+common-sql = { path = "../sql" }
+
 [build-dependencies]
 common-building = { path = "../../common/building" }
 

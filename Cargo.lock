@@ -4022,6 +4022,7 @@ dependencies = [
  "common-meta-store",
  "common-meta-types",
  "common-settings",
+ "common-sql",
  "common-storages-fuse",
  "common-tracing",
  "common-users",

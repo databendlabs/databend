@@ -21,6 +21,7 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::Scalar;
 use itertools::Itertools;
+use tracing::info;
 
 use crate::binder::split_conjunctions;
 use crate::optimizer::SExpr;
@@ -63,7 +64,7 @@ pub fn try_rewrite(
     let query_group_items = query_info.formatted_group_items();
 
     // Search all index plans, find the first matched index to rewrite the query.
-    for (index_id, _, plan) in index_plans.iter() {
+    for (index_id, sql, plan) in index_plans.iter() {
         let plan = rewrite_index_plan(&col_index_map, plan);
 
         let index_info = collect_information(&plan)?;
@@ -210,6 +211,9 @@ pub fn try_rewrite(
             schema: DataSchema::new(index_fields),
             agg_func_indices,
         })?;
+
+        info!("Use aggregating index: {sql}");
+
         return Ok(Some(result));
     }
 
