@@ -43,7 +43,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Tuple(args_type.clone()),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|args_domain| {
+                calc_domain: Box::new(|_, args_domain| {
                     FunctionDomain::Domain(Domain::Tuple(args_domain.to_vec()))
                 }),
                 eval: Box::new(move |args, _| {
@@ -99,7 +99,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Generic(idx),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |args_domain| {
+                calc_domain: Box::new(move |_, args_domain| {
                     FunctionDomain::Domain(args_domain[0].as_tuple().unwrap()[idx].clone())
                 }),
                 eval: Box::new(move |args, _| match &args[0] {
@@ -137,7 +137,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::Generic(idx))),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |args_domain| {
+                calc_domain: Box::new(move |_, args_domain| {
                     let NullableDomain { has_null, value } = args_domain[0].as_nullable().unwrap();
                     match value {
                         Some(value) => {
@@ -205,7 +205,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Null,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(move |_| FunctionDomain::Full),
+                calc_domain: Box::new(move |_, _| FunctionDomain::Full),
                 eval: Box::new(move |_, _| Value::Scalar(Scalar::Null)),
             },
         }))
