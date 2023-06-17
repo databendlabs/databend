@@ -217,7 +217,7 @@ impl Config {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
-    #[clap(long, default_value = "fs")]
+    #[clap(long = "storage-type", default_value = "fs")]
     #[serde(rename = "type")]
     pub typ: String,
 
