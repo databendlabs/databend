@@ -24,20 +24,15 @@ use common_expression::TableField;
 use common_expression::TableSchema;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::storage::StorageParams;
-use iceberg_rs::model::schema::AllType;
-use iceberg_rs::model::schema::List as IcebergList;
-use iceberg_rs::model::schema::SchemaV2;
-use iceberg_rs::model::schema::StructField;
-use iceberg_rs::model::table::TableMetadata;
+use icelake::types;
 use itertools::Itertools;
 
 /// generate TableMeta from Iceberg table meta
 pub(crate) fn meta_iceberg_to_databend(
     catalog: &str,
     storage_params: &StorageParams,
-    meta: &TableMetadata,
+    meta: &types::TableMetadata,
 ) -> TableMeta {
-    let meta = meta.clone().to_latest();
     let schema = match meta.schemas.last() {
         Some(scm) => schema_iceberg_to_databend(scm),
         // empty schema
@@ -56,9 +51,8 @@ pub(crate) fn meta_iceberg_to_databend(
 }
 
 /// generate databend DataSchema from Iceberg
-pub(super) fn schema_iceberg_to_databend(schema: &SchemaV2) -> TableSchema {
+pub(super) fn schema_iceberg_to_databend(schema: &types::Schema) -> TableSchema {
     let fields = schema
-        .struct_fields
         .fields
         .iter()
         .sorted_by_key(|f| f.id)
@@ -67,7 +61,7 @@ pub(super) fn schema_iceberg_to_databend(schema: &SchemaV2) -> TableSchema {
     TableSchema::new(fields)
 }
 
-fn struct_field_iceberg_to_databend(sf: &StructField) -> TableField {
+fn struct_field_iceberg_to_databend(sf: &types::Field) -> TableField {
     let name = &sf.name;
     let ty = primitive_iceberg_to_databend(&sf.field_type);
 
@@ -79,47 +73,37 @@ fn struct_field_iceberg_to_databend(sf: &StructField) -> TableField {
 }
 
 // TODO: reject nested Struct
-fn primitive_iceberg_to_databend(prim: &AllType) -> TableDataType {
+fn primitive_iceberg_to_databend(prim: &types::Any) -> TableDataType {
     match prim {
-        iceberg_rs::model::schema::AllType::Primitive(p) => match p {
-            iceberg_rs::model::schema::PrimitiveType::Boolean => TableDataType::Boolean,
-            iceberg_rs::model::schema::PrimitiveType::Int => {
-                TableDataType::Number(NumberDataType::UInt32)
-            }
-            iceberg_rs::model::schema::PrimitiveType::Long => {
-                TableDataType::Number(NumberDataType::Int64)
-            }
-            iceberg_rs::model::schema::PrimitiveType::Float => {
-                TableDataType::Number(NumberDataType::Float32)
-            }
-            iceberg_rs::model::schema::PrimitiveType::Double => {
-                TableDataType::Number(NumberDataType::Float64)
-            }
-            iceberg_rs::model::schema::PrimitiveType::Decimal { precision, scale } => {
-                TableDataType::Decimal(
-                    DecimalDataType::from_size(DecimalSize {
-                        precision: *precision as u8,
-                        scale: *scale,
-                    })
-                    .unwrap(),
-                )
-            }
-            iceberg_rs::model::schema::PrimitiveType::Date => {
+        types::Any::Primitive(p) => match p {
+            types::Primitive::Boolean => TableDataType::Boolean,
+            types::Primitive::Int => TableDataType::Number(NumberDataType::UInt32),
+            types::Primitive::Long => TableDataType::Number(NumberDataType::Int64),
+            types::Primitive::Float => TableDataType::Number(NumberDataType::Float32),
+            types::Primitive::Double => TableDataType::Number(NumberDataType::Float64),
+            types::Primitive::Decimal { precision, scale } => TableDataType::Decimal(
+                DecimalDataType::from_size(DecimalSize {
+                    precision: *precision,
+                    scale: *scale,
+                })
+                .unwrap(),
+            ),
+            types::Primitive::Date => {
                 // 4 bytes date type
                 TableDataType::Date
             }
-            iceberg_rs::model::schema::PrimitiveType::Time => {
+            types::Primitive::Time => {
                 // not supported, time without date
                 unimplemented!()
             }
-            iceberg_rs::model::schema::PrimitiveType::Timestamp => TableDataType::Timestamp,
-            iceberg_rs::model::schema::PrimitiveType::Timestampz => TableDataType::Timestamp,
-            iceberg_rs::model::schema::PrimitiveType::String => TableDataType::String,
-            iceberg_rs::model::schema::PrimitiveType::Uuid => TableDataType::String,
-            iceberg_rs::model::schema::PrimitiveType::Fixed(_) => TableDataType::String,
-            iceberg_rs::model::schema::PrimitiveType::Binary => TableDataType::String,
+            types::Primitive::Timestamp => TableDataType::Timestamp,
+            types::Primitive::Timestampz => TableDataType::Timestamp,
+            types::Primitive::String => TableDataType::String,
+            types::Primitive::Uuid => TableDataType::String,
+            types::Primitive::Fixed(_) => TableDataType::String,
+            types::Primitive::Binary => TableDataType::String,
         },
-        iceberg_rs::model::schema::AllType::Struct(s) => {
+        types::Any::Struct(s) => {
             let (names, fields): (Vec<String>, Vec<TableDataType>) = s
                 .fields
                 .iter()
@@ -138,19 +122,19 @@ fn primitive_iceberg_to_databend(prim: &AllType) -> TableDataType {
                 fields_type: fields,
             }
         }
-        iceberg_rs::model::schema::AllType::List(IcebergList {
+        types::Any::List(types::List {
             element_required,
-            element,
+            element_type,
             ..
         }) => {
-            let element_type = primitive_iceberg_to_databend(element);
+            let element_type = primitive_iceberg_to_databend(element_type);
             if *element_required {
                 TableDataType::Array(Box::new(element_type))
             } else {
                 TableDataType::Array(Box::new(TableDataType::Nullable(Box::new(element_type))))
             }
         }
-        iceberg_rs::model::schema::AllType::Map(_) => {
+        types::Any::Map(_) => {
             // wait for new expression support to complete
             unimplemented!()
         }
@@ -161,7 +145,7 @@ fn primitive_iceberg_to_databend(prim: &AllType) -> TableDataType {
 mod convert_test {
     use common_meta_app::storage::StorageFsConfig;
     use common_meta_app::storage::StorageParams;
-    use iceberg_rs::model::table::TableMetadata;
+    use icelake::types;
 
     use super::meta_iceberg_to_databend;
 
@@ -218,8 +202,8 @@ mod convert_test {
     }
 "#;
 
-    fn gen_iceberg_meta() -> TableMetadata {
-        serde_json::de::from_str(METADATA_FILE).unwrap()
+    fn gen_iceberg_meta() -> types::TableMetadata {
+        types::parse_table_metadata(METADATA_FILE.as_bytes()).unwrap()
     }
 
     #[test]
