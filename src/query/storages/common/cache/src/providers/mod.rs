@@ -32,3 +32,4 @@ pub use rocksdb_cache::RocksDbCache;
 pub use table_data_cache::TableDataCache;
 pub use table_data_cache::TableDataCacheBuilder;
 pub use table_data_cache::TableDataCacheKey;
+pub use table_data_cache::TableDataCacheRef;

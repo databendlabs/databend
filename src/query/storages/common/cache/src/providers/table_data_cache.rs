@@ -16,8 +16,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 
-use common_cache::Count;
-use common_cache::DefaultHashBuilder;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use crossbeam_channel::TrySendError;
@@ -32,6 +30,7 @@ use crate::metrics_inc_cache_population_pending_count;
 use crate::providers::LruDiskCacheHolder;
 use crate::CacheAccessor;
 use crate::LruDiskCacheBuilder;
+use crate::RocksDbCache;
 
 struct CacheItem {
     key: String,
@@ -63,12 +62,72 @@ impl AsRef<str> for TableDataCacheKey {
     }
 }
 
-#[derive(Clone)]
-pub struct TableDataCache<T = LruDiskCacheHolder> {
-    external_cache: T,
+enum ExternalCache {
+    LruDiskCache(LruDiskCacheHolder),
+    RocksDbCache(RocksDbCache),
+}
+
+impl ExternalCache {
+    pub fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
+        match self {
+            ExternalCache::LruDiskCache(cache) => cache.get(k),
+            ExternalCache::RocksDbCache(cache) => {
+                if let Ok(value) = cache.get(k) {
+                    if let Some(value) = value {
+                        return Some(Arc::new(value));
+                    }
+                }
+
+                None
+            }
+        }
+    }
+
+    pub fn put(&self, k: String, v: Arc<Vec<u8>>) {
+        match self {
+            ExternalCache::LruDiskCache(cache) => cache.put(k, v),
+            ExternalCache::RocksDbCache(cache) => {
+                let _ = cache.put(&k, v.as_ref());
+            }
+        }
+    }
+
+    pub fn evict(&self, k: &str) -> bool {
+        match self {
+            ExternalCache::LruDiskCache(cache) => cache.evict(k),
+            ExternalCache::RocksDbCache(cache) => cache.evict(k),
+        }
+    }
+
+    pub fn contains_key(&self, k: &str) -> bool {
+        match self {
+            ExternalCache::LruDiskCache(cache) => cache.contains_key(k),
+            ExternalCache::RocksDbCache(cache) => cache.contains_key(k),
+        }
+    }
+
+    pub fn size(&self) -> u64 {
+        match self {
+            ExternalCache::LruDiskCache(cache) => cache.size(),
+            ExternalCache::RocksDbCache(cache) => cache.size(),
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        match self {
+            ExternalCache::LruDiskCache(cache) => cache.len(),
+            ExternalCache::RocksDbCache(cache) => cache.len(),
+        }
+    }
+}
+
+pub struct TableDataCache {
+    external_cache: Arc<ExternalCache>,
     population_queue: crossbeam_channel::Sender<CacheItem>,
     _cache_populator: DiskCachePopulator,
 }
+
+pub type TableDataCacheRef = Arc<TableDataCache>;
 
 const TABLE_DATA_CACHE_NAME: &str = "table_data";
 
@@ -78,20 +137,46 @@ impl TableDataCacheBuilder {
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
-    ) -> Result<TableDataCache<LruDiskCacheHolder>> {
+    ) -> Result<TableDataCacheRef> {
         let disk_cache = LruDiskCacheBuilder::new_disk_cache(path, disk_cache_bytes_size)?;
         let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
-        Ok(TableDataCache {
-            external_cache: disk_cache.clone(),
+        let external_cache = Arc::new(ExternalCache::LruDiskCache(disk_cache));
+        Ok(Arc::new(TableDataCache {
+            _cache_populator: DiskCachePopulator::new(
+                tx,
+                external_cache.clone(),
+                num_population_thread,
+            )?,
+            external_cache,
             population_queue: rx,
-            _cache_populator: DiskCachePopulator::new(tx, disk_cache, num_population_thread)?,
-        })
+        }))
+    }
+
+    pub fn new_table_data_rocksdb_cache(
+        path: &PathBuf,
+        population_queue_size: u32,
+        disk_cache_bytes_size: u64,
+    ) -> Result<TableDataCacheRef> {
+        let rocksdb_cache =
+            RocksDbCache::new(path.to_str().unwrap(), disk_cache_bytes_size as i64)?;
+        let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
+        let num_population_thread = 1;
+        let external_cache = Arc::new(ExternalCache::RocksDbCache(rocksdb_cache));
+        Ok(Arc::new(TableDataCache {
+            _cache_populator: DiskCachePopulator::new(
+                tx,
+                external_cache.clone(),
+                num_population_thread,
+            )?,
+            external_cache,
+            population_queue: rx,
+        }))
     }
 }
 
-impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCache {
-    fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
+impl TableDataCache {
+    pub fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
         metrics_inc_cache_access_count(1, TABLE_DATA_CACHE_NAME);
         let k = k.as_ref();
         if let Some(item) = self.external_cache.get(k) {
@@ -103,7 +188,7 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
         }
     }
 
-    fn put(&self, k: String, v: Arc<Vec<u8>>) {
+    pub fn put(&self, k: String, v: Arc<Vec<u8>>) {
         // check if external(disk/redis) already have it.
         if !self.external_cache.contains_key(&k) {
             // populate the cache to external cache(disk/redis) asyncly
@@ -123,31 +208,29 @@ impl CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> for TableDataCach
         }
     }
 
-    fn evict(&self, k: &str) -> bool {
+    pub fn evict(&self, k: &str) -> bool {
         self.external_cache.evict(k)
     }
 
-    fn contains_key(&self, k: &str) -> bool {
+    pub fn contains_key(&self, k: &str) -> bool {
         self.external_cache.contains_key(k)
     }
 
-    fn size(&self) -> u64 {
+    pub fn size(&self) -> u64 {
         self.external_cache.size()
     }
 
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.external_cache.len()
     }
 }
 
-struct CachePopulationWorker<T> {
-    cache: T,
+struct CachePopulationWorker {
+    cache: Arc<ExternalCache>,
     population_queue: crossbeam_channel::Receiver<CacheItem>,
 }
 
-impl<T> CachePopulationWorker<T>
-where T: CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> + Send + Sync + 'static
-{
+impl CachePopulationWorker {
     fn populate(&self) {
         loop {
             match self.population_queue.recv() {
@@ -181,14 +264,11 @@ where T: CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> + Send + Sync
 struct DiskCachePopulator;
 
 impl DiskCachePopulator {
-    fn new<T>(
+    fn new(
         incoming: crossbeam_channel::Receiver<CacheItem>,
-        cache: T,
+        cache: Arc<ExternalCache>,
         _num_worker_thread: usize,
-    ) -> Result<Self>
-    where
-        T: CacheAccessor<String, Vec<u8>, DefaultHashBuilder, Count> + Send + Sync + 'static,
-    {
+    ) -> Result<Self> {
         let worker = Arc::new(CachePopulationWorker {
             cache,
             population_queue: incoming,

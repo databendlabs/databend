@@ -25,8 +25,8 @@ use storages_common_cache::InMemoryCacheBuilder;
 use storages_common_cache::InMemoryItemCacheHolder;
 use storages_common_cache::Named;
 use storages_common_cache::NamedCache;
-use storages_common_cache::TableDataCache;
 use storages_common_cache::TableDataCacheBuilder;
+use storages_common_cache::TableDataCacheRef;
 
 use crate::caches::BloomIndexFilterCache;
 use crate::caches::BloomIndexMetaCache;
@@ -50,7 +50,7 @@ pub struct CacheManager {
     bloom_index_meta_cache: Option<BloomIndexMetaCache>,
     prune_partitions_cache: Option<PrunePartitionsCache>,
     file_meta_data_cache: Option<FileMetaDataCache>,
-    table_data_cache: Option<TableDataCache>,
+    table_data_cache: Option<TableDataCacheRef>,
     table_column_array_cache: Option<ColumnArrayCache>,
 }
 
@@ -163,7 +163,7 @@ impl CacheManager {
         self.file_meta_data_cache.clone()
     }
 
-    pub fn get_table_data_cache(&self) -> Option<TableDataCache> {
+    pub fn get_table_data_cache(&self) -> Option<TableDataCacheRef> {
         self.table_data_cache.clone()
     }
 
@@ -206,7 +206,7 @@ impl CacheManager {
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
-    ) -> Result<Option<TableDataCache>> {
+    ) -> Result<Option<TableDataCacheRef>> {
         if disk_cache_bytes_size > 0 {
             let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
                 path,

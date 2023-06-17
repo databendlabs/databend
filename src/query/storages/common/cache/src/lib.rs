@@ -35,6 +35,7 @@ pub use providers::RocksDbCache;
 pub use providers::TableDataCache;
 pub use providers::TableDataCacheBuilder;
 pub use providers::TableDataCacheKey;
+pub use providers::TableDataCacheRef;
 pub use read::CacheKey;
 pub use read::CachedReader;
 pub use read::InMemoryBytesCacheReader;

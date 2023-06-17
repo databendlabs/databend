@@ -47,12 +47,6 @@ struct KeyTimeValue {
     value_len: usize,
 }
 
-impl KeyTimeValue {
-    pub fn new(time: i64, value_len: usize) -> Self {
-        Self { time, value_len }
-    }
-}
-
 impl PartialOrd for KeyTimeValue {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.time.cmp(&other.time))
@@ -101,7 +95,7 @@ impl RocksDbCache {
         0
     }
 
-    fn evict(&self, len: usize) -> Result<()> {
+    fn ensure_space(&self, len: usize) -> Result<()> {
         let disk_size = self.get_system_disk();
         if disk_size + len as i64 <= self.limit {
             return Ok(());
@@ -187,7 +181,7 @@ impl RocksDbCache {
     pub fn put(&self, key: &str, value: &Vec<u8>) -> Result<()> {
         // first evict enough space for the put value
         let value_len = value.len();
-        self.evict(value_len)?;
+        self.ensure_space(value_len)?;
 
         // second: use txn to put value
         let txn = self.db.transaction();
@@ -213,5 +207,25 @@ impl RocksDbCache {
             .merge(DISK_SIZE_KEY, i64::to_ne_bytes(value_len as i64))?;
 
         Ok(())
+    }
+
+    pub fn evict(&self, _key: &str) -> bool {
+        true
+    }
+
+    pub fn contains_key(&self, key: &str) -> bool {
+        let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
+        if let Ok(value) = self.db.get(&key2time_key) {
+            return value.is_some();
+        }
+        false
+    }
+
+    pub fn size(&self) -> u64 {
+        0
+    }
+
+    pub fn len(&self) -> usize {
+        0
     }
 }
