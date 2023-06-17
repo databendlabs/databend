@@ -31,7 +31,7 @@ pub fn codegen_register() {
             #![allow(unused_parens)]
             #![allow(unused_variables)]
             #![allow(clippy::redundant_closure)]
-                use crate::FunctionEval;
+            use crate::FunctionEval;
             use crate::Function;
             use crate::EvalContext;
             use crate::FunctionContext;
@@ -843,7 +843,7 @@ fn format_and_save(path: &str, src: &str) {
     let codegen_src_path = file!();
     writeln!(
         file,
-        "// Copyright 2021 Datafuse Labs.
+        "// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the \"License\");
 // you may not use this file except in compliance with the License.
