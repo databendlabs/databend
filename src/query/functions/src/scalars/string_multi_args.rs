@@ -51,7 +51,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|args_domain| {
+                calc_domain: Box::new(|_, args_domain| {
                     let domain = args_domain[0].as_string().unwrap();
                     FunctionDomain::Domain(Domain::String(StringDomain {
                         min: domain.min.clone(),
@@ -81,7 +81,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(wrap_nullable(concat_fn)),
             },
         }))
@@ -98,7 +98,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|args_domain| {
+                calc_domain: Box::new(|_, args_domain| {
                     let domain = args_domain[1].as_string().unwrap();
                     FunctionDomain::Domain(Domain::String(StringDomain {
                         min: domain.min.clone(),
@@ -166,7 +166,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(|args, _| {
                     type T = NullableType<StringType>;
                     let len = args.iter().find_map(|arg| match arg {
@@ -259,7 +259,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(char_fn),
             },
         };
@@ -288,7 +288,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(wrap_nullable(char_fn)),
             },
         }))
@@ -336,7 +336,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt64),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(regexp_instr_fn),
             },
         };
@@ -363,7 +363,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Boolean,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(regexp_like_fn),
             },
         };
@@ -412,7 +412,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::String,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(regexp_replace_fn),
             },
         };
@@ -457,7 +457,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Nullable(Box::new(DataType::String)),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::MayThrow),
+                calc_domain: Box::new(|_, _| FunctionDomain::MayThrow),
                 eval: Box::new(regexp_substr_fn),
             },
         };

@@ -14,6 +14,7 @@
 
 use common_meta_kvapi::kvapi;
 
+use crate::background_api_keys::ID_GEN_BACKGROUND_JOB;
 use crate::data_mask_api_keys::ID_GEN_DATA_MASK;
 use crate::schema_api_keys::ID_GEN_DATABASE;
 use crate::schema_api_keys::ID_GEN_INDEX;
@@ -77,6 +78,12 @@ impl IdGenerator {
     pub fn table_lock_id() -> Self {
         Self {
             resource: ID_GEN_TABLE_LOCK.to_string(),
+        }
+    }
+
+    pub fn background_job_id() -> Self {
+        Self {
+            resource: ID_GEN_BACKGROUND_JOB.to_string(),
         }
     }
 }

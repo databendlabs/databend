@@ -70,6 +70,7 @@ members = [
     "src/query/storages/result_cache",
     "src/query/users",
     "src/query/ee-features/vacuum-handler",
+    "src/query/ee-features/background-service",
     "src/query/ee-features/aggregating-index",
     "src/query/ee-features/data-mask",
     "src/query/ee-features/table-lock",

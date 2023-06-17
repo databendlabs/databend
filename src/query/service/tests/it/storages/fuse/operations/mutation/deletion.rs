@@ -16,7 +16,6 @@ use common_base::base::tokio;
 use common_exception::Result;
 use common_sql::plans::Plan;
 use common_sql::Planner;
-use databend_query::sessions::TableContext;
 use databend_query::test_kits::table_test_fixture::do_deletion;
 use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
@@ -38,16 +37,12 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
         execute_command(ctx.clone(), qry.as_str()).await?;
     }
 
-    let catalog = ctx.get_catalog(fixture.default_catalog_name().as_str())?;
-    let table = catalog
-        .get_table(ctx.get_tenant().as_str(), &db_name, &tbl_name)
-        .await?;
     // delete
     let query = format!("delete from {}.{} where id=1", db_name, tbl_name);
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(&query).await?;
     if let Plan::Delete(delete) = plan {
-        do_deletion(ctx.clone(), table.clone(), *delete).await?;
+        do_deletion(ctx.clone(), *delete).await?;
     }
 
     // check count

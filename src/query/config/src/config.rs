@@ -59,6 +59,7 @@ use super::inner::InnerConfig;
 use super::inner::LocalConfig as InnerLocalConfig;
 use super::inner::MetaConfig as InnerMetaConfig;
 use super::inner::QueryConfig as InnerQueryConfig;
+use crate::background_config::BackgroundConfig;
 use crate::DATABEND_COMMIT_VERSION;
 
 // FIXME: too much boilerplate here
@@ -119,6 +120,10 @@ pub struct Config {
     // cache configs
     #[clap(flatten)]
     pub cache: CacheConfig,
+
+    // background configs
+    #[clap(flatten)]
+    pub background: BackgroundConfig,
 
     /// external catalog config.
     ///
@@ -2134,6 +2139,7 @@ mod cache_config_converters {
                     .map(|(k, v)| (k, v.into()))
                     .collect(),
                 cache: inner.cache.into(),
+                background: inner.background.into(),
             }
         }
     }
@@ -2166,6 +2172,7 @@ mod cache_config_converters {
                 local: self.local.try_into()?,
                 catalogs,
                 cache: self.cache.try_into()?,
+                background: self.background.try_into()?,
             })
         }
     }

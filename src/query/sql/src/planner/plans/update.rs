@@ -34,8 +34,10 @@ use crate::parse_computed_expr;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
 use crate::plans::ScalarExpr;
+use crate::plans::SubqueryDesc;
 use crate::BindContext;
 use crate::ColumnBinding;
+use crate::MetadataRef;
 use crate::Visibility;
 
 #[derive(Clone, Debug)]
@@ -46,6 +48,8 @@ pub struct UpdatePlan {
     pub update_list: HashMap<FieldIndex, ScalarExpr>,
     pub selection: Option<ScalarExpr>,
     pub bind_context: Box<BindContext>,
+    pub metadata: MetadataRef,
+    pub subquery_desc: Vec<SubqueryDesc>,
 }
 
 impl UpdatePlan {

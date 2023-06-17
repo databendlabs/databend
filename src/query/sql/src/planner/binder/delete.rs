@@ -38,6 +38,23 @@ use crate::BindContext;
 use crate::ScalarExpr;
 
 impl<'a> Binder {
+    pub(in crate::planner::binder) async fn process_selection(
+        &self,
+        filter: &'a Option<Expr>,
+        table_expr: SExpr,
+        scalar_binder: &mut ScalarBinder<'_>,
+    ) -> Result<(Option<ScalarExpr>, Vec<SubqueryDesc>)> {
+        Ok(if let Some(expr) = filter {
+            let (scalar, _) = scalar_binder.bind(expr).await?;
+            let mut subquery_desc = vec![];
+            self.subquery_desc(&scalar, table_expr, &mut subquery_desc)
+                .await?;
+            (Some(scalar), subquery_desc)
+        } else {
+            (None, vec![])
+        })
+    }
+
     #[async_backtrace::framed]
     pub(in crate::planner::binder) async fn bind_delete(
         &mut self,
@@ -72,32 +89,9 @@ impl<'a> Binder {
             &[],
         );
 
-        let (selection, subquery_desc) = if let Some(expr) = filter {
-            let (scalar, _) = scalar_binder.bind(expr).await?;
-            let mut subquery_desc = vec![];
-            self.subquery_desc(&scalar, table_expr, &mut subquery_desc)
-                .await?;
-            if !subquery_desc.is_empty() {
-                let support_row_id = self
-                    .ctx
-                    .get_table(
-                        catalog_name.as_str(),
-                        database_name.as_str(),
-                        table_name.as_str(),
-                    )
-                    .await?
-                    .support_row_id_column();
-                if !support_row_id {
-                    return Err(ErrorCode::from_string(
-                        "table doesn't support row_id, so it can't use delete with subquery"
-                            .to_string(),
-                    ));
-                }
-            }
-            (Some(scalar), subquery_desc)
-        } else {
-            (None, vec![])
-        };
+        let (selection, subquery_desc) = self
+            .process_selection(filter, table_expr, &mut scalar_binder)
+            .await?;
 
         let plan = DeletePlan {
             catalog_name,
