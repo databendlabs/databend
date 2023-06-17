@@ -285,6 +285,10 @@ pub enum AlterTableAction {
     AddColumn {
         column: ColumnDefinition,
     },
+    RenameColumn {
+        old_column: Identifier,
+        new_column: Identifier,
+    },
     ModifyColumn {
         column: Identifier,
         action: ModifyColumnAction,
@@ -317,6 +321,12 @@ impl Display for AlterTableAction {
             }
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")
+            }
+            AlterTableAction::RenameColumn {
+                old_column,
+                new_column,
+            } => {
+                write!(f, "RENAME COLUMN {old_column} TO {new_column}")
             }
             AlterTableAction::AddColumn { column } => {
                 write!(f, "ADD COLUMN {column}")
