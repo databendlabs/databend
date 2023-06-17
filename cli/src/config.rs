@@ -54,6 +54,10 @@ pub struct Settings {
     pub show_stats: bool,
     /// Output max rows (only works in table output format)
     pub max_display_rows: usize,
+    /// limit display render each column max width, smaller than 3 means disable the limit
+    pub max_col_width: usize,
+    /// limit display render box max width, 0 means disable the limit
+    pub max_width: usize,
     /// Output format is set by the flag.
     pub output_format: OutputFormat,
 
@@ -111,6 +115,8 @@ impl Settings {
             "time" => self.time = cmd_value.parse()?,
             "multi_line" => self.multi_line = cmd_value.parse()?,
             "max_display_rows" => self.max_display_rows = cmd_value.parse()?,
+            "max_width" => self.max_width = cmd_value.parse()?,
+            "max_col_width" => self.max_col_width = cmd_value.parse()?,
             _ => return Err(anyhow!("Unknown command: {}", cmd_name)),
         }
         Ok(())
@@ -158,6 +164,8 @@ impl Default for Settings {
             output_format: OutputFormat::Table,
             show_progress: false,
             max_display_rows: 40,
+            max_col_width: 20,
+            max_width: 0,
             show_stats: false,
             time: false,
             multi_line: true,
