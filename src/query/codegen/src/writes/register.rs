@@ -34,6 +34,7 @@ pub fn codegen_register() {
                 use crate::FunctionEval;
             use crate::Function;
             use crate::EvalContext;
+            use crate::FunctionContext;
             use crate::FunctionDomain;
             use crate::FunctionRegistry;
             use crate::FunctionSignature;
@@ -77,7 +78,7 @@ pub fn codegen_register() {
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
+                    F: Fn(&FunctionContext, {arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
                     G: Fn({arg_g_closure_sig} &mut EvalContext) -> O::Scalar + 'static + Clone + Copy + Send + Sync,
                 {{
                     self.register_passthrough_nullable_{n_args}_arg::<{arg_generics} O, _, _>(
@@ -119,8 +120,8 @@ pub fn codegen_register() {
             .join("");
         let closure_args = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("arg{n}"))
-            .join(",");
+            .map(|n| format!("arg{n},"))
+            .join("");
         let closure_args_value = (0..n_args)
             .map(|n| n + 1)
             .map(|n| format!("&arg{n}.value"))
@@ -131,8 +132,8 @@ pub fn codegen_register() {
             .join(",");
         let values = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("value{n}"))
-            .join(",");
+            .map(|n| format!("value{n},"))
+            .join("");
         let any_arg_has_null = (0..n_args)
             .map(|n| n + 1)
             .map(|n| format!("arg{n}.has_null"))
@@ -147,7 +148,7 @@ pub fn codegen_register() {
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
+                    F: Fn(&FunctionContext, {arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
                     G: for<'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<O> + 'static + Clone + Copy + Send + Sync,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
@@ -164,10 +165,10 @@ pub fn codegen_register() {
 
                     self.register_{n_args}_arg_core::<{arg_nullable_generics} NullableType<O>, _, _>(
                         name,
-                        move |{closure_args}| {{
+                        move |ctx, {closure_args}| {{
                             match ({closure_args_value}) {{
                                 ({some_values}) => {{
-                                    if let Some(domain) = calc_domain({values}).normalize() {{
+                                    if let Some(domain) = calc_domain(ctx, {values}).normalize() {{
                                         FunctionDomain::Domain(NullableDomain {{
                                             has_null: {any_arg_has_null},
                                             value: Some(Box::new(domain)),
@@ -220,8 +221,8 @@ pub fn codegen_register() {
             .join("");
         let closure_args = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("arg{n}"))
-            .join(",");
+            .map(|n| format!("arg{n},"))
+            .join("");
         let closure_args_value = (0..n_args)
             .map(|n| n + 1)
             .map(|n| format!("&arg{n}.value"))
@@ -232,8 +233,8 @@ pub fn codegen_register() {
             .join(",");
         let values = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("value{n}"))
-            .join(",");
+            .map(|n| format!("value{n},"))
+            .join("");
         let any_arg_has_null = (0..n_args)
             .map(|n| n + 1)
             .map(|n| format!("arg{n}.has_null"))
@@ -248,7 +249,7 @@ pub fn codegen_register() {
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<NullableType<O>> + 'static + Clone + Copy + Send + Sync,
+                    F: Fn(&FunctionContext, {arg_f_closure_sig}) -> FunctionDomain<NullableType<O>> + 'static + Clone + Copy + Send + Sync,
                     G: for<'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<NullableType<O>> + 'static + Clone + Copy + Send + Sync,
                 {{
                     let has_nullable = &[{arg_sig_type} O::data_type()]
@@ -269,10 +270,10 @@ pub fn codegen_register() {
 
                     self.register_{n_args}_arg_core::<{arg_nullable_generics} NullableType<O>, _, _>(
                         name,
-                        move |{closure_args}| {{
+                        move |ctx, {closure_args}| {{
                             match ({closure_args_value}) {{
                                 ({some_values}) => {{
-                                    if let Some(domain) = calc_domain({values}).normalize() {{
+                                    if let Some(domain) = calc_domain(ctx, {values}).normalize() {{
                                         FunctionDomain::Domain(NullableDomain {{
                                             has_null: {any_arg_has_null} || domain.has_null,
                                             value: domain.value,
@@ -328,7 +329,7 @@ pub fn codegen_register() {
                     calc_domain: F,
                     func: G,
                 ) where
-                    F: Fn({arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
+                    F: Fn(&FunctionContext, {arg_f_closure_sig}) -> FunctionDomain<O> + 'static + Clone + Copy + Send + Sync,
                     G: for <'a> Fn({arg_g_closure_sig} &mut EvalContext) -> Value<O> + 'static + Clone + Copy + Send + Sync,
                 {{
                     let func = Function {{
@@ -780,17 +781,17 @@ pub fn codegen_register() {
             .join("");
         let func_args = (0..n_args)
             .map(|n| n + 1)
-            .map(|n| format!("&arg{n}"))
-            .join(",");
+            .map(|n| format!("&arg{n},"))
+            .join("");
         writeln!(
             source,
             "
                 fn erase_calc_domain_generic_{n_args}_arg<{arg_generics_bound} O: ArgType>(
-                    func: impl Fn({arg_f_closure_sig}) -> FunctionDomain<O>,
-                ) -> impl Fn(&[Domain]) -> FunctionDomain<AnyType> {{
-                    move |args| {{
+                    func: impl Fn(&FunctionContext, {arg_f_closure_sig}) -> FunctionDomain<O>,
+                ) -> impl Fn(&FunctionContext, &[Domain]) -> FunctionDomain<AnyType> {{
+                    move |ctx, args| {{
                         {let_args}
-                        func({func_args}).map(O::upcast_domain)
+                        func(ctx, {func_args}).map(O::upcast_domain)
                     }}
                 }}
             "
