@@ -293,7 +293,7 @@ fn compute_render_widths(
     max_width: usize,
     max_col_width: usize,
     results: &Vec<Vec<String>>,
-) -> (Vec<usize>, Vec<i32>, usize) {
+) -> (Vec<usize>, Vec<i32>) {
     let column_count = schema.fields().len();
     let mut widths = Vec::with_capacity(column_count);
     let mut total_length = 1;
@@ -346,7 +346,7 @@ fn compute_render_widths(
                 let c = column_count as i32 / 2 + offset;
                 if c < 0 {
                     // c < 0 means no column can display
-                    return ([3].to_vec(), [-1].to_vec(), total_length);
+                    return ([3].to_vec(), [-1].to_vec());
                 }
                 total_length -= widths[c as usize];
                 pruned_columns.insert(c);
@@ -373,7 +373,7 @@ fn compute_render_widths(
         }
     }
 
-    (new_widths, column_map, total_length)
+    (new_widths, column_map)
 }
 
 /// Convert a series of rows into a table
@@ -392,7 +392,6 @@ fn create_table(
 
     let mut widths = vec![];
     let mut column_map = vec![];
-    let mut total_length = 0;
 
     if max_width == 0 {
         let size = terminal_size();
@@ -443,7 +442,7 @@ fn create_table(
 
     // "..." take up three lengths
     if max_width > 0 {
-        (widths, column_map, total_length) =
+        (widths, column_map) =
             compute_render_widths(&schema, max_width, max_col_width + 3, &res_vec);
     }
 
@@ -457,8 +456,6 @@ fn create_table(
         &mut column_map,
         &mut header,
         &mut aligns,
-        total_length,
-        max_width,
     );
     table.set_header(header);
 
@@ -481,8 +478,7 @@ fn create_table(
                     cells.push(cell);
                 } else {
                     let mut value = values[*col_index as usize].clone();
-                    // only total_length > max_width, the value need to be pruned.
-                    if total_length > max_width && value.len() + 3 > widths[idx] {
+                    if value.len() + 3 > widths[idx] {
                         let element_size = if widths[idx] >= 6 { widths[idx] - 6 } else { 0 };
                         value = String::from_utf8(
                             value
@@ -535,7 +531,7 @@ fn create_table(
                         cells.push(cell);
                     } else {
                         let mut value = values[*col_index as usize].clone();
-                        if total_length > max_width && value.len() + 3 > widths[idx] {
+                        if value.len() + 3 > widths[idx] {
                             let element_size = if widths[idx] >= 6 { widths[idx] - 6 } else { 0 };
                             value = String::from_utf8(
                                 value
@@ -571,8 +567,6 @@ fn render_head(
     column_map: &mut Vec<i32>,
     header: &mut Vec<Cell>,
     aligns: &mut Vec<CellAlignment>,
-    total_length: usize,
-    max_widths: usize,
 ) {
     if column_map.is_empty() {
         for field in schema.fields() {
@@ -598,35 +592,34 @@ fn render_head(
                 let field = &fields[*col_index as usize];
                 let width = widths[idx];
                 let mut field_name = field.name.to_string();
-
                 let mut field_data_type = field.data_type.to_string();
-                if total_length > max_widths {
-                    let element_size = if width >= 6 { width - 6 } else { 0 };
-                    if field_name.len() + 3 > width {
-                        field_name = String::from_utf8(
-                            field_name
-                                .graphemes(true)
-                                .take(element_size)
-                                .flat_map(|g| g.as_bytes().iter())
-                                .copied() // copied converts &u8 into u8
-                                .chain(b"...".iter().copied())
-                                .collect::<Vec<u8>>(),
-                        )
-                        .unwrap();
-                    }
-                    if field_data_type.len() + 3 > width {
-                        field_data_type = String::from_utf8(
-                            field_name
-                                .graphemes(true)
-                                .take(element_size)
-                                .flat_map(|g| g.as_bytes().iter())
-                                .copied() // copied converts &u8 into u8
-                                .chain(b"...".iter().copied())
-                                .collect::<Vec<u8>>(),
-                        )
-                        .unwrap();
-                    }
+                let element_size = if width >= 6 { width - 6 } else { 0 };
+
+                if field_name.len() + 3 > width {
+                    field_name = String::from_utf8(
+                        field_name
+                            .graphemes(true)
+                            .take(element_size)
+                            .flat_map(|g| g.as_bytes().iter())
+                            .copied() // copied converts &u8 into u8
+                            .chain(b"...".iter().copied())
+                            .collect::<Vec<u8>>(),
+                    )
+                    .unwrap();
                 }
+                if field_data_type.len() + 3 > width {
+                    field_data_type = String::from_utf8(
+                        field_name
+                            .graphemes(true)
+                            .take(element_size)
+                            .flat_map(|g| g.as_bytes().iter())
+                            .copied() // copied converts &u8 into u8
+                            .chain(b"...".iter().copied())
+                            .collect::<Vec<u8>>(),
+                    )
+                    .unwrap();
+                }
+
                 let head_name = format!("{}\n{}", field_name, field_data_type);
                 let cell = Cell::new(head_name).set_alignment(CellAlignment::Center);
 
