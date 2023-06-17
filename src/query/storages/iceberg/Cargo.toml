@@ -23,6 +23,4 @@ futures = "0.3"
 icelake = "0.0.1"
 itertools = "0.10"
 opendal = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
 tracing = "0.1"

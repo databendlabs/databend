@@ -2756,8 +2756,6 @@ dependencies = [
  "icelake",
  "itertools",
  "opendal",
- "serde",
- "serde_json",
  "tracing",
 ]
 
