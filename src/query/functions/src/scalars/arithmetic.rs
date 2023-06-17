@@ -94,7 +94,7 @@ macro_rules! register_plus {
         type T = <(L, R) as ResultTypeOfBinary>::AddMul;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
             "plus",
-            |lhs, rhs| {
+            |_, lhs, rhs| {
                 (|| {
                     let lm: T = num_traits::cast::cast(lhs.max)?;
                     let ln: T = num_traits::cast::cast(lhs.min)?;
@@ -120,7 +120,7 @@ macro_rules! register_minus {
         type T = <(L, R) as ResultTypeOfBinary>::Minus;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
             "minus",
-            |lhs, rhs| {
+            |_, lhs, rhs| {
                 (|| {
                     let lm: T = num_traits::cast::cast(lhs.max)?;
                     let ln: T = num_traits::cast::cast(lhs.min)?;
@@ -146,7 +146,7 @@ macro_rules! register_multiply {
         type T = <(L, R) as ResultTypeOfBinary>::AddMul;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
             "multiply",
-            |lhs, rhs| {
+            |_, lhs, rhs| {
                 (|| {
                     let lm: T = num_traits::cast::cast(lhs.max)?;
                     let ln: T = num_traits::cast::cast(lhs.min)?;
@@ -178,7 +178,7 @@ macro_rules! register_divide {
         $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
             "divide",
 
-            |_, _| FunctionDomain::MayThrow,
+            |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                 |a, b, output, ctx| {
                     let b = (b.as_() : T);
@@ -201,7 +201,7 @@ macro_rules! register_div {
         $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
             "div",
 
-            |_, _| FunctionDomain::MayThrow,
+            |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(
                 |a, b, output, ctx| {
                     let b = (b.as_() : F64);
@@ -236,7 +236,7 @@ macro_rules! register_modulo {
             $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>,_, _>(
                 "modulo",
 
-                |_, _| FunctionDomain::MayThrow,
+                |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                     |a, b, output, ctx| {
                         let b = (b.as_() : F64);
@@ -253,7 +253,7 @@ macro_rules! register_modulo {
             $registry.register_passthrough_nullable_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>, _, _>(
                 "modulo",
 
-                |_, _| FunctionDomain::MayThrow,
+                |_, _, _| FunctionDomain::MayThrow,
                 vectorize_modulo::<L, R, M, T>()
             );
         }
@@ -287,7 +287,7 @@ macro_rules! register_bitwise_and {
         type R = $rt;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_and",
-            |_, _| FunctionDomain::Full,
+            |_, _, _| FunctionDomain::Full,
             |a, b, _| (a.as_(): i64).bitand(b.as_(): i64),
         );
     };
@@ -299,7 +299,7 @@ macro_rules! register_bitwise_or {
         type R = $rt;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_or",
-            |_, _| FunctionDomain::Full,
+            |_, _, _| FunctionDomain::Full,
             |a, b, _| (a.as_(): i64).bitor(b.as_(): i64),
         );
     };
@@ -311,7 +311,7 @@ macro_rules! register_bitwise_xor {
         type R = $rt;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_xor",
-            |_, _| FunctionDomain::Full,
+            |_, _, _| FunctionDomain::Full,
             |a, b, _| (a.as_(): i64).bitxor(b.as_(): i64),
         );
     };
@@ -323,7 +323,7 @@ macro_rules! register_bitwise_shift_left {
         type R = $rt;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_shift_left",
-            |_, _| FunctionDomain::Full,
+            |_, _, _| FunctionDomain::Full,
             |a, b, _| (a.as_(): i64) << (b.as_(): u64),
         );
     };
@@ -335,7 +335,7 @@ macro_rules! register_bitwise_shift_right {
         type R = $rt;
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_shift_right",
-            |_, _| FunctionDomain::Full,
+            |_, _, _| FunctionDomain::Full,
             |a, b, _| (a.as_(): i64) >> (b.as_(): u64),
         );
     };
@@ -458,7 +458,7 @@ macro_rules! register_bitwise_not {
         type N = $n;
         $registry.register_1_arg::<NumberType<N>, NumberType<i64>, _, _>(
             "bit_not",
-            |_| FunctionDomain::Full,
+            |_, _| FunctionDomain::Full,
             |a, _| !(a.as_(): i64),
         );
     };
@@ -488,10 +488,10 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                 type T = <NUM_TYPE as ResultTypeOfUnary>::Negate;
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<T>, _, _>(
                     "minus",
-                    |lhs| {
+                    |_, val| {
                         FunctionDomain::Domain(SimpleDomain::<T> {
-                            min: -(lhs.max.as_(): T),
-                            max: -(lhs.min.as_(): T),
+                            min: -(val.max.as_(): T),
+                            max: -(val.min.as_(): T),
                         })
                     },
                     |a, _| -(a.as_(): T),
@@ -523,7 +523,7 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         if src_type.can_lossless_cast_to(*dest_type) {
                             registry.register_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
                                 &name,
-                                |domain| {
+                                |_, domain| {
                                     let (domain, overflowing) = domain.overflow_cast();
                                     debug_assert!(!overflowing);
                                     FunctionDomain::Domain(domain)
@@ -535,7 +535,7 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         } else {
                             registry.register_passthrough_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
                                 &name,
-                                            |domain| {
+                                            |_, domain| {
                                     let (domain, overflowing) = domain.overflow_cast();
                                     if overflowing {
                                         FunctionDomain::MayThrow
@@ -561,7 +561,7 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         if src_type.can_lossless_cast_to(*dest_type) {
                             registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
                                 &name,
-                                |domain| {
+                                |_, domain| {
                                     let (domain, overflowing) = domain.overflow_cast();
                                     debug_assert!(!overflowing);
                                     FunctionDomain::Domain(NullableDomain {
@@ -578,7 +578,7 @@ pub fn register_number_to_number(registry: &mut FunctionRegistry) {
                         } else {
                             registry.register_combine_nullable_1_arg::<NumberType<SRC_TYPE>, NumberType<DEST_TYPE>, _, _>(
                                 &name,
-                                |domain| {
+                                |_, domain| {
                                     let (domain, overflowing) = domain.overflow_cast();
                                     FunctionDomain::Domain(NullableDomain {
                                         has_null: overflowing,
@@ -635,7 +635,7 @@ pub fn register_decimal_minus(registry: &mut FunctionRegistry) {
                 return_type: arg_type.clone(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(move |args, _tx| unary_minus_decimal(args, arg_type.clone())),
             },
         }))
@@ -680,7 +680,7 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                 registry
                     .register_passthrough_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
                         &name,
-                        |_| FunctionDomain::MayThrow,
+                        |_, _| FunctionDomain::MayThrow,
                         vectorize_with_builder_1_arg::<StringType, NumberType<DEST_TYPE>>(
                             move |val, output, ctx| {
                                 let str_val = String::from_utf8_lossy(val);
@@ -699,7 +699,7 @@ fn register_string_to_number(registry: &mut FunctionRegistry) {
                 registry
                     .register_combine_nullable_1_arg::<StringType, NumberType<DEST_TYPE>, _, _>(
                         &name,
-                        |_| FunctionDomain::Full,
+                        |_, _| FunctionDomain::Full,
                         vectorize_with_builder_1_arg::<
                             StringType,
                             NullableType<NumberType<DEST_TYPE>>,
@@ -724,7 +724,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                 registry
                     .register_passthrough_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
                         "to_string",
-                        |_| FunctionDomain::Full,
+                        |_, _| FunctionDomain::Full,
                         |from, _| match from {
                             ValueRef::Scalar(s) => Value::Scalar(s.to_string().into_bytes()),
                             ValueRef::Column(from) => {
@@ -761,7 +761,7 @@ pub fn register_number_to_string(registry: &mut FunctionRegistry) {
                     );
                 registry.register_combine_nullable_1_arg::<NumberType<NUM_TYPE>, StringType, _, _>(
                     "try_to_string",
-                    |_| FunctionDomain::Full,
+                    |_, _| FunctionDomain::Full,
                     |from, _| match from {
                         ValueRef::Scalar(s) => Value::Scalar(Some(s.to_string().into_bytes())),
                         ValueRef::Column(from) => {
@@ -828,7 +828,7 @@ fn register_decimal_to_string(registry: &mut FunctionRegistry) {
                 return_type: StringType::data_type(),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_args_domain| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(move |args, tx| decimal_to_string(args, arg_type.clone(), tx)),
             },
         }))
