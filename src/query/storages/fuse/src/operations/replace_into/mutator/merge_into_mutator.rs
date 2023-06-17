@@ -65,9 +65,13 @@ use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccu
 use crate::operations::replace_into::OnConflictField;
 struct AggregationContext {
     segment_locations: HashMap<SegmentIndex, Location>,
+    // the fields specified in ON CONFLICT clause
     on_conflict_fields: Vec<OnConflictField>,
+    // table fields excludes `on_conflict_fields`
     remain_column_field_ids: Vec<FieldIndex>,
+    // reader that reads the ON CONFLICT key fields
     key_column_reader: Arc<BlockReader>,
+    // reader that reads the `remain_column_field_ids`
     remain_column_reader: Option<Arc<BlockReader>>,
     data_accessor: Operator,
     write_settings: WriteSettings,
@@ -100,7 +104,8 @@ impl MergeIntoOperationAggregator {
         let segment_reader =
             MetaReaders::segment_info_reader(data_accessor.clone(), table_schema.clone());
 
-        let key_column_field_indexes: HashSet<FieldIndex> =
+        // order matters, later the projection that used by block readers depends on the order
+        let key_column_field_indexes: Vec<FieldIndex> =
             on_conflict_fields.iter().map(|i| i.field_index).collect();
 
         let remain_column_field_ids: Vec<FieldIndex> = {
@@ -119,8 +124,7 @@ impl MergeIntoOperationAggregator {
         };
 
         let key_column_reader = {
-            let projection =
-                Projection::Columns(key_column_field_indexes.iter().copied().collect());
+            let projection = Projection::Columns(key_column_field_indexes);
             BlockReader::create(
                 data_accessor.clone(),
                 table_schema.clone(),
@@ -289,9 +293,12 @@ impl AggregationContext {
         deleted_key_hashes: &HashSet<UniqueKeyDigest>,
     ) -> Result<Option<ReplacementLogEntry>> {
         info!(
-            "apply delete to segment idx {}, block idx {}",
-            segment_index, block_index
+            "apply delete to segment idx {}, block idx {}, num of deletion key hashes: {}",
+            segment_index,
+            block_index,
+            deleted_key_hashes.len()
         );
+
         if block_meta.row_count == 0 {
             return Ok(None);
         }
@@ -303,7 +310,6 @@ impl AggregationContext {
         let on_conflict_fields = &self.on_conflict_fields;
         let mut columns = Vec::with_capacity(on_conflict_fields.len());
         for (field, _) in on_conflict_fields.iter().enumerate() {
-            // let on_conflict_field_index = field.field_index;
             let on_conflict_field_index = field;
             let key_column = key_columns_data
                 .columns()
