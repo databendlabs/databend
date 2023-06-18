@@ -45,6 +45,16 @@ CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 statement error 2719
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a) OVER (), b FROM t1 WHERE b > 3
 
+# Should be able to query internal columns after creating aggreagting index.
+statement ok
+SELECT _row_id FROM t1;
+
+statement ok
+SELECT sum(a), _block_name FROM t1 group by _block_name;
+
+statement ok
+SELECT a, sum(b), _block_name FROM t1 group by a, _block_name;
+
 statement ok
 DROP AGGREGATING INDEX idx1
 
