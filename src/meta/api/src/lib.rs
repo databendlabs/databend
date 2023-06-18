@@ -16,6 +16,10 @@
 #![deny(unused_crate_dependencies)]
 extern crate common_meta_types;
 
+mod background_api;
+mod background_api_impl;
+mod background_api_keys;
+mod background_api_test_suite;
 pub mod compat_errors;
 mod data_mask_api;
 mod data_mask_api_impl;
@@ -35,6 +39,8 @@ mod share_api_test_suite;
 pub(crate) mod testing;
 pub(crate) mod util;
 
+pub use background_api::BackgroundApi;
+pub use background_api_test_suite::BackgroundApiTestSuite;
 pub use data_mask_api::DatamaskApi;
 pub use id::Id;
 pub(crate) use id_generator::IdGenerator;

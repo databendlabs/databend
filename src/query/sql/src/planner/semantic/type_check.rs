@@ -228,7 +228,7 @@ impl<'a> TypeChecker<'a> {
                         // add internal column binding into `BindContext`
                         let column = self
                             .bind_context
-                            .add_internal_column_binding(&column, self.metadata.clone());
+                            .add_internal_column_binding(&column, self.metadata.clone())?;
                         let data_type = *column.data_type.clone();
                         (
                             BoundColumnRef {

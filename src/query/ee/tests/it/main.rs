@@ -14,5 +14,6 @@
 
 #![feature(unwrap_infallible)]
 mod aggregating_index;
+mod background_service;
 mod license;
 mod storages;
