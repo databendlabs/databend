@@ -44,3 +44,28 @@ ALTER TABLE system.abc drop column c1
 statement ok
 DROP TABLE IF EXISTS `05_0003_at_t1`
 
+statement ok
+CREATE TABLE `05_0003_at_t2`(a int, c int)
+
+statement ok
+INSERT INTO TABLE `05_0003_at_t2` values(1,2)
+
+statement error 1065
+ALTER TABLE `05_0003_at_t2` rename column a to a
+
+statement error 1065
+ALTER TABLE `05_0003_at_t2` rename column a to _row_id
+
+statement error 1065
+ALTER TABLE `05_0003_at_t2` rename column a to c
+
+statement ok
+ALTER TABLE `05_0003_at_t2` rename column a to b
+
+query I
+SELECT b FROM `05_0003_at_t2`
+----
+1
+
+statement ok
+DROP TABLE IF EXISTS `05_0003_at_t2`
