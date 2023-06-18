@@ -69,6 +69,7 @@ pub fn parse_exprs(
         table_meta,
         None,
         false,
+        false,
     );
 
     let columns = metadata.read().columns_by_table_index(table_index);

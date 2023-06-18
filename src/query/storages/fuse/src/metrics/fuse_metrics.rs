@@ -169,6 +169,17 @@ pub fn metrics_inc_pruning_milliseconds(c: u64) {
     increment_gauge!(key!("pruning_milliseconds"), c as f64);
 }
 
+pub fn metrics_inc_deletion_block_range_pruned_nums(c: u64) {
+    increment_gauge!(key!("deletion_block_range_pruned_nums"), c as f64);
+}
+
+pub fn metrics_inc_deletion_block_range_pruned_whole_block_nums(c: u64) {
+    increment_gauge!(
+        key!("deletion_block_range_pruned_whole_block_nums"),
+        c as f64
+    );
+}
+
 pub fn metrics_reset() {
     let c = 0 as f64;
 
@@ -213,4 +224,6 @@ pub fn metrics_reset() {
     gauge!(key!("bytes_block_bloom_pruning_after"), c);
     gauge!(key!("bytes_block_range_pruning_before"), c);
     gauge!(key!("bytes_block_range_pruning_after"), c);
+    gauge!(key!("deletion_block_range_pruned_nums"), c);
+    gauge!(key!("deletion_block_range_pruned_whole_block_nums"), c);
 }

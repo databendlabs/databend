@@ -1178,11 +1178,12 @@ impl<'a, Index: ColumnIndex> ConstantFolder<'a, Index> {
                     }
                 };
 
-                let func_domain = args_domain.and_then(|domains| match (calc_domain)(&domains) {
-                    FunctionDomain::MayThrow => None,
-                    FunctionDomain::Full => Some(Domain::full(return_type)),
-                    FunctionDomain::Domain(domain) => Some(domain),
-                });
+                let func_domain =
+                    args_domain.and_then(|domains| match (calc_domain)(self.func_ctx, &domains) {
+                        FunctionDomain::MayThrow => None,
+                        FunctionDomain::Full => Some(Domain::full(return_type)),
+                        FunctionDomain::Domain(domain) => Some(domain),
+                    });
 
                 if let Some(scalar) = func_domain.as_ref().and_then(Domain::as_singleton) {
                     return (

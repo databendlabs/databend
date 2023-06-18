@@ -19,6 +19,7 @@ mod physical_plan;
 mod physical_plan_builder;
 mod physical_plan_display;
 mod physical_plan_visitor;
+mod profile;
 pub mod table_read_plan;
 mod util;
 
@@ -31,4 +32,5 @@ pub use physical_plan::*;
 pub use physical_plan_builder::PhysicalPlanBuilder;
 pub use physical_plan_builder::RangeJoinCondition;
 pub use physical_plan_visitor::PhysicalPlanReplacer;
+pub use profile::*;
 pub use util::*;

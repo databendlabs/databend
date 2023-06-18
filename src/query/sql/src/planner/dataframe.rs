@@ -96,6 +96,7 @@ impl Dataframe {
                 table_meta,
                 None,
                 false,
+                false,
             );
 
             binder

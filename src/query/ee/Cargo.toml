@@ -15,6 +15,7 @@ test = false
 # Workspace dependencies
 aggregating-index = { path = "../ee-features/aggregating-index" }
 async-backtrace = { workspace = true }
+background-service = { path = "../ee-features/background-service" }
 common-arrow = { path = "../../common/arrow" }
 common-base = { path = "../../common/base" }
 common-catalog = { path = "../catalog" }
@@ -42,8 +43,10 @@ table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
 virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
 
+arrow-array = { version = "37.0.0" }
 async-trait = "0.1.57"
 chrono = { workspace = true }
+chrono-tz = { workspace = true }
 dashmap = "5.4"
 futures = "0.3.24"
 futures-util = "0.3.24"

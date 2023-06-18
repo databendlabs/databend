@@ -25,7 +25,6 @@ members = [
     "src/common/openai",
     "src/common/tracing",
     "src/common/storage",
-    "src/common/profile",
     "src/common/vector",
     "src/common/license",
     # Query
@@ -45,6 +44,7 @@ members = [
     "src/query/pipeline/sinks",
     "src/query/pipeline/sources",
     "src/query/pipeline/transforms",
+    "src/query/profile",
     "src/query/settings",
     "src/query/sql",
     "src/query/storages/common/blocks",
@@ -70,6 +70,7 @@ members = [
     "src/query/storages/result_cache",
     "src/query/users",
     "src/query/ee-features/vacuum-handler",
+    "src/query/ee-features/background-service",
     "src/query/ee-features/aggregating-index",
     "src/query/ee-features/data-mask",
     "src/query/ee-features/table-lock",
@@ -139,10 +140,7 @@ tonic = { version = "0.9.2", features = ["transport", "codegen", "prost", "tls-r
 
 # serialization
 prost = { version = "0.11.0" }
-# 1.0.153 adds a new feature which will allow `serde(alias = "…")` inside a flattened struct.
-# This feature seems cool but will break our config parse.
-# @xuanwo will address this issue upon his return from Mars.
-serde = { version = "=1.0.152", features = ["derive", "rc"] }
+serde = { version = "1.0.164", features = ["derive", "rc"] }
 serde_json = { version = "1.0.85", default-features = false, features = ["preserve_order"] }
 tonic-build = { version = "0.9.2" }
 

@@ -14,6 +14,7 @@
 
 use std::env;
 
+use background_service::get_background_service_handler;
 use common_base::mem_allocator::GlobalAllocator;
 use common_base::runtime::GLOBAL_MEM_STAT;
 use common_base::set_alloc_error_hook;
@@ -93,7 +94,7 @@ pub async fn init_services(conf: &InnerConfig) -> Result<()> {
     GlobalServices::init(conf.clone()).await
 }
 
-pub async fn start_services(conf: &InnerConfig) -> Result<()> {
+async fn precheck_services(conf: &InnerConfig) -> Result<()> {
     if conf.query.max_memory_limit_enabled {
         let size = conf.query.max_server_memory_usage as i64;
         info!("Set memory limit: {}", size);
@@ -125,6 +126,11 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
 
     #[cfg(not(target_os = "macos"))]
     check_max_open_files();
+    Ok(())
+}
+
+pub async fn start_services(conf: &InnerConfig) -> Result<()> {
+    precheck_services(conf).await?;
 
     let mut shutdown_handle = ShutdownHandle::create()?;
 
@@ -333,7 +339,16 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     }
 
     info!("Ready for connections.");
-    shutdown_handle.wait_for_termination_request().await;
+    if conf.background.enable {
+        println!("Start background service");
+        get_background_service_handler()
+            .start(&mut shutdown_handle)
+            .await?;
+        // for one shot background service, we need to drop it manually.
+        drop(shutdown_handle);
+    } else {
+        shutdown_handle.wait_for_termination_request().await;
+    }
     info!("Shutdown server.");
     Ok(())
 }
