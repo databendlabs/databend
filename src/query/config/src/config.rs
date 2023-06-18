@@ -217,13 +217,22 @@ impl Config {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
 pub struct StorageConfig {
-    #[clap(long, default_value = "fs")]
-    #[serde(rename = "type", alias = "storage_type")]
-    pub storage_type: String,
+    #[clap(long = "storage-type", default_value = "fs")]
+    #[serde(rename = "type")]
+    pub typ: String,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub storage_type: Option<String>,
 
     #[clap(long, default_value_t)]
-    #[serde(rename = "num_cpus", alias = "storage_num_cpus")]
+    #[serde(rename = "num_cpus")]
     pub storage_num_cpus: u64,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    #[serde(rename = "storage_num_cpus")]
+    pub deprecated_storage_num_cpus: Option<u64>,
 
     #[clap(long = "storage-allow-insecure")]
     pub allow_insecure: bool,
@@ -275,7 +284,7 @@ impl From<InnerStorageConfig> for StorageConfig {
     fn from(inner: InnerStorageConfig) -> Self {
         let mut cfg = Self {
             storage_num_cpus: inner.num_cpus,
-            storage_type: "".to_string(),
+            typ: "".to_string(),
             allow_insecure: inner.allow_insecure,
             // use default for each config instead of using `..Default::default`
             // using `..Default::default` is calling `Self::default`
@@ -290,47 +299,51 @@ impl From<InnerStorageConfig> for StorageConfig {
             obs: Default::default(),
             webhdfs: Default::default(),
             cos: Default::default(),
+
+            // Deprecated fields
+            storage_type: None,
+            deprecated_storage_num_cpus: None,
         };
 
         match inner.params {
             StorageParams::Azblob(v) => {
-                cfg.storage_type = "azblob".to_string();
+                cfg.typ = "azblob".to_string();
                 cfg.azblob = v.into();
             }
             StorageParams::Fs(v) => {
-                cfg.storage_type = "fs".to_string();
+                cfg.typ = "fs".to_string();
                 cfg.fs = v.into();
             }
             #[cfg(feature = "storage-hdfs")]
             StorageParams::Hdfs(v) => {
-                cfg.storage_type = "hdfs".to_string();
+                cfg.typ = "hdfs".to_string();
                 cfg.hdfs = v.into();
             }
             StorageParams::Memory => {
-                cfg.storage_type = "memory".to_string();
+                cfg.typ = "memory".to_string();
             }
             StorageParams::S3(v) => {
-                cfg.storage_type = "s3".to_string();
+                cfg.typ = "s3".to_string();
                 cfg.s3 = v.into()
             }
             StorageParams::Gcs(v) => {
-                cfg.storage_type = "gcs".to_string();
+                cfg.typ = "gcs".to_string();
                 cfg.gcs = v.into()
             }
             StorageParams::Obs(v) => {
-                cfg.storage_type = "obs".to_string();
+                cfg.typ = "obs".to_string();
                 cfg.obs = v.into()
             }
             StorageParams::Oss(v) => {
-                cfg.storage_type = "oss".to_string();
+                cfg.typ = "oss".to_string();
                 cfg.oss = v.into()
             }
             StorageParams::Webhdfs(v) => {
-                cfg.storage_type = "webhdfs".to_string();
+                cfg.typ = "webhdfs".to_string();
                 cfg.webhdfs = v.into()
             }
             StorageParams::Cos(v) => {
-                cfg.storage_type = "cos".to_string();
+                cfg.typ = "cos".to_string();
                 cfg.cos = v.into()
             }
             v => unreachable!("{v:?} should not be used as storage backend"),
@@ -344,11 +357,22 @@ impl TryInto<InnerStorageConfig> for StorageConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerStorageConfig> {
+        if self.storage_type.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`storage_type` is deprecated, please use `type` instead",
+            ));
+        }
+        if self.deprecated_storage_num_cpus.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`storage_num_cpus` is deprecated, please use `num_cpus` instead",
+            ));
+        }
+
         Ok(InnerStorageConfig {
             num_cpus: self.storage_num_cpus,
             allow_insecure: self.allow_insecure,
             params: {
-                match self.storage_type.as_str() {
+                match self.typ.as_str() {
                     "azblob" => StorageParams::Azblob(self.azblob.try_into()?),
                     "fs" => StorageParams::Fs(self.fs.try_into()?),
                     "gcs" => StorageParams::Gcs(self.gcs.try_into()?),
@@ -387,8 +411,11 @@ impl Default for CatalogConfig {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CatalogsHiveConfig {
-    #[serde(alias = "meta_store_address")]
     pub address: String,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    pub meta_store_address: Option<String>,
+
     pub protocol: String,
 }
 
@@ -397,8 +424,10 @@ pub struct CatalogsHiveConfig {
 #[serde(default)]
 pub struct HiveCatalogConfig {
     #[clap(long = "hive-meta-store-address", default_value_t)]
-    #[serde(rename = "address", alias = "meta_store_address")]
-    pub meta_store_address: String,
+    pub address: String,
+    /// Deprecated fields, used for catching error, will be removed later.
+    pub meta_store_address: Option<String>,
+
     #[clap(long = "hive-thrift-protocol", default_value_t)]
     pub protocol: String,
 }
@@ -431,6 +460,12 @@ impl From<InnerCatalogConfig> for CatalogConfig {
 impl TryInto<InnerCatalogHiveConfig> for CatalogsHiveConfig {
     type Error = ErrorCode;
     fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
+        if self.meta_store_address.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`meta_store_address` is deprecated, please use `address` instead",
+            ));
+        }
+
         Ok(InnerCatalogHiveConfig {
             address: self.address,
             protocol: self.protocol.parse()?,
@@ -443,6 +478,9 @@ impl From<InnerCatalogHiveConfig> for CatalogsHiveConfig {
         Self {
             address: inner.address,
             protocol: inner.protocol.to_string(),
+
+            // Deprecated fields
+            meta_store_address: None,
         }
     }
 }
@@ -456,8 +494,14 @@ impl Default for CatalogsHiveConfig {
 impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
     type Error = ErrorCode;
     fn try_into(self) -> Result<InnerCatalogHiveConfig, Self::Error> {
+        if self.meta_store_address.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`meta_store_address` is deprecated, please use `address` instead",
+            ));
+        }
+
         Ok(InnerCatalogHiveConfig {
-            address: self.meta_store_address,
+            address: self.address,
             protocol: self.protocol.parse()?,
         })
     }
@@ -466,8 +510,11 @@ impl TryInto<InnerCatalogHiveConfig> for HiveCatalogConfig {
 impl From<InnerCatalogHiveConfig> for HiveCatalogConfig {
     fn from(inner: InnerCatalogHiveConfig) -> Self {
         Self {
-            meta_store_address: inner.address,
+            address: inner.address,
             protocol: inner.protocol.to_string(),
+
+            // Deprecated fields
+            meta_store_address: None,
         }
     }
 }
@@ -1603,18 +1650,27 @@ impl From<InnerQueryConfig> for QueryConfig {
 pub struct LogConfig {
     /// Log level <DEBUG|INFO|ERROR>
     #[clap(long = "log-level", default_value = "INFO")]
-    #[serde(alias = "log_level")]
     pub level: String,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub log_level: Option<String>,
 
     /// Log file dir
     #[clap(long = "log-dir", default_value = "./.databend/logs")]
-    #[serde(alias = "log_dir")]
     pub dir: String,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub log_dir: Option<String>,
 
     /// Log file dir
     #[clap(long = "log-query-enabled")]
-    #[serde(alias = "log_query_enabled")]
     pub query_enabled: bool,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub log_query_enabled: Option<bool>,
 
     #[clap(flatten)]
     pub file: FileLogConfig,
@@ -1633,6 +1689,22 @@ impl TryInto<InnerLogConfig> for LogConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerLogConfig> {
+        if self.log_dir.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`log_dir` is deprecated, use `dir` instead".to_string(),
+            ));
+        }
+        if self.log_level.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`log_level` is deprecated, use `level` instead".to_string(),
+            ));
+        }
+        if self.log_query_enabled.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`log_query_enabled` is deprecated, use `query_enabled` instead".to_string(),
+            ));
+        }
+
         let mut file: InnerFileLogConfig = self.file.try_into()?;
         if self.level != "INFO" {
             file.level = self.level.to_string();
@@ -1656,6 +1728,11 @@ impl From<InnerLogConfig> for LogConfig {
             query_enabled: false,
             file: inner.file.into(),
             stderr: inner.stderr.into(),
+
+            // Deprecated fields
+            log_dir: None,
+            log_level: None,
+            log_query_enabled: None,
         }
     }
 }
@@ -1766,8 +1843,11 @@ impl From<InnerStderrLogConfig> for StderrLogConfig {
 pub struct MetaConfig {
     /// The dir to store persisted meta state for a embedded meta store
     #[clap(long = "meta-embedded-dir", default_value_t)]
-    #[serde(alias = "meta_embedded_dir")]
     pub embedded_dir: String,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub meta_embedded_dir: Option<String>,
 
     /// MetaStore backend endpoints
     #[clap(long = "meta-endpoints", help = "MetaStore peers endpoints")]
@@ -1775,27 +1855,34 @@ pub struct MetaConfig {
 
     /// MetaStore backend user name
     #[clap(long = "meta-username", default_value = "root")]
-    #[serde(alias = "meta_username")]
     pub username: String,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub meta_username: Option<String>,
 
     /// MetaStore backend user password
     #[clap(long = "meta-password", default_value_t)]
-    #[serde(alias = "meta_password")]
     pub password: String,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub meta_password: Option<String>,
 
     /// Timeout for each client request, in seconds
     #[clap(long = "meta-client-timeout-in-second", default_value = "10")]
-    #[serde(alias = "meta_client_timeout_in_second")]
     pub client_timeout_in_second: u64,
+
+    /// Deprecated fields, used for catching error, will be removed later.
+    #[clap(skip)]
+    pub meta_client_timeout_in_second: Option<u64>,
 
     /// AutoSyncInterval is the interval to update endpoints with its latest members.
     /// 0 disables auto-sync. By default auto-sync is disabled.
     #[clap(long = "auto-sync-interval", default_value = "0")]
-    #[serde(alias = "auto_sync_interval")]
     pub auto_sync_interval: u64,
 
     #[clap(long = "unhealth-endpoint-evict-time", default_value = "120")]
-    #[serde(alias = "unhealth_endpoint_evict_time")]
     pub unhealth_endpoint_evict_time: u64,
 
     /// Certificate for client to identify meta rpc serve
@@ -1819,6 +1906,28 @@ impl TryInto<InnerMetaConfig> for MetaConfig {
     type Error = ErrorCode;
 
     fn try_into(self) -> Result<InnerMetaConfig> {
+        if self.meta_embedded_dir.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`meta_embedded_dir` is deprecated, use `embedded_dir` instead".to_string(),
+            ));
+        }
+        if self.meta_username.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`meta_username` is deprecated, use `username` instead".to_string(),
+            ));
+        }
+        if self.meta_password.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`meta_password` is deprecated, use `password` instead".to_string(),
+            ));
+        }
+        if self.meta_client_timeout_in_second.is_some() {
+            return Err(ErrorCode::InvalidConfig(
+                "`meta_client_timeout_in_second` is deprecated, use `client_timeout_in_second` instead"
+                    .to_string(),
+            ));
+        }
+
         Ok(InnerMetaConfig {
             embedded_dir: self.embedded_dir,
             endpoints: self.endpoints,
@@ -1845,6 +1954,12 @@ impl From<InnerMetaConfig> for MetaConfig {
             unhealth_endpoint_evict_time: inner.unhealth_endpoint_evict_time,
             rpc_tls_meta_server_root_ca_cert: inner.rpc_tls_meta_server_root_ca_cert,
             rpc_tls_meta_service_domain_name: inner.rpc_tls_meta_service_domain_name,
+
+            // Deprecated fields
+            meta_embedded_dir: None,
+            meta_username: None,
+            meta_password: None,
+            meta_client_timeout_in_second: None,
         }
     }
 }
@@ -2153,7 +2268,7 @@ mod cache_config_converters {
                 let catalog = v.try_into()?;
                 catalogs.insert(k, catalog);
             }
-            if !self.catalog.meta_store_address.is_empty() || !self.catalog.protocol.is_empty() {
+            if !self.catalog.address.is_empty() || !self.catalog.protocol.is_empty() {
                 tracing::warn!(
                     "`catalog` is planned to be deprecated, please add catalog in `catalogs` instead"
                 );

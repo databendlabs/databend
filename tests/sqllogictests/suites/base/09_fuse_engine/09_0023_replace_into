@@ -377,6 +377,53 @@ statement ok
 DROP TABLE test
 
 
+
+###########################################
+# test cases for "prewhere"  optimization #
+###########################################
+
+statement ok
+drop table if exists t;
+
+statement ok
+create table t (id int, c1 int, c2 int, c3 int, c4 int) row_per_block=3;
+
+statement ok
+insert into t select number, number * 3, number * 5, number * 7, number * 9 from numbers(100);
+
+query IIIII
+select sum(id), sum(c1), sum(c2), sum(c3), sum(c4) from t;
+----
+4950 14850 24750 34650 44550
+
+statement ok
+replace into t on(c1, c3) select * from t;
+
+# verify the replace into is idempotent
+query IIIII
+select sum(id), sum(c1), sum(c2), sum(c3), sum(c4) from t;
+----
+4950 14850 24750 34650 44550
+
+
+# update half of the rows, set columns other than c1 and c3 to 0
+statement ok
+replace into t on(c3, c1) select 0 , c1, 0, c3, 0 from t where t.id % 2 = 0;
+
+# verify the result is as expected
+query IIIII
+select sum(t.id), sum(t.c1), sum(t.c2), sum(t.c3), sum(t.c4) from (select 0 as id , c1, 0 as c2, c3, 0 as c4 from t where t.id % 2 = 0 union select * from t where t.id % 2 != 0) t;
+----
+2500 14850 12500 34650 22500
+
+query IIIII
+select sum(id), sum(c1), sum(c2), sum(c3), sum(c4) from t;
+----
+2500 14850 12500 34650 22500
+
+statement ok
+drop table t;
+
 statement ok
 DROP DATABASE db_09_0023
 

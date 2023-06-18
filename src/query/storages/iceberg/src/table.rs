@@ -33,7 +33,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_storage::DataOperator;
 use futures::StreamExt;
-use iceberg_rs::model::table::TableMetadata;
+use icelake::types;
 use opendal::Operator;
 
 use crate::converters::meta_iceberg_to_databend;
@@ -42,6 +42,8 @@ use crate::converters::meta_iceberg_to_databend;
 const META_PTR: &str = "metadata/version_hint.text";
 
 /// accessor wrapper as a table
+///
+/// TODO: we should use icelake Table instead.
 #[allow(unused)]
 pub struct IcebergTable {
     /// database that belongs to
@@ -51,13 +53,15 @@ pub struct IcebergTable {
     /// root of the table
     tbl_root: DataOperator,
     /// table metadata
-    manifests: TableMetadata,
+    manifests: types::TableMetadata,
     /// table information
     info: TableInfo,
 }
 
 impl IcebergTable {
     /// create a new table on the table directory
+    ///
+    /// TODO: we should use icelake Table instead.
     #[async_backtrace::framed]
     pub async fn try_create_table_from_read(
         catalog: &str,
@@ -75,13 +79,13 @@ impl IcebergTable {
                 &latest_manifest, e
             ))
         })?;
-        let metadata: TableMetadata =
-            serde_json::de::from_slice(meta_json.as_slice()).map_err(|e| {
-                ErrorCode::ReadTableDataError(format!(
-                    "invalid metadata in {}: {:?}",
-                    &latest_manifest, e
-                ))
-            })?;
+
+        let metadata = types::parse_table_metadata(meta_json.as_slice()).map_err(|e| {
+            ErrorCode::ReadTableDataError(format!(
+                "invalid metadata in {}: {:?}",
+                &latest_manifest, e
+            ))
+        })?;
 
         let sp = tbl_root.params();
 
