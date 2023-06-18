@@ -72,7 +72,7 @@ impl HttpQueryManager {
         request: HttpQueryRequest,
     ) -> Result<Arc<HttpQuery>> {
         let query = HttpQuery::try_create(ctx, request, self.config).await?;
-        let query = self.add_query(&query.id, query.clone()).await;
+        self.add_query(&query.id, query.clone()).await;
         Ok(query)
     }
 
@@ -83,13 +83,9 @@ impl HttpQueryManager {
     }
 
     #[async_backtrace::framed]
-    async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) -> Arc<HttpQuery> {
-        let key = query_id.to_string();
+    async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
-        if queries.contains_key(&key) {
-            return queries[&key].clone();
-        }
-        queries.insert(key, query.clone());
+        queries.insert(query_id.to_string(), query.clone());
 
         let timeout = self.config.result_timeout_secs;
         let self_clone = self.clone();
@@ -105,8 +101,8 @@ impl HttpQueryManager {
                             warn!("{msg}, but fail to remove");
                         } else {
                             warn!("{msg}");
-                            query_clone.detach().await;
-                            query_clone.kill().await;
+                            query.detach().await;
+                            query.kill().await;
                         };
                         break;
                     }
@@ -119,7 +115,6 @@ impl HttpQueryManager {
                 }
             }
         });
-        query
     }
 
     // not remove it until timeout or cancelled by user, even if query execution is aborted
