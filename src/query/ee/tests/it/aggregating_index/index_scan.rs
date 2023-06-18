@@ -15,11 +15,19 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use aggregating_index::get_agg_index_handler;
+use chrono::Utc;
 use common_base::base::tokio;
 use common_exception::Result;
+use common_expression::block_debug::pretty_format_blocks;
 use common_expression::infer_table_schema;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRefExt;
 use common_expression::SendableDataBlockStream;
+use common_meta_app::schema::CreateIndexReq;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::IndexNameIdent;
+use common_meta_app::schema::IndexType;
 use common_sql::optimizer::SExpr;
 use common_sql::planner::plans::Plan;
 use common_sql::plans::RelOperator;
@@ -52,11 +60,35 @@ async fn execute_plan(ctx: Arc<QueryContext>, plan: &Plan) -> Result<SendableDat
     interpreter.execute(ctx).await
 }
 
-async fn create_index(ctx: Arc<QueryContext>, index_name: &str, query: &str) -> Result<()> {
+async fn create_index(ctx: Arc<QueryContext>, index_name: &str, query: &str) -> Result<u64> {
     let sql = format!("CREATE AGGREGATING INDEX {index_name} AS {query}");
-    execute_sql(ctx, &sql).await?;
 
-    Ok(())
+    let plan = plan_sql(ctx.clone(), &sql).await?;
+
+    if let Plan::CreateIndex(plan) = plan {
+        let catalog = ctx.get_catalog("default")?;
+        let create_index_req = CreateIndexReq {
+            if_not_exists: plan.if_not_exists,
+            name_ident: IndexNameIdent {
+                tenant: ctx.get_tenant(),
+                index_name: index_name.to_string(),
+            },
+            meta: IndexMeta {
+                table_id: plan.table_id,
+                index_type: IndexType::AGGREGATING,
+                created_on: Utc::now(),
+                drop_on: None,
+                query: query.to_string(),
+            },
+        };
+
+        let handler = get_agg_index_handler();
+        let res = handler.do_create_index(catalog, create_index_req).await?;
+
+        return Ok(res.index_id);
+    }
+
+    unreachable!()
 }
 
 async fn drop_index(ctx: Arc<QueryContext>, index_name: &str) -> Result<()> {
@@ -88,7 +120,7 @@ async fn test_index_scan() -> Result<()> {
     // Create index
     let index_name = "index1";
 
-    create_index(
+    let index_id = create_index(
         fixture.ctx(),
         index_name,
         "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
@@ -99,6 +131,7 @@ async fn test_index_scan() -> Result<()> {
     refresh_index(
         fixture.ctx(),
         "SELECT b, SUM_state(a), _block_name from t WHERE c > 1 GROUP BY b, _block_name",
+        index_id,
     )
     .await?;
 
@@ -149,12 +182,13 @@ fn is_index_scan_sexpr(s_expr: &SExpr) -> bool {
     }
 }
 
-async fn refresh_index(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
+async fn refresh_index(ctx: Arc<QueryContext>, sql: &str, index_id: u64) -> Result<()> {
     let plan = plan_sql(ctx.clone(), sql).await?;
-    let output_schema = plan.schema();
+    let mut output_fields = plan.schema().fields().to_vec();
+    assert_eq!(output_fields.last().unwrap().name(), "_block_name");
+    output_fields.pop(); // Pop _block_name field
+    let output_schema = DataSchemaRefExt::create(output_fields);
     let index_schema = infer_table_schema(&output_schema)?;
-    let block_name_index = output_schema.index_of("_block_name")?;
-    assert_eq!(block_name_index, output_schema.num_fields() - 1);
 
     let mut buffer = vec![];
     let mut map: HashMap<String, Vec<(usize, usize, usize)>> = HashMap::new();
@@ -181,7 +215,7 @@ async fn refresh_index(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
 
             map.entry(name)
                 .and_modify(|v| v.push((index, row, 1)))
-                .or_insert(vec![]);
+                .or_insert(vec![(index, row, 1)]);
         }
 
         buffer.push(result);
@@ -189,10 +223,10 @@ async fn refresh_index(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
     }
 
     let op = ctx.get_data_operator()?.operator();
+    let data = buffer.iter().collect::<Vec<_>>();
 
     for (loc, indices) in map {
-        let index_block =
-            DataBlock::take_blocks(&buffer.iter().collect::<Vec<_>>(), &indices, indices.len());
+        let index_block = DataBlock::take_blocks(&data, &indices, indices.len());
         let mut buf = vec![];
 
         serialize_block(
@@ -203,7 +237,7 @@ async fn refresh_index(ctx: Arc<QueryContext>, sql: &str) -> Result<()> {
         )?;
 
         let index_loc =
-            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&loc, 0);
+            TableMetaLocationGenerator::gen_agg_index_location_from_block_location(&loc, index_id);
 
         op.write(&index_loc, buf).await?;
     }

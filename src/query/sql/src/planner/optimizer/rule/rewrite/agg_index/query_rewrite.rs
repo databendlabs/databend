@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
@@ -89,7 +90,7 @@ pub fn try_rewrite(
 
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
-        let mut agg_func_indices = Vec::with_capacity(
+        let mut agg_func_indices = HashSet::with_capacity(
             query_info
                 .aggregation
                 .as_ref()
@@ -102,14 +103,13 @@ pub fn try_rewrite(
             // In another word, is to rewrite the input items of the aggregation.
             // The input of aggregation will only have the arguments of the aggregate functions and group by columns (expressions).
             // So just need to find if the aggregate functions call and group by exprs exist in index selection.
-            for agg in query_agg.aggregate_functions.iter() {
+            for expr in query_agg.group_items.iter() {
                 if let Some(rewritten) = try_create_column_binding(
                     &index_selection,
-                    &query_info.format_scalar(&agg.scalar),
+                    &query_info.format_scalar(&expr.scalar),
                 ) {
-                    agg_func_indices.push(agg.index);
                     new_selection.push(ScalarItem {
-                        index: agg.index,
+                        index: expr.index,
                         scalar: rewritten.into(),
                     });
                 } else {
@@ -118,13 +118,16 @@ pub fn try_rewrite(
                 }
             }
             if flag {
-                for expr in query_agg.group_items.iter() {
-                    if let Some(rewritten) =
-                        rewrite_by_selection(&query_info, &expr.scalar, &index_selection)
-                    {
+                for agg in query_agg.aggregate_functions.iter() {
+                    if let Some(mut rewritten) = try_create_column_binding(
+                        &index_selection,
+                        &query_info.format_scalar(&agg.scalar),
+                    ) {
+                        agg_func_indices.insert(rewritten.column.index);
+                        rewritten.column.data_type = Box::new(DataType::String.wrap_nullable());
                         new_selection.push(ScalarItem {
-                            index: expr.index,
-                            scalar: rewritten,
+                            index: agg.index,
+                            scalar: rewritten.into(),
                         });
                     } else {
                         flag = false;
@@ -201,15 +204,27 @@ pub fn try_rewrite(
         let index_fields = index_selection
             .iter()
             .sorted_by_key(|(_, (idx, _))| *idx)
-            .map(|(_, (idx, ty))| Ok(DataField::new(&format!("index_col_{idx}"), ty.clone())))
-            .collect::<Result<Vec<_>>>()?;
+            .map(|(_, (idx, ty))| {
+                if agg_func_indices.contains(idx) {
+                    // If the item is an aggregation function,
+                    // the actual data in the index is the temp state of the function.
+                    // (E.g. `sum` function will store serialized `sum_state` in index data.)
+                    // So the data type will be `Nullable(String)`.
+                    DataField::new(
+                        &format!("index_col_{idx}"),
+                        DataType::String.wrap_nullable(),
+                    )
+                } else {
+                    DataField::new(&format!("index_col_{idx}"), ty.clone())
+                }
+            })
+            .collect::<Vec<_>>();
 
         let result = push_down_index_scan(s_expr, AggIndexInfo {
             index_id: *index_id,
             selection: new_selection,
             predicates: new_predicates,
             schema: DataSchema::new(index_fields),
-            agg_func_indices,
         })?;
 
         info!("Use aggregating index: {sql}");

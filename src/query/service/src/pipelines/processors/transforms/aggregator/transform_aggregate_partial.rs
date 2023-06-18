@@ -182,21 +182,20 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
     fn execute_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
         let aggregate_functions = &self.params.aggregate_functions;
         let offsets_aggregate_states = &self.params.offsets_aggregate_states;
-        let agg_meta = block
-            .get_meta()
-            .and_then(AggIndexMeta::downcast_ref_from)
-            .unwrap();
 
         for index in 0..aggregate_functions.len() {
+            // Aggregation states are in the back of the block.
+            let agg_index = block.num_columns() - aggregate_functions.len() + index;
             let function = &aggregate_functions[index];
             let offset = offsets_aggregate_states[index];
             let agg_state = block
-                .get_by_offset(agg_meta.agg_funcs[index])
+                .get_by_offset(agg_index)
                 .value
                 .as_column()
                 .unwrap()
-                .as_string()
-                .unwrap();
+                .remove_nullable();
+
+            let agg_state = agg_state.as_string().unwrap();
 
             for (row, mut raw_state) in agg_state.iter().enumerate() {
                 let place = &places[row];

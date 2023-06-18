@@ -466,7 +466,6 @@ impl PhysicalPlanBuilder {
             selection,
             schema: agg.schema.clone(),
             actual_table_field_len: output_fields.len(),
-            agg_func_indices: agg.agg_func_indices.clone(),
         };
         push_down.agg_index = Some(agg_info);
 
