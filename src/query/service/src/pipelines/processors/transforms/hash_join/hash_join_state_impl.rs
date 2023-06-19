@@ -479,7 +479,7 @@ impl HashJoinState for JoinHashTable {
     }
 
     fn generate_outer_scan_task(&self) -> Result<()> {
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_map.get() };
         let bitmap_num = outer_scan_bitmap.len();
         if bitmap_num == 0 {
             return Ok(());
@@ -524,7 +524,7 @@ impl HashJoinState for JoinHashTable {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
         let interrupt = self.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
@@ -532,12 +532,12 @@ impl HashJoinState for JoinHashTable {
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
-        let bitmap = &outer_scan_bitmap[chunk_index];
-        let bitmap_len = bitmap.len();
+        let outer_map = &outer_scan_map[chunk_index];
+        let outer_map_len = outer_map.len();
         let mut row_index = 0;
-        while row_index < bitmap_len {
-            while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
-                if !bitmap.get(row_index) {
+        while row_index < outer_map_len {
+            while row_index < outer_map_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+                if !outer_map[row_index] {
                     build_indexes[build_indexes_occupied].chunk_index = chunk_index;
                     build_indexes[build_indexes_occupied].row_index = row_index;
                     build_indexes_occupied += 1;
@@ -603,7 +603,7 @@ impl HashJoinState for JoinHashTable {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
         let interrupt = self.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
@@ -611,12 +611,12 @@ impl HashJoinState for JoinHashTable {
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
-        let bitmap = &outer_scan_bitmap[chunk_index];
-        let bitmap_len = bitmap.len();
+        let outer_map = &outer_scan_map[chunk_index];
+        let outer_map_len = outer_map.len();
         let mut row_index = 0;
-        while row_index < bitmap_len {
-            while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
-                if bitmap.get(row_index) {
+        while row_index < outer_map_len {
+            while row_index < outer_map_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+                if outer_map[row_index] {
                     build_indexes[build_indexes_occupied].chunk_index = chunk_index;
                     build_indexes[build_indexes_occupied].row_index = row_index;
                     build_indexes_occupied += 1;
@@ -651,7 +651,7 @@ impl HashJoinState for JoinHashTable {
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
         let interrupt = self.interrupt.clone();
         let chunk_index = task;
         if interrupt.load(Ordering::Relaxed) {
@@ -659,12 +659,12 @@ impl HashJoinState for JoinHashTable {
                 "Aborted query, because the server is shutting down or the query was killed.",
             ));
         }
-        let bitmap = &outer_scan_bitmap[chunk_index];
-        let bitmap_len = bitmap.len();
+        let outer_map = &outer_scan_map[chunk_index];
+        let outer_map_len = outer_map.len();
         let mut row_index = 0;
-        while row_index < bitmap_len {
-            while row_index < bitmap_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
-                if !bitmap.get(row_index) {
+        while row_index < outer_map_len {
+            while row_index < outer_map_len && build_indexes_occupied < JOIN_MAX_BLOCK_SIZE {
+                if !outer_map[row_index] {
                     build_indexes[build_indexes_occupied].chunk_index = chunk_index;
                     build_indexes[build_indexes_occupied].row_index = row_index;
                     build_indexes_occupied += 1;
