@@ -51,6 +51,7 @@ dashmap = "5.4"
 futures = "0.3.24"
 futures-util = "0.3.24"
 jwt-simple = "0.11.0"
+parking_lot = "0.12.1"
 tempfile = "3.4.0"
 tracing = "0.1.36"
 
