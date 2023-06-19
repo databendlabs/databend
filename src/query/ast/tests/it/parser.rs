@@ -178,6 +178,7 @@ fn test_statement() {
         r#"ALTER TABLE t DROP CLUSTER KEY;"#,
         r#"ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;"#,
         r#"ALTER TABLE t ADD COLUMN a float default 101 COMMENT 'hello';"#,
+        r#"ALTER TABLE t RENAME COLUMN a TO b;"#,
         r#"ALTER TABLE t DROP COLUMN b;"#,
         r#"ALTER TABLE t MODIFY COLUMN b SET MASKING POLICY mask;"#,
         r#"ALTER TABLE t SET OPTIONS(SNAPSHOT_LOCATION='1/7/_ss/101fd790dbbe4238a31a8f2e2f856179_v4.mpk',block_per_segment = 500);"#,
