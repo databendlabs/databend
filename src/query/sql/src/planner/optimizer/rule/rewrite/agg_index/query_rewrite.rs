@@ -90,13 +90,16 @@ pub fn try_rewrite(
 
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
-        let mut agg_func_indices = HashSet::with_capacity(
-            query_info
-                .aggregation
-                .as_ref()
-                .map(|(a, _)| a.aggregate_functions.len())
-                .unwrap_or(0),
-        );
+        let agg_func_indices = index_info
+            .aggregation
+            .as_ref()
+            .map(|(agg, _)| {
+                agg.aggregate_functions
+                    .iter()
+                    .map(|f| f.index)
+                    .collect::<HashSet<_>>()
+            })
+            .unwrap_or_default();
 
         if let Some((query_agg, _)) = query_info.aggregation {
             // If the query is an aggregation query, the index selection is to rewrite the input `EvalScalar` operator of `Aggregate` operators.
@@ -123,8 +126,7 @@ pub fn try_rewrite(
                         &index_selection,
                         &query_info.format_scalar(&agg.scalar),
                     ) {
-                        agg_func_indices.insert(rewritten.column.index);
-                        rewritten.column.data_type = Box::new(DataType::String.wrap_nullable());
+                        rewritten.column.data_type = Box::new(DataType::String);
                         new_selection.push(ScalarItem {
                             index: agg.index,
                             scalar: rewritten.into(),
@@ -205,18 +207,17 @@ pub fn try_rewrite(
             .iter()
             .sorted_by_key(|(_, (idx, _))| *idx)
             .map(|(_, (idx, ty))| {
-                if agg_func_indices.contains(idx) {
-                    // If the item is an aggregation function,
-                    // the actual data in the index is the temp state of the function.
-                    // (E.g. `sum` function will store serialized `sum_state` in index data.)
-                    // So the data type will be `Nullable(String)`.
-                    DataField::new(
-                        &format!("index_col_{idx}"),
-                        DataType::String.wrap_nullable(),
-                    )
-                } else {
-                    DataField::new(&format!("index_col_{idx}"), ty.clone())
+                if let ScalarExpr::BoundColumnRef(col) = &index_info.selection.items[*idx].scalar {
+                    if agg_func_indices.contains(&col.column.index) {
+                        // If the item is an aggregation function,
+                        // the actual data in the index is the temp state of the function.
+                        // (E.g. `sum` function will store serialized `sum_state` in index data.)
+                        // So the data type will be `String`.
+                        return DataField::new(&format!("index_col_{idx}"), DataType::String);
+                    }
                 }
+
+                DataField::new(&format!("index_col_{idx}"), ty.clone())
             })
             .collect::<Vec<_>>();
 

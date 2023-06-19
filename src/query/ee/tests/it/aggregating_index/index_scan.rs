@@ -19,7 +19,6 @@ use aggregating_index::get_agg_index_handler;
 use chrono::Utc;
 use common_base::base::tokio;
 use common_exception::Result;
-use common_expression::block_debug::pretty_format_blocks;
 use common_expression::infer_table_schema;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRefExt;
@@ -154,6 +153,179 @@ async fn test_index_scan() -> Result<()> {
             "| 1        | 1        |",
             "| 2        | 3        |",
             "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    // Insert new data but not refresh index
+    execute_sql(
+        fixture.ctx(),
+        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+    )
+    .await?;
+
+    // Query with one fuse block and one index block
+    let plan = plan_sql(
+        fixture.ctx(),
+        "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 1        | 2        |",
+            "| 2        | 6        |",
+            "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    drop_index(fixture.ctx(), index_name).await?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_index_scan_two_agg_funcs() -> Result<()> {
+    let (_guard, ctx) = create_ee_query_context(None).await.unwrap();
+    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+
+    // Create table
+    execute_sql(
+        fixture.ctx(),
+        "CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'",
+    )
+    .await?;
+
+    // Insert data
+    execute_sql(
+        fixture.ctx(),
+        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+    )
+    .await?;
+
+    // Create index
+    let index_name = "index1";
+
+    let index_id = create_index(
+        fixture.ctx(),
+        index_name,
+        "SELECT b, MAX(a), SUM(a) from t WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    // Refresh Index
+    refresh_index(
+        fixture.ctx(),
+        "SELECT b, MAX_state(a), SUM_state(a), _block_name from t WHERE c > 1 GROUP BY b, _block_name",
+        index_id,
+    )
+    .await?;
+
+    // Query with index
+    // sum
+    let plan = plan_sql(
+        fixture.ctx(),
+        "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 1        | 1        |",
+            "| 2        | 3        |",
+            "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    // sum and max
+    let plan = plan_sql(
+        fixture.ctx(),
+        "SELECT b, SUM(a), MAX(a) from t WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+----------+",
+            "| Column 0 | Column 1 | Column 2 |",
+            "+----------+----------+----------+",
+            "| 1        | 1        | 1        |",
+            "| 2        | 3        | 2        |",
+            "+----------+----------+----------+",
+        ],
+    )
+    .await?;
+
+    // Insert new data but not refresh index
+    execute_sql(
+        fixture.ctx(),
+        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+    )
+    .await?;
+
+    // Query with one fuse block and one index block
+    // sum
+    let plan = plan_sql(
+        fixture.ctx(),
+        "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+",
+            "| Column 0 | Column 1 |",
+            "+----------+----------+",
+            "| 1        | 2        |",
+            "| 2        | 6        |",
+            "+----------+----------+",
+        ],
+    )
+    .await?;
+
+    // sum and max
+    let plan = plan_sql(
+        fixture.ctx(),
+        "SELECT b, SUM(a), MAX(a) from t WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    assert!(is_index_scan_plan(&plan));
+
+    expects_ok(
+        "Index scan",
+        execute_plan(fixture.ctx(), &plan).await,
+        vec![
+            "+----------+----------+----------+",
+            "| Column 0 | Column 1 | Column 2 |",
+            "+----------+----------+----------+",
+            "| 1        | 2        | 1        |",
+            "| 2        | 6        | 2        |",
+            "+----------+----------+----------+",
         ],
     )
     .await?;

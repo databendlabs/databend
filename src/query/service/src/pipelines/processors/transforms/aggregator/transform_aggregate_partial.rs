@@ -193,9 +193,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 .value
                 .as_column()
                 .unwrap()
-                .remove_nullable();
-
-            let agg_state = agg_state.as_string().unwrap();
+                .as_string()
+                .unwrap();
 
             for (row, mut raw_state) in agg_state.iter().enumerate() {
                 let place = &places[row];
