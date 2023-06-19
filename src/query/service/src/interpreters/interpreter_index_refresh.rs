@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
@@ -117,11 +118,13 @@ impl Interpreter for RefreshIndexInterpreter {
         let fuse_table: Arc<FuseTable> = fuse_table.into();
         let table_schema = infer_table_schema(&schema)?;
 
+        let data_accessor = self.ctx.get_data_operator()?;
+
         build_res.main_pipeline.resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
-                fuse_table.get_operator(),
+                data_accessor.operator(),
                 self.plan.index_id,
                 fuse_table.get_write_settings(),
                 table_schema.clone(),
