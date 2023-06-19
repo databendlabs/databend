@@ -16,10 +16,10 @@ echo "select \$2 from @data_csv (files=>('select.csv')) order by \$1;" | $MYSQL_
 echo "---table alias"
 echo "select a.\$1 from @data_csv (files=>('select.csv')) a order by \$1;" | $MYSQL_CLIENT_CONNECT
 
-echo "---err1"
+echo "---select *"
 echo "select * from @data_csv (files=>('select.csv'));" | $MYSQL_CLIENT_CONNECT
 
-echo "---err2"
+echo "---select *,\$1"
 echo "select *, \$1 from @data_csv (files=>('select.csv'));" | $MYSQL_CLIENT_CONNECT
 
 echo "---copy"
