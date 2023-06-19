@@ -36,12 +36,14 @@ use tracing::error;
 use tracing::info;
 
 use super::v1::HttpQueryContext;
-use super::v1::HEADER_QUERY_ID;
 use crate::auth::AuthMgr;
 use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
+
+const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE_LABEL";
+
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
     pub auth_manager: Arc<AuthMgr>,
@@ -172,12 +174,12 @@ impl<E> HTTPSessionEndpoint<E> {
             .auth(ctx.get_current_session(), &credential)
             .await?;
 
-        let query_id = req
+        let deduplicate_label = req
             .headers()
-            .get(HEADER_QUERY_ID)
+            .get(DEDUPLICATE_LABEL)
             .map(|id| id.to_str().unwrap().to_string());
 
-        Ok(HttpQueryContext::new(session, query_id))
+        Ok(HttpQueryContext::new(session, deduplicate_label))
     }
 }
 #[poem::async_trait]

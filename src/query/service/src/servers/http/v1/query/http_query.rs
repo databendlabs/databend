@@ -272,12 +272,11 @@ impl HttpQuery {
             }
         };
 
-        let http_query_id = &ctx.query_id;
+        let deduplicate_label = &ctx.deduplicate_label;
         let ctx = session.create_query_context().await?;
 
-        if let Some(id) = http_query_id {
-            ctx.set_id(id.clone());
-            ctx.get_settings().set_deduplicate_label(id.clone())?;
+        if let Some(label) = deduplicate_label {
+            ctx.get_settings().set_deduplicate_label(label.clone())?;
         }
 
         let session_id = session.get_id().clone();

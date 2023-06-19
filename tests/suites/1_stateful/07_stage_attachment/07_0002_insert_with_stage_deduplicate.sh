@@ -24,12 +24,12 @@ echo "CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV)" | $MYSQL_CLIENT_CONNECT
 echo "list @s1" | $MYSQL_CLIENT_CONNECT | awk '{print $1}'
 
 ## Insert with stage use http API
-curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' --header 'X-DATABEND-QUERY-ID:  insert1' -d '{"sql": "insert into sample (Id, City, Score) values", "stage_attachment": {"location": "@s1/sample.csv"}}' | jq -r '.id, .stats.scan_progress.bytes, .stats.write_progress.bytes, .error'
+curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' --header 'X-DATABEND-DEDUPLICATE_LABEL: insert1' -d '{"sql": "insert into sample (Id, City, Score) values", "stage_attachment": {"location": "@s1/sample.csv"}}' | jq -r '.stats.scan_progress.bytes, .stats.write_progress.bytes, .error'
 
 echo "select * from sample" | $MYSQL_CLIENT_CONNECT
 
-## Insert again with the same query_id will have no effect
-curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' --header 'X-DATABEND-QUERY-ID:  insert1' -d '{"sql": "insert into sample (Id, City, Score) values", "stage_attachment": {"location": "@s1/sample.csv"}}' | jq -r '.id, .stats.scan_progress.bytes, .stats.write_progress.bytes, .error'
+## Insert again with the same deduplicate_label will have no effect
+curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" --header 'Content-Type: application/json' --header 'X-DATABEND-DEDUPLICATE_LABEL: insert1' -d '{"sql": "insert into sample (Id, City, Score) values", "stage_attachment": {"location": "@s1/sample.csv"}}' | jq -r '.stats.scan_progress.bytes, .stats.write_progress.bytes, .error'
 
 echo "select * from sample" | $MYSQL_CLIENT_CONNECT
 
