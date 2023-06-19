@@ -655,12 +655,14 @@ impl Display for ColumnDefinition {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ModifyColumnAction {
     SetMaskingPolicy(String),
+    SetDataType(TypeName),
 }
 
 impl Display for ModifyColumnAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match &self {
             ModifyColumnAction::SetMaskingPolicy(name) => write!(f, "SET MASKING POLICY {}", name)?,
+            ModifyColumnAction::SetDataType(name) => write!(f, "SET COLUMN TYPE {}", name)?,
         }
 
         Ok(())

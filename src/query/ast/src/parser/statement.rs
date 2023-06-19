@@ -1803,6 +1803,27 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
     )(i)
 }
 
+pub fn modify_column_action(i: Input) -> IResult<ModifyColumnAction> {
+    let set_mask_policy = map(
+        rule! {
+            SET ~ MASKING ~ POLICY ~ #ident
+        },
+        |(_, _, _, mask_name)| ModifyColumnAction::SetMaskingPolicy(mask_name.to_string()),
+    );
+
+    let set_column_type = map(
+        rule! {
+            SET ~ DATA ~ TYPE ~ #type_name
+        },
+        |(_, _, _, name)| ModifyColumnAction::SetDataType(name),
+    );
+
+    rule!(
+        #set_mask_policy
+        | #set_column_type
+    )(i)
+}
+
 pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     let rename_table = map(
         rule! {
@@ -1828,12 +1849,9 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let modify_column = map(
         rule! {
-            MODIFY ~ COLUMN ~ #ident ~ SET ~ MASKING ~ POLICY ~ #ident
+            MODIFY ~ COLUMN ~ #ident ~ #modify_column_action
         },
-        |(_, _, column, _, _, _, mask_name)| AlterTableAction::ModifyColumn {
-            column,
-            action: ModifyColumnAction::SetMaskingPolicy(mask_name.to_string()),
-        },
+        |(_, _, column, action)| AlterTableAction::ModifyColumn { column, action },
     );
     let drop_column = map(
         rule! {

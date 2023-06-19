@@ -16,15 +16,20 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use common_ast::ast::ModifyColumnAction;
+use common_ast::ast::TypeName;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::type_check::can_auto_cast_to;
+use common_expression::types::DataType;
+use common_functions::BUILTIN_FUNCTIONS;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_types::MatchSeq;
 use common_sql::plans::ModifyTableColumnPlan;
+use common_sql::resolve_type_name;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 use common_users::UserApiProvider;
@@ -92,6 +97,44 @@ impl ModifyTableColumnInterpreter {
         new_table_meta.column_mask_policy = Some(column_mask_policy);
         Ok(new_table_meta)
     }
+
+    // Set data column type.
+    async fn do_set_data_type(
+        &self,
+        table: &Arc<dyn Table>,
+        table_meta: TableMeta,
+        type_name: &TypeName,
+    ) -> Result<TableMeta> {
+        let mut new_table_meta = table_meta;
+
+        let mut schema = table.schema().as_ref().clone();
+        if let Ok(i) = schema.index_of(&self.plan.column) {
+            let new_type = resolve_type_name(&type_name)?;
+            let new_data_type: DataType = (&new_type).into();
+            let old_data_type: DataType = (&schema.fields[i].data_type).into();
+            if !can_auto_cast_to(
+                &old_data_type,
+                &new_data_type,
+                &BUILTIN_FUNCTIONS.default_cast_rules,
+            ) {
+                return Err(ErrorCode::SemanticError(format!(
+                    "cannot alter table column {} data type from {} to {}",
+                    self.plan.column,
+                    schema.fields[i].data_type.to_string(),
+                    new_type.to_string(),
+                )));
+            }
+            schema.fields[i].data_type = new_type;
+            new_table_meta.schema = Arc::new(schema);
+        } else {
+            return Err(ErrorCode::UnknownColumn(format!(
+                "Cannot find column {}",
+                self.plan.column
+            )));
+        }
+
+        Ok(new_table_meta)
+    }
 }
 
 #[async_trait::async_trait]
@@ -142,6 +185,9 @@ impl Interpreter for ModifyTableColumnInterpreter {
             ModifyColumnAction::SetMaskingPolicy(mask_name) => {
                 self.do_set_data_mask_policy(table, table_meta, mask_name.clone())
                     .await?
+            }
+            ModifyColumnAction::SetDataType(type_name) => {
+                self.do_set_data_type(table, table_meta, type_name).await?
             }
         };
 
