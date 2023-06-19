@@ -257,8 +257,8 @@ where TablesTable<T>: HistoryAware
             UInt64Type::from_opt_data(data_size),
             UInt64Type::from_opt_data(data_compressed_size),
             UInt64Type::from_opt_data(index_size),
-            UInt64Type::from_opt_data(number_of_blocks),
             UInt64Type::from_opt_data(number_of_segments),
+            UInt64Type::from_opt_data(number_of_blocks),
         ]))
     }
 }

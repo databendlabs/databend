@@ -20,6 +20,8 @@ use common_meta_app::schema::DatabaseIdent;
 use common_meta_app::schema::DatabaseInfo;
 use common_meta_app::schema::DatabaseMeta;
 use common_meta_app::schema::DatabaseNameIdent;
+use common_storages_system::BackgroundJobTable;
+use common_storages_system::BackgroundTaskTable;
 use common_storages_system::BuildOptionsTable;
 use common_storages_system::CachesTable;
 use common_storages_system::CatalogsTable;
@@ -105,6 +107,8 @@ impl SystemDatabase {
             CachesTable::create(sys_db_meta.next_table_id()),
             IndexesTable::create(sys_db_meta.next_table_id()),
             QueryProfileTable::create(sys_db_meta.next_table_id()),
+            BackgroundTaskTable::create(sys_db_meta.next_table_id()),
+            BackgroundJobTable::create(sys_db_meta.next_table_id()),
         ];
 
         let disable_tables = Self::disable_system_tables();

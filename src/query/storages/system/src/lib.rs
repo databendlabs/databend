@@ -17,6 +17,8 @@
 
 extern crate core;
 
+mod background_jobs_table;
+mod background_tasks_table;
 mod build_options_table;
 mod caches_table;
 mod catalogs_table;
@@ -49,6 +51,8 @@ mod tracing_table;
 mod users_table;
 mod util;
 
+pub use background_jobs_table::BackgroundJobTable;
+pub use background_tasks_table::BackgroundTaskTable;
 pub use build_options_table::BuildOptionsTable;
 pub use caches_table::CachesTable;
 pub use catalogs_table::CatalogsTable;

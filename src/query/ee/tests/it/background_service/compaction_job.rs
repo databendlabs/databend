@@ -31,7 +31,7 @@ async fn test_get_compaction_advice_sql() -> Result<()> {
     );
     assert_eq!(
         sql.trim(),
-        "select\n        IF(segment_count > 10 and block_count / segment_count < 100, TRUE, FALSE) AS segment_advice,\n        IF(bytes_uncompressed / block_count / 1024 / 1024 < 50, TRUE, FALSE) AS block_advice,\n        row_count, bytes_uncompressed, bytes_compressed, index_size,\n        segment_count, block_count,\n        block_count/segment_count,\n        humanize_size(bytes_uncompressed / block_count) AS per_block_uncompressed_size_string\n        from fuse_snapshot('db1', 'tbl1') order by timestamp ASC LIMIT 1;"
+        "select\n        IF(segment_count > 10 and block_count / segment_count < 100, TRUE, FALSE) AS segment_advice,\n        IF(bytes_uncompressed / block_count / 1024 / 1024 < 50 and bytes_uncompressed / 1024 / 1024 > 1000, TRUE, FALSE) AS block_advice,\n        row_count, bytes_uncompressed, bytes_compressed, index_size,\n        segment_count, block_count,\n        block_count/segment_count,\n        humanize_size(bytes_uncompressed / block_count) AS per_block_uncompressed_size_string\n        from fuse_snapshot('db1', 'tbl1') order by timestamp ASC LIMIT 1;"
     );
     Ok(())
 }
