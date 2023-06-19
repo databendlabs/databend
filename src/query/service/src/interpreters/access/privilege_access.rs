@@ -256,6 +256,18 @@ impl AccessChecker for PrivilegeAccess {
                     )
                     .await?;
             }
+            Plan::RenameTableColumn(plan) => {
+                session
+                    .validate_privilege(
+                        &GrantObject::Table(
+                            plan.catalog.clone(),
+                            plan.database.clone(),
+                            plan.table.clone(),
+                        ),
+                        vec![UserPrivilegeType::Alter],
+                    )
+                    .await?;
+            }
             Plan::ModifyTableColumn(plan) => {
                 session
                     .validate_privilege(

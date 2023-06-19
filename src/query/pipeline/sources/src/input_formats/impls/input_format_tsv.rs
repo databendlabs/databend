@@ -45,68 +45,107 @@ impl InputFormatTSV {
     pub fn create() -> Self {
         Self {}
     }
+
+    fn read_column(
+        builder: &mut ColumnBuilder,
+        field_decoder: &FieldDecoderTSV,
+        col_data: &[u8],
+        column_index: usize,
+        schema: &TableSchemaRef,
+    ) -> std::result::Result<(), String> {
+        if col_data.is_empty() {
+            builder.push_default();
+        } else {
+            let mut reader = Cursor::new(col_data);
+            if let Err(e) = field_decoder.read_field(builder, &mut reader, true) {
+                return Err(format_column_error(
+                    schema,
+                    column_index,
+                    col_data,
+                    &e.message(),
+                ));
+            };
+            reader.ignore_white_spaces();
+            if reader.must_eof().is_err() {
+                return Err(format_column_error(
+                    schema,
+                    column_index,
+                    col_data,
+                    "bad field end",
+                ));
+            }
+        }
+        Ok(())
+    }
+
     fn read_row(
         field_delimiter: u8,
         field_decoder: &FieldDecoderTSV,
         buf: &[u8],
         columns: &mut Vec<ColumnBuilder>,
         schema: &TableSchemaRef,
+        columns_to_read: &Option<Vec<usize>>,
     ) -> Result<()> {
         let num_columns = columns.len();
         let mut column_index = 0;
         let mut field_start = 0;
-        let mut pos = 0;
+        let mut field_end = 0;
         let mut err_msg = None;
         let buf_len = buf.len();
-        while pos <= buf_len && column_index < num_columns {
-            if pos == buf_len || buf[pos] == field_delimiter {
-                let col_data = &buf[field_start..pos];
-                if col_data.is_empty() {
-                    columns[column_index].push_default();
-                } else {
-                    let mut reader = Cursor::new(col_data);
-                    if let Err(e) =
-                        field_decoder.read_field(&mut columns[column_index], &mut reader, true)
-                    {
-                        err_msg = Some(format_column_error(
-                            schema,
+        if let Some(columns_to_read) = columns_to_read {
+            while field_end <= buf_len && column_index < num_columns {
+                if field_end == buf_len || buf[field_end] == field_delimiter {
+                    if columns_to_read.contains(&column_index) {
+                        if let Err(msg) = Self::read_column(
+                            &mut columns[column_index],
+                            field_decoder,
+                            &buf[field_start..field_end],
                             column_index,
-                            col_data,
-                            &e.message(),
-                        ));
-                        break;
-                    };
-                    reader.ignore_white_spaces();
-                    if reader.must_eof().is_err() {
-                        err_msg = Some(format_column_error(
                             schema,
-                            column_index,
-                            col_data,
-                            "bad field end",
-                        ));
+                        ) {
+                            err_msg = Some(msg);
+                            break;
+                        }
+                    }
+                    column_index += 1;
+                    field_start = field_end + 1;
+                }
+                field_end += 1;
+            }
+            while column_index < num_columns {
+                columns[column_index].push_default();
+                column_index += 1;
+            }
+        } else {
+            while field_end <= buf_len && column_index < num_columns {
+                if field_end == buf_len || buf[field_end] == field_delimiter {
+                    if let Err(msg) = Self::read_column(
+                        &mut columns[column_index],
+                        field_decoder,
+                        &buf[field_start..field_end],
+                        column_index,
+                        schema,
+                    ) {
+                        err_msg = Some(msg);
                         break;
                     }
+                    column_index += 1;
+                    field_start = field_end + 1;
                 }
-                column_index += 1;
-                field_start = pos + 1;
-                if column_index > num_columns {
+                field_end += 1;
+            }
+            if err_msg.is_none() {
+                // expect: field_end > buf_len && column_index == num_columns
+                if column_index < num_columns {
+                    err_msg = Some(format!(
+                        "need {} columns, find {} only",
+                        num_columns, column_index
+                    ));
+                } else if field_end <= buf_len {
                     err_msg = Some("too many columns".to_string());
-                    break;
                 }
             }
-            pos += 1;
         }
-        if err_msg.is_none() {
-            if column_index < num_columns {
-                err_msg = Some(format!(
-                    "need {} columns, find {} only",
-                    num_columns, column_index
-                ));
-            } else if pos < buf_len {
-                err_msg = Some("too many columns".to_string());
-            }
-        }
-
         if let Some(m) = err_msg {
             let mut msg = format!("{}, row data: ", m);
             verbose_string(buf, &mut msg);
@@ -176,7 +215,14 @@ impl InputFormatTextBase for InputFormatTSV {
         let mut error_map: HashMap<u16, InputError> = HashMap::new();
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
-            if let Err(e) = Self::read_row(field_delimiter, field_decoder, buf, columns, schema) {
+            if let Err(e) = Self::read_row(
+                field_delimiter,
+                field_decoder,
+                buf,
+                columns,
+                schema,
+                &builder.projection,
+            ) {
                 match builder.ctx.on_error_mode {
                     OnErrorMode::Continue => {
                         Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);

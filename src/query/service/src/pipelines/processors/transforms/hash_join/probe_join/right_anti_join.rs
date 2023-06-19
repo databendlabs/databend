@@ -40,7 +40,7 @@ impl JoinHashTable {
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
 
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -64,7 +64,7 @@ impl JoinHashTable {
                     }
 
                     for row_ptr in local_build_indexes.iter() {
-                        outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                        outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
                     }
 
                     occupied = 0;
@@ -93,7 +93,7 @@ impl JoinHashTable {
         }
 
         for row_ptr in local_build_indexes.iter().take(occupied) {
-            outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+            outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
         }
 
         Ok(vec![])
@@ -126,7 +126,7 @@ impl JoinHashTable {
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -169,7 +169,7 @@ impl JoinHashTable {
 
                         if all_true {
                             for row_ptr in local_build_indexes.iter() {
-                                outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                                outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
                             }
                         } else if !all_false {
                             // Safe to unwrap.
@@ -178,8 +178,8 @@ impl JoinHashTable {
                             while idx < occupied {
                                 let valid = unsafe { validity.get_bit_unchecked(idx) };
                                 if valid {
-                                    outer_scan_bitmap[local_build_indexes[idx].chunk_index]
-                                        .set(local_build_indexes[idx].row_index, true);
+                                    outer_scan_map[local_build_indexes[idx].chunk_index]
+                                        [local_build_indexes[idx].row_index] = true;
                                 }
                                 idx += 1;
                             }
@@ -233,7 +233,7 @@ impl JoinHashTable {
 
             if all_true {
                 for row_ptr in local_build_indexes.iter().take(occupied) {
-                    outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                    outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
                 }
             } else if !all_false {
                 // Safe to unwrap.
@@ -242,8 +242,8 @@ impl JoinHashTable {
                 while idx < occupied {
                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                     if valid {
-                        outer_scan_bitmap[local_build_indexes[idx].chunk_index]
-                            .set(local_build_indexes[idx].row_index, true);
+                        outer_scan_map[local_build_indexes[idx].chunk_index]
+                            [local_build_indexes[idx].row_index] = true;
                     }
                     idx += 1;
                 }

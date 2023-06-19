@@ -6,9 +6,9 @@ c
 1
 2
 3
----err1
+---select *
 ERROR 1105 (HY000) at line 1: Code: 1065, Text = select columns from csv file must in the form of $<column_position>.
----err2
+---select *,$1
 ERROR 1105 (HY000) at line 1: Code: 1065, Text = can not select * from csv/ndjson file.
 ---copy
 1	

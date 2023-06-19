@@ -104,8 +104,8 @@ pub struct JoinHashTable {
     pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
     pub(crate) interrupt: Arc<AtomicBool>,
-    /// OuterScan bitmap
-    pub(crate) outer_scan_bitmap: Arc<SyncUnsafeCell<Vec<MutableBitmap>>>,
+    /// OuterScan map
+    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
     /// Finalize tasks
     pub(crate) build_worker_num: Arc<AtomicU32>,
     pub(crate) finalize_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
@@ -175,7 +175,7 @@ impl JoinHashTable {
             row_ptrs: RwLock::new(vec![]),
             probe_schema: probe_data_schema,
             interrupt: Arc::new(AtomicBool::new(false)),
-            outer_scan_bitmap: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             build_worker_num: Arc::new(AtomicU32::new(0)),
             finalize_tasks: Arc::new(RwLock::new(VecDeque::new())),
             outer_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
