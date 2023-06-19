@@ -198,7 +198,7 @@ impl Interpreter for InsertInterpreter {
                         ..
                     } => {
                         let mut builder1 =
-                            PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                            PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                         (builder1.build(s_expr).await?, bind_context.columns.clone())
                     }
                     _ => unreachable!(),

@@ -171,7 +171,9 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
             projection: Some(proj),
             ..Default::default()
         };
-        let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
+        let (stats, parts) = table
+            .read_partitions(ctx.clone(), Some(push_downs), true)
+            .await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
         assert!(!parts.is_empty());
     }

@@ -158,8 +158,9 @@ impl<Event: SystemLogElement + 'static> Table for SystemLogTable<Event> {
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
-        _: Arc<dyn TableContext>,
-        _: Option<PushDownInfo>,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((PartStatistics::default(), Partitions::default()))
     }

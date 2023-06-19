@@ -95,8 +95,9 @@ impl Table for FuseSegmentTable {
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _push_downs: Option<PushDownInfo>,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((PartStatistics::default(), Partitions::default()))
     }

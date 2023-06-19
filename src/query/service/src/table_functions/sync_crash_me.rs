@@ -109,8 +109,9 @@ impl Table for SyncCrashMeTable {
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
-        _: Arc<dyn TableContext>,
-        _: Option<PushDownInfo>,
+        ctx: Arc<dyn TableContext>,
+        push_downs: Option<PushDownInfo>,
+        _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         // dummy statistics
         Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))

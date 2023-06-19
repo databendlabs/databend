@@ -66,7 +66,7 @@ async fn run_table_tests(
     let table_info = table.get_table_info();
     writeln!(file, "---------- TABLE INFO ------------").unwrap();
     writeln!(file, "{table_info}").unwrap();
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let blocks = stream.try_collect::<Vec<_>>().await?;
@@ -98,7 +98,7 @@ async fn test_build_options_table() -> Result<()> {
     let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
 
     let table = BuildOptionsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -125,7 +125,7 @@ async fn test_clusters_table() -> Result<()> {
     let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = ClustersTable::create(1);
 
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -178,7 +178,7 @@ async fn test_configs_table_redact() -> Result<()> {
     ctx.get_settings().set_max_threads(8)?;
 
     let table = ConfigsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -194,7 +194,7 @@ async fn test_configs_table_redact() -> Result<()> {
 async fn test_contributors_table() -> Result<()> {
     let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = ContributorsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -207,7 +207,7 @@ async fn test_contributors_table() -> Result<()> {
 async fn test_credits_table() -> Result<()> {
     let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = CreditsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -256,7 +256,7 @@ async fn test_engines_table() -> Result<()> {
 async fn test_functions_table() -> Result<()> {
     let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = FunctionsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;
@@ -270,7 +270,7 @@ async fn test_metrics_table() -> Result<()> {
     init_default_metrics_recorder();
     let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table = MetricsTable::create(1);
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     metrics::counter!("test.test_metrics_table_count", 1);
     #[cfg(feature = "enable_histogram")]
@@ -338,7 +338,7 @@ async fn test_settings_table() -> Result<()> {
 async fn test_tracing_table() -> Result<()> {
     let (_guard, ctx) = databend_query::test_kits::create_query_context().await?;
     let table: Arc<dyn Table> = Arc::new(TracingTable::create(1));
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     let stream = table.read_data_block_stream(ctx, &source_plan).await?;
     let result = stream.try_collect::<Vec<_>>().await?;

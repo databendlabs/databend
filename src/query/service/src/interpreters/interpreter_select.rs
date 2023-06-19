@@ -76,7 +76,7 @@ impl SelectInterpreter {
     #[inline]
     #[async_backtrace::framed]
     pub async fn build_physical_plan(&self) -> Result<PhysicalPlan> {
-        let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone());
+        let mut builder = PhysicalPlanBuilder::new(self.metadata.clone(), self.ctx.clone(), false);
         builder.build(&self.s_expr).await
     }
 
