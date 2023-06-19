@@ -559,7 +559,7 @@ impl Binder {
                 };
                 StageTable::try_create(info)?
             }
-            FileFormatParams::Csv(..) => {
+            FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
                 let max_column_position = self.metadata.read().get_max_column_position();
                 if max_column_position == 0 {
                     return Err(ErrorCode::SemanticError(
@@ -584,7 +584,7 @@ impl Binder {
             }
             _ => {
                 return Err(ErrorCode::Unimplemented(
-                    "stage table function only support parquet/NDJson/CSV format for now",
+                    "query stage files only support parquet/NDJson/CSV/TSV format for now",
                 ));
             }
         };
