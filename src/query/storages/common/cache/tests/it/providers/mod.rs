@@ -14,3 +14,4 @@
 
 mod disk_cache;
 mod rocksdb_cache;
+mod rocksdb_disk_cache;

@@ -15,6 +15,7 @@
 mod disk_cache;
 mod memory_cache;
 mod rocksdb_cache;
+mod rocksdb_disk_cache;
 mod table_data_cache;
 pub use disk_cache::result::Error as DiskCacheError;
 pub use disk_cache::result::Result as DiskCacheResult;
@@ -29,6 +30,7 @@ pub use memory_cache::InMemoryBytesCacheHolder;
 pub use memory_cache::InMemoryCacheBuilder;
 pub use memory_cache::InMemoryItemCacheHolder;
 pub use rocksdb_cache::RocksDbCache;
+pub use rocksdb_disk_cache::RocksDbDiskCache;
 pub use table_data_cache::TableDataCache;
 pub use table_data_cache::TableDataCacheBuilder;
 pub use table_data_cache::TableDataCacheKey;

@@ -389,7 +389,7 @@ impl CacheAccessor<String, Vec<u8>, common_cache::DefaultHashBuilder, Count>
 
 /// The crc32 checksum is stored at the end of `bytes` and encoded as le u32.
 // Although parquet page has built-in crc, but it is optional (and not generated in parquet2)
-fn validate_checksum(bytes: &[u8]) -> Result<()> {
+pub fn validate_checksum(bytes: &[u8]) -> Result<()> {
     let total_len = bytes.len();
     if total_len <= 4 {
         Err(ErrorCode::StorageOther(format!(

@@ -12,64 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
-
 use chrono::Utc;
 use common_exception::Result;
-use rocksdb::MergeOperands;
 use rocksdb::TransactionDBOptions;
-use serde::Deserialize;
-use serde::Serialize;
 
-#[derive(Serialize, Deserialize)]
-struct TimeValue {
-    pub time: i64,
-    pub value_len: usize,
-}
+use super::rocksdb_disk_cache::i64_merge_operator;
+use super::rocksdb_disk_cache::KeyTimeValue;
+use super::rocksdb_disk_cache::DISK_SIZE_KEY;
+use super::rocksdb_disk_cache::KEY2TIME_COLUMN_PREFIX;
+use super::rocksdb_disk_cache::TIME2KEY_COLUMN_PREFIX;
+use crate::metrics_inc_cache_access_count;
+use crate::metrics_inc_cache_hit_count;
+use crate::metrics_inc_cache_miss_count;
+
+// map key -> value
+static KEY2VALUE_COLUMN_PREFIX: &str = "_key2value";
+static ROCKSDB_DISK_CACHE_NAME: &str = "rocksdb_cache";
 
 pub struct RocksDbCache {
     db: rocksdb::TransactionDB,
     limit: i64,
-}
-
-// map key -> (time,id,len)
-static KEY2TIME_COLUMN_PREFIX: &str = "_key2time";
-// map key -> value
-static KEY2VALUE_COLUMN_PREFIX: &str = "_key2value";
-// map (time,id) -> key
-static TIME2KEY_COLUMN_PREFIX: &str = "_time2key";
-// system data key
-static DISK_SIZE_KEY: &str = "_system/disk_size";
-
-#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
-struct KeyTimeValue {
-    time: i64,
-    value_len: usize,
-}
-
-impl PartialOrd for KeyTimeValue {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.time.cmp(&other.time))
-    }
-}
-
-fn i64_merge_operator(
-    _: &[u8],
-    existing_val: Option<&[u8]>,
-    operands: &MergeOperands,
-) -> Option<Vec<u8>> {
-    // first get the old value
-    let mut value = if let Some(v) = existing_val {
-        let data: [u8; 8] = v[0..8].try_into().unwrap();
-        i64::from_ne_bytes(data)
-    } else {
-        0
-    };
-    // second merge operands
-    for op in operands {
-        value += i64::from_ne_bytes(op[0..8].try_into().unwrap())
-    }
-    Some(i64::to_ne_bytes(value).to_vec())
 }
 
 impl RocksDbCache {
@@ -137,6 +99,7 @@ impl RocksDbCache {
 
 impl RocksDbCache {
     pub fn get<Q: AsRef<str>>(&self, key: Q) -> Result<Option<Vec<u8>>> {
+        metrics_inc_cache_access_count(1, ROCKSDB_CACHE_NAME);
         let key = key.as_ref();
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
         if let Ok(value) = self.db.get(&key2time_key) {
@@ -169,12 +132,14 @@ impl RocksDbCache {
 
                         txn.commit()?;
 
+                        metrics_inc_cache_hit_count(1, ROCKSDB_CACHE_NAME);
                         return Ok(Some(value));
                     }
                 }
             }
         }
 
+        metrics_inc_cache_miss_count(1, ROCKSDB_CACHE_NAME);
         Ok(None)
     }
 

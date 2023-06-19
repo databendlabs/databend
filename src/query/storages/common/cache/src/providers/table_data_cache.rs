@@ -31,6 +31,7 @@ use crate::providers::LruDiskCacheHolder;
 use crate::CacheAccessor;
 use crate::LruDiskCacheBuilder;
 use crate::RocksDbCache;
+use crate::RocksDbDiskCache;
 
 struct CacheItem {
     key: String,
@@ -65,6 +66,7 @@ impl AsRef<str> for TableDataCacheKey {
 enum ExternalCache {
     LruDiskCache(LruDiskCacheHolder),
     RocksDbCache(RocksDbCache),
+    RocksDbDiskCache(RocksDbDiskCache),
 }
 
 impl ExternalCache {
@@ -72,6 +74,15 @@ impl ExternalCache {
         match self {
             ExternalCache::LruDiskCache(cache) => cache.get(k),
             ExternalCache::RocksDbCache(cache) => {
+                if let Ok(value) = cache.get(k) {
+                    if let Some(value) = value {
+                        return Some(Arc::new(value));
+                    }
+                }
+
+                None
+            }
+            ExternalCache::RocksDbDiskCache(cache) => {
                 if let Ok(value) = cache.get(k) {
                     if let Some(value) = value {
                         return Some(Arc::new(value));
@@ -89,6 +100,9 @@ impl ExternalCache {
             ExternalCache::RocksDbCache(cache) => {
                 let _ = cache.put(&k, v.as_ref());
             }
+            ExternalCache::RocksDbDiskCache(cache) => {
+                let _ = cache.put(&k, v.as_ref());
+            }
         }
     }
 
@@ -96,6 +110,7 @@ impl ExternalCache {
         match self {
             ExternalCache::LruDiskCache(cache) => cache.evict(k),
             ExternalCache::RocksDbCache(cache) => cache.evict(k),
+            ExternalCache::RocksDbDiskCache(cache) => cache.evict(k),
         }
     }
 
@@ -103,6 +118,7 @@ impl ExternalCache {
         match self {
             ExternalCache::LruDiskCache(cache) => cache.contains_key(k),
             ExternalCache::RocksDbCache(cache) => cache.contains_key(k),
+            ExternalCache::RocksDbDiskCache(cache) => cache.contains_key(k),
         }
     }
 
@@ -110,6 +126,7 @@ impl ExternalCache {
         match self {
             ExternalCache::LruDiskCache(cache) => cache.size(),
             ExternalCache::RocksDbCache(cache) => cache.size(),
+            ExternalCache::RocksDbDiskCache(cache) => cache.size(),
         }
     }
 
@@ -117,6 +134,7 @@ impl ExternalCache {
         match self {
             ExternalCache::LruDiskCache(cache) => cache.len(),
             ExternalCache::RocksDbCache(cache) => cache.len(),
+            ExternalCache::RocksDbDiskCache(cache) => cache.len(),
         }
     }
 }
@@ -163,6 +181,27 @@ impl TableDataCacheBuilder {
         let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
         let num_population_thread = 1;
         let external_cache = Arc::new(ExternalCache::RocksDbCache(rocksdb_cache));
+        Ok(Arc::new(TableDataCache {
+            _cache_populator: DiskCachePopulator::new(
+                tx,
+                external_cache.clone(),
+                num_population_thread,
+            )?,
+            external_cache,
+            population_queue: rx,
+        }))
+    }
+
+    pub fn new_table_data_rocksdb_disk_cache(
+        path: &PathBuf,
+        population_queue_size: u32,
+        disk_cache_bytes_size: u64,
+    ) -> Result<TableDataCacheRef> {
+        let rocksdb_cache =
+            RocksDbDiskCache::new(path.to_str().unwrap(), disk_cache_bytes_size as i64)?;
+        let (rx, tx) = crossbeam_channel::bounded(population_queue_size as usize);
+        let num_population_thread = 1;
+        let external_cache = Arc::new(ExternalCache::RocksDbDiskCache(rocksdb_cache));
         Ok(Arc::new(TableDataCache {
             _cache_populator: DiskCachePopulator::new(
                 tx,
