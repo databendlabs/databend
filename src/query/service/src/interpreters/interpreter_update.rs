@@ -21,21 +21,37 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::DataBlock;
 use common_expression::ROW_ID_COL_NAME;
 use common_license::license_manager::get_license_manager;
 use common_sql::executor::cast_expr_to_non_null_boolean;
+use common_sql::optimizer::CascadesOptimizer;
+use common_sql::optimizer::HeuristicOptimizer;
+use common_sql::optimizer::SExpr;
+use common_sql::optimizer::SubqueryRewriter;
+use common_sql::optimizer::DEFAULT_REWRITE_RULES;
+use common_sql::plans::EvalScalar as PlanEvalScalar;
+use common_sql::plans::RelOperator::EvalScalar;
+use common_sql::plans::ScalarItem;
 use common_sql::ColumnBinding;
+use common_sql::ScalarExpr;
 use common_sql::Visibility;
+use futures_util::TryStreamExt;
 use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::interpreter_delete::replace_subquery;
 use crate::interpreters::interpreter_delete::subquery_filter;
 use crate::interpreters::Interpreter;
+use crate::interpreters::SelectInterpreter;
+use crate::pipelines::executor::ExecutorSettings;
+use crate::pipelines::executor::PipelinePullingExecutor;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_query_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::UpdatePlan;
+use crate::stream::PullingExecutorStream;
 
 /// interprets UpdatePlan
 pub struct UpdateInterpreter {
@@ -148,11 +164,87 @@ impl Interpreter for UpdateInterpreter {
             (None, vec![])
         };
 
-        let update_list = self.plan.generate_update_list(
+        let mut subquery_scalars = vec![];
+        let mut update_list = self.plan.generate_update_list(
             self.ctx.clone(),
             tbl.schema().into(),
             col_indices.clone(),
+            &mut subquery_scalars,
         )?;
+
+        for scalar in subquery_scalars.iter() {
+            if let ScalarExpr::SubqueryExpr(subquery_expr) = scalar {
+                if subquery_expr.data_type() == DataType::Nullable(Box::new(DataType::Boolean)) {
+                    return Err(ErrorCode::from_string(
+                        "
+                        subquery type in update list should be scalar subquery"
+                            .to_string(),
+                    ));
+                }
+                let mut rewriter = SubqueryRewriter::new(self.plan.metadata.clone());
+                let expr = if subquery_expr.outer_columns.is_empty() {
+                    // Uncorrelated subquery
+                    rewriter.rewrite(subquery_expr.subquery.as_ref())?
+                } else {
+                    // Correlated subquery
+                    let eval_scalar = EvalScalar(PlanEvalScalar {
+                        items: vec![ScalarItem {
+                            scalar: scalar.clone(),
+                            index: 0,
+                        }],
+                    });
+                    let subquery_expr = SExpr::create_unary(
+                        Arc::new(eval_scalar),
+                        Arc::new(self.plan.table_expr.clone()),
+                    );
+                    rewriter.rewrite(&subquery_expr)?
+                };
+                // Optimize expression
+                // BindContext is only used by pre_optimize and post_optimize, so we can use a mock one.
+                let heuristic_optimizer = HeuristicOptimizer::new(
+                    self.ctx.get_function_context()?,
+                    self.plan.bind_context.clone(),
+                    self.plan.metadata.clone(),
+                );
+                let mut expr =
+                    heuristic_optimizer.optimize_expression(&expr, &DEFAULT_REWRITE_RULES)?;
+                let mut cascades =
+                    CascadesOptimizer::create(self.ctx.clone(), self.plan.metadata.clone(), false)?;
+                expr = cascades.optimize(expr)?;
+
+                // Create `input_expr` pipeline and execute it to get `` data block.
+                let select_interpreter = SelectInterpr_row_ideter::try_create(
+                    self.ctx.clone(),
+                    self.plan.bind_context.as_ref().clone(),
+                    expr,
+                    self.plan.metadata.clone(),
+                    None,
+                    false,
+                )?;
+                // Build physical plan
+                let physical_plan = select_interpreter.build_physical_plan().await?;
+                // Create pipeline for physical plan
+                let pipeline = build_query_pipeline(
+                    &self.ctx,
+                    &[subquery_expr.output_column.clone()],
+                    &physical_plan,
+                    false,
+                    false,
+                )
+                .await?;
+
+                // Execute pipeline
+                let settings = self.ctx.get_settings();
+                let query_id = self.ctx.get_id();
+                let settings = ExecutorSettings::try_create(&settings, query_id)?;
+                let pulling_executor = PipelinePullingExecutor::from_pipelines(pipeline, settings)?;
+                self.ctx.set_executor(pulling_executor.get_inner())?;
+                let stream_blocks = PullingExecutorStream::create(pulling_executor)?
+                    .try_collect::<Vec<DataBlock>>()
+                    .await?;
+                dbg!(stream_blocks[0].columns()[0].value.as_ref().len());
+            }
+        }
 
         let computed_list = self
             .plan

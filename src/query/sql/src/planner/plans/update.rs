@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::ComputedExpr;
 use common_expression::ConstantFolder;
+use common_expression::DataBlock;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
@@ -30,10 +31,18 @@ use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::binder::wrap_cast_scalar;
+use crate::optimizer::CascadesOptimizer;
+use crate::optimizer::HeuristicOptimizer;
+use crate::optimizer::SExpr;
+use crate::optimizer::SubqueryRewriter;
+use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::parse_computed_expr;
+use crate::plans::eval_scalar;
 use crate::plans::BoundColumnRef;
 use crate::plans::FunctionCall;
+use crate::plans::RelOperator::EvalScalar;
 use crate::plans::ScalarExpr;
+use crate::plans::ScalarItem;
 use crate::plans::SubqueryDesc;
 use crate::BindContext;
 use crate::ColumnBinding;
@@ -46,6 +55,7 @@ pub struct UpdatePlan {
     pub database: String,
     pub table: String,
     pub update_list: HashMap<FieldIndex, ScalarExpr>,
+    pub table_expr: SExpr,
     pub selection: Option<ScalarExpr>,
     pub bind_context: Box<BindContext>,
     pub metadata: MetadataRef,
@@ -62,6 +72,7 @@ impl UpdatePlan {
         ctx: Arc<dyn TableContext>,
         schema: DataSchema,
         col_indices: Vec<usize>,
+        subquery_scalars: &mut Vec<ScalarExpr>,
     ) -> Result<Vec<(FieldIndex, RemoteExpr<String>)>> {
         let predicate = ScalarExpr::BoundColumnRef(BoundColumnRef {
             span: None,
@@ -81,6 +92,10 @@ impl UpdatePlan {
         self.update_list.iter().try_fold(
             Vec::with_capacity(self.update_list.len()),
             |mut acc, (index, scalar)| {
+                if let ScalarExpr::SubqueryExpr(_) = scalar {
+                    subquery_scalars.push(scalar.clone());
+                    return Ok::<_, ErrorCode>(acc);
+                }
                 let field = schema.field(*index);
                 let data_type = scalar.data_type()?;
                 let target_type = field.data_type();

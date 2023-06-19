@@ -97,18 +97,12 @@ impl Binder {
                 )));
             }
 
-            // TODO(zhyass): update_list support subquery.
             let (scalar, _) = scalar_binder.bind(&update_expr.expr).await?;
-            if matches!(scalar, ScalarExpr::SubqueryExpr(_)) {
-                return Err(ErrorCode::Internal(
-                    "update_list in update statement does not support subquery temporarily",
-                ));
-            }
             update_columns.insert(index, scalar);
         }
 
         let (selection, subquery_desc) = self
-            .process_selection(selection, table_expr, &mut scalar_binder)
+            .process_selection(selection, table_expr.clone(), &mut scalar_binder)
             .await?;
 
         let plan = UpdatePlan {
@@ -116,6 +110,7 @@ impl Binder {
             database: database_name,
             table: table_name,
             update_list: update_columns,
+            table_expr,
             selection,
             bind_context: Box::new(context.clone()),
             metadata: self.metadata.clone(),
