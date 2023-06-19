@@ -371,4 +371,28 @@ statement ok
 drop table t;
 
 statement ok
+set timezone='Asia/Shanghai';
+
+query T
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+----
+2000
+
+statement ok
+SET timezone ='America/Toronto';
+
+query T
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+----
+2000
+
+statement ok
+set timezone = 'UTC';
+
+query T
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+----
+2000
+
+statement ok
 unset timezone;
