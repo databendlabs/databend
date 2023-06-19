@@ -59,6 +59,9 @@ ALTER TABLE `05_0003_at_t2` rename column a to _row_id
 statement error 1065
 ALTER TABLE `05_0003_at_t2` rename column a to c
 
+statement error 1065
+ALTER TABLE `05_0003_at_t2` rename column d to e
+
 statement ok
 ALTER TABLE `05_0003_at_t2` rename column a to b
 

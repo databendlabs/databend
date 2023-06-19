@@ -960,6 +960,7 @@ impl Binder {
             ));
         }
         let mut new_schema = table_schema.as_ref().clone();
+        let mut old_column_existed = false;
         for (i, field) in table_schema.fields().iter().enumerate() {
             if field.name() == &new_name {
                 return Err(ErrorCode::SemanticError(
@@ -968,7 +969,13 @@ impl Binder {
             }
             if field.name() == &old_name {
                 new_schema.rename_field(i, &new_name);
+                old_column_existed = true;
             }
+        }
+        if !old_column_existed {
+            return Err(ErrorCode::SemanticError(
+                "rename column not existed".to_string(),
+            ));
         }
         Ok((new_schema, new_name))
     }
