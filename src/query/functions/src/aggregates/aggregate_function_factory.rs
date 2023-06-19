@@ -229,6 +229,9 @@ impl AggregateFunctionFactory {
                     }
                     Some(nested_desc) => {
                         *features = nested_desc.features.clone();
+                        if suffix == "_state" {
+                            features.returns_default_when_only_null = true;
+                        }
                         return (desc.creator)(
                             nested_name,
                             params,
