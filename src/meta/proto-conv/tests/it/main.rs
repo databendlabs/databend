@@ -49,3 +49,4 @@ mod v041_virtual_column;
 mod v042_s3_stage_new_field;
 mod v043_table_statistics;
 mod v044_table_meta;
+mod v045_background;

@@ -126,6 +126,7 @@ impl Binder {
             table_meta,
             None,
             false,
+            false,
         );
 
         self.bind_base_table(bind_context, database, table_index)
@@ -288,6 +289,7 @@ impl Binder {
                                 table_meta,
                                 table_alias_name,
                                 false,
+                                false,
                             );
                             let (s_expr, mut new_bind_context) =
                                 self.bind_query(&mut new_bind_context, query).await?;
@@ -322,6 +324,7 @@ impl Binder {
                             table_meta,
                             table_alias_name,
                             bind_context.view_info.is_some(),
+                            bind_context.planning_agg_index,
                         );
 
                         if !agg_indexes.is_empty() {
@@ -408,6 +411,7 @@ impl Binder {
                         table.clone(),
                         table_alias_name,
                         false,
+                        false,
                     );
 
                     let (s_expr, mut bind_context) = self
@@ -472,6 +476,7 @@ impl Binder {
                         "system".to_string(),
                         table.clone(),
                         table_alias_name,
+                        false,
                         false,
                     );
 
@@ -595,6 +600,7 @@ impl Binder {
             "system".to_string(),
             table.clone(),
             table_alias_name,
+            false,
             false,
         );
 

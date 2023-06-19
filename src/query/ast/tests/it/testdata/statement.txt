@@ -7161,6 +7161,52 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t RENAME COLUMN a TO b;
+---------- Output ---------
+ALTER TABLE t RENAME COLUMN a TO b
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: RenameColumn {
+            old_column: Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    28..29,
+                ),
+            },
+            new_column: Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    33..34,
+                ),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t DROP COLUMN b;
 ---------- Output ---------
 ALTER TABLE t DROP COLUMN b
@@ -11413,6 +11459,100 @@ GenerateVirtualColumns(
                 29..30,
             ),
         },
+    },
+)
+
+
+---------- Input ----------
+--各环节转各环节转各环节转各环节转各
+  select 34343
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            56..68,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    56..68,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                63..68,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
+    },
+)
+
+
+---------- Input ----------
+-- xxxxx
+  select 34343;
+---------- Output ---------
+SELECT 34343
+---------- AST ------------
+Query(
+    Query {
+        span: Some(
+            11..23,
+        ),
+        with: None,
+        body: Select(
+            SelectStmt {
+                span: Some(
+                    11..23,
+                ),
+                hints: None,
+                distinct: false,
+                select_list: [
+                    AliasedExpr {
+                        expr: Literal {
+                            span: Some(
+                                18..23,
+                            ),
+                            lit: UInt64(
+                                34343,
+                            ),
+                        },
+                        alias: None,
+                    },
+                ],
+                from: [],
+                selection: None,
+                group_by: None,
+                having: None,
+                window_list: None,
+            },
+        ),
+        order_by: [],
+        limit: [],
+        offset: None,
+        ignore_result: false,
     },
 )
 

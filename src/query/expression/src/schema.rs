@@ -514,6 +514,10 @@ impl TableSchema {
         false
     }
 
+    pub fn rename_field(&mut self, i: FieldIndex, new_name: &str) {
+        self.fields[i].name = new_name.to_string();
+    }
+
     pub fn fields_map(&self) -> BTreeMap<FieldIndex, TableField> {
         let x = self.fields().iter().cloned().enumerate();
         x.collect::<BTreeMap<_, _>>()

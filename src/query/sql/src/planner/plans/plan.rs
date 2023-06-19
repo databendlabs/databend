@@ -32,6 +32,7 @@ use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::ModifyTableColumnPlan;
+use super::RenameTableColumnPlan;
 use super::SetOptionsPlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
@@ -164,6 +165,7 @@ pub enum Plan {
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
+    RenameTableColumn(Box<RenameTableColumnPlan>),
     AddTableColumn(Box<AddTableColumnPlan>),
     DropTableColumn(Box<DropTableColumnPlan>),
     ModifyTableColumn(Box<ModifyTableColumnPlan>),
@@ -310,6 +312,7 @@ impl Display for Plan {
             Plan::DropTable(_) => write!(f, "DropTable"),
             Plan::UndropTable(_) => write!(f, "UndropTable"),
             Plan::RenameTable(_) => write!(f, "RenameTable"),
+            Plan::RenameTableColumn(_) => write!(f, "RenameTableColumn"),
             Plan::AddTableColumn(_) => write!(f, "AddTableColumn"),
             Plan::ModifyTableColumn(_) => write!(f, "ModifyTableColumn"),
             Plan::DropTableColumn(_) => write!(f, "DropTableColumn"),

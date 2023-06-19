@@ -59,6 +59,22 @@ impl DatamaskAlreadyExists {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
+#[error("BackgroundJobAlreadyExists: `{name}` while `{context}`")]
+pub struct BackgroundJobAlreadyExists {
+    name: String,
+    context: String,
+}
+
+impl BackgroundJobAlreadyExists {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, thiserror::Error)]
 #[error("CreateDatabaseWithDropTime: `{db_name}` with drop_on")]
 pub struct CreateDatabaseWithDropTime {
     db_name: String,
@@ -260,6 +276,22 @@ pub struct UnknownDatamask {
 }
 
 impl UnknownDatamask {
+    pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            context: context.into(),
+        }
+    }
+}
+
+#[derive(thiserror::Error, Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[error("UnknownBackgroundJob: `{name}` while `{context}`")]
+pub struct UnknownBackgroundJob {
+    name: String,
+    context: String,
+}
+
+impl UnknownBackgroundJob {
     pub fn new(name: impl Into<String>, context: impl Into<String>) -> Self {
         Self {
             name: name.into(),
@@ -803,6 +835,12 @@ pub enum AppError {
     UnknownDatamask(#[from] UnknownDatamask),
 
     #[error(transparent)]
+    BackgroundJobAlreadyExists(#[from] BackgroundJobAlreadyExists),
+
+    #[error(transparent)]
+    UnknownBackgroundJob(#[from] UnknownBackgroundJob),
+
+    #[error(transparent)]
     UnmatchColumnDataType(#[from] UnmatchColumnDataType),
 
     #[error(transparent)]
@@ -810,6 +848,18 @@ pub enum AppError {
 
     #[error(transparent)]
     VirtualColumnAlreadyExists(#[from] VirtualColumnAlreadyExists),
+}
+
+impl AppErrorMessage for UnknownBackgroundJob {
+    fn message(&self) -> String {
+        format!("Unknown background job '{}'", self.name)
+    }
+}
+
+impl AppErrorMessage for BackgroundJobAlreadyExists {
+    fn message(&self) -> String {
+        format!("Background job '{}' already exists", self.name)
+    }
 }
 
 impl AppErrorMessage for UnknownDatabase {
@@ -1141,6 +1191,11 @@ impl From<AppError> for ErrorCode {
             AppError::DropIndexWithDropTime(err) => ErrorCode::DropIndexWithDropTime(err.message()),
             AppError::DatamaskAlreadyExists(err) => ErrorCode::DatamaskAlreadyExists(err.message()),
             AppError::UnknownDatamask(err) => ErrorCode::UnknownDatamask(err.message()),
+
+            AppError::BackgroundJobAlreadyExists(err) => {
+                ErrorCode::BackgroundJobAlreadyExists(err.message())
+            }
+            AppError::UnknownBackgroundJob(err) => ErrorCode::UnknownBackgroundJob(err.message()),
             AppError::UnmatchColumnDataType(err) => ErrorCode::UnmatchColumnDataType(err.message()),
             AppError::VirtualColumnNotFound(err) => ErrorCode::VirtualColumnNotFound(err.message()),
             AppError::VirtualColumnAlreadyExists(err) => {

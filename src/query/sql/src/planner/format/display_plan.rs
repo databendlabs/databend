@@ -74,6 +74,9 @@ impl Plan {
             Plan::DescribeTable(describe_table) => Ok(format!("{:?}", describe_table)),
             Plan::RenameTable(rename_table) => Ok(format!("{:?}", rename_table)),
             Plan::SetOptions(set_options) => Ok(format!("{:?}", set_options)),
+            Plan::RenameTableColumn(rename_table_column) => {
+                Ok(format!("{:?}", rename_table_column))
+            }
             Plan::AddTableColumn(add_table_column) => Ok(format!("{:?}", add_table_column)),
             Plan::ModifyTableColumn(modify_table_column) => {
                 Ok(format!("{:?}", modify_table_column))
