@@ -27,6 +27,8 @@ use common_expression::FunctionSignature;
 use common_expression::Scalar;
 use common_expression::ScalarRef;
 use common_expression::Value;
+use jsonb::array_length;
+use jsonb::array_values;
 use jsonb::get_by_path;
 use jsonb::jsonpath::parse_json_path;
 
@@ -42,7 +44,8 @@ pub fn register(registry: &mut FunctionRegistry) {
                 ty @ (DataType::Null
                 | DataType::EmptyArray
                 | DataType::Nullable(_)
-                | DataType::Array(_)),
+                | DataType::Array(_)
+                | DataType::Variant),
             ] => Some(build_unnest(ty, Box::new(|ty| ty))),
             _ => {
                 // Generate a fake function with signature `unset(Array(T0 NULL))` to have a better error message.
@@ -182,6 +185,22 @@ fn build_unnest(
                                     let unnest_array = unnest_column(col);
                                     let array_len = unnest_array.len();
                                     (Value::Column(Column::Tuple(vec![unnest_array])), array_len)
+                                }
+                                ScalarRef::Variant(val) => {
+                                    let len = match array_length(val) {
+                                        Some(len) => len,
+                                        None => 0,
+                                    };
+                                    let mut builder =
+                                        StringColumnBuilder::with_capacity(len, len * 10);
+                                    if let Some(vals) = array_values(val) {
+                                        for val in vals {
+                                            builder.put_slice(&val);
+                                            builder.commit_row();
+                                        }
+                                    }
+                                    let col = Column::Variant(builder.build()).wrap_nullable(None);
+                                    (Value::Column(Column::Tuple(vec![col])), len)
                                 }
                                 _ => unreachable!(),
                             }

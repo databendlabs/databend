@@ -64,7 +64,6 @@ use jsonb::build_array;
 use jsonb::build_object;
 use jsonb::get_by_index;
 use jsonb::get_by_name;
-use jsonb::get_by_name_ignore_case;
 use jsonb::get_by_path;
 use jsonb::get_by_path_array;
 use jsonb::get_by_path_first;
@@ -237,7 +236,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match std::str::from_utf8(name) {
-                    Ok(name) => match get_by_name(val, name) {
+                    Ok(name) => match get_by_name(val, name, false) {
                         Some(v) => {
                             output.push(&v);
                         }
@@ -275,7 +274,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 if idx < 0 || idx > i32::MAX.into() {
                     output.push_null();
                 } else {
-                    match get_by_index(val, idx as i32) {
+                    match get_by_index(val, idx as usize) {
                         Some(v) => {
                             output.push(&v);
                         }
@@ -300,7 +299,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                     }
                 }
                 match std::str::from_utf8(name) {
-                    Ok(name) => match get_by_name_ignore_case(val, name) {
+                    Ok(name) => match get_by_name(val, name, true) {
                         Some(v) => output.push(&v),
                         None => output.push_null(),
                     },
