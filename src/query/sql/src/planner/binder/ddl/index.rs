@@ -137,10 +137,12 @@ impl Binder {
 
         let tokens = tokenize_sql(&index_meta.query)?;
         let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
+        // rewrite aggregate function
         let mut index_rewriter = AggregatingIndexRewriter {
             user_defined_block_name: false,
         };
         walk_statement_mut(&mut index_rewriter, &mut stmt);
+
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
@@ -158,7 +160,7 @@ impl Binder {
 
         if tables.len() != 1 {
             return Err(ErrorCode::UnsupportedIndex(
-                "Create Index currently only support single table",
+                "Aggregating Index currently only support single table",
             ));
         }
 

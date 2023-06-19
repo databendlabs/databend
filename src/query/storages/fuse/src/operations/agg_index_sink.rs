@@ -24,7 +24,6 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
 use common_expression::ScalarRef;
-use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::BLOCK_NAME_COL_NAME;
 use common_pipeline_core::processors::port::InputPort;
@@ -89,15 +88,12 @@ impl AggIndexSink {
             }
         }
 
-        let mut new_source_schema = TableSchema::from(source_schema.as_ref().clone());
+        let mut new_source_schema = source_schema.as_ref().clone();
 
         if !user_defined_block_name {
             new_source_schema.drop_column(BLOCK_NAME_COL_NAME)?;
         }
 
-        dbg!(&projections);
-        dbg!(&block_location);
-        dbg!(&new_source_schema);
         Ok(ProcessorPtr::create(Box::new(AggIndexSink {
             state: State::None,
             input,
@@ -114,7 +110,6 @@ impl AggIndexSink {
     }
 
     fn process_block(&mut self, block: &mut DataBlock) {
-        dbg!(&block.columns());
         let col = block.get_by_offset(self.block_location.unwrap());
         let block_id = self.blocks.len();
         for i in 0..block.num_rows() {
@@ -130,7 +125,6 @@ impl AggIndexSink {
                 .and_modify(|idx_vec| idx_vec.push((block_id, i, 1)))
                 .or_insert(vec![(block_id, i, 1)]);
         }
-        dbg!(&self.location_data);
         let mut result = DataBlock::new(vec![], block.num_rows());
         for index in self.projections.iter() {
             result.add_column(block.get_by_offset(*index).clone());
@@ -180,8 +174,7 @@ impl Processor for AggIndexSink {
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::PreProcess(mut block) => {
-                let block = self.process_block(&mut block);
-                dbg!(&block);
+                self.process_block(&mut block);
             }
             _state => {
                 return Err(ErrorCode::Internal("Unknown state for fuse table sink"));
@@ -195,7 +188,7 @@ impl Processor for AggIndexSink {
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::None) {
             State::PostProcess => {
-                let blocks = self.blocks.iter().map(|b| b).collect::<Vec<_>>();
+                let blocks = self.blocks.iter().collect::<Vec<_>>();
                 for (loc, indexes) in &self.location_data {
                     let block = DataBlock::take_blocks(&blocks, indexes, indexes.len());
                     let loc =
@@ -203,8 +196,6 @@ impl Processor for AggIndexSink {
                             loc,
                             self.index_id,
                         );
-                    dbg!(&loc);
-                    dbg!(&block);
                     let mut data = vec![];
                     io::serialize_block(
                         &self.write_settings,

@@ -82,12 +82,9 @@ impl VisitorMut for AggregatingIndexRewriter {
         if select_list.iter().any(|target| match target {
             SelectTarget::AliasedExpr { expr, .. } => match (*expr).clone().as_ref() {
                 Expr::ColumnRef { column, .. } => {
-                    if column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME) {
-                        true
-                    } else {
-                        false
-                    }
+                    column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
                 }
+
                 _ => false,
             },
             SelectTarget::QualifiedName { .. } => false,
@@ -99,11 +96,7 @@ impl VisitorMut for AggregatingIndexRewriter {
                     GroupBy::Normal(groups) => {
                         if !groups.iter().any(|expr| match (*expr).clone() {
                             Expr::ColumnRef { column, .. } => {
-                                if column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME) {
-                                    true
-                                } else {
-                                    false
-                                }
+                                column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
                             }
                             _ => false,
                         }) {

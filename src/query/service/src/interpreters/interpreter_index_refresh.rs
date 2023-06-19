@@ -98,12 +98,10 @@ impl Interpreter for RefreshIndexInterpreter {
             }
         };
 
-        dbg!(&select_column_bindings);
-
-        let mut new_read_source = self.get_read_source(&query_plan)?;
-        dbg!(&new_read_source.parts.partitions);
-        new_read_source.parts.partitions =
-            new_read_source.parts.partitions.as_slice()[1..].to_vec();
+        let new_read_source = self.get_read_source(&query_plan)?;
+        // TODO(ariesdevil): sort and slice parts with limit
+        // new_read_source.parts.partitions =
+        //     new_read_source.parts.partitions.as_slice()[1..].to_vec();
 
         let mut replace_read_source = ReplaceReadSource {
             source: new_read_source,
@@ -114,12 +112,10 @@ impl Interpreter for RefreshIndexInterpreter {
             build_query_pipeline_without_render_result_set(&self.ctx, &query_plan, false).await?;
 
         let input_schema = query_plan.output_schema()?;
-        dbg!(&input_schema);
 
         let fuse_table = FuseTable::do_create(self.plan.table_info.clone())?;
         let fuse_table: Arc<FuseTable> = fuse_table.into();
         let table_schema = infer_table_schema(&schema)?;
-        dbg!(&table_schema);
 
         build_res.main_pipeline.resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
