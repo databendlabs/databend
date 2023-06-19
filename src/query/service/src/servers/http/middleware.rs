@@ -42,7 +42,7 @@ use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
 
-const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE_LABEL";
+const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE-LABEL";
 
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,

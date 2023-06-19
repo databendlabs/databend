@@ -29,7 +29,10 @@ pub struct HttpQueryContext {
 
 impl HttpQueryContext {
     pub fn new(session: Arc<Session>, deduplicate_label: Option<String>) -> Self {
-        HttpQueryContext { session, deduplicate_label }
+        HttpQueryContext {
+            session,
+            deduplicate_label,
+        }
     }
 
     pub fn get_session(&self, session_type: SessionType) -> Arc<Session> {
