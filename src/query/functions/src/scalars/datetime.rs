@@ -247,8 +247,7 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
 
     fn calc_date_to_timestamp(val: i32, tz: Tz) -> i64 {
         let ts = (val as i64) * 24 * 3600 * MICROS_IN_A_SEC;
-        let ts = ts.to_timestamp(tz);
-        let datetime_utc = DateTime::<Utc>::from_utc(
+        let epoch_time_with_ltz = DateTime::<Utc>::from_utc(
             NaiveDate::from_ymd_opt(1970, 1, 1)
                 .unwrap()
                 .and_hms_micro_opt(0, 0, 0, 0)
@@ -257,16 +256,9 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
         )
         .with_timezone(&tz)
         .naive_local()
-        .signed_duration_since(
-            NaiveDate::from_ymd_opt(1970, 1, 1)
-                .unwrap()
-                .and_hms_micro_opt(0, 0, 0, 0)
-                .unwrap(),
-        )
-        .num_microseconds()
-        .unwrap();
+        .timestamp_micros();
 
-        ts.timestamp_micros() - datetime_utc
+        ts - epoch_time_with_ltz
     }
 }
 
@@ -373,15 +365,7 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
         })(val, ctx)
     }
     fn calc_timestamp_to_date(val: i64, tz: Tz) -> i32 {
-        val.to_timestamp(tz)
-            .naive_local()
-            .signed_duration_since(
-                NaiveDate::from_ymd_opt(1970, 1, 1)
-                    .unwrap()
-                    .and_hms_opt(0, 0, 0)
-                    .unwrap(),
-            )
-            .num_days() as i32
+        val.to_timestamp(tz).naive_local().num_days_from_ce() - EPOCH_DAYS_FROM_CE
     }
 }
 
