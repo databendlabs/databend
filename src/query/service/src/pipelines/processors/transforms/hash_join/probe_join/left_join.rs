@@ -68,7 +68,7 @@ impl JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         // Start to probe hash table.
         for (i, key) in keys_iter.enumerate() {
@@ -188,7 +188,7 @@ impl JoinHashTable {
                         result_blocks.push(merged_block);
                         if self.hash_join_desc.join_type == JoinType::Full {
                             for row_ptr in local_build_indexes.iter().take(matched_num) {
-                                outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                                outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
                             }
                         }
                     }
@@ -263,11 +263,7 @@ impl JoinHashTable {
             probe_block = DataBlock::new(nullable_probe_columns, probe_unmatched_indexes_occupied);
         }
 
-        let merged_block = self.merge_eq_block(&null_build_block, &probe_block)?;
-
-        if !merged_block.is_empty() {
-            result_blocks.push(merged_block);
-        }
+        result_blocks.push(self.merge_eq_block(&null_build_block, &probe_block)?);
 
         Ok(result_blocks)
     }
@@ -312,7 +308,7 @@ impl JoinHashTable {
         let build_num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         // Start to probe hash table.
         for (i, key) in keys_iter.enumerate() {
@@ -440,8 +436,7 @@ impl JoinHashTable {
                             result_blocks.push(merged_block);
                             if self.hash_join_desc.join_type == JoinType::Full {
                                 for row_ptr in local_build_indexes.iter().take(matched_num) {
-                                    outer_scan_bitmap[row_ptr.chunk_index]
-                                        .set(row_ptr.row_index, true);
+                                    outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
                                 }
                             }
                         } else if all_false {
@@ -458,8 +453,8 @@ impl JoinHashTable {
                                 while idx < matched_num {
                                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                                     if valid {
-                                        outer_scan_bitmap[local_build_indexes[idx].chunk_index]
-                                            .set(local_build_indexes[idx].row_index, true);
+                                        outer_scan_map[local_build_indexes[idx].chunk_index]
+                                            [local_build_indexes[idx].row_index] = true;
                                     } else {
                                         row_state[row_state_indexes[idx]] -= 1;
                                     }
@@ -529,6 +524,10 @@ impl JoinHashTable {
             idx += 1;
         }
 
+        if probe_indexes_occupied == 0 {
+            return Ok(result_blocks);
+        }
+
         let null_build_block = DataBlock::new(
             self.row_space
                 .data_schema
@@ -564,11 +563,7 @@ impl JoinHashTable {
             probe_block = DataBlock::new(nullable_probe_columns, num_rows);
         }
 
-        let merged_block = self.merge_eq_block(&null_build_block, &probe_block)?;
-
-        if !merged_block.is_empty() {
-            result_blocks.push(merged_block);
-        }
+        result_blocks.push(self.merge_eq_block(&null_build_block, &probe_block)?);
 
         Ok(result_blocks)
     }
