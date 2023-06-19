@@ -40,13 +40,8 @@ use crate::io::WriteSettings;
 
 enum State {
     None,
-    NeedSerialize(DataBlock),
     PreProcess(DataBlock),
     PostProcess,
-    Serialized {
-        data: Vec<u8>,
-        idx_file_location: String,
-    },
     Finished,
 }
 
@@ -74,8 +69,9 @@ impl AggIndexSink {
         source_schema: TableSchemaRef,
         input_schema: DataSchemaRef,
         result_columns: &[ColumnBinding],
+        user_defined_block_name: bool,
     ) -> Result<ProcessorPtr> {
-        let mut projections = Vec::with_capacity(result_columns.len() - 1);
+        let mut projections = Vec::new();
         let mut block_location: Option<FieldIndex> = None;
 
         for column_binding in result_columns {
@@ -84,6 +80,9 @@ impl AggIndexSink {
                 .column_name
                 .eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
             {
+                if user_defined_block_name {
+                    projections.push(input_schema.index_of(index.to_string().as_str())?);
+                }
                 block_location = Some(input_schema.index_of(index.to_string().as_str())?);
             } else {
                 projections.push(input_schema.index_of(index.to_string().as_str())?);
@@ -92,7 +91,9 @@ impl AggIndexSink {
 
         let mut new_source_schema = TableSchema::from(source_schema.as_ref().clone());
 
-        new_source_schema.drop_column(BLOCK_NAME_COL_NAME)?;
+        if !user_defined_block_name {
+            new_source_schema.drop_column(BLOCK_NAME_COL_NAME)?;
+        }
 
         dbg!(&projections);
         dbg!(&block_location);
@@ -149,14 +150,6 @@ impl Processor for AggIndexSink {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(&self.state, State::NeedSerialize(_)) {
-            return Ok(Event::Sync);
-        }
-
-        if matches!(&self.state, State::Serialized { .. }) {
-            return Ok(Event::Async);
-        }
-
         if self.finished {
             self.state = State::Finished;
             return Ok(Event::Finished);

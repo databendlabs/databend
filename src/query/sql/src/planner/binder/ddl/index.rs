@@ -137,12 +137,10 @@ impl Binder {
 
         let tokens = tokenize_sql(&index_meta.query)?;
         let (mut stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
-        walk_statement_mut(
-            &mut AggregatingIndexRewriter {
-                sql_dialect: Dialect::PostgreSQL,
-            },
-            &mut stmt,
-        );
+        let mut index_rewriter = AggregatingIndexRewriter {
+            user_defined_block_name: false,
+        };
+        walk_statement_mut(&mut index_rewriter, &mut stmt);
         bind_context.planning_agg_index = true;
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
@@ -174,6 +172,7 @@ impl Binder {
             table_info: table.get_table_info().clone(),
             query_plan: Box::new(plan),
             metadata: self.metadata.clone(),
+            user_defined_block_name: index_rewriter.user_defined_block_name,
         };
 
         Ok(Plan::RefreshIndex(Box::new(plan)))

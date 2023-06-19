@@ -42,4 +42,5 @@ pub struct RefreshIndexPlan {
     pub table_info: TableInfo,
     pub query_plan: Box<Plan>,
     pub metadata: MetadataRef,
+    pub user_defined_block_name: bool,
 }

@@ -131,6 +131,7 @@ impl Interpreter for RefreshIndexInterpreter {
                 table_schema.clone(),
                 input_schema.clone(),
                 &select_column_bindings,
+                self.plan.user_defined_block_name,
             )
         })?;
 

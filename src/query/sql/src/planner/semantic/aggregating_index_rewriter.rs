@@ -20,7 +20,6 @@ use common_ast::ast::SelectStmt;
 use common_ast::ast::SelectTarget;
 use common_ast::ast::TableReference;
 use common_ast::walk_select_target_mut;
-use common_ast::Dialect;
 use common_ast::VisitorMut;
 use common_expression::BLOCK_NAME_COL_NAME;
 
@@ -28,7 +27,7 @@ use crate::planner::SUPPORTED_AGGREGATING_INDEX_FUNCTIONS;
 
 #[derive(Debug, Clone, Default)]
 pub struct AggregatingIndexRewriter {
-    pub sql_dialect: Dialect,
+    pub user_defined_block_name: bool,
 }
 
 impl VisitorMut for AggregatingIndexRewriter {
@@ -93,6 +92,7 @@ impl VisitorMut for AggregatingIndexRewriter {
             },
             SelectTarget::QualifiedName { .. } => false,
         }) {
+            self.user_defined_block_name = true;
             // check group by also has `BLOCK_NAME_COL_NAME`
             if let Some(group_by) = group_by {
                 match group_by {
