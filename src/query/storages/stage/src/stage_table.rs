@@ -109,7 +109,7 @@ impl Table for StageTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
+        _push_downs: Option<PushDownInfo>,
         _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let stage_info = &self.table_info;

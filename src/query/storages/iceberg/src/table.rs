@@ -172,8 +172,8 @@ impl Table for IcebergTable {
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
-        ctx: Arc<dyn TableContext>,
-        push_downs: Option<PushDownInfo>,
+        _ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
         _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         todo!()
