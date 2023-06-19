@@ -30,6 +30,8 @@ use crate::optimizer::runtime_filter::try_add_runtime_filter_nodes;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
+use crate::optimizer::COMMUTE_JOIN_RULES;
+use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::BindContext;
@@ -148,14 +150,24 @@ pub fn optimize_query(
 ) -> Result<SExpr> {
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
-    let heuristic =
-        HeuristicOptimizer::new(ctx.get_function_context()?, bind_context, metadata.clone());
+    let heuristic = HeuristicOptimizer::new(
+        ctx.get_function_context()?,
+        &bind_context,
+        metadata.clone(),
+        &DEFAULT_REWRITE_RULES,
+    );
     let mut result = heuristic.optimize(s_expr)?;
     if ctx.get_settings().get_enable_dphyp()? {
-        let (dp_res, optimized) =
-            DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result))?;
+        let (dp_res, _) = DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result))?;
         result = (*dp_res).clone();
-        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, optimized)?;
+        let commute_join = HeuristicOptimizer::new(
+            ctx.get_function_context()?,
+            &bind_context,
+            metadata.clone(),
+            &COMMUTE_JOIN_RULES,
+        );
+        result = commute_join.optimize(result)?;
+        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, true)?;
         result = cascades.optimize(result)?;
     } else {
         let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, false)?;
@@ -186,8 +198,12 @@ fn get_optimized_memo(
     metadata: MetadataRef,
     bind_context: Box<BindContext>,
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
-    let heuristic =
-        HeuristicOptimizer::new(ctx.get_function_context()?, bind_context, metadata.clone());
+    let heuristic = HeuristicOptimizer::new(
+        ctx.get_function_context()?,
+        &bind_context,
+        metadata.clone(),
+        &DEFAULT_REWRITE_RULES,
+    );
     let result = heuristic.optimize(s_expr)?;
 
     let mut cascades = CascadesOptimizer::create(ctx, metadata, false)?;

@@ -56,24 +56,29 @@ pub static DEFAULT_REWRITE_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| {
     ]
 });
 
+pub static COMMUTE_JOIN_RULES: Lazy<Vec<RuleID>> = Lazy::new(|| vec![RuleID::CommuteJoin]);
+
 /// A heuristic query optimizer. It will apply specific transformation rules in order and
 /// implement the logical plans with default implementation rules.
-pub struct HeuristicOptimizer {
+pub struct HeuristicOptimizer<'a> {
     func_ctx: FunctionContext,
-    bind_context: Box<BindContext>,
+    bind_context: &'a BindContext,
     metadata: MetadataRef,
+    rules: &'a [RuleID],
 }
 
-impl HeuristicOptimizer {
+impl<'a> HeuristicOptimizer<'a> {
     pub fn new(
         func_ctx: FunctionContext,
-        bind_context: Box<BindContext>,
+        bind_context: &'a BindContext,
         metadata: MetadataRef,
+        rules: &'a [RuleID],
     ) -> Self {
         HeuristicOptimizer {
             func_ctx,
             bind_context,
             metadata,
+            rules,
         }
     }
 
@@ -97,7 +102,7 @@ impl HeuristicOptimizer {
 
     pub fn optimize(&self, s_expr: SExpr) -> Result<SExpr> {
         let pre_optimized = self.pre_optimize(s_expr)?;
-        let optimized = self.optimize_expression(&pre_optimized, &DEFAULT_REWRITE_RULES)?;
+        let optimized = self.optimize_expression(&pre_optimized, self.rules)?;
         let post_optimized = self.post_optimize(optimized)?;
 
         Ok(post_optimized)
