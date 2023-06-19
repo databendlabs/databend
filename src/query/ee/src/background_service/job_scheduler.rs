@@ -139,7 +139,6 @@ impl JobScheduler {
     // Checks and runs a single [Job](crate::Job)
     async fn check_and_run_job(mut job: BoxedJob) -> Result<()> {
         if !Self::should_run_job(&job.get_info(), Utc::now()) {
-            info!(background = true, "Job is not ready to run");
             return Ok(());
         }
         let info = job.get_info();
@@ -147,6 +146,7 @@ impl JobScheduler {
         let mut status = info.job_status.unwrap();
         status.next_task_scheduled_time = params.get_next_running_time(Utc::now());
         job.update_job_status(status.clone()).await?;
+        info!(background = true, next_scheduled_time = ?status.next_task_scheduled_time, "Running job");
         tokio::spawn(async move { job.run().await });
         Ok(())
     }
