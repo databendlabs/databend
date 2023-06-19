@@ -17,6 +17,7 @@ use std::io::Write;
 use chrono::prelude::*;
 use chrono::Datelike;
 use chrono::Utc;
+use chrono_tz::Tz;
 use common_arrow::arrow::temporal_conversions::EPOCH_DAYS_FROM_CE;
 use common_expression::error_to_null;
 use common_expression::types::date::check_date;
@@ -210,22 +211,24 @@ fn register_string_to_timestamp(registry: &mut FunctionRegistry) {
 fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<DateType, TimestampType, _, _>(
         "to_timestamp",
-        |_, domain| {
+        |ctx, domain| {
+            let tz = ctx.tz.tz;
             FunctionDomain::Domain(SimpleDomain {
-                min: domain.min as i64 * 24 * 3600 * 1000000,
-                max: domain.max as i64 * 24 * 3600 * 1000000,
+                min: calc_date_to_timestamp(domain.min, tz),
+                max: calc_date_to_timestamp(domain.max, tz),
             })
         },
         eval_date_to_timestamp,
     );
     registry.register_combine_nullable_1_arg::<DateType, TimestampType, _, _>(
         "try_to_timestamp",
-        |_, domain| {
+        |ctx, domain| {
+            let tz = ctx.tz.tz;
             FunctionDomain::Domain(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(SimpleDomain {
-                    min: domain.min as i64 * 24 * 3600 * 1000000,
-                    max: domain.max as i64 * 24 * 3600 * 1000000,
+                    min: calc_date_to_timestamp(domain.min, tz),
+                    max: calc_date_to_timestamp(domain.max, tz),
                 })),
             })
         },
@@ -237,30 +240,33 @@ fn register_date_to_timestamp(registry: &mut FunctionRegistry) {
         ctx: &mut EvalContext,
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<DateType, TimestampType>(|val, output, _| {
-            let ts = (val as i64) * 24 * 3600 * MICROS_IN_A_SEC;
             let tz = ctx.func_ctx.tz.tz;
-            let ts = ts.to_timestamp(tz);
-            let datetime_utc = DateTime::<Utc>::from_utc(
-                NaiveDate::from_ymd_opt(1970, 1, 1)
-                    .unwrap()
-                    .and_hms_micro_opt(0, 0, 0, 0)
-                    .unwrap(),
-                Utc,
-            )
-            .with_timezone(&tz)
-            .naive_local()
-            .signed_duration_since(
-                NaiveDate::from_ymd_opt(1970, 1, 1)
-                    .unwrap()
-                    .and_hms_micro_opt(0, 0, 0, 0)
-                    .unwrap(),
-            )
-            .num_microseconds()
-            .unwrap();
-
-            let res = ts.timestamp_micros() - datetime_utc;
-            output.push(res);
+            output.push(calc_date_to_timestamp(val, tz));
         })(val, ctx)
+    }
+
+    fn calc_date_to_timestamp(val: i32, tz: Tz) -> i64 {
+        let ts = (val as i64) * 24 * 3600 * MICROS_IN_A_SEC;
+        let ts = ts.to_timestamp(tz);
+        let datetime_utc = DateTime::<Utc>::from_utc(
+            NaiveDate::from_ymd_opt(1970, 1, 1)
+                .unwrap()
+                .and_hms_micro_opt(0, 0, 0, 0)
+                .unwrap(),
+            Utc,
+        )
+        .with_timezone(&tz)
+        .naive_local()
+        .signed_duration_since(
+            NaiveDate::from_ymd_opt(1970, 1, 1)
+                .unwrap()
+                .and_hms_micro_opt(0, 0, 0, 0)
+                .unwrap(),
+        )
+        .num_microseconds()
+        .unwrap();
+
+        ts.timestamp_micros() - datetime_utc
     }
 }
 
@@ -295,20 +301,7 @@ fn register_number_to_timestamp(registry: &mut FunctionRegistry) {
     ) -> Value<TimestampType> {
         vectorize_with_builder_1_arg::<Int64Type, TimestampType>(|val, output, ctx| {
             match int64_to_timestamp(val) {
-                Ok(ts) => {
-                    let res = ts
-                        .to_timestamp(ctx.func_ctx.tz.tz)
-                        .naive_local()
-                        .signed_duration_since(
-                            NaiveDate::from_ymd_opt(1970, 1, 1)
-                                .unwrap()
-                                .and_hms_micro_opt(0, 0, 0, 0)
-                                .unwrap(),
-                        )
-                        .num_microseconds()
-                        .unwrap();
-                    output.push(res);
-                }
+                Ok(ts) => output.push(ts),
                 Err(e) => {
                     ctx.set_error(output.len(), e);
                     output.push(0);
@@ -346,22 +339,24 @@ fn register_string_to_date(registry: &mut FunctionRegistry) {
 fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<TimestampType, DateType, _, _>(
         "to_date",
-        |_, domain| {
+        |ctx, domain| {
+            let tz = ctx.tz.tz;
             FunctionDomain::Domain(SimpleDomain {
-                min: (domain.min / 1000000 / 24 / 3600) as i32,
-                max: (domain.max / 1000000 / 24 / 3600) as i32,
+                min: calc_timestamp_to_date(domain.min, tz),
+                max: calc_timestamp_to_date(domain.max, tz),
             })
         },
         eval_timestamp_to_date,
     );
     registry.register_combine_nullable_1_arg::<TimestampType, DateType, _, _>(
         "try_to_date",
-        |_, domain| {
+        |ctx, domain| {
+            let tz = ctx.tz.tz;
             FunctionDomain::Domain(NullableDomain {
                 has_null: false,
                 value: Some(Box::new(SimpleDomain {
-                    min: (domain.min / 1000000 / 24 / 3600) as i32,
-                    max: (domain.max / 1000000 / 24 / 3600) as i32,
+                    min: calc_timestamp_to_date(domain.min, tz),
+                    max: calc_timestamp_to_date(domain.max, tz),
                 })),
             })
         },
@@ -374,18 +369,19 @@ fn register_timestamp_to_date(registry: &mut FunctionRegistry) {
     ) -> Value<DateType> {
         vectorize_with_builder_1_arg::<TimestampType, DateType>(|val, output, ctx| {
             let tz = ctx.func_ctx.tz.tz;
-            let res = val
-                .to_timestamp(tz)
-                .naive_local()
-                .signed_duration_since(
-                    NaiveDate::from_ymd_opt(1970, 1, 1)
-                        .unwrap()
-                        .and_hms_opt(0, 0, 0)
-                        .unwrap(),
-                )
-                .num_days() as i32;
-            output.push(res);
+            output.push(calc_timestamp_to_date(val, tz));
         })(val, ctx)
+    }
+    fn calc_timestamp_to_date(val: i64, tz: Tz) -> i32 {
+        val.to_timestamp(tz)
+            .naive_local()
+            .signed_duration_since(
+                NaiveDate::from_ymd_opt(1970, 1, 1)
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            )
+            .num_days() as i32
     }
 }
 
