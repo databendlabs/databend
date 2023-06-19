@@ -6336,7 +6336,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.2.2"
-source = "git+https://github.com/b41sh/jsonb?rev=dd7661f#dd7661f526a5fd02ba2f89379624b5d90a614d8d"
+source = "git+https://github.com/datafuselabs/jsonb?rev=d1a401f#d1a401f2b8ccd040e18212c1aeca2575450bbead"
 dependencies = [
  "byteorder",
  "fast-float",
