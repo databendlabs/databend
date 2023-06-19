@@ -187,10 +187,7 @@ fn build_unnest(
                                     (Value::Column(Column::Tuple(vec![unnest_array])), array_len)
                                 }
                                 ScalarRef::Variant(val) => {
-                                    let len = match array_length(val) {
-                                        Some(len) => len,
-                                        None => 0,
-                                    };
+                                    let len = array_length(val).unwrap_or(0);
                                     let mut builder =
                                         StringColumnBuilder::with_capacity(len, len * 10);
                                     if let Some(vals) = array_values(val) {
