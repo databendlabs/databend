@@ -19,6 +19,7 @@ use chrono::DateTime;
 use chrono::Datelike;
 use chrono::Duration;
 use chrono::FixedOffset;
+use chrono::LocalResult;
 use chrono::NaiveDate;
 use chrono::Offset;
 use chrono::TimeZone;
@@ -139,15 +140,46 @@ where T: AsRef<[u8]>
             // Examples: '2022-02-02T', '2022-02-02 ', '2022-02-02T02', '2022-02-02T3:', '2022-02-03T03:13', '2022-02-03T03:13:'
             if times.len() < 3 {
                 times.resize(3, 0);
-                dt = tz
-                    .from_local_datetime(&d.and_hms_opt(times[0], times[1], times[2]).unwrap())
-                    .unwrap();
+                // Can not directly unwrap, because of DST.
+                // e.g.
+                // set timezone='Europe/London';
+                // -- if unwrap() will cause session panic.
+                // -- https://github.com/chronotope/chrono/blob/v0.4.24/src/offset/mod.rs#L186
+                // select to_date(to_timestamp('2021-03-28 01:00:00'));
+                match tz.from_local_datetime(&d.and_hms_opt(times[0], times[1], times[2]).unwrap())
+                {
+                    LocalResult::Single(t) => dt = t,
+                    LocalResult::None => {
+                        return Err(ErrorCode::BadBytes(format!(
+                            "maybe none with tz: `{:?}` DST, date part is: {:?}, times part is: is {:?}",
+                            tz, d, times
+                        )));
+                    }
+                    LocalResult::Ambiguous(t1, t2) => {
+                        return Err(ErrorCode::BadBytes(format!(
+                            "Ambiguous local time, ranging from {:?} to {:?}",
+                            t1, t2
+                        )));
+                    }
+                }
                 return less_1000(dt);
             }
 
-            dt = tz
-                .from_local_datetime(&d.and_hms_opt(times[0], times[1], times[2]).unwrap())
-                .unwrap();
+            match tz.from_local_datetime(&d.and_hms_opt(times[0], times[1], times[2]).unwrap()) {
+                LocalResult::Single(t) => dt = t,
+                LocalResult::None => {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "maybe none with tz: `{:?}` DST, date part is: {:?}, times part is: is {:?}",
+                        tz, d, times
+                    )));
+                }
+                LocalResult::Ambiguous(t1, t2) => {
+                    return Err(ErrorCode::BadBytes(format!(
+                        "Ambiguous local time, ranging from {:?} to {:?}",
+                        t1, t2
+                    )));
+                }
+            }
 
             // ms .microseconds
             let dt = if self.ignore_byte(b'.') {
