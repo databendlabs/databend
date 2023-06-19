@@ -70,31 +70,39 @@ impl Rule for RuleCommuteJoin {
         let left_card = left_rel_expr.derive_cardinality()?.cardinality;
         let right_card = right_rel_expr.derive_cardinality()?.cardinality;
 
-        if left_card < right_card {
-            match join.join_type {
+        let need_commute = if left_card < right_card {
+            matches!(
+                join.join_type,
                 JoinType::Inner
-                | JoinType::Cross
-                | JoinType::Left
-                | JoinType::Right
-                | JoinType::LeftSemi
-                | JoinType::RightSemi
-                | JoinType::LeftAnti
-                | JoinType::RightAnti
-                | JoinType::LeftMark => {
-                    // Swap the join conditions side
-                    (join.left_conditions, join.right_conditions) =
-                        (join.right_conditions, join.left_conditions);
-                    join.join_type = join.join_type.opposite();
-                    let mut result = SExpr::create_binary(
-                        Arc::new(join.into()),
-                        Arc::new(right_child.clone()),
-                        Arc::new(left_child.clone()),
-                    );
-                    result.set_applied_rule(&self.id);
-                    state.add_result(result);
-                }
-                _ => {}
-            };
+                    | JoinType::Cross
+                    | JoinType::Left
+                    | JoinType::Right
+                    | JoinType::LeftSemi
+                    | JoinType::RightSemi
+                    | JoinType::LeftAnti
+                    | JoinType::RightAnti
+                    | JoinType::LeftMark
+            )
+        } else if left_card == right_card {
+            matches!(
+                join.join_type,
+                JoinType::Right | JoinType::RightSemi | JoinType::RightAnti
+            )
+        } else {
+            false
+        };
+        if need_commute {
+            // Swap the join conditions side
+            (join.left_conditions, join.right_conditions) =
+                (join.right_conditions, join.left_conditions);
+            join.join_type = join.join_type.opposite();
+            let mut result = SExpr::create_binary(
+                Arc::new(join.into()),
+                Arc::new(right_child.clone()),
+                Arc::new(left_child.clone()),
+            );
+            result.set_applied_rule(&self.id);
+            state.add_result(result);
         }
         Ok(())
     }
