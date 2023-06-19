@@ -427,6 +427,7 @@ select get(obj, 'car_no') from t5
 
 query T
 select get_path(obj, '["car_no"]') from t5
+----
 10
 20
 
