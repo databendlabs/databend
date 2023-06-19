@@ -13,15 +13,20 @@
 // limitations under the License.
 
 use common_exception::Result;
+use common_expression::types::nullable::NullableColumn;
 use common_expression::types::string::StringColumn;
+use common_expression::types::string::StringColumnBuilder;
+use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataSchemaRef;
 use common_expression::RowConverter as CommonRowConverter;
+use common_expression::Scalar;
 use common_expression::SortColumnDescription;
 use common_expression::SortField;
 use common_expression::Value;
+use jsonb::convert_to_comparable;
 
 use super::RowConverter;
 use super::Rows;
@@ -65,10 +70,48 @@ impl RowConverter<StringColumn> for CommonRowConverter {
         let columns = columns
             .iter()
             .map(|entry| match &entry.value {
-                Value::Scalar(s) => {
-                    ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
+                Value::Scalar(s) => match s {
+                    Scalar::Variant(val) => {
+                        // convert variant value to comparable format.
+                        let mut buf = Vec::new();
+                        convert_to_comparable(val, &mut buf);
+                        let s = Scalar::Variant(buf);
+                        ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build()
+                    }
+                    _ => ColumnBuilder::repeat(&s.as_ref(), num_rows, &entry.data_type).build(),
+                },
+                Value::Column(c) => {
+                    let data_type = c.data_type();
+                    match data_type.remove_nullable() {
+                        DataType::Variant => {
+                            // convert variant value to comparable format.
+                            let (_, validity) = c.validity();
+                            let col = c.remove_nullable();
+                            let col = col.as_variant().unwrap();
+                            let mut builder =
+                                StringColumnBuilder::with_capacity(col.len(), col.data.len());
+                            for (i, val) in col.iter().enumerate() {
+                                if let Some(validity) = validity {
+                                    if unsafe { !validity.get_bit_unchecked(i) } {
+                                        builder.commit_row();
+                                        continue;
+                                    }
+                                }
+                                convert_to_comparable(val, &mut builder.data);
+                                builder.commit_row();
+                            }
+                            if data_type.is_nullable() {
+                                Column::Nullable(Box::new(NullableColumn {
+                                    column: Column::Variant(builder.build()),
+                                    validity: validity.unwrap().clone(),
+                                }))
+                            } else {
+                                Column::Variant(builder.build())
+                            }
+                        }
+                        _ => c.clone(),
+                    }
                 }
-                Value::Column(c) => c.clone(),
             })
             .collect::<Vec<_>>();
         Ok(self.convert_columns(&columns, num_rows))
