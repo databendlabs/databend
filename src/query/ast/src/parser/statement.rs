@@ -1806,9 +1806,18 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
 pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     let rename_table = map(
         rule! {
-            RENAME ~ TO ~ #ident
+           RENAME ~ TO ~ #ident
         },
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
+    );
+    let rename_column = map(
+        rule! {
+            RENAME ~ COLUMN ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, old_column, _, new_column)| AlterTableAction::RenameColumn {
+            old_column,
+            new_column,
+        },
     );
     let add_column = map(
         rule! {
@@ -1816,6 +1825,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, column)| AlterTableAction::AddColumn { column },
     );
+
     let modify_column = map(
         rule! {
             MODIFY ~ COLUMN ~ #ident ~ SET ~ MASKING ~ POLICY ~ #ident
@@ -1871,6 +1881,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     rule!(
         #rename_table
+        | #rename_column
         | #add_column
         | #drop_column
         | #modify_column
