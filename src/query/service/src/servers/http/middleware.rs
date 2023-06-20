@@ -224,15 +224,16 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     }
 }
 
-fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<&str, String> {
+fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
     let sensitive_headers = vec!["authorization", "x-clickhouse-key", "cookie"];
     headers
         .iter()
         .map(|(k, v)| {
+            let k = k.as_str().to_lowercase();
             if sensitive_headers.contains(&k.as_str()) {
-                (k.as_str(), "******".to_string())
+                (k, "******".to_string())
             } else {
-                (k.as_str(), v.to_str().unwrap_or_default().to_string())
+                (k, v.to_str().unwrap_or_default().to_string())
             }
         })
         .collect()
