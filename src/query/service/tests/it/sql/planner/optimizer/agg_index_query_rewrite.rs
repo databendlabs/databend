@@ -268,7 +268,7 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) from t group by b",
             index: "select b, sum(a) from t group by b",
             is_matched: true,
-            index_selection: vec!["index_col_1 (#1)", "index_col_0 (#0)"],
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec![],
         },
         TestSuite {
@@ -287,7 +287,7 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) + 1, b + 1 from t group by b",
             index: "select sum(a), b from t group by b",
             is_matched: true,
-            index_selection: vec!["index_col_1 (#1)", "index_col_0 (#0)"],
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec![],
         },
         TestSuite {
@@ -300,7 +300,7 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) + 1 from t group by b",
             index: "select b, sum(a) from t group by b",
             is_matched: true,
-            index_selection: vec!["index_col_1 (#1)", "index_col_0 (#0)"],
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec![],
         },
         // query: eval-agg-eval-filter-scan, index: eval-agg-eval-scan
@@ -308,7 +308,7 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) + 1 from t where b > 1 group by b",
             index: "select b, sum(a) from t group by b",
             is_matched: true,
-            index_selection: vec!["index_col_1 (#1)", "index_col_0 (#0)"],
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
         },
         TestSuite {
@@ -343,14 +343,14 @@ fn get_test_suites() -> Vec<TestSuite> {
             query: "select sum(a) + 1 from t where c > 1 group by b",
             index: "select b, sum(a) from t where c > 1 group by b",
             is_matched: true,
-            index_selection: vec!["index_col_1 (#1)", "index_col_0 (#0)"],
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec![],
         },
         TestSuite {
             query: "select sum(a) + 1, b + 2 from t where b > 1 group by b",
             index: "select b, sum(a) from t where b > 0 group by b",
             is_matched: true,
-            index_selection: vec!["index_col_1 (#1)", "index_col_0 (#0)"],
+            index_selection: vec!["index_col_0 (#0)", "index_col_1 (#1)"],
             rewritten_predicates: vec!["gt(index_col_0 (#0), 1)"],
         },
     ]
