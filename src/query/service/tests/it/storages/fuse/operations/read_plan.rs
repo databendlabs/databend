@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_base::base::tokio;
@@ -95,6 +96,7 @@ fn test_to_partitions() -> Result<()> {
         bloom_filter_location,
         bloom_filter_size,
         meta::Compression::Lz4Raw,
+        Some(Utc::now()),
     ));
 
     let blocks_metas = (0..num_of_block)

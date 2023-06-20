@@ -20,6 +20,8 @@ use std::hash::Hasher;
 use std::ops::Range;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
@@ -44,6 +46,7 @@ pub struct FusePartInfo {
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
     pub block_meta_index: Option<BlockMetaIndex>,
+    pub create_on: Option<DateTime<Utc>>,
 }
 
 #[typetag::serde(name = "fuse")]
@@ -77,6 +80,7 @@ impl FusePartInfo {
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
+        create_on: Option<DateTime<Utc>>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
             location,
@@ -87,6 +91,7 @@ impl FusePartInfo {
             compression,
             sort_min_max,
             block_meta_index,
+            create_on,
         }))
     }
 
