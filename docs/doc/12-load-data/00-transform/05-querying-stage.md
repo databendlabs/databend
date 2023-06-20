@@ -72,7 +72,7 @@ SELECT t1.$1, t2.$2 FROM @my_stage t1, t2;
 
 ### $<col_position>
 
-You can use column positions when you SELECT FROM a staged file. At present, the feature to utilize column positions for SELECT operations from staged files is limited to Parquet, NDJSON, and CSV formats.
+You can use column positions when you SELECT FROM a staged file. At present, the feature to utilize column positions for SELECT operations from staged files is limited to Parquet, NDJSON, CSV and TSV formats.
 
 ```sql
 SELECT $2 FROM @my_stage (FILES=>('sample.csv')) ORDER BY $1;
