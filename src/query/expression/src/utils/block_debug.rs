@@ -20,6 +20,7 @@ use comfy_table::Table;
 use common_exception::Result;
 use terminal_size::terminal_size;
 use terminal_size::Width;
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::DataBlock;
 use crate::DataSchemaRef;

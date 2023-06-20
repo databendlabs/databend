@@ -1946,6 +1946,7 @@ dependencies = [
  "terminal_size",
  "tracing",
  "typetag",
+ "unicode-segmentation",
 ]
 
 [[package]]

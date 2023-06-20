@@ -48,6 +48,7 @@ serde_json = { workspace = true }
 terminal_size = "0.2.6"
 tracing = "0.1.36"
 typetag = "0.2.3"
+unicode-segmentation = "1.10.1"
 
 [dev-dependencies]
 arrow-ord = "37.0.0"
