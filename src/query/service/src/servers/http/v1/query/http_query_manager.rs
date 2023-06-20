@@ -86,8 +86,8 @@ impl HttpQueryManager {
     async fn add_query(self: &Arc<Self>, query_id: &str, query: Arc<HttpQuery>) {
         let mut queries = self.queries.write().await;
         queries.insert(query_id.to_string(), query.clone());
-        let timeout = self.config.result_timeout_secs;
 
+        let timeout = self.config.result_timeout_secs;
         let self_clone = self.clone();
         let query_id_clone = query_id.to_string();
         let query_clone = query.clone();
@@ -102,6 +102,7 @@ impl HttpQueryManager {
                         } else {
                             warn!("{msg}");
                             query.detach().await;
+                            query.kill().await;
                         };
                         break;
                     }

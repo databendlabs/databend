@@ -24,6 +24,9 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'log'     | 'file.level'                               | 'DEBUG'                          | ''       |
 | 'log'     | 'file.on'                                  | 'true'                           | ''       |
 | 'log'     | 'level'                                    | 'DEBUG'                          | ''       |
+| 'log'     | 'log_dir'                                  | 'null'                           | ''       |
+| 'log'     | 'log_level'                                | 'null'                           | ''       |
+| 'log'     | 'log_query_enabled'                        | 'null'                           | ''       |
 | 'log'     | 'query_enabled'                            | 'false'                          | ''       |
 | 'log'     | 'stderr.format'                            | 'text'                           | ''       |
 | 'log'     | 'stderr.level'                             | 'INFO'                           | ''       |
@@ -32,6 +35,10 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'meta'    | 'client_timeout_in_second'                 | '10'                             | ''       |
 | 'meta'    | 'embedded_dir'                             | ''                               | ''       |
 | 'meta'    | 'endpoints'                                | ''                               | ''       |
+| 'meta'    | 'meta_client_timeout_in_second'            | 'null'                           | ''       |
+| 'meta'    | 'meta_embedded_dir'                        | 'null'                           | ''       |
+| 'meta'    | 'meta_password'                            | 'null'                           | ''       |
+| 'meta'    | 'meta_username'                            | 'null'                           | ''       |
 | 'meta'    | 'password'                                 | ''                               | ''       |
 | 'meta'    | 'rpc_tls_meta_server_root_ca_cert'         | ''                               | ''       |
 | 'meta'    | 'rpc_tls_meta_service_domain_name'         | 'localhost'                      | ''       |
@@ -136,6 +143,8 @@ DB.Table: 'system'.'configs', Table: configs-table_id:1, ver:0, Engine: SystemCo
 | 'storage' | 's3.root'                                  | ''                               | ''       |
 | 'storage' | 's3.secret_access_key'                     | ''                               | ''       |
 | 'storage' | 's3.security_token'                        | ''                               | ''       |
+| 'storage' | 'storage_num_cpus'                         | 'null'                           | ''       |
+| 'storage' | 'storage_type'                             | 'null'                           | ''       |
 | 'storage' | 'type'                                     | 'fs'                             | ''       |
 | 'storage' | 'webhdfs.delegation'                       | ''                               | ''       |
 | 'storage' | 'webhdfs.endpoint_url'                     | ''                               | ''       |

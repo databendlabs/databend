@@ -29,7 +29,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // This function takes two Float32 arrays as input and computes the cosine distance between them.
     registry.register_passthrough_nullable_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>, Float32Type, _, _>(
         "cosine_distance",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<Float32Type>, ArrayType<Float32Type>,  Float32Type>(
             |lhs, rhs, output, ctx| {
                 let l_f32=
@@ -55,7 +55,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
     registry.register_passthrough_nullable_1_arg::<StringType, ArrayType<Float32Type>, _, _>(
         "ai_embedding_vector",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, ArrayType<Float32Type>>(|data, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {
@@ -103,7 +103,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     // The OpenAI API key is pre-configured during the binder phase, so we rewrite this function and set the API key.
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "ai_text_completion",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_with_builder_1_arg::<StringType, StringType>(|data, output, ctx| {
             if let Some(validity) = &ctx.validity {
                 if !validity.get_bit(output.len()) {

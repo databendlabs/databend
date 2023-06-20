@@ -83,6 +83,7 @@ impl Processor for TransformRangeJoinLeft {
                     return Ok(Event::Sync);
                 }
                 if self.input_port.is_finished() {
+                    self.state.left_detach()?;
                     self.step = RangeJoinStep::Merging;
                     return Ok(Event::Async);
                 }
@@ -98,11 +99,21 @@ impl Processor for TransformRangeJoinLeft {
                 }
             }
             RangeJoinStep::Execute => {
+                if self.output_port.is_finished() {
+                    return Ok(Event::Finished);
+                }
+
+                if !self.output_port.can_push() {
+                    return Ok(Event::NeedConsume);
+                }
+
                 if !self.output_data_blocks.is_empty() {
                     let data = self.output_data_blocks.pop_front().unwrap();
                     self.output_port.push_data(Ok(data));
-                    Ok(Event::NeedConsume)
-                } else if !self.execute_finished {
+                    return Ok(Event::NeedConsume);
+                }
+
+                if !self.execute_finished {
                     Ok(Event::Sync)
                 } else {
                     self.output_port.finish();
@@ -141,7 +152,6 @@ impl Processor for TransformRangeJoinLeft {
 
     async fn async_process(&mut self) -> Result<()> {
         if let RangeJoinStep::Merging = self.step {
-            self.state.left_detach()?;
             self.state.wait_merge_finish().await?;
             self.step = RangeJoinStep::Execute;
         }

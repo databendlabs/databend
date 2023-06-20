@@ -144,6 +144,7 @@ build_exceptions! {
     UnmatchColumnDataType(1114),
     VirtualColumnNotFound(1115),
     VirtualColumnAlreadyExists(1116),
+    ColumnReferencedByComputedColumn(1117),
 
     // Data Related Errors
 
@@ -176,7 +177,10 @@ build_exceptions! {
     /// LicenseKeyInvalid is used when license key verification error occurs
     ///
     /// For example: license key is expired
-    LicenseKeyInvalid(1402)
+    LicenseKeyInvalid(1402),
+
+    BackgroundJobAlreadyExists(1501),
+    UnknownBackgroundJob(1502)
 }
 
 // Meta service errors [2001, 3000].

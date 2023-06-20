@@ -1806,9 +1806,18 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
 pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     let rename_table = map(
         rule! {
-            RENAME ~ TO ~ #ident
+           RENAME ~ TO ~ #ident
         },
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
+    );
+    let rename_column = map(
+        rule! {
+            RENAME ~ COLUMN ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, old_column, _, new_column)| AlterTableAction::RenameColumn {
+            old_column,
+            new_column,
+        },
     );
     let add_column = map(
         rule! {
@@ -1816,6 +1825,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, column)| AlterTableAction::AddColumn { column },
     );
+
     let modify_column = map(
         rule! {
             MODIFY ~ COLUMN ~ #ident ~ SET ~ MASKING ~ POLICY ~ #ident
@@ -1862,8 +1872,16 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         |(_, _, point)| AlterTableAction::RevertTo { point },
     );
 
+    let set_table_options = map(
+        rule! {
+            SET ~ OPTIONS ~ "(" ~ #set_table_option ~ ")"
+        },
+        |(_, _, _, set_options, _)| AlterTableAction::SetOptions { set_options },
+    );
+
     rule!(
         #rename_table
+        | #rename_column
         | #add_column
         | #drop_column
         | #modify_column
@@ -1871,6 +1889,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         | #drop_table_cluster_key
         | #recluster_table
         | #revert_table
+        | #set_table_options
     )(i)
 }
 
@@ -2011,6 +2030,22 @@ pub fn table_option(i: Input) -> IResult<BTreeMap<String, String>> {
                 opts.iter()
                     .map(|(k, _, v)| (k.name.to_lowercase(), v.clone())),
             )
+        },
+    )(i)
+}
+
+pub fn set_table_option(i: Input) -> IResult<BTreeMap<String, String>> {
+    map(
+        rule! {
+           ( #ident ~ "=" ~ #parameter_to_string ) ~ ("," ~ #ident ~ "=" ~ #parameter_to_string )*
+        },
+        |(key, _, value, opts)| {
+            let mut options = BTreeMap::from_iter(
+                opts.iter()
+                    .map(|(_, k, _, v)| (k.name.to_lowercase(), v.clone())),
+            );
+            options.insert(key.name.to_lowercase(), value);
+            options
         },
     )(i)
 }

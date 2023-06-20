@@ -93,9 +93,6 @@ mod catalog;
 mod converters;
 /// database implementation
 mod database;
-/// reading manifestlist and manifest files
-#[allow(unused)]
-mod manifest;
 /// table metadata reader
 #[allow(unused)]
 mod meta_reader;

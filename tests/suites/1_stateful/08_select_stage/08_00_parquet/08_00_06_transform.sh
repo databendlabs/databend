@@ -28,8 +28,8 @@ echo '--- copy 3'
 echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = parquet)  PATTERN='.*parquet' force=true;" | $MYSQL_CLIENT_CONNECT
 echo "select * from t1 order by id;" | $MYSQL_CLIENT_CONNECT
 
-echo '--- copy csv'
-echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = csv)  PATTERN='.*csv' force=true;" | $MYSQL_CLIENT_CONNECT
+echo '--- copy XML'
+echo "copy into t1 from (select (t.id+1), age from @s1 t)  FILE_FORMAT = (type = XML)  PATTERN='.*csv' force=true;" | $MYSQL_CLIENT_CONNECT
 echo "select * from t1 order by id;" | $MYSQL_CLIENT_CONNECT
 
 echo '--- copy from s3'

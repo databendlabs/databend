@@ -13,7 +13,8 @@ common-base = { path = "../../../common/base" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-pipeline-core = { path = "../core" }
-common-profile = { path = "../../../common/profile" }
+common-profile = { path = "../../profile" }
+jsonb = { workspace = true }
 match-template = "0.0.1"
 
 async-backtrace = { workspace = true }

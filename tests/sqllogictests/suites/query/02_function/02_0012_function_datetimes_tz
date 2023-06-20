@@ -288,4 +288,111 @@ select add_years(to_timestamp(1583013600000000), 1)
 ----
 2021-03-01 14:00:00.000000
 
+statement ok
+set timezone= 'UTC';
 
+statement ok
+drop table if exists t;
+
+statement ok
+create table t(c1 timestamp);
+
+statement ok
+insert into t values('2017-12-01 22:46:53.000000'), ('2017-12-02 22:46:53.000000');
+
+
+query TT
+select c1, to_date(c1) from t;
+----
+2017-12-01 22:46:53.000000 2017-12-01
+2017-12-02 22:46:53.000000 2017-12-02
+
+statement ok
+set timezone='Asia/Shanghai'
+
+query TT
+select c1, to_date(c1) from t;
+----
+2017-12-02 06:46:53.000000 2017-12-02
+2017-12-03 06:46:53.000000 2017-12-03
+
+statement ok
+drop table if exists t;
+
+statement ok
+set timezone = 'UTC';
+
+query TT
+select to_date('2020-12-22') dt, to_timestamp(dt);
+----
+2020-12-22 2020-12-22 00:00:00.000000
+
+query TT
+select '2017-12-02 06:46:53.000000'::timestamp ts, to_date(ts);
+----
+2017-12-02 06:46:53.000000 2017-12-02
+
+statement ok
+set timezone = 'Asia/Shanghai';
+
+query TT
+select to_date('2020-12-22') dt, to_timestamp(dt);
+----
+2020-12-22 2020-12-22 00:00:00.000000
+
+query TT
+select '2017-12-02 06:46:53.000000'::timestamp ts, to_date(ts);
+----
+2017-12-02 06:46:53.000000 2017-12-02
+
+statement ok
+unset timezone;
+
+statement ok
+create table t(c1 date);
+
+statement ok
+insert into t values('2022-02-02');
+
+query T
+select c1, to_timestamp(c1) from t
+----
+2022-02-02 2022-02-02 00:00:00.000000
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+select c1, to_timestamp(c1) from t
+----
+2022-02-02 2022-02-02 00:00:00.000000
+
+statement ok
+drop table t;
+
+statement ok
+set timezone='Asia/Shanghai';
+
+query T
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+----
+2000
+
+statement ok
+SET timezone ='America/Toronto';
+
+query T
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+----
+2000
+
+statement ok
+set timezone = 'UTC';
+
+query T
+select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_date(ts) = to_date(number)  y   from numbers(2000));
+----
+2000
+
+statement ok
+unset timezone;

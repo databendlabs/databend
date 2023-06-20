@@ -1344,6 +1344,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
+            AlterTableAction::RenameColumn {
+                old_column,
+                new_column,
+            } => {
+                let action_name = format!("Action Rename column {} to {}", old_column, new_column);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
             AlterTableAction::ModifyColumn { column, action: _ } => {
                 let action_name = format!("Action ModifyColumn column {}", column);
                 let action_format_ctx = AstFormatContext::new(action_name);
@@ -1387,6 +1395,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_name = "Action RevertTo".to_string();
                 let action_format_ctx = AstFormatContext::with_children(action_name, 1);
                 FormatTreeNode::with_children(action_format_ctx, vec![point_node])
+            }
+            AlterTableAction::SetOptions { set_options } => {
+                let mut action_name = "Action Set Option: ".to_string();
+                for (key, value) in set_options.iter() {
+                    action_name.push_str(format!("{key} to {value}").as_str());
+                }
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
             }
         };
 

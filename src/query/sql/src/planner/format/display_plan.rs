@@ -12,9 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::Result;
+use std::sync::Arc;
 
+use common_exception::Result;
+use common_expression::types::DataType;
+use common_expression::types::NumberDataType;
+use common_expression::ROW_ID_COL_NAME;
+
+use crate::optimizer::SExpr;
+use crate::plans::BoundColumnRef;
+use crate::plans::DeletePlan;
+use crate::plans::EvalScalar;
+use crate::plans::Filter;
 use crate::plans::Plan;
+use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
+use crate::plans::Scan;
+use crate::ColumnBinding;
+use crate::ScalarExpr;
+use crate::Visibility;
 
 impl Plan {
     pub fn format_indent(&self) -> Result<String> {
@@ -57,6 +73,10 @@ impl Plan {
             Plan::UndropTable(undrop_table) => Ok(format!("{:?}", undrop_table)),
             Plan::DescribeTable(describe_table) => Ok(format!("{:?}", describe_table)),
             Plan::RenameTable(rename_table) => Ok(format!("{:?}", rename_table)),
+            Plan::SetOptions(set_options) => Ok(format!("{:?}", set_options)),
+            Plan::RenameTableColumn(rename_table_column) => {
+                Ok(format!("{:?}", rename_table_column))
+            }
             Plan::AddTableColumn(add_table_column) => Ok(format!("{:?}", add_table_column)),
             Plan::ModifyTableColumn(modify_table_column) => {
                 Ok(format!("{:?}", modify_table_column))
@@ -101,7 +121,7 @@ impl Plan {
             // Insert
             Plan::Insert(insert) => Ok(format!("{:?}", insert)),
             Plan::Replace(replace) => Ok(format!("{:?}", replace)),
-            Plan::Delete(delete) => Ok(format!("{:?}", delete)),
+            Plan::Delete(delete) => format_delete(delete),
             Plan::Update(update) => Ok(format!("{:?}", update)),
 
             // Stages
@@ -158,4 +178,63 @@ impl Plan {
             Plan::DescDatamaskPolicy(p) => Ok(format!("{:?}", p)),
         }
     }
+}
+
+fn format_delete(delete: &DeletePlan) -> Result<String> {
+    let table_index = delete
+        .metadata
+        .read()
+        .get_table_index(
+            Some(delete.database_name.as_str()),
+            delete.table_name.as_str(),
+        )
+        .unwrap();
+    let s_expr = if !delete.subquery_desc.is_empty() {
+        let row_id_column_binding = ColumnBinding {
+            database_name: Some(delete.database_name.clone()),
+            table_name: Some(delete.table_name.clone()),
+            column_position: None,
+            table_index: Some(table_index),
+            column_name: ROW_ID_COL_NAME.to_string(),
+            index: delete.subquery_desc[0].index,
+            data_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+            visibility: Visibility::InVisible,
+            virtual_computed_expr: None,
+        };
+        SExpr::create_unary(
+            Arc::new(RelOperator::EvalScalar(EvalScalar {
+                items: vec![ScalarItem {
+                    scalar: ScalarExpr::BoundColumnRef(BoundColumnRef {
+                        span: None,
+                        column: row_id_column_binding,
+                    }),
+                    index: 0,
+                }],
+            })),
+            Arc::new(delete.subquery_desc[0].input_expr.clone()),
+        )
+    } else {
+        let scan = RelOperator::Scan(Scan {
+            table_index,
+            columns: Default::default(),
+            push_down_predicates: None,
+            limit: None,
+            order_by: None,
+            prewhere: None,
+            agg_index: None,
+            statistics: Default::default(),
+        });
+        let scan_expr = SExpr::create_leaf(Arc::new(scan));
+        let mut predicates = vec![];
+        if let Some(selection) = &delete.selection {
+            predicates.push(selection.clone());
+        }
+        let filter = RelOperator::Filter(Filter {
+            predicates,
+            is_having: false,
+        });
+        SExpr::create_unary(Arc::new(filter), Arc::new(scan_expr))
+    };
+    let res = s_expr.to_format_tree(&delete.metadata).format_pretty()?;
+    Ok(format!("DeletePlan:\n{res}"))
 }

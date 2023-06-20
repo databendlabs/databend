@@ -59,6 +59,7 @@ pub struct Metadata {
     //// Columns that are lazy materialized.
     lazy_columns: HashSet<usize>,
     agg_indexes: HashMap<String, Vec<(u64, String, SExpr)>>,
+    max_column_position: usize, // for CSV
 }
 
 impl Metadata {
@@ -115,6 +116,10 @@ impl Metadata {
     }
 
     pub fn add_lazy_columns(&mut self, indices: HashSet<usize>) {
+        if !self.lazy_columns.is_empty() {
+            // `lazy_columns` is only allowed to be set once.
+            return;
+        }
         debug_assert!(indices.iter().all(|i| *i < self.columns.len()));
         self.lazy_columns.extend(indices);
     }
@@ -244,6 +249,7 @@ impl Metadata {
         table_meta: Arc<dyn Table>,
         table_alias_name: Option<String>,
         source_of_view: bool,
+        source_of_index: bool,
     ) -> IndexType {
         let table_name = table_meta.name().to_string();
 
@@ -257,6 +263,7 @@ impl Metadata {
             table: table_meta.clone(),
             alias_name: table_alias_name,
             source_of_view,
+            source_of_index,
         };
         self.tables.push(table_entry);
         let mut index = 0;
@@ -345,6 +352,13 @@ impl Metadata {
             column.alias = alias;
         }
     }
+
+    pub fn set_max_column_position(&mut self, max_pos: usize) {
+        self.max_column_position = max_pos
+    }
+    pub fn get_max_column_position(&self) -> usize {
+        self.max_column_position
+    }
 }
 
 #[derive(Clone)]
@@ -355,6 +369,9 @@ pub struct TableEntry {
     alias_name: Option<String>,
     index: IndexType,
     source_of_view: bool,
+
+    /// If this table is bound to an index.
+    source_of_index: bool,
 
     table: Arc<dyn Table>,
 }
@@ -387,6 +404,7 @@ impl TableEntry {
             table,
             alias_name,
             source_of_view: false,
+            source_of_index: false,
         }
     }
 
@@ -423,6 +441,11 @@ impl TableEntry {
     /// Return true if it is source from view.
     pub fn is_source_of_view(&self) -> bool {
         self.source_of_view
+    }
+
+    /// Return true if it is bound for an index.
+    pub fn is_source_of_index(&self) -> bool {
+        self.source_of_index
     }
 }
 

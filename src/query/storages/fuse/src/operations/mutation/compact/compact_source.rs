@@ -17,65 +17,53 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use common_base::base::ProgressValues;
-use common_base::runtime::GlobalIORuntime;
+use common_catalog::plan::PartInfoPtr;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
-use common_expression::TableSchema;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use opendal::Operator;
 
-use crate::io::write_data;
-use crate::io::BlockBuilder;
 use crate::io::BlockReader;
 use crate::io::ReadSettings;
-use crate::io::TableMetaLocationGenerator;
-use crate::io::WriteSettings;
 use crate::metrics::*;
-use crate::operations::mutation::compact::CompactSourceMeta;
+use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
 use crate::operations::mutation::CompactPartInfo;
+use crate::operations::mutation::SerializeDataMeta;
+use crate::operations::BlockMetaIndex;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::Processor;
-use crate::statistics::ClusterStatsGenerator;
+use crate::FuseStorageFormat;
+
+enum State {
+    ReadData(Option<PartInfoPtr>),
+    Concat(Vec<DataBlock>, BlockMetaIndex),
+    Output(Option<PartInfoPtr>, DataBlock),
+    Finish,
+}
 
 pub struct CompactSource {
+    state: State,
     ctx: Arc<dyn TableContext>,
-    dal: Operator,
-
     block_reader: Arc<BlockReader>,
-    block_builder: BlockBuilder,
-
+    storage_format: FuseStorageFormat,
     output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
-    finished: bool,
 }
 
 impl CompactSource {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        dal: Operator,
-        write_settings: WriteSettings,
-        meta_locations: TableMetaLocationGenerator,
-        source_schema: Arc<TableSchema>,
+        storage_format: FuseStorageFormat,
         block_reader: Arc<BlockReader>,
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
-        let block_builder = BlockBuilder {
-            ctx: ctx.clone(),
-            meta_locations,
-            source_schema,
-            write_settings,
-            cluster_stats_gen: ClusterStatsGenerator::default(),
-        };
         Ok(ProcessorPtr::create(Box::new(CompactSource {
+            state: State::ReadData(None),
             ctx,
-            dal,
             block_reader,
-            block_builder,
+            storage_format,
             output,
-            output_data: None,
-            finished: false,
         })))
     }
 }
@@ -91,15 +79,14 @@ impl Processor for CompactSource {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.finished {
-            self.output.finish();
-            return Ok(Event::Finished);
+        if matches!(self.state, State::ReadData(None)) {
+            self.state = match self.ctx.get_partition() {
+                None => State::Finish,
+                Some(part) => State::ReadData(Some(part)),
+            }
         }
 
         if self.output.is_finished() {
-            if !self.finished {
-                return Ok(Event::Async);
-            }
             return Ok(Event::Finished);
         }
 
@@ -107,19 +94,63 @@ impl Processor for CompactSource {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(block) = self.output_data.take() {
-            self.output.push_data(Ok(block));
-        }
+        match self.state {
+            State::ReadData(_) => Ok(Event::Async),
+            State::Concat(_, _) => Ok(Event::Sync),
+            State::Output(_, _) => {
+                if let State::Output(part, data_block) =
+                    std::mem::replace(&mut self.state, State::Finish)
+                {
+                    self.state = match part {
+                        None => State::Finish,
+                        Some(part) => State::ReadData(Some(part)),
+                    };
 
-        Ok(Event::Async)
+                    self.output.push_data(Ok(data_block));
+                    Ok(Event::NeedConsume)
+                } else {
+                    Err(ErrorCode::Internal("It's a bug."))
+                }
+            }
+            State::Finish => {
+                self.output.finish();
+                Ok(Event::Finished)
+            }
+        }
+    }
+
+    fn process(&mut self) -> Result<()> {
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::Concat(blocks, index) => {
+                // concat blocks.
+                let block = if blocks.len() == 1 {
+                    blocks[0].convert_to_full()
+                } else {
+                    DataBlock::concat(&blocks)?
+                };
+
+                let meta = SerializeDataMeta::create(index, ClusterStatsGenType::Generally);
+                let new_block = block.add_meta(Some(meta))?;
+
+                let progress_values = ProgressValues {
+                    rows: new_block.num_rows(),
+                    bytes: new_block.memory_size(),
+                };
+                self.ctx.get_write_progress().incr(&progress_values);
+
+                self.state = State::Output(self.ctx.get_partition(), new_block);
+            }
+            _ => return Err(ErrorCode::Internal("It's a bug.")),
+        }
+        Ok(())
     }
 
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
-        match self.ctx.get_partition() {
-            Some(part) => {
+        match std::mem::replace(&mut self.state, State::Finish) {
+            State::ReadData(Some(part)) => {
                 let block_reader = self.block_reader.as_ref();
-                let block_builder = self.block_builder.clone();
+                let storage_format = self.storage_format;
 
                 // block read tasks.
                 let mut task_futures = Vec::new();
@@ -129,7 +160,6 @@ impl Processor for CompactSource {
                     stats.push(block.col_stats.clone());
 
                     let settings = ReadSettings::from_ctx(&self.ctx)?;
-                    let storage_format = block_builder.write_settings.storage_format;
                     // read block in parallel.
                     task_futures.push(async move {
                         // Perf
@@ -151,60 +181,10 @@ impl Processor for CompactSource {
                 {
                     metrics_inc_compact_block_read_milliseconds(start.elapsed().as_millis() as u64);
                 }
-
-                // concat blocks.
-                let new_block = if blocks.len() == 1 {
-                    blocks[0].convert_to_full()
-                } else {
-                    DataBlock::concat(&blocks)?
-                };
-                // build block serialization.
-                let serialized = GlobalIORuntime::instance()
-                    .spawn_blocking(move || {
-                        block_builder.build(new_block, |block, _| Ok((None, block)))
-                    })
-                    .await?;
-
-                let start = Instant::now();
-
-                // Perf.
-                {
-                    metrics_inc_compact_block_write_nums(1);
-                    metrics_inc_compact_block_write_bytes(serialized.block_raw_data.len() as u64);
-                }
-
-                // write block data.
-                write_data(
-                    serialized.block_raw_data,
-                    &self.dal,
-                    &serialized.block_meta.location.0,
-                )
-                .await?;
-
-                // write index data.
-                if let Some(index_state) = serialized.bloom_index_state {
-                    write_data(index_state.data, &self.dal, &index_state.location.0).await?;
-                }
-
-                // Perf
-                {
-                    metrics_inc_compact_block_write_milliseconds(start.elapsed().as_millis() as u64);
-                }
-
-                let progress_values = ProgressValues {
-                    rows: serialized.block_meta.row_count as usize,
-                    bytes: serialized.block_meta.block_size as usize,
-                };
-                self.ctx.get_write_progress().incr(&progress_values);
-
-                self.output_data = Some(DataBlock::empty_with_meta(CompactSourceMeta::create(
-                    part.index.clone(),
-                    serialized.block_meta.into(),
-                )));
+                self.state = State::Concat(blocks, part.index.clone());
+                Ok(())
             }
-            None => self.finished = true,
-        };
-
-        Ok(())
+            _ => Err(ErrorCode::Internal("It's a bug.")),
+        }
     }
 }

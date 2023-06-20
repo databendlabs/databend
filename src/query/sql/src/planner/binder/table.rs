@@ -126,6 +126,7 @@ impl Binder {
             table_meta,
             None,
             false,
+            false,
         );
 
         self.bind_base_table(bind_context, database, table_index)
@@ -288,6 +289,7 @@ impl Binder {
                                 table_meta,
                                 table_alias_name,
                                 false,
+                                false,
                             );
                             let (s_expr, mut new_bind_context) =
                                 self.bind_query(&mut new_bind_context, query).await?;
@@ -322,6 +324,7 @@ impl Binder {
                             table_meta,
                             table_alias_name,
                             bind_context.view_info.is_some(),
+                            bind_context.planning_agg_index,
                         );
 
                         if !agg_indexes.is_empty() {
@@ -408,6 +411,7 @@ impl Binder {
                         table.clone(),
                         table_alias_name,
                         false,
+                        false,
                     );
 
                     let (s_expr, mut bind_context) = self
@@ -472,6 +476,7 @@ impl Binder {
                         "system".to_string(),
                         table.clone(),
                         table_alias_name,
+                        false,
                         false,
                     );
 
@@ -554,9 +559,32 @@ impl Binder {
                 };
                 StageTable::try_create(info)?
             }
+            FileFormatParams::Csv(..) | FileFormatParams::Tsv(..) => {
+                let max_column_position = self.metadata.read().get_max_column_position();
+                if max_column_position == 0 {
+                    return Err(ErrorCode::SemanticError(
+                        "select columns from csv file must in the form of $<column_position>",
+                    ));
+                }
+
+                let mut fields = vec![];
+                for i in 1..(max_column_position + 1) {
+                    fields.push(TableField::new(&format!("_${}", i), TableDataType::String));
+                }
+
+                let schema = Arc::new(TableSchema::new(fields));
+                let info = StageTableInfo {
+                    schema,
+                    stage_info,
+                    files_info,
+                    files_to_copy: None,
+                    is_select: true,
+                };
+                StageTable::try_create(info)?
+            }
             _ => {
                 return Err(ErrorCode::Unimplemented(
-                    "stage table function only support parquet/NDJson format for now",
+                    "query stage files only support parquet/NDJson/CSV/TSV format for now",
                 ));
             }
         };
@@ -572,6 +600,7 @@ impl Binder {
             "system".to_string(),
             table.clone(),
             table_alias_name,
+            false,
             false,
         );
 

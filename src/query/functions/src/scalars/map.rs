@@ -34,13 +34,13 @@ pub fn register(registry: &mut FunctionRegistry) {
     registry
         .register_passthrough_nullable_2_arg::<EmptyArrayType, EmptyArrayType, EmptyMapType, _, _>(
             "map",
-            |_, _| FunctionDomain::Full,
+            |_, _, _| FunctionDomain::Full,
             |_, _, _| Value::Scalar(()),
         );
 
     registry.register_passthrough_nullable_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<1>>, MapType<GenericType<0>, GenericType<1>>, _, _>(
         "map",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<ArrayType<GenericType<0>>, ArrayType<GenericType<1>>, MapType<GenericType<0>, GenericType<1>>>(
             |keys, vals, output, ctx| {
                 let key_type = &ctx.generics[0];
@@ -86,13 +86,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_2_arg_core::<NullableType<EmptyMapType>, NullableType<GenericType<0>>, NullType, _, _>(
         "get",
-        |_, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::Full,
         |_, _, _| Value::Scalar(()),
     );
 
     registry.register_combine_nullable_2_arg::<MapType<GenericType<0>, GenericType<1>>, GenericType<0>, GenericType<1>, _, _>(
         "get",
-        |domain, _| FunctionDomain::Domain(NullableDomain {
+        |_, domain, _| FunctionDomain::Domain(NullableDomain {
             has_null: true,
             value: domain.as_ref().map(|(_, val_domain)| Box::new(val_domain.clone())),
         }),

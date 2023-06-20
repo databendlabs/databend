@@ -7,6 +7,10 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced: v1.1.56"/>
 
+import EEFeature from '@site/src/components/EEFeature';
+
+<EEFeature featureName='COMPUTED COLUMNS'/>
+
 Creating tables is one of the most complicated operations for many databases because you might need to:
 
 * Manually specify the engine

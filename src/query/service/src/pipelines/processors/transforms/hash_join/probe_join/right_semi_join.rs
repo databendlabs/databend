@@ -15,7 +15,6 @@
 use std::iter::TrustedLen;
 use std::sync::atomic::Ordering;
 
-use common_arrow::arrow::bitmap::MutableBitmap;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -41,8 +40,7 @@ impl JoinHashTable {
         let mut occupied = 0;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
-        let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -57,7 +55,6 @@ impl JoinHashTable {
                 continue;
             }
             occupied += match_count;
-            validity.extend_constant(match_count, true);
             if occupied >= JOIN_MAX_BLOCK_SIZE {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
@@ -67,11 +64,10 @@ impl JoinHashTable {
                     }
 
                     for row_ptr in local_build_indexes.iter() {
-                        outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                        outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
                     }
 
                     occupied = 0;
-                    validity = MutableBitmap::new();
 
                     if incomplete_ptr == 0 {
                         break;
@@ -88,7 +84,6 @@ impl JoinHashTable {
                     }
 
                     occupied += match_count;
-                    validity.extend_constant(match_count, true);
 
                     if occupied < JOIN_MAX_BLOCK_SIZE {
                         break;
@@ -98,7 +93,7 @@ impl JoinHashTable {
         }
 
         for row_ptr in local_build_indexes.iter().take(occupied) {
-            outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+            outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
         }
 
         Ok(vec![])
@@ -122,7 +117,6 @@ impl JoinHashTable {
         let local_probe_indexes = &mut probe_state.probe_indexes;
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
-        let mut validity = MutableBitmap::with_capacity(JOIN_MAX_BLOCK_SIZE);
 
         let data_blocks = self.row_space.chunks.read();
         let data_blocks = data_blocks
@@ -132,7 +126,7 @@ impl JoinHashTable {
         let num_rows = data_blocks
             .iter()
             .fold(0, |acc, chunk| acc + chunk.num_rows());
-        let outer_scan_bitmap = unsafe { &mut *self.outer_scan_bitmap.get() };
+        let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
 
         for (i, key) in keys_iter.enumerate() {
             let (mut match_count, mut incomplete_ptr) = self.probe_key(
@@ -149,7 +143,6 @@ impl JoinHashTable {
             occupied += match_count;
             local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
             probe_indexes_len += 1;
-            validity.extend_constant(match_count, true);
             if occupied >= JOIN_MAX_BLOCK_SIZE {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
@@ -176,7 +169,7 @@ impl JoinHashTable {
 
                         if all_true {
                             for row_ptr in local_build_indexes.iter() {
-                                outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                                outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
                             }
                         } else if !all_false {
                             // Safe to unwrap.
@@ -185,8 +178,8 @@ impl JoinHashTable {
                             while idx < occupied {
                                 let valid = unsafe { validity.get_bit_unchecked(idx) };
                                 if valid {
-                                    outer_scan_bitmap[local_build_indexes[idx].chunk_index]
-                                        .set(local_build_indexes[idx].row_index, true);
+                                    outer_scan_map[local_build_indexes[idx].chunk_index]
+                                        [local_build_indexes[idx].row_index] = true;
                                 }
                                 idx += 1;
                             }
@@ -195,7 +188,6 @@ impl JoinHashTable {
 
                     probe_indexes_len = 0;
                     occupied = 0;
-                    validity = MutableBitmap::new();
 
                     if incomplete_ptr == 0 {
                         break;
@@ -214,7 +206,6 @@ impl JoinHashTable {
                     occupied += match_count;
                     local_probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
-                    validity.extend_constant(match_count, true);
 
                     if occupied < JOIN_MAX_BLOCK_SIZE {
                         break;
@@ -242,7 +233,7 @@ impl JoinHashTable {
 
             if all_true {
                 for row_ptr in local_build_indexes.iter().take(occupied) {
-                    outer_scan_bitmap[row_ptr.chunk_index].set(row_ptr.row_index, true);
+                    outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
                 }
             } else if !all_false {
                 // Safe to unwrap.
@@ -251,8 +242,8 @@ impl JoinHashTable {
                 while idx < occupied {
                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                     if valid {
-                        outer_scan_bitmap[local_build_indexes[idx].chunk_index]
-                            .set(local_build_indexes[idx].row_index, true);
+                        outer_scan_map[local_build_indexes[idx].chunk_index]
+                            [local_build_indexes[idx].row_index] = true;
                     }
                     idx += 1;
                 }

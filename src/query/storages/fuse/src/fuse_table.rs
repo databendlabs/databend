@@ -28,6 +28,7 @@ use common_catalog::table::AppendMode;
 use common_catalog::table::ColumnStatistics;
 use common_catalog::table::ColumnStatisticsProvider;
 use common_catalog::table::CompactTarget;
+use common_catalog::table::DeletionFilters;
 use common_catalog::table::NavigationDescriptor;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -578,6 +579,8 @@ impl Table for FuseTable {
             data_size: Some(s.data_bytes),
             data_size_compressed: Some(s.compressed_data_bytes),
             index_size: Some(s.index_data_bytes),
+            number_of_blocks: s.number_of_blocks,
+            number_of_segments: s.number_of_segments,
         }))
     }
 
@@ -632,11 +635,13 @@ impl Table for FuseTable {
     async fn delete(
         &self,
         ctx: Arc<dyn TableContext>,
-        filter: Option<RemoteExpr<String>>,
+        filters: Option<DeletionFilters>,
         col_indices: Vec<usize>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete(ctx, filter, col_indices, pipeline).await
+        self.do_delete(ctx, filters, col_indices, query_row_id_col, pipeline)
+            .await
     }
 
     #[async_backtrace::framed]
@@ -647,6 +652,7 @@ impl Table for FuseTable {
         col_indices: Vec<FieldIndex>,
         update_list: Vec<(FieldIndex, RemoteExpr<String>)>,
         computed_list: BTreeMap<FieldIndex, RemoteExpr<String>>,
+        query_row_id_col: bool,
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         self.do_update(
@@ -655,6 +661,7 @@ impl Table for FuseTable {
             col_indices,
             update_list,
             computed_list,
+            query_row_id_col,
             pipeline,
         )
         .await

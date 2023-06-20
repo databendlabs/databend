@@ -154,6 +154,14 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
         AlterTableAction::RenameTable { new_table } => RcDoc::line()
             .append(RcDoc::text("RENAME TO "))
             .append(RcDoc::text(new_table.to_string())),
+        AlterTableAction::RenameColumn {
+            old_column,
+            new_column,
+        } => RcDoc::line()
+            .append(RcDoc::text("RENAME COLUMN "))
+            .append(RcDoc::text(old_column.to_string()))
+            .append(RcDoc::text(" TO "))
+            .append(RcDoc::text(new_column.to_string())),
         AlterTableAction::AddColumn { column } => RcDoc::line()
             .append(RcDoc::text("ADD COLUMN "))
             .append(RcDoc::text(column.to_string())),
@@ -195,6 +203,14 @@ pub(crate) fn pretty_alter_table_action(action: AlterTableAction) -> RcDoc<'stat
             TimeTravelPoint::Snapshot(sid) => RcDoc::text(format!(" AT (SNAPSHOT => {sid})")),
             TimeTravelPoint::Timestamp(ts) => RcDoc::text(format!(" AT (TIMESTAMP => {ts})")),
         },
+        AlterTableAction::SetOptions { set_options } => {
+            let mut doc = RcDoc::line();
+            doc = doc.append(RcDoc::text("SET OPTIONS: "));
+            for (key, value) in set_options.into_iter() {
+                doc = doc.append(RcDoc::text(format!("{key} to {value} ")));
+            }
+            doc
+        }
     }
 }
 

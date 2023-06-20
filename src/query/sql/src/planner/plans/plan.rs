@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt::Display;
+use std::ops::Deref;
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
@@ -23,6 +24,7 @@ use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 
 use super::data_mask::CreateDatamaskPolicyPlan;
+use super::CopyIntoTableMode;
 use super::CreateIndexPlan;
 use super::CreateShareEndpointPlan;
 use super::DescDatamaskPolicyPlan;
@@ -30,6 +32,8 @@ use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::ModifyTableColumnPlan;
+use super::RenameTableColumnPlan;
+use super::SetOptionsPlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
 use crate::plans::copy::CopyPlan;
@@ -161,6 +165,7 @@ pub enum Plan {
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
+    RenameTableColumn(Box<RenameTableColumnPlan>),
     AddTableColumn(Box<AddTableColumnPlan>),
     DropTableColumn(Box<DropTableColumnPlan>),
     ModifyTableColumn(Box<ModifyTableColumnPlan>),
@@ -173,6 +178,7 @@ pub enum Plan {
     VacuumTable(Box<VacuumTablePlan>),
     AnalyzeTable(Box<AnalyzeTablePlan>),
     ExistsTable(Box<ExistsTablePlan>),
+    SetOptions(Box<SetOptionsPlan>),
 
     // Insert
     Insert(Box<Insert>),
@@ -282,7 +288,13 @@ impl Display for Plan {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Plan::Query { .. } => write!(f, "Query"),
-            Plan::Copy(_) => write!(f, "Copy"),
+            Plan::Copy(plan) => match plan.deref() {
+                CopyPlan::IntoTable(copy_plan) => match copy_plan.write_mode {
+                    CopyIntoTableMode::Insert { .. } => write!(f, "Insert"),
+                    _ => write!(f, "Copy"),
+                },
+                _ => write!(f, "Copy"),
+            },
             Plan::Explain { .. } => write!(f, "Explain"),
             Plan::ExplainAnalyze { .. } => write!(f, "ExplainAnalyze"),
             Plan::ShowCreateCatalog(_) => write!(f, "ShowCreateCatalog"),
@@ -300,6 +312,7 @@ impl Display for Plan {
             Plan::DropTable(_) => write!(f, "DropTable"),
             Plan::UndropTable(_) => write!(f, "UndropTable"),
             Plan::RenameTable(_) => write!(f, "RenameTable"),
+            Plan::RenameTableColumn(_) => write!(f, "RenameTableColumn"),
             Plan::AddTableColumn(_) => write!(f, "AddTableColumn"),
             Plan::ModifyTableColumn(_) => write!(f, "ModifyTableColumn"),
             Plan::DropTableColumn(_) => write!(f, "DropTableColumn"),
@@ -373,6 +386,9 @@ impl Display for Plan {
             }
             Plan::DescDatamaskPolicy(..) => {
                 write!(f, "Desc Data Mask Policy")
+            }
+            Plan::SetOptions(..) => {
+                write!(f, "SetOptions")
             }
         }
     }

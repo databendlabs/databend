@@ -41,6 +41,9 @@ use crate::auth::Credential;
 use crate::servers::HttpHandlerKind;
 use crate::sessions::SessionManager;
 use crate::sessions::SessionType;
+
+const DEDUPLICATE_LABEL: &str = "X-DATABEND-DEDUPLICATE-LABEL";
+
 pub struct HTTPSessionMiddleware {
     pub kind: HttpHandlerKind,
     pub auth_manager: Arc<AuthMgr>,
@@ -171,7 +174,12 @@ impl<E> HTTPSessionEndpoint<E> {
             .auth(ctx.get_current_session(), &credential)
             .await?;
 
-        Ok(HttpQueryContext::new(session))
+        let deduplicate_label = req
+            .headers()
+            .get(DEDUPLICATE_LABEL)
+            .map(|id| id.to_str().unwrap().to_string());
+
+        Ok(HttpQueryContext::new(session, deduplicate_label))
     }
 }
 #[poem::async_trait]

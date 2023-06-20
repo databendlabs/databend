@@ -152,12 +152,10 @@ impl Processor for TransformHashJoinProbe {
             }
             HashJoinStep::OuterScan => {
                 if self.output_port.is_finished() {
-                    self.input_port.finish();
                     return Ok(Event::Finished);
                 }
 
                 if !self.output_port.can_push() {
-                    self.input_port.set_not_need_data();
                     return Ok(Event::NeedConsume);
                 }
 

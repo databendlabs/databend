@@ -285,6 +285,10 @@ pub enum AlterTableAction {
     AddColumn {
         column: ColumnDefinition,
     },
+    RenameColumn {
+        old_column: Identifier,
+        new_column: Identifier,
+    },
     ModifyColumn {
         column: Identifier,
         action: ModifyColumnAction,
@@ -303,13 +307,26 @@ pub enum AlterTableAction {
     RevertTo {
         point: TimeTravelPoint,
     },
+    SetOptions {
+        set_options: BTreeMap<String, String>,
+    },
 }
 
 impl Display for AlterTableAction {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
+            AlterTableAction::SetOptions { set_options } => {
+                write!(f, "SET OPTIONS: ").expect("Set Options Write Error ");
+                write_space_separated_map(f, set_options.iter())
+            }
             AlterTableAction::RenameTable { new_table } => {
                 write!(f, "RENAME TO {new_table}")
+            }
+            AlterTableAction::RenameColumn {
+                old_column,
+                new_column,
+            } => {
+                write!(f, "RENAME COLUMN {old_column} TO {new_column}")
             }
             AlterTableAction::AddColumn { column } => {
                 write!(f, "ADD COLUMN {column}")

@@ -23,6 +23,7 @@ use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::Scalar;
 
+use super::AggregateFunctionFactory;
 use super::StateAddr;
 use crate::aggregates::aggregate_function_factory::AggregateFunctionCreator;
 use crate::aggregates::aggregate_function_factory::CombinatorDescription;
@@ -40,7 +41,7 @@ impl AggregateStateCombinator {
         nested_name: &str,
         params: Vec<Scalar>,
         arguments: Vec<DataType>,
-        nested_creator: &AggregateFunctionCreator,
+        _nested_creator: &AggregateFunctionCreator,
     ) -> Result<AggregateFunctionRef> {
         let arg_name = arguments
             .iter()
@@ -50,7 +51,7 @@ impl AggregateStateCombinator {
 
         let name = format!("StateCombinator({nested_name}, {arg_name})");
 
-        let nested = nested_creator(nested_name, params, arguments)?;
+        let nested = AggregateFunctionFactory::instance().get(nested_name, params, arguments)?;
 
         Ok(Arc::new(AggregateStateCombinator { name, nested }))
     }
@@ -131,6 +132,15 @@ impl AggregateFunction for AggregateStateCombinator {
 
     unsafe fn drop_state(&self, place: StateAddr) {
         self.nested.drop_state(place);
+    }
+
+    fn get_own_null_adaptor(
+        &self,
+        _nested_function: super::AggregateFunctionRef,
+        _params: Vec<Scalar>,
+        _arguments: Vec<DataType>,
+    ) -> Result<Option<super::AggregateFunctionRef>> {
+        Ok(Some(Arc::new(self.clone())))
     }
 }
 

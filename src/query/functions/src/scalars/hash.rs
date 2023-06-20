@@ -76,7 +76,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "md5",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() * 32,
             |val, output, ctx| {
@@ -96,7 +96,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "sha",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() * 40,
             |val, output, ctx| {
@@ -118,7 +118,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<StringType, StringType, _, _>(
         "blake3",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         vectorize_string_to_string(
             |col| col.data.len() * 64,
             |val, output, ctx| {
@@ -136,7 +136,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_2_arg::<StringType, NumberType<u64>, StringType, _, _>(
         "sha2",
-        |_, _| FunctionDomain::MayThrow,
+        |_, _, _| FunctionDomain::MayThrow,
         vectorize_with_builder_2_arg::<StringType, NumberType<u64>, StringType>(
             |val, l, output, ctx| {
                 let l: u64 = l.as_();
@@ -183,7 +183,7 @@ fn register_simple_domain_type_hash<T: ArgType>(registry: &mut FunctionRegistry)
 where for<'a> T::ScalarRef<'a>: DFHash {
     registry.register_passthrough_nullable_1_arg::<T, NumberType<u64>, _, _>(
         "siphash64",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<T, NumberType<u64>>(|val, output, _| {
             let mut hasher = DefaultHasher::default();
             DFHash::hash(&val, &mut hasher);
@@ -193,7 +193,7 @@ where for<'a> T::ScalarRef<'a>: DFHash {
 
     registry.register_passthrough_nullable_1_arg::<T, NumberType<u64>, _, _>(
         "xxhash64",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<T, NumberType<u64>>(|val, output, _| {
             let mut hasher = XxHash64::default();
             DFHash::hash(&val, &mut hasher);
@@ -203,7 +203,7 @@ where for<'a> T::ScalarRef<'a>: DFHash {
 
     registry.register_passthrough_nullable_1_arg::<T, NumberType<u32>, _, _>(
         "xxhash32",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<T, NumberType<u32>>(|val, output, _| {
             let mut hasher = XxHash32::default();
             DFHash::hash(&val, &mut hasher);
@@ -217,7 +217,7 @@ where for<'a> T::ScalarRef<'a>: DFHash {
                 registry
                         .register_passthrough_nullable_2_arg::<T, NumberType<NUM_TYPE>, NumberType<u64>, _, _>(
                             "city64withseed",
-                                    |_, _| FunctionDomain::Full,
+                                    |_, _, _| FunctionDomain::Full,
                             vectorize_with_builder_2_arg::<T, NumberType<NUM_TYPE>, NumberType<u64>>(
                                 |val, l, output, _| {
                                     let mut hasher = CityHasher64::with_seed(l as u64);
@@ -233,7 +233,7 @@ where for<'a> T::ScalarRef<'a>: DFHash {
 
     registry.register_passthrough_nullable_2_arg::<T, NumberType<F32>, NumberType<u64>, _, _>(
         "city64withseed",
-        |_, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<T, NumberType<F32>, NumberType<u64>>(|val, l, output, _| {
             let mut hasher = CityHasher64::with_seed(l.0 as u64);
             DFHash::hash(&val, &mut hasher);
@@ -243,7 +243,7 @@ where for<'a> T::ScalarRef<'a>: DFHash {
 
     registry.register_passthrough_nullable_2_arg::<T, NumberType<F64>, NumberType<u64>, _, _>(
         "city64withseed",
-        |_, _| FunctionDomain::Full,
+        |_, _, _| FunctionDomain::Full,
         vectorize_with_builder_2_arg::<T, NumberType<F64>, NumberType<u64>>(|val, l, output, _| {
             let mut hasher = CityHasher64::with_seed(l.0 as u64);
             DFHash::hash(&val, &mut hasher);
