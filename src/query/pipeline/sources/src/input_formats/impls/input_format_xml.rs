@@ -26,7 +26,6 @@ use common_formats::FieldDecoderXML;
 use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::XmlFileFormatParams;
 use common_pipeline_core::InputError;
@@ -250,33 +249,16 @@ impl InputFormatTextBase for InputFormatXML {
                                 &batch.split_info.file.path,
                                 num_rows,
                             ) {
-                                match builder.ctx.on_error_mode {
-                                    OnErrorMode::Continue => {
-                                        Self::on_error_continue(
-                                            columns,
-                                            num_rows,
-                                            e.clone(),
-                                            &mut error_map,
-                                        );
-                                        continue;
-                                    }
-                                    OnErrorMode::AbortNum(n) => {
-                                        Self::on_error_abort(
-                                            columns,
-                                            num_rows,
-                                            n,
-                                            &builder.ctx.on_error_count,
-                                            e,
-                                        )
-                                        .map_err(|e| xml_error(&e.message(), path, num_rows))?;
-                                        continue;
-                                    }
-                                    _ => return Err(xml_error(&e.message(), path, num_rows)),
-                                }
-                            };
+                                builder
+                                    .ctx
+                                    .on_error(e, columns, builder.num_rows, Some(&mut error_map))
+                                    .map_err(|e| xml_error(&e.message(), path, num_rows))?;
+                            } else {
+                                builder.num_rows += 1;
+                            }
+                            num_rows += 1;
                             cols.clear();
                             has_start_row = false;
-                            num_rows += 1;
                         }
                     }
                     Ok(XmlEvent::Characters(v)) => {

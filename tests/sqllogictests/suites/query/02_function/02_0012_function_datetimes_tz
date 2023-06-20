@@ -395,4 +395,15 @@ select  count_if(y = true) from (select to_timestamp(to_date(number)) as ts, to_
 2000
 
 statement ok
+set timezone='Europe/London';
+
+statement error 1001
+----
+select to_date(to_timestamp('2021-03-28 01:00'));
+
+statement error 1001
+----
+select '2021-03-28 01:59:59'::timestamp;
+
+statement ok
 unset timezone;
