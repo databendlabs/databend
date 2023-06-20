@@ -503,10 +503,10 @@ ShowCreateTable (children 1)
 └── TableIdentifier t1
 
 query T
-explain ast create user 'test'@'localhost' identified with sha256_password by 'new_password'
+explain ast create user 'test'@'%' identified with sha256_password by 'new_password'
 ----
 CreateUser (children 3)
-├── User 'test'@'localhost'
+├── User 'test'@'%'
 ├── AuthType sha256_password
 └── Password "new_password"
 
