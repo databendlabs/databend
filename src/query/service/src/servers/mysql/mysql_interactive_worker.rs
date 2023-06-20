@@ -303,7 +303,12 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     // Here we fake some values for the command which Databend not supported.
     fn federated_server_command_check(&self, query: &str) -> Option<(DataSchemaRef, DataBlock)> {
         // INSERT don't need MySQL federated check
-        if query.len() > 6 && query[..6].eq_ignore_ascii_case("INSERT") {
+        // Ensure the query is start with ASCII chars so we won't
+        // panic when we slice the query string.
+        if query.len() > 6
+            && query.char_indices().take(6).all(|(_, c)| c.is_ascii())
+            && query[..6].eq_ignore_ascii_case("INSERT")
+        {
             return None;
         }
         let federated = MySQLFederated::create();
