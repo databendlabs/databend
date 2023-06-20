@@ -198,19 +198,30 @@ where TablesTable<T>: HistoryAware
             .map(|v| v.engine().as_bytes().to_vec())
             .collect();
         let engines_full: Vec<Vec<u8>> = engines.clone();
-        let created_on = database_tables
+        let created_owns: Vec<String> = database_tables
             .iter()
-            .map(|v| v.get_table_info().meta.created_on.timestamp_micros())
-            .collect::<Vec<_>>();
-        let dropped_on = database_tables
+            .map(|v| {
+                v.get_table_info()
+                    .meta
+                    .created_on
+                    .format("%Y-%m-%d %H:%M:%S.%3f %z")
+                    .to_string()
+            })
+            .collect();
+        let created_owns: Vec<Vec<u8>> =
+            created_owns.iter().map(|s| s.as_bytes().to_vec()).collect();
+        let dropped_owns: Vec<String> = database_tables
             .iter()
             .map(|v| {
                 v.get_table_info()
                     .meta
                     .drop_on
-                    .map(|v| v.timestamp_micros())
+                    .map(|v| v.format("%Y-%m-%d %H:%M:%S.%3f %z").to_string())
+                    .unwrap_or_else(|| "NULL".to_owned())
             })
-            .collect::<Vec<_>>();
+            .collect();
+        let dropped_owns: Vec<Vec<u8>> =
+            dropped_owns.iter().map(|s| s.as_bytes().to_vec()).collect();
 
         let updated_on = database_tables
             .iter()
@@ -247,8 +258,8 @@ where TablesTable<T>: HistoryAware
             StringType::from_data(engines_full),
             StringType::from_data(cluster_bys),
             StringType::from_data(is_transient),
-            TimestampType::from_data(created_on),
-            TimestampType::from_opt_data(dropped_on),
+            StringType::from_data(created_owns),
+            StringType::from_data(dropped_owns),
             TimestampType::from_data(updated_on),
             UInt64Type::from_opt_data(num_rows),
             UInt64Type::from_opt_data(data_size),
@@ -273,8 +284,8 @@ where TablesTable<T>: HistoryAware
             TableField::new("engine_full", TableDataType::String),
             TableField::new("cluster_by", TableDataType::String),
             TableField::new("is_transient", TableDataType::String),
-            TableField::new("created_on", TableDataType::Timestamp),
-            TableField::new("dropped_on", TableDataType::Timestamp),
+            TableField::new("created_on", TableDataType::String),
+            TableField::new("dropped_on", TableDataType::String),
             TableField::new("updated_on", TableDataType::Timestamp),
             TableField::new(
                 "num_rows",

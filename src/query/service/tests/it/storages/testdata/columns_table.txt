@@ -51,12 +51,12 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'copy_options'                  | 'system'             | 'stages'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'cpu_time'                      | 'system'             | 'query_profile'       | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'cpu_usage'                     | 'system'             | 'query_log'           | 'UInt32'           | 'INT UNSIGNED'      | ''       | ''       | 'NO'     | ''       |
-| 'create_time'                   | 'information_schema' | 'tables'              | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'create_time'                   | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                    | 'system'             | 'background_jobs'     | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                    | 'system'             | 'background_tasks'    | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'created_on'                    | 'system'             | 'indexes'             | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                    | 'system'             | 'tables'              | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'created_on'                    | 'system'             | 'tables_with_history' | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'created_on'                    | 'system'             | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'created_on'                    | 'system'             | 'tables_with_history' | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'creator'                       | 'system'             | 'background_jobs'     | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'creator'                       | 'system'             | 'background_tasks'    | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'creator'                       | 'system'             | 'stages'              | 'Nullable(String)' | 'VARCHAR'           | ''       | ''       | 'YES'    | ''       |
@@ -98,9 +98,9 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'domain_catalog'                | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'domain_name'                   | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'domain_schema'                 | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'drop_time'                     | 'information_schema' | 'tables'              | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'dropped_on'                    | 'system'             | 'tables'              | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
-| 'dropped_on'                    | 'system'             | 'tables_with_history' | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'drop_time'                     | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'dropped_on'                    | 'system'             | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'dropped_on'                    | 'system'             | 'tables_with_history' | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'dummy'                         | 'system'             | 'one'                 | 'UInt8'            | 'TINYINT UNSIGNED'  | ''       | ''       | 'NO'     | ''       |
 | 'end_time'                      | 'system'             | 'clustering_history'  | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'engine'                        | 'information_schema' | 'tables'              | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
