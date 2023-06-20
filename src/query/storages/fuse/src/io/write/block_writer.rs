@@ -15,6 +15,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_arrow::arrow::chunk::Chunk as ArrowChunk;
 use common_arrow::native::write::NativeWriter;
 use common_catalog::table_context::TableContext;
@@ -198,6 +199,7 @@ impl BlockBuilder {
                 .map(|v| v.size)
                 .unwrap_or_default(),
             compression: self.write_settings.table_compression.try_into()?,
+            create_on: Some(Utc::now()),
         };
 
         let serialized = BlockSerialization {

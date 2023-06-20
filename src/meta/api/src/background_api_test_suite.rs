@@ -181,9 +181,10 @@ impl BackgroundApiTestSuite {
             info!("update log res: {:?}", res);
             let res = res.unwrap();
             assert_eq!(1, res.len(), "there is one task");
+            assert_eq!(task_id, res[0].1, "task name");
             assert_eq!(
                 BackgroundTaskState::DONE,
-                res[0].1.task_state,
+                res[0].2.task_state,
                 "first state is done"
             );
         }
@@ -313,14 +314,15 @@ impl BackgroundApiTestSuite {
             assert!(res.is_ok());
             let resp = res.unwrap();
             assert_eq!(1, resp.len());
+            assert_eq!(job_ident.name, resp[0].1, "expect same ident name");
             assert_eq!(
                 BackgroundJobState::FAILED,
-                resp[0].1.job_status.clone().unwrap().job_state,
+                resp[0].2.job_status.clone().unwrap().job_state,
                 "first state is started"
             );
             assert_eq!(
                 INTERVAL,
-                resp[0].1.job_params.clone().unwrap().job_type,
+                resp[0].2.job_params.clone().unwrap().job_type,
                 "first state is started"
             );
         }
