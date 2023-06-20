@@ -27,7 +27,6 @@ use common_formats::FileFormatOptionsExt;
 use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_string;
 use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
 use common_meta_app::principal::TsvFileFormatParams;
 use common_pipeline_core::InputError;
@@ -211,7 +210,6 @@ impl InputFormatTextBase for InputFormatTSV {
         let schema = &builder.ctx.schema;
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
-        let mut num_rows = 0usize;
         let mut error_map: HashMap<u16, InputError> = HashMap::new();
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end]; // include \n
@@ -223,23 +221,14 @@ impl InputFormatTextBase for InputFormatTSV {
                 schema,
                 &builder.projection,
             ) {
-                match builder.ctx.on_error_mode {
-                    OnErrorMode::Continue => {
-                        Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);
-                        start = *end;
-                        continue;
-                    }
-                    OnErrorMode::AbortNum(n) => {
-                        Self::on_error_abort(columns, num_rows, n, &builder.ctx.on_error_count, e)
-                            .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
-                        start = *end;
-                        continue;
-                    }
-                    _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
-                }
+                builder
+                    .ctx
+                    .on_error(e, columns, builder.num_rows, Some(&mut error_map))
+                    .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+            } else {
+                builder.num_rows += 1;
             }
             start = *end;
-            num_rows += 1;
         }
         Ok(error_map)
     }

@@ -31,7 +31,6 @@ use common_io::cursor_ext::*;
 use common_io::format_diagnostic::verbose_char;
 use common_meta_app::principal::CsvFileFormatParams;
 use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
 use common_pipeline_core::InputError;
 use csv_core::ReadRecordResult;
@@ -176,9 +175,7 @@ impl InputFormatTextBase for InputFormatCSV {
         batch: RowBatch,
     ) -> Result<HashMap<u16, InputError>> {
         let columns = &mut builder.mutable_columns;
-        let n_column = columns.len();
         let mut start = 0usize;
-        let mut num_rows = 0usize;
         let mut error_map: HashMap<u16, InputError> = HashMap::new();
         let mut field_end_idx = 0;
         let field_decoder = builder
@@ -197,26 +194,15 @@ impl InputFormatTextBase for InputFormatCSV {
                 &batch.field_ends[field_end_idx..field_end_idx + num_fields],
                 &builder.projection,
             ) {
-                match builder.ctx.on_error_mode {
-                    OnErrorMode::Continue => {
-                        Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);
-                        start = *end;
-                        field_end_idx += n_column;
-                        continue;
-                    }
-                    OnErrorMode::AbortNum(n) => {
-                        Self::on_error_abort(columns, num_rows, n, &builder.ctx.on_error_count, e)
-                            .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
-                        start = *end;
-                        field_end_idx += n_column;
-                        continue;
-                    }
-                    _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
-                }
+                builder
+                    .ctx
+                    .on_error(e, columns, builder.num_rows, Some(&mut error_map))
+                    .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+            } else {
+                builder.num_rows += 1;
             }
             start = *end;
             field_end_idx += num_fields;
-            num_rows += 1;
         }
         Ok(error_map)
     }
