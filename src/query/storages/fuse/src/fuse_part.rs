@@ -37,9 +37,6 @@ use storages_common_table_meta::meta::Compression;
 pub struct FusePartInfo {
     pub location: String,
 
-    /// FusePartInfo itself is not versioned
-    /// the `format_version` is the version of the block which the `location` points to
-    pub format_version: u64,
     pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
@@ -84,7 +81,6 @@ impl FusePartInfo {
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
             location,
-            format_version,
             create_on,
             columns_meta,
             virtual_columns_meta,

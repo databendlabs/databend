@@ -639,8 +639,8 @@ async fn fuzz(
         None,
     )?;
 
-    let formated_expect = pretty_format_blocks(&vec![expect])?;
-    let formated_actual = pretty_format_blocks(&vec![actual])?;
+    let formated_expect = pretty_format_blocks(&[expect])?;
+    let formated_actual = pretty_format_blocks(&[actual])?;
 
     assert_eq!(
         formated_expect, formated_actual,
