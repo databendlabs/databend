@@ -44,7 +44,7 @@ use crate::input_formats::InputFormatTextBase;
 use crate::input_formats::RowBatch;
 use crate::input_formats::SplitInfo;
 
-const MAX_CSV_COLUMNS: usize = 1024;
+const MAX_CSV_COLUMNS: usize = 1000;
 
 pub struct InputFormatCSV {}
 
@@ -154,9 +154,9 @@ impl InputFormatTextBase for InputFormatCSV {
             .build();
         let projection = ctx.projection.clone();
         let max_fields = match &projection {
-            Some(p) => std::cmp::max(p.iter().copied().max().unwrap_or(1) + 1, MAX_CSV_COLUMNS),
-            None => ctx.schema.num_fields() + 6,
-        };
+            Some(p) => p.iter().copied().max().unwrap_or(1),
+            None => ctx.schema.num_fields(),
+        } + MAX_CSV_COLUMNS;
         Ok(CsvReaderState {
             common: AligningStateCommon::create(split_info, false, csv_params.headers as usize),
             ctx: ctx.clone(),
