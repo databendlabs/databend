@@ -1,7 +1,9 @@
 statement ok
 drop table if exists t;
+
 statement ok
 drop table if exists t_origin;
+
 # make sure there will be multiple blocks there, by shrink the `row_per_block`
 statement ok
 create table t (id int, c1 int, c2 int) row_per_block=10;
