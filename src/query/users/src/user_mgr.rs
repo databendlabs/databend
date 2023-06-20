@@ -57,7 +57,7 @@ impl UserApiProvider {
                 user_info.option.set_all_flag();
             } else {
                 return Err(ErrorCode::UnknownUser(format!(
-                    "only accept root from localhost, current: '{}'@'{}'",
+                    "only accept root from 127.0.0.1, current: '{}'@'{}'",
                     user.username, user.hostname
                 )));
             }
@@ -133,13 +133,14 @@ impl UserApiProvider {
         if_not_exists: bool,
     ) -> Result<u64> {
         if self.get_configured_user(&user_info.name).is_some() {
-            return Err(ErrorCode::UserAlreadyExists(
-                "same name with configured user",
-            ));
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Same name with configured user `{}`",
+                user_info.name
+            )));
         }
         if user_info.is_root() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "User cannot be created with builtin user name {}",
+                "User cannot be created with builtin user `{}`",
                 user_info.name
             )));
         }
@@ -165,6 +166,12 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
+        if user.is_root() {
+            return Err(ErrorCode::UnknownUser(format!(
+                "Cannot grant privileges to builtin user `{}`",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -182,6 +189,12 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
+        if user.is_root() {
+            return Err(ErrorCode::UnknownUser(format!(
+                "Cannot revoke privileges from builtin user `{}`",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -198,6 +211,12 @@ impl UserApiProvider {
         user: UserIdentity,
         grant_role: String,
     ) -> Result<Option<u64>> {
+        if user.is_root() {
+            return Err(ErrorCode::UnknownUser(format!(
+                "Cannot grant role to builtin user `{}`",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -214,6 +233,12 @@ impl UserApiProvider {
         user: UserIdentity,
         revoke_role: String,
     ) -> Result<Option<u64>> {
+        if user.is_root() {
+            return Err(ErrorCode::UnknownUser(format!(
+                "Cannot revoke role from builtin user `{}`",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -228,13 +253,13 @@ impl UserApiProvider {
     pub async fn drop_user(&self, tenant: &str, user: UserIdentity, if_exists: bool) -> Result<()> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Configured user {} cannot be dropped",
+                "Configured user `{}` cannot be dropped",
                 user.username
             )));
         }
         if user.is_root() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Builtin user {} cannot be dropped",
+                "Builtin user `{}` cannot be dropped",
                 user.username
             )));
         }
@@ -263,13 +288,19 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Configured user {} cannot be updated",
+                "Configured user `{}` cannot be updated",
                 user.username
             )));
         }
         let client = self.get_user_api_client(tenant)?;
         if user.is_root() && auth_info.is_some() {
             // Root user info is not exist, need to add user info first.
+            if user.hostname != "127.0.0.1" {
+                return Err(ErrorCode::UnknownUser(format!(
+                    "Builtin user `{}` only allow set host to 127.0.0.1",
+                    user.username
+                )));
+            }
             let user_info =
                 UserInfo::new(&user.username, &user.hostname, auth_info.clone().unwrap());
             if let Ok(res) = client.add_user(user_info).await {

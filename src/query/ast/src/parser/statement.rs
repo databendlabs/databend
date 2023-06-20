@@ -2134,15 +2134,22 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
 }
 
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
-    map(
+    map_res(
         rule! {
             #parameter_to_string ~ ( "@" ~ #literal_string )?
         },
-        |(username, opt_hostname)| UserIdentity {
-            username,
-            hostname: opt_hostname
+        |(username, opt_hostname)| {
+            let hostname = opt_hostname
                 .map(|(_, hostname)| hostname)
-                .unwrap_or_else(|| "%".to_string()),
+                .unwrap_or_else(|| "%".to_string());
+            if username == "root" || username == "default" {
+                if hostname != "127.0.0.1" {
+                    return Err(ErrorKind::Other("hostname only support `127.0.0.1`"));
+                }
+            } else if hostname != "%" {
+                return Err(ErrorKind::Other("hostname only support `%`"));
+            }
+            Ok(UserIdentity { username, hostname })
         },
     )(i)
 }

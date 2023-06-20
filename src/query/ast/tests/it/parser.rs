@@ -169,9 +169,9 @@ fn test_statement() {
         r#"DROP STAGE ~"#,
         r#"list @stage_a;"#,
         r#"list @~;"#,
-        r#"create user 'test-e'@'localhost' identified by 'password';"#,
-        r#"drop user if exists 'test-j'@'localhost';"#,
-        r#"alter user 'test-e'@'localhost' identified by 'new-password';"#,
+        r#"create user 'test-e'@'%' identified by 'password';"#,
+        r#"drop user if exists 'test-j'@'%';"#,
+        r#"alter user 'test-e'@'%' identified by 'new-password';"#,
         r#"create role 'test'"#,
         r#"drop role if exists 'test'"#,
         r#"ALTER TABLE t CLUSTER BY(c1);"#,
@@ -189,31 +189,31 @@ fn test_statement() {
         r#"VACUUM TABLE t RETAIN 4 HOURS DRY RUN;"#,
         r#"VACUUM TABLE t RETAIN 40 HOURS;"#,
         r#"CREATE TABLE t (a INT COMMENT 'col comment') COMMENT='table comment';"#,
-        r#"GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';"#,
-        r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
-        r#"GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';"#,
-        r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT CREATE, CREATE USER ON * TO 'test-grant'@'%';"#,
+        r#"GRANT SELECT, CREATE ON * TO 'test-grant'@'%';"#,
+        r#"GRANT SELECT, CREATE ON *.* TO 'test-grant'@'%';"#,
+        r#"GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%';"#,
         r#"GRANT SELECT, CREATE ON * TO ROLE 'role1';"#,
-        r#"GRANT ALL ON *.* TO 'test-grant'@'localhost';"#,
+        r#"GRANT ALL ON *.* TO 'test-grant'@'%';"#,
         r#"GRANT ALL ON *.* TO ROLE 'role2';"#,
-        r#"GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';"#,
+        r#"GRANT ALL PRIVILEGES ON * TO 'test-grant'@'%';"#,
         r#"GRANT ALL PRIVILEGES ON * TO ROLE 'role3';"#,
         r#"GRANT ROLE 'test' TO 'test-user';"#,
         r#"GRANT ROLE 'test' TO USER 'test-user';"#,
         r#"GRANT ROLE 'test' TO ROLE 'test-user';"#,
-        r#"GRANT SELECT ON db01.* TO 'test-grant'@'localhost';"#,
-        r#"GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.* TO 'test-grant'@'%';"#,
+        r#"GRANT SELECT ON db01.* TO USER 'test-grant'@'%';"#,
         r#"GRANT SELECT ON db01.* TO ROLE 'role1'"#,
-        r#"GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';"#,
-        r#"GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT ON db01.tb1 TO 'test-grant'@'%';"#,
+        r#"GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%';"#,
         r#"GRANT SELECT ON db01.tb1 TO ROLE 'role1';"#,
         r#"GRANT SELECT ON tb1 TO ROLE 'role1';"#,
         r#"GRANT ALL ON tb1 TO 'u1';"#,
         r#"SHOW GRANTS;"#,
-        r#"SHOW GRANTS FOR 'test-grant'@'localhost';"#,
-        r#"SHOW GRANTS FOR USER 'test-grant'@'localhost';"#,
+        r#"SHOW GRANTS FOR 'test-grant'@'%';"#,
+        r#"SHOW GRANTS FOR USER 'test-grant'@'%';"#,
         r#"SHOW GRANTS FOR ROLE 'role1';"#,
-        r#"REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';"#,
+        r#"REVOKE SELECT, CREATE ON * FROM 'test-grant'@'%';"#,
         r#"REVOKE SELECT ON tb1 FROM ROLE 'role1';"#,
         r#"REVOKE ALL ON tb1 FROM 'u1';"#,
         r#"COPY INTO mytable
@@ -413,6 +413,7 @@ fn test_statement() {
     ];
 
     for case in cases {
+        // println!("--111--case={:?}", case);
         let tokens = tokenize_sql(case).unwrap();
         let (stmt, fmt) = parse_sql(&tokens, Dialect::PostgreSQL).unwrap();
         writeln!(file, "---------- Input ----------").unwrap();
@@ -448,19 +449,20 @@ fn test_statement_error() {
         r#"insert into t format"#,
         r#"show tables format"#,
         r#"alter database system x rename to db"#,
-        r#"create user 'test-e'@'localhost' identified bi 'password';"#,
-        r#"drop usar if exists 'test-j'@'localhost';"#,
-        r#"alter user 'test-e'@'localhost' identifies by 'new-password';"#,
-        r#"create role 'test'@'localhost';"#,
-        r#"drop role 'test'@'localhost';"#,
+        r#"create user 'test-e'@'%' identified bi 'password';"#,
+        r#"create user 'test-e'@'localhost' identified by 'password';"#,
+        r#"drop usar if exists 'test-j'@'%';"#,
+        r#"alter user 'test-e'@'%' identifies by 'new-password';"#,
+        r#"create role 'test'@'%';"#,
+        r#"drop role 'test'@'%';"#,
         r#"drop role role1;"#,
         r#"GRANT ROLE test TO ROLE 'test-user';"#,
         r#"GRANT ROLE 'test' TO ROLE test-user;"#,
-        r#"GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';"#,
-        r#"GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';"#,
+        r#"GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'%';"#,
+        r#"GRANT SELECT, CREATE ON *.c TO 'test-grant'@'%';"#,
         r#"SHOW GRANT FOR ROLE role1;"#,
-        r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';"#,
-        r#"REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';"#,
+        r#"REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'%';"#,
+        r#"REVOKE SELECT, CREATE ON * TO 'test-grant'@'%';"#,
         r#"COPY INTO mytable FROM 's3://bucket' CREDENTIAL = ();"#,
         r#"COPY INTO mytable FROM @mystage CREDENTIALS = ();"#,
         r#"CALL system$test"#,
@@ -479,6 +481,7 @@ fn test_statement_error() {
     ];
 
     for case in cases {
+        // println!("--222--case={:?}", case);
         let tokens = tokenize_sql(case).unwrap();
         let err = parse_sql(&tokens, Dialect::PostgreSQL).unwrap_err();
         writeln!(file, "---------- Input ----------").unwrap();
