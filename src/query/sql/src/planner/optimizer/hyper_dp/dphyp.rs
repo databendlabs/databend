@@ -103,24 +103,11 @@ impl DPhpy {
         s_expr: Arc<SExpr>,
         join_conditions: &mut Vec<(ScalarExpr, ScalarExpr)>,
         join_child: bool,
-        is_subquery: bool,
         join_relation: Option<Arc<SExpr>>,
     ) -> Result<(Arc<SExpr>, bool)> {
         // Start to traverse and stop when meet join
         if s_expr.is_pattern() {
             return Ok((s_expr, false));
-        }
-
-        if is_subquery {
-            // If it's a subquery, start a new dphyp
-            let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
-            let (new_s_expr, _) = dphyp.optimize(s_expr)?;
-            let relation_idx = self.join_relations.len() as IndexType;
-            for table_index in dphyp.table_index_map.keys() {
-                self.table_index_map.insert(*table_index, relation_idx);
-            }
-            self.join_relations.push(JoinRelation::new(&new_s_expr));
-            return Ok((new_s_expr, true));
         }
 
         match s_expr.plan.as_ref() {
@@ -145,18 +132,6 @@ impl DPhpy {
                 {
                     is_inner_join = false;
                 }
-                let mut left_is_subquery = false;
-                let mut right_is_subquery = false;
-                // Fixme: If join's child is EvalScalar, we think it is a subquery.
-                // Check join's child is filter or scan
-                let left_op = s_expr.child(0)?.plan.as_ref();
-                let right_op = s_expr.child(1)?.plan.as_ref();
-                if matches!(left_op, RelOperator::EvalScalar(_)) {
-                    left_is_subquery = true;
-                }
-                if matches!(right_op, RelOperator::EvalScalar(_)) {
-                    right_is_subquery = true;
-                }
                 // Add join conditions
                 for condition_pair in op.left_conditions.iter().zip(op.right_conditions.iter()) {
                     join_conditions.push((condition_pair.0.clone(), condition_pair.1.clone()));
@@ -177,14 +152,12 @@ impl DPhpy {
                         s_expr.children()[0].clone(),
                         join_conditions,
                         true,
-                        left_is_subquery,
                         None,
                     )?;
                     let right_res = self.get_base_relations(
                         s_expr.children()[1].clone(),
                         join_conditions,
                         true,
-                        right_is_subquery,
                         None,
                     )?;
                     let new_s_expr: Arc<SExpr> =
@@ -192,11 +165,7 @@ impl DPhpy {
                     Ok((new_s_expr, left_res.1 && right_res.1))
                 }
             }
-            RelOperator::ProjectSet(_)
-            | RelOperator::EvalScalar(_)
-            | RelOperator::Filter(_)
-            | RelOperator::Sort(_)
-            | RelOperator::Limit(_) => {
+            RelOperator::Filter(_) => {
                 if join_child {
                     // If plan in filter, save it
                     if let RelOperator::Filter(op) = s_expr.plan.as_ref() {
@@ -206,7 +175,6 @@ impl DPhpy {
                         s_expr.children()[0].clone(),
                         join_conditions,
                         true,
-                        false,
                         Some(s_expr.clone()),
                     )?;
                     let new_s_expr = Arc::new(s_expr.replace_children([child]));
@@ -216,14 +184,18 @@ impl DPhpy {
                         s_expr.children()[0].clone(),
                         join_conditions,
                         false,
-                        false,
                         None,
                     )?;
                     let new_s_expr = Arc::new(s_expr.replace_children([child]));
                     Ok((new_s_expr, optimized))
                 }
             }
-            RelOperator::Aggregate(_) | RelOperator::Window(_) => {
+            RelOperator::EvalScalar(_)
+            | RelOperator::ProjectSet(_)
+            | RelOperator::Aggregate(_)
+            | RelOperator::Window(_)
+            | RelOperator::Sort(_)
+            | RelOperator::Limit(_) => {
                 let mut dphyp = DPhpy::new(self.ctx.clone(), self.metadata.clone());
                 let (child, _) = dphyp.optimize(s_expr.children()[0].clone())?;
                 let relation_idx = self.join_relations.len() as IndexType;
@@ -253,8 +225,7 @@ impl DPhpy {
         // Firstly, we need to extract all join conditions and base tables
         // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
-        let (s_expr, res) =
-            self.get_base_relations(s_expr, &mut join_conditions, false, false, None)?;
+        let (s_expr, res) = self.get_base_relations(s_expr, &mut join_conditions, false, None)?;
         if !res {
             return Ok((s_expr, false));
         }
