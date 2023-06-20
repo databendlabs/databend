@@ -56,7 +56,7 @@ ON t.database = d.name
 WHERE t.database != 'system'
     AND t.database != 'information_schema'
     AND t.engine = 'FUSE'
-    AND t.num_rows > 1 * 1000 * 1000
+    AND t.num_rows > 1 * 1000 * 100
     AND t.table_id NOT IN (
         SELECT
           table_id
