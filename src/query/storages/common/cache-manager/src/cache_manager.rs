@@ -67,7 +67,6 @@ impl CacheManager {
             config.disk_cache_config.max_bytes,
             &config.data_cache_storage,
         )?;
-        println!("table_data_cache: {}", table_data_cache.is_some());
 
         // setup in-memory table column cache
         let table_column_array_cache = Self::new_in_memory_cache(

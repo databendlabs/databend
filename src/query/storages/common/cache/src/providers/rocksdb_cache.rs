@@ -20,14 +20,11 @@ use super::rocksdb_disk_cache::i64_merge_operator;
 use super::rocksdb_disk_cache::KeyTimeValue;
 use super::rocksdb_disk_cache::DISK_SIZE_KEY;
 use super::rocksdb_disk_cache::KEY2TIME_COLUMN_PREFIX;
+use super::rocksdb_disk_cache::ROCKSDB_LRU_ACCESS_COUNT;
 use super::rocksdb_disk_cache::TIME2KEY_COLUMN_PREFIX;
-use crate::metrics_inc_cache_access_count;
-use crate::metrics_inc_cache_hit_count;
-use crate::metrics_inc_cache_miss_count;
 
 // map key -> value
 static KEY2VALUE_COLUMN_PREFIX: &str = "_key2value";
-static ROCKSDB_CACHE_NAME: &str = "rocksdb_cache";
 
 pub struct RocksDbCache {
     db: rocksdb::TransactionDB,
@@ -95,16 +92,22 @@ impl RocksDbCache {
 
 impl RocksDbCache {
     pub fn get<Q: AsRef<str>>(&self, key: Q) -> Result<Option<Vec<u8>>> {
-        metrics_inc_cache_access_count(1, ROCKSDB_CACHE_NAME);
         let key = key.as_ref();
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
         if let Ok(Some(time_value)) = self.db.get(&key2time_key) {
             let key2value_key = format!("{}/{}", KEY2VALUE_COLUMN_PREFIX, key);
             if let Ok(Some(value)) = self.db.get(key2value_key) {
-                let key_time_value: KeyTimeValue = serde_json::from_slice(&time_value)?;
-
                 // use txn to update key access time
                 let txn = self.db.transaction();
+
+                let mut key_time_value: KeyTimeValue = serde_json::from_slice(&time_value)?;
+                key_time_value.count += 1;
+                // access count less than ROCKSDB_LRU_ACCESS_COUNT cannot move to head of LRU list
+                if key_time_value.count < ROCKSDB_LRU_ACCESS_COUNT {
+                    txn.put(key2time_key, serde_json::to_string(&key_time_value)?)?;
+                    txn.commit()?;
+                    return Ok(Some(value));
+                }
 
                 let key_hash = crc32fast::hash(key.as_bytes());
                 // first delete old time key
@@ -121,17 +124,16 @@ impl RocksDbCache {
                 let new_key_time_value = KeyTimeValue {
                     time: now,
                     value_len: key_time_value.value_len,
+                    count: 0,
                 };
                 txn.put(&key2time_key, serde_json::to_string(&new_key_time_value)?)?;
 
                 txn.commit()?;
 
-                metrics_inc_cache_hit_count(1, ROCKSDB_CACHE_NAME);
                 return Ok(Some(value));
             }
         }
 
-        metrics_inc_cache_miss_count(1, ROCKSDB_CACHE_NAME);
         Ok(None)
     }
 
@@ -151,6 +153,7 @@ impl RocksDbCache {
         let key_time_value = KeyTimeValue {
             time: now,
             value_len,
+            count: 0,
         };
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
         txn.put(key2time_key, serde_json::to_string(&key_time_value)?)?;

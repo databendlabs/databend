@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cmp::Ordering;
 use std::fs;
 use std::fs::File;
 use std::io::IoSlice;
 use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
+use std::println;
 
 use chrono::Utc;
 use common_exception::Result;
@@ -28,14 +28,11 @@ use tracing::error;
 use tracing::warn;
 
 use super::disk_cache::validate_checksum;
-use crate::metrics_inc_cache_access_count;
-use crate::metrics_inc_cache_hit_count;
-use crate::metrics_inc_cache_miss_count;
 use crate::DiskCacheKey;
 
 static ROCKSDB_META_PATH: &str = "meta";
 static ROCKSDB_DATA_PATH: &str = "data";
-static ROCKSDB_DISK_CACHE_NAME: &str = "rocksdb_disk_cache";
+pub(crate) const ROCKSDB_LRU_ACCESS_COUNT: u8 = 3;
 
 // map key -> (time,id,len)
 pub(crate) const KEY2TIME_COLUMN_PREFIX: &str = "_key2time";
@@ -45,16 +42,13 @@ pub(crate) const TIME2KEY_COLUMN_PREFIX: &str = "_time2key";
 // system data key
 pub(crate) const DISK_SIZE_KEY: &str = "_system/disk_size";
 
-#[derive(serde::Serialize, serde::Deserialize, PartialEq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct KeyTimeValue {
     pub time: i64,
     pub value_len: usize,
-}
-
-impl PartialOrd for KeyTimeValue {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.time.cmp(&other.time))
-    }
+    // key access count, only keys which access count >= `ROCKSDB_LRU_ACCESS_COUNT`
+    // can move to head of LRU list.
+    pub count: u8,
 }
 
 pub struct RocksDbDiskCache {
@@ -121,7 +115,14 @@ impl RocksDbDiskCache {
         let txn = self.db.transaction();
 
         let value_len = if let Some(time_value) = time_value {
-            let key_time_value: KeyTimeValue = serde_json::from_slice(time_value)?;
+            let mut key_time_value: KeyTimeValue = serde_json::from_slice(time_value)?;
+            key_time_value.count += 1;
+            // access count less than ROCKSDB_LRU_ACCESS_COUNT cannot move to head of LRU list
+            if key_time_value.count < ROCKSDB_LRU_ACCESS_COUNT {
+                txn.put(key2time_key, serde_json::to_string(&key_time_value)?)?;
+                txn.commit()?;
+                return Ok(());
+            }
 
             // first delete old time key
             let old_time_key = format!(
@@ -140,6 +141,7 @@ impl RocksDbDiskCache {
         let new_key_time_value = KeyTimeValue {
             time: now,
             value_len,
+            count: 0,
         };
         txn.put(key2time_key, serde_json::to_string(&new_key_time_value)?)?;
 
@@ -213,7 +215,6 @@ impl RocksDbDiskCache {
 
 impl RocksDbDiskCache {
     pub fn get<Q: AsRef<str>>(&self, key: Q) -> Result<Option<Vec<u8>>> {
-        metrics_inc_cache_access_count(1, ROCKSDB_DISK_CACHE_NAME);
         let key = key.as_ref();
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
         if let Ok(Some(time_value)) = self.db.get(&key2time_key) {
@@ -229,7 +230,6 @@ impl RocksDbDiskCache {
             return match get_cache_content() {
                 Ok(mut bytes) => {
                     if let Err(e) = validate_checksum(bytes.as_slice()) {
-                        metrics_inc_cache_miss_count(1, ROCKSDB_DISK_CACHE_NAME);
                         error!("data cache, of key {key},  crc validation failure: {e}");
                         {
                             // remove the invalid cache, error of removal ignored
@@ -240,7 +240,6 @@ impl RocksDbDiskCache {
                         }
                         Ok(None)
                     } else {
-                        metrics_inc_cache_hit_count(1, ROCKSDB_DISK_CACHE_NAME);
                         // trim the checksum bytes and return
                         let total_len = bytes.len();
                         let body_len = total_len - 4;
@@ -250,7 +249,6 @@ impl RocksDbDiskCache {
                     }
                 }
                 Err(e) => {
-                    metrics_inc_cache_miss_count(1, ROCKSDB_DISK_CACHE_NAME);
                     error!("get disk cache item failed, cache_key {key}. {e}");
                     Ok(None)
                 }
