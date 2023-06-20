@@ -24,6 +24,7 @@ use common_sql::plans::RenameTableColumnPlan;
 use common_storages_share::save_share_table_info;
 use common_storages_view::view_table::VIEW_ENGINE;
 
+use crate::interpreters::check_referenced_computed_columns;
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
@@ -82,6 +83,17 @@ impl Interpreter for RenameTableColumnInterpreter {
                     "Cannot rename table column with the same name as internal column: {}",
                     self.plan.new_column
                 )));
+            }
+
+            let table_schema = table_info.schema();
+            let field = table_schema.field_with_name(self.plan.old_column.as_str())?;
+            if field.computed_expr.is_none() {
+                // Check if old column is referenced by computed columns.
+                check_referenced_computed_columns(
+                    self.ctx.clone(),
+                    table_schema,
+                    self.plan.old_column.as_str(),
+                )?;
             }
 
             new_table_meta.schema = Arc::new(self.plan.schema.clone());
