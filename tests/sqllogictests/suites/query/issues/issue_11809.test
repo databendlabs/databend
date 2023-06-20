@@ -1,0 +1,13 @@
+query I
+--总共
+select * from numbers(1);
+----
+0
+
+query I
+--总共总共总共总共
+--总共总共总共
+select * from numbers(1);
+----
+0
+
