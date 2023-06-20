@@ -21,7 +21,7 @@ SELECT COUNT(*)=1 from system.tables where name = 't' and database = 'db_12_0001
 
 # system.tables_with_history should contain the newly created table, and dropped_on should be NULL
 query B
-SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database = 'db_12_0001' and dropped_on = 'NULL'
+SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database = 'db_12_0001' and dropped_on = NULL
 ----
 1
 
@@ -40,7 +40,7 @@ SELECT COUNT(*)=0 from system.tables where name = 't' and database = 'db_12_0001
 
 # system.tables_with_history should contain the dropped table, and dropped_on should NOT be NULL
 query B
-SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database = 'db_12_0001' and dropped_on != 'NULL'
+SELECT COUNT(*)=1 from system.tables_with_history where name = 't' and database = 'db_12_0001' and dropped_on != NULL
 ----
 1
 
