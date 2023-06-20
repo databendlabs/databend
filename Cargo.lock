@@ -2680,6 +2680,7 @@ dependencies = [
  "common-meta-app",
  "common-meta-types",
  "common-pipeline-core",
+ "common-pipeline-sinks",
  "common-pipeline-sources",
  "common-pipeline-transforms",
  "common-sharing",

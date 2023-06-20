@@ -21,7 +21,10 @@ use aggregating_index::get_agg_index_handler;
 use chrono::Utc;
 use common_base::base::tokio;
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::block_debug::assert_two_blocks_sorted_eq_with_name;
+use common_expression::DataBlock;
 use common_expression::SendableDataBlockStream;
 use common_meta_app::schema::CreateIndexReq;
 use common_meta_app::schema::IndexMeta;
@@ -33,6 +36,7 @@ use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
 use enterprise_query::test_kits::context::create_ee_query_context;
+use futures_util::TryStreamExt;
 
 async fn plan_sql(ctx: Arc<QueryContext>, sql: &str) -> Result<Plan> {
     let mut planner = Planner::new(ctx);
@@ -121,8 +125,12 @@ async fn test_index_refresh() -> Result<()> {
     // Refresh Index
     refresh_index(fixture.ctx(), "index1").await?;
 
-    // Get table snapshop files
     let block_path = find_block_path(&root)?.unwrap();
+    let block_name_prefix = PathBuf::from(
+        block_path
+            .strip_prefix(&root)
+            .map_err(|e| ErrorCode::Internal(e.to_string()))?,
+    );
     let blocks = collect_file_names(&block_path)?;
 
     // Get aggregating index files
@@ -131,6 +139,28 @@ async fn test_index_refresh() -> Result<()> {
 
     assert_eq!(blocks, indexes);
 
+    // Check aggregating index is correct.
+    {
+        let res = execute_sql(
+            fixture.ctx(),
+            "SELECT b, SUM_STATE(a) from t WHERE c > 1 GROUP BY b",
+        )
+        .await?;
+        let data_blocks: Vec<DataBlock> = res.try_collect().await?;
+
+        let agg_res = execute_sql(
+            fixture.ctx(),
+            &format!(
+                "SELECT * FROM 'fs://{}'",
+                agg_index_path.join(&indexes[0]).to_str().unwrap()
+            ),
+        )
+        .await?;
+        let agg_data_blocks: Vec<DataBlock> = agg_res.try_collect().await?;
+
+        assert_two_blocks_sorted_eq_with_name("refresh index", &data_blocks, &agg_data_blocks);
+    }
+
     // Insert more data
     execute_sql(
         fixture.ctx(),
@@ -138,14 +168,57 @@ async fn test_index_refresh() -> Result<()> {
     )
     .await?;
 
-    let blocks = collect_file_names(&block_path)?;
+    let pre_block = blocks[0].clone();
+    let mut blocks = collect_file_names(&block_path)?;
     assert!(blocks.len() > indexes.len());
 
     // Refresh Index again
     refresh_index(fixture.ctx(), "index1").await?;
 
-    let indexes = collect_file_names(&agg_index_path)?;
-    assert_eq!(blocks, indexes);
+    // check the new added index is correct.
+    {
+        let pre_agg_index = indexes[0].clone();
+        let mut indexes = collect_file_names(&agg_index_path)?;
+        assert_eq!(blocks, indexes);
+
+        let new_block = {
+            blocks.retain(|s| s != &pre_block);
+            blocks[0].clone()
+        };
+
+        let new_agg_index = {
+            indexes.retain(|i| i != &pre_agg_index);
+            indexes[0].clone()
+        };
+
+        let data_blocks: Vec<DataBlock> = execute_sql(
+            fixture.ctx(),
+            &format!(
+                "SELECT b, SUM_STATE(a) from t WHERE c > 1 and _block_name = '{}' GROUP BY b",
+                block_name_prefix.join(&new_block).to_str().unwrap()
+            ),
+        )
+        .await?
+        .try_collect()
+        .await?;
+
+        let agg_data_blocks: Vec<DataBlock> = execute_sql(
+            fixture.ctx(),
+            &format!(
+                "SELECT * FROM 'fs://{}'",
+                agg_index_path.join(&new_agg_index).to_str().unwrap()
+            ),
+        )
+        .await?
+        .try_collect()
+        .await?;
+
+        assert_two_blocks_sorted_eq_with_name(
+            "refresh index again",
+            &data_blocks,
+            &agg_data_blocks,
+        );
+    }
 
     Ok(())
 }

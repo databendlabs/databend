@@ -61,6 +61,7 @@ pub async fn create_ee_query_context(
     conf.query.databend_enterprise_license = Some(token);
     // make sure we are using `fs` storage
     let root = tmp_dir.path().to_str().unwrap().to_string();
+    conf.storage.allow_insecure = true;
     conf.storage.params = StorageParams::Fs(StorageFsConfig {
         // use `TempDir` as root path (auto clean)
         root: root.clone(),

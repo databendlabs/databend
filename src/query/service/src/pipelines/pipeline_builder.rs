@@ -115,7 +115,7 @@ use crate::sessions::TableContext;
 pub struct PipelineBuilder {
     ctx: Arc<QueryContext>,
 
-    pub main_pipeline: Pipeline,
+    main_pipeline: Pipeline,
     pub pipelines: Vec<Pipeline>,
 
     // Used in runtime filter source

@@ -12,24 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use common_exception::ErrorCode;
+use async_trait::unboxed_simple;
 use common_exception::Result;
+use common_expression::types::StringType;
+use common_expression::types::ValueType;
 use common_expression::BlockRowIndex;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FieldIndex;
-use common_expression::ScalarRef;
 use common_expression::TableSchemaRef;
 use common_expression::BLOCK_NAME_COL_NAME;
 use common_pipeline_core::processors::port::InputPort;
-use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_core::processors::Processor;
+use common_pipeline_sinks::AsyncSink;
+use common_pipeline_sinks::AsyncSinker;
 use common_sql::ColumnBinding;
 use opendal::Operator;
 
@@ -37,16 +37,7 @@ use crate::io;
 use crate::io::TableMetaLocationGenerator;
 use crate::io::WriteSettings;
 
-enum State {
-    None,
-    PreProcess(DataBlock),
-    PostProcess,
-    Finished,
-}
-
 pub struct AggIndexSink {
-    state: State,
-    input: Arc<InputPort>,
     data_accessor: Operator,
     index_id: u64,
     write_settings: WriteSettings,
@@ -55,7 +46,6 @@ pub struct AggIndexSink {
     block_location: Option<FieldIndex>,
     location_data: HashMap<String, Vec<BlockRowIndex>>,
     blocks: Vec<DataBlock>,
-    finished: bool,
 }
 
 impl AggIndexSink {
@@ -94,9 +84,7 @@ impl AggIndexSink {
             new_source_schema.drop_column(BLOCK_NAME_COL_NAME)?;
         }
 
-        Ok(ProcessorPtr::create(Box::new(AggIndexSink {
-            state: State::None,
-            input,
+        let sinker = AsyncSinker::create(input, AggIndexSink {
             data_accessor,
             index_id,
             write_settings,
@@ -105,19 +93,20 @@ impl AggIndexSink {
             block_location,
             location_data: HashMap::new(),
             blocks: vec![],
-            finished: false,
-        })))
+        });
+
+        Ok(ProcessorPtr::create(sinker))
     }
 
     fn process_block(&mut self, block: &mut DataBlock) {
         let col = block.get_by_offset(self.block_location.unwrap());
+        let block_name_col = col.value.try_downcast::<StringType>().unwrap();
         let block_id = self.blocks.len();
         for i in 0..block.num_rows() {
             let location = unsafe {
-                match col.value.index_unchecked(i) {
-                    ScalarRef::String(loc) => String::from_utf8_unchecked(loc.to_vec()),
-                    _ => unreachable!(),
-                }
+                String::from_utf8_unchecked(StringType::to_owned_scalar(
+                    block_name_col.index(i).unwrap(),
+                ))
             };
 
             self.location_data
@@ -134,84 +123,31 @@ impl AggIndexSink {
 }
 
 #[async_trait]
-impl Processor for AggIndexSink {
-    fn name(&self) -> String {
-        "AggIndexSink".to_string()
-    }
-
-    fn as_any(&mut self) -> &mut dyn Any {
-        self
-    }
-
-    fn event(&mut self) -> Result<Event> {
-        if self.finished {
-            self.state = State::Finished;
-            return Ok(Event::Finished);
-        }
-
-        if self.input.is_finished() {
-            self.state = State::PostProcess;
-            return Ok(Event::Async);
-        }
-
-        if !self.input.has_data() {
-            self.input.set_need_data();
-            return Ok(Event::NeedData);
-        }
-
-        let data_block = self.input.pull_data().unwrap()?;
-        if data_block.is_empty() {
-            // data source like
-            //  `select number from numbers(3000000) where number >=2000000 and number < 3000000`
-            // may generate empty data blocks
-            Ok(Event::NeedData)
-        } else {
-            self.state = State::PreProcess(data_block);
-            Ok(Event::Sync)
-        }
-    }
-
-    fn process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::None) {
-            State::PreProcess(mut block) => {
-                self.process_block(&mut block);
-            }
-            _state => {
-                return Err(ErrorCode::Internal("Unknown state for fuse table sink"));
-            }
-        }
-
-        Ok(())
-    }
+impl AsyncSink for AggIndexSink {
+    const NAME: &'static str = "AggIndexSink";
 
     #[async_backtrace::framed]
-    async fn async_process(&mut self) -> Result<()> {
-        match std::mem::replace(&mut self.state, State::None) {
-            State::PostProcess => {
-                let blocks = self.blocks.iter().collect::<Vec<_>>();
-                for (loc, indexes) in &self.location_data {
-                    let block = DataBlock::take_blocks(&blocks, indexes, indexes.len());
-                    let loc =
-                        TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
-                            loc,
-                            self.index_id,
-                        );
-                    let mut data = vec![];
-                    io::serialize_block(
-                        &self.write_settings,
-                        &self.source_schema,
-                        block,
-                        &mut data,
-                    )?;
-                    self.data_accessor.write(&loc, data).await?;
-                }
-                self.finished = true;
-            }
-            _state => {
-                return Err(ErrorCode::Internal("Unknown state for fuse table sink."));
-            }
+    async fn on_finish(&mut self) -> Result<()> {
+        let blocks = self.blocks.iter().collect::<Vec<_>>();
+        for (loc, indexes) in &self.location_data {
+            let block = DataBlock::take_blocks(&blocks, indexes, indexes.len());
+            let loc = TableMetaLocationGenerator::gen_agg_index_location_from_block_location(
+                loc,
+                self.index_id,
+            );
+            let mut data = vec![];
+            io::serialize_block(&self.write_settings, &self.source_schema, block, &mut data)?;
+            self.data_accessor.write(&loc, data).await?;
         }
-
         Ok(())
+    }
+
+    #[unboxed_simple]
+    #[async_backtrace::framed]
+    async fn consume(&mut self, data_block: DataBlock) -> Result<bool> {
+        let mut block = data_block;
+        self.process_block(&mut block);
+
+        Ok(true)
     }
 }
