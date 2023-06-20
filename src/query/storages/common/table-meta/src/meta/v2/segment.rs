@@ -16,6 +16,8 @@ use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_arrow::native::ColumnMeta as NativeColumnMeta;
 use common_expression::ColumnId;
 use common_expression::TableField;
@@ -73,6 +75,9 @@ pub struct BlockMeta {
     #[serde(default)]
     pub bloom_filter_index_size: u64,
     pub compression: Compression,
+
+    // block create_on
+    pub create_on: Option<DateTime<Utc>>,
 }
 
 impl BlockMeta {
@@ -88,6 +93,7 @@ impl BlockMeta {
         bloom_filter_index_location: Option<Location>,
         bloom_filter_index_size: u64,
         compression: Compression,
+        create_on: Option<DateTime<Utc>>,
     ) -> Self {
         Self {
             row_count,
@@ -100,6 +106,7 @@ impl BlockMeta {
             bloom_filter_index_location,
             bloom_filter_index_size,
             compression,
+            create_on,
         }
     }
 
@@ -233,6 +240,7 @@ impl BlockMeta {
             bloom_filter_index_location: None,
             bloom_filter_index_size: 0,
             compression: Compression::Lz4,
+            create_on: None,
         }
     }
 
@@ -263,6 +271,7 @@ impl BlockMeta {
             bloom_filter_index_location: s.bloom_filter_index_location.clone(),
             bloom_filter_index_size: s.bloom_filter_index_size,
             compression: s.compression,
+            create_on: None,
         }
     }
 }
