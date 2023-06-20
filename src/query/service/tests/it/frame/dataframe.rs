@@ -353,8 +353,8 @@ async fn test_case(sql: &str, df: Dataframe, ctx: Arc<QueryContext>) -> Result<(
     let schema = plan.schema();
 
     for (a, b) in blocks.iter().zip(blocks2.iter()) {
-        let a = box_render(&schema, &[a.clone().unwrap()]).unwrap();
-        let b = box_render(&schema, &[b.clone().unwrap()]).unwrap();
+        let a = box_render(&schema, &[a.clone().unwrap()], 40, 0, 0).unwrap();
+        let b = box_render(&schema, &[b.clone().unwrap()], 40, 0, 0).unwrap();
 
         assert_eq!(a, b);
     }

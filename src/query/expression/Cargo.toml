@@ -45,6 +45,7 @@ roaring = { version = "0.10.1", features = ["serde"] }
 rust_decimal = "1.26"
 serde = { workspace = true }
 serde_json = { workspace = true }
+terminal_size = "0.2.6"
 tracing = "0.1.36"
 typetag = "0.2.3"
 
