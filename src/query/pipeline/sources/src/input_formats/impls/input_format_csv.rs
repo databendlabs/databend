@@ -196,7 +196,7 @@ impl InputFormatTextBase for InputFormatCSV {
             ) {
                 builder
                     .ctx
-                    .on_error(e, columns, builder.num_rows, Some(&mut error_map))
+                    .on_error(e, Some((columns, builder.num_rows)), Some(&mut error_map))
                     .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
             } else {
                 builder.num_rows += 1;
@@ -247,7 +247,13 @@ impl CsvReaderState {
             ReadRecordResult::OutputEndsFull => Err(self.error_output_ends_full()),
             ReadRecordResult::Record => {
                 if self.projection.is_none() {
-                    self.check_num_field()?;
+                    if let Err(e) = self.check_num_field() {
+                        self.ctx.on_error(e, None, None)?;
+                        self.common.rows += 1;
+                        self.common.offset += n_in;
+                        self.n_end = 0;
+                        return Ok((Some(0), n_in, n_out));
+                    }
                 }
 
                 self.common.rows += 1;
@@ -300,12 +306,16 @@ impl AligningStateTextBased for CsvReaderState {
             buf = &buf[n_in..];
             out_pos += n_out;
             if let Some(num_fields) = num_fields {
-                row_batch
-                    .field_ends
-                    .extend_from_slice(&self.field_ends[..num_fields]);
-                row_batch.num_fields.push(num_fields);
-                row_batch.row_ends.push(last_batch_remain_len + out_pos);
-                row_batch_end = out_pos;
+                if num_fields == 0 {
+                    out_pos = row_batch_end;
+                } else {
+                    row_batch
+                        .field_ends
+                        .extend_from_slice(&self.field_ends[..num_fields]);
+                    row_batch.num_fields.push(num_fields);
+                    row_batch.row_ends.push(last_batch_remain_len + out_pos);
+                    row_batch_end = out_pos;
+                }
             }
         }
 

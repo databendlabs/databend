@@ -390,18 +390,19 @@ impl InputContext {
     pub fn on_error(
         &self,
         e: ErrorCode,
-        columns: &mut [ColumnBuilder],
-        num_rows: usize,
+        columns: Option<(&mut [ColumnBuilder], usize)>,
         local_error_map: Option<&mut HashMap<u16, InputError>>,
     ) -> Result<()> {
-        columns.iter_mut().for_each(|c| {
-            // the whole record is invalid, so we need to pop all the values
-            // not necessary if this function returns error, still do it for code simplicity
-            if c.len() > num_rows {
-                c.pop().expect("must success");
-                assert_eq!(c.len(), num_rows);
-            }
-        });
+        if let Some((columns, num_rows)) = columns {
+            columns.iter_mut().for_each(|c| {
+                // the whole record is invalid, so we need to pop all the values
+                // not necessary if this function returns error, still do it for code simplicity
+                if c.len() > num_rows {
+                    c.pop().expect("must success");
+                    assert_eq!(c.len(), num_rows);
+                }
+            });
+        }
 
         match &self.on_error_mode {
             OnErrorMode::Continue => {
