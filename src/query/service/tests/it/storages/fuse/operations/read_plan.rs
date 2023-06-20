@@ -28,6 +28,7 @@ use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
+use common_storages_fuse::FusePartInfo;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
@@ -176,6 +177,10 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
         let (stats, parts) = table.read_partitions(ctx.clone(), Some(push_downs)).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
         assert!(!parts.is_empty());
+
+        let part = parts.partitions[0].clone();
+        let fuse_part = FusePartInfo::from_part(&part)?;
+        assert!(fuse_part.create_on.is_some())
     }
     Ok(())
 }

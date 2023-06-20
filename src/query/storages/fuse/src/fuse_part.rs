@@ -39,6 +39,7 @@ pub struct FusePartInfo {
     /// FusePartInfo itself is not versioned
     /// the `format_version` is the version of the block which the `location` points to
     pub format_version: u64,
+    pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
     pub virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
@@ -46,7 +47,6 @@ pub struct FusePartInfo {
 
     pub sort_min_max: Option<(Scalar, Scalar)>,
     pub block_meta_index: Option<BlockMetaIndex>,
-    pub create_on: Option<DateTime<Utc>>,
 }
 
 #[typetag::serde(name = "fuse")]
@@ -85,13 +85,13 @@ impl FusePartInfo {
         Arc::new(Box::new(FusePartInfo {
             location,
             format_version,
+            create_on,
             columns_meta,
             virtual_columns_meta,
             nums_rows: rows_count as usize,
             compression,
             sort_min_max,
             block_meta_index,
-            create_on,
         }))
     }
 
