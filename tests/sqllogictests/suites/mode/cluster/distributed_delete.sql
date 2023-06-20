@@ -1,5 +1,6 @@
-drop table if exists t_lazy;
 drop table if exists t;
+drop table if exists t_origin;
+drop table if exists del_id;
 # make sure there will be multiple blocks there, by shrink the `row_per_block`
 statement ok
 create table t (id int, c1 int, c2 int) row_per_block=10;
