@@ -72,7 +72,7 @@ SELECT t1.$1, t2.$2 FROM @my_stage t1, t2;
 
 ### $<col_position>
 
-You can use column positions when you SELECT FROM a staged file. At present, the feature to utilize column positions for SELECT operations from staged files is limited to Parquet, NDJSON, CSV and TSV formats.
+When selecting from a staged file, you can use column positions, and these positions start from 1. At present, the feature to utilize column positions for SELECT operations from staged files is limited to Parquet, NDJSON, CSV, and TSV formats. 
 
 ```sql
 SELECT $2 FROM @my_stage (FILES=>('sample.csv')) ORDER BY $1;
@@ -115,7 +115,7 @@ They are explained in [Create Stage](../../14-sql-commands/00-ddl/40-stage/01-dd
 When querying a staged file, the following limitations are applicable in terms of format-specific constraints:
 
 - Selecting all fields with the symbol * is only supported for Parquet files.
-- When selecting from a CSV or TSV file, it is necessary for all fields to be of the String data type, and if column positions are used in the SELECT statement, the number of fields in the file must not exceed N+1000. In other words, if the statement is `SELECT $2 FROM @my_stage (FILES=>('sample.csv'))`, the sample.csv file can have a maximum of 1,002 fields.
+- When selecting from a CSV or TSV file, all fields are parsed as strings, and the SELECT statement only allows the use of column positions. Additionally, there is a restriction on the number of fields in the file, which must not exceed max.N+1000. For example, if the statement is `SELECT $1, $2 FROM @my_stage (FILES=>('sample.csv'))`, the sample.csv file can have a maximum of 1,002 fields.
 
 ## Examples
 
