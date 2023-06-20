@@ -63,6 +63,15 @@ impl BlockOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
         match self {
             BlockOperator::Map { exprs } => {
+                if input
+                    .get_meta()
+                    .and_then(AggIndexMeta::downcast_ref_from)
+                    .is_some()
+                {
+                    // It's from aggregating index.
+                    return Ok(input);
+                }
+
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(expr)?;
@@ -76,6 +85,15 @@ impl BlockOperator {
                 exprs,
                 output_indexes,
             } => {
+                if input
+                    .get_meta()
+                    .and_then(AggIndexMeta::downcast_ref_from)
+                    .is_some()
+                {
+                    // It's from aggregating index.
+                    return Ok(input);
+                }
+
                 let original_num_columns = input.num_columns();
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
@@ -101,6 +119,15 @@ impl BlockOperator {
             }
 
             BlockOperator::Filter { expr } => {
+                if input
+                    .get_meta()
+                    .and_then(AggIndexMeta::downcast_ref_from)
+                    .is_some()
+                {
+                    // It's from aggregating index.
+                    return Ok(input);
+                }
+
                 assert_eq!(expr.data_type(), &DataType::Boolean);
 
                 let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
@@ -260,15 +287,6 @@ impl Transform for CompoundBlockOperator {
     const SKIP_EMPTY_DATA_BLOCK: bool = true;
 
     fn transform(&mut self, data_block: DataBlock) -> Result<DataBlock> {
-        if data_block
-            .get_meta()
-            .and_then(AggIndexMeta::downcast_ref_from)
-            .is_some()
-        {
-            // It's from aggregating index.
-            return Ok(data_block);
-        }
-
         self.operators
             .iter()
             .try_fold(data_block, |input, op| op.execute(&self.ctx, input))

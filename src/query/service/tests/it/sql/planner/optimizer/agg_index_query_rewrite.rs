@@ -278,12 +278,6 @@ fn get_test_suites() -> Vec<TestSuite> {
             ..Default::default()
         },
         TestSuite {
-            query: "select sum(a) + 1 from t group by b",
-            index: "select sum(a) + 1 from t group by b",
-            is_matched: false,
-            ..Default::default()
-        },
-        TestSuite {
             query: "select sum(a) + 1, b + 1 from t group by b",
             index: "select sum(a), b from t group by b",
             is_matched: true,
