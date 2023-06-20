@@ -42,8 +42,6 @@ use crate::plans::RelOp;
 use crate::plans::ScalarExpr;
 use crate::IndexType;
 
-const BROADCAST_JOIN_THRESHOLD: f64 = 20.0;
-
 #[derive(Clone, Debug, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
     Inner,
@@ -493,7 +491,10 @@ impl Operator for Join {
         {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
             let right_stat_info = rel_expr.derive_cardinality_child(1)?;
-            if right_stat_info.cardinality * BROADCAST_JOIN_THRESHOLD < left_stat_info.cardinality {
+            // The broadcast join is cheaper than the hash join when one input is at least (n − 1)× larger than the other
+            // where n is the number of servers in the cluster.
+            let broadcast_join_threshold = (ctx.get_cluster().nodes.len() - 1) as f64;
+            if right_stat_info.cardinality * broadcast_join_threshold < left_stat_info.cardinality {
                 required.distribution = Distribution::Broadcast;
                 return Ok(required);
             }
