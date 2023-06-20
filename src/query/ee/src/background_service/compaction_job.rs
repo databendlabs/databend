@@ -57,11 +57,21 @@ WHERE t.database != 'system'
     AND t.database != 'information_schema'
     AND t.engine = 'FUSE'
     AND t.num_rows > 1 * 1000 * 1000
-    AND t.data_compressed_size > 1 * 1000 * 1000 * 1000
+    AND t.table_id NOT IN (
+        SELECT
+          table_id
+        FROM
+          system.background_tasks
+        WHERE
+          state = 'DONE'
+          AND table_id = t.table_id
+          AND type = 'COMPACTION'
+          AND updated_on > t.updated_on
+    )
     ;
 ";
 
-const SEGMENT_SIZE: u64 = 10;
+const SEGMENT_SIZE: u64 = 1;
 const PER_SEGMENT_BLOCK: u64 = 100;
 const PER_BLOCK_SIZE: u64 = 50; // MB
 
@@ -115,14 +125,12 @@ pub fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) 
         old.number_of_blocks.unwrap() as f64 / old.number_of_segments.unwrap() as f64;
     let new_segment_density =
         new.number_of_blocks.unwrap() as f64 / new.number_of_segments.unwrap() as f64;
-    let should_continue_seg_compact = new_segment_density > old_segment_density
-        || old.number_of_blocks != new.number_of_blocks
-        || old.number_of_segments != new.number_of_segments;
+    let should_continue_seg_compact = new_segment_density != old_segment_density
+        && new_segment_density < PER_SEGMENT_BLOCK as f64;
     let old_block_density = old.data_bytes as f64 / old.number_of_blocks.unwrap() as f64;
     let new_block_density = new.data_bytes as f64 / new.number_of_blocks.unwrap() as f64;
-    let should_continue_blk_compact = new_block_density > old_block_density
-        || old.data_bytes != new.data_bytes
-        || old.number_of_blocks != new.number_of_blocks;
+    let should_continue_blk_compact = new_block_density != old_block_density
+        && new_block_density < PER_BLOCK_SIZE as f64 * 1024.0 * 1024.0;
     (should_continue_seg_compact, should_continue_blk_compact)
 }
 
@@ -543,8 +551,7 @@ impl CompactionJob {
         IF(bytes_uncompressed / block_count / 1024 / 1024 < {} and bytes_uncompressed / 1024 / 1024 > 1000, TRUE, FALSE) AS block_advice,
         row_count, bytes_uncompressed, bytes_compressed, index_size,
         segment_count, block_count,
-        block_count/segment_count,
-        humanize_size(bytes_uncompressed / block_count) AS per_block_uncompressed_size_string
+        block_count/segment_count
         from fuse_snapshot('{}', '{}') order by timestamp ASC LIMIT 1;
         ",
             seg_size, avg_seg, avg_blk, database, table
