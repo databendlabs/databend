@@ -35,6 +35,7 @@ pub struct ProbeState {
     // row_state:  the state (counter) of the probe block row -> [1, 1, 2, 1]
     pub(crate) row_state: Option<Vec<usize>>,
     pub(crate) row_state_indexes: Option<Vec<usize>>,
+    pub(crate) probe_unmatched_indexes: Option<Vec<(u32, u32)>>,
     pub(crate) markers: Option<Vec<MarkerKind>>,
 }
 
@@ -47,18 +48,23 @@ impl ProbeState {
         let mut true_validity = MutableBitmap::new();
         true_validity.extend_constant(JOIN_MAX_BLOCK_SIZE, true);
         let true_validity: Bitmap = true_validity.into();
-        let (row_state, row_state_indexes) = match &join_type {
+        let (row_state, row_state_indexes, probe_unmatched_indexes) = match &join_type {
             JoinType::Left | JoinType::Single | JoinType::Full => {
                 if with_conjunct {
                     (
                         Some(vec![0; JOIN_MAX_BLOCK_SIZE]),
                         Some(vec![0; JOIN_MAX_BLOCK_SIZE]),
+                        None,
                     )
                 } else {
-                    (Some(vec![0; JOIN_MAX_BLOCK_SIZE]), None)
+                    (
+                        Some(vec![0; JOIN_MAX_BLOCK_SIZE]),
+                        None,
+                        Some(vec![(0, 0); JOIN_MAX_BLOCK_SIZE]),
+                    )
                 }
             }
-            _ => (None, None),
+            _ => (None, None, None),
         };
         ProbeState {
             probe_indexes: vec![(0, 0); JOIN_MAX_BLOCK_SIZE],
@@ -76,6 +82,7 @@ impl ProbeState {
             row_state,
             row_state_indexes,
             markers: None,
+            probe_unmatched_indexes,
         }
     }
 }
