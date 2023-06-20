@@ -64,7 +64,6 @@ pub struct HeuristicOptimizer<'a> {
     func_ctx: FunctionContext,
     bind_context: &'a BindContext,
     metadata: MetadataRef,
-    rules: &'a [RuleID],
 }
 
 impl<'a> HeuristicOptimizer<'a> {
@@ -72,13 +71,11 @@ impl<'a> HeuristicOptimizer<'a> {
         func_ctx: FunctionContext,
         bind_context: &'a BindContext,
         metadata: MetadataRef,
-        rules: &'a [RuleID],
     ) -> Self {
         HeuristicOptimizer {
             func_ctx,
             bind_context,
             metadata,
-            rules,
         }
     }
 
@@ -100,9 +97,9 @@ impl<'a> HeuristicOptimizer<'a> {
         pruner.remove_unused_columns(&s_expr, require_columns)
     }
 
-    pub fn optimize(&self, s_expr: SExpr) -> Result<SExpr> {
+    pub fn optimize(&self, s_expr: SExpr, rules: &[RuleID]) -> Result<SExpr> {
         let pre_optimized = self.pre_optimize(s_expr)?;
-        let optimized = self.optimize_expression(&pre_optimized, self.rules)?;
+        let optimized = self.optimize_expression(&pre_optimized, rules)?;
         let post_optimized = self.post_optimize(optimized)?;
 
         Ok(post_optimized)

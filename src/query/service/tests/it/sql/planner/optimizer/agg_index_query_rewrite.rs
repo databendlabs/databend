@@ -417,9 +417,8 @@ async fn plan_sql(
                 ctx.get_function_context()?,
                 &bind_context,
                 metadata.clone(),
-                &DEFAULT_REWRITE_RULES,
             );
-            optimizer.optimize(*s_expr)?
+            optimizer.optimize(*s_expr, &DEFAULT_REWRITE_RULES)?
         } else {
             *s_expr
         };

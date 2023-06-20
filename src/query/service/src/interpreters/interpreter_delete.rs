@@ -248,7 +248,6 @@ pub async fn subquery_filter(
         ctx.get_function_context()?,
         &mock_bind_context,
         metadata.clone(),
-        &DEFAULT_REWRITE_RULES,
     );
     let mut expr = heuristic_optimizer.optimize_expression(&expr, &DEFAULT_REWRITE_RULES)?;
     let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata.clone(), false)?;

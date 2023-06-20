@@ -150,23 +150,13 @@ pub fn optimize_query(
 ) -> Result<SExpr> {
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
-    let heuristic = HeuristicOptimizer::new(
-        ctx.get_function_context()?,
-        &bind_context,
-        metadata.clone(),
-        &DEFAULT_REWRITE_RULES,
-    );
-    let mut result = heuristic.optimize(s_expr)?;
+    let heuristic =
+        HeuristicOptimizer::new(ctx.get_function_context()?, &bind_context, metadata.clone());
+    let mut result = heuristic.optimize(s_expr, &DEFAULT_REWRITE_RULES)?;
     if ctx.get_settings().get_enable_dphyp()? {
         let (dp_res, _) = DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result))?;
         result = (*dp_res).clone();
-        let commute_join = HeuristicOptimizer::new(
-            ctx.get_function_context()?,
-            &bind_context,
-            metadata.clone(),
-            &COMMUTE_JOIN_RULES,
-        );
-        result = commute_join.optimize(result)?;
+        result = heuristic.optimize(result, &COMMUTE_JOIN_RULES)?;
         let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, true)?;
         result = cascades.optimize(result)?;
     } else {
@@ -198,13 +188,9 @@ fn get_optimized_memo(
     metadata: MetadataRef,
     bind_context: Box<BindContext>,
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
-    let heuristic = HeuristicOptimizer::new(
-        ctx.get_function_context()?,
-        &bind_context,
-        metadata.clone(),
-        &DEFAULT_REWRITE_RULES,
-    );
-    let result = heuristic.optimize(s_expr)?;
+    let heuristic =
+        HeuristicOptimizer::new(ctx.get_function_context()?, &bind_context, metadata.clone());
+    let result = heuristic.optimize(s_expr, &DEFAULT_REWRITE_RULES)?;
 
     let mut cascades = CascadesOptimizer::create(ctx, metadata, false)?;
     cascades.optimize(result)?;
