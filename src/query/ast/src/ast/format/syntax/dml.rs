@@ -84,7 +84,11 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
                     .append(RcDoc::text(rest_str))
                     .append(RcDoc::text(start.to_string())),
             ),
-        InsertSource::StreamingV2 { settings, start } => RcDoc::text("FILE_FORMAT").append(
+        InsertSource::StreamingV2 {
+            settings,
+            on_error_mode,
+            start,
+        } => RcDoc::text("FILE_FORMAT").append(
             RcDoc::line()
                 .append(RcDoc::text("FILE_FORMAT_SETTINGS = "))
                 .append(parenthesized(
@@ -101,6 +105,11 @@ fn pretty_source(source: InsertSource) -> RcDoc<'static> {
                     RcDoc::text("start:")
                         .append(RcDoc::space())
                         .append(RcDoc::text(start.to_string())),
+                )
+                .append(
+                    RcDoc::text("on_error:")
+                        .append(RcDoc::space())
+                        .append(RcDoc::text(format!("{:?}", on_error_mode))),
                 ),
         ),
         InsertSource::Values { rest_str } => RcDoc::text("VALUES").append(
