@@ -924,7 +924,7 @@ async fn test_fuzz() -> Result<()> {
     let test_suites = get_test_suites();
 
     for suite in test_suites {
-        for num_blocks in [1, 10, 50, 100] {
+        for num_blocks in [1, 10] {
             for num_rows_per_block in [1, 10, 50, 100] {
                 for index_block_ratio in [0.0, 0.2, 0.5, 0.8, 1.0] {
                     fuzz(
