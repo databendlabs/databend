@@ -20,6 +20,8 @@ use std::hash::Hasher;
 use std::ops::Range;
 use std::sync::Arc;
 
+use chrono::DateTime;
+use chrono::Utc;
 use common_arrow::parquet::metadata::ColumnDescriptor;
 use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartInfoPtr;
@@ -37,6 +39,7 @@ pub struct FusePartInfo {
     /// FusePartInfo itself is not versioned
     /// the `format_version` is the version of the block which the `location` points to
     pub format_version: u64,
+    pub create_on: Option<DateTime<Utc>>,
     pub nums_rows: usize,
     pub columns_meta: HashMap<ColumnId, ColumnMeta>,
     pub virtual_columns_meta: Option<HashMap<String, VirtualColumnMeta>>,
@@ -77,10 +80,12 @@ impl FusePartInfo {
         compression: Compression,
         sort_min_max: Option<(Scalar, Scalar)>,
         block_meta_index: Option<BlockMetaIndex>,
+        create_on: Option<DateTime<Utc>>,
     ) -> Arc<Box<dyn PartInfo>> {
         Arc::new(Box::new(FusePartInfo {
             location,
             format_version,
+            create_on,
             columns_meta,
             virtual_columns_meta,
             nums_rows: rows_count as usize,

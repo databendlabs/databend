@@ -1982,6 +1982,7 @@ dependencies = [
  "bumpalo",
  "bytes",
  "chrono",
+ "chrono-tz",
  "comfy-table",
  "common-arrow",
  "common-ast",
@@ -6338,7 +6339,7 @@ dependencies = [
 [[package]]
 name = "jsonb"
 version = "0.2.2"
-source = "git+https://github.com/datafuselabs/jsonb?rev=d1a401f#d1a401f2b8ccd040e18212c1aeca2575450bbead"
+source = "git+https://github.com/datafuselabs/jsonb?rev=a9cccc7#a9cccc744c7beff0ca5fc7726eec1f2a347b3ef3"
 dependencies = [
  "byteorder",
  "fast-float",
