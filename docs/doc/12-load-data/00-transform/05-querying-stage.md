@@ -58,7 +58,7 @@ The PATTERN option allows you to specify a [PCRE2](https://www.pcre.org/current/
 
 The FILES option, on the other hand, enables you to explicitly specify one or more file names separated by commas. This option allows you to directly filter and query data from specific files within a folder. For example, if you want to query data from the Parquet files "books-2023.parquet", "books-2022.parquet", and "books-2021.parquet", you can provide these file names within the FILES option.
 
-### alias
+### table_alias
 
 When working with staged files in a SELECT statement where no table name is available, you can assign an alias to the files. This allows you to treat the files as a table, with its fields serving as columns within the table. This is useful when working with multiple tables within the SELECT statement or when selecting specific columns. Here's an example:
 
@@ -69,7 +69,13 @@ SELECT t1.$1, t2.$2 FROM @my_stage t1, t2;
 
 ### $<col_position>
 
-You can use column positions when you SELECT FROM a staged file. At present, the feature to utilize column positions for SELECT operations from staged files is limited to Parquet and NDJSON file formats. It is important to note that when working with NDJSON, only $1 is allowed, representing the entire row and having the data type Variant.
+You can use column positions when you SELECT FROM a staged file. At present, the feature to utilize column positions for SELECT operations from staged files is limited to Parquet, NDJSON, and CSV formats.
+
+```sql
+SELECT $2 FROM @my_stage (FILES=>('sample.csv')) ORDER BY $1;
+```
+
+It is important to note that when working with NDJSON, only $1 is allowed, representing the entire row and having the data type Variant. To select a specific field, use `$1:<field_name>`.
 
 ```sql
 -- Select the entire row using column position:
@@ -79,7 +85,7 @@ SELECT $1 FROM @my_stage (FILE_FORMAT=>'NDJSON')
 SELECT $1:a FROM @my_stage (FILE_FORMAT=>'NDJSON')
 ```
 
-When using COPY INTO to copy data from a stage NDJSON file, Databend matches the field names at the top level of the NDJSON file with the column names in the destination table, rather than relying on column positions. In the example below, the table my_table should have identical column definitions as the top-level field names in the NDJSON files:
+When using COPY INTO to copy data from a staged file, Databend matches the field names at the top level of the NDJSON file with the column names in the destination table, rather than relying on column positions. In the example below, the table *my_table* should have identical column definitions as the top-level field names in the NDJSON files:
 
 ```sql
 COPY INTO my_table FROM (SELECT $1 SELECT @my_stage t) FILE_FORMAT = (type = NDJSON)
@@ -100,6 +106,13 @@ To query data files in a bucket or container, provide necessary connection infor
 - ENABLE_VIRTUAL_HOST_STYLE
 
 They are explained in [Create Stage](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
+
+## Limitations
+
+When querying a staged file, the following limitations are applicable in terms of format-specific constraints:
+
+- Selecting all fields with the symbol * is only supported for Parquet files.
+- When selecting from a CSV or TSV file, it is necessary for all fields to be of the String data type, and if column positions are used in the SELECT statement, the number of fields in the file must not exceed N+1000. In other words, if the statement is `SELECT $2 FROM @my_stage (FILES=>('sample.csv'))`, the sample.csv file can have a maximum of 1,002 fields.
 
 ## Examples
 
