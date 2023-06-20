@@ -502,6 +502,8 @@ pub struct CacheConfig {
 pub enum CacheStorageTypeConfig {
     None,
     Disk,
+    RocksDb,
+    RocksDbDisk,
     // Redis,
 }
 
@@ -516,6 +518,8 @@ impl ToString for CacheStorageTypeConfig {
         match self {
             CacheStorageTypeConfig::None => "none".to_string(),
             CacheStorageTypeConfig::Disk => "disk".to_string(),
+            CacheStorageTypeConfig::RocksDb => "rocksdb".to_string(),
+            CacheStorageTypeConfig::RocksDbDisk => "rocksdbdisk".to_string(),
         }
     }
 }

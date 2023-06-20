@@ -20,20 +20,21 @@ common-exception = { path = "../../../../common/exception" }
 
 async-backtrace = { workspace = true }
 async-trait = { version = "0.1.57", package = "async-trait-fn" }
+chrono = { workspace = true }
 crc32fast = "1.3.2"
 crossbeam-channel = "0.5.6"
 hex = "0.4.3"
 metrics = "0.20.1"
 parking_lot = "0.12.1"
+rocksdb = { version = "0.21.0", features = [
+    "snappy",
+    "multi-threaded-cf",
+], default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }
 siphasher = "0.3.10"
 tracing = "0.1.36"
 walkdir = "2.3.2"
-rocksdb = { version = "0.21.0", features = [
-  "snappy", "multi-threaded-cf",
-], default-features = false }
-chrono = { workspace = true }
-serde = { workspace = true }
-serde_json = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3.4.0"

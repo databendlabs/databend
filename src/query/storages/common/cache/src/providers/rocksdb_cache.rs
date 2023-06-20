@@ -27,7 +27,7 @@ use crate::metrics_inc_cache_miss_count;
 
 // map key -> value
 static KEY2VALUE_COLUMN_PREFIX: &str = "_key2value";
-static ROCKSDB_DISK_CACHE_NAME: &str = "rocksdb_cache";
+static ROCKSDB_CACHE_NAME: &str = "rocksdb_cache";
 
 pub struct RocksDbCache {
     db: rocksdb::TransactionDB,
@@ -49,10 +49,8 @@ impl RocksDbCache {
     }
 
     fn get_system_disk(&self) -> i64 {
-        if let Ok(value) = self.db.get(DISK_SIZE_KEY) {
-            if let Some(bytes) = &value {
-                return i64::from_ne_bytes(bytes[0..8].try_into().unwrap());
-            }
+        if let Ok(Some(bytes)) = self.db.get(DISK_SIZE_KEY) {
+            return i64::from_ne_bytes(bytes[0..8].try_into().unwrap());
         }
         0
     }
@@ -68,24 +66,22 @@ impl RocksDbCache {
         while let Some(Ok((time_key, v))) = iter.next() {
             let key = String::from_utf8(v.as_ref().to_vec())?;
             let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, &key);
-            if let Ok(value) = self.db.get(&key2time_key) {
-                if let Some(value) = &value {
-                    let key_time_value: KeyTimeValue = serde_json::from_slice(value)?;
-                    let txn = self.db.transaction();
-                    evicted_len += key_time_value.value_len;
+            if let Ok(Some(value)) = self.db.get(&key2time_key) {
+                let key_time_value: KeyTimeValue = serde_json::from_slice(&value)?;
+                let txn = self.db.transaction();
+                evicted_len += key_time_value.value_len;
 
-                    let key2value_key = format!("{}/{}", KEY2VALUE_COLUMN_PREFIX, &key);
+                let key2value_key = format!("{}/{}", KEY2VALUE_COLUMN_PREFIX, &key);
 
-                    txn.delete(&time_key)?;
-                    txn.delete(&key2time_key)?;
-                    txn.delete(&key2value_key)?;
+                txn.delete(&time_key)?;
+                txn.delete(&key2time_key)?;
+                txn.delete(&key2value_key)?;
 
-                    if txn.commit().is_err() {
-                        evicted_len -= key_time_value.value_len;
-                    } else {
-                        let add: i64 = -(key_time_value.value_len as i64);
-                        self.db.merge(DISK_SIZE_KEY, i64::to_ne_bytes(add))?;
-                    }
+                if txn.commit().is_err() {
+                    evicted_len -= key_time_value.value_len;
+                } else {
+                    let add: i64 = -(key_time_value.value_len as i64);
+                    self.db.merge(DISK_SIZE_KEY, i64::to_ne_bytes(add))?;
                 }
             }
             if evicted_len >= len {
@@ -102,40 +98,36 @@ impl RocksDbCache {
         metrics_inc_cache_access_count(1, ROCKSDB_CACHE_NAME);
         let key = key.as_ref();
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
-        if let Ok(value) = self.db.get(&key2time_key) {
-            if let Some(time_value) = &value {
-                let key2value_key = format!("{}/{}", KEY2VALUE_COLUMN_PREFIX, key);
-                if let Ok(value) = self.db.get(&key2value_key) {
-                    if let Some(value) = value {
-                        let key_time_value: KeyTimeValue = serde_json::from_slice(time_value)?;
+        if let Ok(Some(time_value)) = self.db.get(&key2time_key) {
+            let key2value_key = format!("{}/{}", KEY2VALUE_COLUMN_PREFIX, key);
+            if let Ok(Some(value)) = self.db.get(key2value_key) {
+                let key_time_value: KeyTimeValue = serde_json::from_slice(&time_value)?;
 
-                        // use txn to update key access time
-                        let txn = self.db.transaction();
+                // use txn to update key access time
+                let txn = self.db.transaction();
 
-                        let key_hash = crc32fast::hash(key.as_bytes());
-                        // first delete old time key
-                        let old_time_key = format!(
-                            "{}/{}:{}",
-                            TIME2KEY_COLUMN_PREFIX, key_time_value.time, key_hash
-                        );
-                        txn.delete(&old_time_key)?;
+                let key_hash = crc32fast::hash(key.as_bytes());
+                // first delete old time key
+                let old_time_key = format!(
+                    "{}/{}:{}",
+                    TIME2KEY_COLUMN_PREFIX, key_time_value.time, key_hash
+                );
+                txn.delete(old_time_key)?;
 
-                        // add new time key
-                        let now = Utc::now().timestamp_micros();
-                        let time_key = format!("{}/{}/{}", TIME2KEY_COLUMN_PREFIX, now, key_hash);
-                        txn.put(&&time_key, key)?;
-                        let new_key_time_value = KeyTimeValue {
-                            time: now,
-                            value_len: key_time_value.value_len,
-                        };
-                        txn.put(&key2time_key, &serde_json::to_string(&new_key_time_value)?)?;
+                // add new time key
+                let now = Utc::now().timestamp_micros();
+                let time_key = format!("{}/{}/{}", TIME2KEY_COLUMN_PREFIX, now, key_hash);
+                txn.put(time_key, key)?;
+                let new_key_time_value = KeyTimeValue {
+                    time: now,
+                    value_len: key_time_value.value_len,
+                };
+                txn.put(&key2time_key, serde_json::to_string(&new_key_time_value)?)?;
 
-                        txn.commit()?;
+                txn.commit()?;
 
-                        metrics_inc_cache_hit_count(1, ROCKSDB_CACHE_NAME);
-                        return Ok(Some(value));
-                    }
-                }
+                metrics_inc_cache_hit_count(1, ROCKSDB_CACHE_NAME);
+                return Ok(Some(value));
             }
         }
 
@@ -155,15 +147,15 @@ impl RocksDbCache {
 
         let now = Utc::now().timestamp_micros();
         let time_key = format!("{}/{}/{}", TIME2KEY_COLUMN_PREFIX, now, key_hash);
-        txn.put(&time_key, key)?;
+        txn.put(time_key, key)?;
         let key_time_value = KeyTimeValue {
             time: now,
             value_len,
         };
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
-        txn.put(&key2time_key, &serde_json::to_string(&key_time_value)?)?;
+        txn.put(key2time_key, serde_json::to_string(&key_time_value)?)?;
         let key2value_key = format!("{}/{}", KEY2VALUE_COLUMN_PREFIX, key);
-        txn.put(&key2value_key, value)?;
+        txn.put(key2value_key, value)?;
 
         txn.commit()?;
 
@@ -180,7 +172,7 @@ impl RocksDbCache {
 
     pub fn contains_key(&self, key: &str) -> bool {
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
-        if let Ok(value) = self.db.get(&key2time_key) {
+        if let Ok(value) = self.db.get(key2time_key) {
             return value.is_some();
         }
         false
@@ -192,5 +184,9 @@ impl RocksDbCache {
 
     pub fn len(&self) -> usize {
         0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        false
     }
 }

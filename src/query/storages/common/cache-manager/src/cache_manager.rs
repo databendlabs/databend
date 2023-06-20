@@ -58,21 +58,16 @@ impl CacheManager {
     /// Initialize the caches according to the relevant configurations.
     pub fn init(config: &CacheConfig, tenant_id: impl Into<String>) -> Result<()> {
         // setup table data cache
-        let table_data_cache = {
-            match config.data_cache_storage {
-                CacheStorageTypeInnerConfig::None => None,
-                CacheStorageTypeInnerConfig::Disk => {
-                    let real_disk_cache_root = PathBuf::from(&config.disk_cache_config.path)
-                        .join(tenant_id.into())
-                        .join("v1");
-                    Self::new_block_data_cache(
-                        &real_disk_cache_root,
-                        config.table_data_cache_population_queue_size,
-                        config.disk_cache_config.max_bytes,
-                    )?
-                }
-            }
-        };
+        let real_disk_cache_root = PathBuf::from(&config.disk_cache_config.path)
+            .join(tenant_id.into())
+            .join("v2");
+        let table_data_cache = Self::new_table_data_cache(
+            &real_disk_cache_root,
+            config.table_data_cache_population_queue_size,
+            config.disk_cache_config.max_bytes,
+            &config.data_cache_storage,
+        )?;
+        println!("table_data_cache: {}", table_data_cache.is_some());
 
         // setup in-memory table column cache
         let table_column_array_cache = Self::new_in_memory_cache(
@@ -202,18 +197,37 @@ impl CacheManager {
         }
     }
 
-    fn new_block_data_cache(
+    fn new_table_data_cache(
         path: &PathBuf,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
+        cache_type: &CacheStorageTypeInnerConfig,
     ) -> Result<Option<TableDataCacheRef>> {
         if disk_cache_bytes_size > 0 {
-            let cache_holder = TableDataCacheBuilder::new_table_data_disk_cache(
-                path,
-                population_queue_size,
-                disk_cache_bytes_size,
-            )?;
-            Ok(Some(cache_holder))
+            match cache_type {
+                CacheStorageTypeInnerConfig::Disk => {
+                    Ok(Some(TableDataCacheBuilder::new_table_data_disk_cache(
+                        path,
+                        population_queue_size,
+                        disk_cache_bytes_size,
+                    )?))
+                }
+                CacheStorageTypeInnerConfig::RocksDb => {
+                    Ok(Some(TableDataCacheBuilder::new_table_data_rocksdb_cache(
+                        path,
+                        population_queue_size,
+                        disk_cache_bytes_size,
+                    )?))
+                }
+                CacheStorageTypeInnerConfig::RocksDbDisk => Ok(Some(
+                    TableDataCacheBuilder::new_table_data_rocksdb_disk_cache(
+                        path,
+                        population_queue_size,
+                        disk_cache_bytes_size,
+                    )?,
+                )),
+                _ => Ok(None),
+            }
         } else {
             Ok(None)
         }

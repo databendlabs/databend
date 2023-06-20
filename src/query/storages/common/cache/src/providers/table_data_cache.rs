@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
@@ -69,24 +70,21 @@ enum ExternalCache {
     RocksDbDiskCache(RocksDbDiskCache),
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl ExternalCache {
     pub fn get<Q: AsRef<str>>(&self, k: Q) -> Option<Arc<Vec<u8>>> {
         match self {
             ExternalCache::LruDiskCache(cache) => cache.get(k),
             ExternalCache::RocksDbCache(cache) => {
-                if let Ok(value) = cache.get(k) {
-                    if let Some(value) = value {
-                        return Some(Arc::new(value));
-                    }
+                if let Ok(Some(value)) = cache.get(k) {
+                    return Some(Arc::new(value));
                 }
 
                 None
             }
             ExternalCache::RocksDbDiskCache(cache) => {
-                if let Ok(value) = cache.get(k) {
-                    if let Some(value) = value {
-                        return Some(Arc::new(value));
-                    }
+                if let Ok(Some(value)) = cache.get(k) {
+                    return Some(Arc::new(value));
                 }
 
                 None
@@ -172,7 +170,7 @@ impl TableDataCacheBuilder {
     }
 
     pub fn new_table_data_rocksdb_cache(
-        path: &PathBuf,
+        path: &Path,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
     ) -> Result<TableDataCacheRef> {
@@ -193,7 +191,7 @@ impl TableDataCacheBuilder {
     }
 
     pub fn new_table_data_rocksdb_disk_cache(
-        path: &PathBuf,
+        path: &Path,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
     ) -> Result<TableDataCacheRef> {

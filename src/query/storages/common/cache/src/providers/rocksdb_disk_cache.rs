@@ -94,7 +94,7 @@ impl RocksDbDiskCache {
         let db: rocksdb::TransactionDB = rocksdb::TransactionDB::open(
             &opts,
             &TransactionDBOptions::default(),
-            &rocksdb_meta_path,
+            rocksdb_meta_path,
         )?;
 
         Ok(RocksDbDiskCache {
@@ -128,7 +128,7 @@ impl RocksDbDiskCache {
                 "{}/{}:{}",
                 TIME2KEY_COLUMN_PREFIX, key_time_value.time, key_hash
             );
-            txn.delete(&old_time_key)?;
+            txn.delete(old_time_key)?;
             key_time_value.value_len
         } else {
             value_len.unwrap()
@@ -136,12 +136,12 @@ impl RocksDbDiskCache {
         // add new time key
         let now = Utc::now().timestamp_micros();
         let time_key = format!("{}/{}/{}", TIME2KEY_COLUMN_PREFIX, now, key_hash);
-        txn.put(&&time_key, key)?;
+        txn.put(time_key, key)?;
         let new_key_time_value = KeyTimeValue {
             time: now,
             value_len,
         };
-        txn.put(&key2time_key, &serde_json::to_string(&new_key_time_value)?)?;
+        txn.put(key2time_key, serde_json::to_string(&new_key_time_value)?)?;
 
         txn.commit()?;
 
@@ -149,10 +149,8 @@ impl RocksDbDiskCache {
     }
 
     fn get_system_disk(&self) -> i64 {
-        if let Ok(value) = self.db.get(DISK_SIZE_KEY) {
-            if let Some(bytes) = &value {
-                return i64::from_ne_bytes(bytes[0..8].try_into().unwrap());
-            }
+        if let Ok(Some(bytes)) = self.db.get(DISK_SIZE_KEY) {
+            return i64::from_ne_bytes(bytes[0..8].try_into().unwrap());
         }
         0
     }
@@ -168,28 +166,26 @@ impl RocksDbDiskCache {
         while let Some(Ok((time_key, v))) = iter.next() {
             let key = String::from_utf8(v.as_ref().to_vec())?;
             let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, &key);
-            if let Ok(value) = self.db.get(&key2time_key) {
-                if let Some(value) = &value {
-                    let key_time_value: KeyTimeValue = serde_json::from_slice(value)?;
-                    let txn = self.db.transaction();
-                    evicted_len += key_time_value.value_len;
+            if let Ok(Some(value)) = self.db.get(&key2time_key) {
+                let key_time_value: KeyTimeValue = serde_json::from_slice(&value)?;
+                let txn = self.db.transaction();
+                evicted_len += key_time_value.value_len;
 
-                    txn.delete(&time_key)?;
-                    txn.delete(&key2time_key)?;
+                txn.delete(&time_key)?;
+                txn.delete(&key2time_key)?;
 
-                    if txn.commit().is_err() {
-                        evicted_len -= key_time_value.value_len;
-                    } else {
-                        let cache_file_path = self.abs_path_of_cache_key(&key);
-                        fs::remove_file(&cache_file_path).unwrap_or_else(|e| {
-                            error!(
-                                "Error removing file from cache: `{:?}`: {}",
-                                cache_file_path, e
-                            )
-                        });
-                        let add: i64 = -(key_time_value.value_len as i64);
-                        self.db.merge(DISK_SIZE_KEY, i64::to_ne_bytes(add))?;
-                    }
+                if txn.commit().is_err() {
+                    evicted_len -= key_time_value.value_len;
+                } else {
+                    let cache_file_path = self.abs_path_of_cache_key(&key);
+                    fs::remove_file(&cache_file_path).unwrap_or_else(|e| {
+                        error!(
+                            "Error removing file from cache: `{:?}`: {}",
+                            cache_file_path, e
+                        )
+                    });
+                    let add: i64 = -(key_time_value.value_len as i64);
+                    self.db.merge(DISK_SIZE_KEY, i64::to_ne_bytes(add))?;
                 }
             }
             if evicted_len >= len {
@@ -201,7 +197,7 @@ impl RocksDbDiskCache {
     }
 
     fn put_value_to_disk(&self, key: &str, bytes: &[&[u8]]) -> Result<()> {
-        let path = self.abs_path_of_cache_key(&key);
+        let path = self.abs_path_of_cache_key(key);
         if let Some(parent_path) = path.parent() {
             fs::create_dir_all(parent_path)?;
         }
@@ -220,47 +216,44 @@ impl RocksDbDiskCache {
         metrics_inc_cache_access_count(1, ROCKSDB_DISK_CACHE_NAME);
         let key = key.as_ref();
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
-        if let Ok(value) = self.db.get(&key2time_key) {
-            if let Some(time_value) = &value {
-                let cache_file_path = self.abs_path_of_cache_key(key);
-                // check disk cache
-                let get_cache_content = || {
-                    let mut v = vec![];
-                    let mut file = File::open(cache_file_path)?;
-                    file.read_to_end(&mut v)?;
-                    Ok::<_, Box<dyn std::error::Error>>(v)
-                };
+        if let Ok(Some(time_value)) = self.db.get(&key2time_key) {
+            let cache_file_path = self.abs_path_of_cache_key(key);
+            // check disk cache
+            let get_cache_content = || {
+                let mut v = vec![];
+                let mut file = File::open(cache_file_path)?;
+                file.read_to_end(&mut v)?;
+                Ok::<_, Box<dyn std::error::Error>>(v)
+            };
 
-                return match get_cache_content() {
-                    Ok(mut bytes) => {
-                        if let Err(e) = validate_checksum(bytes.as_slice()) {
-                            metrics_inc_cache_miss_count(1, ROCKSDB_DISK_CACHE_NAME);
-                            error!("data cache, of key {key},  crc validation failure: {e}");
-                            {
-                                // remove the invalid cache, error of removal ignored
-                                let r = self.db.delete(&key2time_key);
-                                if let Err(e) = r {
-                                    warn!("failed to remove invalid cache item, key {key}. {e}");
-                                }
-                            }
-                            Ok(None)
-                        } else {
-                            metrics_inc_cache_hit_count(1, ROCKSDB_DISK_CACHE_NAME);
-                            // trim the checksum bytes and return
-                            let total_len = bytes.len();
-                            let body_len = total_len - 4;
-                            bytes.truncate(body_len);
-                            // let item = Arc::new(bytes);
-                            self.update_cache_key_time(&key2time_key, key, Some(time_value), None)?;
-                            Ok(Some(bytes))
-                        }
-                    }
-                    Err(e) => {
+            return match get_cache_content() {
+                Ok(mut bytes) => {
+                    if let Err(e) = validate_checksum(bytes.as_slice()) {
                         metrics_inc_cache_miss_count(1, ROCKSDB_DISK_CACHE_NAME);
-                        error!("get disk cache item failed, cache_key {key}. {e}");
+                        error!("data cache, of key {key},  crc validation failure: {e}");
+                        {
+                            // remove the invalid cache, error of removal ignored
+                            let r = self.db.delete(&key2time_key);
+                            if let Err(e) = r {
+                                warn!("failed to remove invalid cache item, key {key}. {e}");
+                            }
+                        }
                         Ok(None)
+                    } else {
+                        metrics_inc_cache_hit_count(1, ROCKSDB_DISK_CACHE_NAME);
+                        // trim the checksum bytes and return
+                        let total_len = bytes.len();
+                        let body_len = total_len - 4;
+                        bytes.truncate(body_len);
+                        self.update_cache_key_time(&key2time_key, key, Some(&time_value), None)?;
+                        Ok(Some(bytes))
                     }
-                };
+                }
+                Err(e) => {
+                    metrics_inc_cache_miss_count(1, ROCKSDB_DISK_CACHE_NAME);
+                    error!("get disk cache item failed, cache_key {key}. {e}");
+                    Ok(None)
+                }
             };
         }
 
@@ -294,7 +287,7 @@ impl RocksDbDiskCache {
 
     pub fn contains_key(&self, key: &str) -> bool {
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
-        if let Ok(value) = self.db.get(&key2time_key) {
+        if let Ok(value) = self.db.get(key2time_key) {
             return value.is_some();
         }
         false
@@ -306,5 +299,9 @@ impl RocksDbDiskCache {
 
     pub fn len(&self) -> usize {
         0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        false
     }
 }

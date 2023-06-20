@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(clippy::len_without_is_empty)]
+#![allow(clippy::enum_variant_names)]
 #![feature(write_all_vectored)]
 
 mod cache;

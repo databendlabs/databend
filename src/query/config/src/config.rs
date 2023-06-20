@@ -2092,7 +2092,8 @@ fn bool_true() -> bool {
 pub enum CacheStorageTypeConfig {
     None,
     Disk,
-    // Redis,
+    RocksDb,
+    RocksDbDisk,
 }
 
 impl Default for CacheStorageTypeConfig {
@@ -2238,6 +2239,8 @@ mod cache_config_converters {
             Ok(match value {
                 CacheStorageTypeConfig::None => inner::CacheStorageTypeConfig::None,
                 CacheStorageTypeConfig::Disk => inner::CacheStorageTypeConfig::Disk,
+                CacheStorageTypeConfig::RocksDb => inner::CacheStorageTypeConfig::RocksDb,
+                CacheStorageTypeConfig::RocksDbDisk => inner::CacheStorageTypeConfig::RocksDbDisk,
             })
         }
     }
@@ -2247,6 +2250,8 @@ mod cache_config_converters {
             match value {
                 inner::CacheStorageTypeConfig::None => CacheStorageTypeConfig::None,
                 inner::CacheStorageTypeConfig::Disk => CacheStorageTypeConfig::Disk,
+                inner::CacheStorageTypeConfig::RocksDb => CacheStorageTypeConfig::RocksDb,
+                inner::CacheStorageTypeConfig::RocksDbDisk => CacheStorageTypeConfig::RocksDbDisk,
             }
         }
     }
