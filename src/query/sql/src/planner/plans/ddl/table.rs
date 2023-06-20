@@ -209,6 +209,7 @@ pub struct RenameTableColumnPlan {
     pub database: String,
     pub table: String,
     pub schema: TableSchema,
+    pub old_column: String,
     pub new_column: String,
 }
 
