@@ -104,7 +104,7 @@ insert into showtabstat.t4 values(1)
 statement ok 
 SHOW TABLE STATUS FROM showtabstat WHERE engine = 'test'
 
-statement error 1001
+statement ok
 SHOW TABLE STATUS FROM showtabstat WHERE Create_time = 'test'
 
 statement ok
