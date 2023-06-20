@@ -13,6 +13,9 @@ DROP USER IF EXISTS 'test-d@%'
 statement ok
 DROP USER IF EXISTS 'test-e'
 
+statement error 1005
+CREATE USER 'test-a'@'127.0.0.1' IDENTIFIED BY 'password'
+
 statement ok
 CREATE USER 'test-a'@'%' IDENTIFIED BY 'password'
 
