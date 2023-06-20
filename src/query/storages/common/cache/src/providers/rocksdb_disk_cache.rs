@@ -18,7 +18,6 @@ use std::io::IoSlice;
 use std::io::Read;
 use std::io::Write;
 use std::path::PathBuf;
-use std::println;
 
 use chrono::Utc;
 use common_exception::Result;
@@ -111,7 +110,6 @@ impl RocksDbDiskCache {
         time_value: Option<&Vec<u8>>,
         value_len: Option<usize>,
     ) -> Result<()> {
-        let key_hash = crc32fast::hash(key.as_bytes());
         let txn = self.db.transaction();
 
         let value_len = if let Some(time_value) = time_value {
@@ -124,9 +122,10 @@ impl RocksDbDiskCache {
                 return Ok(());
             }
 
-            // first delete old time key
+            // delete old time key
+            let key_hash = crc32fast::hash(key.as_bytes());
             let old_time_key = format!(
-                "{}/{}:{}",
+                "{}/{}/{}",
                 TIME2KEY_COLUMN_PREFIX, key_time_value.time, key_hash
             );
             txn.delete(old_time_key)?;
@@ -135,6 +134,7 @@ impl RocksDbDiskCache {
             value_len.unwrap()
         };
         // add new time key
+        let key_hash = crc32fast::hash(key.as_bytes());
         let now = Utc::now().timestamp_micros();
         let time_key = format!("{}/{}/{}", TIME2KEY_COLUMN_PREFIX, now, key_hash);
         txn.put(time_key, key)?;
@@ -268,7 +268,7 @@ impl RocksDbDiskCache {
         let crc_bytes = crc.to_le_bytes();
         self.put_value_to_disk(key, &[value.as_slice(), &crc_bytes])?;
 
-        // third: use txn to put value
+        // third: use txn to update key access time and count
         let key2time_key = format!("{}/{}", KEY2TIME_COLUMN_PREFIX, key);
         self.update_cache_key_time(&key2time_key, key, None, Some(value_len))?;
 
@@ -297,9 +297,5 @@ impl RocksDbDiskCache {
 
     pub fn len(&self) -> usize {
         0
-    }
-
-    pub fn is_empty(&self) -> bool {
-        false
     }
 }

@@ -112,7 +112,7 @@ impl RocksDbCache {
                 let key_hash = crc32fast::hash(key.as_bytes());
                 // first delete old time key
                 let old_time_key = format!(
-                    "{}/{}:{}",
+                    "{}/{}/{}",
                     TIME2KEY_COLUMN_PREFIX, key_time_value.time, key_hash
                 );
                 txn.delete(old_time_key)?;
@@ -187,9 +187,5 @@ impl RocksDbCache {
 
     pub fn len(&self) -> usize {
         0
-    }
-
-    pub fn is_empty(&self) -> bool {
-        false
     }
 }
