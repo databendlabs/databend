@@ -34,3 +34,4 @@ select (select sum(c1) from t_origin where id % 3 != 0 or id <= 500) = (select s
 query I
 select (select sum(c2) from t_origin where id % 3 != 0 or id <= 500) = (select sum(c2) from t);
 ----
+1
