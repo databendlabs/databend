@@ -1449,10 +1449,11 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     );
     let streaming_v2 = map(
         rule! {
-           #file_format_clause ~ #rest_str
+           #file_format_clause  ~ ( ON_ERROR ~ "=" ~ #ident)? ~  #rest_str
         },
-        |(options, (_, start))| InsertSource::StreamingV2 {
+        |(options, on_error_opt, (_, start))| InsertSource::StreamingV2 {
             settings: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
             start,
         },
     );
