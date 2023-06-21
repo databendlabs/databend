@@ -135,7 +135,7 @@ impl InputFormatTextBase for InputFormatNDJson {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
                     builder
                         .ctx
-                        .on_error(e, columns, builder.num_rows, Some(&mut error_map))
+                        .on_error(e, Some((columns, builder.num_rows)), Some(&mut error_map))
                         .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
                 } else {
                     builder.num_rows += 1;
