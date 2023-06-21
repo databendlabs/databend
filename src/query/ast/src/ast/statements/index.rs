@@ -62,3 +62,19 @@ impl Display for DropIndexStmt {
         Ok(())
     }
 }
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RefreshIndexStmt {
+    pub index: Identifier,
+    pub limit: Option<u64>,
+}
+
+impl Display for RefreshIndexStmt {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "REFRESH INDEX {index}", index = self.index)?;
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
+        Ok(())
+    }
+}

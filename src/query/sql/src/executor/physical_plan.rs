@@ -14,6 +14,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Display;
+use std::fmt::Formatter;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
@@ -696,6 +697,30 @@ pub struct RuntimeFilterSource {
 impl RuntimeFilterSource {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         self.left_side.output_schema()
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RefreshIndex {
+    pub input: Box<PhysicalPlan>,
+    pub index_id: u64,
+    pub table_info: TableInfo,
+    pub select_schema: DataSchemaRef,
+    pub select_column_bindings: Vec<ColumnBinding>,
+}
+
+impl RefreshIndex {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRefExt::create(vec![DataField::new(
+            "index_loc",
+            DataType::String,
+        )]))
+    }
+}
+
+impl Display for RefreshIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RefreshIndex")
     }
 }
 

@@ -27,6 +27,7 @@ use common_meta_app::app_error::DropDbWithDropTime;
 use common_meta_app::app_error::DropIndexWithDropTime;
 use common_meta_app::app_error::DropTableWithDropTime;
 use common_meta_app::app_error::DuplicatedUpsertFiles;
+use common_meta_app::app_error::GetIndexWithDropTime;
 use common_meta_app::app_error::IndexAlreadyExists;
 use common_meta_app::app_error::ShareHasNoGrantedPrivilege;
 use common_meta_app::app_error::TableAlreadyExists;
@@ -79,6 +80,8 @@ use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::EmptyProto;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -1036,6 +1039,40 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             }
         }
         Ok(DropIndexReply {})
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let tenant_index = &req.name_ident;
+
+        let res = get_index_or_err(self, tenant_index).await?;
+
+        let (index_id_seq, index_id, _, index_meta) = res;
+
+        if index_id_seq == 0 {
+            return Err(KVAppError::AppError(AppError::UnknownIndex(
+                UnknownIndex::new(&tenant_index.index_name, "get_index"),
+            )));
+        }
+
+        // Safe unwrap(): index_meta_seq > 0 implies index_meta is not None.
+        let index_meta = index_meta.unwrap();
+
+        debug!(index_id, name_key = debug(&tenant_index), "drop_index");
+
+        // get an index with drop time
+        if index_meta.drop_on.is_some() {
+            return Err(KVAppError::AppError(AppError::GetIndexWithDropTIme(
+                GetIndexWithDropTime::new(&tenant_index.index_name),
+            )));
+        }
+
+        Ok(GetIndexReply {
+            index_id,
+            index_meta,
+        })
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]

@@ -265,7 +265,7 @@ pub fn adjust_threads_and_request(
     (max_threads, max_io_requests)
 }
 
-pub(super) fn fill_internal_column_meta(
+pub(crate) fn fill_internal_column_meta(
     data_block: DataBlock,
     fuse_part: &FusePartInfo,
     offsets: Option<Vec<usize>>,

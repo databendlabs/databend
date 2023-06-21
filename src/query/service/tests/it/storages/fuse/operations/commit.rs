@@ -11,6 +11,7 @@
 //  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //  See the License for the specific language governing permissions and
 //  limitations under the License.
+
 use std::any::Any;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -57,6 +58,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -681,6 +684,11 @@ impl Catalog for FakedCatalog {
 
     #[async_backtrace::framed]
     async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
         unimplemented!()
     }
 

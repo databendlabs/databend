@@ -138,16 +138,19 @@ impl Processor for DeserializeDataTransform {
             let start = Instant::now();
 
             let columns_chunks = read_res.columns_chunks()?;
-            let part = FusePartInfo::from_part(&part)?;
+            let fuse_part = FusePartInfo::from_part(&part)?;
 
             let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                &part.location,
-                part.nums_rows,
-                &part.compression,
-                &part.columns_meta,
+                &fuse_part.location,
+                fuse_part.nums_rows,
+                &fuse_part.compression,
+                &fuse_part.columns_meta,
                 columns_chunks,
                 Some(self.uncompressed_buffer.clone()),
             )?;
+
+            // let meta = DataSourceMeta::create(vec![part.clone()], vec![]);
+            // let data_block = data_block.add_meta(Some(meta))?;
 
             // Perf.
             {
@@ -163,7 +166,7 @@ impl Processor for DeserializeDataTransform {
             // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
             // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
             if self.block_reader.query_internal_columns() {
-                let data_block = fill_internal_column_meta(data_block, part, None)?;
+                let data_block = fill_internal_column_meta(data_block, fuse_part, None)?;
                 self.output_data = Some(data_block);
             } else {
                 self.output_data = Some(data_block);
