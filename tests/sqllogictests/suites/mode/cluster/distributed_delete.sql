@@ -10,7 +10,13 @@ create table t (id int, c1 int, c2 int) row_per_block=10;
 
 # generate test data
 statement ok
-insert into t select number, number * 10, number * 5 from numbers(1000);
+insert into t select number, number * 10, number * 5 from numbers(500) where number ;
+
+statement ok
+insert into t select number, number * 10, number * 5 from numbers(1000) where number > 499;
+
+statement ok
+insert into t select number, number * 10, number * 5 from numbers(1500) where number > 1499;
 
 # "backup" t
 statement ok
