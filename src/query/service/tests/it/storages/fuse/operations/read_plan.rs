@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use std::iter::Iterator;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_arrow::arrow::datatypes::DataType as ArrowType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_base::base::tokio;
@@ -27,6 +28,7 @@ use common_expression::FieldIndex;
 use common_expression::Scalar;
 use common_storage::ColumnNode;
 use common_storage::ColumnNodes;
+use common_storages_fuse::FusePartInfo;
 use databend_query::storages::fuse::FuseTable;
 use databend_query::test_kits::table_test_fixture::TestFixture;
 use futures::TryStreamExt;
@@ -95,6 +97,7 @@ fn test_to_partitions() -> Result<()> {
         bloom_filter_location,
         bloom_filter_size,
         meta::Compression::Lz4Raw,
+        Some(Utc::now()),
     ));
 
     let blocks_metas = (0..num_of_block)
@@ -176,6 +179,10 @@ async fn test_fuse_table_exact_statistic() -> Result<()> {
             .await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
         assert!(!parts.is_empty());
+
+        let part = parts.partitions[0].clone();
+        let fuse_part = FusePartInfo::from_part(&part)?;
+        assert!(fuse_part.create_on.is_some())
     }
     Ok(())
 }

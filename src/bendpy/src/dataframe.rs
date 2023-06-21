@@ -30,17 +30,30 @@ use crate::datablock::PyDataBlocks;
 use crate::schema::PySchema;
 use crate::utils::wait_for_future;
 
+#[pyclass(name = "BoxSize", module = "databend", subclass)]
+#[derive(Clone, Debug)]
+pub(crate) struct PyBoxSize {
+    pub(crate) bs_max_display_rows: usize,
+    pub(crate) bs_max_width: usize,
+    pub(crate) bs_max_col_width: usize,
+}
+
 #[pyclass(name = "DataFrame", module = "databend", subclass)]
 #[derive(Clone)]
 pub(crate) struct PyDataFrame {
     ctx: Arc<QueryContext>,
     pub(crate) df: Plan,
+    display_width: PyBoxSize,
 }
 
 impl PyDataFrame {
     /// creates a new PyDataFrame
-    pub fn new(ctx: Arc<QueryContext>, df: Plan) -> Self {
-        Self { ctx, df }
+    pub fn new(ctx: Arc<QueryContext>, df: Plan, display_width: PyBoxSize) -> Self {
+        Self {
+            ctx,
+            df,
+            display_width,
+        }
     }
 
     async fn df_collect(&self) -> Result<Vec<DataBlock>> {
@@ -55,15 +68,22 @@ impl PyDataFrame {
 impl PyDataFrame {
     fn __repr__(&self, py: Python) -> PyResult<String> {
         let blocks = self.collect(py)?;
-        Ok(blocks.box_render())
+        let bs = self.get_box();
+        Ok(blocks.box_render(bs.bs_max_display_rows, bs.bs_max_width, bs.bs_max_width))
     }
 
     pub fn collect(&self, py: Python) -> PyResult<PyDataBlocks> {
         let blocks = wait_for_future(py, self.df_collect());
+        let display_width = self.get_box();
         Ok(PyDataBlocks {
             blocks: blocks.unwrap(),
             schema: self.df.schema(),
+            display_width,
         })
+    }
+
+    pub fn get_box(&self) -> PyBoxSize {
+        self.display_width.clone()
     }
 
     pub fn schema(&self) -> PySchema {

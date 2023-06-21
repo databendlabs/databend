@@ -1344,6 +1344,14 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
+            AlterTableAction::RenameColumn {
+                old_column,
+                new_column,
+            } => {
+                let action_name = format!("Action Rename column {} to {}", old_column, new_column);
+                let action_format_ctx = AstFormatContext::new(action_name);
+                FormatTreeNode::new(action_format_ctx)
+            }
             AlterTableAction::ModifyColumn { column, action: _ } => {
                 let action_name = format!("Action ModifyColumn column {}", column);
                 let action_format_ctx = AstFormatContext::new(action_name);
@@ -1528,6 +1536,22 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let name = "DropIndex".to_string();
         let format_ctx = AstFormatContext::with_children(name, 1);
         let node = FormatTreeNode::with_children(format_ctx, vec![child]);
+        self.children.push(node);
+    }
+
+    fn visit_refresh_index(&mut self, stmt: &'ast RefreshIndexStmt) {
+        let mut children = Vec::new();
+        self.visit_index_ref(&stmt.index);
+        children.push(self.children.pop().unwrap());
+        if let Some(limit) = stmt.limit {
+            let name = format!("Refresh index limit {}", limit);
+            let limit_format_ctx = AstFormatContext::new(name);
+            children.push(FormatTreeNode::new(limit_format_ctx));
+        }
+
+        let name = "RefreshIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
         self.children.push(node);
     }
 

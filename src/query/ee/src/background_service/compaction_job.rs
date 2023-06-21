@@ -36,7 +36,6 @@ use common_meta_app::background::BackgroundJobType::ONESHOT;
 use common_meta_app::background::BackgroundTaskIdent;
 use common_meta_app::background::BackgroundTaskInfo;
 use common_meta_app::background::BackgroundTaskState;
-use common_meta_app::background::GetBackgroundJobReq;
 use common_meta_app::background::UpdateBackgroundJobStatusReq;
 use common_meta_app::background::UpdateBackgroundTaskReq;
 use common_meta_app::schema::TableStatistics;
@@ -57,11 +56,22 @@ ON t.database = d.name
 WHERE t.database != 'system'
     AND t.database != 'information_schema'
     AND t.engine = 'FUSE'
-    AND t.num_rows > 0
-    AND t.data_compressed_size > 0;
+    AND t.num_rows > 1 * 1000 * 100
+    AND t.table_id NOT IN (
+        SELECT
+          table_id
+        FROM
+          system.background_tasks
+        WHERE
+          state = 'DONE'
+          AND table_id = t.table_id
+          AND type = 'COMPACTION'
+          AND updated_on > t.updated_on
+    )
+    ;
 ";
 
-const SEGMENT_SIZE: u64 = 10;
+const SEGMENT_SIZE: u64 = 1;
 const PER_SEGMENT_BLOCK: u64 = 100;
 const PER_BLOCK_SIZE: u64 = 50; // MB
 
@@ -72,7 +82,7 @@ pub struct CompactionJob {
     conf: InnerConfig,
     meta_api: Arc<MetaStore>,
     creator: BackgroundJobIdent,
-    info: BackgroundJobInfo,
+    info: Arc<parking_lot::Mutex<BackgroundJobInfo>>,
 
     finish_tx: Arc<Mutex<Sender<u64>>>,
 }
@@ -80,14 +90,14 @@ pub struct CompactionJob {
 #[async_trait::async_trait]
 impl Job for CompactionJob {
     async fn run(&mut self) {
-        info!(background = true, job_name = ?self.creator.clone(), job_status = ?self.info.job_status.clone(), "Compaction job started");
+        info!(background = true, job_name = ?self.creator.clone(), "Compaction job started");
         self.do_compaction_job()
             .await
             .expect("failed to do compaction job");
     }
 
     fn get_info(&self) -> BackgroundJobInfo {
-        self.info.clone()
+        self.info.lock().clone()
     }
 
     async fn update_job_status(&mut self, status: BackgroundJobStatus) -> Result<()> {
@@ -97,13 +107,7 @@ impl Job for CompactionJob {
                 status: status.clone(),
             })
             .await?;
-        self.info = self
-            .meta_api
-            .get_background_job(GetBackgroundJobReq {
-                name: self.creator.clone(),
-            })
-            .await?
-            .info;
+        self.info.lock().job_status = Some(status);
         Ok(())
     }
 }
@@ -121,14 +125,12 @@ pub fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) 
         old.number_of_blocks.unwrap() as f64 / old.number_of_segments.unwrap() as f64;
     let new_segment_density =
         new.number_of_blocks.unwrap() as f64 / new.number_of_segments.unwrap() as f64;
-    let should_continue_seg_compact = new_segment_density > old_segment_density
-        || old.number_of_blocks != new.number_of_blocks
-        || old.number_of_segments != new.number_of_segments;
+    let should_continue_seg_compact = new_segment_density != old_segment_density
+        && new_segment_density < PER_SEGMENT_BLOCK as f64;
     let old_block_density = old.data_bytes as f64 / old.number_of_blocks.unwrap() as f64;
     let new_block_density = new.data_bytes as f64 / new.number_of_blocks.unwrap() as f64;
-    let should_continue_blk_compact = new_block_density > old_block_density
-        || old.data_bytes != new.data_bytes
-        || old.number_of_blocks != new.number_of_blocks;
+    let should_continue_blk_compact = new_block_density != old_block_density
+        && new_block_density < PER_BLOCK_SIZE as f64 * 1024.0 * 1024.0;
     (should_continue_seg_compact, should_continue_blk_compact)
 }
 
@@ -145,6 +147,7 @@ impl CompactionJob {
         let tenant = config.query.tenant_id.clone();
         let creator = BackgroundJobIdent { tenant, name };
         let meta_api = UserApiProvider::instance().get_meta_store_client();
+        let info = Arc::new(parking_lot::Mutex::new(info));
         Self {
             conf: config.clone(),
             meta_api,
@@ -228,6 +231,20 @@ impl CompactionJob {
         }
     }
 
+    async fn sync_compact_status(&self, id: String) -> Result<Option<BackgroundJobStatus>> {
+        let job_info = self.info.clone();
+        let job_info = job_info.lock();
+        let mut job_status = job_info.job_status.clone().unwrap();
+        job_status.last_task_id = Some(id);
+        job_status.last_task_run_at = Some(Utc::now());
+        job_status.next_task_scheduled_time = job_info
+            .job_params
+            .as_ref()
+            .unwrap()
+            .get_next_running_time(job_status.last_task_run_at.unwrap());
+        Ok(Some(job_status))
+    }
+
     async fn compact_table(
         &mut self,
         svc: &Arc<BackgroundServiceHandlerWrapper>,
@@ -249,15 +266,18 @@ impl CompactionJob {
             info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
             return Ok(());
         }
-
         let id = Uuid::new_v4().to_string();
+        let status = self.sync_compact_status(id.clone()).await?;
+        if status.is_none() {
+            return Ok(());
+        }
+        self.update_job_status(status.clone().unwrap()).await?;
 
         info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "start compact");
         let task_name = BackgroundTaskIdent {
             tenant: self.creator.tenant.clone(),
-            task_id: id.clone(),
+            task_id: status.unwrap().last_task_id.unwrap(),
         };
-
         let mut info = BackgroundTaskInfo::new_compaction_task(
             self.creator.clone(),
             db_id,
@@ -277,16 +297,7 @@ impl CompactionJob {
             .await?;
 
         let start = Instant::now();
-        let mut job_status = self.info.job_status.clone().unwrap();
-        job_status.last_task_id = Some(id.clone());
-        job_status.last_task_run_at = Some(Utc::now());
-        job_status.next_task_scheduled_time = self
-            .info
-            .job_params
-            .as_ref()
-            .unwrap()
-            .get_next_running_time(job_status.last_task_run_at.unwrap());
-        self.update_job_status(job_status.clone()).await?;
+
         match self
             .do_compact_table(svc, database.clone(), table.clone())
             .await
@@ -537,11 +548,10 @@ impl CompactionJob {
             "
         select
         IF(segment_count > {} and block_count / segment_count < {}, TRUE, FALSE) AS segment_advice,
-        IF(bytes_uncompressed / block_count / 1024 / 1024 < {}, TRUE, FALSE) AS block_advice,
+        IF(bytes_uncompressed / block_count / 1024 / 1024 < {} and bytes_uncompressed / 1024 / 1024 > 1000, TRUE, FALSE) AS block_advice,
         row_count, bytes_uncompressed, bytes_compressed, index_size,
         segment_count, block_count,
-        block_count/segment_count,
-        humanize_size(bytes_uncompressed / block_count) AS per_block_uncompressed_size_string
+        block_count/segment_count
         from fuse_snapshot('{}', '{}') order by timestamp ASC LIMIT 1;
         ",
             seg_size, avg_seg, avg_blk, database, table

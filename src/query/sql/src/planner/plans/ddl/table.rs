@@ -25,6 +25,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
+use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::UndropTableReq;
@@ -195,6 +196,24 @@ pub struct AddTableColumnPlan {
 }
 
 impl AddTableColumnPlan {
+    pub fn schema(&self) -> DataSchemaRef {
+        Arc::new(DataSchema::empty())
+    }
+}
+
+// Table rename column
+#[derive(Clone, Debug, PartialEq)]
+pub struct RenameTableColumnPlan {
+    pub tenant: String,
+    pub catalog: String,
+    pub database: String,
+    pub table: String,
+    pub schema: TableSchema,
+    pub old_column: String,
+    pub new_column: String,
+}
+
+impl RenameTableColumnPlan {
     pub fn schema(&self) -> DataSchemaRef {
         Arc::new(DataSchema::empty())
     }

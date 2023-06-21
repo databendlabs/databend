@@ -719,6 +719,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let refresh_index = map(
+        rule! {
+            REFRESH ~ AGGREGATING ~ INDEX ~ #ident ~ ( LIMIT ~ #literal_u64 )?
+        },
+        |(_, _, _, index, opt_limit)| {
+            Statement::RefreshIndex(RefreshIndexStmt {
+                index,
+                limit: opt_limit.map(|(_, limit)| limit),
+            })
+        },
+    );
+
     let create_virtual_columns = map(
         rule! {
             CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
@@ -1325,6 +1337,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
+            | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),
         rule!(
             #create_virtual_columns: "`CREATE VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
@@ -1436,10 +1449,11 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     );
     let streaming_v2 = map(
         rule! {
-           #file_format_clause ~ #rest_str
+           #file_format_clause  ~ ( ON_ERROR ~ "=" ~ #ident)? ~  #rest_str
         },
-        |(options, (_, start))| InsertSource::StreamingV2 {
+        |(options, on_error_opt, (_, start))| InsertSource::StreamingV2 {
             settings: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
             start,
         },
     );
@@ -1806,9 +1820,18 @@ pub fn alter_database_action(i: Input) -> IResult<AlterDatabaseAction> {
 pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
     let rename_table = map(
         rule! {
-            RENAME ~ TO ~ #ident
+           RENAME ~ TO ~ #ident
         },
         |(_, _, new_table)| AlterTableAction::RenameTable { new_table },
+    );
+    let rename_column = map(
+        rule! {
+            RENAME ~ COLUMN ~ #ident ~ TO ~ #ident
+        },
+        |(_, _, old_column, _, new_column)| AlterTableAction::RenameColumn {
+            old_column,
+            new_column,
+        },
     );
     let add_column = map(
         rule! {
@@ -1816,6 +1839,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
         },
         |(_, _, column)| AlterTableAction::AddColumn { column },
     );
+
     let modify_column = map(
         rule! {
             MODIFY ~ COLUMN ~ #ident ~ SET ~ MASKING ~ POLICY ~ #ident
@@ -1871,6 +1895,7 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     rule!(
         #rename_table
+        | #rename_column
         | #add_column
         | #drop_column
         | #modify_column

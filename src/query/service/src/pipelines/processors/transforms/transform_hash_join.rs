@@ -108,6 +108,11 @@ impl Processor for TransformHashJoinProbe {
             HashJoinStep::Probe => {
                 if self.output_port.is_finished() {
                     self.input_port.finish();
+
+                    if self.join_state.need_outer_scan() {
+                        self.join_state.probe_done()?;
+                    }
+
                     return Ok(Event::Finished);
                 }
 

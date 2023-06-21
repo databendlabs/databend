@@ -154,7 +154,6 @@ impl Table for StageTable {
             ..
         }) = &plan.push_downs
         {
-            println!("projection: {:?}", columns);
             Some(columns.clone())
         } else {
             None
@@ -194,7 +193,6 @@ impl Table for StageTable {
                 m
             }
         };
-        // let projection = self.projection.lock().clone();
         let input_ctx = Arc::new(InputContext::try_create_from_copy(
             operator,
             settings,

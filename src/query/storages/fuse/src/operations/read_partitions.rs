@@ -552,6 +552,7 @@ impl FuseTable {
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
+        let create_on = meta.create_on;
 
         let sort_min_max = top_k.as_ref().map(|top_k| {
             let stat = meta.col_stats.get(&top_k.column_id).unwrap();
@@ -567,6 +568,7 @@ impl FuseTable {
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
+            create_on,
         )
     }
 
@@ -593,6 +595,7 @@ impl FuseTable {
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
         let format_version = meta.location.1;
+        let create_on = meta.create_on;
 
         let sort_min_max = top_k.and_then(|top_k| {
             let stat = meta.col_stats.get(&top_k.column_id);
@@ -611,6 +614,7 @@ impl FuseTable {
             meta.compression(),
             sort_min_max,
             block_meta_index.to_owned(),
+            create_on,
         )
     }
 }

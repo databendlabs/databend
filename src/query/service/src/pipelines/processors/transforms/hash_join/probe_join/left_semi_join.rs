@@ -89,8 +89,10 @@ impl JoinHashTable {
     {
         // If there is no build key, the result is input
         // Eg: select * from onecolumn as a right semi join twocolumn as b on true order by b.x
-        let mut probe_indexes = Vec::with_capacity(input.num_rows());
         let valids = &probe_state.valids;
+        let probe_indexes = &mut probe_state.probe_indexes;
+        let mut probe_indexes_occupied = 0;
+        let mut result_blocks = vec![];
 
         for (i, key) in keys_iter.enumerate() {
             let contains = if self.hash_join_desc.from_correlated_subquery {
@@ -101,16 +103,30 @@ impl JoinHashTable {
 
             match (contains, SEMI) {
                 (true, true) | (false, false) => {
-                    probe_indexes.push((i as u32, 1));
+                    probe_indexes[probe_indexes_occupied] = (i as u32, 1);
+                    probe_indexes_occupied += 1;
+                    if probe_indexes_occupied >= JOIN_MAX_BLOCK_SIZE {
+                        let probe_block = DataBlock::take_compacted_indices(
+                            input,
+                            &probe_indexes[0..probe_indexes_occupied],
+                            probe_indexes_occupied,
+                        )?;
+                        probe_indexes_occupied = 0;
+                        result_blocks.push(probe_block);
+                    }
                 }
                 _ => {}
             }
         }
-        Ok(vec![DataBlock::take_compacted_indices(
-            input,
-            &probe_indexes,
-            probe_indexes.len(),
-        )?])
+        if probe_indexes_occupied > 0 {
+            let probe_block = DataBlock::take_compacted_indices(
+                input,
+                &probe_indexes[0..probe_indexes_occupied],
+                probe_indexes_occupied,
+            )?;
+            result_blocks.push(probe_block);
+        }
+        Ok(result_blocks)
     }
 
     fn left_semi_anti_join_with_other_conjunct<'a, const SEMI: bool, H: HashJoinHashtableLike, IT>(

@@ -362,6 +362,7 @@ pub fn walk_statement_mut<V: VisitorMut>(visitor: &mut V, statement: &mut Statem
         Statement::DropView(stmt) => visitor.visit_drop_view(stmt),
         Statement::CreateIndex(stmt) => visitor.visit_create_index(stmt),
         Statement::DropIndex(stmt) => visitor.visit_drop_index(stmt),
+        Statement::RefreshIndex(stmt) => visitor.visit_refresh_index(stmt),
         Statement::CreateVirtualColumns(stmt) => visitor.visit_create_virtual_columns(stmt),
         Statement::AlterVirtualColumns(stmt) => visitor.visit_alter_virtual_columns(stmt),
         Statement::DropVirtualColumns(stmt) => visitor.visit_drop_virtual_columns(stmt),

@@ -358,4 +358,8 @@ impl Settings {
             Ok(Some(deduplicate_label))
         }
     }
+
+    pub fn set_deduplicate_label(&self, val: String) -> Result<()> {
+        self.set_setting("deduplicate_label".to_string(), val)
+    }
 }

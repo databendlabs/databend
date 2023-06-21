@@ -58,6 +58,7 @@ use common_expression::ComputedExpr;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::TableField;
+use common_expression::TableSchema;
 use common_expression::TableSchemaRef;
 use common_expression::TableSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
@@ -97,6 +98,7 @@ use crate::plans::OptimizeTableAction;
 use crate::plans::OptimizeTablePlan;
 use crate::plans::Plan;
 use crate::plans::ReclusterTablePlan;
+use crate::plans::RenameTableColumnPlan;
 use crate::plans::RenameTablePlan;
 use crate::plans::RevertTablePlan;
 use crate::plans::RewriteKind;
@@ -611,6 +613,28 @@ impl Binder {
                     table,
                 })))
             }
+            AlterTableAction::RenameColumn {
+                old_column,
+                new_column,
+            } => {
+                let schema = self
+                    .ctx
+                    .get_table(&catalog, &database, &table)
+                    .await?
+                    .schema();
+                let (new_schema, old_column, new_column) = self
+                    .analyze_rename_column(old_column, new_column, schema)
+                    .await?;
+                Ok(Plan::RenameTableColumn(Box::new(RenameTableColumnPlan {
+                    tenant: self.ctx.get_tenant(),
+                    catalog,
+                    database,
+                    table,
+                    schema: new_schema,
+                    old_column,
+                    new_column,
+                })))
+            }
             AlterTableAction::AddColumn { column } => {
                 let schema = self
                     .ctx
@@ -919,6 +943,42 @@ impl Binder {
             database,
             table,
         })))
+    }
+
+    #[async_backtrace::framed]
+    async fn analyze_rename_column(
+        &self,
+        old_column: &Identifier,
+        new_column: &Identifier,
+        table_schema: TableSchemaRef,
+    ) -> Result<(TableSchema, String, String)> {
+        let old_name = normalize_identifier(old_column, &self.name_resolution_ctx).name;
+        let new_name = normalize_identifier(new_column, &self.name_resolution_ctx).name;
+
+        if old_name == new_name {
+            return Err(ErrorCode::SemanticError(
+                "new column name is the same as old column name".to_string(),
+            ));
+        }
+        let mut new_schema = table_schema.as_ref().clone();
+        let mut old_column_existed = false;
+        for (i, field) in table_schema.fields().iter().enumerate() {
+            if field.name() == &new_name {
+                return Err(ErrorCode::SemanticError(
+                    "new column name existed".to_string(),
+                ));
+            }
+            if field.name() == &old_name {
+                new_schema.rename_field(i, &new_name);
+                old_column_existed = true;
+            }
+        }
+        if !old_column_existed {
+            return Err(ErrorCode::SemanticError(
+                "rename column not existed".to_string(),
+            ));
+        }
+        Ok((new_schema, old_name, new_name))
     }
 
     #[async_backtrace::framed]

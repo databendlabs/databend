@@ -25,7 +25,6 @@ use common_formats::FieldDecoder;
 use common_formats::FieldJsonAstDecoder;
 use common_formats::FileFormatOptionsExt;
 use common_meta_app::principal::FileFormatParams;
-use common_meta_app::principal::OnErrorMode;
 use common_meta_app::principal::StageFileFormatType;
 use common_pipeline_core::InputError;
 
@@ -128,38 +127,21 @@ impl InputFormatTextBase for InputFormatNDJson {
 
         let columns = &mut builder.mutable_columns;
         let mut start = 0usize;
-        let mut num_rows = 0usize;
         let mut error_map: HashMap<u16, InputError> = HashMap::new();
         for (i, end) in batch.row_ends.iter().enumerate() {
             let buf = &batch.data[start..*end];
             let buf = buf.trim();
             if !buf.is_empty() {
                 if let Err(e) = Self::read_row(field_decoder, buf, columns, &builder.ctx.schema) {
-                    match builder.ctx.on_error_mode {
-                        OnErrorMode::Continue => {
-                            Self::on_error_continue(columns, num_rows, e.clone(), &mut error_map);
-                            start = *end;
-                            continue;
-                        }
-                        OnErrorMode::AbortNum(n) => {
-                            Self::on_error_abort(
-                                columns,
-                                num_rows,
-                                n,
-                                &builder.ctx.on_error_count,
-                                e,
-                            )
-                            .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
-
-                            start = *end;
-                            continue;
-                        }
-                        _ => return Err(batch.error(&e.message(), &builder.ctx, start, i)),
-                    }
+                    builder
+                        .ctx
+                        .on_error(e, Some((columns, builder.num_rows)), Some(&mut error_map))
+                        .map_err(|e| batch.error(&e.message(), &builder.ctx, start, i))?;
+                } else {
+                    builder.num_rows += 1;
                 }
             }
             start = *end;
-            num_rows += 1;
         }
         Ok(error_map)
     }

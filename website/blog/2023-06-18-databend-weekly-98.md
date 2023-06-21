@@ -61,14 +61,12 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### IceLake - Pure Rust Iceberg Implementation 
 
-[Iceberg](https://iceberg.apache.org/) is an open table format designed for analytic datasets. However, the lack of a mature Rust binding for Iceberg makes it difficult to integrate with databases like Databend.
+[Iceberg](https://iceberg.apache.org/), an open table format for analytics, lacks a mature Rust binding, making integration with databases like Databend difficult. IceLake aims to fill this gap and build an open ecosystem that:
 
-IceLake intends to fill this gap. By developing icelake, I expect to build up an open ecosystem that:
-
-- Users can read/write iceberg table from **ANY** storage services like s3, gcs, azblob, hdfs and so on.
+- Users can read/write iceberg tables from **ANY** storage services like s3, gcs, azblob, hdfs and so on.
 - **ANY** Databases can integrate with `icelake` to facilitate reading and writing of iceberg tables.
-- Provides **NATIVE** support transmute between `arrow`.
-- Provides bindings so that other language can operate on iceberg tables powered by rust core.
+- Provides **NATIVE** support transmute between `arrow`s.
+- Provides bindings so that other languages can work with iceberg tables powered by Rust core.
 
 If you are interested in learning more, please check out the resources listed below:
 
