@@ -83,10 +83,10 @@ GRANT SELECT ON 'default'.'system'.'one' TO 'account_admin'
 query T
 SHOW GRANTS FOR 'test-grant'
 ----
-GRANT ALL ON 'default'.'default'.* TO 'test-grant'
-GRANT SELECT ON 'default'.'db01'.* TO 'test-grant'
-GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'
+GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'db01'.* TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
 
 statement ok
 REVOKE SELECT ON db01.* FROM 'test-grant'
@@ -94,9 +94,9 @@ REVOKE SELECT ON db01.* FROM 'test-grant'
 query T
 SHOW GRANTS FOR 'test-grant'
 ----
-GRANT ALL ON 'default'.'default'.* TO 'test-grant'
-GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'
+GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
 
 statement ok
 REVOKE ALL PRIVILEGES ON * FROM 'test-grant'
@@ -104,8 +104,8 @@ REVOKE ALL PRIVILEGES ON * FROM 'test-grant'
 query T
 SHOW GRANTS FOR 'test-grant'
 ----
-GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'
+GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
 
 statement ok
 CREATE ROLE 'test-grant-role'
