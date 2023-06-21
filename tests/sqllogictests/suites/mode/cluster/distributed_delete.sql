@@ -74,7 +74,7 @@ select * from t order by id except select * from v_after_deletion order by id;
 ----
 
 query I
-select (select count() from v_rows_deleted) = (select count() from t);
+select (select count() from v_after_deletion) = (select count() from t);
 ----
 1
 
@@ -82,7 +82,7 @@ statement ok
 drop table t;
 
 statement ok
-drop view after_deletion;
+drop view v_after_deletion;
 
 statement ok
 drop table if exists del_id;
