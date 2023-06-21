@@ -532,6 +532,7 @@ pub struct NavigationDescriptor {
     pub point: NavigationPoint,
 }
 
+#[derive(Debug, Clone)]
 pub struct DeletionFilters {
     // the filter expression for the deletion
     pub filter: RemoteExpr<String>,

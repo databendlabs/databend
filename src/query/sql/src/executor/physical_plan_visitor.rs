@@ -17,6 +17,8 @@ use common_exception::Result;
 use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregatePartial;
+use super::DeleteFinal;
+use super::DeletePartial;
 use super::DistributedInsertSelect;
 use super::EvalScalar;
 use super::Exchange;
@@ -58,6 +60,8 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::DistributedInsertSelect(plan) => self.replace_insert_select(plan),
             PhysicalPlan::ProjectSet(plan) => self.replace_project_set(plan),
             PhysicalPlan::RuntimeFilterSource(plan) => self.replace_runtime_filter_source(plan),
+            PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
+            PhysicalPlan::DeleteFinal(plan) => self.replace_delete_final(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
         }
     }
@@ -290,6 +294,18 @@ pub trait PhysicalPlanReplacer {
         )))
     }
 
+    fn replace_delete_partial(&mut self, plan: &DeletePartial) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DeletePartial(Box::new(plan.clone())))
+    }
+
+    fn replace_delete_final(&mut self, plan: &DeleteFinal) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::DeleteFinal(Box::new(DeleteFinal {
+            input: Box::new(input),
+            ..plan.clone()
+        })))
+    }
+
     fn replace_project_set(&mut self, plan: &ProjectSet) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
         Ok(PhysicalPlan::ProjectSet(ProjectSet {
@@ -385,6 +401,10 @@ impl PhysicalPlan {
                 PhysicalPlan::RangeJoin(plan) => {
                     Self::traverse(&plan.left, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right, pre_visit, visit, post_visit);
+                }
+                PhysicalPlan::DeletePartial(_) => {}
+                PhysicalPlan::DeleteFinal(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
                 }
             }
             post_visit(plan);
