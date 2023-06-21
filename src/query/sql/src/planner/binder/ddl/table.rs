@@ -622,7 +622,7 @@ impl Binder {
                     .get_table(&catalog, &database, &table)
                     .await?
                     .schema();
-                let (new_schema, new_column) = self
+                let (new_schema, old_column, new_column) = self
                     .analyze_rename_column(old_column, new_column, schema)
                     .await?;
                 Ok(Plan::RenameTableColumn(Box::new(RenameTableColumnPlan {
@@ -631,6 +631,7 @@ impl Binder {
                     database,
                     table,
                     schema: new_schema,
+                    old_column,
                     new_column,
                 })))
             }
@@ -950,7 +951,7 @@ impl Binder {
         old_column: &Identifier,
         new_column: &Identifier,
         table_schema: TableSchemaRef,
-    ) -> Result<(TableSchema, String)> {
+    ) -> Result<(TableSchema, String, String)> {
         let old_name = normalize_identifier(old_column, &self.name_resolution_ctx).name;
         let new_name = normalize_identifier(new_column, &self.name_resolution_ctx).name;
 
@@ -977,7 +978,7 @@ impl Binder {
                 "rename column not existed".to_string(),
             ));
         }
-        Ok((new_schema, new_name))
+        Ok((new_schema, old_name, new_name))
     }
 
     #[async_backtrace::framed]

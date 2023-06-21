@@ -23,6 +23,7 @@ use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
 use pyo3::prelude::*;
 
+use crate::dataframe::PyBoxSize;
 use crate::dataframe::PyDataFrame;
 use crate::utils::wait_for_future;
 use crate::utils::RUNTIME;
@@ -88,6 +89,10 @@ impl PySessionContext {
 async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(sql).await?;
-
-    Ok(PyDataFrame::new(ctx.clone(), plan))
+    let display_width = PyBoxSize {
+        bs_max_display_rows: 40,
+        bs_max_width: 0,
+        bs_max_col_width: 20,
+    };
+    Ok(PyDataFrame::new(ctx.clone(), plan, display_width))
 }

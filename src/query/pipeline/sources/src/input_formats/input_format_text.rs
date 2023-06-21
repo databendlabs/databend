@@ -15,8 +15,6 @@
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
-use std::sync::atomic::AtomicU64;
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
 use common_compress::DecompressDecoder;
@@ -246,43 +244,6 @@ pub trait InputFormatTextBase: Sized + Send + Sync + 'static {
         builder: &mut BlockBuilder<Self>,
         batch: RowBatch,
     ) -> Result<HashMap<u16, InputError>>;
-
-    fn on_error_continue(
-        columns: &mut Vec<ColumnBuilder>,
-        num_rows: usize,
-        e: ErrorCode,
-        error_map: &mut HashMap<u16, InputError>,
-    ) {
-        columns.iter_mut().for_each(|c| {
-            // check if parts of columns inserted data, if so, pop it.
-            if c.len() > num_rows {
-                c.pop().expect("must success");
-            }
-        });
-        error_map
-            .entry(e.code())
-            .and_modify(|input_error| input_error.num += 1)
-            .or_insert(InputError { err: e, num: 1 });
-    }
-
-    fn on_error_abort(
-        columns: &mut Vec<ColumnBuilder>,
-        num_rows: usize,
-        abort_num: u64,
-        error_count: &AtomicU64,
-        e: ErrorCode,
-    ) -> Result<()> {
-        if abort_num <= 1 || error_count.fetch_add(1, Ordering::Relaxed) >= abort_num - 1 {
-            return Err(e);
-        }
-        columns.iter_mut().for_each(|c| {
-            // check if parts of columns inserted data, if so, pop it.
-            if c.len() > num_rows {
-                c.pop().expect("must success");
-            }
-        });
-        Ok(())
-    }
 }
 
 pub struct InputFormatTextPipe<T> {
@@ -584,7 +545,6 @@ impl<T: InputFormatTextBase> BlockBuilderTrait for BlockBuilder<T> {
     fn deserialize(&mut self, batch: Option<RowBatch>) -> Result<Vec<DataBlock>> {
         if let Some(b) = batch {
             let file_name = b.split_info.file.path.clone();
-            self.num_rows += b.row_ends.len();
             let r = T::deserialize(self, b)?;
             self.merge_map(r, file_name);
             let mem = self.memory_size();

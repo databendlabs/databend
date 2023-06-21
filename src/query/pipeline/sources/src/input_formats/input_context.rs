@@ -17,6 +17,7 @@ use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::mem;
 use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -26,6 +27,7 @@ use common_compress::CompressAlgorithm;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
+use common_expression::ColumnBuilder;
 use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_formats::ClickhouseFormatType;
@@ -383,5 +385,44 @@ impl InputContext {
             return Some(m);
         }
         None
+    }
+
+    pub fn on_error(
+        &self,
+        e: ErrorCode,
+        columns: Option<(&mut [ColumnBuilder], usize)>,
+        local_error_map: Option<&mut HashMap<u16, InputError>>,
+    ) -> Result<()> {
+        if let Some((columns, num_rows)) = columns {
+            columns.iter_mut().for_each(|c| {
+                // the whole record is invalid, so we need to pop all the values
+                // not necessary if this function returns error, still do it for code simplicity
+                if c.len() > num_rows {
+                    c.pop().expect("must success");
+                    assert_eq!(c.len(), num_rows);
+                }
+            });
+        }
+
+        match &self.on_error_mode {
+            OnErrorMode::Continue => {
+                if let Some(m) = local_error_map {
+                    m.entry(e.code())
+                        .and_modify(|input_error| input_error.num += 1)
+                        .or_insert(InputError { err: e, num: 1 });
+                }
+                Ok(())
+            }
+            OnErrorMode::AbortNum(abort_num) => {
+                if *abort_num <= 1
+                    || self.on_error_count.fetch_add(1, Ordering::Relaxed) >= *abort_num - 1
+                {
+                    Err(e)
+                } else {
+                    Ok(())
+                }
+            }
+            _ => Err(e),
+        }
     }
 }

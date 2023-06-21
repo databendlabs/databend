@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use chrono::Utc;
 use common_arrow::parquet::metadata::ThriftFileMetaData;
 use common_exception::Result;
 use common_expression::DataBlock;
@@ -88,6 +89,7 @@ impl<'a> BlockWriter<'a> {
             bloom_filter_index_location,
             bloom_filter_index_size,
             Compression::Lz4Raw,
+            Some(Utc::now()),
         );
         Ok((block_meta, meta))
     }

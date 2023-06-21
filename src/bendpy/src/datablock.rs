@@ -17,18 +17,28 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use pyo3::prelude::*;
 
+use crate::dataframe::PyBoxSize;
+
 #[pyclass(name = "DataBlock", module = "databend", subclass)]
 
 pub struct PyDataBlock {
     block: DataBlock,
     schema: DataSchemaRef,
+    display_width: PyBoxSize,
 }
 
 #[pymethods]
 impl PyDataBlock {
     fn __repr__(&self, _py: Python) -> PyResult<String> {
         let block = self.block.slice(0..10);
-        let s: String = box_render(&self.schema, &[block]).unwrap();
+        let s: String = box_render(
+            &self.schema,
+            &[block],
+            self.display_width.bs_max_display_rows,
+            self.display_width.bs_max_width,
+            self.display_width.bs_max_col_width,
+        )
+        .unwrap();
         Ok(s)
     }
 
@@ -39,25 +49,34 @@ impl PyDataBlock {
     fn num_columns(&self) -> usize {
         self.block.num_columns()
     }
+
+    fn get_box(&self) -> PyBoxSize {
+        self.display_width.clone()
+    }
 }
 
 #[pyclass(name = "DataBlocks", module = "databend", subclass)]
 pub struct PyDataBlocks {
     pub(crate) blocks: Vec<DataBlock>,
     pub(crate) schema: DataSchemaRef,
+    pub(crate) display_width: PyBoxSize,
 }
 
 impl PyDataBlocks {
-    pub fn box_render(&self) -> String {
+    pub fn box_render(&self, max_rows: usize, max_width: usize, max_col_width: usize) -> String {
         let blocks: Vec<DataBlock> = self.blocks.iter().take(10).cloned().collect();
-        box_render(&self.schema, &blocks).unwrap()
+        box_render(&self.schema, &blocks, max_rows, max_width, max_col_width).unwrap()
     }
 }
 
 #[pymethods]
 impl PyDataBlocks {
     fn __repr__(&self, _py: Python) -> PyResult<String> {
-        Ok(self.box_render())
+        Ok(self.box_render(
+            self.display_width.bs_max_display_rows,
+            self.display_width.bs_max_width,
+            self.display_width.bs_max_col_width,
+        ))
     }
 
     fn num_rows(&self) -> usize {
@@ -66,5 +85,9 @@ impl PyDataBlocks {
 
     fn num_columns(&self) -> usize {
         self.schema.num_fields()
+    }
+
+    fn get_box(&self) -> PyBoxSize {
+        self.display_width.clone()
     }
 }
