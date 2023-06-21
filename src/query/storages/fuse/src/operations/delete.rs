@@ -136,7 +136,7 @@ impl FuseTable {
             )
             .await?;
         info!(
-            "fast dalete done, number of whole block deletion detected in pruning phase: {}",
+            "fast delete done, number of whole block deletion detected in pruning phase: {}",
             info.num_whole_block_mutation
         );
         if partitions.is_empty() {
