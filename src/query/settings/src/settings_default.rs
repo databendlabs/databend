@@ -178,12 +178,6 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
-                ("enable_distributed_eval_index", DefaultSettingValue {
-                    value: UserSettingValue::UInt64(1),
-                    desc: "Enables evaluated indexes to be created and maintained across multiple nodes.",
-                    possible_values: None,
-                    display_in_show_settings: true,
-                }),
                 ("prefer_broadcast_join", DefaultSettingValue {
                     value: UserSettingValue::UInt64(1),
                     desc: "Enables broadcast join.",

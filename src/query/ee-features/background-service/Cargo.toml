@@ -18,7 +18,6 @@ async-backtrace = { workspace = true }
 async-trait = "0.1.57"
 common-base = { path = "../../../common/base" }
 common-exception = { path = "../../../common/exception" }
-databend-query = { path = "../../service" }
 
 [build-dependencies]
 

@@ -120,8 +120,9 @@ impl Table for GPT2SQLTable {
     #[async_backtrace::framed]
     async fn read_partitions(
         &self,
-        _: Arc<dyn TableContext>,
-        _: Option<PushDownInfo>,
+        _ctx: Arc<dyn TableContext>,
+        _push_downs: Option<PushDownInfo>,
+        _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         // dummy statistics
         Ok((PartStatistics::default_exact(), Partitions::default()))

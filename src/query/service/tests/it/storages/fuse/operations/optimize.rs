@@ -56,7 +56,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
 
     // there will be 5 blocks
     let table = fixture.latest_default_table().await?;
-    let (_, parts) = table.read_partitions(ctx.clone(), None).await?;
+    let (_, parts) = table.read_partitions(ctx.clone(), None, true).await?;
     assert_eq!(parts.len(), n);
 
     // do compact
@@ -78,7 +78,7 @@ async fn test_fuse_table_optimize() -> Result<()> {
 
     // verify compaction
     let table = fixture.latest_default_table().await?;
-    let (_, parts) = table.read_partitions(ctx.clone(), None).await?;
+    let (_, parts) = table.read_partitions(ctx.clone(), None, true).await?;
     // blocks are so tiny, they should be compacted into one
     assert_eq!(parts.len(), 1);
 
