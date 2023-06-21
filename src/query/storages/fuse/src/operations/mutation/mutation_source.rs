@@ -227,6 +227,10 @@ impl Processor for MutationSource {
                     };
 
                     if affect_rows != 0 {
+                        if self.query_row_id_col {
+                            // remove the row_id_col
+                            data_block = data_block.pop_columns(1)?;
+                        }
                         let progress_values = ProgressValues {
                             rows: affect_rows,
                             bytes: 0,
