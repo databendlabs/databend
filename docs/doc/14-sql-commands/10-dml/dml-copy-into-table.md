@@ -216,7 +216,7 @@ copyOptions ::=
 | PURGE                 | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                                                                                            | Optional |
 | FORCE                 | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.                                                                        | Optional |
 | DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                                                                                           | Optional |
-| ON_ERROR              | Provides options to handle a file containing errors. Select `continue` to skip the file and continue, or `abort_N` to abort the load operation when num of error >= N, the default values is abort, which means abort_1. | Optional |
+| ON_ERROR              | Provides options to handle a file containing errors. Select 'continue' to skip the file and proceed, or 'abort_N' to terminate the load operation when the number of errors is equal to or greater than N. The default value is 'abort', which is equivalent to 'abort_1'. | Optional |
 | MAX_FILES             | Sets the maximum number of files to load. Defaults to `0` meaning no limits.                                                                                                                                             | Optional |
 
 :::info
