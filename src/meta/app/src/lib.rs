@@ -23,6 +23,7 @@
 #![feature(no_sanitize)]
 
 pub mod app_error;
+pub mod background;
 pub mod data_mask;
 pub mod principal;
 pub mod schema;

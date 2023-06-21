@@ -15,6 +15,7 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(no_sanitize)]
 
+mod background_config;
 /// Config mods provide config support.
 ///
 /// We are providing two config types:

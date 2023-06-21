@@ -32,6 +32,7 @@ use super::DropDatamaskPolicyPlan;
 use super::DropIndexPlan;
 use super::DropShareEndpointPlan;
 use super::ModifyTableColumnPlan;
+use super::RenameTableColumnPlan;
 use super::SetOptionsPlan;
 use super::VacuumTablePlan;
 use crate::optimizer::SExpr;
@@ -86,6 +87,7 @@ use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::KillPlan;
 use crate::plans::OptimizeTablePlan;
+use crate::plans::RefreshIndexPlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTablePlan;
@@ -164,6 +166,7 @@ pub enum Plan {
     DropTable(Box<DropTablePlan>),
     UndropTable(Box<UndropTablePlan>),
     RenameTable(Box<RenameTablePlan>),
+    RenameTableColumn(Box<RenameTableColumnPlan>),
     AddTableColumn(Box<AddTableColumnPlan>),
     DropTableColumn(Box<DropTableColumnPlan>),
     ModifyTableColumn(Box<ModifyTableColumnPlan>),
@@ -192,6 +195,7 @@ pub enum Plan {
     // Indexes
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
+    RefreshIndex(Box<RefreshIndexPlan>),
 
     // Virtual Columns
     CreateVirtualColumns(Box<CreateVirtualColumnsPlan>),
@@ -310,6 +314,7 @@ impl Display for Plan {
             Plan::DropTable(_) => write!(f, "DropTable"),
             Plan::UndropTable(_) => write!(f, "UndropTable"),
             Plan::RenameTable(_) => write!(f, "RenameTable"),
+            Plan::RenameTableColumn(_) => write!(f, "RenameTableColumn"),
             Plan::AddTableColumn(_) => write!(f, "AddTableColumn"),
             Plan::ModifyTableColumn(_) => write!(f, "ModifyTableColumn"),
             Plan::DropTableColumn(_) => write!(f, "DropTableColumn"),
@@ -326,6 +331,7 @@ impl Display for Plan {
             Plan::DropView(_) => write!(f, "DropView"),
             Plan::CreateIndex(_) => write!(f, "CreateIndex"),
             Plan::DropIndex(_) => write!(f, "DropIndex"),
+            Plan::RefreshIndex(_) => write!(f, "RefreshIndex"),
             Plan::CreateVirtualColumns(_) => write!(f, "CreateVirtualColumns"),
             Plan::AlterVirtualColumns(_) => write!(f, "AlterVirtualColumns"),
             Plan::DropVirtualColumns(_) => write!(f, "DropVirtualColumns"),

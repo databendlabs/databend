@@ -177,6 +177,9 @@ impl InterpreterFactory {
                 ctx,
                 *set_options.clone(),
             )?)),
+            Plan::RenameTableColumn(rename_table_column) => Ok(Arc::new(
+                RenameTableColumnInterpreter::try_create(ctx, *rename_table_column.clone())?,
+            )),
             Plan::AddTableColumn(add_table_column) => Ok(Arc::new(
                 AddTableColumnInterpreter::try_create(ctx, *add_table_column.clone())?,
             )),
@@ -238,7 +241,10 @@ impl InterpreterFactory {
                 ctx,
                 *index.clone(),
             )?)),
-
+            Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
             // Virtual columns
             Plan::CreateVirtualColumns(create_virtual_columns) => Ok(Arc::new(
                 CreateVirtualColumnsInterpreter::try_create(ctx, *create_virtual_columns.clone())?,

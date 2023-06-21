@@ -53,7 +53,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Generic(0),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|args_domain| {
+                calc_domain: Box::new(|_, args_domain| {
                     let mut domain = None;
                     for cond_idx in (0..args_domain.len() - 1).step_by(2) {
                         let (has_true, has_null_or_false) = match &args_domain[cond_idx] {
@@ -105,7 +105,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<NullType, BooleanType, _, _>(
         "is_not_null",
-        |_| {
+        |_, _| {
             FunctionDomain::Domain(BooleanDomain {
                 has_true: false,
                 has_false: true,
@@ -115,7 +115,7 @@ pub fn register(registry: &mut FunctionRegistry) {
     );
     registry.register_1_arg_core::<NullableType<GenericType<0>>, BooleanType, _, _>(
         "is_not_null",
-        |NullableDomain { has_null, value }| {
+        |_, NullableDomain { has_null, value }| {
             FunctionDomain::Domain(BooleanDomain {
                 has_true: value.is_some(),
                 has_false: *has_null,

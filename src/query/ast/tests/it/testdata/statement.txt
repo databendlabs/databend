@@ -7161,6 +7161,52 @@ AlterTable(
 
 
 ---------- Input ----------
+ALTER TABLE t RENAME COLUMN a TO b;
+---------- Output ---------
+ALTER TABLE t RENAME COLUMN a TO b
+---------- AST ------------
+AlterTable(
+    AlterTableStmt {
+        if_exists: false,
+        table_reference: Table {
+            span: Some(
+                12..13,
+            ),
+            catalog: None,
+            database: None,
+            table: Identifier {
+                name: "t",
+                quote: None,
+                span: Some(
+                    12..13,
+                ),
+            },
+            alias: None,
+            travel_point: None,
+            pivot: None,
+            unpivot: None,
+        },
+        action: RenameColumn {
+            old_column: Identifier {
+                name: "a",
+                quote: None,
+                span: Some(
+                    28..29,
+                ),
+            },
+            new_column: Identifier {
+                name: "b",
+                quote: None,
+                span: Some(
+                    33..34,
+                ),
+            },
+        },
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t DROP COLUMN b;
 ---------- Output ---------
 ALTER TABLE t DROP COLUMN b

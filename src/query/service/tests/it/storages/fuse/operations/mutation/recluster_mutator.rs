@@ -16,6 +16,7 @@ use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::Utc;
 use common_base::base::tokio;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -65,6 +66,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
             None,
             0,
             meta::Compression::Lz4Raw,
+            Some(Utc::now()),
         ));
 
         let statistics =

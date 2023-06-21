@@ -43,6 +43,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -363,6 +365,11 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn drop_index(&self, _req: DropIndexReq) -> Result<DropIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
         unimplemented!()
     }
 

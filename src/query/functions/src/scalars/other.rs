@@ -81,7 +81,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
         "humanize_size",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_byte_size(val.into());
             output.put_str(&new_val);
@@ -91,7 +91,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_passthrough_nullable_1_arg::<Float64Type, StringType, _, _>(
         "humanize_number",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         vectorize_with_builder_1_arg::<Float64Type, StringType>(move |val, output, _| {
             let new_val = convert_number_size(val.into());
             output.put_str(&new_val);
@@ -101,7 +101,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<Float64Type, UInt8Type, _, _>(
         "sleep",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         |a, ctx| {
             if let Some(val) = a.as_scalar() {
                 let duration =
@@ -132,7 +132,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_0_arg_core::<NumberType<F64>, _, _>(
         "rand",
-        || {
+        |_| {
             FunctionDomain::Domain(SimpleDomain {
                 min: OrderedFloat(0.0),
                 max: OrderedFloat(1.0),
@@ -149,7 +149,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg::<NumberType<u64>, NumberType<F64>, _, _>(
         "rand",
-        |_| {
+        |_, _| {
             FunctionDomain::Domain(SimpleDomain {
                 min: OrderedFloat(0.0),
                 max: OrderedFloat(1.0),
@@ -163,7 +163,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<GenericType<0>, StringType, _, _>(
         "typeof",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         |_, ctx| Value::Scalar(ctx.generics[0].sql_name().into_bytes()),
     );
 
@@ -175,7 +175,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 return_type: DataType::Boolean,
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| {
+                calc_domain: Box::new(|_, _| {
                     FunctionDomain::Domain(Domain::Boolean(BooleanDomain {
                         has_true: false,
                         has_false: true,
@@ -188,7 +188,7 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<NullableType<GenericType<0>>, GenericType<0>, _, _>(
         "assume_not_null",
-        |domain| {
+        |_, domain| {
             domain
                 .value
                 .as_ref()
@@ -204,20 +204,20 @@ pub fn register(registry: &mut FunctionRegistry) {
 
     registry.register_1_arg_core::<NullType, NullType, _, _>(
         "to_nullable",
-        |_| FunctionDomain::Domain(()),
+        |_, _| FunctionDomain::Domain(()),
         |val, _| val.to_owned(),
     );
 
     registry
         .register_1_arg_core::<NullableType<GenericType<0>>, NullableType<GenericType<0>>, _, _>(
             "to_nullable",
-            |domain| FunctionDomain::Domain(domain.clone()),
+            |_, domain| FunctionDomain::Domain(domain.clone()),
             |val, _| val.to_owned(),
         );
 
     registry.register_0_arg_core::<StringType, _, _>(
         "gen_random_uuid",
-        || FunctionDomain::Full,
+        |_| FunctionDomain::Full,
         |ctx| {
             let mut values: Vec<u8> = Vec::with_capacity(ctx.num_rows * 36);
             let mut offsets: Vec<u64> = Vec::with_capacity(ctx.num_rows);
@@ -241,13 +241,13 @@ pub fn register(registry: &mut FunctionRegistry) {
 fn register_inet_aton(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<StringType, UInt32Type, _, _>(
         "inet_aton",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         eval_inet_aton,
     );
 
     registry.register_combine_nullable_1_arg::<StringType, UInt32Type, _, _>(
         "try_inet_aton",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         error_to_null(eval_inet_aton),
     );
 
@@ -271,13 +271,13 @@ fn register_inet_aton(registry: &mut FunctionRegistry) {
 fn register_inet_ntoa(registry: &mut FunctionRegistry) {
     registry.register_passthrough_nullable_1_arg::<Int64Type, StringType, _, _>(
         "inet_ntoa",
-        |_| FunctionDomain::MayThrow,
+        |_, _| FunctionDomain::MayThrow,
         eval_inet_ntoa,
     );
 
     registry.register_combine_nullable_1_arg::<Int64Type, StringType, _, _>(
         "try_inet_ntoa",
-        |_| FunctionDomain::Full,
+        |_, _| FunctionDomain::Full,
         error_to_null(eval_inet_ntoa),
     );
 
@@ -305,7 +305,7 @@ macro_rules! register_simple_domain_type_run_diff {
     ($registry:ident, $T:ty, $O:ty, $source_primitive_type:ty, $zero:expr) => {
         $registry.register_passthrough_nullable_1_arg::<$T, $O, _, _>(
             "running_difference",
-            |_| FunctionDomain::MayThrow,
+            |_, _| FunctionDomain::MayThrow,
             move |arg1, ctx| match arg1 {
                 ValueRef::Scalar(_val) => {
                     let mut builder =
@@ -360,7 +360,7 @@ fn register_grouping(registry: &mut FunctionRegistry) {
                 return_type: DataType::Number(NumberDataType::UInt32),
             },
             eval: FunctionEval::Scalar {
-                calc_domain: Box::new(|_| FunctionDomain::Full),
+                calc_domain: Box::new(|_, _| FunctionDomain::Full),
                 eval: Box::new(move |args, _| match &args[0] {
                     ValueRef::Scalar(ScalarRef::Number(NumberScalar::UInt32(v))) => Value::Scalar(
                         Scalar::Number(NumberScalar::UInt32(compute_grouping(&params, *v))),
