@@ -253,6 +253,7 @@ impl InputContext {
     }
 
     #[async_backtrace::framed]
+    #[allow(clippy::too_many_arguments)]
     pub async fn try_create_from_insert_file_format(
         stream_receiver: Receiver<Result<StreamingReadBatch>>,
         settings: Arc<Settings>,
@@ -261,6 +262,7 @@ impl InputContext {
         scan_progress: Arc<Progress>,
         is_multi_part: bool,
         block_compact_thresholds: BlockThresholds,
+        on_error_mode: OnErrorMode,
     ) -> Result<Self> {
         let read_batch_size = settings.get_input_read_buffer_size()? as usize;
         let file_format_options_ext = FileFormatOptionsExt::create_from_settings(&settings, false)?;
@@ -283,7 +285,7 @@ impl InputContext {
             block_compact_thresholds,
             file_format_options_ext,
             file_format_params,
-            on_error_mode: OnErrorMode::AbortNum(1),
+            on_error_mode,
             on_error_count: AtomicU64::new(0),
             on_error_map: None,
             projection: None,
