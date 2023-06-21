@@ -102,7 +102,7 @@ async fn drop_index(ctx: Arc<QueryContext>, index_name: &str) -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_index_scan() -> Result<()> {
-    let (_guard, ctx) = create_ee_query_context(None).await.unwrap();
+    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
 
     // Create table
@@ -273,7 +273,7 @@ async fn test_index_scan() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_index_scan_two_agg_funcs() -> Result<()> {
-    let (_guard, ctx) = create_ee_query_context(None).await.unwrap();
+    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
 
     // Create table
@@ -515,7 +515,7 @@ async fn fuzz(
         index_block_ratio,
     );
 
-    let (_guard, ctx) = create_ee_query_context(None).await.unwrap();
+    let (_guard, ctx, _) = create_ee_query_context(None).await.unwrap();
     let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
     let ctx = fixture.ctx();
 

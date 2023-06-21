@@ -62,16 +62,18 @@ pub enum BlockOperator {
 impl BlockOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
         match self {
-            BlockOperator::Map { exprs } => {
+            BlockOperator::Map { .. }
+            | BlockOperator::MapWithOutput { .. }
+            | BlockOperator::Filter { .. }
                 if input
                     .get_meta()
                     .and_then(AggIndexMeta::downcast_ref_from)
-                    .is_some()
-                {
-                    // It's from aggregating index.
-                    return Ok(input);
-                }
-
+                    .is_some() =>
+            {
+                // It's from aggregating index.
+                Ok(input)
+            }
+            BlockOperator::Map { exprs } => {
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
                     let result = evaluator.run(expr)?;
@@ -85,15 +87,6 @@ impl BlockOperator {
                 exprs,
                 output_indexes,
             } => {
-                if input
-                    .get_meta()
-                    .and_then(AggIndexMeta::downcast_ref_from)
-                    .is_some()
-                {
-                    // It's from aggregating index.
-                    return Ok(input);
-                }
-
                 let original_num_columns = input.num_columns();
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
@@ -119,15 +112,6 @@ impl BlockOperator {
             }
 
             BlockOperator::Filter { expr } => {
-                if input
-                    .get_meta()
-                    .and_then(AggIndexMeta::downcast_ref_from)
-                    .is_some()
-                {
-                    // It's from aggregating index.
-                    return Ok(input);
-                }
-
                 assert_eq!(expr.data_type(), &DataType::Boolean);
 
                 let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
