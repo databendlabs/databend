@@ -31,8 +31,8 @@ use uuid::Uuid;
 
 use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
+use crate::operations::commit::data_mutation;
 use crate::operations::commit::Conflict;
-use crate::operations::commit::MutatorConflictDetector;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
 use crate::statistics::reducers::merge_statistics_mut;
@@ -56,6 +56,7 @@ pub trait SnapshotGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
+        modified_segments: Vec<Location>,
     ) -> Result<TableSnapshot>;
 }
 
@@ -90,13 +91,14 @@ impl SnapshotGenerator for MutationGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
+        modified_segments: Vec<Location>,
     ) -> Result<TableSnapshot> {
         let previous =
             previous.unwrap_or_else(|| Arc::new(TableSnapshot::new_empty_snapshot(schema.clone())));
 
-        match MutatorConflictDetector::detect_conflicts(
-            self.base_snapshot.as_ref(),
+        match data_mutation::MutatorConflictDetector::detect_conflicts(
             previous.as_ref(),
+            &modified_segments,
         ) {
             Conflict::Unresolvable => {
                 metrics_inc_commit_mutation_unresolvable_conflict();
@@ -117,6 +119,28 @@ impl SnapshotGenerator for MutationGenerator {
                     .cloned()
                     .collect::<Vec<_>>();
                 let new_summary = merge_statistics(&self.merged_statistics, &append_statistics);
+                let new_snapshot = TableSnapshot::new(
+                    Uuid::new_v4(),
+                    &previous.timestamp,
+                    Some((previous.snapshot_id, previous.format_version)),
+                    schema,
+                    new_summary,
+                    new_segments,
+                    cluster_key_meta,
+                    previous.table_statistics_location.clone(),
+                );
+                Ok(new_snapshot)
+            }
+            Conflict::ResolvableDataMutate => {
+                tracing::info!("resolvable conflicts detected");
+                metrics_inc_commit_mutation_resolvable_conflict();
+                let mut new_segments = previous.segments.clone();
+                for m in &modified_segments {
+                    new_segments.retain(|x| x != m);
+                }
+                new_segments.extend(self.merged_segments.clone());
+                let new_summary = merge_statistics(&self.merged_statistics, &previous.summary);
+                let new_summary = deduct_statistics(&new_summary, &self.base_snapshot.summary);
                 let new_snapshot = TableSnapshot::new(
                     Uuid::new_v4(),
                     &previous.timestamp,
@@ -199,6 +223,7 @@ impl SnapshotGenerator for AppendGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
+        _modified_segments: Vec<Location>,
     ) -> Result<TableSnapshot> {
         let mut prev_timestamp = None;
         let mut prev_snapshot_id = None;

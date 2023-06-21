@@ -128,6 +128,7 @@ impl TryFrom<DataBlock> for MutationLogs {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 pub struct CommitMeta {
     pub segments: Vec<Location>,
+    pub modified_segments: Vec<Location>,
     pub summary: Statistics,
     pub abort_operation: AbortOperation,
     pub need_lock: bool,
@@ -136,12 +137,14 @@ pub struct CommitMeta {
 impl CommitMeta {
     pub fn new(
         segments: Vec<Location>,
+        modified_segments: Vec<Location>,
         summary: Statistics,
         abort_operation: AbortOperation,
         need_lock: bool,
     ) -> Self {
         CommitMeta {
             segments,
+            modified_segments,
             summary,
             abort_operation,
             need_lock,

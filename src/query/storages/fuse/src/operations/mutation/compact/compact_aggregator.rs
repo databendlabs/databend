@@ -183,6 +183,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             .collect();
         let meta = CommitMeta::new(
             merged_segments,
+            vec![],
             std::mem::take(&mut self.merged_statistics),
             std::mem::take(&mut self.abort_operation),
             true,

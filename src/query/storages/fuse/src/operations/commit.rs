@@ -370,6 +370,7 @@ impl FuseTable {
                                     concurrently_appended_segment_locations =
                                         &latest_snapshot.segments[range_of_newly_append];
                                 }
+                                _ => unreachable!(),
                             }
 
                             retries += 1;
@@ -490,6 +491,7 @@ pub enum Conflict {
     // resolvable conflicts with append only operation
     // the range embedded is the range of segments that are appended in the latest snapshot
     ResolvableAppend(Range<usize>),
+    ResolvableDataMutate,
 }
 
 // wraps a namespace, to clarify the who is detecting conflict
@@ -511,6 +513,35 @@ impl MutatorConflictDetector {
             Conflict::ResolvableAppend(0..(latest_segments_len - base_segments_len))
         } else {
             Conflict::Unresolvable
+        }
+    }
+}
+
+/// For delete, update, replace operations, if the modified segments are still in the latest snapshot, then it is resolvable
+///
+/// We call them data mutation operations, because they mutate the data, but don't reorginize the data on purpose,like compact and recluster
+pub mod data_mutation {
+    use storages_common_table_meta::meta::Location;
+    use storages_common_table_meta::meta::TableSnapshot;
+
+    use super::Conflict;
+
+    pub struct MutatorConflictDetector;
+
+    impl MutatorConflictDetector {
+        pub fn detect_conflicts(
+            latest: &TableSnapshot,
+            modified_segments: &[Location],
+        ) -> Conflict {
+            let latest_segments = &latest.segments;
+            if modified_segments
+                .iter()
+                .all(|modified_segment| latest_segments.contains(modified_segment))
+            {
+                Conflict::ResolvableDataMutate
+            } else {
+                Conflict::Unresolvable
+            }
         }
     }
 }

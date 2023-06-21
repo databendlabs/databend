@@ -178,6 +178,10 @@ impl MutationAccumulator {
 
         let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         let segment_indices = self.mutations.keys().cloned().collect::<Vec<_>>();
+        let modified_segments = segment_indices
+            .iter()
+            .map(|i| self.base_segments[*i].clone())
+            .collect::<Vec<_>>();
         for chunk in segment_indices.chunks(chunk_size) {
             let results = self.partial_apply(chunk.to_vec()).await?;
             for result in results {
@@ -227,6 +231,7 @@ impl MutationAccumulator {
 
         let meta = CommitMeta::new(
             new_segments,
+            modified_segments,
             self.summary.clone(),
             self.abort_operation.clone(),
             false,
