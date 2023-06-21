@@ -63,6 +63,7 @@ impl FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         debug!("fuse table do read partitions, push downs:{:?}", push_downs);
         let snapshot = self.read_table_snapshot().await?;
@@ -76,10 +77,7 @@ impl FuseTable {
                     .meta_location_generator
                     .snapshot_location_from_uuid(&snapshot.snapshot_id, snapshot.format_version)?;
 
-                let settings = ctx.get_settings();
-                if (settings.get_enable_distributed_eval_index()? && !ctx.get_cluster().is_empty())
-                    || is_lazy
-                {
+                if !dry_run || is_lazy {
                     let mut segments = Vec::with_capacity(snapshot.segments.len());
                     for (idx, segment_location) in snapshot.segments.iter().enumerate() {
                         segments.push(FuseLazyPartInfo::create(idx, segment_location.clone()))

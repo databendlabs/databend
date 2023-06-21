@@ -489,8 +489,9 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        self.do_read_partitions(ctx, push_downs).await
+        self.do_read_partitions(ctx, push_downs, dyn_run).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read_data", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
