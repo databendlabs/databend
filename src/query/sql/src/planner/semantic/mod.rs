@@ -13,6 +13,7 @@
 // limitations under the License.
 
 mod aggregate_rewriter;
+mod aggregating_index_rewriter;
 mod distinct_to_groupby;
 mod grouping_check;
 mod lowering;
@@ -21,6 +22,7 @@ mod type_check;
 mod window_check;
 
 pub use aggregate_rewriter::AggregateRewriter;
+pub use aggregating_index_rewriter::AggregatingIndexRewriter;
 pub use distinct_to_groupby::DistinctToGroupBy;
 pub use grouping_check::GroupingChecker;
 pub use lowering::*;
@@ -33,3 +35,5 @@ pub use type_check::resolve_type_name_by_str;
 pub use type_check::validate_function_arg;
 pub use type_check::TypeChecker;
 pub use window_check::WindowChecker;
+
+pub(crate) const SUPPORTED_AGGREGATING_INDEX_FUNCTIONS: [&str; 3] = ["sum", "min", "max"];

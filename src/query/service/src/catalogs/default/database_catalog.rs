@@ -15,7 +15,10 @@
 use std::any::Any;
 use std::sync::Arc;
 
+use common_catalog::catalog::StorageDescription;
+use common_catalog::database::Database;
 use common_catalog::table_args::TableArgs;
+use common_catalog::table_function::TableFunction;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -38,6 +41,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -69,10 +74,7 @@ use tracing::info;
 use crate::catalogs::catalog::Catalog;
 use crate::catalogs::default::ImmutableCatalog;
 use crate::catalogs::default::MutableCatalog;
-use crate::databases::Database;
-use crate::storages::StorageDescription;
 use crate::storages::Table;
-use crate::table_functions::TableFunction;
 use crate::table_functions::TableFunctionFactory;
 
 /// Combine two catalogs together
@@ -487,6 +489,11 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
         self.mutable_catalog.drop_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
+        self.mutable_catalog.get_index(req).await
     }
 
     #[async_backtrace::framed]

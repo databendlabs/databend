@@ -157,6 +157,27 @@ impl Display for DropIndexReq {
 pub struct DropIndexReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetIndexReq {
+    pub name_ident: IndexNameIdent,
+}
+
+impl Display for GetIndexReq {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "get_index:{}/{}",
+            self.name_ident.tenant, self.name_ident.index_name
+        )
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct GetIndexReply {
+    pub index_id: u64,
+    pub index_meta: IndexMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListIndexesReq {
     pub tenant: String,
     pub table_id: Option<MetaId>,

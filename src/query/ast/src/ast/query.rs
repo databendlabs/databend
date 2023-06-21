@@ -179,6 +179,18 @@ impl SelectTarget {
             SelectTarget::QualifiedName { .. } => false,
         }
     }
+
+    pub fn function_call_name(&self) -> Option<String> {
+        match self {
+            SelectTarget::AliasedExpr { box expr, .. } => match expr {
+                Expr::FunctionCall { name, window, .. } if window.is_none() => {
+                    Some(name.name.to_lowercase())
+                }
+                _ => None,
+            },
+            SelectTarget::QualifiedName { .. } => None,
+        }
+    }
 }
 
 pub type QualifiedName = Vec<Indirection>;

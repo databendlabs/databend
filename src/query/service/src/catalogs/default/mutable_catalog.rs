@@ -47,6 +47,8 @@ use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -232,6 +234,11 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply> {
         Ok(self.ctx.meta.drop_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
+        Ok(self.ctx.meta.get_index(req).await?)
     }
 
     #[async_backtrace::framed]

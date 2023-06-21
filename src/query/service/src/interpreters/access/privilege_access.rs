@@ -493,7 +493,8 @@ impl AccessChecker for PrivilegeAccess {
             Plan::AlterUser(_)
             | Plan::AlterUDF(_)
             | Plan::RenameDatabase(_)
-            | Plan::RevertTable(_) => {
+            | Plan::RevertTable(_)
+            | Plan::RefreshIndex(_) => {
                 session
                     .validate_privilege(&GrantObject::Global, vec![UserPrivilegeType::Alter])
                     .await?;
