@@ -203,13 +203,14 @@ impl PipelineBuilder {
         }
     }
 
-    /// The flow of Pipeline that build_delete_partial and build_delete_final build is as follows:
+    /// The flow of Pipeline is as follows:
+    ///
     /// +---------------+      +-----------------------+
-    /// |MutationSource1| ---> |SerializeDataTransform1|   ------
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |     ...       | ---> |          ...          |   ...   | ---> |TableMutationAggregator| ---> |CommitSink|
-    /// +---------------+      +-----------------------+         |      +-----------------------+      +----------+
-    /// |MutationSourceN| ---> |SerializeDataTransformN|   ------
+    /// |MutationSource1| ---> |SerializeDataTransform1|   
+    /// +---------------+      +-----------------------+               
+    /// |     ...       | ---> |          ...          |
+    /// +---------------+      +-----------------------+               
+    /// |MutationSourceN| ---> |SerializeDataTransformN|   
     /// +---------------+      +-----------------------+
     fn build_delete_partial(&mut self, delete: &DeletePartial) -> Result<()> {
         let table =
@@ -238,6 +239,11 @@ impl PipelineBuilder {
         Ok(())
     }
 
+    /// The flow of Pipeline is as follows:
+    ///
+    /// +-----------------------+      +----------+
+    /// |TableMutationAggregator| ---> |CommitSink|
+    /// +-----------------------+      +----------+
     fn build_delete_final(&mut self, delete: &DeleteFinal) -> Result<()> {
         self.build_pipeline(&delete.input)?;
         let table =
