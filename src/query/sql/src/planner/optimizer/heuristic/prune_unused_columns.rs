@@ -29,11 +29,17 @@ use crate::MetadataRef;
 
 pub struct UnusedColumnPruner {
     metadata: MetadataRef,
+
+    /// If exclude lazy columns
+    apply_lazy: bool,
 }
 
 impl UnusedColumnPruner {
-    pub fn new(metadata: MetadataRef) -> Self {
-        Self { metadata }
+    pub fn new(metadata: MetadataRef, apply_lazy: bool) -> Self {
+        Self {
+            metadata,
+            apply_lazy,
+        }
     }
 
     pub fn remove_unused_columns(&self, expr: &SExpr, require_columns: ColumnSet) -> Result<SExpr> {
@@ -220,11 +226,21 @@ impl UnusedColumnPruner {
                     Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }
-            RelOperator::Limit(p) => Ok(SExpr::create_unary(
-                Arc::new(RelOperator::Limit(p.clone())),
-                Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
-            )),
+            RelOperator::Limit(p) => {
+                if self.apply_lazy {
+                    let metadata = self.metadata.read().clone();
+                    let lazy_columns = metadata.lazy_columns();
+                    required = required
+                        .difference(lazy_columns)
+                        .cloned()
+                        .collect::<ColumnSet>();
+                }
 
+                Ok(SExpr::create_unary(
+                    Arc::new(RelOperator::Limit(p.clone())),
+                    Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
+                ))
+            }
             RelOperator::UnionAll(p) => {
                 let left_used = p.pairs.iter().fold(required.clone(), |mut acc, v| {
                     acc.insert(v.0);
