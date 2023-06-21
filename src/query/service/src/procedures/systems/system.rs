@@ -45,7 +45,7 @@ impl SystemProcedure {
             Box::new(SearchTablesProcedure::try_create),
         );
         factory.register(
-            "system$execute_job",
+            "system$execute_background_job",
             Box::new(ExecuteJobProcedure::try_create),
         );
     }
