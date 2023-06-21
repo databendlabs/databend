@@ -100,6 +100,9 @@ impl Job for CompactionJob {
         self.info.lock().clone()
     }
 
+    fn get_name(&self) -> BackgroundJobIdent {
+        self.creator.clone()
+    }
     async fn update_job_status(&mut self, status: BackgroundJobStatus) -> Result<()> {
         self.meta_api
             .update_background_job_status(UpdateBackgroundJobStatusReq {

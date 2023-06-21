@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use crate::procedures::systems::execute_job::ExecuteJobProcedure;
 use crate::procedures::systems::ClusteringInformationProcedure;
 use crate::procedures::systems::FuseBlockProcedure;
 use crate::procedures::systems::FuseSegmentProcedure;
@@ -42,6 +43,10 @@ impl SystemProcedure {
         factory.register(
             "system$search_tables",
             Box::new(SearchTablesProcedure::try_create),
+        );
+        factory.register(
+            "system$execute_job",
+            Box::new(ExecuteJobProcedure::try_create),
         );
     }
 }
