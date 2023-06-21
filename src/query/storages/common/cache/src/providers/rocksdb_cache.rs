@@ -15,6 +15,7 @@
 use chrono::Utc;
 use common_exception::Result;
 use rocksdb::TransactionDBOptions;
+use tracing::error;
 
 use super::rocksdb_disk_cache::i64_merge_operator;
 use super::rocksdb_disk_cache::KeyTimeValue;
@@ -66,20 +67,21 @@ impl RocksDbCache {
             if let Ok(Some(value)) = self.db.get(&key2time_key) {
                 let key_time_value: KeyTimeValue = serde_json::from_slice(&value)?;
                 let txn = self.db.transaction();
-                evicted_len += key_time_value.value_len;
 
                 let key2value_key = format!("{}/{}", KEY2VALUE_COLUMN_PREFIX, &key);
 
-                txn.delete(&time_key)?;
-                txn.delete(&key2time_key)?;
-                txn.delete(&key2value_key)?;
+                let _ = txn.delete(&time_key);
+                let _ = txn.delete(&key2time_key);
+                let _ = txn.delete(&key2value_key);
 
-                if txn.commit().is_err() {
-                    evicted_len -= key_time_value.value_len;
-                } else {
-                    let add: i64 = -(key_time_value.value_len as i64);
-                    self.db.merge(DISK_SIZE_KEY, i64::to_ne_bytes(add))?;
+                if let Err(e) = txn.commit() {
+                    error!("Error remove key {} meta data {}", key, e);
+                    continue;
                 }
+
+                evicted_len += key_time_value.value_len;
+                let add: i64 = -(key_time_value.value_len as i64);
+                let _ = self.db.merge(DISK_SIZE_KEY, i64::to_ne_bytes(add));
             }
             if evicted_len >= len {
                 break;

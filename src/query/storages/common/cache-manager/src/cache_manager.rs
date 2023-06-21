@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -197,7 +198,7 @@ impl CacheManager {
     }
 
     fn new_table_data_cache(
-        path: &PathBuf,
+        path: &Path,
         population_queue_size: u32,
         disk_cache_bytes_size: u64,
         cache_type: &CacheStorageTypeInnerConfig,
@@ -206,21 +207,21 @@ impl CacheManager {
             match cache_type {
                 CacheStorageTypeInnerConfig::Disk => {
                     Ok(Some(TableDataCacheBuilder::new_table_data_disk_cache(
-                        path,
+                        &path.join("disk"),
                         population_queue_size,
                         disk_cache_bytes_size,
                     )?))
                 }
                 CacheStorageTypeInnerConfig::RocksDb => {
                     Ok(Some(TableDataCacheBuilder::new_table_data_rocksdb_cache(
-                        path,
+                        &path.join("rocksdb"),
                         population_queue_size,
                         disk_cache_bytes_size,
                     )?))
                 }
                 CacheStorageTypeInnerConfig::RocksDbDisk => Ok(Some(
                     TableDataCacheBuilder::new_table_data_rocksdb_disk_cache(
-                        path,
+                        &path.join("rocksdb_disk"),
                         population_queue_size,
                         disk_cache_bytes_size,
                     )?,

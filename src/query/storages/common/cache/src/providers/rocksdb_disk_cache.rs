@@ -115,8 +115,9 @@ impl RocksDbDiskCache {
         let value_len = if let Some(time_value) = time_value {
             let mut key_time_value: KeyTimeValue = serde_json::from_slice(time_value)?;
             key_time_value.count += 1;
-            // access count less than ROCKSDB_LRU_ACCESS_COUNT cannot move to head of LRU list
+            // access count less than `ROCKSDB_LRU_ACCESS_COUNT` cannot move to head of LRU list
             if key_time_value.count < ROCKSDB_LRU_ACCESS_COUNT {
+                // in this case just update access count and return
                 txn.put(key2time_key, serde_json::to_string(&key_time_value)?)?;
                 txn.commit()?;
                 return Ok(());
@@ -171,24 +172,29 @@ impl RocksDbDiskCache {
             if let Ok(Some(value)) = self.db.get(&key2time_key) {
                 let key_time_value: KeyTimeValue = serde_json::from_slice(&value)?;
                 let txn = self.db.transaction();
+
+                let _ = txn.delete(&time_key);
+                let _ = txn.delete(&key2time_key);
+
+                if let Err(e) = txn.commit() {
+                    error!("Error remove key {} meta data {}", key, e);
+                }
+
+                // ignore remove meta error, continue to remove disk cache
+                let cache_file_path = self.abs_path_of_cache_key(&key);
+                if let Err(e) = fs::remove_file(&cache_file_path) {
+                    error!(
+                        "Error removing file from cache: `{:?}`: {}",
+                        cache_file_path, e
+                    );
+                    continue;
+                }
+
                 evicted_len += key_time_value.value_len;
 
-                txn.delete(&time_key)?;
-                txn.delete(&key2time_key)?;
-
-                if txn.commit().is_err() {
-                    evicted_len -= key_time_value.value_len;
-                } else {
-                    let cache_file_path = self.abs_path_of_cache_key(&key);
-                    fs::remove_file(&cache_file_path).unwrap_or_else(|e| {
-                        error!(
-                            "Error removing file from cache: `{:?}`: {}",
-                            cache_file_path, e
-                        )
-                    });
-                    let add: i64 = -(key_time_value.value_len as i64);
-                    self.db.merge(DISK_SIZE_KEY, i64::to_ne_bytes(add))?;
-                }
+                // update disk size stat
+                let add: i64 = -(key_time_value.value_len as i64);
+                let _ = self.db.merge(DISK_SIZE_KEY, i64::to_ne_bytes(add));
             }
             if evicted_len >= len {
                 break;
