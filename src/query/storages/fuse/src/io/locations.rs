@@ -154,6 +154,14 @@ impl TableMetaLocationGenerator {
     pub fn gen_virtual_block_location(location: &str) -> String {
         location.replace(FUSE_TBL_BLOCK_PREFIX, FUSE_TBL_VIRTUAL_BLOCK_PREFIX)
     }
+
+    pub fn gen_agg_index_location_from_block_location(loc: &str, index_id: u64) -> String {
+        let splits = loc.split('/').collect::<Vec<_>>();
+        let len = splits.len();
+        let prefix = splits[..len - 2].join("/");
+        let block_name = splits[len - 1];
+        format!("{prefix}/{FUSE_TBL_AGG_INDEX_PREFIX}/{index_id}/{block_name}")
+    }
 }
 
 trait SnapshotLocationCreator {

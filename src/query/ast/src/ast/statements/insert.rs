@@ -69,6 +69,7 @@ pub enum InsertSource {
     },
     StreamingV2 {
         settings: BTreeMap<String, String>,
+        on_error_mode: Option<String>,
         start: usize,
     },
     Values {
@@ -87,12 +88,21 @@ impl Display for InsertSource {
                 rest_str,
                 start: _,
             } => write!(f, "FORMAT {format} {rest_str}"),
-            InsertSource::StreamingV2 { settings, start: _ } => {
+            InsertSource::StreamingV2 {
+                settings,
+                on_error_mode,
+                start: _,
+            } => {
                 write!(f, " FILE_FORMAT = (")?;
                 for (k, v) in settings.iter() {
                     write!(f, " {} = '{}'", k, v)?;
                 }
-                write!(f, " )")
+                write!(f, " )")?;
+                write!(
+                    f,
+                    " ON_ERROR = '{}'",
+                    on_error_mode.as_ref().unwrap_or(&"Abort".to_string())
+                )
             }
             InsertSource::Values { rest_str } => write!(f, "VALUES {rest_str}"),
             InsertSource::Select { query } => write!(f, "{query}"),

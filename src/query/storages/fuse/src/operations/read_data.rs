@@ -57,7 +57,7 @@ impl FuseTable {
     }
 
     // Build the block reader.
-    fn build_block_reader(
+    pub fn build_block_reader(
         &self,
         plan: &DataSourcePlan,
         ctx: Arc<dyn TableContext>,

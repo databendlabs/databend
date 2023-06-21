@@ -3,86 +3,73 @@ title: ALTER TABLE
 description:
   Adds or drops a column of a table.
 ---
+import FunctionDescription from '@site/src/components/FunctionDescription';
 
-Adds or drops a column of a table.
+<FunctionDescription description="Introduced: v1.1.39"/>
+
+Modifies a table by adding, renaming, or removing a column.
 
 ## Syntax
 
 ```sql
+-- Add a column
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
-ADD COLUMN <column_name> <data_type> [NOT NULL | NULL] [DEFAULT <constant_expr>];
+ADD COLUMN <column_name> <data_type> [NOT NULL | NULL] [DEFAULT <constant_value>];
 
+-- Rename a column
+ALTER TABLE [IF EXISTS] [database.]<table_name>
+RENAME COLUMN <column_name> TO <new_column_name>;
+
+-- Remove a column
 ALTER TABLE [IF EXISTS] [database.]<table_name> 
 DROP COLUMN <column_name>;
 ```
 
-:::caution
-In `ALTER TABLE ADD COLUMN`, the default value for a column must be a constant value.
-
-This is different from [CREATE TABLE](10-ddl-create-table.md), where the default value can be any expression.
-
-If a non-constant expression is used, an error will occur.
+:::note
+Only a constant value can be accepted as a default value when adding a new column. If a non-constant expression is used, an error will occur.
 :::
 
 ## Examples
 
-### Add Column
-
-Add a new column to an existing table:
+This example illustrates the creation of a table called "default.users" with columns for id, username, email, and age. It showcases the addition of columns for business_email, middle_name, and phone_number with various constraints. The example also demonstrates the renaming and subsequent removal of the "age" column.
 
 ```sql
 -- Create a table
-CREATE TABLE students (
-  id BIGINT,
-  name VARCHAR
+CREATE TABLE default.users (
+  id INT,
+  username VARCHAR(50) NOT NULL,
+  email VARCHAR(255),
+  age INT
 );
 
--- Add a new column 'age' to the 'students' table
-ALTER TABLE students ADD COLUMN age INT;
-```
+-- Add a column with a default value
+ALTER TABLE default.users
+ADD COLUMN business_email VARCHAR(255) NOT NULL DEFAULT 'example@example.com';
 
-### Drop Column
+-- Add a column allowing NULL values
+ALTER TABLE default.users
+ADD COLUMN middle_name VARCHAR(50) NULL;
 
-Remove an existing column from a table:
+-- Add a column with NOT NULL constraint
+ALTER TABLE default.users
+ADD COLUMN phone_number VARCHAR(20) NOT NULL;
 
-```sql
--- Create a table with three columns
-CREATE TABLE employees (
-  id BIGINT,
-  name VARCHAR,
-  department VARCHAR
-);
+-- Rename a column
+ALTER TABLE default.users
+RENAME COLUMN age TO new_age;
 
--- Remove the 'department' column from the 'employees' table
-ALTER TABLE employees DROP COLUMN department;
-```
+-- Remove a column
+ALTER TABLE default.users
+DROP COLUMN new_age;
 
-### Add Column with Default Value
+DESC default.users;
 
-Add a new column to an existing table with a default value:
-
-```sql
--- Create a table
-CREATE TABLE orders (
-  id BIGINT,
-  item VARCHAR
-);
-
--- Add a new column 'status' with a default value 'Pending' to the 'orders' table
-ALTER TABLE orders ADD COLUMN status VARCHAR DEFAULT 'Pending';
-```
-
-### Add Column with NOT NULL Constraint
-
-Add a new column to an existing table with a NOT NULL constraint, which ensures that a value must be assigned to the column:
-
-```sql
--- Create a table
-CREATE TABLE products (
-  id BIGINT,
-  name VARCHAR
-);
-
--- Add a new column 'price' with a NOT NULL constraint to the 'products' table
-ALTER TABLE products ADD COLUMN price INT NOT NULL;
+Field         |Type   |Null|Default              |Extra|
+--------------+-------+----+---------------------+-----+
+id            |INT    |NO  |0                    |     |
+username      |VARCHAR|NO  |''                   |     |
+email         |VARCHAR|NO  |''                   |     |
+business_email|VARCHAR|NO  |'example@example.com'|     |
+middle_name   |VARCHAR|YES |NULL                 |     |
+phone_number  |VARCHAR|NO  |''                   |     |
 ```

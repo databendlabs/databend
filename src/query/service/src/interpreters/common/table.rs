@@ -16,10 +16,16 @@ use std::sync::Arc;
 
 use common_catalog::table::AppendMode;
 use common_catalog::table::Table;
+use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ComputedExpr;
 use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
+use common_sql::parse_computed_expr;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;
@@ -87,5 +93,36 @@ pub fn append2table(
 
     table.commit_insertion(ctx, &mut build_res.main_pipeline, copied_files, overwrite)?;
 
+    Ok(())
+}
+
+pub fn check_referenced_computed_columns(
+    ctx: Arc<dyn TableContext>,
+    table_schema: TableSchemaRef,
+    column: &str,
+) -> Result<()> {
+    let fields = table_schema
+        .fields()
+        .iter()
+        .filter(|f| f.name != column)
+        .map(|f| f.into())
+        .collect::<Vec<_>>();
+    let schema = DataSchemaRefExt::create(fields);
+
+    for f in schema.fields() {
+        if let Some(computed_expr) = f.computed_expr() {
+            let expr = match computed_expr {
+                ComputedExpr::Stored(expr) => expr.clone(),
+                ComputedExpr::Virtual(expr) => expr.clone(),
+            };
+            if parse_computed_expr(ctx.clone(), schema.clone(), &expr).is_err() {
+                return Err(ErrorCode::ColumnReferencedByComputedColumn(format!(
+                    "column `{}` is referenced by computed column `{}`",
+                    column,
+                    &f.name()
+                )));
+            }
+        }
+    }
     Ok(())
 }

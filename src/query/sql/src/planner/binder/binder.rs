@@ -195,7 +195,7 @@ impl<'a> Binder {
                     }
                 }
                 self.bind_copy(bind_context, stmt).await?
-            },
+            }
 
             Statement::ShowMetrics => {
                 self.bind_rewrite_to_query(
@@ -265,6 +265,7 @@ impl<'a> Binder {
             // Indexes
             Statement::CreateIndex(stmt) => self.bind_create_index(bind_context, stmt).await?,
             Statement::DropIndex(stmt) => self.bind_drop_index(stmt).await?,
+            Statement::RefreshIndex(stmt) => self.bind_refresh_index(bind_context, stmt).await?,
 
             // Virtual Columns
             Statement::CreateVirtualColumns(stmt) => self.bind_create_virtual_columns(stmt).await?,
@@ -319,14 +320,16 @@ impl<'a> Binder {
                         warn!("In INSERT resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
-                self.bind_insert(bind_context, stmt).await?},
+                self.bind_insert(bind_context, stmt).await?
+            }
             Statement::Replace(stmt) => {
                 if let Some(hints) = &stmt.hints {
                     if let Some(e) = self.opt_hints_set_var(bind_context, hints).await.err() {
                         warn!("In REPLACE resolve optimize hints {:?} failed, err: {:?}", hints, e);
                     }
                 }
-                self.bind_replace(bind_context, stmt).await?},
+                self.bind_replace(bind_context, stmt).await?
+            }
             Statement::Delete {
                 hints,
                 table_reference,
@@ -347,7 +350,7 @@ impl<'a> Binder {
                     }
                 }
                 self.bind_update(bind_context, stmt).await?
-            },
+            }
 
             // Permissions
             Statement::Grant(stmt) => self.bind_grant(stmt).await?,
@@ -357,7 +360,7 @@ impl<'a> Binder {
             Statement::Revoke(stmt) => self.bind_revoke(stmt).await?,
 
             // File Formats
-            Statement::CreateFileFormat{  if_not_exists, name, file_format_options} =>  {
+            Statement::CreateFileFormat { if_not_exists, name, file_format_options } => {
                 if StageFileFormatType::from_str(name).is_ok() {
                     return Err(ErrorCode::SyntaxException(format!(
                         "File format {name} is reserved"
@@ -366,18 +369,18 @@ impl<'a> Binder {
                 Plan::CreateFileFormat(Box::new(CreateFileFormatPlan {
                     if_not_exists: *if_not_exists,
                     name: name.clone(),
-                    file_format_params: file_format_options.clone().try_into()?
+                    file_format_params: file_format_options.clone().try_into()?,
                 }))
-            },
+            }
 
-            Statement::DropFileFormat{
+            Statement::DropFileFormat {
                 if_exists,
                 name,
             } => Plan::DropFileFormat(Box::new(DropFileFormatPlan {
                 if_exists: *if_exists,
                 name: name.clone(),
             })),
-            Statement::ShowFileFormats  => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
+            Statement::ShowFileFormats => Plan::ShowFileFormats(Box::new(ShowFileFormatsPlan {})),
 
             // UDFs
             Statement::CreateUDF {
@@ -472,10 +475,10 @@ impl<'a> Binder {
             Statement::CreateShareEndpoint(stmt) => {
                 self.bind_create_share_endpoint(stmt).await?
             }
-                        Statement::ShowShareEndpoint(stmt) => {
+            Statement::ShowShareEndpoint(stmt) => {
                 self.bind_show_share_endpoint(stmt).await?
             }
-                                    Statement::DropShareEndpoint(stmt) => {
+            Statement::DropShareEndpoint(stmt) => {
                 self.bind_drop_share_endpoint(stmt).await?
             }
             Statement::CreateShare(stmt) => {

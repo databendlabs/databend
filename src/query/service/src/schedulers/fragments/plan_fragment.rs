@@ -184,7 +184,7 @@ impl PlanFragment {
     }
 }
 
-struct ReplaceReadSource {
+pub struct ReplaceReadSource {
     pub source: DataSourcePlan,
 }
 

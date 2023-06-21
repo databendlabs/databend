@@ -21,6 +21,7 @@ use headers::authorization::Basic;
 use headers::authorization::Bearer;
 use headers::authorization::Credentials;
 use http::header::AUTHORIZATION;
+use http::HeaderMap;
 use http::HeaderValue;
 use poem::error::Error as PoemError;
 use poem::error::Result as PoemResult;
@@ -158,6 +159,7 @@ pub struct HTTPSessionEndpoint<E> {
     pub kind: HttpHandlerKind,
     pub auth_manager: Arc<AuthMgr>,
 }
+
 impl<E> HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn auth(&self, req: &Request) -> Result<HttpQueryContext> {
@@ -189,7 +191,12 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
     #[async_backtrace::framed]
     async fn call(&self, mut req: Request) -> PoemResult<Self::Output> {
         // method, url, version, header
-        info!("receive http handler request: {req:?},");
+        info!(
+            "http session endpoint: got new request: {} {} {:?}",
+            req.method(),
+            req.uri(),
+            sanitize_request_headers(req.headers()),
+        );
         let res = match self.auth(&req).await {
             Ok(ctx) => {
                 req.extensions_mut().insert(ctx);
@@ -215,4 +222,19 @@ impl<E: Endpoint> Endpoint for HTTPSessionEndpoint<E> {
             Ok(res) => Ok(res.into_response()),
         }
     }
+}
+
+fn sanitize_request_headers(headers: &HeaderMap) -> HashMap<String, String> {
+    let sensitive_headers = vec!["authorization", "x-clickhouse-key", "cookie"];
+    headers
+        .iter()
+        .map(|(k, v)| {
+            let k = k.as_str().to_lowercase();
+            if sensitive_headers.contains(&k.as_str()) {
+                (k, "******".to_string())
+            } else {
+                (k, v.to_str().unwrap_or_default().to_string())
+            }
+        })
+        .collect()
 }

@@ -1539,6 +1539,22 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_refresh_index(&mut self, stmt: &'ast RefreshIndexStmt) {
+        let mut children = Vec::new();
+        self.visit_index_ref(&stmt.index);
+        children.push(self.children.pop().unwrap());
+        if let Some(limit) = stmt.limit {
+            let name = format!("Refresh index limit {}", limit);
+            let limit_format_ctx = AstFormatContext::new(name);
+            children.push(FormatTreeNode::new(limit_format_ctx));
+        }
+
+        let name = "RefreshIndex".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_create_virtual_columns(&mut self, stmt: &'ast CreateVirtualColumnsStmt) {
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);
         let table_child = self.children.pop().unwrap();

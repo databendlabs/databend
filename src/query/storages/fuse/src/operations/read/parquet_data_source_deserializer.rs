@@ -148,7 +148,6 @@ impl Processor for DeserializeDataTransform {
                 }
                 DataSource::Normal(data) => {
                     let start = Instant::now();
-
                     let columns_chunks = data.columns_chunks()?;
                     let part = FusePartInfo::from_part(&part)?;
 
