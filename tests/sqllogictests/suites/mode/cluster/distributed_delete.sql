@@ -70,7 +70,7 @@ select * from v_after_deletion order by id except select * from t order by id;
 ----
 
 query III
-select *from t order by id except select * from v_after_deletion order by id;
+select * from t order by id except select * from v_after_deletion order by id;
 ----
 
 query I
