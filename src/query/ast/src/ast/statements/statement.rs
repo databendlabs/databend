@@ -128,6 +128,7 @@ pub enum Statement {
     // Indexes
     CreateIndex(CreateIndexStmt),
     DropIndex(DropIndexStmt),
+    RefreshIndex(RefreshIndexStmt),
 
     // VirtualColumns
     CreateVirtualColumns(CreateVirtualColumnsStmt),
@@ -389,6 +390,7 @@ impl Display for Statement {
             Statement::DropView(stmt) => write!(f, "{stmt}")?,
             Statement::CreateIndex(stmt) => write!(f, "{stmt}")?,
             Statement::DropIndex(stmt) => write!(f, "{stmt}")?,
+            Statement::RefreshIndex(stmt) => write!(f, "{stmt}")?,
             Statement::CreateVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::AlterVirtualColumns(stmt) => write!(f, "{stmt}")?,
             Statement::DropVirtualColumns(stmt) => write!(f, "{stmt}")?,

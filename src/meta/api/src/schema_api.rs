@@ -38,6 +38,8 @@ use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
 use common_meta_app::schema::ExtendTableLockRevReq;
 use common_meta_app::schema::GetDatabaseReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::GetTableReq;
@@ -113,6 +115,8 @@ pub trait SchemaApi: Send + Sync {
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply, KVAppError>;
 
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError>;
+
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError>;
 
     async fn list_indexes(
         &self,

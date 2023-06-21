@@ -103,6 +103,7 @@ impl Plan {
             // Indexes
             Plan::CreateIndex(index) => Ok(format!("{:?}", index)),
             Plan::DropIndex(index) => Ok(format!("{:?}", index)),
+            Plan::RefreshIndex(index) => Ok(format!("{index:?}")),
 
             // Virtual Columns
             Plan::CreateVirtualColumns(create_virtual_columns) => {

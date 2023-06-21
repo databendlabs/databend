@@ -206,18 +206,18 @@ copyOptions ::=
   [ PURGE = <bool> ]
   [ FORCE = <bool> ]
   [ DISABLE_VARIANT_CHECK = <bool> ]
-  [ ON_ERROR = { continue | abort } ]
+  [ ON_ERROR = { continue | abort | abort_N } ]
   [ MAX_FILES = <num> ]
 ```
 
-| Parameter             | Description                                                                                                                                             | Required |
-|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
-| SIZE_LIMIT            | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                          | Optional |
-| PURGE                 | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                           | Optional |
-| FORCE                 | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.       | Optional |
-| DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                           | Optional |
-| ON_ERROR              | Provides options to handle a file containing errors. Select `continue` to skip the file and continue, or `abort` (default) to abort the load operation. | Optional |
-| MAX_FILES             | Sets the maximum number of files to load. Defaults to `0` meaning no limits.                                                                             | Optional |
+| Parameter             | Description                                                                                                                                                                                                              | Required |
+|-----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------|
+| SIZE_LIMIT            | Specifies the maximum rows of data to be loaded for a given COPY statement. Defaults to `0` meaning no limits.                                                                                                           | Optional |
+| PURGE                 | If `True`, the command will purge the files in the stage after they are loaded successfully into the table. Default: `False`.                                                                                            | Optional |
+| FORCE                 | Defaults to `False` meaning the command will skip duplicate files in the stage when copying data. If `True`, duplicate files will not be skipped.                                                                        | Optional |
+| DISABLE_VARIANT_CHECK | If `True`, this will allow the variant field to insert invalid JSON strings. Default: `False`.                                                                                                                           | Optional |
+| ON_ERROR              | Decides how to handle a file that contains errors: 'continue' to skip and proceed, 'abort' to terminate on error, 'abort_N' to terminate when errors ≥ N. Default is 'abort'. Note: 'abort_N' not available for Parquet files. | Optional |
+| MAX_FILES             | Sets the maximum number of files to load. Defaults to `0` meaning no limits.                                                                                                                                             | Optional |
 
 :::info
 The parameter ON_ERROR currently does not work for parquet files.

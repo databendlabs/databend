@@ -36,6 +36,8 @@ use common_meta_app::schema::DropTableByIdReq;
 use common_meta_app::schema::DropTableReply;
 use common_meta_app::schema::DropVirtualColumnReply;
 use common_meta_app::schema::DropVirtualColumnReq;
+use common_meta_app::schema::GetIndexReply;
+use common_meta_app::schema::GetIndexReq;
 use common_meta_app::schema::GetTableCopiedFileReply;
 use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::IndexMeta;
@@ -96,6 +98,8 @@ pub trait Catalog: DynClone + Send + Sync {
     async fn create_index(&self, req: CreateIndexReq) -> Result<CreateIndexReply>;
 
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply>;
+
+    async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply>;
 
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>>;
 

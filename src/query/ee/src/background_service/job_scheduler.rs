@@ -26,14 +26,15 @@ use common_exception::Result;
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobState;
 use common_meta_app::background::BackgroundJobType;
+use dashmap::DashMap;
 use tracing::info;
 
 use crate::background_service::job::BoxedJob;
 use crate::background_service::job::Job;
 
 pub struct JobScheduler {
-    one_shot_jobs: Vec<BoxedJob>,
-    scheduled_jobs: Vec<BoxedJob>,
+    one_shot_jobs: DashMap<String, BoxedJob>,
+    scheduled_jobs: DashMap<String, BoxedJob>,
     pub job_tick_interval: Duration,
     pub finish_tx: Arc<Mutex<Sender<u64>>>,
     pub finish_rx: Arc<Mutex<Receiver<u64>>>,
@@ -53,8 +54,8 @@ impl JobScheduler {
         let (finish_tx, finish_rx) = tokio::sync::mpsc::channel(100);
         let (suspend_tx, suspend_rx) = tokio::sync::mpsc::channel(100);
         Self {
-            one_shot_jobs: Vec::new(),
-            scheduled_jobs: Vec::new(),
+            one_shot_jobs: DashMap::new(),
+            scheduled_jobs: DashMap::new(),
             job_tick_interval: Duration::from_secs(5),
             finish_tx: Arc::new(Mutex::new(finish_tx)),
             finish_rx: Arc::new(Mutex::new(finish_rx)),
@@ -64,16 +65,24 @@ impl JobScheduler {
         }
     }
 
+    pub fn get_scheduled_job(&self, job_name: &str) -> Option<BoxedJob> {
+        self.scheduled_jobs
+            .get(job_name)
+            .map(|job| job.value().box_clone())
+    }
+
     pub fn add_job(&mut self, job: impl Job + Send + Sync + Clone + 'static) -> Result<()> {
         if job.get_info().job_params.is_none() {
             return Ok(());
         }
         match job.get_info().job_params.unwrap().job_type {
             BackgroundJobType::ONESHOT => {
-                self.one_shot_jobs.push(Box::new(job) as BoxedJob);
+                self.one_shot_jobs
+                    .insert(job.get_name().name, Box::new(job) as BoxedJob);
             }
             BackgroundJobType::CRON | BackgroundJobType::INTERVAL => {
-                self.scheduled_jobs.push(Box::new(job) as BoxedJob);
+                self.scheduled_jobs
+                    .insert(job.get_name().name, Box::new(job) as BoxedJob);
             }
         }
         Ok(())
@@ -124,12 +133,12 @@ impl JobScheduler {
         }
         Ok(())
     }
-    async fn check_and_run_jobs(jobs: &[BoxedJob]) {
+    async fn check_and_run_jobs(jobs: &DashMap<String, BoxedJob>) {
         let job_futures = jobs
             .iter()
             .map(|job| {
-                let j = job.box_clone();
-                Self::check_and_run_job(j)
+                let j = job.value().box_clone();
+                Self::check_and_run_job(j, false)
             })
             .collect::<Vec<_>>();
         for job in job_futures {
@@ -137,24 +146,39 @@ impl JobScheduler {
         }
     }
     // Checks and runs a single [Job](crate::Job)
-    async fn check_and_run_job(mut job: BoxedJob) -> Result<()> {
-        if !Self::should_run_job(&job.get_info(), Utc::now()) {
+    pub async fn check_and_run_job(mut job: BoxedJob, force_execute: bool) -> Result<()> {
+        if !Self::should_run_job(&job.get_info(), Utc::now(), force_execute) {
             return Ok(());
         }
-        let info = job.get_info();
-        let params = info.job_params.unwrap();
-        let mut status = info.job_status.unwrap();
-        status.next_task_scheduled_time = params.get_next_running_time(Utc::now());
-        job.update_job_status(status.clone()).await?;
-        info!(background = true, next_scheduled_time = ?status.next_task_scheduled_time, "Running job");
+
+        // update job status only if it is not forced to run
+        if !force_execute {
+            let info = job.get_info();
+            let params = info.job_params.unwrap();
+            let mut status = info.job_status.unwrap();
+            status.next_task_scheduled_time = params.get_next_running_time(Utc::now());
+            job.update_job_status(status.clone()).await?;
+            info!(background = true, next_scheduled_time = ?status.next_task_scheduled_time, "Running job");
+        } else {
+            info!(background = true, "Running execute job");
+        }
+
         tokio::spawn(async move { job.run().await });
         Ok(())
     }
 
     // returns true if the job should be run
-    pub fn should_run_job(job_info: &BackgroundJobInfo, time: DateTime<Utc>) -> bool {
+    pub fn should_run_job(
+        job_info: &BackgroundJobInfo,
+        time: DateTime<Utc>,
+        force_execute: bool,
+    ) -> bool {
         if job_info.job_status.clone().is_none() || job_info.job_params.clone().is_none() {
             return false;
+        }
+
+        if force_execute {
+            return true;
         }
 
         let job_params = &job_info.job_params.clone().unwrap();

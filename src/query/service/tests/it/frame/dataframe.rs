@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::io::Write;
 use std::sync::Arc;
 
 use common_ast::ast::BinaryOperator;
@@ -30,6 +31,7 @@ use common_sql::Planner;
 use databend_query::interpreters::InterpreterFactory;
 use databend_query::sessions::QueryContext;
 use databend_query::test_kits::TestFixture;
+use goldenfile::Mint;
 use tokio_stream::StreamExt;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -353,10 +355,60 @@ async fn test_case(sql: &str, df: Dataframe, ctx: Arc<QueryContext>) -> Result<(
     let schema = plan.schema();
 
     for (a, b) in blocks.iter().zip(blocks2.iter()) {
-        let a = box_render(&schema, &[a.clone().unwrap()]).unwrap();
-        let b = box_render(&schema, &[b.clone().unwrap()]).unwrap();
+        let a = box_render(&schema, &[a.clone().unwrap()], 40, 0, 0).unwrap();
+        let b = box_render(&schema, &[b.clone().unwrap()], 40, 0, 0).unwrap();
 
         assert_eq!(a, b);
     }
     Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_box_display() {
+    let mut mint = Mint::new("tests/it/frame/testdata");
+    let mut file = &mint.new_goldenfile("box_display.txt").unwrap();
+
+    let fixture = TestFixture::new().await;
+    let ctx = fixture.ctx();
+
+    let cases = vec![
+        "select number*10000 as n, concat('a',n::String,'b'),concat('testcc', n::String,'vabc') as c1 from numbers(100)",
+    ];
+
+    for sql in cases {
+        let mut planner = Planner::new(ctx.clone());
+        let (plan, _) = planner.plan_sql(sql).await.unwrap();
+
+        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await.unwrap();
+        let stream = interpreter.execute(ctx.clone()).await.unwrap();
+        let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
+        let schema = plan.schema();
+
+        writeln!(file, "------------ SQL INFO --------------").unwrap();
+        writeln!(file, "{}", sql).unwrap();
+        writeln!(file, "---------- DISPLAY INFO ------------").unwrap();
+        writeln!(
+            file,
+            "max_rows {:?}, max_width {:?}, max_col_width {:?}",
+            40, 33, 13
+        )
+        .unwrap();
+        for a in blocks.iter() {
+            let a = box_render(&schema, &[a.clone().unwrap()], 40, 33, 13).unwrap();
+            write!(file, "{}", a).unwrap();
+        }
+
+        writeln!(file, "\n---------- DISPLAY INFO ------------").unwrap();
+        writeln!(
+            file,
+            "max_rows {:?}, max_width {:?}, max_col_width {:?}",
+            40, 40, 13
+        )
+        .unwrap();
+        for a in blocks.iter() {
+            let a = box_render(&schema, &[a.clone().unwrap()], 40, 40, 13).unwrap();
+            write!(file, "{}", a).unwrap();
+        }
+        write!(file, "\n\n").unwrap();
+    }
 }

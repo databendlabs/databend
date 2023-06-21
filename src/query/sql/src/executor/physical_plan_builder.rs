@@ -109,16 +109,18 @@ pub struct PhysicalPlanBuilder {
     pub(crate) func_ctx: FunctionContext,
 
     next_plan_id: u32,
+    dry_run: bool,
 }
 
 impl PhysicalPlanBuilder {
-    pub fn new(metadata: MetadataRef, ctx: Arc<dyn TableContext>) -> Self {
+    pub fn new(metadata: MetadataRef, ctx: Arc<dyn TableContext>, dry_run: bool) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
         Self {
             metadata,
             ctx,
             next_plan_id: 0,
             func_ctx,
+            dry_run,
         }
     }
 
@@ -399,6 +401,7 @@ impl PhysicalPlanBuilder {
                 } else {
                     Some(project_internal_columns.clone())
                 },
+                self.dry_run,
             )
             .await?;
 
@@ -437,6 +440,7 @@ impl PhysicalPlanBuilder {
                         CATALOG_DEFAULT.to_string(),
                         None,
                         None,
+                        self.dry_run,
                     )
                     .await?;
                 Ok(PhysicalPlan::TableScan(TableScan {
