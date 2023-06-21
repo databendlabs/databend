@@ -34,6 +34,7 @@ enum HashJoinStep {
     Finalize,
     Probe,
     OuterScan,
+    Finished,
 }
 
 pub struct TransformHashJoinProbe {
@@ -105,6 +106,10 @@ impl Processor for TransformHashJoinProbe {
         match self.step {
             HashJoinStep::Build => Ok(Event::Async),
             HashJoinStep::Finalize => unreachable!(),
+            HashJoinStep::Finished => {
+                self.output_port.finish();
+                Ok(Event::Finished)
+            }
             HashJoinStep::Probe => {
                 if self.output_port.is_finished() {
                     self.input_port.finish();
@@ -143,13 +148,13 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
-                    if self.join_state.need_outer_scan() {
+                    return if self.join_state.need_outer_scan() {
                         self.join_state.probe_done()?;
-                        return Ok(Event::Async);
+                        Ok(Event::Async)
                     } else {
                         self.output_port.finish();
-                        return Ok(Event::Finished);
-                    }
+                        Ok(Event::Finished)
+                    };
                 }
 
                 self.input_port.set_need_data();
@@ -188,7 +193,7 @@ impl Processor for TransformHashJoinProbe {
     fn process(&mut self) -> Result<()> {
         match self.step {
             HashJoinStep::Build => Ok(()),
-            HashJoinStep::Finalize => unreachable!(),
+            HashJoinStep::Finalize | HashJoinStep::Finished => unreachable!(),
             HashJoinStep::Probe => {
                 if let Some(data) = self.input_data.pop_front() {
                     let data = data.convert_to_full();
@@ -212,6 +217,10 @@ impl Processor for TransformHashJoinProbe {
         match self.step {
             HashJoinStep::Build => {
                 self.join_state.wait_finalize_finish().await?;
+                if self.join_state.fast_return()? {
+                    self.step = HashJoinStep::Finished;
+                    return Ok(());
+                }
                 self.step = HashJoinStep::Probe;
             }
             HashJoinStep::Finalize => unreachable!(),
@@ -219,7 +228,7 @@ impl Processor for TransformHashJoinProbe {
                 self.join_state.wait_probe_finish().await?;
                 self.step = HashJoinStep::OuterScan;
             }
-            HashJoinStep::OuterScan => unreachable!(),
+            HashJoinStep::OuterScan | HashJoinStep::Finished => unreachable!(),
         };
         Ok(())
     }
@@ -293,6 +302,7 @@ impl Processor for TransformHashJoinBuild {
             },
             HashJoinStep::Probe => unreachable!(),
             HashJoinStep::OuterScan => unreachable!(),
+            HashJoinStep::Finished => Ok(Event::Finished),
         }
     }
 
@@ -316,8 +326,9 @@ impl Processor for TransformHashJoinBuild {
                     self.join_state.finalize_done()
                 }
             }
-            HashJoinStep::Probe => unreachable!(),
-            HashJoinStep::OuterScan => unreachable!(),
+            HashJoinStep::Probe | HashJoinStep::OuterScan | HashJoinStep::Finished => {
+                unreachable!()
+            }
         }
     }
 
@@ -325,6 +336,10 @@ impl Processor for TransformHashJoinBuild {
     async fn async_process(&mut self) -> Result<()> {
         if let HashJoinStep::Build = &self.step {
             self.join_state.wait_build_finish().await?;
+            if self.join_state.fast_return()? {
+                self.step = HashJoinStep::Finished;
+                return Ok(());
+            }
             self.step = HashJoinStep::Finalize;
         }
         Ok(())
