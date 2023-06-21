@@ -101,13 +101,10 @@ impl Interpreter for DeleteInterpreter {
         let table_info = tbl.get_table_info().clone();
 
         // Add table lock heartbeat.
-        let mut heartbeat = {
-            // Add table lock heartbeat.
-            let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-            handler
-                .try_lock(self.ctx.clone(), table_info.clone())
-                .await?
-        };
+        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
+        let mut heartbeat = handler
+            .try_lock(self.ctx.clone(), table_info.clone())
+            .await?;
 
         // refresh table.
         let tbl = self
