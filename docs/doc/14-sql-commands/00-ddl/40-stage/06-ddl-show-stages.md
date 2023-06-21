@@ -17,7 +17,7 @@ SHOW STAGES;
 SHOW STAGES;
 
 ---
-name|stage_type|number_of_files|creator           |comment|
-----+----------+---------------+------------------+-------+
-eric|Internal  |              0|'root'@'127.0.0.1'|       |
+name|stage_type|number_of_files|creator   |comment|
+----+----------+---------------+----------+-------+
+eric|Internal  |              0|'root'@'%'|       |
 ```

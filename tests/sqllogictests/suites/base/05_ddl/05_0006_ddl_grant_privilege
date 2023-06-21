@@ -50,7 +50,7 @@ onlyif mysql
 query T
 select current_user()
 ----
-'root'@'127.0.0.1'
+'root'@'%'
 
 onlyif mysql
 statement ok
