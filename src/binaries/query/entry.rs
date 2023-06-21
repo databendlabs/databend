@@ -341,9 +341,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
     info!("Ready for connections.");
     if conf.background.enable {
         println!("Start background service");
-        get_background_service_handler()
-            .start(&mut shutdown_handle)
-            .await?;
+        get_background_service_handler().start().await?;
         // for one shot background service, we need to drop it manually.
         drop(shutdown_handle);
     } else {
