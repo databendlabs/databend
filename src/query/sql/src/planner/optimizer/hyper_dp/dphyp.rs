@@ -253,7 +253,8 @@ impl DPhpy {
         // Firstly, we need to extract all join conditions and base tables
         // `join_condition` is pair, left is left_condition, right is right_condition
         let mut join_conditions = vec![];
-        let (s_expr, res) = self.get_base_relations(s_expr, &mut join_conditions, false, None, false)?;
+        let (s_expr, res) =
+            self.get_base_relations(s_expr, &mut join_conditions, false, None, false)?;
         if !res {
             return Ok((s_expr, false));
         }
