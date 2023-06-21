@@ -29,7 +29,12 @@ use crate::UserApiProvider;
 impl UserApiProvider {
     // Get one user from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_user(&self, tenant: &str, user: UserIdentity) -> Result<UserInfo> {
+    pub async fn get_user(
+        &self,
+        tenant: &str,
+        user: UserIdentity,
+        client_ip: &str,
+    ) -> Result<UserInfo> {
         if user.is_root() {
             let mut user_info = if let Some(auth_info) = self.get_configured_user(&user.username) {
                 UserInfo::new(&user.username, "%", auth_info.clone())
@@ -43,7 +48,7 @@ impl UserApiProvider {
                     UserInfo::new_no_auth(&user.username, &user.hostname)
                 }
             };
-            if user.is_localhost() {
+            if client_ip == "127.0.0.1" || client_ip == "localhost" {
                 user_info.grants.grant_privileges(
                     &GrantObject::Global,
                     UserPrivilegeSet::available_privileges_on_global(),
@@ -58,7 +63,7 @@ impl UserApiProvider {
             } else {
                 return Err(ErrorCode::UnknownUser(format!(
                     "only accept root from 127.0.0.1, current: '{}'@'{}'",
-                    user.username, user.hostname
+                    user.username, client_ip
                 )));
             }
             Ok(user_info)
@@ -76,8 +81,7 @@ impl UserApiProvider {
         }
     }
 
-    /// find the matched user with the client ip address, like 'u1'@'127.0.0.1', if the specific
-    /// user@host is not found, try 'u1'@'%'.
+    /// Find the matched user with the '%' host, like 'u1'@'%'.
     #[async_backtrace::framed]
     pub async fn get_user_with_client_ip(
         &self,
@@ -85,24 +89,8 @@ impl UserApiProvider {
         username: &str,
         client_ip: &str,
     ) -> Result<UserInfo> {
-        let user = self
-            .get_user(tenant, UserIdentity::new(username, client_ip))
-            .await
-            .map(Some)
-            .or_else(|e| {
-                if e.code() == ErrorCode::UNKNOWN_USER && !client_ip.eq("%") {
-                    Ok(None)
-                } else {
-                    Err(e)
-                }
-            })?;
-        match user {
-            Some(user) => Ok(user),
-            None => {
-                self.get_user(tenant, UserIdentity::new(username, "%"))
-                    .await
-            }
-        }
+        let user = UserIdentity::new(username, "%");
+        self.get_user(tenant, user, client_ip).await
     }
 
     // Get the tenant all users list.
@@ -295,12 +283,6 @@ impl UserApiProvider {
         let client = self.get_user_api_client(tenant)?;
         if user.is_root() && auth_info.is_some() {
             // Root user info is not exist, need to add user info first.
-            if user.hostname != "127.0.0.1" {
-                return Err(ErrorCode::UnknownUser(format!(
-                    "Builtin user `{}` only allow set host to 127.0.0.1",
-                    user.username
-                )));
-            }
             let user_info =
                 UserInfo::new(&user.username, &user.hostname, auth_info.clone().unwrap());
             if let Ok(res) = client.add_user(user_info).await {
@@ -327,7 +309,7 @@ impl UserApiProvider {
         user_name: UserIdentity,
         default_role: Option<String>,
     ) -> Result<Option<u64>> {
-        let mut user = self.get_user(tenant, user_name.clone()).await?;
+        let mut user = self.get_user(tenant, user_name.clone(), "%").await?;
         user.option.set_default_role(default_role);
         self.update_user(tenant, user_name, None, Some(user.option))
             .await

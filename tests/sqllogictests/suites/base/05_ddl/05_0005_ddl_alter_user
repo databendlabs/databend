@@ -1,54 +1,57 @@
 statement ok
-DROP USER IF EXISTS 'test-e'@'%'
+DROP USER IF EXISTS 'test-e'
 
 statement ok
-DROP USER IF EXISTS 'test-g'@'%'
+DROP USER IF EXISTS 'test-g'
 
 statement ok
-DROP USER IF EXISTS 'test-h'@'%'
+DROP USER IF EXISTS 'test-h'
 
 statement ok
-DROP USER IF EXISTS 'test-i@%'
+DROP USER IF EXISTS 'test-i'
 
 statement ok
-CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
+CREATE USER 'test-e' IDENTIFIED BY 'password'
 
-statement ok
+statement error 1005
 ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password'
 
+statement ok
+ALTER USER 'test-e' IDENTIFIED BY 'new-password'
+
 statement error 2201
-ALTER USER 'test1'@'%' IDENTIFIED BY 'password'
+ALTER USER 'test1' IDENTIFIED BY 'password'
 
 statement ok
-CREATE USER 'test-g'@'%' IDENTIFIED WITH sha256_password BY 'password'
+CREATE USER 'test-g' IDENTIFIED WITH sha256_password BY 'password'
 
 statement ok
-ALTER USER 'test-g'@'%' IDENTIFIED WITH sha256_password BY 'new-password'
+ALTER USER 'test-g' IDENTIFIED WITH sha256_password BY 'new-password'
 
 statement ok
-CREATE USER 'test-h'@'%' IDENTIFIED WITH double_sha1_password BY 'password'
+CREATE USER 'test-h' IDENTIFIED WITH double_sha1_password BY 'password'
 
 statement ok
-ALTER USER 'test-h'@'%' IDENTIFIED WITH double_sha1_password BY 'new-password'
+ALTER USER 'test-h' IDENTIFIED WITH double_sha1_password BY 'new-password'
 
 statement ok
-CREATE USER 'test-i@%' IDENTIFIED WITH sha256_password BY 'password'
+CREATE USER 'test-i' IDENTIFIED WITH sha256_password BY 'password'
 
 statement ok
-ALTER USER 'test-i@%' IDENTIFIED WITH sha256_password BY 'new-password'
+ALTER USER 'test-i' IDENTIFIED WITH sha256_password BY 'new-password'
 
 statement ok
-ALTER USER 'test-h'@'%' WITH DEFAULT_ROLE = 'role1'
+ALTER USER 'test-h' WITH DEFAULT_ROLE = 'role1'
 
 statement ok
-DROP USER IF EXISTS 'test-e'@'%'
+DROP USER IF EXISTS 'test-e'
 
 statement ok
-DROP USER IF EXISTS 'test-g'@'%'
+DROP USER IF EXISTS 'test-g'
 
 statement ok
-DROP USER IF EXISTS 'test-h'@'%'
+DROP USER IF EXISTS 'test-h'
 
 statement ok
-DROP USER IF EXISTS 'test-i@%'
+DROP USER IF EXISTS 'test-i'
 

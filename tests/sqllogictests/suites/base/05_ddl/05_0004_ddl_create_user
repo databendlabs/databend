@@ -1,14 +1,14 @@
 statement ok
-DROP USER IF EXISTS 'test-a'@'%'
+DROP USER IF EXISTS 'test-a'
 
 statement ok
-DROP USER IF EXISTS 'test-b'@'%'
+DROP USER IF EXISTS 'test-b'
 
 statement ok
-DROP USER IF EXISTS 'test-c'@'%'
+DROP USER IF EXISTS 'test-c'
 
 statement ok
-DROP USER IF EXISTS 'test-d@%'
+DROP USER IF EXISTS 'test-d'
 
 statement ok
 DROP USER IF EXISTS 'test-e'
@@ -16,41 +16,44 @@ DROP USER IF EXISTS 'test-e'
 statement error 1005
 CREATE USER 'test-a'@'127.0.0.1' IDENTIFIED BY 'password'
 
-statement ok
+statement error 1005
 CREATE USER 'test-a'@'%' IDENTIFIED BY 'password'
+
+statement ok
+CREATE USER 'test-a' IDENTIFIED BY 'password'
 
 statement error 2202
-CREATE USER 'test-a'@'%' IDENTIFIED BY 'password'
+CREATE USER 'test-a' IDENTIFIED BY 'password'
 
 statement ok
-CREATE USER 'test-b'@'%' IDENTIFIED WITH sha256_password BY 'password'
+CREATE USER 'test-b' IDENTIFIED WITH sha256_password BY 'password'
 
 statement ok
-CREATE USER 'test-c'@'%' IDENTIFIED WITH double_sha1_password BY 'password'
+CREATE USER 'test-c' IDENTIFIED WITH double_sha1_password BY 'password'
 
 statement ok
-CREATE USER 'test-d@%' IDENTIFIED WITH sha256_password BY 'password'
+CREATE USER 'test-d' IDENTIFIED WITH sha256_password BY 'password'
 
 statement ok
-CREATE USER IF NOT EXISTS 'test-d@%' IDENTIFIED WITH sha256_password BY 'password'
+CREATE USER IF NOT EXISTS 'test-d' IDENTIFIED WITH sha256_password BY 'password'
 
 statement ok
 CREATE USER IF NOT EXISTS 'test-e' IDENTIFIED BY '123' WITH DEFAULT_ROLE = 'role1'
 
 statement ok
-DROP USER IF EXISTS 'test-a'@'%'
+DROP USER IF EXISTS 'test-a'
 
 statement ok
-DROP USER IF EXISTS 'test-b'@'%'
+DROP USER IF EXISTS 'test-b'
 
 statement ok
-DROP USER IF EXISTS 'test-c'@'%'
+DROP USER IF EXISTS 'test-c'
 
 statement ok
-DROP USER IF EXISTS 'test-d@%'
+DROP USER IF EXISTS 'test-d'
 
 statement ok
-DROP USER IF EXISTS 'test-d@%'
+DROP USER IF EXISTS 'test-d'
 
 statement ok
 DROP USER IF EXISTS 'test-e'

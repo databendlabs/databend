@@ -6873,7 +6873,7 @@ ListStage {
 
 
 ---------- Input ----------
-create user 'test-e'@'%' identified by 'password';
+create user 'test-e' identified by 'password';
 ---------- Output ---------
 CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
@@ -6896,7 +6896,7 @@ CreateUser(
 
 
 ---------- Input ----------
-drop user if exists 'test-j'@'%';
+drop user if exists 'test-j';
 ---------- Output ---------
 DROP USER IF EXISTS 'test-j'@'%'
 ---------- AST ------------
@@ -6910,7 +6910,7 @@ DropUser {
 
 
 ---------- Input ----------
-alter user 'test-e'@'%' identified by 'new-password';
+alter user 'test-e' identified by 'new-password';
 ---------- Output ---------
 ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password'
 ---------- AST ------------
@@ -7568,7 +7568,7 @@ CreateTable(
 
 
 ---------- Input ----------
-GRANT CREATE, CREATE USER ON * TO 'test-grant'@'%';
+GRANT CREATE, CREATE USER ON * TO 'test-grant';
 ---------- Output ---------
 GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -7594,7 +7594,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO 'test-grant'@'%';
+GRANT SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
 GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -7620,7 +7620,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON *.* TO 'test-grant'@'%';
+GRANT SELECT, CREATE ON *.* TO 'test-grant';
 ---------- Output ---------
 GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -7644,7 +7644,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%';
+GRANT SELECT, CREATE ON * TO USER 'test-grant';
 ---------- Output ---------
 GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -7693,7 +7693,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL ON *.* TO 'test-grant'@'%';
+GRANT ALL ON *.* TO 'test-grant';
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -7730,7 +7730,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL PRIVILEGES ON * TO 'test-grant'@'%';
+GRANT ALL PRIVILEGES ON * TO 'test-grant';
 ---------- Output ---------
 GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -7828,7 +7828,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO 'test-grant'@'%';
+GRANT SELECT ON db01.* TO 'test-grant';
 ---------- Output ---------
 GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -7855,7 +7855,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'%';
+GRANT SELECT ON db01.* TO USER 'test-grant';
 ---------- Output ---------
 GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -7906,7 +7906,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO 'test-grant'@'%';
+GRANT SELECT ON db01.tb1 TO 'test-grant';
 ---------- Output ---------
 GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -7934,7 +7934,7 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%';
+GRANT SELECT ON db01.tb1 TO USER 'test-grant';
 ---------- Output ---------
 GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
@@ -8043,7 +8043,7 @@ ShowGrants {
 
 
 ---------- Input ----------
-SHOW GRANTS FOR 'test-grant'@'%';
+SHOW GRANTS FOR 'test-grant';
 ---------- Output ---------
 SHOW GRANTS FOR USER 'test-grant'@'%'
 ---------- AST ------------
@@ -8060,7 +8060,7 @@ ShowGrants {
 
 
 ---------- Input ----------
-SHOW GRANTS FOR USER 'test-grant'@'%';
+SHOW GRANTS FOR USER 'test-grant';
 ---------- Output ---------
 SHOW GRANTS FOR USER 'test-grant'@'%'
 ---------- AST ------------
@@ -8091,7 +8091,7 @@ ShowGrants {
 
 
 ---------- Input ----------
-REVOKE SELECT, CREATE ON * FROM 'test-grant'@'%';
+REVOKE SELECT, CREATE ON * FROM 'test-grant';
 ---------- Output ---------
 REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'%'
 ---------- AST ------------

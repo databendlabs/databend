@@ -63,7 +63,7 @@ impl Interpreter for ShowGrantsInterpreter {
             Some(ref principal) => match principal {
                 PrincipalIdentity::User(user) => {
                     let user = UserApiProvider::instance()
-                        .get_user(&tenant, user.clone())
+                        .get_user(&tenant, user.clone(), "%")
                         .await?;
                     (user.identity().to_string(), user.grants)
                 }

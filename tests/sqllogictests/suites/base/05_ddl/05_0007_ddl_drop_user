@@ -1,29 +1,32 @@
 statement error 2201
+DROP USER 'test-j'
+
+statement ok
+DROP USER IF EXISTS 'test-j'
+
+statement ok
+CREATE USER 'test-j' IDENTIFIED BY 'password'
+
+statement error 1005
 DROP USER 'test-j'@'%'
 
 statement ok
-DROP USER IF EXISTS 'test-j'@'%'
+DROP USER 'test-j'
 
 statement ok
-CREATE USER 'test-j'@'%' IDENTIFIED BY 'password'
+DROP USER IF EXISTS 'test-j'
 
 statement ok
-DROP USER 'test-j'@'%'
+CREATE USER 'test-l' IDENTIFIED WITH sha256_password BY 'password'
 
 statement ok
-DROP USER IF EXISTS 'test-j'@'%'
+DROP USER 'test-l'
 
 statement ok
-CREATE USER 'test-l'@'%' IDENTIFIED WITH sha256_password BY 'password'
+DROP USER IF EXISTS 'test-l'
 
 statement ok
-DROP USER 'test-l'@'%'
+DROP USER IF EXISTS 'test-l'
 
 statement ok
-DROP USER IF EXISTS 'test-l'@'%'
-
-statement ok
-DROP USER IF EXISTS 'test-l'@'%'
-
-statement ok
-DROP USER IF EXISTS 'test-l'@'%'
+DROP USER IF EXISTS 'test-l'
