@@ -101,16 +101,12 @@ impl Interpreter for DeleteInterpreter {
         let table_info = tbl.get_table_info().clone();
 
         // Add table lock heartbeat.
-        let heartbeat = if !is_distributed {
+        let mut heartbeat = {
             // Add table lock heartbeat.
             let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-            Some(
-                handler
-                    .try_lock(self.ctx.clone(), table_info.clone())
-                    .await?,
-            )
-        } else {
-            None
+            handler
+                .try_lock(self.ctx.clone(), table_info.clone())
+                .await?
         };
 
         // refresh table.
@@ -252,20 +248,17 @@ impl Interpreter for DeleteInterpreter {
                 build_res = build_local_pipeline(&self.ctx, &physical_plan, false).await?
             }
         }
-        if let Some(mut heartbeat) = heartbeat {
-            if build_res.main_pipeline.is_empty() {
-                heartbeat.shutdown().await?;
-            } else {
-                build_res.main_pipeline.set_on_finished(move |may_error| {
-                    // shutdown table lock heartbeat.
-                    GlobalIORuntime::instance()
-                        .block_on(async move { heartbeat.shutdown().await })?;
-                    match may_error {
-                        None => Ok(()),
-                        Some(error_code) => Err(error_code.clone()),
-                    }
-                });
-            }
+        if build_res.main_pipeline.is_empty() {
+            heartbeat.shutdown().await?;
+        } else {
+            build_res.main_pipeline.set_on_finished(move |may_error| {
+                // shutdown table lock heartbeat.
+                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
+                match may_error {
+                    None => Ok(()),
+                    Some(error_code) => Err(error_code.clone()),
+                }
+            });
         }
 
         Ok(build_res)
