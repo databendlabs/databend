@@ -70,15 +70,7 @@ impl Interpreter for ExplainInterpreter {
                     s_expr, metadata, ..
                 } => {
                     let ctx = self.ctx.clone();
-                    let settings = ctx.get_settings();
-
-                    let enable_distributed_eval_index =
-                        settings.get_enable_distributed_eval_index()?;
-                    settings.set_enable_distributed_eval_index(false)?;
-                    scopeguard::defer! {
-                        let _ = settings.set_enable_distributed_eval_index(enable_distributed_eval_index);
-                    }
-                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
+                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
                     let plan = builder.build(s_expr).await?;
                     self.explain_physical_plan(&plan, metadata)?
                 }
@@ -90,15 +82,7 @@ impl Interpreter for ExplainInterpreter {
                     s_expr, metadata, ..
                 } => {
                     let ctx = self.ctx.clone();
-                    let settings = ctx.get_settings();
-
-                    let enable_distributed_eval_index =
-                        settings.get_enable_distributed_eval_index()?;
-                    settings.set_enable_distributed_eval_index(false)?;
-                    scopeguard::defer! {
-                        let _ = settings.set_enable_distributed_eval_index(enable_distributed_eval_index);
-                    }
-                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx);
+                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
                     let plan = builder.build(s_expr).await?;
                     self.explain_join_order(&plan, metadata)?
                 }
@@ -114,16 +98,6 @@ impl Interpreter for ExplainInterpreter {
                     ignore_result,
                     ..
                 } => {
-                    let ctx = self.ctx.clone();
-                    let settings = ctx.get_settings();
-
-                    let enable_distributed_eval_index =
-                        settings.get_enable_distributed_eval_index()?;
-                    settings.set_enable_distributed_eval_index(false)?;
-                    scopeguard::defer! {
-                        let _ = settings.set_enable_distributed_eval_index(enable_distributed_eval_index);
-                    }
-
                     self.explain_analyze(s_expr, metadata, *ignore_result)
                         .await?
                 }
@@ -228,7 +202,7 @@ impl ExplainInterpreter {
         metadata: MetadataRef,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone());
+        let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone(), true);
         let plan = builder.build(&s_expr).await?;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result, false).await?;
 
@@ -259,7 +233,7 @@ impl ExplainInterpreter {
         metadata: MetadataRef,
     ) -> Result<Vec<DataBlock>> {
         let ctx = self.ctx.clone();
-        let plan = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone())
+        let plan = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true)
             .build(&s_expr)
             .await?;
 
@@ -284,7 +258,7 @@ impl ExplainInterpreter {
         metadata: &MetadataRef,
         ignore_result: bool,
     ) -> Result<Vec<DataBlock>> {
-        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+        let mut builder = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), true);
         let plan = builder.build(s_expr).await?;
         let mut build_res =
             build_query_pipeline(&self.ctx, &[], &plan, ignore_result, true).await?;

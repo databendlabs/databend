@@ -154,6 +154,7 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
         Err(ErrorCode::Unimplemented(format!(

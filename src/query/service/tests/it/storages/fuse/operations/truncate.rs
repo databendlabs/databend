@@ -52,7 +52,7 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
         .append_commit_blocks(table.clone(), blocks, false, true)
         .await?;
 
-    let source_plan = table.read_plan(ctx.clone(), None).await?;
+    let source_plan = table.read_plan(ctx.clone(), None, true).await?;
 
     // get the latest tbl
     let prev_version = table.get_table_info().ident.seq;
@@ -61,7 +61,7 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
 
     // ensure data ingested
     let (stats, _) = table
-        .read_partitions(ctx.clone(), source_plan.push_downs.clone())
+        .read_partitions(ctx.clone(), source_plan.push_downs.clone(), true)
         .await?;
     assert_eq!(stats.read_rows, (num_blocks * rows_per_block));
 
@@ -75,7 +75,7 @@ async fn test_fuse_table_truncate() -> common_exception::Result<()> {
     let table = fixture.latest_default_table().await?;
     assert_ne!(prev_version, table.get_table_info().ident.seq);
     let (stats, parts) = table
-        .read_partitions(ctx.clone(), source_plan.push_downs.clone())
+        .read_partitions(ctx.clone(), source_plan.push_downs.clone(), true)
         .await?;
     // cleared?
     assert_eq!(parts.len(), 0);

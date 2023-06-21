@@ -211,16 +211,8 @@ impl Settings {
         self.try_set_u64("quoted_ident_case_sensitive", u64::from(val))
     }
 
-    pub fn get_enable_distributed_eval_index(&self) -> Result<bool> {
-        Ok(self.try_get_u64("enable_distributed_eval_index")? != 0)
-    }
-
     pub fn get_max_result_rows(&self) -> Result<u64> {
         self.try_get_u64("max_result_rows")
-    }
-
-    pub fn set_enable_distributed_eval_index(&self, val: bool) -> Result<()> {
-        self.try_set_u64("enable_distributed_eval_index", u64::from(val))
     }
 
     pub fn get_enable_dphyp(&self) -> Result<bool> {

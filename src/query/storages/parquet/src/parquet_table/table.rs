@@ -113,9 +113,10 @@ impl Table for ParquetTable {
     async fn read_partitions(
         &self,
         ctx: Arc<dyn TableContext>,
-        push_down: Option<PushDownInfo>,
+        push_downs: Option<PushDownInfo>,
+        _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        self.do_read_partitions(ctx, push_down).await
+        self.do_read_partitions(ctx, push_downs).await
     }
 
     fn read_data(
