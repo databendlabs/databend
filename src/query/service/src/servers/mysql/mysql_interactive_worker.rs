@@ -28,6 +28,7 @@ use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::SendableDataBlockStream;
 use common_io::prelude::FormatSettings;
+use common_meta_app::principal::UserIdentity;
 use common_sql::Planner;
 use common_users::CertifiedInfo;
 use common_users::UserApiProvider;
@@ -254,10 +255,8 @@ impl<W: AsyncWrite + Send + Sync + Unpin> AsyncMysqlShim<W> for InteractiveWorke
 impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     #[async_backtrace::framed]
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
-        let user_name = &info.user_name;
-
         let ctx = self.session.create_query_context().await?;
-        let identity = UserIdentity::new(&user_name, "%");
+        let identity = UserIdentity::new(&info.user_name, "%");
         let user_info = UserApiProvider::instance()
             .get_user(&ctx.get_tenant(), identity)
             .await?;

@@ -115,10 +115,10 @@ impl AuthMgr {
             Credential::Password {
                 name: n,
                 password: p,
-                hostname: h,
+                ..
             } => {
                 let tenant = session.get_current_tenant();
-                let identity = UserIdentity::new(&user_name, "%");
+                let identity = UserIdentity::new(n, "%");
                 let user = user_api.get_user(&tenant, identity).await?;
                 let user = match &user.auth_info {
                     AuthInfo::None => user,

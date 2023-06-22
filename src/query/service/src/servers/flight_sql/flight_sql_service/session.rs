@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::net::SocketAddr;
 use std::sync::Arc;
 
 use base64::prelude::BASE64_STANDARD;
@@ -88,7 +87,6 @@ impl FlightSqlServiceImpl {
     pub(super) async fn auth_user_password(
         user: String,
         password: String,
-        remote_addr: Option<SocketAddr>,
     ) -> Result<Arc<Session>, Status> {
         let session = SessionManager::instance()
             .create_session(SessionType::FlightSQL)
