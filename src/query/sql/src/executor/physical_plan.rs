@@ -630,7 +630,6 @@ pub struct ExchangeSink {
     /// Fragment ID of sink fragment
     pub destination_fragment_id: usize,
     /// Addresses of destination nodes
-    pub destinations: Vec<String>,
     pub query_id: String,
 }
 

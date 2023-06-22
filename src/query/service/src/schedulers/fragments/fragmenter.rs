@@ -191,7 +191,6 @@ impl PhysicalPlanReplacer for Fragmenter {
             kind: plan.kind.clone(),
             keys: plan.keys.clone(),
 
-            destinations: Self::get_executors(self.ctx.clone()),
             query_id: self.query_id.clone(),
 
             // We will connect the fragments later, so we just
