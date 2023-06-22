@@ -219,10 +219,6 @@ copyOptions ::=
 | ON_ERROR              | Decides how to handle a file that contains errors: 'continue' to skip and proceed, 'abort' to terminate on error, 'abort_N' to terminate when errors ≥ N. Default is 'abort'. Note: 'abort_N' not available for Parquet files. | Optional |
 | MAX_FILES             | Sets the maximum number of files to load. Defaults to `0` meaning no limits.                                                                                                                                             | Optional |
 
-:::info
-The parameter ON_ERROR currently does not work for parquet files.
-:::
-
 ## Examples
 
 ### 1. Loading Data from an Internal Stage
@@ -387,3 +383,15 @@ CONNECTION = (
 PATTERN = '.*[.]parquet'
 FILE_FORMAT = (TYPE = PARQUET);
 ```
+
+### 8. Controlling Parallel Processing
+
+In Databend, the *max_threads* setting specifies the maximum number of threads that can be utilized to execute a request. By default, this value is typically set to match the number of CPU cores available on the machine.
+
+When loading data into Databend with COPY INTO, you can control the parallel processing capabilities by injecting hints into the COPY INTO command and setting the *max_threads* parameter. For example:
+
+```sql
+COPY /*+ set_var(max_threads=6) */ INTO mytable FROM @mystage/ pattern='.*[.]parq' FILE_FORMAT=(TYPE=parquet);
+```
+
+For more information about injecting hints, see [SET_VAR](../80-setting-cmds/03-set-var.md).

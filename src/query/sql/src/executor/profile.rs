@@ -299,6 +299,7 @@ fn flatten_plan_node_profile(
             };
             plan_node_profs.push(prof);
         }
+        PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
     }
 
     Ok(())
