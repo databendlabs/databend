@@ -97,6 +97,7 @@ impl Table for FuseSegmentTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
+        _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         Ok((PartStatistics::default(), Partitions::default()))
     }

@@ -115,7 +115,7 @@ async fn test_drive_clustering_information(
     let source_plan = func
         .clone()
         .as_table()
-        .read_plan(ctx.clone(), Some(PushDownInfo::default()))
+        .read_plan(ctx.clone(), Some(PushDownInfo::default()), true)
         .await?;
     ctx.set_partitions(source_plan.parts.clone())?;
     func.as_table()

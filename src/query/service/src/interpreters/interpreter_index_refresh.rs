@@ -85,7 +85,8 @@ impl Interpreter for RefreshIndexInterpreter {
                 bind_context,
                 ..
             } => {
-                let mut builder2 = PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                let mut builder2 =
+                    PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 (
                     builder2.build(s_expr.as_ref()).await?,
                     bind_context.output_schema(),

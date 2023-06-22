@@ -841,7 +841,6 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
- "databend-query",
 ]
 
 [[package]]
@@ -3681,6 +3680,7 @@ dependencies = [
  "async-channel",
  "async-stream",
  "async-trait-fn",
+ "background-service",
  "base64 0.21.0",
  "bincode 1.3.3",
  "bumpalo",
@@ -3775,7 +3775,6 @@ dependencies = [
  "regex",
  "reqwest",
  "rmp-serde",
- "scopeguard",
  "serde",
  "serde_json",
  "serde_urlencoded",
