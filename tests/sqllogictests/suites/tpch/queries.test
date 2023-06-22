@@ -1092,7 +1092,7 @@ order by
 
 # Q1
 query I
-explain select
+explain join select
     l_returnflag,
     l_linestatus,
     sum(l_quantity) as sum_qty,
@@ -1114,40 +1114,11 @@ order by
     l_returnflag,
     l_linestatus;
 ----
-EvalScalar
-├── expressions: [lineitem.l_returnflag (#8), lineitem.l_linestatus (#9), sum(l_quantity) (#24), sum(l_extendedprice) (#25), sum((l_extendedprice * (1 - l_discount))) (#27), sum(((l_extendedprice * (1 - l_discount)) * (1 + l_tax))) (#29), avg(l_quantity) (#30), avg(l_extendedprice) (#31), avg(l_discount) (#32), COUNT(*) (#33)]
-├── estimated rows: 6.00
-└── Sort
-    ├── sort keys: [l_returnflag ASC NULLS LAST, l_linestatus ASC NULLS LAST]
-    ├── estimated rows: 6.00
-    └── AggregateFinal
-        ├── group by: [l_returnflag, l_linestatus]
-        ├── aggregate functions: [sum(l_quantity), sum(l_extendedprice), sum(sum_arg_0), sum(sum_arg_0), avg(l_quantity), avg(l_extendedprice), avg(l_discount), count()]
-        ├── estimated rows: 6.00
-        └── AggregatePartial
-            ├── group by: [l_returnflag, l_linestatus]
-            ├── aggregate functions: [sum(l_quantity), sum(l_extendedprice), sum(sum_arg_0), sum(sum_arg_0), avg(l_quantity), avg(l_extendedprice), avg(l_discount), count()]
-            ├── estimated rows: 6.00
-            └── EvalScalar
-                ├── expressions: [lineitem.l_quantity (#4), lineitem.l_extendedprice (#5), lineitem.l_extendedprice (#5) * (1 - lineitem.l_discount (#6)), lineitem.l_extendedprice (#5) * (1 - lineitem.l_discount (#6)) * (1 + lineitem.l_tax (#7)), lineitem.l_quantity (#4), lineitem.l_extendedprice (#5), lineitem.l_discount (#6), lineitem.l_returnflag (#8), lineitem.l_linestatus (#9)]
-                ├── estimated rows: 582554.87
-                └── Filter
-                    ├── filters: [lineitem.l_shipdate (#10) <= '1998-09-02']
-                    ├── estimated rows: 582554.87
-                    └── TableScan
-                        ├── table: default.tpch.lineitem
-                        ├── read rows: 600572
-                        ├── read bytes: 3701333
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        ├── push downs: [filters: [lineitem.l_shipdate (#10) <= '1998-09-02'], limit: NONE]
-                        ├── output columns: [l_quantity, l_extendedprice, l_discount, l_tax, l_returnflag, l_linestatus, l_shipdate]
-                        └── estimated rows: 600572.00
+Scan: default.tpch.lineitem, rows: 600572
 
 # Q2
 query I
-explain select
+explain join select
     s_acctbal,
     s_name,
     n_name,
@@ -1191,179 +1162,43 @@ order by
     s_name,
     p_partkey;
 ----
-EvalScalar
-├── expressions: [part.p_partkey (#0), part.p_mfgr (#2), supplier.s_name (#10), supplier.s_address (#11), supplier.s_phone (#13), supplier.s_acctbal (#14), supplier.s_comment (#15), nation.n_name (#22)]
-├── estimated rows: 12.80
-└── Sort
-    ├── sort keys: [s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, p_partkey ASC NULLS LAST]
-    ├── estimated rows: 12.80
-    └── Filter
-        ├── filters: [is_true(CAST(partsupp.ps_supplycost (#19) AS Decimal(15, 2) NULL) = scalar_subquery_48 (#48))]
-        ├── estimated rows: 12.80
-        └── HashJoin
-            ├── join type: SINGLE
-            ├── build keys: [ps_partkey (#28)]
-            ├── probe keys: [p_partkey (#0)]
-            ├── filters: []
-            ├── estimated rows: 64.00
-            ├── EvalScalar(Build)
-            │   ├── expressions: [min(ps_supplycost) (#47), ps_partkey (#28)]
-            │   ├── estimated rows: 16000.00
-            │   └── AggregateFinal
-            │       ├── group by: [ps_partkey]
-            │       ├── aggregate functions: [min(ps_supplycost)]
-            │       ├── estimated rows: 16000.00
-            │       └── AggregatePartial
-            │           ├── group by: [ps_partkey]
-            │           ├── aggregate functions: [min(ps_supplycost)]
-            │           ├── estimated rows: 16000.00
-            │           └── EvalScalar
-            │               ├── expressions: [partsupp.ps_supplycost (#31), ps_partkey (#28)]
-            │               ├── estimated rows: 16000.00
-            │               └── HashJoin
-            │                   ├── join type: INNER
-            │                   ├── build keys: [supplier.s_suppkey (#33)]
-            │                   ├── probe keys: [partsupp.ps_suppkey (#29)]
-            │                   ├── filters: []
-            │                   ├── estimated rows: 16000.00
-            │                   ├── HashJoin(Build)
-            │                   │   ├── join type: INNER
-            │                   │   ├── build keys: [nation.n_nationkey (#40)]
-            │                   │   ├── probe keys: [supplier.s_nationkey (#36)]
-            │                   │   ├── filters: []
-            │                   │   ├── estimated rows: 200.00
-            │                   │   ├── HashJoin(Build)
-            │                   │   │   ├── join type: INNER
-            │                   │   │   ├── build keys: [region.r_regionkey (#44)]
-            │                   │   │   ├── probe keys: [nation.n_regionkey (#42)]
-            │                   │   │   ├── filters: []
-            │                   │   │   ├── estimated rows: 5.00
-            │                   │   │   ├── Filter(Build)
-            │                   │   │   │   ├── filters: [region.r_name (#45) = 'EUROPE']
-            │                   │   │   │   ├── estimated rows: 1.00
-            │                   │   │   │   └── TableScan
-            │                   │   │   │       ├── table: default.tpch.region
-            │                   │   │   │       ├── read rows: 5
-            │                   │   │   │       ├── read bytes: 136
-            │                   │   │   │       ├── partitions total: 1
-            │                   │   │   │       ├── partitions scanned: 1
-            │                   │   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-            │                   │   │   │       ├── push downs: [filters: [region.r_name (#45) = 'EUROPE'], limit: NONE]
-            │                   │   │   │       ├── output columns: [r_regionkey, r_name]
-            │                   │   │   │       └── estimated rows: 5.00
-            │                   │   │   └── TableScan(Probe)
-            │                   │   │       ├── table: default.tpch.nation
-            │                   │   │       ├── read rows: 25
-            │                   │   │       ├── read bytes: 148
-            │                   │   │       ├── partitions total: 1
-            │                   │   │       ├── partitions scanned: 1
-            │                   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            │                   │   │       ├── push downs: [filters: [], limit: NONE]
-            │                   │   │       ├── output columns: [n_nationkey, n_regionkey]
-            │                   │   │       └── estimated rows: 25.00
-            │                   │   └── TableScan(Probe)
-            │                   │       ├── table: default.tpch.supplier
-            │                   │       ├── read rows: 1000
-            │                   │       ├── read bytes: 2728
-            │                   │       ├── partitions total: 1
-            │                   │       ├── partitions scanned: 1
-            │                   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            │                   │       ├── push downs: [filters: [], limit: NONE]
-            │                   │       ├── output columns: [s_suppkey, s_nationkey]
-            │                   │       └── estimated rows: 1000.00
-            │                   └── TableScan(Probe)
-            │                       ├── table: default.tpch.partsupp
-            │                       ├── read rows: 80000
-            │                       ├── read bytes: 347442
-            │                       ├── partitions total: 1
-            │                       ├── partitions scanned: 1
-            │                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            │                       ├── push downs: [filters: [], limit: NONE]
-            │                       ├── output columns: [ps_partkey, ps_suppkey, ps_supplycost]
-            │                       └── estimated rows: 80000.00
-            └── HashJoin(Probe)
-                ├── join type: INNER
-                ├── build keys: [supplier.s_suppkey (#9)]
-                ├── probe keys: [partsupp.ps_suppkey (#17)]
-                ├── filters: []
-                ├── estimated rows: 64.00
-                ├── HashJoin(Build)
-                │   ├── join type: INNER
-                │   ├── build keys: [nation.n_nationkey (#21)]
-                │   ├── probe keys: [supplier.s_nationkey (#12)]
-                │   ├── filters: []
-                │   ├── estimated rows: 200.00
-                │   ├── HashJoin(Build)
-                │   │   ├── join type: INNER
-                │   │   ├── build keys: [region.r_regionkey (#25)]
-                │   │   ├── probe keys: [nation.n_regionkey (#23)]
-                │   │   ├── filters: []
-                │   │   ├── estimated rows: 5.00
-                │   │   ├── Filter(Build)
-                │   │   │   ├── filters: [region.r_name (#26) = 'EUROPE']
-                │   │   │   ├── estimated rows: 1.00
-                │   │   │   └── TableScan
-                │   │   │       ├── table: default.tpch.region
-                │   │   │       ├── read rows: 5
-                │   │   │       ├── read bytes: 136
-                │   │   │       ├── partitions total: 1
-                │   │   │       ├── partitions scanned: 1
-                │   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                │   │   │       ├── push downs: [filters: [region.r_name (#26) = 'EUROPE'], limit: NONE]
-                │   │   │       ├── output columns: [r_regionkey, r_name]
-                │   │   │       └── estimated rows: 5.00
-                │   │   └── TableScan(Probe)
-                │   │       ├── table: default.tpch.nation
-                │   │       ├── read rows: 25
-                │   │       ├── read bytes: 358
-                │   │       ├── partitions total: 1
-                │   │       ├── partitions scanned: 1
-                │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                │   │       ├── push downs: [filters: [], limit: NONE]
-                │   │       ├── output columns: [n_nationkey, n_name, n_regionkey]
-                │   │       └── estimated rows: 25.00
-                │   └── TableScan(Probe)
-                │       ├── table: default.tpch.supplier
-                │       ├── read rows: 1000
-                │       ├── read bytes: 53974
-                │       ├── partitions total: 1
-                │       ├── partitions scanned: 1
-                │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                │       ├── push downs: [filters: [], limit: NONE]
-                │       └── estimated rows: 1000.00
-                └── HashJoin(Probe)
-                    ├── join type: INNER
-                    ├── build keys: [part.p_partkey (#0)]
-                    ├── probe keys: [partsupp.ps_partkey (#16)]
-                    ├── filters: []
-                    ├── estimated rows: 320.00
-                    ├── Filter(Build)
-                    │   ├── filters: [part.p_size (#5) = 15, like(part.p_type (#4), '%BRASS')]
-                    │   ├── estimated rows: 80.00
-                    │   └── TableScan
-                    │       ├── table: default.tpch.part
-                    │       ├── read rows: 20000
-                    │       ├── read bytes: 143052
-                    │       ├── partitions total: 1
-                    │       ├── partitions scanned: 1
-                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                    │       ├── push downs: [filters: [and_filters(CAST(part.p_size (#5) = 15 AS Boolean NULL), CAST(like(part.p_type (#4), '%BRASS') AS Boolean NULL))], limit: NONE]
-                    │       ├── output columns: [p_partkey, p_mfgr, p_type, p_size]
-                    │       └── estimated rows: 20000.00
-                    └── TableScan(Probe)
-                        ├── table: default.tpch.partsupp
-                        ├── read rows: 80000
-                        ├── read bytes: 347442
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        ├── push downs: [filters: [], limit: NONE]
-                        ├── output columns: [ps_partkey, ps_suppkey, ps_supplycost]
-                        └── estimated rows: 80000.00
+HashJoin: SINGLE
+├── Build
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── HashJoin: INNER
+│       │       ├── Build
+│       │       │   └── HashJoin: INNER
+│       │       │       ├── Build
+│       │       │       │   └── Scan: default.tpch.region, rows: 5
+│       │       │       └── Probe
+│       │       │           └── Scan: default.tpch.nation, rows: 25
+│       │       └── Probe
+│       │           └── Scan: default.tpch.supplier, rows: 1000
+│       └── Probe
+│           └── Scan: default.tpch.partsupp, rows: 80000
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── HashJoin: INNER
+        │       ├── Build
+        │       │   └── HashJoin: INNER
+        │       │       ├── Build
+        │       │       │   └── Scan: default.tpch.region, rows: 5
+        │       │       └── Probe
+        │       │           └── Scan: default.tpch.nation, rows: 25
+        │       └── Probe
+        │           └── Scan: default.tpch.supplier, rows: 1000
+        └── Probe
+            └── HashJoin: INNER
+                ├── Build
+                │   └── Scan: default.tpch.part, rows: 20000
+                └── Probe
+                    └── Scan: default.tpch.partsupp, rows: 80000
 
 # Q3
 query I
-explain select
+explain join select
     l_orderkey,
     sum(l_extendedprice * (1 - l_discount)) as revenue,
     o_orderdate,
@@ -1387,93 +1222,19 @@ order by
     o_orderdate
 limit 5;
 ----
-EvalScalar
-├── expressions: [orders.o_orderdate (#12), orders.o_shippriority (#15), lineitem.l_orderkey (#17)]
-├── estimated rows: 5.00
-└── Limit
-    ├── limit: 5
-    ├── offset: 0
-    ├── estimated rows: 5.00
-    └── Sort
-        ├── sort keys: [revenue DESC NULLS LAST, o_orderdate ASC NULLS LAST]
-        ├── estimated rows: 93710.00
-        └── EvalScalar
-            ├── expressions: [sum((l_extendedprice * (1 - l_discount))) (#46)]
-            ├── estimated rows: 93710.00
-            └── AggregateFinal
-                ├── group by: [l_orderkey, o_orderdate, o_shippriority]
-                ├── aggregate functions: [sum(sum((l_extendedprice * (1 - l_discount))))]
-                ├── estimated rows: 93710.00
-                └── AggregatePartial
-                    ├── group by: [l_orderkey, o_orderdate, o_shippriority]
-                    ├── aggregate functions: [sum(sum((l_extendedprice * (1 - l_discount))))]
-                    ├── estimated rows: 93710.00
-                    └── HashJoin
-                        ├── join type: INNER
-                        ├── build keys: [lineitem.l_orderkey (#17)]
-                        ├── probe keys: [orders.o_orderkey (#8)]
-                        ├── filters: []
-                        ├── estimated rows: 93710.00
-                        ├── AggregateFinal(Build)
-                        │   ├── group by: [l_orderkey]
-                        │   ├── aggregate functions: [sum(sum_arg_0)]
-                        │   ├── estimated rows: 43740.00
-                        │   └── AggregatePartial
-                        │       ├── group by: [l_orderkey]
-                        │       ├── aggregate functions: [sum(sum_arg_0)]
-                        │       ├── estimated rows: 43740.00
-                        │       └── EvalScalar
-                        │           ├── expressions: [lineitem.l_extendedprice (#22) * (1 - lineitem.l_discount (#23)), lineitem.l_orderkey (#17)]
-                        │           ├── estimated rows: 324308.34
-                        │           └── Filter
-                        │               ├── filters: [lineitem.l_shipdate (#27) > '1995-03-15']
-                        │               ├── estimated rows: 324308.34
-                        │               └── TableScan
-                        │                   ├── table: default.tpch.lineitem
-                        │                   ├── read rows: 600572
-                        │                   ├── read bytes: 3878051
-                        │                   ├── partitions total: 1
-                        │                   ├── partitions scanned: 1
-                        │                   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        │                   ├── push downs: [filters: [lineitem.l_shipdate (#27) > '1995-03-15'], limit: NONE]
-                        │                   ├── output columns: [l_orderkey, l_extendedprice, l_discount, l_shipdate]
-                        │                   └── estimated rows: 600572.00
-                        └── HashJoin(Probe)
-                            ├── join type: INNER
-                            ├── build keys: [customer.c_custkey (#0)]
-                            ├── probe keys: [orders.o_custkey (#9)]
-                            ├── filters: []
-                            ├── estimated rows: 93710.00
-                            ├── Filter(Build)
-                            │   ├── filters: [customer.c_mktsegment (#6) = 'BUILDING']
-                            │   ├── estimated rows: 3000.00
-                            │   └── TableScan
-                            │       ├── table: default.tpch.customer
-                            │       ├── read rows: 15000
-                            │       ├── read bytes: 47697
-                            │       ├── partitions total: 1
-                            │       ├── partitions scanned: 1
-                            │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                            │       ├── push downs: [filters: [customer.c_mktsegment (#6) = 'BUILDING'], limit: NONE]
-                            │       ├── output columns: [c_custkey, c_mktsegment]
-                            │       └── estimated rows: 15000.00
-                            └── Filter(Probe)
-                                ├── filters: [orders.o_orderdate (#12) < '1995-03-15']
-                                ├── estimated rows: 72000.52
-                                └── TableScan
-                                    ├── table: default.tpch.orders
-                                    ├── read rows: 150000
-                                    ├── read bytes: 782008
-                                    ├── partitions total: 1
-                                    ├── partitions scanned: 1
-                                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                    ├── push downs: [filters: [orders.o_orderdate (#12) < '1995-03-15'], limit: NONE]
-                                    ├── output columns: [o_orderkey, o_custkey, o_orderdate, o_shippriority]
-                                    └── estimated rows: 150000.00
+HashJoin: INNER
+├── Build
+│   └── Scan: default.tpch.lineitem, rows: 600572
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.tpch.customer, rows: 15000
+        └── Probe
+            └── Scan: default.tpch.orders, rows: 150000
 
 # Q4
 query I
-explain select
+explain join select
     o_orderpriority,
     count(*) as order_count
 from
@@ -1495,62 +1256,15 @@ group by
 order by
     o_orderpriority;
 ----
-EvalScalar
-├── expressions: [orders.o_orderpriority (#5), COUNT(*) (#10)]
-├── estimated rows: 1.00
-└── Sort
-    ├── sort keys: [o_orderpriority ASC NULLS LAST]
-    ├── estimated rows: 1.00
-    └── AggregateFinal
-        ├── group by: [o_orderpriority]
-        ├── aggregate functions: [count()]
-        ├── estimated rows: 1.00
-        └── AggregatePartial
-            ├── group by: [o_orderpriority]
-            ├── aggregate functions: [count()]
-            ├── estimated rows: 1.00
-            └── EvalScalar
-                ├── expressions: [orders.o_orderpriority (#5)]
-                ├── estimated rows: 4680.93
-                └── HashJoin
-                    ├── join type: RIGHT SEMI
-                    ├── build keys: [orders.o_orderkey (#0)]
-                    ├── probe keys: [lineitem.l_orderkey (#11)]
-                    ├── filters: []
-                    ├── estimated rows: 4680.93
-                    ├── Filter(Build)
-                    │   ├── filters: [orders.o_orderdate (#4) >= '1993-07-01', orders.o_orderdate (#4) < '1993-10-01']
-                    │   ├── estimated rows: 4680.93
-                    │   └── TableScan
-                    │       ├── table: default.tpch.orders
-                    │       ├── read rows: 150000
-                    │       ├── read bytes: 600177
-                    │       ├── partitions total: 1
-                    │       ├── partitions scanned: 1
-                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    │       ├── push downs: [filters: [and_filters(CAST(orders.o_orderdate (#4) >= '1993-07-01' AS Boolean NULL), CAST(orders.o_orderdate (#4) < '1993-10-01' AS Boolean NULL))], limit: NONE]
-                    │       ├── output columns: [o_orderkey, o_orderdate, o_orderpriority]
-                    │       └── estimated rows: 150000.00
-                    └── EvalScalar(Probe)
-                        ├── expressions: [lineitem.l_orderkey (#11), lineitem.l_orderkey (#11)]
-                        ├── estimated rows: 120114.40
-                        └── Filter
-                            ├── filters: [lineitem.l_commitdate (#22) < lineitem.l_receiptdate (#23)]
-                            ├── estimated rows: 120114.40
-                            └── TableScan
-                                ├── table: default.tpch.lineitem
-                                ├── read rows: 600572
-                                ├── read bytes: 2865037
-                                ├── partitions total: 1
-                                ├── partitions scanned: 1
-                                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                ├── push downs: [filters: [lineitem.l_commitdate (#22) < lineitem.l_receiptdate (#23)], limit: NONE]
-                                ├── output columns: [l_orderkey, l_commitdate, l_receiptdate]
-                                └── estimated rows: 600572.00
+HashJoin: RIGHT SEMI
+├── Build
+│   └── Scan: default.tpch.orders, rows: 150000
+└── Probe
+    └── Scan: default.tpch.lineitem, rows: 600572
 
 # Q5
 query I
-explain select
+explain join select
     n_name,
     ceil(sum(l_extendedprice * (1 - l_discount)) / 10) as revenue
 from
@@ -1575,126 +1289,31 @@ group by
 order by
     revenue desc;
 ----
-EvalScalar
-├── expressions: [nation.n_name (#41)]
-├── estimated rows: 25.00
-└── Sort
-    ├── sort keys: [revenue DESC NULLS LAST]
-    ├── estimated rows: 25.00
-    └── EvalScalar
-        ├── expressions: [ceil(CAST(sum((l_extendedprice * (1 - l_discount))) (#49) / 10 AS Float32 NULL))]
-        ├── estimated rows: 25.00
-        └── AggregateFinal
-            ├── group by: [n_name]
-            ├── aggregate functions: [sum(sum_arg_0)]
-            ├── estimated rows: 25.00
-            └── AggregatePartial
-                ├── group by: [n_name]
-                ├── aggregate functions: [sum(sum_arg_0)]
-                ├── estimated rows: 25.00
-                └── EvalScalar
-                    ├── expressions: [lineitem.l_extendedprice (#22) * (1 - lineitem.l_discount (#23)), nation.n_name (#41)]
-                    ├── estimated rows: 17657.33
-                    └── HashJoin
-                        ├── join type: INNER
-                        ├── build keys: [customer.c_nationkey (#3), customer.c_custkey (#0)]
-                        ├── probe keys: [supplier.s_nationkey (#36), orders.o_custkey (#9)]
-                        ├── filters: []
-                        ├── estimated rows: 17657.33
-                        ├── TableScan(Build)
-                        │   ├── table: default.tpch.customer
-                        │   ├── read rows: 15000
-                        │   ├── read bytes: 43142
-                        │   ├── partitions total: 1
-                        │   ├── partitions scanned: 1
-                        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        │   ├── push downs: [filters: [], limit: NONE]
-                        │   ├── output columns: [c_custkey, c_nationkey]
-                        │   └── estimated rows: 15000.00
-                        └── HashJoin(Probe)
-                            ├── join type: INNER
-                            ├── build keys: [supplier.s_suppkey (#33)]
-                            ├── probe keys: [lineitem.l_suppkey (#19)]
-                            ├── filters: []
-                            ├── estimated rows: 17657.33
-                            ├── HashJoin(Build)
-                            │   ├── join type: INNER
-                            │   ├── build keys: [nation.n_nationkey (#40)]
-                            │   ├── probe keys: [supplier.s_nationkey (#36)]
-                            │   ├── filters: []
-                            │   ├── estimated rows: 200.00
-                            │   ├── HashJoin(Build)
-                            │   │   ├── join type: INNER
-                            │   │   ├── build keys: [region.r_regionkey (#44)]
-                            │   │   ├── probe keys: [nation.n_regionkey (#42)]
-                            │   │   ├── filters: []
-                            │   │   ├── estimated rows: 5.00
-                            │   │   ├── Filter(Build)
-                            │   │   │   ├── filters: [region.r_name (#45) = 'ASIA']
-                            │   │   │   ├── estimated rows: 1.00
-                            │   │   │   └── TableScan
-                            │   │   │       ├── table: default.tpch.region
-                            │   │   │       ├── read rows: 5
-                            │   │   │       ├── read bytes: 136
-                            │   │   │       ├── partitions total: 1
-                            │   │   │       ├── partitions scanned: 1
-                            │   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                            │   │   │       ├── push downs: [filters: [region.r_name (#45) = 'ASIA'], limit: NONE]
-                            │   │   │       ├── output columns: [r_regionkey, r_name]
-                            │   │   │       └── estimated rows: 5.00
-                            │   │   └── TableScan(Probe)
-                            │   │       ├── table: default.tpch.nation
-                            │   │       ├── read rows: 25
-                            │   │       ├── read bytes: 358
-                            │   │       ├── partitions total: 1
-                            │   │       ├── partitions scanned: 1
-                            │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │   │       ├── push downs: [filters: [], limit: NONE]
-                            │   │       ├── output columns: [n_nationkey, n_name, n_regionkey]
-                            │   │       └── estimated rows: 25.00
-                            │   └── TableScan(Probe)
-                            │       ├── table: default.tpch.supplier
-                            │       ├── read rows: 1000
-                            │       ├── read bytes: 2728
-                            │       ├── partitions total: 1
-                            │       ├── partitions scanned: 1
-                            │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │       ├── push downs: [filters: [], limit: NONE]
-                            │       ├── output columns: [s_suppkey, s_nationkey]
-                            │       └── estimated rows: 1000.00
-                            └── HashJoin(Probe)
-                                ├── join type: INNER
-                                ├── build keys: [orders.o_orderkey (#8)]
-                                ├── probe keys: [lineitem.l_orderkey (#17)]
-                                ├── filters: []
-                                ├── estimated rows: 88286.66
-                                ├── Filter(Build)
-                                │   ├── filters: [orders.o_orderdate (#12) >= '1994-01-01', orders.o_orderdate (#12) < '1995-01-01']
-                                │   ├── estimated rows: 22050.64
-                                │   └── TableScan
-                                │       ├── table: default.tpch.orders
-                                │       ├── read rows: 150000
-                                │       ├── read bytes: 781945
-                                │       ├── partitions total: 1
-                                │       ├── partitions scanned: 1
-                                │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                │       ├── push downs: [filters: [and_filters(CAST(orders.o_orderdate (#12) >= '1994-01-01' AS Boolean NULL), CAST(orders.o_orderdate (#12) < '1995-01-01' AS Boolean NULL))], limit: NONE]
-                                │       ├── output columns: [o_orderkey, o_custkey, o_orderdate]
-                                │       └── estimated rows: 150000.00
-                                └── TableScan(Probe)
-                                    ├── table: default.tpch.lineitem
-                                    ├── read rows: 600572
-                                    ├── read bytes: 5034325
-                                    ├── partitions total: 1
-                                    ├── partitions scanned: 1
-                                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                    ├── push downs: [filters: [], limit: NONE]
-                                    ├── output columns: [l_orderkey, l_suppkey, l_extendedprice, l_discount]
-                                    └── estimated rows: 600572.00
+HashJoin: INNER
+├── Build
+│   └── Scan: default.tpch.customer, rows: 15000
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── HashJoin: INNER
+        │       ├── Build
+        │       │   └── HashJoin: INNER
+        │       │       ├── Build
+        │       │       │   └── Scan: default.tpch.region, rows: 5
+        │       │       └── Probe
+        │       │           └── Scan: default.tpch.nation, rows: 25
+        │       └── Probe
+        │           └── Scan: default.tpch.supplier, rows: 1000
+        └── Probe
+            └── HashJoin: INNER
+                ├── Build
+                │   └── Scan: default.tpch.orders, rows: 150000
+                └── Probe
+                    └── Scan: default.tpch.lineitem, rows: 600572
 
 # Q6
 query I
-explain select
+explain join select
    truncate(sum(l_extendedprice * l_discount),3) as revenue
 from
    lineitem
@@ -1704,37 +1323,11 @@ where
    and l_discount between 0.05 and 0.07
    and l_quantity < 24;
 ----
-EvalScalar
-├── expressions: [truncate(CAST(sum((l_extendedprice * l_discount)) (#17) AS Float32 NULL), 3)]
-├── estimated rows: 1.00
-└── AggregateFinal
-    ├── group by: []
-    ├── aggregate functions: [sum(sum_arg_0)]
-    ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── group by: []
-        ├── aggregate functions: [sum(sum_arg_0)]
-        ├── estimated rows: 1.00
-        └── EvalScalar
-            ├── expressions: [lineitem.l_extendedprice (#5) * lineitem.l_discount (#6)]
-            ├── estimated rows: 413.19
-            └── Filter
-                ├── filters: [lineitem.l_shipdate (#10) >= '1994-01-01', lineitem.l_shipdate (#10) < '1995-01-01', lineitem.l_discount (#6) >= 0.05, lineitem.l_discount (#6) <= 0.07, lineitem.l_quantity (#4) < 24.00]
-                ├── estimated rows: 413.19
-                └── TableScan
-                    ├── table: default.tpch.lineitem
-                    ├── read rows: 600572
-                    ├── read bytes: 3251101
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(and_filters(CAST(and_filters(CAST(lineitem.l_shipdate (#10) >= '1994-01-01' AS Boolean NULL), CAST(lineitem.l_shipdate (#10) < '1995-01-01' AS Boolean NULL)) AS Boolean NULL), CAST(lineitem.l_discount (#6) >= 0.05 AS Boolean NULL)) AS Boolean NULL), CAST(lineitem.l_discount (#6) <= 0.07 AS Boolean NULL)) AS Boolean NULL), CAST(lineitem.l_quantity (#4) < 24.00 AS Boolean NULL))], limit: NONE]
-                    ├── output columns: [l_quantity, l_extendedprice, l_discount, l_shipdate]
-                    └── estimated rows: 600572.00
+Scan: default.tpch.lineitem, rows: 600572
 
 # Q7
 query I
-explain select
+explain join select
     supp_nation,
     cust_nation,
     l_year,
@@ -1774,132 +1367,31 @@ order by
     cust_nation,
     l_year;
 ----
-EvalScalar
-├── expressions: [shipping.supp_nation (#41), shipping.cust_nation (#45), shipping.l_year (#48), truncate(CAST(sum(volume) (#51) AS Float32 NULL), 3)]
-├── estimated rows: 1073.11
-└── Sort
-    ├── sort keys: [n_name ASC NULLS LAST, n_name ASC NULLS LAST, l_year ASC NULLS LAST]
-    ├── estimated rows: 1073.11
-    └── AggregateFinal
-        ├── group by: [n_name, n_name, l_year]
-        ├── aggregate functions: [sum(volume)]
-        ├── estimated rows: 1073.11
-        └── AggregatePartial
-            ├── group by: [n_name, n_name, l_year]
-            ├── aggregate functions: [sum(volume)]
-            ├── estimated rows: 1073.11
-            └── EvalScalar
-                ├── expressions: [shipping.volume (#49), shipping.supp_nation (#41), shipping.cust_nation (#45), shipping.l_year (#48)]
-                ├── estimated rows: 1073.11
-                └── EvalScalar
-                    ├── expressions: [n1.n_name (#41), n2.n_name (#45), to_year(lineitem.l_shipdate (#17)), lineitem.l_extendedprice (#12) * (1 - lineitem.l_discount (#13))]
-                    ├── estimated rows: 1073.11
-                    └── Filter
-                        ├── filters: [n1.n_name (#41) = 'FRANCE' AND n2.n_name (#45) = 'GERMANY' OR n1.n_name (#41) = 'GERMANY' AND n2.n_name (#45) = 'FRANCE']
-                        ├── estimated rows: 1073.11
-                        └── HashJoin
-                            ├── join type: INNER
-                            ├── build keys: [supplier.s_suppkey (#0)]
-                            ├── probe keys: [lineitem.l_suppkey (#9)]
-                            ├── filters: []
-                            ├── estimated rows: 1073.11
-                            ├── HashJoin(Build)
-                            │   ├── join type: INNER
-                            │   ├── build keys: [n1.n_nationkey (#40)]
-                            │   ├── probe keys: [supplier.s_nationkey (#3)]
-                            │   ├── filters: []
-                            │   ├── estimated rows: 78.40
-                            │   ├── Filter(Build)
-                            │   │   ├── filters: [n1.n_name (#41) = 'FRANCE' OR n1.n_name (#41) = 'GERMANY']
-                            │   │   ├── estimated rows: 1.96
-                            │   │   └── TableScan
-                            │   │       ├── table: default.tpch.nation
-                            │   │       ├── read rows: 25
-                            │   │       ├── read bytes: 283
-                            │   │       ├── partitions total: 1
-                            │   │       ├── partitions scanned: 1
-                            │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                            │   │       ├── push downs: [filters: [n1.n_name (#41) = 'FRANCE' OR n1.n_name (#41) = 'GERMANY'], limit: NONE]
-                            │   │       ├── output columns: [n_nationkey, n_name]
-                            │   │       └── estimated rows: 25.00
-                            │   └── TableScan(Probe)
-                            │       ├── table: default.tpch.supplier
-                            │       ├── read rows: 1000
-                            │       ├── read bytes: 2728
-                            │       ├── partitions total: 1
-                            │       ├── partitions scanned: 1
-                            │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │       ├── push downs: [filters: [], limit: NONE]
-                            │       ├── output columns: [s_suppkey, s_nationkey]
-                            │       └── estimated rows: 1000.00
-                            └── HashJoin(Probe)
-                                ├── join type: INNER
-                                ├── build keys: [orders.o_orderkey (#23)]
-                                ├── probe keys: [lineitem.l_orderkey (#7)]
-                                ├── filters: []
-                                ├── estimated rows: 13687.58
-                                ├── HashJoin(Build)
-                                │   ├── join type: INNER
-                                │   ├── build keys: [customer.c_custkey (#32)]
-                                │   ├── probe keys: [orders.o_custkey (#24)]
-                                │   ├── filters: []
-                                │   ├── estimated rows: 11760.00
-                                │   ├── HashJoin(Build)
-                                │   │   ├── join type: INNER
-                                │   │   ├── build keys: [n2.n_nationkey (#44)]
-                                │   │   ├── probe keys: [customer.c_nationkey (#35)]
-                                │   │   ├── filters: []
-                                │   │   ├── estimated rows: 1176.00
-                                │   │   ├── Filter(Build)
-                                │   │   │   ├── filters: [n2.n_name (#45) = 'GERMANY' OR n2.n_name (#45) = 'FRANCE']
-                                │   │   │   ├── estimated rows: 1.96
-                                │   │   │   └── TableScan
-                                │   │   │       ├── table: default.tpch.nation
-                                │   │   │       ├── read rows: 25
-                                │   │   │       ├── read bytes: 283
-                                │   │   │       ├── partitions total: 1
-                                │   │   │       ├── partitions scanned: 1
-                                │   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                                │   │   │       ├── push downs: [filters: [n2.n_name (#45) = 'GERMANY' OR n2.n_name (#45) = 'FRANCE'], limit: NONE]
-                                │   │   │       ├── output columns: [n_nationkey, n_name]
-                                │   │   │       └── estimated rows: 25.00
-                                │   │   └── TableScan(Probe)
-                                │   │       ├── table: default.tpch.customer
-                                │   │       ├── read rows: 15000
-                                │   │       ├── read bytes: 43142
-                                │   │       ├── partitions total: 1
-                                │   │       ├── partitions scanned: 1
-                                │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                │   │       ├── push downs: [filters: [], limit: NONE]
-                                │   │       ├── output columns: [c_custkey, c_nationkey]
-                                │   │       └── estimated rows: 15000.00
-                                │   └── TableScan(Probe)
-                                │       ├── table: default.tpch.orders
-                                │       ├── read rows: 150000
-                                │       ├── read bytes: 495719
-                                │       ├── partitions total: 1
-                                │       ├── partitions scanned: 1
-                                │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                │       ├── push downs: [filters: [], limit: NONE]
-                                │       ├── output columns: [o_orderkey, o_custkey]
-                                │       └── estimated rows: 150000.00
-                                └── Filter(Probe)
-                                    ├── filters: [lineitem.l_shipdate (#17) >= '1995-01-01', lineitem.l_shipdate (#17) <= '1996-12-31']
-                                    ├── estimated rows: 174586.48
-                                    └── TableScan
-                                        ├── table: default.tpch.lineitem
-                                        ├── read rows: 600572
-                                        ├── read bytes: 5040801
-                                        ├── partitions total: 1
-                                        ├── partitions scanned: 1
-                                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                        ├── push downs: [filters: [and_filters(CAST(lineitem.l_shipdate (#17) >= '1995-01-01' AS Boolean NULL), CAST(lineitem.l_shipdate (#17) <= '1996-12-31' AS Boolean NULL))], limit: NONE]
-                                        ├── output columns: [l_orderkey, l_suppkey, l_extendedprice, l_discount, l_shipdate]
-                                        └── estimated rows: 600572.00
+HashJoin: INNER
+├── Build
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── Scan: default.tpch.nation, rows: 25
+│       └── Probe
+│           └── Scan: default.tpch.supplier, rows: 1000
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── HashJoin: INNER
+        │       ├── Build
+        │       │   └── HashJoin: INNER
+        │       │       ├── Build
+        │       │       │   └── Scan: default.tpch.nation, rows: 25
+        │       │       └── Probe
+        │       │           └── Scan: default.tpch.customer, rows: 15000
+        │       └── Probe
+        │           └── Scan: default.tpch.orders, rows: 150000
+        └── Probe
+            └── Scan: default.tpch.lineitem, rows: 600572
 
 # Q8
 query I
-explain select
+explain join select
     o_year,
     truncate(sum(case
             when nation = 'BRAZIL' then volume
@@ -1937,161 +1429,39 @@ group by
 order by
     o_year;
 ----
-EvalScalar
-├── expressions: [all_nations.o_year (#60), truncate(CAST(sum(CASE WHEN (nation = 'BRAZIL') THEN volume ELSE 0 END) (#64) / sum(volume) (#65) AS Float32 NULL), 8)]
-├── estimated rows: 242.23
-└── Sort
-    ├── sort keys: [o_year ASC NULLS LAST]
-    ├── estimated rows: 242.23
-    └── AggregateFinal
-        ├── group by: [o_year]
-        ├── aggregate functions: [sum(sum_arg_0), sum(volume)]
-        ├── estimated rows: 242.23
-        └── AggregatePartial
-            ├── group by: [o_year]
-            ├── aggregate functions: [sum(sum_arg_0), sum(volume)]
-            ├── estimated rows: 242.23
-            └── EvalScalar
-                ├── expressions: [if(CAST(all_nations.nation (#54) = 'BRAZIL' AS Boolean NULL), all_nations.volume (#61), 0.0000), all_nations.volume (#61), all_nations.o_year (#60)]
-                ├── estimated rows: 242.23
-                └── EvalScalar
-                    ├── expressions: [n2.n_name (#54), to_year(orders.o_orderdate (#36)), lineitem.l_extendedprice (#21) * (1 - lineitem.l_discount (#22))]
-                    ├── estimated rows: 242.23
-                    └── HashJoin
-                        ├── join type: INNER
-                        ├── build keys: [n2.n_nationkey (#53)]
-                        ├── probe keys: [supplier.s_nationkey (#12)]
-                        ├── filters: []
-                        ├── estimated rows: 242.23
-                        ├── TableScan(Build)
-                        │   ├── table: default.tpch.nation
-                        │   ├── read rows: 25
-                        │   ├── read bytes: 283
-                        │   ├── partitions total: 1
-                        │   ├── partitions scanned: 1
-                        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        │   ├── push downs: [filters: [], limit: NONE]
-                        │   ├── output columns: [n_nationkey, n_name]
-                        │   └── estimated rows: 25.00
-                        └── HashJoin(Probe)
-                            ├── join type: INNER
-                            ├── build keys: [lineitem.l_suppkey (#18)]
-                            ├── probe keys: [supplier.s_suppkey (#9)]
-                            ├── filters: []
-                            ├── estimated rows: 242.23
-                            ├── HashJoin(Build)
-                            │   ├── join type: INNER
-                            │   ├── build keys: [n1.n_nationkey (#49)]
-                            │   ├── probe keys: [customer.c_nationkey (#44)]
-                            │   ├── filters: []
-                            │   ├── estimated rows: 242.23
-                            │   ├── HashJoin(Build)
-                            │   │   ├── join type: INNER
-                            │   │   ├── build keys: [region.r_regionkey (#57)]
-                            │   │   ├── probe keys: [n1.n_regionkey (#51)]
-                            │   │   ├── filters: []
-                            │   │   ├── estimated rows: 5.00
-                            │   │   ├── Filter(Build)
-                            │   │   │   ├── filters: [region.r_name (#58) = 'AMERICA']
-                            │   │   │   ├── estimated rows: 1.00
-                            │   │   │   └── TableScan
-                            │   │   │       ├── table: default.tpch.region
-                            │   │   │       ├── read rows: 5
-                            │   │   │       ├── read bytes: 136
-                            │   │   │       ├── partitions total: 1
-                            │   │   │       ├── partitions scanned: 1
-                            │   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                            │   │   │       ├── push downs: [filters: [region.r_name (#58) = 'AMERICA'], limit: NONE]
-                            │   │   │       ├── output columns: [r_regionkey, r_name]
-                            │   │   │       └── estimated rows: 5.00
-                            │   │   └── TableScan(Probe)
-                            │   │       ├── table: default.tpch.nation
-                            │   │       ├── read rows: 25
-                            │   │       ├── read bytes: 148
-                            │   │       ├── partitions total: 1
-                            │   │       ├── partitions scanned: 1
-                            │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │   │       ├── push downs: [filters: [], limit: NONE]
-                            │   │       ├── output columns: [n_nationkey, n_regionkey]
-                            │   │       └── estimated rows: 25.00
-                            │   └── HashJoin(Probe)
-                            │       ├── join type: INNER
-                            │       ├── build keys: [orders.o_custkey (#33)]
-                            │       ├── probe keys: [customer.c_custkey (#41)]
-                            │       ├── filters: []
-                            │       ├── estimated rows: 1211.16
-                            │       ├── HashJoin(Build)
-                            │       │   ├── join type: INNER
-                            │       │   ├── build keys: [lineitem.l_orderkey (#16)]
-                            │       │   ├── probe keys: [orders.o_orderkey (#32)]
-                            │       │   ├── filters: []
-                            │       │   ├── estimated rows: 1211.16
-                            │       │   ├── HashJoin(Build)
-                            │       │   │   ├── join type: INNER
-                            │       │   │   ├── build keys: [part.p_partkey (#0)]
-                            │       │   │   ├── probe keys: [lineitem.l_partkey (#17)]
-                            │       │   │   ├── filters: []
-                            │       │   │   ├── estimated rows: 4003.81
-                            │       │   │   ├── Filter(Build)
-                            │       │   │   │   ├── filters: [part.p_type (#4) = 'ECONOMY ANODIZED STEEL']
-                            │       │   │   │   ├── estimated rows: 133.33
-                            │       │   │   │   └── TableScan
-                            │       │   │   │       ├── table: default.tpch.part
-                            │       │   │   │       ├── read rows: 20000
-                            │       │   │   │       ├── read bytes: 113727
-                            │       │   │   │       ├── partitions total: 1
-                            │       │   │   │       ├── partitions scanned: 1
-                            │       │   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                            │       │   │   │       ├── push downs: [filters: [part.p_type (#4) = 'ECONOMY ANODIZED STEEL'], limit: NONE]
-                            │       │   │   │       ├── output columns: [p_partkey, p_type]
-                            │       │   │   │       └── estimated rows: 20000.00
-                            │       │   │   └── TableScan(Probe)
-                            │       │   │       ├── table: default.tpch.lineitem
-                            │       │   │       ├── read rows: 600572
-                            │       │   │       ├── read bytes: 6550682
-                            │       │   │       ├── partitions total: 1
-                            │       │   │       ├── partitions scanned: 1
-                            │       │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │       │   │       ├── push downs: [filters: [], limit: NONE]
-                            │       │   │       ├── output columns: [l_orderkey, l_partkey, l_suppkey, l_extendedprice, l_discount]
-                            │       │   │       └── estimated rows: 600572.00
-                            │       │   └── Filter(Probe)
-                            │       │       ├── filters: [orders.o_orderdate (#36) >= '1995-01-01', orders.o_orderdate (#36) <= '1996-12-31']
-                            │       │       ├── estimated rows: 45375.15
-                            │       │       └── TableScan
-                            │       │           ├── table: default.tpch.orders
-                            │       │           ├── read rows: 150000
-                            │       │           ├── read bytes: 781945
-                            │       │           ├── partitions total: 1
-                            │       │           ├── partitions scanned: 1
-                            │       │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │       │           ├── push downs: [filters: [and_filters(CAST(orders.o_orderdate (#36) >= '1995-01-01' AS Boolean NULL), CAST(orders.o_orderdate (#36) <= '1996-12-31' AS Boolean NULL))], limit: NONE]
-                            │       │           ├── output columns: [o_orderkey, o_custkey, o_orderdate]
-                            │       │           └── estimated rows: 150000.00
-                            │       └── TableScan(Probe)
-                            │           ├── table: default.tpch.customer
-                            │           ├── read rows: 15000
-                            │           ├── read bytes: 43142
-                            │           ├── partitions total: 1
-                            │           ├── partitions scanned: 1
-                            │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │           ├── push downs: [filters: [], limit: NONE]
-                            │           ├── output columns: [c_custkey, c_nationkey]
-                            │           └── estimated rows: 15000.00
-                            └── TableScan(Probe)
-                                ├── table: default.tpch.supplier
-                                ├── read rows: 1000
-                                ├── read bytes: 2728
-                                ├── partitions total: 1
-                                ├── partitions scanned: 1
-                                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                ├── push downs: [filters: [], limit: NONE]
-                                ├── output columns: [s_suppkey, s_nationkey]
-                                └── estimated rows: 1000.00
+HashJoin: INNER
+├── Build
+│   └── Scan: default.tpch.nation, rows: 25
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── HashJoin: INNER
+        │       ├── Build
+        │       │   └── HashJoin: INNER
+        │       │       ├── Build
+        │       │       │   └── Scan: default.tpch.region, rows: 5
+        │       │       └── Probe
+        │       │           └── Scan: default.tpch.nation, rows: 25
+        │       └── Probe
+        │           └── HashJoin: INNER
+        │               ├── Build
+        │               │   └── HashJoin: INNER
+        │               │       ├── Build
+        │               │       │   └── HashJoin: INNER
+        │               │       │       ├── Build
+        │               │       │       │   └── Scan: default.tpch.part, rows: 20000
+        │               │       │       └── Probe
+        │               │       │           └── Scan: default.tpch.lineitem, rows: 600572
+        │               │       └── Probe
+        │               │           └── Scan: default.tpch.orders, rows: 150000
+        │               └── Probe
+        │                   └── Scan: default.tpch.customer, rows: 15000
+        └── Probe
+            └── Scan: default.tpch.supplier, rows: 1000
 
 # Q9
 query I
-explain select
+explain join select
     nation,
     o_year,
     truncate(truncate(sum(amount),0)/10, 0) as sum_profit
@@ -2124,130 +1494,31 @@ order by
     sum_profit
 limit 5;
 ----
-EvalScalar
-├── expressions: [profit.nation (#47), profit.o_year (#50)]
-├── estimated rows: 5.00
-└── Limit
-    ├── limit: 5
-    ├── offset: 0
-    ├── estimated rows: 5.00
-    └── Sort
-        ├── sort keys: [sum_profit ASC NULLS LAST]
-        ├── estimated rows: 480457.60
-        └── EvalScalar
-            ├── expressions: [truncate(truncate(sum(amount) (#53), 0) / 10, 0)]
-            ├── estimated rows: 480457.60
-            └── AggregateFinal
-                ├── group by: [n_name, o_year]
-                ├── aggregate functions: [sum(amount)]
-                ├── estimated rows: 480457.60
-                └── AggregatePartial
-                    ├── group by: [n_name, o_year]
-                    ├── aggregate functions: [sum(amount)]
-                    ├── estimated rows: 480457.60
-                    └── EvalScalar
-                        ├── expressions: [profit.amount (#51), profit.nation (#47), profit.o_year (#50)]
-                        ├── estimated rows: 480457.60
-                        └── EvalScalar
-                            ├── expressions: [nation.n_name (#47), to_year(orders.o_orderdate (#41)), truncate(to_float32(lineitem.l_extendedprice (#21) * (1 - lineitem.l_discount (#22)) - partsupp.ps_supplycost (#35) * lineitem.l_quantity (#20)), 100)]
-                            ├── estimated rows: 480457.60
-                            └── HashJoin
-                                ├── join type: INNER
-                                ├── build keys: [partsupp.ps_suppkey (#33), partsupp.ps_partkey (#32)]
-                                ├── probe keys: [lineitem.l_suppkey (#18), lineitem.l_partkey (#17)]
-                                ├── filters: []
-                                ├── estimated rows: 480457.60
-                                ├── TableScan(Build)
-                                │   ├── table: default.tpch.partsupp
-                                │   ├── read rows: 80000
-                                │   ├── read bytes: 347442
-                                │   ├── partitions total: 1
-                                │   ├── partitions scanned: 1
-                                │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                │   ├── push downs: [filters: [], limit: NONE]
-                                │   ├── output columns: [ps_partkey, ps_suppkey, ps_supplycost]
-                                │   └── estimated rows: 80000.00
-                                └── HashJoin(Probe)
-                                    ├── join type: INNER
-                                    ├── build keys: [supplier.s_suppkey (#9)]
-                                    ├── probe keys: [lineitem.l_suppkey (#18)]
-                                    ├── filters: []
-                                    ├── estimated rows: 120114.40
-                                    ├── HashJoin(Build)
-                                    │   ├── join type: INNER
-                                    │   ├── build keys: [nation.n_nationkey (#46)]
-                                    │   ├── probe keys: [supplier.s_nationkey (#12)]
-                                    │   ├── filters: []
-                                    │   ├── estimated rows: 1000.00
-                                    │   ├── TableScan(Build)
-                                    │   │   ├── table: default.tpch.nation
-                                    │   │   ├── read rows: 25
-                                    │   │   ├── read bytes: 283
-                                    │   │   ├── partitions total: 1
-                                    │   │   ├── partitions scanned: 1
-                                    │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                    │   │   ├── push downs: [filters: [], limit: NONE]
-                                    │   │   ├── output columns: [n_nationkey, n_name]
-                                    │   │   └── estimated rows: 25.00
-                                    │   └── TableScan(Probe)
-                                    │       ├── table: default.tpch.supplier
-                                    │       ├── read rows: 1000
-                                    │       ├── read bytes: 2728
-                                    │       ├── partitions total: 1
-                                    │       ├── partitions scanned: 1
-                                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                    │       ├── push downs: [filters: [], limit: NONE]
-                                    │       ├── output columns: [s_suppkey, s_nationkey]
-                                    │       └── estimated rows: 1000.00
-                                    └── HashJoin(Probe)
-                                        ├── join type: INNER
-                                        ├── build keys: [lineitem.l_orderkey (#16)]
-                                        ├── probe keys: [orders.o_orderkey (#37)]
-                                        ├── filters: []
-                                        ├── estimated rows: 120114.40
-                                        ├── HashJoin(Build)
-                                        │   ├── join type: INNER
-                                        │   ├── build keys: [part.p_partkey (#0)]
-                                        │   ├── probe keys: [lineitem.l_partkey (#17)]
-                                        │   ├── filters: []
-                                        │   ├── estimated rows: 120114.40
-                                        │   ├── Filter(Build)
-                                        │   │   ├── filters: [like(part.p_name (#1), '%green%')]
-                                        │   │   ├── estimated rows: 4000.00
-                                        │   │   └── TableScan
-                                        │   │       ├── table: default.tpch.part
-                                        │   │       ├── read rows: 20000
-                                        │   │       ├── read bytes: 230836
-                                        │   │       ├── partitions total: 1
-                                        │   │       ├── partitions scanned: 1
-                                        │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                        │   │       ├── push downs: [filters: [like(part.p_name (#1), '%green%')], limit: NONE]
-                                        │   │       ├── output columns: [p_partkey, p_name]
-                                        │   │       └── estimated rows: 20000.00
-                                        │   └── TableScan(Probe)
-                                        │       ├── table: default.tpch.lineitem
-                                        │       ├── read rows: 600572
-                                        │       ├── read bytes: 7350269
-                                        │       ├── partitions total: 1
-                                        │       ├── partitions scanned: 1
-                                        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                        │       ├── push downs: [filters: [], limit: NONE]
-                                        │       ├── output columns: [l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]
-                                        │       └── estimated rows: 600572.00
-                                        └── TableScan(Probe)
-                                            ├── table: default.tpch.orders
-                                            ├── read rows: 150000
-                                            ├── read bytes: 420350
-                                            ├── partitions total: 1
-                                            ├── partitions scanned: 1
-                                            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                            ├── push downs: [filters: [], limit: NONE]
-                                            ├── output columns: [o_orderkey, o_orderdate]
-                                            └── estimated rows: 150000.00
+HashJoin: INNER
+├── Build
+│   └── Scan: default.tpch.partsupp, rows: 80000
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── HashJoin: INNER
+        │       ├── Build
+        │       │   └── Scan: default.tpch.nation, rows: 25
+        │       └── Probe
+        │           └── Scan: default.tpch.supplier, rows: 1000
+        └── Probe
+            └── HashJoin: INNER
+                ├── Build
+                │   └── HashJoin: INNER
+                │       ├── Build
+                │       │   └── Scan: default.tpch.part, rows: 20000
+                │       └── Probe
+                │           └── Scan: default.tpch.lineitem, rows: 600572
+                └── Probe
+                    └── Scan: default.tpch.orders, rows: 150000
 
 # Q10
 query I
-explain select
+explain join select
     c_custkey,
     c_name,
     TRUNCATE(sum(l_extendedprice * (1 - l_discount)), 3) as revenue,
@@ -2279,98 +1550,23 @@ group by
 order by
     revenue desc limit 5;
 ----
-EvalScalar
-├── expressions: [customer.c_custkey (#0), customer.c_name (#1), customer.c_address (#2), customer.c_phone (#4), customer.c_acctbal (#5), customer.c_comment (#7), nation.n_name (#34)]
-├── estimated rows: 5.00
-└── Limit
-    ├── limit: 5
-    ├── offset: 0
-    ├── estimated rows: 5.00
-    └── Sort
-        ├── sort keys: [revenue DESC NULLS LAST]
-        ├── estimated rows: 66673.12
-        └── EvalScalar
-            ├── expressions: [truncate(CAST(sum((l_extendedprice * (1 - l_discount))) (#39) AS Float32 NULL), 3)]
-            ├── estimated rows: 66673.12
-            └── AggregateFinal
-                ├── group by: [c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment]
-                ├── aggregate functions: [sum(sum_arg_0)]
-                ├── estimated rows: 66673.12
-                └── AggregatePartial
-                    ├── group by: [c_custkey, c_name, c_acctbal, c_phone, n_name, c_address, c_comment]
-                    ├── aggregate functions: [sum(sum_arg_0)]
-                    ├── estimated rows: 66673.12
-                    └── EvalScalar
-                        ├── expressions: [lineitem.l_extendedprice (#22) * (1 - lineitem.l_discount (#23)), customer.c_custkey (#0), customer.c_name (#1), customer.c_acctbal (#5), customer.c_phone (#4), nation.n_name (#34), customer.c_address (#2), customer.c_comment (#7)]
-                        ├── estimated rows: 66673.12
-                        └── HashJoin
-                            ├── join type: INNER
-                            ├── build keys: [orders.o_orderkey (#8)]
-                            ├── probe keys: [lineitem.l_orderkey (#17)]
-                            ├── filters: []
-                            ├── estimated rows: 66673.12
-                            ├── HashJoin(Build)
-                            │   ├── join type: INNER
-                            │   ├── build keys: [nation.n_nationkey (#33)]
-                            │   ├── probe keys: [customer.c_nationkey (#3)]
-                            │   ├── filters: []
-                            │   ├── estimated rows: 5550.91
-                            │   ├── TableScan(Build)
-                            │   │   ├── table: default.tpch.nation
-                            │   │   ├── read rows: 25
-                            │   │   ├── read bytes: 283
-                            │   │   ├── partitions total: 1
-                            │   │   ├── partitions scanned: 1
-                            │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │   │   ├── push downs: [filters: [], limit: NONE]
-                            │   │   ├── output columns: [n_nationkey, n_name]
-                            │   │   └── estimated rows: 25.00
-                            │   └── HashJoin(Probe)
-                            │       ├── join type: INNER
-                            │       ├── build keys: [orders.o_custkey (#9)]
-                            │       ├── probe keys: [customer.c_custkey (#0)]
-                            │       ├── filters: []
-                            │       ├── estimated rows: 5550.91
-                            │       ├── Filter(Build)
-                            │       │   ├── filters: [orders.o_orderdate (#12) >= '1993-10-01', orders.o_orderdate (#12) < '1994-01-01']
-                            │       │   ├── estimated rows: 5550.91
-                            │       │   └── TableScan
-                            │       │       ├── table: default.tpch.orders
-                            │       │       ├── read rows: 150000
-                            │       │       ├── read bytes: 781945
-                            │       │       ├── partitions total: 1
-                            │       │       ├── partitions scanned: 1
-                            │       │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │       │       ├── push downs: [filters: [and_filters(CAST(orders.o_orderdate (#12) >= '1993-10-01' AS Boolean NULL), CAST(orders.o_orderdate (#12) < '1994-01-01' AS Boolean NULL))], limit: NONE]
-                            │       │       ├── output columns: [o_orderkey, o_custkey, o_orderdate]
-                            │       │       └── estimated rows: 150000.00
-                            │       └── TableScan(Probe)
-                            │           ├── table: default.tpch.customer
-                            │           ├── read rows: 15000
-                            │           ├── read bytes: 821020
-                            │           ├── partitions total: 1
-                            │           ├── partitions scanned: 1
-                            │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │           ├── push downs: [filters: [], limit: NONE]
-                            │           ├── output columns: [c_custkey, c_name, c_address, c_nationkey, c_phone, c_acctbal, c_comment]
-                            │           └── estimated rows: 15000.00
-                            └── Filter(Probe)
-                                ├── filters: [lineitem.l_returnflag (#25) = 'R']
-                                ├── estimated rows: 200190.67
-                                └── TableScan
-                                    ├── table: default.tpch.lineitem
-                                    ├── read rows: 600572
-                                    ├── read bytes: 3944046
-                                    ├── partitions total: 1
-                                    ├── partitions scanned: 1
-                                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                                    ├── push downs: [filters: [lineitem.l_returnflag (#25) = 'R'], limit: NONE]
-                                    ├── output columns: [l_orderkey, l_extendedprice, l_discount, l_returnflag]
-                                    └── estimated rows: 600572.00
+HashJoin: INNER
+├── Build
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── Scan: default.tpch.nation, rows: 25
+│       └── Probe
+│           └── HashJoin: INNER
+│               ├── Build
+│               │   └── Scan: default.tpch.orders, rows: 150000
+│               └── Probe
+│                   └── Scan: default.tpch.customer, rows: 15000
+└── Probe
+    └── Scan: default.tpch.lineitem, rows: 600572
 
 # Q11
 query I
-explain select
+explain join select
     ps_partkey,
     sum(ps_supplycost * ps_availqty) as value
 from
@@ -2398,147 +1594,31 @@ group by
 order by
     value desc limit 100;
 ----
-EvalScalar
-├── expressions: [partsupp.ps_partkey (#0)]
-├── estimated rows: 100.00
-└── Limit
-    ├── limit: 100
-    ├── offset: 0
-    ├── estimated rows: 100.00
-    └── Sort
-        ├── sort keys: [value DESC NULLS LAST]
-        ├── estimated rows: 640.00
-        └── EvalScalar
-            ├── expressions: [sum((ps_supplycost * ps_availqty)) (#40)]
-            ├── estimated rows: 640.00
-            └── Filter
-                ├── filters: [is_true(CAST(sum((ps_supplycost * ps_availqty)) (#40) AS Float32 NULL) > CAST(scalar_subquery_38 (#38) AS Float32 NULL))]
-                ├── estimated rows: 640.00
-                └── HashJoin
-                    ├── join type: SINGLE
-                    ├── build keys: []
-                    ├── probe keys: []
-                    ├── filters: []
-                    ├── estimated rows: 3200.00
-                    ├── EvalScalar(Build)
-                    │   ├── expressions: [sum((ps_supplycost * ps_availqty)) (#37) * 0.000002]
-                    │   ├── estimated rows: 1.00
-                    │   └── AggregateFinal
-                    │       ├── group by: []
-                    │       ├── aggregate functions: [sum(sum_arg_0)]
-                    │       ├── estimated rows: 1.00
-                    │       └── AggregatePartial
-                    │           ├── group by: []
-                    │           ├── aggregate functions: [sum(sum_arg_0)]
-                    │           ├── estimated rows: 1.00
-                    │           └── EvalScalar
-                    │               ├── expressions: [partsupp.ps_supplycost (#23) * partsupp.ps_availqty (#22)]
-                    │               ├── estimated rows: 3200.00
-                    │               └── HashJoin
-                    │                   ├── join type: INNER
-                    │                   ├── build keys: [supplier.s_suppkey (#25)]
-                    │                   ├── probe keys: [partsupp.ps_suppkey (#21)]
-                    │                   ├── filters: []
-                    │                   ├── estimated rows: 3200.00
-                    │                   ├── HashJoin(Build)
-                    │                   │   ├── join type: INNER
-                    │                   │   ├── build keys: [nation.n_nationkey (#32)]
-                    │                   │   ├── probe keys: [supplier.s_nationkey (#28)]
-                    │                   │   ├── filters: []
-                    │                   │   ├── estimated rows: 40.00
-                    │                   │   ├── Filter(Build)
-                    │                   │   │   ├── filters: [nation.n_name (#33) = 'GERMANY']
-                    │                   │   │   ├── estimated rows: 1.00
-                    │                   │   │   └── TableScan
-                    │                   │   │       ├── table: default.tpch.nation
-                    │                   │   │       ├── read rows: 25
-                    │                   │   │       ├── read bytes: 283
-                    │                   │   │       ├── partitions total: 1
-                    │                   │   │       ├── partitions scanned: 1
-                    │                   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                    │                   │   │       ├── push downs: [filters: [nation.n_name (#33) = 'GERMANY'], limit: NONE]
-                    │                   │   │       ├── output columns: [n_nationkey, n_name]
-                    │                   │   │       └── estimated rows: 25.00
-                    │                   │   └── TableScan(Probe)
-                    │                   │       ├── table: default.tpch.supplier
-                    │                   │       ├── read rows: 1000
-                    │                   │       ├── read bytes: 2728
-                    │                   │       ├── partitions total: 1
-                    │                   │       ├── partitions scanned: 1
-                    │                   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    │                   │       ├── push downs: [filters: [], limit: NONE]
-                    │                   │       ├── output columns: [s_suppkey, s_nationkey]
-                    │                   │       └── estimated rows: 1000.00
-                    │                   └── TableScan(Probe)
-                    │                       ├── table: default.tpch.partsupp
-                    │                       ├── read rows: 80000
-                    │                       ├── read bytes: 518526
-                    │                       ├── partitions total: 1
-                    │                       ├── partitions scanned: 1
-                    │                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    │                       ├── push downs: [filters: [], limit: NONE]
-                    │                       ├── output columns: [ps_suppkey, ps_availqty, ps_supplycost]
-                    │                       └── estimated rows: 80000.00
-                    └── AggregateFinal(Probe)
-                        ├── group by: [ps_partkey]
-                        ├── aggregate functions: [sum(sum_arg_0)]
-                        ├── estimated rows: 3200.00
-                        └── AggregatePartial
-                            ├── group by: [ps_partkey]
-                            ├── aggregate functions: [sum(sum_arg_0)]
-                            ├── estimated rows: 3200.00
-                            └── EvalScalar
-                                ├── expressions: [partsupp.ps_supplycost (#3) * partsupp.ps_availqty (#2), partsupp.ps_partkey (#0)]
-                                ├── estimated rows: 3200.00
-                                └── HashJoin
-                                    ├── join type: INNER
-                                    ├── build keys: [supplier.s_suppkey (#5)]
-                                    ├── probe keys: [partsupp.ps_suppkey (#1)]
-                                    ├── filters: []
-                                    ├── estimated rows: 3200.00
-                                    ├── HashJoin(Build)
-                                    │   ├── join type: INNER
-                                    │   ├── build keys: [nation.n_nationkey (#12)]
-                                    │   ├── probe keys: [supplier.s_nationkey (#8)]
-                                    │   ├── filters: []
-                                    │   ├── estimated rows: 40.00
-                                    │   ├── Filter(Build)
-                                    │   │   ├── filters: [nation.n_name (#13) = 'GERMANY']
-                                    │   │   ├── estimated rows: 1.00
-                                    │   │   └── TableScan
-                                    │   │       ├── table: default.tpch.nation
-                                    │   │       ├── read rows: 25
-                                    │   │       ├── read bytes: 283
-                                    │   │       ├── partitions total: 1
-                                    │   │       ├── partitions scanned: 1
-                                    │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                                    │   │       ├── push downs: [filters: [nation.n_name (#13) = 'GERMANY'], limit: NONE]
-                                    │   │       ├── output columns: [n_nationkey, n_name]
-                                    │   │       └── estimated rows: 25.00
-                                    │   └── TableScan(Probe)
-                                    │       ├── table: default.tpch.supplier
-                                    │       ├── read rows: 1000
-                                    │       ├── read bytes: 2728
-                                    │       ├── partitions total: 1
-                                    │       ├── partitions scanned: 1
-                                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                    │       ├── push downs: [filters: [], limit: NONE]
-                                    │       ├── output columns: [s_suppkey, s_nationkey]
-                                    │       └── estimated rows: 1000.00
-                                    └── TableScan(Probe)
-                                        ├── table: default.tpch.partsupp
-                                        ├── read rows: 80000
-                                        ├── read bytes: 539528
-                                        ├── partitions total: 1
-                                        ├── partitions scanned: 1
-                                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                        ├── push downs: [filters: [], limit: NONE]
-                                        ├── output columns: [ps_partkey, ps_suppkey, ps_availqty, ps_supplycost]
-                                        └── estimated rows: 80000.00
+HashJoin: SINGLE
+├── Build
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── HashJoin: INNER
+│       │       ├── Build
+│       │       │   └── Scan: default.tpch.nation, rows: 25
+│       │       └── Probe
+│       │           └── Scan: default.tpch.supplier, rows: 1000
+│       └── Probe
+│           └── Scan: default.tpch.partsupp, rows: 80000
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── HashJoin: INNER
+        │       ├── Build
+        │       │   └── Scan: default.tpch.nation, rows: 25
+        │       └── Probe
+        │           └── Scan: default.tpch.supplier, rows: 1000
+        └── Probe
+            └── Scan: default.tpch.partsupp, rows: 80000
 
 # Q12
 query I
-explain select
+explain join select
     l_shipmode,
     sum(case
             when o_orderpriority = '1-URGENT'
@@ -2567,56 +1647,15 @@ group by
 order by
     l_shipmode;
 ----
-EvalScalar
-├── expressions: [lineitem.l_shipmode (#23), sum(CASE WHEN ((o_orderpriority = '1-URGENT') OR (o_orderpriority = '2-HIGH')) THEN 1 ELSE 0 END) (#28), sum(CASE WHEN ((o_orderpriority <> '1-URGENT') AND (o_orderpriority <> '2-HIGH')) THEN 1 ELSE 0 END) (#30)]
-├── estimated rows: 1.00
-└── Sort
-    ├── sort keys: [l_shipmode ASC NULLS LAST]
-    ├── estimated rows: 1.00
-    └── AggregateFinal
-        ├── group by: [l_shipmode]
-        ├── aggregate functions: [sum(sum_arg_0), sum(sum_arg_0)]
-        ├── estimated rows: 1.00
-        └── AggregatePartial
-            ├── group by: [l_shipmode]
-            ├── aggregate functions: [sum(sum_arg_0), sum(sum_arg_0)]
-            ├── estimated rows: 1.00
-            └── EvalScalar
-                ├── expressions: [if(CAST(orders.o_orderpriority (#5) = '1-URGENT' OR orders.o_orderpriority (#5) = '2-HIGH' AS Boolean NULL), 1, 0), if(CAST(orders.o_orderpriority (#5) <> '1-URGENT' AND orders.o_orderpriority (#5) <> '2-HIGH' AS Boolean NULL), 1, 0), lineitem.l_shipmode (#23)]
-                ├── estimated rows: 905.03
-                └── HashJoin
-                    ├── join type: INNER
-                    ├── build keys: [lineitem.l_orderkey (#9)]
-                    ├── probe keys: [orders.o_orderkey (#0)]
-                    ├── filters: []
-                    ├── estimated rows: 905.03
-                    ├── Filter(Build)
-                    │   ├── filters: [lineitem.l_shipmode (#23) = 'MAIL' OR lineitem.l_shipmode (#23) = 'SHIP', lineitem.l_commitdate (#20) < lineitem.l_receiptdate (#21), lineitem.l_shipdate (#19) < lineitem.l_commitdate (#20), lineitem.l_receiptdate (#21) >= '1994-01-01', lineitem.l_receiptdate (#21) < '1995-01-01']
-                    │   ├── estimated rows: 905.03
-                    │   └── TableScan
-                    │       ├── table: default.tpch.lineitem
-                    │       ├── read rows: 600572
-                    │       ├── read bytes: 3600248
-                    │       ├── partitions total: 1
-                    │       ├── partitions scanned: 1
-                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                    │       ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(and_filters(CAST(and_filters(CAST(lineitem.l_shipmode (#23) = 'MAIL' OR lineitem.l_shipmode (#23) = 'SHIP' AS Boolean NULL), CAST(lineitem.l_commitdate (#20) < lineitem.l_receiptdate (#21) AS Boolean NULL)) AS Boolean NULL), CAST(lineitem.l_shipdate (#19) < lineitem.l_commitdate (#20) AS Boolean NULL)) AS Boolean NULL), CAST(lineitem.l_receiptdate (#21) >= '1994-01-01' AS Boolean NULL)) AS Boolean NULL), CAST(lineitem.l_receiptdate (#21) < '1995-01-01' AS Boolean NULL))], limit: NONE]
-                    │       ├── output columns: [l_orderkey, l_shipdate, l_commitdate, l_receiptdate, l_shipmode]
-                    │       └── estimated rows: 600572.00
-                    └── TableScan(Probe)
-                        ├── table: default.tpch.orders
-                        ├── read rows: 150000
-                        ├── read bytes: 313951
-                        ├── partitions total: 1
-                        ├── partitions scanned: 1
-                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        ├── push downs: [filters: [], limit: NONE]
-                        ├── output columns: [o_orderkey, o_orderpriority]
-                        └── estimated rows: 150000.00
+HashJoin: INNER
+├── Build
+│   └── Scan: default.tpch.lineitem, rows: 600572
+└── Probe
+    └── Scan: default.tpch.orders, rows: 150000
 
 # Q13
 query I
-explain select
+explain join select
     c_count,
     count(*) as custdist
 from
@@ -2640,73 +1679,15 @@ order by
     custdist desc,
     c_count desc;
 ----
-EvalScalar
-├── expressions: [c_orders.c_count (#19)]
-├── estimated rows: 6400.00
-└── Sort
-    ├── sort keys: [custdist DESC NULLS LAST, c_count DESC NULLS LAST]
-    ├── estimated rows: 6400.00
-    └── EvalScalar
-        ├── expressions: [COUNT(*) (#21)]
-        ├── estimated rows: 6400.00
-        └── AggregateFinal
-            ├── group by: [c_count]
-            ├── aggregate functions: [count()]
-            ├── estimated rows: 6400.00
-            └── AggregatePartial
-                ├── group by: [c_count]
-                ├── aggregate functions: [count()]
-                ├── estimated rows: 6400.00
-                └── EvalScalar
-                    ├── expressions: [c_orders.c_count (#19)]
-                    ├── estimated rows: 6400.00
-                    └── EvalScalar
-                        ├── expressions: [count(o_orderkey) (#18)]
-                        ├── estimated rows: 6400.00
-                        └── AggregateFinal
-                            ├── group by: [c_custkey]
-                            ├── aggregate functions: [count(o_orderkey)]
-                            ├── estimated rows: 6400.00
-                            └── AggregatePartial
-                                ├── group by: [c_custkey]
-                                ├── aggregate functions: [count(o_orderkey)]
-                                ├── estimated rows: 6400.00
-                                └── EvalScalar
-                                    ├── expressions: [orders.o_orderkey (#8), customer.c_custkey (#0)]
-                                    ├── estimated rows: 120000.00
-                                    └── HashJoin
-                                        ├── join type: RIGHT OUTER
-                                        ├── build keys: [CAST(customer.c_custkey (#0) AS Int64 NULL)]
-                                        ├── probe keys: [orders.o_custkey (#9)]
-                                        ├── filters: []
-                                        ├── estimated rows: 120000.00
-                                        ├── TableScan(Build)
-                                        │   ├── table: default.tpch.customer
-                                        │   ├── read rows: 15000
-                                        │   ├── read bytes: 29226
-                                        │   ├── partitions total: 1
-                                        │   ├── partitions scanned: 1
-                                        │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                        │   ├── push downs: [filters: [], limit: NONE]
-                                        │   ├── output columns: [c_custkey]
-                                        │   └── estimated rows: 15000.00
-                                        └── Filter(Probe)
-                                            ├── filters: [NOT like(orders.o_comment (#16), '%pending%deposits%')]
-                                            ├── estimated rows: 120000.00
-                                            └── TableScan
-                                                ├── table: default.tpch.orders
-                                                ├── read rows: 150000
-                                                ├── read bytes: 2522636
-                                                ├── partitions total: 1
-                                                ├── partitions scanned: 1
-                                                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                                ├── push downs: [filters: [NOT like(orders.o_comment (#16), '%pending%deposits%')], limit: NONE]
-                                                ├── output columns: [o_orderkey, o_custkey, o_comment]
-                                                └── estimated rows: 150000.00
+HashJoin: RIGHT OUTER
+├── Build
+│   └── Scan: default.tpch.customer, rows: 15000
+└── Probe
+    └── Scan: default.tpch.orders, rows: 150000
 
 # Q14
 query I
-explain select
+explain join select
             TRUNCATE(100.00 * sum(case
                              when p_type like 'PROMO%'
                                  then l_extendedprice * (1 - l_discount)
@@ -2720,53 +1701,15 @@ where
   and l_shipdate >= to_date('1995-09-01')
   and l_shipdate < add_months(to_date('1995-09-01'), 1);
 ----
-EvalScalar
-├── expressions: [truncate(CAST(100.00 * sum(CASE WHEN (p_type LIKE 'PROMO%') THEN (l_extendedprice * (1 - l_discount)) ELSE 0 END) (#26) / sum((l_extendedprice * (1 - l_discount))) (#28) AS Float32 NULL), 5)]
-├── estimated rows: 1.00
-└── AggregateFinal
-    ├── group by: []
-    ├── aggregate functions: [sum(sum_arg_0), sum(sum_arg_0)]
-    ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── group by: []
-        ├── aggregate functions: [sum(sum_arg_0), sum(sum_arg_0)]
-        ├── estimated rows: 1.00
-        └── EvalScalar
-            ├── expressions: [if(CAST(part.p_type (#20) >= 'PROMO' AND part.p_type (#20) < 'PROMP' AS Boolean NULL), lineitem.l_extendedprice (#5) * (1 - lineitem.l_discount (#6)), 0.0000), lineitem.l_extendedprice (#5) * (1 - lineitem.l_discount (#6))]
-            ├── estimated rows: 5646.35
-            └── HashJoin
-                ├── join type: INNER
-                ├── build keys: [lineitem.l_partkey (#1)]
-                ├── probe keys: [part.p_partkey (#16)]
-                ├── filters: []
-                ├── estimated rows: 5646.35
-                ├── Filter(Build)
-                │   ├── filters: [lineitem.l_shipdate (#10) >= '1995-09-01', lineitem.l_shipdate (#10) < '1995-10-01']
-                │   ├── estimated rows: 5646.35
-                │   └── TableScan
-                │       ├── table: default.tpch.lineitem
-                │       ├── read rows: 600572
-                │       ├── read bytes: 3967871
-                │       ├── partitions total: 1
-                │       ├── partitions scanned: 1
-                │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                │       ├── push downs: [filters: [and_filters(CAST(lineitem.l_shipdate (#10) >= '1995-09-01' AS Boolean NULL), CAST(lineitem.l_shipdate (#10) < '1995-10-01' AS Boolean NULL))], limit: NONE]
-                │       ├── output columns: [l_partkey, l_extendedprice, l_discount, l_shipdate]
-                │       └── estimated rows: 600572.00
-                └── TableScan(Probe)
-                    ├── table: default.tpch.part
-                    ├── read rows: 20000
-                    ├── read bytes: 113727
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [], limit: NONE]
-                    ├── output columns: [p_partkey, p_type]
-                    └── estimated rows: 20000.00
+HashJoin: INNER
+├── Build
+│   └── Scan: default.tpch.lineitem, rows: 600572
+└── Probe
+    └── Scan: default.tpch.part, rows: 20000
 
 # Q15
 query I
-explain with revenue as (
+explain join with revenue as (
     select
         l_suppkey as supplier_no,
         truncate(sum(l_extendedprice * (1 - l_discount)), 2) as total_revenue
@@ -2797,109 +1740,19 @@ where
 order by
     s_suppkey;
 ----
-EvalScalar
-├── expressions: [supplier.s_suppkey (#0), supplier.s_name (#1), supplier.s_address (#2), supplier.s_phone (#4), revenue.total_revenue (#26)]
-├── estimated rows: 0.40
-└── Sort
-    ├── sort keys: [s_suppkey ASC NULLS LAST]
-    ├── estimated rows: 0.40
-    └── Filter
-        ├── filters: [is_true(revenue.total_revenue (#26) = scalar_subquery_48 (#48))]
-        ├── estimated rows: 0.40
-        └── HashJoin
-            ├── join type: SINGLE
-            ├── build keys: []
-            ├── probe keys: []
-            ├── filters: []
-            ├── estimated rows: 2.00
-            ├── EvalScalar(Build)
-            │   ├── expressions: [max(total_revenue) (#47)]
-            │   ├── estimated rows: 1.00
-            │   └── AggregateFinal
-            │       ├── group by: []
-            │       ├── aggregate functions: [max(total_revenue)]
-            │       ├── estimated rows: 1.00
-            │       └── AggregatePartial
-            │           ├── group by: []
-            │           ├── aggregate functions: [max(total_revenue)]
-            │           ├── estimated rows: 1.00
-            │           └── EvalScalar
-            │               ├── expressions: [revenue.total_revenue (#46)]
-            │               ├── estimated rows: 2.00
-            │               └── EvalScalar
-            │                   ├── expressions: [truncate(CAST(sum((l_extendedprice * (1 - l_discount))) (#45) AS Float32 NULL), 2)]
-            │                   ├── estimated rows: 2.00
-            │                   └── AggregateFinal
-            │                       ├── group by: [l_suppkey]
-            │                       ├── aggregate functions: [sum(sum_arg_0)]
-            │                       ├── estimated rows: 2.00
-            │                       └── AggregatePartial
-            │                           ├── group by: [l_suppkey]
-            │                           ├── aggregate functions: [sum(sum_arg_0)]
-            │                           ├── estimated rows: 2.00
-            │                           └── EvalScalar
-            │                               ├── expressions: [lineitem.l_extendedprice (#32) * (1 - lineitem.l_discount (#33)), lineitem.l_suppkey (#29)]
-            │                               ├── estimated rows: 20180.11
-            │                               └── Filter
-            │                                   ├── filters: [lineitem.l_shipdate (#37) >= '1996-01-01', lineitem.l_shipdate (#37) < '1996-04-01']
-            │                                   ├── estimated rows: 20180.11
-            │                                   └── TableScan
-            │                                       ├── table: default.tpch.lineitem
-            │                                       ├── read rows: 600572
-            │                                       ├── read bytes: 3614264
-            │                                       ├── partitions total: 1
-            │                                       ├── partitions scanned: 1
-            │                                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-            │                                       ├── push downs: [filters: [and_filters(CAST(lineitem.l_shipdate (#37) >= '1996-01-01' AS Boolean NULL), CAST(lineitem.l_shipdate (#37) < '1996-04-01' AS Boolean NULL))], limit: NONE]
-            │                                       ├── output columns: [l_suppkey, l_extendedprice, l_discount, l_shipdate]
-            │                                       └── estimated rows: 600572.00
-            └── HashJoin(Probe)
-                ├── join type: INNER
-                ├── build keys: [revenue.supplier_no (#9)]
-                ├── probe keys: [supplier.s_suppkey (#0)]
-                ├── filters: []
-                ├── estimated rows: 2.00
-                ├── EvalScalar(Build)
-                │   ├── expressions: [lineitem.l_suppkey (#9), truncate(CAST(sum((l_extendedprice * (1 - l_discount))) (#25) AS Float32 NULL), 2)]
-                │   ├── estimated rows: 2.00
-                │   └── AggregateFinal
-                │       ├── group by: [l_suppkey]
-                │       ├── aggregate functions: [sum(sum_arg_0)]
-                │       ├── estimated rows: 2.00
-                │       └── AggregatePartial
-                │           ├── group by: [l_suppkey]
-                │           ├── aggregate functions: [sum(sum_arg_0)]
-                │           ├── estimated rows: 2.00
-                │           └── EvalScalar
-                │               ├── expressions: [lineitem.l_extendedprice (#12) * (1 - lineitem.l_discount (#13)), lineitem.l_suppkey (#9)]
-                │               ├── estimated rows: 20180.11
-                │               └── Filter
-                │                   ├── filters: [lineitem.l_shipdate (#17) >= '1996-01-01', lineitem.l_shipdate (#17) < '1996-04-01']
-                │                   ├── estimated rows: 20180.11
-                │                   └── TableScan
-                │                       ├── table: default.tpch.lineitem
-                │                       ├── read rows: 600572
-                │                       ├── read bytes: 3614264
-                │                       ├── partitions total: 1
-                │                       ├── partitions scanned: 1
-                │                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                │                       ├── push downs: [filters: [and_filters(CAST(lineitem.l_shipdate (#17) >= '1996-01-01' AS Boolean NULL), CAST(lineitem.l_shipdate (#17) < '1996-04-01' AS Boolean NULL))], limit: NONE]
-                │                       ├── output columns: [l_suppkey, l_extendedprice, l_discount, l_shipdate]
-                │                       └── estimated rows: 600572.00
-                └── TableScan(Probe)
-                    ├── table: default.tpch.supplier
-                    ├── read rows: 1000
-                    ├── read bytes: 32083
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [], limit: NONE]
-                    ├── output columns: [s_suppkey, s_name, s_address, s_phone]
-                    └── estimated rows: 1000.00
+HashJoin: SINGLE
+├── Build
+│   └── Scan: default.tpch.lineitem, rows: 600572
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.tpch.lineitem, rows: 600572
+        └── Probe
+            └── Scan: default.tpch.supplier, rows: 1000
 
 # Q16
 query I
-explain select
+explain join select
     p_brand,
     p_type,
     p_size,
@@ -2931,88 +1784,19 @@ order by
     p_size
 limit 20;
 ----
-EvalScalar
-├── expressions: [part.p_brand (#8), part.p_type (#9), part.p_size (#10)]
-├── estimated rows: 0.00
-└── Limit
-    ├── limit: 20
-    ├── offset: 0
-    ├── estimated rows: 0.00
-    └── Sort
-        ├── sort keys: [supplier_cnt DESC NULLS LAST, p_brand ASC NULLS LAST, p_type ASC NULLS LAST, p_size ASC NULLS LAST]
-        ├── estimated rows: 0.00
-        └── EvalScalar
-            ├── expressions: [count(DISTINCT ps_suppkey) (#15)]
-            ├── estimated rows: 0.00
-            └── AggregateFinal
-                ├── group by: [p_brand, p_type, p_size]
-                ├── aggregate functions: [count_distinct(ps_suppkey)]
-                ├── estimated rows: 0.00
-                └── AggregatePartial
-                    ├── group by: [p_brand, p_type, p_size]
-                    ├── aggregate functions: [count_distinct(ps_suppkey)]
-                    ├── estimated rows: 0.00
-                    └── EvalScalar
-                        ├── expressions: [partsupp.ps_suppkey (#1), part.p_brand (#8), part.p_type (#9), part.p_size (#10)]
-                        ├── estimated rows: 0.00
-                        └── Filter
-                            ├── filters: [is_true(NOT 24 (#24))]
-                            ├── estimated rows: 0.00
-                            └── HashJoin
-                                ├── join type: RIGHT MARK
-                                ├── build keys: [subquery_16 (#16)]
-                                ├── probe keys: [partsupp.ps_suppkey (#1)]
-                                ├── filters: []
-                                ├── estimated rows: 200.00
-                                ├── EvalScalar(Build)
-                                │   ├── expressions: [supplier.s_suppkey (#16)]
-                                │   ├── estimated rows: 200.00
-                                │   └── Filter
-                                │       ├── filters: [like(supplier.s_comment (#22), '%Customer%Complaints%')]
-                                │       ├── estimated rows: 200.00
-                                │       └── TableScan
-                                │           ├── table: default.tpch.supplier
-                                │           ├── read rows: 1000
-                                │           ├── read bytes: 19094
-                                │           ├── partitions total: 1
-                                │           ├── partitions scanned: 1
-                                │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                │           ├── push downs: [filters: [like(supplier.s_comment (#22), '%Customer%Complaints%')], limit: NONE]
-                                │           ├── output columns: [s_suppkey, s_comment]
-                                │           └── estimated rows: 1000.00
-                                └── HashJoin(Probe)
-                                    ├── join type: INNER
-                                    ├── build keys: [part.p_partkey (#5)]
-                                    ├── probe keys: [partsupp.ps_partkey (#0)]
-                                    ├── filters: []
-                                    ├── estimated rows: 14745.60
-                                    ├── Filter(Build)
-                                    │   ├── filters: [part.p_brand (#8) <> 'Brand#45', NOT (part.p_type (#9) >= 'MEDIUM POLISHED' AND part.p_type (#9) < 'MEDIUM POLISHEE'), contains([49, 14, 23, 45, 19, 3, 36, 9], part.p_size (#10))]
-                                    │   ├── estimated rows: 3686.40
-                                    │   └── TableScan
-                                    │       ├── table: default.tpch.part
-                                    │       ├── read rows: 20000
-                                    │       ├── read bytes: 161505
-                                    │       ├── partitions total: 1
-                                    │       ├── partitions scanned: 1
-                                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                    │       ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(part.p_brand (#8) <> 'Brand#45' AS Boolean NULL), CAST(NOT (part.p_type (#9) >= 'MEDIUM POLISHED' AND part.p_type (#9) < 'MEDIUM POLISHEE') AS Boolean NULL)) AS Boolean NULL), CAST(contains([49, 14, 23, 45, 19, 3, 36, 9], part.p_size (#10)) AS Boolean NULL))], limit: NONE]
-                                    │       ├── output columns: [p_partkey, p_brand, p_type, p_size]
-                                    │       └── estimated rows: 20000.00
-                                    └── TableScan(Probe)
-                                        ├── table: default.tpch.partsupp
-                                        ├── read rows: 80000
-                                        ├── read bytes: 122677
-                                        ├── partitions total: 1
-                                        ├── partitions scanned: 1
-                                        ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                        ├── push downs: [filters: [], limit: NONE]
-                                        ├── output columns: [ps_partkey, ps_suppkey]
-                                        └── estimated rows: 80000.00
+HashJoin: RIGHT MARK
+├── Build
+│   └── Scan: default.tpch.supplier, rows: 1000
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.tpch.part, rows: 20000
+        └── Probe
+            └── Scan: default.tpch.partsupp, rows: 80000
 
 #Q17
 query I
-explain select
+explain join select
         truncate(sum(l_extendedprice) / 7.0,8) as avg_yearly
 from
     lineitem,
@@ -3030,86 +1814,19 @@ where
             l_partkey = p_partkey
 );
 ----
-EvalScalar
-├── expressions: [truncate(CAST(sum(l_extendedprice) (#25) / 7.0 AS Float32 NULL), 8)]
-├── estimated rows: 1.00
-└── AggregateFinal
-    ├── group by: []
-    ├── aggregate functions: [sum(l_extendedprice)]
-    ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── group by: []
-        ├── aggregate functions: [sum(l_extendedprice)]
-        ├── estimated rows: 1.00
-        └── EvalScalar
-            ├── expressions: [lineitem.l_extendedprice (#5)]
-            ├── estimated rows: 120.11
-            └── Filter
-                ├── filters: [is_true(CAST(lineitem.l_quantity (#4) AS Decimal(38, 5) NULL) < scalar_subquery_43 (#43))]
-                ├── estimated rows: 120.11
-                └── HashJoin
-                    ├── join type: SINGLE
-                    ├── build keys: [l_partkey (#27)]
-                    ├── probe keys: [p_partkey (#16)]
-                    ├── filters: []
-                    ├── estimated rows: 600.57
-                    ├── EvalScalar(Build)
-                    │   ├── expressions: [0.2 * avg(l_quantity) (#42), l_partkey (#27)]
-                    │   ├── estimated rows: 20000.00
-                    │   └── AggregateFinal
-                    │       ├── group by: [l_partkey]
-                    │       ├── aggregate functions: [avg(l_quantity)]
-                    │       ├── estimated rows: 20000.00
-                    │       └── AggregatePartial
-                    │           ├── group by: [l_partkey]
-                    │           ├── aggregate functions: [avg(l_quantity)]
-                    │           ├── estimated rows: 20000.00
-                    │           └── EvalScalar
-                    │               ├── expressions: [lineitem.l_quantity (#30), l_partkey (#27)]
-                    │               ├── estimated rows: 600572.00
-                    │               └── TableScan
-                    │                   ├── table: default.tpch.lineitem
-                    │                   ├── read rows: 600572
-                    │                   ├── read bytes: 2315944
-                    │                   ├── partitions total: 1
-                    │                   ├── partitions scanned: 1
-                    │                   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    │                   ├── push downs: [filters: [], limit: NONE]
-                    │                   ├── output columns: [l_partkey, l_quantity]
-                    │                   └── estimated rows: 600572.00
-                    └── HashJoin(Probe)
-                        ├── join type: INNER
-                        ├── build keys: [part.p_partkey (#16)]
-                        ├── probe keys: [lineitem.l_partkey (#1)]
-                        ├── filters: []
-                        ├── estimated rows: 600.57
-                        ├── Filter(Build)
-                        │   ├── filters: [part.p_brand (#19) = 'Brand#23', part.p_container (#22) = 'MED BOX']
-                        │   ├── estimated rows: 20.00
-                        │   └── TableScan
-                        │       ├── table: default.tpch.part
-                        │       ├── read rows: 20000
-                        │       ├── read bytes: 104834
-                        │       ├── partitions total: 1
-                        │       ├── partitions scanned: 1
-                        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                        │       ├── push downs: [filters: [and_filters(CAST(part.p_brand (#19) = 'Brand#23' AS Boolean NULL), CAST(part.p_container (#22) = 'MED BOX' AS Boolean NULL))], limit: NONE]
-                        │       ├── output columns: [p_partkey, p_brand, p_container]
-                        │       └── estimated rows: 20000.00
-                        └── TableScan(Probe)
-                            ├── table: default.tpch.lineitem
-                            ├── read rows: 600572
-                            ├── read bytes: 4371297
-                            ├── partitions total: 1
-                            ├── partitions scanned: 1
-                            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            ├── push downs: [filters: [], limit: NONE]
-                            ├── output columns: [l_partkey, l_quantity, l_extendedprice]
-                            └── estimated rows: 600572.00
+HashJoin: SINGLE
+├── Build
+│   └── Scan: default.tpch.lineitem, rows: 600572
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── Scan: default.tpch.part, rows: 20000
+        └── Probe
+            └── Scan: default.tpch.lineitem, rows: 600572
 
 #Q18
 query I
-explain select
+explain join select
     c_name,
     c_custkey,
     o_orderkey,
@@ -3142,102 +1859,23 @@ order by
     o_totalprice desc,
     o_orderdate;
 ----
-EvalScalar
-├── expressions: [customer.c_custkey (#0), customer.c_name (#1), orders.o_orderkey (#8), orders.o_totalprice (#11), orders.o_orderdate (#12), sum(l_quantity) (#33)]
-├── estimated rows: 600572.00
-└── Sort
-    ├── sort keys: [o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST]
-    ├── estimated rows: 600572.00
-    └── AggregateFinal
-        ├── group by: [c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice]
-        ├── aggregate functions: [sum(l_quantity)]
-        ├── estimated rows: 600572.00
-        └── AggregatePartial
-            ├── group by: [c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice]
-            ├── aggregate functions: [sum(l_quantity)]
-            ├── estimated rows: 600572.00
-            └── EvalScalar
-                ├── expressions: [lineitem.l_quantity (#21), customer.c_name (#1), customer.c_custkey (#0), orders.o_orderkey (#8), orders.o_orderdate (#12), orders.o_totalprice (#11)]
-                ├── estimated rows: 600572.00
-                └── HashJoin
-                    ├── join type: LEFT SEMI
-                    ├── build keys: [subquery_34 (#34)]
-                    ├── probe keys: [orders.o_orderkey (#8)]
-                    ├── filters: []
-                    ├── estimated rows: 600572.00
-                    ├── EvalScalar(Build)
-                    │   ├── expressions: [lineitem.l_orderkey (#34)]
-                    │   ├── estimated rows: 30000.00
-                    │   └── Filter
-                    │       ├── filters: [is_true(sum(l_quantity) (#50) > 300.00)]
-                    │       ├── estimated rows: 30000.00
-                    │       └── AggregateFinal
-                    │           ├── group by: [l_orderkey]
-                    │           ├── aggregate functions: [sum(l_quantity)]
-                    │           ├── estimated rows: 150000.00
-                    │           └── AggregatePartial
-                    │               ├── group by: [l_orderkey]
-                    │               ├── aggregate functions: [sum(l_quantity)]
-                    │               ├── estimated rows: 150000.00
-                    │               └── EvalScalar
-                    │                   ├── expressions: [lineitem.l_quantity (#38), lineitem.l_orderkey (#34)]
-                    │                   ├── estimated rows: 600572.00
-                    │                   └── TableScan
-                    │                       ├── table: default.tpch.lineitem
-                    │                       ├── read rows: 600572
-                    │                       ├── read bytes: 2226124
-                    │                       ├── partitions total: 1
-                    │                       ├── partitions scanned: 1
-                    │                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    │                       ├── push downs: [filters: [], limit: NONE]
-                    │                       ├── output columns: [l_orderkey, l_quantity]
-                    │                       └── estimated rows: 600572.00
-                    └── HashJoin(Probe)
-                        ├── join type: INNER
-                        ├── build keys: [orders.o_orderkey (#8)]
-                        ├── probe keys: [lineitem.l_orderkey (#17)]
-                        ├── filters: []
-                        ├── estimated rows: 600572.00
-                        ├── HashJoin(Build)
-                        │   ├── join type: INNER
-                        │   ├── build keys: [customer.c_custkey (#0)]
-                        │   ├── probe keys: [orders.o_custkey (#9)]
-                        │   ├── filters: []
-                        │   ├── estimated rows: 150000.00
-                        │   ├── TableScan(Build)
-                        │   │   ├── table: default.tpch.customer
-                        │   │   ├── read rows: 15000
-                        │   │   ├── read bytes: 37103
-                        │   │   ├── partitions total: 1
-                        │   │   ├── partitions scanned: 1
-                        │   │   ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        │   │   ├── push downs: [filters: [], limit: NONE]
-                        │   │   ├── output columns: [c_custkey, c_name]
-                        │   │   └── estimated rows: 15000.00
-                        │   └── TableScan(Probe)
-                        │       ├── table: default.tpch.orders
-                        │       ├── read rows: 150000
-                        │       ├── read bytes: 1363196
-                        │       ├── partitions total: 1
-                        │       ├── partitions scanned: 1
-                        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        │       ├── push downs: [filters: [], limit: NONE]
-                        │       ├── output columns: [o_orderkey, o_custkey, o_totalprice, o_orderdate]
-                        │       └── estimated rows: 150000.00
-                        └── TableScan(Probe)
-                            ├── table: default.tpch.lineitem
-                            ├── read rows: 600572
-                            ├── read bytes: 2226124
-                            ├── partitions total: 1
-                            ├── partitions scanned: 1
-                            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            ├── push downs: [filters: [], limit: NONE]
-                            ├── output columns: [l_orderkey, l_quantity]
-                            └── estimated rows: 600572.00
+HashJoin: LEFT SEMI
+├── Build
+│   └── Scan: default.tpch.lineitem, rows: 600572
+└── Probe
+    └── HashJoin: INNER
+        ├── Build
+        │   └── HashJoin: INNER
+        │       ├── Build
+        │       │   └── Scan: default.tpch.customer, rows: 15000
+        │       └── Probe
+        │           └── Scan: default.tpch.orders, rows: 150000
+        └── Probe
+            └── Scan: default.tpch.lineitem, rows: 600572
 
 # Q19
 query I
-explain select
+explain join select
     truncate(sum(l_extendedprice* (1 - l_discount)),3) as revenue
 from
     lineitem,
@@ -3307,59 +1945,15 @@ where
         )
 ;
 ----
-EvalScalar
-├── expressions: [truncate(CAST(sum((l_extendedprice * (1 - l_discount))) (#26) AS Float32 NULL), 3)]
-├── estimated rows: 1.00
-└── AggregateFinal
-    ├── group by: []
-    ├── aggregate functions: [sum(sum_arg_0)]
-    ├── estimated rows: 1.00
-    └── AggregatePartial
-        ├── group by: []
-        ├── aggregate functions: [sum(sum_arg_0)]
-        ├── estimated rows: 1.00
-        └── EvalScalar
-            ├── expressions: [lineitem.l_extendedprice (#5) * (1 - lineitem.l_discount (#6))]
-            ├── estimated rows: 949.54
-            └── Filter
-                ├── filters: [part.p_brand (#19) = 'Brand#52' AND contains(['SM CASE', 'SM BOX', 'SM PACK', 'SM PKG'], part.p_container (#22)) AND lineitem.l_quantity (#4) >= 4.00 AND lineitem.l_quantity (#4) <= 14.00 AND part.p_size (#21) <= 5 OR part.p_brand (#19) = 'Brand#11' AND contains(['MED BAG', 'MED BOX', 'MED PKG', 'MED PACK'], part.p_container (#22)) AND lineitem.l_quantity (#4) >= 18.00 AND lineitem.l_quantity (#4) <= 28.00 AND part.p_size (#21) <= 10 OR part.p_brand (#19) = 'Brand#51' AND contains(['LG CASE', 'LG BOX', 'LG PACK', 'LG PKG'], part.p_container (#22)) AND lineitem.l_quantity (#4) >= 29.00 AND lineitem.l_quantity (#4) <= 39.00 AND part.p_size (#21) <= 15]
-                ├── estimated rows: 949.54
-                └── HashJoin
-                    ├── join type: INNER
-                    ├── build keys: [part.p_partkey (#16)]
-                    ├── probe keys: [lineitem.l_partkey (#1)]
-                    ├── filters: []
-                    ├── estimated rows: 198137.80
-                    ├── Filter(Build)
-                    │   ├── filters: [part.p_size (#21) >= 1, part.p_brand (#19) = 'Brand#52' AND contains(['SM CASE', 'SM BOX', 'SM PACK', 'SM PKG'], part.p_container (#22)) AND part.p_size (#21) <= 5 OR part.p_brand (#19) = 'Brand#11' AND contains(['MED BAG', 'MED BOX', 'MED PKG', 'MED PACK'], part.p_container (#22)) AND part.p_size (#21) <= 10 OR part.p_brand (#19) = 'Brand#51' AND contains(['LG CASE', 'LG BOX', 'LG PACK', 'LG PKG'], part.p_container (#22)) AND part.p_size (#21) <= 15]
-                    │   ├── estimated rows: 86.31
-                    │   └── TableScan
-                    │       ├── table: default.tpch.part
-                    │       ├── read rows: 20000
-                    │       ├── read bytes: 126392
-                    │       ├── partitions total: 1
-                    │       ├── partitions scanned: 1
-                    │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                    │       ├── push downs: [filters: [and_filters(CAST(part.p_size (#21) >= 1 AS Boolean NULL), CAST(part.p_brand (#19) = 'Brand#52' AND contains(['SM CASE', 'SM BOX', 'SM PACK', 'SM PKG'], part.p_container (#22)) AND part.p_size (#21) <= 5 OR part.p_brand (#19) = 'Brand#11' AND contains(['MED BAG', 'MED BOX', 'MED PKG', 'MED PACK'], part.p_container (#22)) AND part.p_size (#21) <= 10 OR part.p_brand (#19) = 'Brand#51' AND contains(['LG CASE', 'LG BOX', 'LG PACK', 'LG PKG'], part.p_container (#22)) AND part.p_size (#21) <= 15 AS Boolean NULL))], limit: NONE]
-                    │       ├── output columns: [p_partkey, p_brand, p_size, p_container]
-                    │       └── estimated rows: 20000.00
-                    └── Filter(Probe)
-                        ├── filters: [lineitem.l_shipmode (#14) = 'AIR' OR lineitem.l_shipmode (#14) = 'AIR REG', lineitem.l_shipinstruct (#13) = 'DELIVER IN PERSON', lineitem.l_quantity (#4) >= 4.00 AND lineitem.l_quantity (#4) <= 14.00 OR lineitem.l_quantity (#4) >= 18.00 AND lineitem.l_quantity (#4) <= 28.00 OR lineitem.l_quantity (#4) >= 29.00 AND lineitem.l_quantity (#4) <= 39.00]
-                        ├── estimated rows: 4591.41
-                        └── TableScan
-                            ├── table: default.tpch.lineitem
-                            ├── read rows: 600572
-                            ├── read bytes: 6130737
-                            ├── partitions total: 1
-                            ├── partitions scanned: 1
-                            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                            ├── push downs: [filters: [and_filters(CAST(and_filters(CAST(lineitem.l_shipmode (#14) = 'AIR' OR lineitem.l_shipmode (#14) = 'AIR REG' AS Boolean NULL), CAST(lineitem.l_shipinstruct (#13) = 'DELIVER IN PERSON' AS Boolean NULL)) AS Boolean NULL), CAST(lineitem.l_quantity (#4) >= 4.00 AND lineitem.l_quantity (#4) <= 14.00 OR lineitem.l_quantity (#4) >= 18.00 AND lineitem.l_quantity (#4) <= 28.00 OR lineitem.l_quantity (#4) >= 29.00 AND lineitem.l_quantity (#4) <= 39.00 AS Boolean NULL))], limit: NONE]
-                            ├── output columns: [l_partkey, l_quantity, l_extendedprice, l_discount, l_shipinstruct, l_shipmode]
-                            └── estimated rows: 600572.00
+HashJoin: INNER
+├── Build
+│   └── Scan: default.tpch.part, rows: 20000
+└── Probe
+    └── Scan: default.tpch.lineitem, rows: 600572
 
 # Q20
 query I
-explain select
+explain join select
     s_name,
     s_address
 from
@@ -3397,122 +1991,27 @@ where
 order by
     s_name;
 ----
-EvalScalar
-├── expressions: [supplier.s_name (#1), supplier.s_address (#2)]
-├── estimated rows: 40.00
-└── Sort
-    ├── sort keys: [s_name ASC NULLS LAST]
-    ├── estimated rows: 40.00
-    └── HashJoin
-        ├── join type: RIGHT SEMI
-        ├── build keys: [supplier.s_suppkey (#0)]
-        ├── probe keys: [subquery_12 (#12)]
-        ├── filters: []
-        ├── estimated rows: 40.00
-        ├── HashJoin(Build)
-        │   ├── join type: INNER
-        │   ├── build keys: [nation.n_nationkey (#7)]
-        │   ├── probe keys: [supplier.s_nationkey (#3)]
-        │   ├── filters: []
-        │   ├── estimated rows: 40.00
-        │   ├── Filter(Build)
-        │   │   ├── filters: [nation.n_name (#8) = 'CANADA']
-        │   │   ├── estimated rows: 1.00
-        │   │   └── TableScan
-        │   │       ├── table: default.tpch.nation
-        │   │       ├── read rows: 25
-        │   │       ├── read bytes: 283
-        │   │       ├── partitions total: 1
-        │   │       ├── partitions scanned: 1
-        │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-        │   │       ├── push downs: [filters: [nation.n_name (#8) = 'CANADA'], limit: NONE]
-        │   │       ├── output columns: [n_nationkey, n_name]
-        │   │       └── estimated rows: 25.00
-        │   └── TableScan(Probe)
-        │       ├── table: default.tpch.supplier
-        │       ├── read rows: 1000
-        │       ├── read bytes: 25588
-        │       ├── partitions total: 1
-        │       ├── partitions scanned: 1
-        │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-        │       ├── push downs: [filters: [], limit: NONE]
-        │       ├── output columns: [s_suppkey, s_name, s_address, s_nationkey]
-        │       └── estimated rows: 1000.00
-        └── EvalScalar(Probe)
-            ├── expressions: [partsupp.ps_suppkey (#12)]
-            ├── estimated rows: 16000.00
-            └── Filter
-                ├── filters: [is_true(CAST(partsupp.ps_availqty (#13) AS Decimal(38, 3) NULL) > scalar_subquery_42 (#42))]
-                ├── estimated rows: 16000.00
-                └── HashJoin
-                    ├── join type: SINGLE
-                    ├── build keys: [l_partkey (#26), l_suppkey (#27)]
-                    ├── probe keys: [ps_partkey (#11), ps_suppkey (#12)]
-                    ├── filters: []
-                    ├── estimated rows: 80000.00
-                    ├── EvalScalar(Build)
-                    │   ├── expressions: [0.5 * sum(l_quantity) (#41), l_suppkey (#27), l_partkey (#26)]
-                    │   ├── estimated rows: 8484.00
-                    │   └── AggregateFinal
-                    │       ├── group by: [l_suppkey, l_partkey]
-                    │       ├── aggregate functions: [sum(l_quantity)]
-                    │       ├── estimated rows: 8484.00
-                    │       └── AggregatePartial
-                    │           ├── group by: [l_suppkey, l_partkey]
-                    │           ├── aggregate functions: [sum(l_quantity)]
-                    │           ├── estimated rows: 8484.00
-                    │           └── EvalScalar
-                    │               ├── expressions: [lineitem.l_quantity (#29), l_suppkey (#27), l_partkey (#26)]
-                    │               ├── estimated rows: 85281.88
-                    │               └── Filter
-                    │                   ├── filters: [lineitem.l_shipdate (#35) >= '1994-01-01', lineitem.l_shipdate (#35) < '1995-01-01']
-                    │                   ├── estimated rows: 85281.88
-                    │                   └── TableScan
-                    │                       ├── table: default.tpch.lineitem
-                    │                       ├── read rows: 600572
-                    │                       ├── read bytes: 3485170
-                    │                       ├── partitions total: 1
-                    │                       ├── partitions scanned: 1
-                    │                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    │                       ├── push downs: [filters: [and_filters(CAST(lineitem.l_shipdate (#35) >= '1994-01-01' AS Boolean NULL), CAST(lineitem.l_shipdate (#35) < '1995-01-01' AS Boolean NULL))], limit: NONE]
-                    │                       ├── output columns: [l_partkey, l_suppkey, l_quantity, l_shipdate]
-                    │                       └── estimated rows: 600572.00
-                    └── HashJoin(Probe)
-                        ├── join type: LEFT SEMI
-                        ├── build keys: [subquery_16 (#16)]
-                        ├── probe keys: [partsupp.ps_partkey (#11)]
-                        ├── filters: []
-                        ├── estimated rows: 80000.00
-                        ├── EvalScalar(Build)
-                        │   ├── expressions: [part.p_partkey (#16)]
-                        │   ├── estimated rows: 800.00
-                        │   └── Filter
-                        │       ├── filters: [part.p_name (#17) >= 'forest', part.p_name (#17) < 'foresu']
-                        │       ├── estimated rows: 800.00
-                        │       └── TableScan
-                        │           ├── table: default.tpch.part
-                        │           ├── read rows: 20000
-                        │           ├── read bytes: 230836
-                        │           ├── partitions total: 1
-                        │           ├── partitions scanned: 1
-                        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        │           ├── push downs: [filters: [and_filters(CAST(part.p_name (#17) >= 'forest' AS Boolean NULL), CAST(part.p_name (#17) < 'foresu' AS Boolean NULL))], limit: NONE]
-                        │           ├── output columns: [p_partkey, p_name]
-                        │           └── estimated rows: 20000.00
-                        └── TableScan(Probe)
-                            ├── table: default.tpch.partsupp
-                            ├── read rows: 80000
-                            ├── read bytes: 314763
-                            ├── partitions total: 1
-                            ├── partitions scanned: 1
-                            ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            ├── push downs: [filters: [], limit: NONE]
-                            ├── output columns: [ps_partkey, ps_suppkey, ps_availqty]
-                            └── estimated rows: 80000.00
+HashJoin: RIGHT SEMI
+├── Build
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── Scan: default.tpch.nation, rows: 25
+│       └── Probe
+│           └── Scan: default.tpch.supplier, rows: 1000
+└── Probe
+    └── HashJoin: SINGLE
+        ├── Build
+        │   └── Scan: default.tpch.lineitem, rows: 600572
+        └── Probe
+            └── HashJoin: LEFT SEMI
+                ├── Build
+                │   └── Scan: default.tpch.part, rows: 20000
+                └── Probe
+                    └── Scan: default.tpch.partsupp, rows: 80000
 
 # Q21
 query I
-explain select
+explain join select
     s_name,
     truncate(count(*),4) as numwait
 from
@@ -3552,138 +2051,31 @@ order by
     numwait desc,
     s_name;
 ----
-EvalScalar
-├── expressions: [supplier.s_name (#1)]
-├── estimated rows: 1000.00
-└── Sort
-    ├── sort keys: [numwait DESC NULLS LAST, s_name ASC NULLS LAST]
-    ├── estimated rows: 1000.00
-    └── EvalScalar
-        ├── expressions: [truncate(COUNT(*) (#37), 4)]
-        ├── estimated rows: 1000.00
-        └── AggregateFinal
-            ├── group by: [s_name]
-            ├── aggregate functions: [count()]
-            ├── estimated rows: 1000.00
-            └── AggregatePartial
-                ├── group by: [s_name]
-                ├── aggregate functions: [count()]
-                ├── estimated rows: 1000.00
-                └── EvalScalar
-                    ├── expressions: [supplier.s_name (#1)]
-                    ├── estimated rows: 14413.44
-                    └── HashJoin
-                        ├── join type: RIGHT ANTI
-                        ├── build keys: [l1.l_orderkey (#7)]
-                        ├── probe keys: [l3.l_orderkey (#54)]
-                        ├── filters: [l3.l_suppkey (#56) <> l1.l_suppkey (#9)]
-                        ├── estimated rows: 14413.44
-                        ├── HashJoin(Build)
-                        │   ├── join type: RIGHT SEMI
-                        │   ├── build keys: [l1.l_orderkey (#7)]
-                        │   ├── probe keys: [l2.l_orderkey (#38)]
-                        │   ├── filters: [l2.l_suppkey (#40) <> l1.l_suppkey (#9)]
-                        │   ├── estimated rows: 14413.44
-                        │   ├── HashJoin(Build)
-                        │   │   ├── join type: INNER
-                        │   │   ├── build keys: [l1.l_orderkey (#7)]
-                        │   │   ├── probe keys: [orders.o_orderkey (#23)]
-                        │   │   ├── filters: []
-                        │   │   ├── estimated rows: 14413.44
-                        │   │   ├── HashJoin(Build)
-                        │   │   │   ├── join type: INNER
-                        │   │   │   ├── build keys: [supplier.s_suppkey (#0)]
-                        │   │   │   ├── probe keys: [l1.l_suppkey (#9)]
-                        │   │   │   ├── filters: []
-                        │   │   │   ├── estimated rows: 4804.58
-                        │   │   │   ├── HashJoin(Build)
-                        │   │   │   │   ├── join type: INNER
-                        │   │   │   │   ├── build keys: [nation.n_nationkey (#32)]
-                        │   │   │   │   ├── probe keys: [supplier.s_nationkey (#3)]
-                        │   │   │   │   ├── filters: []
-                        │   │   │   │   ├── estimated rows: 40.00
-                        │   │   │   │   ├── Filter(Build)
-                        │   │   │   │   │   ├── filters: [nation.n_name (#33) = 'SAUDI ARABIA']
-                        │   │   │   │   │   ├── estimated rows: 1.00
-                        │   │   │   │   │   └── TableScan
-                        │   │   │   │   │       ├── table: default.tpch.nation
-                        │   │   │   │   │       ├── read rows: 25
-                        │   │   │   │   │       ├── read bytes: 283
-                        │   │   │   │   │       ├── partitions total: 1
-                        │   │   │   │   │       ├── partitions scanned: 1
-                        │   │   │   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                        │   │   │   │   │       ├── push downs: [filters: [nation.n_name (#33) = 'SAUDI ARABIA'], limit: NONE]
-                        │   │   │   │   │       ├── output columns: [n_nationkey, n_name]
-                        │   │   │   │   │       └── estimated rows: 25.00
-                        │   │   │   │   └── TableScan(Probe)
-                        │   │   │   │       ├── table: default.tpch.supplier
-                        │   │   │   │       ├── read rows: 1000
-                        │   │   │   │       ├── read bytes: 3296
-                        │   │   │   │       ├── partitions total: 1
-                        │   │   │   │       ├── partitions scanned: 1
-                        │   │   │   │       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        │   │   │   │       ├── push downs: [filters: [], limit: NONE]
-                        │   │   │   │       ├── output columns: [s_suppkey, s_name, s_nationkey]
-                        │   │   │   │       └── estimated rows: 1000.00
-                        │   │   │   └── Filter(Probe)
-                        │   │   │       ├── filters: [l1.l_receiptdate (#19) > l1.l_commitdate (#18)]
-                        │   │   │       ├── estimated rows: 120114.40
-                        │   │   │       └── TableScan
-                        │   │   │           ├── table: default.tpch.lineitem
-                        │   │   │           ├── read rows: 600572
-                        │   │   │           ├── read bytes: 4027787
-                        │   │   │           ├── partitions total: 1
-                        │   │   │           ├── partitions scanned: 1
-                        │   │   │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        │   │   │           ├── push downs: [filters: [l1.l_receiptdate (#19) > l1.l_commitdate (#18)], limit: NONE]
-                        │   │   │           ├── output columns: [l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
-                        │   │   │           └── estimated rows: 600572.00
-                        │   │   └── Filter(Probe)
-                        │   │       ├── filters: [orders.o_orderstatus (#25) = 'F']
-                        │   │       ├── estimated rows: 50000.00
-                        │   │       └── TableScan
-                        │   │           ├── table: default.tpch.orders
-                        │   │           ├── read rows: 150000
-                        │   │           ├── read bytes: 170985
-                        │   │           ├── partitions total: 1
-                        │   │           ├── partitions scanned: 1
-                        │   │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 1 to 1>]
-                        │   │           ├── push downs: [filters: [orders.o_orderstatus (#25) = 'F'], limit: NONE]
-                        │   │           ├── output columns: [o_orderkey, o_orderstatus]
-                        │   │           └── estimated rows: 150000.00
-                        │   └── EvalScalar(Probe)
-                        │       ├── expressions: [l2.l_orderkey (#38), l2.l_suppkey (#40), l2.l_orderkey (#38), l2.l_suppkey (#40)]
-                        │       ├── estimated rows: 600572.00
-                        │       └── TableScan
-                        │           ├── table: default.tpch.lineitem
-                        │           ├── read rows: 600572
-                        │           ├── read bytes: 2589287
-                        │           ├── partitions total: 1
-                        │           ├── partitions scanned: 1
-                        │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                        │           ├── push downs: [filters: [], limit: NONE]
-                        │           ├── output columns: [l_orderkey, l_suppkey]
-                        │           └── estimated rows: 600572.00
-                        └── EvalScalar(Probe)
-                            ├── expressions: [l3.l_orderkey (#54), l3.l_suppkey (#56), l3.l_orderkey (#54), l3.l_suppkey (#56)]
-                            ├── estimated rows: 120114.40
-                            └── Filter
-                                ├── filters: [l3.l_receiptdate (#66) > l3.l_commitdate (#65)]
-                                ├── estimated rows: 120114.40
-                                └── TableScan
-                                    ├── table: default.tpch.lineitem
-                                    ├── read rows: 600572
-                                    ├── read bytes: 4027787
-                                    ├── partitions total: 1
-                                    ├── partitions scanned: 1
-                                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                    ├── push downs: [filters: [l3.l_receiptdate (#66) > l3.l_commitdate (#65)], limit: NONE]
-                                    ├── output columns: [l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
-                                    └── estimated rows: 600572.00
+HashJoin: RIGHT ANTI
+├── Build
+│   └── HashJoin: RIGHT SEMI
+│       ├── Build
+│       │   └── HashJoin: INNER
+│       │       ├── Build
+│       │       │   └── HashJoin: INNER
+│       │       │       ├── Build
+│       │       │       │   └── HashJoin: INNER
+│       │       │       │       ├── Build
+│       │       │       │       │   └── Scan: default.tpch.nation, rows: 25
+│       │       │       │       └── Probe
+│       │       │       │           └── Scan: default.tpch.supplier, rows: 1000
+│       │       │       └── Probe
+│       │       │           └── Scan: default.tpch.lineitem, rows: 600572
+│       │       └── Probe
+│       │           └── Scan: default.tpch.orders, rows: 150000
+│       └── Probe
+│           └── Scan: default.tpch.lineitem, rows: 600572
+└── Probe
+    └── Scan: default.tpch.lineitem, rows: 600572
 
 # Q22
 query I
-explain select
+explain join select
     cntrycode,
     count(*) as numcust,
     sum(c_acctbal) as totacctbal
@@ -3721,91 +2113,12 @@ group by
 order by
     cntrycode;
 ----
-EvalScalar
-├── expressions: [custsale.cntrycode (#27), COUNT(*) (#30), sum(c_acctbal) (#31)]
-├── estimated rows: 600.00
-└── Sort
-    ├── sort keys: [cntrycode ASC NULLS LAST]
-    ├── estimated rows: 600.00
-    └── AggregateFinal
-        ├── group by: [cntrycode]
-        ├── aggregate functions: [count(), sum(c_acctbal)]
-        ├── estimated rows: 600.00
-        └── AggregatePartial
-            ├── group by: [cntrycode]
-            ├── aggregate functions: [count(), sum(c_acctbal)]
-            ├── estimated rows: 600.00
-            └── EvalScalar
-                ├── expressions: [custsale.c_acctbal (#5), custsale.cntrycode (#27)]
-                ├── estimated rows: 600.00
-                └── EvalScalar
-                    ├── expressions: [customer.c_acctbal (#5), substr(customer.c_phone (#4), 1, 2)]
-                    ├── estimated rows: 600.00
-                    └── Filter
-                        ├── filters: [is_true(CAST(customer.c_acctbal (#5) AS Decimal(38, 4) NULL) > scalar_subquery_17 (#17))]
-                        ├── estimated rows: 600.00
-                        └── HashJoin
-                            ├── join type: RIGHT ANTI
-                            ├── build keys: [customer.c_custkey (#0)]
-                            ├── probe keys: [orders.o_custkey (#19)]
-                            ├── filters: []
-                            ├── estimated rows: 3000.00
-                            ├── HashJoin(Build)
-                            │   ├── join type: SINGLE
-                            │   ├── build keys: []
-                            │   ├── probe keys: []
-                            │   ├── filters: []
-                            │   ├── estimated rows: 3000.00
-                            │   ├── EvalScalar(Build)
-                            │   │   ├── expressions: [avg(c_acctbal) (#16)]
-                            │   │   ├── estimated rows: 1.00
-                            │   │   └── AggregateFinal
-                            │   │       ├── group by: []
-                            │   │       ├── aggregate functions: [avg(c_acctbal)]
-                            │   │       ├── estimated rows: 1.00
-                            │   │       └── AggregatePartial
-                            │   │           ├── group by: []
-                            │   │           ├── aggregate functions: [avg(c_acctbal)]
-                            │   │           ├── estimated rows: 1.00
-                            │   │           └── EvalScalar
-                            │   │               ├── expressions: [customer.c_acctbal (#13)]
-                            │   │               ├── estimated rows: 600.00
-                            │   │               └── Filter
-                            │   │                   ├── filters: [customer.c_acctbal (#13) > 0.00, contains(['13', '31', '23', '29', '30', '18', '17'], substr(customer.c_phone (#12), 1, 2))]
-                            │   │                   ├── estimated rows: 600.00
-                            │   │                   └── TableScan
-                            │   │                       ├── table: default.tpch.customer
-                            │   │                       ├── read rows: 15000
-                            │   │                       ├── read bytes: 165159
-                            │   │                       ├── partitions total: 1
-                            │   │                       ├── partitions scanned: 1
-                            │   │                       ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │   │                       ├── push downs: [filters: [and_filters(CAST(customer.c_acctbal (#13) > 0.00 AS Boolean NULL), CAST(contains(['13', '31', '23', '29', '30', '18', '17'], substr(customer.c_phone (#12), 1, 2)) AS Boolean NULL))], limit: NONE]
-                            │   │                       ├── output columns: [c_phone, c_acctbal]
-                            │   │                       └── estimated rows: 15000.00
-                            │   └── Filter(Probe)
-                            │       ├── filters: [contains(['13', '31', '23', '29', '30', '18', '17'], substr(customer.c_phone (#4), 1, 2))]
-                            │       ├── estimated rows: 3000.00
-                            │       └── TableScan
-                            │           ├── table: default.tpch.customer
-                            │           ├── read rows: 15000
-                            │           ├── read bytes: 194385
-                            │           ├── partitions total: 1
-                            │           ├── partitions scanned: 1
-                            │           ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                            │           ├── push downs: [filters: [contains(['13', '31', '23', '29', '30', '18', '17'], substr(customer.c_phone (#4), 1, 2))], limit: NONE]
-                            │           ├── output columns: [c_custkey, c_phone, c_acctbal]
-                            │           └── estimated rows: 15000.00
-                            └── EvalScalar(Probe)
-                                ├── expressions: [orders.o_custkey (#19), orders.o_custkey (#19)]
-                                ├── estimated rows: 150000.00
-                                └── TableScan
-                                    ├── table: default.tpch.orders
-                                    ├── read rows: 150000
-                                    ├── read bytes: 361595
-                                    ├── partitions total: 1
-                                    ├── partitions scanned: 1
-                                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                                    ├── push downs: [filters: [], limit: NONE]
-                                    ├── output columns: [o_custkey]
-                                    └── estimated rows: 150000.00
+HashJoin: RIGHT ANTI
+├── Build
+│   └── HashJoin: SINGLE
+│       ├── Build
+│       │   └── Scan: default.tpch.customer, rows: 15000
+│       └── Probe
+│           └── Scan: default.tpch.customer, rows: 15000
+└── Probe
+    └── Scan: default.tpch.orders, rows: 150000
