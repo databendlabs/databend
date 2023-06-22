@@ -183,7 +183,7 @@ impl Binder {
             self.ctx.get_current_user()?
         } else {
             UserApiProvider::instance()
-                .get_user(&self.ctx.get_tenant(), user.clone().unwrap(), "localhost")
+                .get_user(&self.ctx.get_tenant(), user.clone().unwrap())
                 .await?
         };
 

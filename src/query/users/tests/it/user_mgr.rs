@@ -73,7 +73,7 @@ async fn test_user_manager() -> Result<()> {
     // get user hostname.
     {
         let user_info = user_mgr
-            .get_user(tenant, UserIdentity::new(username, hostname), hostname)
+            .get_user(tenant, UserIdentity::new(username, hostname))
             .await?;
         assert_eq!(hostname, user_info.hostname);
         assert_eq!(pwd.as_bytes(), user_info.auth_info.get_password().unwrap());
@@ -108,9 +108,7 @@ async fn test_user_manager() -> Result<()> {
     {
         let user_info: UserInfo = UserInfo::new(username, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.clone(), false).await?;
-        let old_user = user_mgr
-            .get_user(tenant, user_info.identity(), hostname)
-            .await?;
+        let old_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(old_user.grants, UserGrantSet::empty());
 
         let mut add_priv = UserPrivilegeSet::empty();
@@ -118,9 +116,7 @@ async fn test_user_manager() -> Result<()> {
         user_mgr
             .grant_privileges_to_user(tenant, user_info.identity(), GrantObject::Global, add_priv)
             .await?;
-        let new_user = user_mgr
-            .get_user(tenant, user_info.identity(), hostname)
-            .await?;
+        let new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert!(
             new_user
                 .grants
@@ -148,9 +144,7 @@ async fn test_user_manager() -> Result<()> {
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
-        let user_info = user_mgr
-            .get_user(tenant, user_info.identity(), hostname)
-            .await?;
+        let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(user_info.grants.entries().len(), 1);
 
         user_mgr
@@ -161,9 +155,7 @@ async fn test_user_manager() -> Result<()> {
                 UserPrivilegeSet::all_privileges(),
             )
             .await?;
-        let user_info = user_mgr
-            .get_user(tenant, user_info.identity(), hostname)
-            .await?;
+        let user_info = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(user_info.grants.entries().len(), 0);
         user_mgr
             .drop_user(tenant, user_info.identity(), true)
@@ -182,9 +174,7 @@ async fn test_user_manager() -> Result<()> {
         let user_info: UserInfo = UserInfo::new(user, hostname, auth_info.clone());
         user_mgr.add_user(tenant, user_info.clone(), false).await?;
 
-        let old_user = user_mgr
-            .get_user(tenant, user_info.identity(), hostname)
-            .await?;
+        let old_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(old_user.auth_info.get_password().unwrap(), Vec::from(pwd));
 
         // alter both password & password_type
@@ -196,9 +186,7 @@ async fn test_user_manager() -> Result<()> {
         user_mgr
             .update_user(tenant, user_info.identity(), Some(auth_info), None)
             .await?;
-        let new_user = user_mgr
-            .get_user(tenant, user_info.identity(), hostname)
-            .await?;
+        let new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(
             new_user.auth_info.get_password().unwrap(),
             Vec::from(new_pwd)
@@ -217,9 +205,7 @@ async fn test_user_manager() -> Result<()> {
         user_mgr
             .update_user(tenant, user_info.identity(), Some(auth_info.clone()), None)
             .await?;
-        let new_new_user = user_mgr
-            .get_user(tenant, user_info.identity(), hostname)
-            .await?;
+        let new_new_user = user_mgr.get_user(tenant, user_info.identity()).await?;
         assert_eq!(
             new_new_user.auth_info.get_password().unwrap(),
             Vec::from(new_new_pwd)
@@ -250,13 +236,11 @@ async fn test_user_manager_with_root_user() -> Result<()> {
     let username2 = "root";
 
     let hostname1 = "%";
-    let client_ip = "127.0.0.1";
-    let client_ip2 = "192.168.0.1";
 
-    // Get user via username `default` and client_ip `127.0.0.1`.
+    // Get user via username `default` and hostname `%`.
     {
         let user = user_mgr
-            .get_user(tenant, UserIdentity::new(username1, hostname1), client_ip)
+            .get_user(tenant, UserIdentity::new(username1, hostname1))
             .await?;
         assert_eq!(user.name, username1);
         assert_eq!(user.hostname, hostname1);
@@ -269,22 +253,10 @@ async fn test_user_manager_with_root_user() -> Result<()> {
         ]));
     }
 
-    // Get user via username `default` and client_ip `192.168.0.1` will be denied.
-    {
-        let res = user_mgr
-            .get_user(tenant, UserIdentity::new(username1, hostname1), client_ip2)
-            .await;
-        assert!(res.is_err());
-        assert_eq!(
-            "Code: 2201, Text = only accept root from 127.0.0.1, current: 'default'@'192.168.0.1'.",
-            res.err().unwrap().to_string()
-        );
-    }
-
-    // Get user via username `root` and client_ip `127.0.0.1`.
+    // Get user via username `root` and hostname `%`.
     {
         let user = user_mgr
-            .get_user(tenant, UserIdentity::new(username2, hostname1), client_ip)
+            .get_user(tenant, UserIdentity::new(username2, hostname1))
             .await?;
         assert_eq!(user.name, username2);
         assert_eq!(user.hostname, hostname1);
@@ -295,18 +267,6 @@ async fn test_user_manager_with_root_user() -> Result<()> {
             UserPrivilegeType::Insert,
             UserPrivilegeType::Super
         ]));
-    }
-
-    // Get user via username `root` and client_ip `192.168.0.1` will be denied.
-    {
-        let res = user_mgr
-            .get_user(tenant, UserIdentity::new(username2, hostname1), client_ip2)
-            .await;
-        assert!(res.is_err());
-        assert_eq!(
-            "Code: 2201, Text = only accept root from 127.0.0.1, current: 'root'@'192.168.0.1'.",
-            res.err().unwrap().to_string()
-        );
     }
 
     // create `root` user.
@@ -342,7 +302,7 @@ async fn test_user_manager_with_root_user() -> Result<()> {
         user_mgr
             .update_user(tenant, user_info.clone(), Some(auth_info), None)
             .await?;
-        let new_user = user_mgr.get_user(tenant, user_info, client_ip).await?;
+        let new_user = user_mgr.get_user(tenant, user_info).await?;
         assert_eq!(new_user.name, username2);
         assert_eq!(new_user.hostname, hostname1);
         assert_eq!(new_user.auth_info.get_type(), AuthType::DoubleSha1Password);
@@ -367,7 +327,7 @@ async fn test_user_manager_with_root_user() -> Result<()> {
         user_mgr
             .update_user(tenant, user_info.clone(), Some(auth_info), None)
             .await?;
-        let new_user = user_mgr.get_user(tenant, user_info, client_ip).await?;
+        let new_user = user_mgr.get_user(tenant, user_info).await?;
         assert_eq!(new_user.name, username2);
         assert_eq!(new_user.hostname, hostname1);
         assert_eq!(new_user.auth_info.get_type(), AuthType::DoubleSha1Password);

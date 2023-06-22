@@ -85,7 +85,7 @@ impl AuthMgr {
                 let identity = UserIdentity::new(&user_name, "%");
 
                 // create a new user for this identity if not exists
-                let user = match user_api.get_user(&tenant, identity.clone(), "%").await {
+                let user = match user_api.get_user(&tenant, identity.clone()).await {
                     Ok(user_info) => match user_info.auth_info {
                         AuthInfo::JWT => user_info,
                         _ => return Err(ErrorCode::AuthenticateFailure("wrong auth type")),
@@ -118,9 +118,8 @@ impl AuthMgr {
                 hostname: h,
             } => {
                 let tenant = session.get_current_tenant();
-                let user = user_api
-                    .get_user_with_client_ip(&tenant, n, h.as_ref().unwrap_or(&"%".to_string()))
-                    .await?;
+                let identity = UserIdentity::new(&user_name, "%");
+                let user = user_api.get_user(&tenant, identity).await?;
                 let user = match &user.auth_info {
                     AuthInfo::None => user,
                     AuthInfo::Password {

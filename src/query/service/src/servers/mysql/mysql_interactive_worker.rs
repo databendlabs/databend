@@ -255,11 +255,11 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorkerBase<W> {
     #[async_backtrace::framed]
     async fn authenticate(&self, salt: &[u8], info: CertifiedInfo) -> Result<bool> {
         let user_name = &info.user_name;
-        let client_ip = info.user_client_address.split(':').collect::<Vec<_>>()[0];
 
         let ctx = self.session.create_query_context().await?;
+        let identity = UserIdentity::new(&user_name, "%");
         let user_info = UserApiProvider::instance()
-            .get_user_with_client_ip(&ctx.get_tenant(), user_name, client_ip)
+            .get_user(&ctx.get_tenant(), identity)
             .await?;
 
         let authed = user_info.auth_info.auth_mysql(&info.user_password, salt)?;

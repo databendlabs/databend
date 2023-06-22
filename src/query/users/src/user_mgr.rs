@@ -29,12 +29,7 @@ use crate::UserApiProvider;
 impl UserApiProvider {
     // Get one user from by tenant.
     #[async_backtrace::framed]
-    pub async fn get_user(
-        &self,
-        tenant: &str,
-        user: UserIdentity,
-        client_ip: &str,
-    ) -> Result<UserInfo> {
+    pub async fn get_user(&self, tenant: &str, user: UserIdentity) -> Result<UserInfo> {
         if user.is_root() {
             let mut user_info = if let Some(auth_info) = self.get_configured_user(&user.username) {
                 UserInfo::new(&user.username, "%", auth_info.clone())
@@ -48,24 +43,17 @@ impl UserApiProvider {
                     UserInfo::new_no_auth(&user.username, &user.hostname)
                 }
             };
-            if client_ip == "127.0.0.1" || client_ip == "localhost" {
-                user_info.grants.grant_privileges(
-                    &GrantObject::Global,
-                    UserPrivilegeSet::available_privileges_on_global(),
-                );
-                user_info
-                    .grants
-                    .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
-                user_info
-                    .option
-                    .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
-                user_info.option.set_all_flag();
-            } else {
-                return Err(ErrorCode::UnknownUser(format!(
-                    "only accept root from 127.0.0.1, current: '{}'@'{}'",
-                    user.username, client_ip
-                )));
-            }
+            user_info.grants.grant_privileges(
+                &GrantObject::Global,
+                UserPrivilegeSet::available_privileges_on_global(),
+            );
+            user_info
+                .grants
+                .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
+            user_info
+                .option
+                .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
+            user_info.option.set_all_flag();
             Ok(user_info)
         } else if let Some(auth_info) = self.get_configured_user(&user.username) {
             let mut user_info = UserInfo::new(&user.username, "%", auth_info.clone());
@@ -79,18 +67,6 @@ impl UserApiProvider {
             let get_user = client.get_user(user, MatchSeq::GE(0));
             Ok(get_user.await?.data)
         }
-    }
-
-    /// Find the matched user with the '%' host, like 'u1'@'%'.
-    #[async_backtrace::framed]
-    pub async fn get_user_with_client_ip(
-        &self,
-        tenant: &str,
-        username: &str,
-        client_ip: &str,
-    ) -> Result<UserInfo> {
-        let user = UserIdentity::new(username, "%");
-        self.get_user(tenant, user, client_ip).await
     }
 
     // Get the tenant all users list.
@@ -306,12 +282,12 @@ impl UserApiProvider {
     pub async fn update_user_default_role(
         &self,
         tenant: &str,
-        user_name: UserIdentity,
+        user: UserIdentity,
         default_role: Option<String>,
     ) -> Result<Option<u64>> {
-        let mut user = self.get_user(tenant, user_name.clone(), "%").await?;
-        user.option.set_default_role(default_role);
-        self.update_user(tenant, user_name, None, Some(user.option))
+        let mut user_info = self.get_user(tenant, user.clone()).await?;
+        user_info.option.set_default_role(default_role);
+        self.update_user(tenant, user, None, Some(user_info.option))
             .await
     }
 }
