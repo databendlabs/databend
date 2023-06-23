@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_index_sink;
 mod analyze;
 mod append;
 mod commit;
@@ -32,6 +33,7 @@ mod truncate;
 mod update;
 pub mod util;
 
+pub use agg_index_sink::AggIndexSink;
 pub use common::BlockMetaIndex;
 pub use common::FillInternalColumnProcessor;
 pub use compact::CompactOptions;
@@ -41,5 +43,6 @@ pub use mutation::ReclusterMutator;
 pub use mutation::SegmentCompactMutator;
 pub use mutation::SegmentCompactionState;
 pub use mutation::SegmentCompactor;
+pub use mutation::SerializeDataTransform;
 pub use read::build_row_fetcher_pipeline;
 pub use util::column_parquet_metas;

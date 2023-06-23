@@ -241,7 +241,10 @@ impl InterpreterFactory {
                 ctx,
                 *index.clone(),
             )?)),
-
+            Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
             // Virtual columns
             Plan::CreateVirtualColumns(create_virtual_columns) => Ok(Arc::new(
                 CreateVirtualColumnsInterpreter::try_create(ctx, *create_virtual_columns.clone())?,

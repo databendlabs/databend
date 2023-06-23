@@ -40,7 +40,6 @@ use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
 use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::servers::ShutdownHandle;
 use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
@@ -94,21 +93,20 @@ impl BackgroundServiceHandler for RealBackgroundService {
     }
 
     #[async_backtrace::framed]
-    async fn start(&self, _shutdown_handler: &mut ShutdownHandle) -> Result<()> {
-        let settings = SessionManager::create(&self.conf)
-            .create_session(SessionType::Dummy)
-            .await
-            .unwrap()
-            .get_settings();
-        // check for valid license
-        let enterprise_enabled = get_license_manager()
-            .manager
-            .check_enterprise_enabled(
-                &settings,
-                self.conf.query.tenant_id.clone(),
-                "background_service".to_string(),
-            )
-            .is_ok();
+    async fn execute_scheduled_job(&self, name: String) -> Result<()> {
+        self.check_license().await?;
+        return if let Some(job) = self.scheduler.get_scheduled_job(name.as_str()) {
+            JobScheduler::check_and_run_job(job, true).await
+        } else {
+            Err(ErrorCode::UnknownBackgroundJob(format!(
+                "background job {} not found",
+                name
+            )))
+        };
+    }
+    #[async_backtrace::framed]
+    async fn start(&self) -> Result<()> {
+        let enterprise_enabled = self.check_license().await.is_ok();
         if !enterprise_enabled {
             panic!("Background service is only available in enterprise edition.");
         }
@@ -239,5 +237,19 @@ impl RealBackgroundService {
         let wrapper = BackgroundServiceHandlerWrapper::new(Box::new(rm));
         GlobalInstance::set(Arc::new(wrapper));
         Ok(())
+    }
+
+    async fn check_license(&self) -> Result<()> {
+        let settings = SessionManager::create(&self.conf)
+            .create_session(SessionType::Dummy)
+            .await
+            .unwrap()
+            .get_settings();
+        // check for valid license
+        get_license_manager().manager.check_enterprise_enabled(
+            &settings,
+            self.conf.query.tenant_id.clone(),
+            "background_service".to_string(),
+        )
     }
 }

@@ -79,6 +79,38 @@ pub fn assert_blocks_sorted_eq_with_name(test_name: &str, expect: Vec<&str>, blo
     );
 }
 
+/// Assert with order insensitive.
+/// ['a', 'b'] equals ['b', 'a']
+pub fn assert_two_blocks_sorted_eq_with_name(
+    test_name: &str,
+    expect: &[DataBlock],
+    blocks: &[DataBlock],
+) {
+    let expected = pretty_format_blocks(expect).unwrap();
+    let mut expected_lines: Vec<&str> = expected.trim().lines().collect();
+
+    // sort except for header + footer
+    let num_lines = expected_lines.len();
+    if num_lines > 3 {
+        expected_lines.as_mut_slice()[2..num_lines - 1].sort_unstable()
+    }
+
+    let formatted = pretty_format_blocks(blocks).unwrap();
+    let mut actual_lines: Vec<&str> = formatted.trim().lines().collect();
+
+    // sort except for header + footer
+    let num_lines = actual_lines.len();
+    if num_lines > 3 {
+        actual_lines.as_mut_slice()[2..num_lines - 1].sort_unstable()
+    }
+
+    assert_eq!(
+        expected_lines, actual_lines,
+        "{:#?}\n\nexpected:\n\n{:#?}\nactual:\n\n{:#?}\n\n",
+        test_name, expected_lines, actual_lines
+    );
+}
+
 pub fn box_render(
     schema: &DataSchemaRef,
     blocks: &[DataBlock],

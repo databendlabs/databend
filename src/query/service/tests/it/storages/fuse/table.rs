@@ -51,10 +51,10 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         table = fixture.latest_default_table().await?;
         assert_ne!(prev_version, table.get_table_info().ident.seq);
 
-        let (stats, _) = table.read_partitions(ctx.clone(), None).await?;
+        let (stats, _) = table.read_partitions(ctx.clone(), None, true).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        let plan = table.read_plan(ctx.clone(), None).await?;
+        let plan = table.read_plan(ctx.clone(), None, true).await?;
 
         let stream = table.read_data_block_stream(ctx.clone(), &plan).await?;
         let blocks = stream.try_collect::<Vec<_>>().await?;
@@ -99,10 +99,10 @@ async fn test_fuse_table_normal_case() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         assert_ne!(prev_version, table.get_table_info().ident.seq);
 
-        let (stats, _) = table.read_partitions(ctx.clone(), None).await?;
+        let (stats, _) = table.read_partitions(ctx.clone(), None, true).await?;
         assert_eq!(stats.read_rows, num_blocks * rows_per_block);
 
-        let plan = table.read_plan(ctx.clone(), None).await?;
+        let plan = table.read_plan(ctx.clone(), None, true).await?;
         let stream = table.read_data_block_stream(ctx.clone(), &plan).await?;
 
         let blocks = stream.try_collect::<Vec<_>>().await?;

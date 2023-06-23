@@ -55,6 +55,9 @@ parking_lot = "0.12.1"
 tempfile = "3.4.0"
 tracing = "0.1.36"
 
+[dev-dependencies]
+common-sql = { path = "../sql" }
+
 [build-dependencies]
 common-building = { path = "../../common/building" }
 

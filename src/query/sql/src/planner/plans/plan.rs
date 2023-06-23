@@ -87,6 +87,7 @@ use crate::plans::GrantPrivilegePlan;
 use crate::plans::GrantRolePlan;
 use crate::plans::KillPlan;
 use crate::plans::OptimizeTablePlan;
+use crate::plans::RefreshIndexPlan;
 use crate::plans::RemoveStagePlan;
 use crate::plans::RenameDatabasePlan;
 use crate::plans::RenameTablePlan;
@@ -194,6 +195,7 @@ pub enum Plan {
     // Indexes
     CreateIndex(Box<CreateIndexPlan>),
     DropIndex(Box<DropIndexPlan>),
+    RefreshIndex(Box<RefreshIndexPlan>),
 
     // Virtual Columns
     CreateVirtualColumns(Box<CreateVirtualColumnsPlan>),
@@ -329,6 +331,7 @@ impl Display for Plan {
             Plan::DropView(_) => write!(f, "DropView"),
             Plan::CreateIndex(_) => write!(f, "CreateIndex"),
             Plan::DropIndex(_) => write!(f, "DropIndex"),
+            Plan::RefreshIndex(_) => write!(f, "RefreshIndex"),
             Plan::CreateVirtualColumns(_) => write!(f, "CreateVirtualColumns"),
             Plan::AlterVirtualColumns(_) => write!(f, "AlterVirtualColumns"),
             Plan::DropVirtualColumns(_) => write!(f, "DropVirtualColumns"),

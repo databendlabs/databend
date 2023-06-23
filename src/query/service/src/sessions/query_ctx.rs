@@ -116,7 +116,7 @@ impl QueryContext {
     }
 
     // Build fuse/system normal table by table info.
-    fn build_table_by_table_info(
+    pub fn build_table_by_table_info(
         &self,
         catalog_name: &str,
         table_info: &TableInfo,

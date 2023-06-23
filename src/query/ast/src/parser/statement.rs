@@ -719,6 +719,18 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         },
     );
 
+    let refresh_index = map(
+        rule! {
+            REFRESH ~ AGGREGATING ~ INDEX ~ #ident ~ ( LIMIT ~ #literal_u64 )?
+        },
+        |(_, _, _, index, opt_limit)| {
+            Statement::RefreshIndex(RefreshIndexStmt {
+                index,
+                limit: opt_limit.map(|(_, limit)| limit),
+            })
+        },
+    );
+
     let create_virtual_columns = map(
         rule! {
             CREATE ~ VIRTUAL ~ COLUMNS ~ ^"(" ~ ^#comma_separated_list1(expr) ~ ^")" ~ FOR ~ #period_separated_idents_1_to_3
@@ -1325,6 +1337,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
         rule!(
             #create_index: "`CREATE AGGREGATING INDEX [IF NOT EXISTS] <index> AS SELECT ...`"
             | #drop_index: "`DROP AGGREGATING INDEX [IF EXISTS] <index>`"
+            | #refresh_index: "`REFRESH AGGREGATING INDEX <index> [LIMIT <limit>]`"
         ),
         rule!(
             #create_virtual_columns: "`CREATE VIRTUAL COLUMNS (expr, ...) FOR [<database>.]<table>`"
@@ -1436,10 +1449,11 @@ pub fn insert_source(i: Input) -> IResult<InsertSource> {
     );
     let streaming_v2 = map(
         rule! {
-           #file_format_clause ~ #rest_str
+           #file_format_clause  ~ ( ON_ERROR ~ "=" ~ #ident)? ~  #rest_str
         },
-        |(options, (_, start))| InsertSource::StreamingV2 {
+        |(options, on_error_opt, (_, start))| InsertSource::StreamingV2 {
             settings: options,
+            on_error_mode: on_error_opt.map(|v| v.2.to_string()),
             start,
         },
     );

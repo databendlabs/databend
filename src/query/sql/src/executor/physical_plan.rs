@@ -14,9 +14,11 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Display;
+use std::fmt::Formatter;
 
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::InternalColumn;
+use common_catalog::plan::Partitions;
 use common_catalog::plan::Projection;
 use common_exception::Result;
 use common_expression::types::DataType;
@@ -31,6 +33,7 @@ use common_expression::Scalar;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
+use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::RangeJoinCondition;
@@ -627,7 +630,6 @@ pub struct ExchangeSink {
     /// Fragment ID of sink fragment
     pub destination_fragment_id: usize,
     /// Addresses of destination nodes
-    pub destinations: Vec<String>,
     pub query_id: String,
 }
 
@@ -700,6 +702,60 @@ impl RuntimeFilterSource {
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct DeletePartial {
+    pub parts: Partitions,
+    pub filter: RemoteExpr<String>,
+    pub table_info: TableInfo,
+    pub catalog_name: String,
+    pub col_indices: Vec<usize>,
+    pub query_row_id_col: bool,
+}
+
+impl DeletePartial {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+}
+
+impl DeleteFinal {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRef::default())
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct DeleteFinal {
+    pub input: Box<PhysicalPlan>,
+    pub snapshot: TableSnapshot,
+    pub table_info: TableInfo,
+    pub catalog_name: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct RefreshIndex {
+    pub input: Box<PhysicalPlan>,
+    pub index_id: u64,
+    pub table_info: TableInfo,
+    pub select_schema: DataSchemaRef,
+    pub select_column_bindings: Vec<ColumnBinding>,
+}
+
+impl RefreshIndex {
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        Ok(DataSchemaRefExt::create(vec![DataField::new(
+            "index_loc",
+            DataType::String,
+        )]))
+    }
+}
+
+impl Display for RefreshIndex {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "RefreshIndex")
+    }
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalPlan {
     TableScan(TableScan),
     Filter(Filter),
@@ -725,6 +781,10 @@ pub enum PhysicalPlan {
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),
+
+    /// For distributed delete
+    DeletePartial(Box<DeletePartial>),
+    DeleteFinal(Box<DeleteFinal>),
 }
 
 impl PhysicalPlan {
@@ -759,6 +819,7 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(v) => v.plan_id,
             PhysicalPlan::ExchangeSource(v) => v.plan_id,
             PhysicalPlan::ExchangeSink(v) => v.plan_id,
+            PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
         }
     }
 
@@ -783,6 +844,8 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => plan.output_schema(),
             PhysicalPlan::ProjectSet(plan) => plan.output_schema(),
             PhysicalPlan::RuntimeFilterSource(plan) => plan.output_schema(),
+            PhysicalPlan::DeletePartial(plan) => plan.output_schema(),
+            PhysicalPlan::DeleteFinal(plan) => plan.output_schema(),
             PhysicalPlan::RangeJoin(plan) => plan.output_schema(),
         }
     }
@@ -808,6 +871,8 @@ impl PhysicalPlan {
             PhysicalPlan::ExchangeSink(_) => "Exchange Sink".to_string(),
             PhysicalPlan::ProjectSet(_) => "Unnest".to_string(),
             PhysicalPlan::RuntimeFilterSource(_) => "RuntimeFilterSource".to_string(),
+            PhysicalPlan::DeletePartial(_) => "DeletePartial".to_string(),
+            PhysicalPlan::DeleteFinal(_) => "DeleteFinal".to_string(),
             PhysicalPlan::RangeJoin(_) => "RangeJoin".to_string(),
         }
     }
@@ -837,6 +902,8 @@ impl PhysicalPlan {
             PhysicalPlan::DistributedInsertSelect(plan) => {
                 Box::new(std::iter::once(plan.input.as_ref()))
             }
+            PhysicalPlan::DeletePartial(_plan) => Box::new(std::iter::empty()),
+            PhysicalPlan::DeleteFinal(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::ProjectSet(plan) => Box::new(std::iter::once(plan.input.as_ref())),
             PhysicalPlan::RuntimeFilterSource(plan) => Box::new(
                 std::iter::once(plan.left_side.as_ref())
@@ -870,7 +937,9 @@ impl PhysicalPlan {
             | PhysicalPlan::RangeJoin(_)
             | PhysicalPlan::AggregateExpand(_)
             | PhysicalPlan::AggregateFinal(_)
-            | PhysicalPlan::AggregatePartial(_) => None,
+            | PhysicalPlan::AggregatePartial(_)
+            | PhysicalPlan::DeletePartial(_)
+            | PhysicalPlan::DeleteFinal(_) => None,
         }
     }
 }

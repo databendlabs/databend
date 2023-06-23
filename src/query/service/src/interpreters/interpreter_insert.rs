@@ -166,13 +166,17 @@ impl Interpreter for InsertInterpreter {
                     _ => {}
                 }
             }
-            InsertInputSource::StreamingWithFileFormat(params, _, input_context) => {
+            InsertInputSource::StreamingWithFileFormat {
+                format,
+                input_context_option: input_context,
+                ..
+            } => {
                 let input_context = input_context.as_ref().expect("must success").clone();
                 input_context
                     .format
                     .exec_stream(input_context.clone(), &mut build_res.main_pipeline)?;
 
-                if params.get_type().has_inner_schema() {
+                if format.get_type().has_inner_schema() {
                     let dest_schema = plan.schema();
                     let func_ctx = self.ctx.get_function_context()?;
 
@@ -198,7 +202,7 @@ impl Interpreter for InsertInterpreter {
                         ..
                     } => {
                         let mut builder1 =
-                            PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone());
+                            PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                         (builder1.build(s_expr).await?, bind_context.columns.clone())
                     }
                     _ => unreachable!(),
@@ -262,7 +266,7 @@ impl Interpreter for InsertInterpreter {
 
         let append_mode = match &self.plan.source {
             InsertInputSource::StreamingWithFormat(..)
-            | InsertInputSource::StreamingWithFileFormat(..) => AppendMode::Copy,
+            | InsertInputSource::StreamingWithFileFormat { .. } => AppendMode::Copy,
             _ => AppendMode::Normal,
         };
 

@@ -631,7 +631,6 @@ impl QueryCoordinator {
 
             return Ok(build_res);
         }
-
         Err(ErrorCode::Unimplemented("ExchangeSource is unimplemented"))
     }
 
