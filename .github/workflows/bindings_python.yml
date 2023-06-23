@@ -34,6 +34,7 @@ jobs:
         target:
           - x86_64-unknown-linux-gnu
           - aarch64-unknown-linux-gnu
+          - aarch64-apple-darwin
     steps:
       - uses: actions/checkout@v3
         with:

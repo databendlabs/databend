@@ -140,13 +140,13 @@ fn create_box_table(
     let top_rows = top_collection.num_rows().min(top_rows);
     if bottom_rows == 0 {
         for block in results {
-            let mut v = vec![];
             for row in 0..block.num_rows() {
+                let mut v = vec![];
                 for block_entry in block.columns() {
                     v.push(block_entry.value.index(row).unwrap().to_string());
                 }
+                res_vec.push(v);
             }
-            res_vec.push(v);
         }
     } else {
         let bottom_collection = results.last().unwrap();

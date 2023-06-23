@@ -84,6 +84,84 @@ impl PySessionContext {
             }
         }
     }
+
+    fn register_parquet(
+        &mut self,
+        name: &str,
+        path: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        self.register_table(name, path, "parquet", pattern, py)
+    }
+
+    fn register_csv(
+        &mut self,
+        name: &str,
+        path: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        self.register_table(name, path, "csv", pattern, py)
+    }
+
+    fn register_ndjson(
+        &mut self,
+        name: &str,
+        path: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        self.register_table(name, path, "ndjson", pattern, py)
+    }
+
+    fn register_tsv(
+        &mut self,
+        name: &str,
+        path: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        self.register_table(name, path, "tsv", pattern, py)
+    }
+
+    fn register_table(
+        &mut self,
+        name: &str,
+        path: &str,
+        file_format: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        let mut path = path.to_owned();
+        if path.starts_with("/") {
+            path = format!("fs://{}", path);
+        }
+
+        if !path.contains("://") {
+            path = format!(
+                "fs://{}/{}",
+                std::env::current_dir().unwrap().to_str().unwrap(),
+                path.as_str()
+            );
+        }
+
+        // Example: select * from '/home/sundy/dataset/hits_p/' (file_format => 'parquet', pattern => '.*.parquet') limit 3;
+        let sql = if let Some(pattern) = pattern {
+            format!(
+                "create view {} as select * from '{}' (file_format => '{}', pattern => '{}')",
+                name, path, file_format, pattern
+            )
+        } else {
+            format!(
+                "create view {} as select * from '{}' (file_format => '{}')",
+                name, path, file_format
+            )
+        };
+
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
 }
 
 async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {

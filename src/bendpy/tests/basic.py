@@ -23,6 +23,16 @@ class TestBasic:
         df =  self.ctx.sql("select number % 3 n, sum(number) b from numbers(100) group by n order by n").to_pandas()
         assert df.values.tolist() == [[0, 1683], [1, 1617], [2, 1650] ]
 
+        df =  self.ctx.sql("select number % 3 n, sum(number) b from numbers(100) group by n order by n").collect()
+        assert str(df) == """┌─────────────────────┐
+│   n   │      b      │
+│ UInt8 │ UInt64 NULL │
+├───────┼─────────────┤
+│     0 │ 1683        │
+│     1 │ 1617        │
+│     2 │ 1650        │
+└─────────────────────┘"""
+
     def test_create_insert_select(self):
         self.ctx.sql("create table aa (a int, b string, c bool, d double)").collect()
         self.ctx.sql("insert into aa select number, number, true, number from numbers(10)").collect()
