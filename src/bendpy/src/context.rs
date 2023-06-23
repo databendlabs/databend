@@ -134,7 +134,7 @@ impl PySessionContext {
         py: Python,
     ) -> PyResult<()> {
         let mut path = path.to_owned();
-        if path.starts_with("/") {
+        if path.starts_with('/') {
             path = format!("fs://{}", path);
         }
 
