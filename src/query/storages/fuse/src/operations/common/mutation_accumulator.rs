@@ -32,6 +32,7 @@ use storages_common_table_meta::meta::Versioned;
 use tracing::info;
 
 use super::ConflictResolveContext;
+use super::DeleteConflictResolveContext;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
@@ -77,6 +78,15 @@ impl BlockMutations {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum MutationKind {
+    Delete,
+    Update,
+    Replace,
+    Recluster,
+    Insert,
+}
+
 pub struct MutationAccumulator {
     ctx: Arc<dyn TableContext>,
     schema: TableSchemaRef,
@@ -91,9 +101,11 @@ pub struct MutationAccumulator {
 
     abort_operation: AbortOperation,
     summary: Statistics,
+    kind: MutationKind,
 }
 
 impl MutationAccumulator {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         ctx: Arc<dyn TableContext>,
         schema: TableSchemaRef,
@@ -102,6 +114,7 @@ impl MutationAccumulator {
         thresholds: BlockThresholds,
         base_segments: Vec<Location>,
         summary: Statistics,
+        kind: MutationKind,
     ) -> Self {
         MutationAccumulator {
             ctx,
@@ -114,6 +127,7 @@ impl MutationAccumulator {
             base_segments,
             abort_operation: AbortOperation::default(),
             summary,
+            kind,
         }
     }
 
@@ -231,12 +245,22 @@ impl MutationAccumulator {
             .chain(updated_segments)
             .collect();
 
+        let conflict_resolve_context = match self.kind {
+            MutationKind::Delete => {
+                ConflictResolveContext::Delete(Box::new(DeleteConflictResolveContext {
+                    modified_segments,
+                    modified_statistics,
+                }))
+            }
+            MutationKind::Update => ConflictResolveContext::Update,
+            MutationKind::Replace => ConflictResolveContext::Replace,
+            MutationKind::Recluster => ConflictResolveContext::Recluster,
+            MutationKind::Insert => ConflictResolveContext::Insert,
+        };
+
         let meta = CommitMeta::new(
             new_segments,
-            ConflictResolveContext::Mutation(Box::new(super::MutationConflictResolveContext {
-                modified_segments,
-                modified_statistics,
-            })),
+            conflict_resolve_context,
             self.summary.clone(),
             self.abort_operation.clone(),
             false,

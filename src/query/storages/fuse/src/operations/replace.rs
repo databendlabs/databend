@@ -31,6 +31,7 @@ use rand::prelude::SliceRandom;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 
+use super::common::MutationKind;
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
 use crate::operations::common::AppendTransform;
@@ -262,7 +263,7 @@ impl FuseTable {
         //    ┌───────────────────┐       ┌───────────────────────┐         ┌───────────────────┐
         //    │ResizeProcessor(1) ├──────►│TableMutationAggregator├────────►│     CommitSink    │
         //    └───────────────────┘       └───────────────────────┘         └───────────────────┘
-        self.chain_mutation_pipes(&ctx, pipeline, base_snapshot)?;
+        self.chain_mutation_pipes(&ctx, pipeline, base_snapshot, MutationKind::Replace)?;
 
         Ok(())
     }
@@ -327,6 +328,7 @@ impl FuseTable {
         ctx: &Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         base_snapshot: Arc<TableSnapshot>,
+        mutation_kind: MutationKind,
     ) -> Result<()> {
         // resize
         pipeline.resize(1)?;
@@ -347,6 +349,7 @@ impl FuseTable {
                 location_gen,
                 schema,
                 dal,
+                mutation_kind,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input,

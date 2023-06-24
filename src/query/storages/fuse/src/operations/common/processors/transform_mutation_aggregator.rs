@@ -29,6 +29,7 @@ use tracing::debug;
 use tracing::info;
 
 use crate::io::TableMetaLocationGenerator;
+use crate::operations::common::mutation_accumulator::MutationKind;
 use crate::operations::common::CommitMeta;
 use crate::operations::common::MutationAccumulator;
 use crate::operations::common::MutationLogs;
@@ -43,6 +44,7 @@ pub struct TableMutationAggregator {
 }
 
 impl TableMutationAggregator {
+    #[allow(clippy::too_many_arguments)]
     pub fn create(
         ctx: Arc<dyn TableContext>,
         base_segments: Vec<Location>,
@@ -51,6 +53,7 @@ impl TableMutationAggregator {
         location_gen: TableMetaLocationGenerator,
         schema: TableSchemaRef,
         dal: Operator,
+        mutation_kind: MutationKind,
     ) -> Self {
         let mutation_accumulator = MutationAccumulator::new(
             ctx.clone(),
@@ -60,6 +63,7 @@ impl TableMutationAggregator {
             thresholds,
             base_segments,
             base_summary,
+            mutation_kind,
         );
 
         TableMutationAggregator {

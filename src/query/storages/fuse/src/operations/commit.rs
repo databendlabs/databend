@@ -48,6 +48,7 @@ use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use tracing::info;
 use tracing::warn;
 
+use super::common::MutationKind;
 use crate::io::MetaWriter;
 use crate::io::SegmentsIO;
 use crate::io::TableMetaLocationGenerator;
@@ -86,6 +87,7 @@ impl FuseTable {
                 self.meta_location_generator().clone(),
                 self.schema(),
                 self.get_operator(),
+                MutationKind::Insert,
             );
             Ok(ProcessorPtr::create(AsyncAccumulatingTransformer::create(
                 input, output, aggregator,
