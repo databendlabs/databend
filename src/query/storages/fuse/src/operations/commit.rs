@@ -516,32 +516,3 @@ impl MutatorConflictDetector {
         }
     }
 }
-
-/// For delete, update, replace operations, if the modified segments are still in the latest snapshot, then it is resolvable
-///
-/// We call them data mutation operations, because they mutate the data, but don't reorginize the data on purpose,like compact and recluster
-pub mod data_mutation {
-    use storages_common_table_meta::meta::Location;
-    use storages_common_table_meta::meta::TableSnapshot;
-
-    use super::Conflict;
-
-    pub struct MutatorConflictDetector;
-
-    impl MutatorConflictDetector {
-        pub fn detect_conflicts(
-            latest: &TableSnapshot,
-            modified_segments: &[Location],
-        ) -> Conflict {
-            let latest_segments = &latest.segments;
-            if modified_segments
-                .iter()
-                .all(|modified_segment| latest_segments.contains(modified_segment))
-            {
-                Conflict::ResolvableDataMutate
-            } else {
-                Conflict::Unresolvable
-            }
-        }
-    }
-}

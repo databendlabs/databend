@@ -31,6 +31,7 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::Versioned;
 use tracing::info;
 
+use super::ConflictResolveContext;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
@@ -182,6 +183,7 @@ impl MutationAccumulator {
             .iter()
             .map(|i| self.base_segments[*i].clone())
             .collect::<Vec<_>>();
+        let mut modified_statistics = Statistics::default();
         for chunk in segment_indices.chunks(chunk_size) {
             let results = self.partial_apply(chunk.to_vec()).await?;
             for result in results {
@@ -194,7 +196,7 @@ impl MutationAccumulator {
                     // remove the old segment location.
                     segments_editor.remove(&result.index);
                 }
-
+                merge_statistics_mut(&mut modified_statistics, &result.origin_summary);
                 if !recalc_stats {
                     // deduct the old segment summary from the merged summary.
                     deduct_statistics_mut(&mut self.summary, &result.origin_summary);
@@ -231,7 +233,10 @@ impl MutationAccumulator {
 
         let meta = CommitMeta::new(
             new_segments,
-            modified_segments,
+            ConflictResolveContext::Mutation(Box::new(super::MutationConflictResolveContext {
+                modified_segments,
+                modified_statistics,
+            })),
             self.summary.clone(),
             self.abort_operation.clone(),
             false,

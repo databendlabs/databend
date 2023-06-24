@@ -31,7 +31,6 @@ use uuid::Uuid;
 
 use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
 use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
-use crate::operations::commit::data_mutation;
 use crate::operations::commit::Conflict;
 use crate::statistics::merge_statistics;
 use crate::statistics::reducers::deduct_statistics;
@@ -42,6 +41,8 @@ pub trait SnapshotGenerator {
     fn set_merged_segments(&mut self, segments: Vec<Location>);
 
     fn set_merged_summary(&mut self, summary: Statistics);
+
+    fn set_context(&mut self, ctx: ConflictResolveContext);
 
     async fn fill_default_values(
         &mut self,
@@ -56,8 +57,35 @@ pub trait SnapshotGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        modified_segments: Vec<Location>,
     ) -> Result<TableSnapshot>;
+
+    /// How to add a new method of conflict detection:
+    ///
+    /// 1. add a new `SnapshotGenerator`
+    ///
+    /// 2. design a new variant of enum `MutationConflictResolveContext`, and pass it from pipeline to `SnapshotGenerator`
+    ///
+    /// 3. impl method `detect_conflicts` for the new `SnapshotGenerator`
+    fn detect_conflicts(&self, _lastest: &TableSnapshot) -> Result<Conflict> {
+        Err(ErrorCode::Unimplemented(
+            "detect_conflicts is not implemented",
+        ))
+    }
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
+pub struct MutationConflictResolveContext {
+    pub modified_segments: Vec<Location>,
+    pub modified_statistics: Statistics,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Default)]
+pub enum ConflictResolveContext {
+    Mutation(Box<MutationConflictResolveContext>),
+    Append,
+    Compact,
+    #[default]
+    Uninitialized,
 }
 
 #[derive(Clone)]
@@ -65,6 +93,7 @@ pub struct MutationGenerator {
     base_snapshot: Arc<TableSnapshot>,
     merged_segments: Vec<Location>,
     merged_statistics: Statistics,
+    ctx: Option<Box<MutationConflictResolveContext>>,
 }
 
 impl MutationGenerator {
@@ -73,6 +102,7 @@ impl MutationGenerator {
             base_snapshot,
             merged_segments: vec![],
             merged_statistics: Statistics::default(),
+            ctx: None,
         }
     }
 }
@@ -86,20 +116,29 @@ impl SnapshotGenerator for MutationGenerator {
         self.merged_statistics = summary;
     }
 
+    fn detect_conflicts(&self, latest: &TableSnapshot) -> Result<Conflict> {
+        let latest_segments = &latest.segments;
+        let modified_segments = &self.ctx.as_ref().unwrap().modified_segments;
+        if modified_segments
+            .iter()
+            .all(|modified_segment| latest_segments.contains(modified_segment))
+        {
+            Ok(Conflict::ResolvableDataMutate)
+        } else {
+            Ok(Conflict::Unresolvable)
+        }
+    }
+
     fn generate_new_snapshot(
         &self,
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        modified_segments: Vec<Location>,
     ) -> Result<TableSnapshot> {
         let previous =
             previous.unwrap_or_else(|| Arc::new(TableSnapshot::new_empty_snapshot(schema.clone())));
 
-        match data_mutation::MutatorConflictDetector::detect_conflicts(
-            previous.as_ref(),
-            &modified_segments,
-        ) {
+        match self.detect_conflicts(&previous)? {
             Conflict::Unresolvable => {
                 metrics_inc_commit_mutation_unresolvable_conflict();
                 Err(ErrorCode::StorageOther(
@@ -135,12 +174,11 @@ impl SnapshotGenerator for MutationGenerator {
                 tracing::info!("resolvable conflicts detected");
                 metrics_inc_commit_mutation_resolvable_conflict();
                 let mut new_segments = previous.segments.clone();
-                for m in &modified_segments {
-                    new_segments.retain(|x| x != m);
-                }
+                let ctx = self.ctx.as_ref().unwrap();
+                new_segments.retain(|x| !ctx.modified_segments.contains(x));
                 new_segments.extend(self.merged_segments.clone());
                 let new_summary = merge_statistics(&self.merged_statistics, &previous.summary);
-                let new_summary = deduct_statistics(&new_summary, &self.base_snapshot.summary);
+                let new_summary = deduct_statistics(&new_summary, &ctx.modified_statistics);
                 let new_snapshot = TableSnapshot::new(
                     Uuid::new_v4(),
                     &previous.timestamp,
@@ -153,6 +191,15 @@ impl SnapshotGenerator for MutationGenerator {
                 );
                 Ok(new_snapshot)
             }
+        }
+    }
+
+    fn set_context(&mut self, ctx: ConflictResolveContext) {
+        match ctx {
+            ConflictResolveContext::Mutation(ctx) => {
+                self.ctx = Some(ctx);
+            }
+            _ => unreachable!(),
         }
     }
 }
@@ -201,6 +248,13 @@ impl SnapshotGenerator for AppendGenerator {
         self.merged_statistics = summary;
     }
 
+    fn set_context(&mut self, ctx: ConflictResolveContext) {
+        match ctx {
+            ConflictResolveContext::Append => {}
+            _ => unreachable!(),
+        }
+    }
+
     async fn fill_default_values(
         &mut self,
         schema: TableSchema,
@@ -223,7 +277,6 @@ impl SnapshotGenerator for AppendGenerator {
         schema: TableSchema,
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
-        _modified_segments: Vec<Location>,
     ) -> Result<TableSnapshot> {
         let mut prev_timestamp = None;
         let mut prev_snapshot_id = None;

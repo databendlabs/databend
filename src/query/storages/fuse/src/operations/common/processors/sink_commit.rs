@@ -28,7 +28,6 @@ use common_expression::BlockMetaInfoDowncast;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use opendal::Operator;
 use storages_common_table_meta::meta::ClusterKey;
-use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::Versioned;
 use table_lock::TableLockHandlerWrapper;
@@ -39,6 +38,7 @@ use crate::metrics::metrics_inc_commit_aborts;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
+use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
@@ -84,7 +84,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
     abort_operation: AbortOperation,
     heartbeat: TableLockHeartbeat,
 
-    modified_segments: Vec<Location>,
+    conflict_resolve_context: ConflictResolveContext,
 }
 
 impl<F> CommitSink<F>
@@ -113,7 +113,7 @@ where F: SnapshotGenerator + Send + 'static
             retries: 0,
             max_retry_elapsed,
             input,
-            modified_segments: vec![],
+            conflict_resolve_context: ConflictResolveContext::default(),
         })))
     }
 
@@ -140,7 +140,6 @@ where F: SnapshotGenerator + Send + 'static
         self.snapshot_gen.set_merged_segments(meta.segments.clone());
         self.snapshot_gen.set_merged_summary(meta.summary.clone());
         self.abort_operation = meta.abort_operation.clone();
-        self.modified_segments = meta.modified_segments.clone();
 
         self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
 
@@ -204,12 +203,12 @@ where F: SnapshotGenerator + Send + 'static
                 cluster_key_meta,
             } => {
                 let schema = self.table.schema().as_ref().clone();
-                match self.snapshot_gen.generate_new_snapshot(
-                    schema,
-                    cluster_key_meta,
-                    previous,
-                    std::mem::take(&mut self.modified_segments),
-                ) {
+                self.snapshot_gen
+                    .set_context(std::mem::take(&mut self.conflict_resolve_context));
+                match self
+                    .snapshot_gen
+                    .generate_new_snapshot(schema, cluster_key_meta, previous)
+                {
                     Ok(snapshot) => {
                         self.state = State::TryCommit {
                             data: snapshot.to_bytes()?,

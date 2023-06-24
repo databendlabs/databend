@@ -38,6 +38,7 @@ use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
+use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::operations::common::Replacement;
@@ -183,7 +184,7 @@ impl AsyncAccumulatingTransform for CompactAggregator {
             .collect();
         let meta = CommitMeta::new(
             merged_segments,
-            vec![],
+            ConflictResolveContext::Compact,
             std::mem::take(&mut self.merged_statistics),
             std::mem::take(&mut self.abort_operation),
             true,
