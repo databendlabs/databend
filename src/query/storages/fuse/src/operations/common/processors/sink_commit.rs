@@ -134,14 +134,16 @@ where F: SnapshotGenerator + Send + 'static
 
         self.input.finish();
 
-        let meta = CommitMeta::downcast_ref_from(&input_meta)
+        let meta = CommitMeta::downcast_from(input_meta)
             .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?;
 
-        self.snapshot_gen.set_merged_segments(meta.segments.clone());
-        self.snapshot_gen.set_merged_summary(meta.summary.clone());
-        self.abort_operation = meta.abort_operation.clone();
+        self.snapshot_gen.set_merged_segments(meta.segments);
+        self.snapshot_gen.set_merged_summary(meta.summary);
+        self.abort_operation = meta.abort_operation;
 
         self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
+
+        self.conflict_resolve_context = meta.conflict_resolve_context;
 
         if meta.need_lock {
             self.state = State::TryLock;
