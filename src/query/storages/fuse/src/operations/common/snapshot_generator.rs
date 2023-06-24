@@ -248,11 +248,8 @@ impl SnapshotGenerator for AppendGenerator {
         self.merged_statistics = summary;
     }
 
-    fn set_context(&mut self, ctx: ConflictResolveContext) {
-        match ctx {
-            ConflictResolveContext::Append => {}
-            _ => unreachable!(),
-        }
+    fn set_context(&mut self, _ctx: ConflictResolveContext) {
+        // unimplemented yet, do nothing
     }
 
     async fn fill_default_values(
