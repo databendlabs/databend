@@ -26,9 +26,9 @@ env:
   RUNNER_PROVIDER: github
 
 jobs:
-  build_linux:
-    name: ${{ matrix.target.runs }}
-    runs-on: ubuntu-latest
+  builds:
+    name: build_${{ matrix.target.name }}
+    runs-on: ${{ matrix.target.runs }}
     strategy:
       matrix:
         target:
