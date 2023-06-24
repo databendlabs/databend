@@ -27,6 +27,21 @@ df.to_pandas()
 
 ```
 
+### Register external table:
+
+***supported functions:***
+- register_parquet
+- register_ndjson
+- register_csv
+- register_tsv
+
+```python
+
+ctx.register_parquet("pa", "/home/sundy/dataset/hits_p/", pattern = ".*.parquet")
+ctx.sql("select * from pa limit 10").collect()
+```
+
+
 ### Tenant separation:
 
 ```python
@@ -70,7 +85,7 @@ Build API docs:
 
 ```shell
 maturin develop -E docs
-pdoc opendal
+pdoc databend
 ```
 
 ## Storage configuration

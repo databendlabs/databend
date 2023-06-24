@@ -60,7 +60,6 @@ where T: AsRef<[u8]>
                     b'0' => buf.push(b'\0'),
                     b'\'' => buf.push(b'\''),
                     b'\\' => buf.push(b'\\'),
-                    b'\"' => buf.push(b'\"'),
                     _ => {
                         buf.push(b'\\');
                         buf.push(c);
@@ -165,7 +164,6 @@ where T: AsRef<[u8]>
                         check_pos(pos + 1, positions)?;
                         buf.push(b'\\');
                     }
-                    b'\"' => buf.push(b'\"'),
                     _ => {
                         buf.push(b'\\');
                         buf.push(c);
