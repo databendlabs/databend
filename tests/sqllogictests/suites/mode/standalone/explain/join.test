@@ -623,12 +623,12 @@ drop table t1
 statement ok
 drop table t2
 
-statement ok
-set enable_cbo = 0
-
 # https://github.com/datafuselabs/databend/issues/10523
 statement ok
 create table t1 as select * from numbers(1)
+
+statement ok
+set enable_cbo = 0
 
 query I
 select t1.number FROM
@@ -656,9 +656,6 @@ t1 AS t20
 ----
 0
 
-statement ok
-set enable_cbo = 1
-
 query I
 SELECT t20.number
 FROM
@@ -685,6 +682,9 @@ CROSS JOIN t1 AS t2)
 CROSS JOIN t1
 ----
 0
+
+statement ok
+set enable_cbo = 1
 
 statement ok
 drop table t1
