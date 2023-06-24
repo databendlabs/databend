@@ -74,6 +74,7 @@ jobs:
       - name: Get Toolchain
         id: toolchain
         run: |
+          bash ./scripts/setup/dev_setup.sh -yb
           RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
           echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
 
