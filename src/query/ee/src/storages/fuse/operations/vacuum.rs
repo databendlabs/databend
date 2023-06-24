@@ -34,6 +34,8 @@ use tracing::info;
 
 use crate::storages::fuse::get_snapshot_referenced_segments;
 
+const DRY_RUN_LIMIT: usize = 1000;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct SnapshotReferencedFiles {
     pub segments: HashSet<String>,
@@ -351,13 +353,14 @@ pub async fn do_vacuum(
     fuse_table: &FuseTable,
     ctx: Arc<dyn TableContext>,
     retention_time: DateTime<Utc>,
-    dry_run_limit: Option<usize>,
+    dry_run: bool,
 ) -> Result<Option<Vec<String>>> {
     let start = Instant::now();
     // First, do purge
     let instant = Some(NavigationPoint::TimePoint(retention_time));
+    let dry_run_limit = if dry_run { Some(DRY_RUN_LIMIT) } else { None };
     let purge_files_opt = fuse_table
-        .purge(ctx.clone(), instant, true, dry_run_limit)
+        .purge(ctx.clone(), instant, dry_run_limit, true, dry_run)
         .await?;
     let status = format!(
         "do_vacuum: purged table, cost:{} sec",
@@ -367,19 +370,21 @@ pub async fn do_vacuum(
     ctx.set_status_info(&status);
     if let Some(mut purge_files) = purge_files_opt {
         let dry_run_limit = dry_run_limit.unwrap();
-        if purge_files.len() >= dry_run_limit {
-            return Ok(Some(purge_files));
+        if purge_files.len() < dry_run_limit {
+            do_dry_run_orphan_files(
+                fuse_table,
+                &ctx,
+                retention_time,
+                start,
+                &mut purge_files,
+                dry_run_limit,
+            )
+            .await?;
         }
 
-        do_dry_run_orphan_files(
-            fuse_table,
-            &ctx,
-            retention_time,
-            start,
-            &mut purge_files,
-            dry_run_limit,
-        )
-        .await?;
+        if purge_files.len() > dry_run_limit {
+            purge_files = purge_files.into_iter().take(dry_run_limit).collect();
+        }
         Ok(Some(purge_files))
     } else {
         debug_assert!(dry_run_limit.is_none());

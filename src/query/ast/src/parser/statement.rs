@@ -590,14 +590,15 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
     );
     let optimize_table = map(
         rule! {
-            OPTIMIZE ~ TABLE ~ #period_separated_idents_1_to_3 ~ #optimize_table_action
+            OPTIMIZE ~ TABLE ~ #period_separated_idents_1_to_3 ~ #optimize_table_action ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, _, (catalog, database, table), action)| {
+        |(_, _, (catalog, database, table), action, opt_limit)| {
             Statement::OptimizeTable(OptimizeTableStmt {
                 catalog,
                 database,
                 table,
                 action,
+                limit: opt_limit.map(|(_, limit)| limit),
             })
         },
     );
@@ -1916,13 +1917,11 @@ pub fn optimize_table_action(i: Input) -> IResult<OptimizeTableAction> {
                 before: opt_travel_point.map(|(_, p)| p),
             },
         ),
-        map(
-            rule! { COMPACT ~ (SEGMENT)? ~ ( LIMIT ~ ^#expr )?},
-            |(_, opt_segment, opt_limit)| OptimizeTableAction::Compact {
+        map(rule! { COMPACT ~ (SEGMENT)?}, |(_, opt_segment)| {
+            OptimizeTableAction::Compact {
                 target: opt_segment.map_or(CompactTarget::Block, |_| CompactTarget::Segment),
-                limit: opt_limit.map(|(_, limit)| limit),
-            },
-        ),
+            }
+        }),
     ))(i)
 }
 

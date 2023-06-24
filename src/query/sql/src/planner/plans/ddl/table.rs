@@ -122,6 +122,7 @@ pub struct OptimizeTablePlan {
     pub database: String,
     pub table: String,
     pub action: OptimizeTableAction,
+    pub limit: Option<usize>,
 }
 
 impl OptimizeTablePlan {
@@ -134,8 +135,8 @@ impl OptimizeTablePlan {
 pub enum OptimizeTableAction {
     All,
     Purge(Option<NavigationPoint>),
-    CompactBlocks(Option<usize>),
-    CompactSegments(Option<usize>),
+    CompactBlocks,
+    CompactSegments,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

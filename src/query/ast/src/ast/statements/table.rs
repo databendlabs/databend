@@ -456,6 +456,7 @@ pub struct OptimizeTableStmt {
     pub database: Option<Identifier>,
     pub table: Identifier,
     pub action: OptimizeTableAction,
+    pub limit: Option<u64>,
 }
 
 impl Display for OptimizeTableStmt {
@@ -469,6 +470,9 @@ impl Display for OptimizeTableStmt {
                 .chain(Some(&self.table)),
         )?;
         write!(f, " {}", &self.action)?;
+        if let Some(limit) = self.limit {
+            write!(f, " LIMIT {limit}")?;
+        }
 
         Ok(())
     }
@@ -564,13 +568,8 @@ impl Display for VacuumTableOption {
 #[derive(Debug, Clone, PartialEq)]
 pub enum OptimizeTableAction {
     All,
-    Purge {
-        before: Option<TimeTravelPoint>,
-    },
-    Compact {
-        target: CompactTarget,
-        limit: Option<Expr>,
-    },
+    Purge { before: Option<TimeTravelPoint> },
+    Compact { target: CompactTarget },
 }
 
 impl Display for OptimizeTableAction {
@@ -584,7 +583,7 @@ impl Display for OptimizeTableAction {
                 }
                 Ok(())
             }
-            OptimizeTableAction::Compact { target, limit } => {
+            OptimizeTableAction::Compact { target } => {
                 match target {
                     CompactTarget::Block => {
                         write!(f, "COMPACT BLOCK")?;
@@ -592,9 +591,6 @@ impl Display for OptimizeTableAction {
                     CompactTarget::Segment => {
                         write!(f, "COMPACT SEGMENT")?;
                     }
-                }
-                if let Some(limit) = limit {
-                    write!(f, " LIMIT {limit}")?;
                 }
                 Ok(())
             }

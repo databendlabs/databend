@@ -1441,6 +1441,11 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         let action_name = format!("Action {}", stmt.action);
         let action_format_ctx = AstFormatContext::new(action_name);
         children.push(FormatTreeNode::new(action_format_ctx));
+        if let Some(limit) = stmt.limit {
+            let name = format!("Limit {}", limit);
+            let limit_format_ctx = AstFormatContext::new(name);
+            children.push(FormatTreeNode::new(limit_format_ctx));
+        }
 
         let name = "OptimizeTable".to_string();
         let format_ctx = AstFormatContext::with_children(name, children.len());

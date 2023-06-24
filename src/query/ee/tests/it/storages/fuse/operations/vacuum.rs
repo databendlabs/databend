@@ -60,7 +60,7 @@ async fn check_dry_run_files(fixture: &TestFixture, files: Vec<&Vec<String>>) ->
     let table = fixture.latest_default_table().await?;
     let fuse_table = FuseTable::try_from_table(table.as_ref())?;
     let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-    let files_opt = do_vacuum(fuse_table, table_ctx, retention_time, Some(1000)).await?;
+    let files_opt = do_vacuum(fuse_table, table_ctx, retention_time, true).await?;
 
     assert!(files_opt.is_some());
     let purge_files = files_opt.unwrap();
@@ -329,7 +329,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-        do_vacuum(fuse_table, table_ctx, retention_time, None).await?;
+        do_vacuum(fuse_table, table_ctx, retention_time, false).await?;
     }
 
     assert_eq!(data_count, {
@@ -406,7 +406,7 @@ async fn test_fuse_do_vacuum() -> Result<()> {
         let table = fixture.latest_default_table().await?;
         let fuse_table = FuseTable::try_from_table(table.as_ref())?;
         let retention_time = chrono::Utc::now() - chrono::Duration::seconds(2);
-        do_vacuum(fuse_table, table_ctx, retention_time, None).await?;
+        do_vacuum(fuse_table, table_ctx, retention_time, false).await?;
     }
 
     // check files number

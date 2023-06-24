@@ -49,12 +49,12 @@ impl Interpreter for OptimizeTableInterpreter {
         let ctx = self.ctx.clone();
         let plan = self.plan.clone();
         match self.plan.action.clone() {
-            OptimizeTableAction::CompactBlocks(limit_opt) => {
-                self.build_compact_pipeline(CompactTarget::Blocks, limit_opt)
+            OptimizeTableAction::CompactBlocks => {
+                self.build_compact_pipeline(CompactTarget::Blocks, plan.limit)
                     .await
             }
-            OptimizeTableAction::CompactSegments(limit_opt) => {
-                self.build_compact_pipeline(CompactTarget::Segments, limit_opt)
+            OptimizeTableAction::CompactSegments => {
+                self.build_compact_pipeline(CompactTarget::Segments, plan.limit)
                     .await
             }
             OptimizeTableAction::Purge(point) => {
@@ -63,7 +63,7 @@ impl Interpreter for OptimizeTableInterpreter {
             }
             OptimizeTableAction::All => {
                 let mut build_res = self
-                    .build_compact_pipeline(CompactTarget::Blocks, None)
+                    .build_compact_pipeline(CompactTarget::Blocks, plan.limit)
                     .await?;
 
                 if build_res.main_pipeline.is_empty() {
@@ -132,7 +132,9 @@ async fn purge(
         .await?;
 
     let keep_latest = true;
-    let res = table.purge(ctx, instant, keep_latest, None).await?;
+    let res = table
+        .purge(ctx, instant, plan.limit, keep_latest, false)
+        .await?;
     assert!(res.is_none());
     Ok(())
 }

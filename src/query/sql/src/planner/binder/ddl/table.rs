@@ -821,6 +821,7 @@ impl Binder {
             database,
             table,
             action: ast_action,
+            limit,
         } = stmt;
 
         let (catalog, database, table) =
@@ -836,22 +837,10 @@ impl Binder {
                 };
                 OptimizeTableAction::Purge(p)
             }
-            AstOptimizeTableAction::Compact { target, limit } => {
-                let limit_cnt = match limit {
-                    Some(Expr::Literal {
-                        lit: Literal::UInt64(uint),
-                        ..
-                    }) => Some(*uint as usize),
-                    Some(_) => {
-                        return Err(ErrorCode::IllegalDataType("Unsupported limit type"));
-                    }
-                    _ => None,
-                };
-                match target {
-                    CompactTarget::Block => OptimizeTableAction::CompactBlocks(limit_cnt),
-                    CompactTarget::Segment => OptimizeTableAction::CompactSegments(limit_cnt),
-                }
-            }
+            AstOptimizeTableAction::Compact { target } => match target {
+                CompactTarget::Block => OptimizeTableAction::CompactBlocks,
+                CompactTarget::Segment => OptimizeTableAction::CompactSegments,
+            },
         };
 
         Ok(Plan::OptimizeTable(Box::new(OptimizeTablePlan {
@@ -859,6 +848,7 @@ impl Binder {
             database,
             table,
             action,
+            limit: limit.map(|v| v as usize),
         })))
     }
 

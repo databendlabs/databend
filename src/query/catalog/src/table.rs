@@ -239,10 +239,11 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         instant: Option<NavigationPoint>,
+        limit: Option<usize>,
         keep_last_snapshot: bool,
-        dry_run_limit: Option<usize>,
+        dry_run: bool,
     ) -> Result<Option<Vec<String>>> {
-        let (_, _, _, _) = (ctx, instant, keep_last_snapshot, dry_run_limit);
+        let (_, _, _, _, _) = (ctx, instant, limit, keep_last_snapshot, dry_run);
 
         Ok(None)
     }
