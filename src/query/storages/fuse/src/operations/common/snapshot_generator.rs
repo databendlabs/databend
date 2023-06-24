@@ -66,7 +66,7 @@ pub trait SnapshotGenerator {
     /// 2. design a new variant of enum `MutationConflictResolveContext`, and pass it from pipeline to `SnapshotGenerator`
     ///
     /// 3. impl method `detect_conflicts` for the new `SnapshotGenerator`
-    fn detect_conflicts(&self, _lastest: &TableSnapshot) -> Result<Conflict> {
+    fn detect_conflicts(&self, _latest: &TableSnapshot) -> Result<Conflict> {
         Err(ErrorCode::Unimplemented(
             "detect_conflicts is not implemented",
         ))
