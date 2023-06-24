@@ -184,10 +184,6 @@ impl Binder {
                         .await;
                 }
 
-                if database == "system" {
-                    self.ctx.set_cacheable(false);
-                }
-
                 let tenant = self.ctx.get_tenant();
 
                 let navigation_point = match travel_point {
