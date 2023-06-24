@@ -15,7 +15,7 @@ classifiers = [
 [project.optional-dependencies]
 benchmark = []
 docs = ["pdoc"]
-test = ["pytest", "pandas"]
+test = ["pytest", "pandas", "polars"]
 
 [project.urls]
 Documentation = "https://databend.rs"
