@@ -109,16 +109,18 @@ pub struct PhysicalPlanBuilder {
     pub(crate) func_ctx: FunctionContext,
 
     next_plan_id: u32,
+    dry_run: bool,
 }
 
 impl PhysicalPlanBuilder {
-    pub fn new(metadata: MetadataRef, ctx: Arc<dyn TableContext>) -> Self {
+    pub fn new(metadata: MetadataRef, ctx: Arc<dyn TableContext>, dry_run: bool) -> Self {
         let func_ctx = ctx.get_function_context().unwrap();
         Self {
             metadata,
             ctx,
             next_plan_id: 0,
             func_ctx,
+            dry_run,
         }
     }
 
@@ -373,6 +375,11 @@ impl PhysicalPlanBuilder {
 
         let table_entry = metadata.table(scan.table_index);
         let table = table_entry.table();
+
+        if !table.result_can_be_cached() {
+            self.ctx.set_cacheable(false);
+        }
+
         let mut table_schema = table.schema();
         if !project_internal_columns.is_empty() {
             let mut schema = table_schema.as_ref().clone();
@@ -399,6 +406,7 @@ impl PhysicalPlanBuilder {
                 } else {
                     Some(project_internal_columns.clone())
                 },
+                self.dry_run,
             )
             .await?;
 
@@ -431,12 +439,18 @@ impl PhysicalPlanBuilder {
                     .get_catalog(CATALOG_DEFAULT)?
                     .get_table(self.ctx.get_tenant().as_str(), "system", "one")
                     .await?;
+
+                if !table.result_can_be_cached() {
+                    self.ctx.set_cacheable(false);
+                }
+
                 let source = table
                     .read_plan_with_catalog(
                         self.ctx.clone(),
                         CATALOG_DEFAULT.to_string(),
                         None,
                         None,
+                        self.dry_run,
                     )
                     .await?;
                 Ok(PhysicalPlan::TableScan(TableScan {

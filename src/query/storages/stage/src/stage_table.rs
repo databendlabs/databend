@@ -110,6 +110,7 @@ impl Table for StageTable {
         &self,
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
+        _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let stage_info = &self.table_info;
         // User set the files.
