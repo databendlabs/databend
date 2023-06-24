@@ -146,4 +146,8 @@ impl Table for ResultScan {
         }
         Ok(())
     }
+
+    fn result_can_be_cached(&self) -> bool {
+        true
+    }
 }
