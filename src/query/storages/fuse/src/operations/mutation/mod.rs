@@ -33,5 +33,6 @@ pub use mutation_source::MutationSource;
 pub use recluster_mutator::ReclusterMutator;
 pub use transform_serialize_data::SerializeDataTransform;
 
+pub static MAX_BLOCK_COUNT: usize = 1000_1000;
 pub type SegmentIndex = usize;
 pub type BlockIndex = usize;

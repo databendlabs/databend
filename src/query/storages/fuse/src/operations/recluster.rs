@@ -66,28 +66,7 @@ impl FuseTable {
             return Ok(());
         };
 
-        let schema = self.table_info.schema();
-        let segment_locations = snapshot.segments.clone();
-        let segment_locations = create_segment_location_vector(segment_locations, None);
-        let pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
-        let block_metas = pruner.pruning(segment_locations).await?;
-
         let default_cluster_key_id = self.cluster_key_meta.clone().unwrap().0;
-        let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> = BTreeMap::new();
-        block_metas.into_iter().for_each(|(idx, b)| {
-            if let Some(stats) = &b.cluster_stats {
-                if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
-                    blocks_map.entry(stats.level).or_default().push((
-                        BlockMetaIndex {
-                            segment_idx: idx.segment_idx,
-                            block_idx: idx.block_idx,
-                        },
-                        b,
-                    ));
-                }
-            }
-        });
-
         let block_thresholds = self.get_block_thresholds();
         let avg_depth_threshold = self.get_option(
             FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD,
@@ -99,12 +78,35 @@ impl FuseTable {
         } else {
             1.0
         };
-
         let mut mutator = ReclusterMutator::try_create(threshold, block_thresholds)?;
 
-        let need_recluster = mutator.target_select(blocks_map).await?;
-        if !need_recluster {
-            return Ok(());
+        let schema = self.table_info.schema();
+        let segment_locations = snapshot.segments.clone();
+        let segment_locations = create_segment_location_vector(segment_locations, None);
+        let pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
+        let chunk_size = pruner.max_concurrency;
+        for chunk in segment_locations.chunks(chunk_size) {
+            let block_metas = pruner.pruning(chunk.to_vec()).await?;
+
+            let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> =
+                BTreeMap::new();
+            block_metas.into_iter().for_each(|(idx, b)| {
+                if let Some(stats) = &b.cluster_stats {
+                    if stats.cluster_key_id == default_cluster_key_id && stats.level >= 0 {
+                        blocks_map.entry(stats.level).or_default().push((
+                            BlockMetaIndex {
+                                segment_idx: idx.segment_idx,
+                                block_idx: idx.block_idx,
+                            },
+                            b,
+                        ));
+                    }
+                }
+            });
+
+            if mutator.target_select(blocks_map).await? {
+                break;
+            }
         }
 
         let block_metas: Vec<_> = mutator
@@ -112,6 +114,10 @@ impl FuseTable {
             .iter()
             .map(|meta| (None, meta.clone()))
             .collect();
+        if block_metas.is_empty() {
+            return Ok(());
+        }
+
         let (statistics, parts) = self.read_partitions_with_metas(
             self.table_info.schema(),
             None,
