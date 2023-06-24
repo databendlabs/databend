@@ -375,6 +375,11 @@ impl PhysicalPlanBuilder {
 
         let table_entry = metadata.table(scan.table_index);
         let table = table_entry.table();
+
+        if !table.result_can_be_cached() {
+            self.ctx.set_cacheable(false);
+        }
+
         let mut table_schema = table.schema();
         if !project_internal_columns.is_empty() {
             let mut schema = table_schema.as_ref().clone();
@@ -434,6 +439,11 @@ impl PhysicalPlanBuilder {
                     .get_catalog(CATALOG_DEFAULT)?
                     .get_table(self.ctx.get_tenant().as_str(), "system", "one")
                     .await?;
+
+                if !table.result_can_be_cached() {
+                    self.ctx.set_cacheable(false);
+                }
+
                 let source = table
                     .read_plan_with_catalog(
                         self.ctx.clone(),
