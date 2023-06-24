@@ -24,6 +24,7 @@ use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
+use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
@@ -47,6 +48,8 @@ pub struct TransformHashJoinProbe {
     probe_state: ProbeState,
     block_size: u64,
     outer_scan_finished: bool,
+    output_buffer: Vec<DataBlock>,
+    output_buffer_size: usize,
 }
 
 impl TransformHashJoinProbe {
@@ -69,6 +72,8 @@ impl TransformHashJoinProbe {
             probe_state: ProbeState::create(join_type, with_conjunct, ctx.get_function_context()?),
             block_size: default_block_size,
             outer_scan_finished: false,
+            output_buffer: vec![],
+            output_buffer_size: 0,
         }))
     }
 
@@ -79,14 +84,40 @@ impl TransformHashJoinProbe {
 
     fn probe(&mut self, block: &DataBlock) -> Result<()> {
         self.probe_state.clear();
-        self.output_data_blocks
-            .extend(self.join_state.probe(block, &mut self.probe_state)?);
+        let data_blocks = self.join_state.probe(block, &mut self.probe_state)?;
+        for datablock in data_blocks.into_iter() {
+            if datablock.num_rows() >= JOIN_MAX_BLOCK_SIZE {
+                self.output_data_blocks.push_back(datablock);
+                continue;
+            }
+            self.output_buffer_size += datablock.num_rows();
+            self.output_buffer.push(datablock);
+            if self.output_buffer_size >= JOIN_MAX_BLOCK_SIZE {
+                let data_block = DataBlock::concat(self.output_buffer.as_slice())?;
+                self.output_data_blocks.push_back(data_block);
+                self.output_buffer_size = 0;
+                self.output_buffer.clear();
+            }
+        }
         Ok(())
     }
 
     fn outer_scan(&mut self, task: usize) -> Result<()> {
-        self.output_data_blocks
-            .extend(self.join_state.outer_scan(task, &mut self.probe_state)?);
+        let data_blocks = self.join_state.outer_scan(task, &mut self.probe_state)?;
+        for datablock in data_blocks.into_iter() {
+            if datablock.num_rows() >= JOIN_MAX_BLOCK_SIZE {
+                self.output_data_blocks.push_back(datablock);
+                continue;
+            }
+            self.output_buffer_size += datablock.num_rows();
+            self.output_buffer.push(datablock);
+            if self.output_buffer_size >= JOIN_MAX_BLOCK_SIZE {
+                let data_block = DataBlock::concat(self.output_buffer.as_slice())?;
+                self.output_data_blocks.push_back(data_block);
+                self.output_buffer_size = 0;
+                self.output_buffer.clear();
+            }
+        }
         Ok(())
     }
 }
@@ -147,6 +178,13 @@ impl Processor for TransformHashJoinProbe {
                         self.join_state.probe_done()?;
                         return Ok(Event::Async);
                     } else {
+                        if self.output_buffer_size > 0 {
+                            let data = DataBlock::concat(self.output_buffer.as_slice())?;
+                            // self.output_port.can_push() is true, so we can push data.
+                            self.output_port.push_data(Ok(data));
+                            self.output_buffer_size = 0;
+                            return Ok(Event::NeedConsume);
+                        }
                         self.output_port.finish();
                         return Ok(Event::Finished);
                     }
@@ -173,6 +211,13 @@ impl Processor for TransformHashJoinProbe {
                 match self.outer_scan_finished {
                     false => Ok(Event::Sync),
                     true => {
+                        if self.output_buffer_size > 0 {
+                            let data = DataBlock::concat(self.output_buffer.as_slice())?;
+                            // self.output_port.can_push() is true, so we can push data.
+                            self.output_port.push_data(Ok(data));
+                            self.output_buffer_size = 0;
+                            return Ok(Event::NeedConsume);
+                        }
                         self.output_port.finish();
                         Ok(Event::Finished)
                     }

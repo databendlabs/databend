@@ -13,7 +13,7 @@
 // limitations under the License.
 
 mod common;
-mod desc;
+pub(crate) mod desc;
 mod hash_join_state;
 mod hash_join_state_impl;
 mod join_hash_table;
