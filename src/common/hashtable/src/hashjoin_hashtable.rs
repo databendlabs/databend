@@ -89,7 +89,7 @@ impl<K: Keyable, A: Allocator + Clone + Default> HashJoinHashTable<K, A> {
             },
             atomic_pointers: std::ptr::null_mut(),
             hash_mask: capacity - 1,
-            phantom: PhantomData::default(),
+            phantom: PhantomData,
         };
         hashtable.atomic_pointers = unsafe {
             std::mem::transmute::<*mut u64, *mut AtomicU64>(hashtable.pointers.as_mut_ptr())

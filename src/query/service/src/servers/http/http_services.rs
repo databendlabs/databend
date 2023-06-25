@@ -89,6 +89,7 @@ impl HttpHandler {
         ep.with(session_middleware).boxed()
     }
 
+    #[allow(clippy::let_with_type_underscore)]
     #[async_backtrace::framed]
     async fn build_router(&self, sock: SocketAddr) -> impl Endpoint {
         let ep_v1 = Route::new()
