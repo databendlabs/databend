@@ -29,7 +29,7 @@ use common_base::base::uuid::Uuid;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::BackgroundApi;
-use common_meta_app::background::BackgroundJobIdent;
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobParams, ManualTriggerParams, UpdateBackgroundJobParamsReq};
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobStatus;
 use common_meta_app::background::BackgroundJobType::ONESHOT;
@@ -82,7 +82,6 @@ pub struct CompactionJob {
     conf: InnerConfig,
     meta_api: Arc<MetaStore>,
     creator: BackgroundJobIdent,
-    info: Arc<parking_lot::Mutex<BackgroundJobInfo>>,
 
     finish_tx: Arc<Mutex<Sender<u64>>>,
 }
@@ -110,7 +109,16 @@ impl Job for CompactionJob {
                 status: status.clone(),
             })
             .await?;
-        self.info.lock().job_status = Some(status);
+        Ok(())
+    }
+
+    async fn update_job_params(&mut self, param: BackgroundJobParams) -> Result<()> {
+        self.meta_api
+            .update_background_job_params(UpdateBackgroundJobParamsReq {
+                job_name: self.creator.clone(),
+                params: param.clone(),
+            })
+            .await?;
         Ok(())
     }
 }
@@ -155,7 +163,6 @@ impl CompactionJob {
             conf: config.clone(),
             meta_api,
             creator,
-            info,
             finish_tx,
         }
     }
@@ -234,9 +241,14 @@ impl CompactionJob {
         }
     }
 
-    async fn sync_compact_status(&self, id: String) -> Result<Option<BackgroundJobStatus>> {
-        let job_info = self.info.clone();
-        let job_info = job_info.lock();
+    async fn sync_compact_params(job_info: &BackgroundJobInfo) -> (BackgroundJobParams, Option<ManualTriggerParams>) {
+        let mut job_params = job_info.job_params.clone().unwrap();
+        let manual = job_params.manual_trigger_params.clone();
+        job_params.manual_trigger_params = None;
+        (job_params, manual)
+    }
+    async fn sync_compact_status(&self, id: String, job_info: &BackgroundJobInfo) -> Result<Option<BackgroundJobStatus>> {
+
         let mut job_status = job_info.job_status.clone().unwrap();
         job_status.last_task_id = Some(id);
         job_status.last_task_run_at = Some(Utc::now());
@@ -269,11 +281,16 @@ impl CompactionJob {
             info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
             return Ok(());
         }
+        let job_info = self.get_info();
         let id = Uuid::new_v4().to_string();
-        let status = self.sync_compact_status(id.clone()).await?;
+
+        let (params, manual) = Self::sync_compact_params(&job_info).await;
+        let status = self.sync_compact_status(id.clone(), &job_info).await?;
         if status.is_none() {
             return Ok(());
         }
+        // guarantee at least once for maunal job
+        self.update_job_params(params).await?;
         self.update_job_status(status.clone().unwrap()).await?;
 
         info!(job = "compaction", background = true, id=id.clone(), database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "start compact");
@@ -286,6 +303,7 @@ impl CompactionJob {
             db_id,
             tb_id,
             stats,
+            manual,
             format!(
                 "need segment compaction: {}, need block compaction: {}",
                 seg, blk

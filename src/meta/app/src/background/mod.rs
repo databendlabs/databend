@@ -44,3 +44,5 @@ pub use background_task::ListBackgroundTasksReq;
 pub use background_task::UpdateBackgroundTaskReply;
 pub use background_task::UpdateBackgroundTaskReq;
 pub use background_task::VacuumStats;
+
+pub use background_job::ManualTriggerParams;

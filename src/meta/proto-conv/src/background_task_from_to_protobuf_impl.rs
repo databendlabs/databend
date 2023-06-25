@@ -20,6 +20,7 @@ use common_meta_app as mt;
 use common_meta_app::schema::TableStatistics;
 use common_protos::pb;
 use num::FromPrimitive;
+use common_meta_app::background::ManualTriggerParams;
 
 use crate::reader_check_msg;
 use crate::FromToProto;
@@ -54,6 +55,9 @@ impl FromToProto for mt::background::BackgroundTaskInfo {
             vacuum_stats: p
                 .vacuum_stats
                 .and_then(|t| mt::background::VacuumStats::from_pb(t).ok()),
+            manual_trigger: p
+                .manual_trigger
+                .and_then(|t| ManualTriggerParams::from_pb(t).ok()),
             creator: match p.creator {
                 Some(c) => Some(mt::background::BackgroundJobIdent::from_pb(c)?),
                 None => None,
@@ -75,6 +79,7 @@ impl FromToProto for mt::background::BackgroundTaskInfo {
                 .clone()
                 .and_then(|t| t.to_pb().ok()),
             vacuum_stats: self.vacuum_stats.clone().and_then(|t| t.to_pb().ok()),
+            manual_trigger: self.manual_trigger.clone().and_then(|t| t.to_pb().ok()),
             creator: self.creator.as_ref().and_then(|c| c.to_pb().ok()),
             created_at: self.created_at.to_pb()?,
         };

@@ -14,7 +14,7 @@
 
 use chrono::DateTime;
 use chrono::Utc;
-use common_meta_app::background::BackgroundJobIdent;
+use common_meta_app::background::{BackgroundJobIdent, ManualTriggerParams};
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobParams;
 use common_meta_app::background::BackgroundJobState;
@@ -63,6 +63,7 @@ fn new_background_job(state: BackgroundJobState, created_at: DateTime<Utc>) -> B
             scheduled_job_interval: std::time::Duration::from_secs(0),
             scheduled_job_timezone: None,
             scheduled_job_cron: "".to_string(),
+            manual_trigger_params: None,
         }),
         last_updated: None,
         task_type: Default::default(),
@@ -249,6 +250,11 @@ impl BackgroundApiTestSuite {
                     scheduled_job_interval: std::time::Duration::from_secs(3600),
                     scheduled_job_cron: "".to_string(),
                     scheduled_job_timezone: None,
+                    manual_trigger_params: Some(ManualTriggerParams{
+                        id: "001".to_string(),
+                        trigger: Default::default(),
+                        triggered_at: Default::default(),
+                    }),
                 },
             };
 
@@ -268,8 +274,11 @@ impl BackgroundApiTestSuite {
             );
             assert_eq!(
                 std::time::Duration::from_secs(3600),
-                res.info.job_params.unwrap().scheduled_job_interval
-            )
+                res.info.job_params.as_ref().unwrap().scheduled_job_interval
+            );
+            assert!(res.info.job_params.as_ref().unwrap().manual_trigger_params.is_some());
+            assert_eq!(res.info.job_params.as_ref().unwrap().manual_trigger_params.as_ref().unwrap().id, "001".to_string());
+
         }
 
         info!("--- update a background job params");

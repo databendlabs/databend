@@ -20,7 +20,7 @@ use std::time::Duration;
 use chrono::DateTime;
 use chrono::Utc;
 
-use crate::background::BackgroundJobIdent;
+use crate::background::{BackgroundJobIdent, ManualTriggerParams};
 use crate::schema::TableStatistics;
 
 #[derive(
@@ -116,6 +116,8 @@ pub struct BackgroundTaskInfo {
     pub message: String,
     pub compaction_task_stats: Option<CompactionStats>,
     pub vacuum_stats: Option<VacuumStats>,
+
+    pub manual_trigger: Option<ManualTriggerParams>,
     pub creator: Option<BackgroundJobIdent>,
     pub created_at: DateTime<Utc>,
 }
@@ -126,6 +128,7 @@ impl BackgroundTaskInfo {
         db_id: u64,
         tb_id: u64,
         tb_stats: TableStatistics,
+        manual_trigger: Option<ManualTriggerParams>,
         message: String,
     ) -> Self {
         let now = Utc::now();
@@ -142,6 +145,7 @@ impl BackgroundTaskInfo {
                 total_compaction_time: None,
             }),
             vacuum_stats: None,
+            manual_trigger,
             creator: Some(creator),
             created_at: now,
         }

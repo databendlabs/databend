@@ -27,7 +27,7 @@ use common_exception::Result;
 use common_expression::DataBlock;
 use common_license::license_manager::get_license_manager;
 use common_meta_api::BackgroundApi;
-use common_meta_app::background::BackgroundJobIdent;
+use common_meta_app::background::{BackgroundJobIdent, ManualTriggerParams};
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobState;
 use common_meta_app::background::CreateBackgroundJobReq;
@@ -40,13 +40,14 @@ use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
 use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::Session;
+use databend_query::sessions::{QueryContext, Session};
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
 use futures_util::StreamExt;
 use tracing::error;
 use tracing::info;
+use common_base::base::uuid::Uuid;
 
 use crate::background_service::session::create_session;
 use crate::background_service::CompactionJob;
@@ -56,6 +57,7 @@ pub struct RealBackgroundService {
     conf: InnerConfig,
     session: Arc<Session>,
     scheduler: Arc<JobScheduler>,
+    pub meta_api: Arc<MetaStore>,
 }
 
 #[async_trait::async_trait]
@@ -93,16 +95,41 @@ impl BackgroundServiceHandler for RealBackgroundService {
     }
 
     #[async_backtrace::framed]
-    async fn execute_scheduled_job(&self, name: String) -> Result<()> {
+    async fn execute_scheduled_job(&self, ctx: Arc<QueryContext>, name: String) -> Result<()> {
         self.check_license().await?;
-        return if let Some(job) = self.scheduler.get_scheduled_job(name.as_str()) {
-            JobScheduler::check_and_run_job(job, true).await
+        if self.conf.background.enable {
+            return if let Some(job) = self.scheduler.get_scheduled_job(name.as_str()) {
+
+                JobScheduler::check_and_run_job(job, true).await
+            } else {
+                Err(ErrorCode::UnknownBackgroundJob(format!(
+                    "background job {} not found",
+                    name
+                )))
+            };
         } else {
-            Err(ErrorCode::UnknownBackgroundJob(format!(
-                "background job {} not found",
-                name
-            )))
-        };
+            // regist the trigger to background job on meta store
+            // the consistency level is final consistency, which means that
+            // when many execute scheduled job requests are sent to the meta store,
+            // only one of them will be executed and the others will be ignored.
+            let name = BackgroundJobIdent {
+                tenant: ctx.get_tenant().to_string(),
+                name,
+            };
+            let info = self.meta_api.get_background_job(GetBackgroundJobReq {
+                name: name.clone(),
+            }).await?;
+            let mut params = info.info.job_params.clone().unwrap_or_default();
+            let id = Uuid::new_v4().to_string();
+            let trigger = ctx.get_current_user()?.identity();
+            params.manual_trigger_params = Some(ManualTriggerParams::new(id, trigger));
+            self.meta_api.update_background_job_params(UpdateBackgroundJobParamsReq {
+                job_name: name,
+                params,
+            }).await?;
+            Ok(())
+        }
+
     }
     #[async_backtrace::framed]
     async fn start(&self) -> Result<()> {
@@ -119,7 +146,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
 
 impl RealBackgroundService {
     pub async fn new(conf: &InnerConfig) -> Result<Self> {
-        let session = create_session().await?;
+        let mut session = create_session().await?;
         let user = UserInfo::new_no_auth(
             format!(
                 "{}-{}-background-svc",
@@ -148,6 +175,7 @@ impl RealBackgroundService {
             conf: conf.clone(),
             session: session.clone(),
             scheduler: Arc::new(scheduler),
+            meta_api,
         };
         Ok(rm)
     }

@@ -17,7 +17,7 @@ use std::str::FromStr;
 use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app as mt;
-use common_meta_app::background::BackgroundJobParams;
+use common_meta_app::background::{BackgroundJobParams, ManualTriggerParams};
 use common_meta_app::background::BackgroundJobStatus;
 use common_protos::pb;
 use num::FromPrimitive;
@@ -103,6 +103,7 @@ impl FromToProto for mt::background::BackgroundJobParams {
                     })
                 })
                 .transpose()?,
+            manual_trigger_params: p.manual_trigger.map( |t| ManualTriggerParams::from_pb(t)).transpose()?
         })
     }
 
@@ -114,6 +115,7 @@ impl FromToProto for mt::background::BackgroundJobParams {
             scheduled_job_interval_seconds: self.scheduled_job_interval.as_secs(),
             scheduled_job_cron: self.scheduled_job_cron.clone(),
             scheduled_job_timezone: self.scheduled_job_timezone.map(|t| t.name().to_string()),
+            manual_trigger: self.manual_trigger_params.clone().map(|t| t.to_pb().ok()).flatten(),
         };
         Ok(p)
     }
@@ -176,6 +178,35 @@ impl FromToProto for mt::background::BackgroundJobIdent {
             min_reader_ver: MIN_READER_VER,
             tenant: self.tenant.clone(),
             name: self.name.clone(),
+        };
+        Ok(p)
+    }
+}
+
+
+impl FromToProto for mt::background::ManualTriggerParams {
+    type PB = pb::ManualTriggerParams;
+    fn get_pb_ver(p: &Self::PB) -> u64 {
+        p.ver
+    }
+    fn from_pb(p: Self::PB) -> Result<Self, Incompatible>
+    where Self: Sized {
+        reader_check_msg(p.ver, p.min_reader_ver)?;
+        Ok(Self {
+            id: p.id,
+            trigger: mt::principal::UserIdentity::from_pb(p.trigger.ok_or_else(|| Incompatible {
+                reason: format!("trigger is required"),
+            })?)?,
+            triggered_at: DateTime::<Utc>::from_pb(p.triggered_at)?,
+        })
+    }
+    fn to_pb(&self) -> Result<Self::PB, Incompatible> {
+        let p = pb::ManualTriggerParams {
+            ver: VER,
+            min_reader_ver: MIN_READER_VER,
+            id: self.id.clone(),
+            trigger: Some(self.trigger.to_pb()?),
+            triggered_at: self.triggered_at.to_pb()?,
         };
         Ok(p)
     }
