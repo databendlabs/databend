@@ -12,5 +12,5 @@ echo "create table products (id int, name string, description string);" | $MYSQL
 curl -s -u root: -H "stage_name:s1" -F "upload=@${CURDIR}/../../../data/ttt.csv" -XPUT "http://localhost:8000/v1/upload_to_stage" -u root: | jq ".data"
 curl -s -u root: -H "stage_name:s1" -F "upload=@${CURDIR}/../../../data/sample.csv" -XPUT "http://localhost:8000/v1/upload_to_stage" -u root: | jq ".data"
 echo "copy into products from @s1 pattern = '.*[.]csv';" | $MYSQL_CLIENT_CONNECT
-echo "select * from products;" | $MYSQL_CLIENT_CONNECT
+echo "select * from products order by id;" | $MYSQL_CLIENT_CONNECT
 echo "select count(*) from products;" | $MYSQL_CLIENT_CONNECT

@@ -209,7 +209,7 @@ impl CopyInterpreter {
         }
         let mut stage_table_info = plan.stage_table_info.clone();
         stage_table_info.files_to_copy = Some(files.clone());
-        let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
+        let stage_table = StageTable::try_create(stage_table_info.clone())?;
         let read_source_plan = {
             stage_table
                 .read_plan_with_catalog(

@@ -167,9 +167,6 @@ impl InputFormatTextBase for InputFormatCSV {
             n_end: 0,
             num_fields: ctx.schema.num_fields(),
             projection,
-            need_skip_first_line: split_info.offset > 0,
-            has_read_one_more_line: false,
-            received_bytes_offset: split_info.offset,
         })
     }
 
@@ -225,10 +222,6 @@ pub struct CsvReaderState {
 
     num_fields: usize,
     projection: Option<Vec<usize>>,
-    // used to skip the first line
-    need_skip_first_line: bool,
-    has_read_one_more_line: bool,
-    received_bytes_offset: usize,
 }
 
 impl CsvReaderState {
@@ -254,16 +247,13 @@ impl CsvReaderState {
             ReadRecordResult::OutputEndsFull => Err(self.error_output_ends_full()),
             ReadRecordResult::Record => {
                 if self.projection.is_none() {
-                    if !self.need_skip_first_line && !self.has_read_one_more_line {
-                        if let Err(e) = self.check_num_field() {
-                            self.ctx.on_error(e, None, None)?;
-                            self.common.rows += 1;
-                            self.common.offset += n_in;
-                            self.n_end = 0;
-                            return Ok((Some(0), n_in, n_out));
-                        }
+                    if let Err(e) = self.check_num_field() {
+                        self.ctx.on_error(e, None, None)?;
+                        self.common.rows += 1;
+                        self.common.offset += n_in;
+                        self.n_end = 0;
+                        return Ok((Some(0), n_in, n_out));
                     }
-                    self.need_skip_first_line = false;
                 }
 
                 self.common.rows += 1;
@@ -287,7 +277,6 @@ impl AligningStateTextBased for CsvReaderState {
     fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
         let mut out_tmp = vec![0u8; buf_in.len()];
         let mut buf = buf_in;
-        self.received_bytes_offset += buf.len();
         while self.common.rows_to_skip > 0 {
             let (_, n_in, _) = self.read_record(buf, &mut out_tmp)?;
             buf = &buf[n_in..];
@@ -337,14 +326,12 @@ impl AligningStateTextBased for CsvReaderState {
                 buf_in.len(),
             );
             self.out.extend_from_slice(&out_tmp);
-            self.judge_read_one_more_line();
             Ok(vec![])
         } else {
             let last_remain = mem::take(&mut self.out);
 
             self.common.batch_id += 1;
             self.out.extend_from_slice(&out_tmp[row_batch_end..]);
-            self.judge_read_one_more_line();
             tracing::debug!(
                 "csv aligner: {} + {} bytes => {} rows + {} bytes remain",
                 last_remain.len(),
@@ -401,14 +388,6 @@ impl AligningStateTextBased for CsvReaderState {
 }
 
 impl CsvReaderState {
-    fn judge_read_one_more_line(&mut self) {
-        if self.received_bytes_offset - self.out.len()
-            > self.split_info.offset + self.split_info.size
-        {
-            self.has_read_one_more_line = true;
-        }
-    }
-
     fn check_num_field(&self) -> Result<()> {
         let expect = self.num_fields;
         let actual = self.n_end;
