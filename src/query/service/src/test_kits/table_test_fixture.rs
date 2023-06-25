@@ -60,7 +60,6 @@ use jsonb::Value as JsonbValue;
 use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use tempfile::TempDir;
-use tracing::log::warn;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
