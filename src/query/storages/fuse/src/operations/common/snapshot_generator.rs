@@ -63,8 +63,10 @@ pub trait SnapshotGenerator {
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq)]
 pub struct DeleteConflictResolveContext {
-    pub modified_segments: Vec<Location>,
-    pub modified_statistics: Statistics,
+    pub removed_segments: Vec<Location>,
+    pub added_segments: Vec<Location>,
+    pub removed_statistics: Statistics,
+    pub added_statistics: Statistics,
 }
 
 #[derive(Clone, serde::Serialize, serde::Deserialize, Debug, PartialEq, Default)]
@@ -103,7 +105,7 @@ impl MutationGenerator {
         match &self.ctx {
             ConflictResolveContext::Delete(ctx) => {
                 if ctx
-                    .modified_segments
+                    .removed_segments
                     .iter()
                     .all(|modified_segment| latest.segments.contains(modified_segment))
                 {
@@ -172,17 +174,19 @@ impl SnapshotGenerator for MutationGenerator {
                 tracing::info!("resolvable conflicts detected");
                 metrics_inc_commit_mutation_resolvable_conflict();
                 let DeleteConflictResolveContext {
-                    modified_segments,
-                    modified_statistics,
+                    removed_segments,
+                    added_segments,
+                    removed_statistics,
+                    added_statistics,
                 } = match &self.ctx {
                     ConflictResolveContext::Delete(ctx) => ctx.as_ref(),
                     _ => unreachable!(),
                 };
                 let mut new_segments = previous.segments.clone();
-                new_segments.retain(|x| !modified_segments.contains(x));
-                new_segments.extend(self.merged_segments.clone());
-                let new_summary = merge_statistics(&self.merged_statistics, &previous.summary);
-                let new_summary = deduct_statistics(&new_summary, modified_statistics);
+                new_segments.retain(|x| !removed_segments.contains(x));
+                new_segments.extend(added_segments.iter().cloned());
+                let new_summary = merge_statistics(added_statistics, &previous.summary);
+                let new_summary = deduct_statistics(&new_summary, removed_statistics);
                 let new_snapshot = TableSnapshot::new(
                     Uuid::new_v4(),
                     &previous.timestamp,

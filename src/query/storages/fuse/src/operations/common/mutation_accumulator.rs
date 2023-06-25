@@ -193,11 +193,13 @@ impl MutationAccumulator {
 
         let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         let segment_indices = self.mutations.keys().cloned().collect::<Vec<_>>();
-        let modified_segments = segment_indices
+        let removed_segments = segment_indices
             .iter()
             .map(|i| self.base_segments[*i].clone())
             .collect::<Vec<_>>();
-        let mut modified_statistics = Statistics::default();
+        let mut added_segments = vec![];
+        let mut removed_statistics = Statistics::default();
+        let mut added_statistics = Statistics::default();
         for chunk in segment_indices.chunks(chunk_size) {
             let results = self.partial_apply(chunk.to_vec()).await?;
             for result in results {
@@ -206,11 +208,13 @@ impl MutationAccumulator {
                     self.abort_operation.add_segment(location.clone());
                     segments_editor.insert(result.index, (location.clone(), SegmentInfo::VERSION));
                     merge_statistics_mut(&mut self.summary, &summary);
+                    merge_statistics_mut(&mut added_statistics, &summary);
+                    added_segments.push((location, SegmentInfo::VERSION));
                 } else {
                     // remove the old segment location.
                     segments_editor.remove(&result.index);
                 }
-                merge_statistics_mut(&mut modified_statistics, &result.origin_summary);
+                merge_statistics_mut(&mut removed_statistics, &result.origin_summary);
                 if !recalc_stats {
                     // deduct the old segment summary from the merged summary.
                     deduct_statistics_mut(&mut self.summary, &result.origin_summary);
@@ -238,7 +242,7 @@ impl MutationAccumulator {
         let updated_segments = segments_editor.into_values();
 
         // with newly appended segments
-        let new_segments = self
+        let new_segments: Vec<_> = self
             .appended_segments
             .iter()
             .map(|(path, _segment, format_version)| (path.clone(), *format_version))
@@ -248,8 +252,10 @@ impl MutationAccumulator {
         let conflict_resolve_context = match self.kind {
             MutationKind::Delete => {
                 ConflictResolveContext::Delete(Box::new(DeleteConflictResolveContext {
-                    modified_segments,
-                    modified_statistics,
+                    removed_segments,
+                    added_segments,
+                    removed_statistics,
+                    added_statistics,
                 }))
             }
             MutationKind::Update => ConflictResolveContext::Update,
