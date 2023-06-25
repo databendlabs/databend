@@ -27,7 +27,7 @@ env:
 
 jobs:
   builds:
-    name: build_${{ matrix.target.name }}
+    name: build-${{ matrix.target.name }}
     runs-on: ${{ matrix.target.runs }}
     strategy:
       matrix:
@@ -127,18 +127,21 @@ jobs:
           pytest -v tests/*
 
       - name: Upload artifact
-        if: github.event_name == 'pull_request'
+        working-directory: src/bendpy
         uses: ./.github/actions/artifact_upload
         with:
-          sha: ${{ github.sha }}
-          target: ${{ matrix.target.name }}
-          category: python
-          path: src/bendpy/dist
+          name: dist
+          path: dist/*.whl
 
-      - name: Publish package to PyPI
-        if: github.event_name != 'pull_request'
-        uses: pypa/gh-action-pypi-publish@release/v1
+  release:
+    name: Publish in PyPI
+    needs: [build-x86_64-unknown-linux-gnu, build-aarch64-unknown-linux-gnu, build-x86_64-apple-darwin, build-aarch64-apple-darwin]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+      - name: Publish to PyPI
+        # if: github.event_name != 'pull_request'
+        uses: pypa/gh-action-pypi-publish@master
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          packages-dir: src/bendpy/dist/
+          password: ${{ secrets.pypi_password }}
           skip-existing: true
