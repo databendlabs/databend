@@ -127,11 +127,10 @@ jobs:
           pytest -v tests/*
 
       - name: Upload artifact
-        working-directory: src/bendpy
         uses: ./.github/actions/artifact_upload
         with:
           name: dist
-          path: dist/*.whl
+          path: src/bendpy/dist/*.whl
 
   release:
     name: Publish in PyPI
@@ -140,7 +139,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v3
       - name: Publish to PyPI
-        # if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request'
         uses: pypa/gh-action-pypi-publish@master
         with:
           password: ${{ secrets.pypi_password }}
