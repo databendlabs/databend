@@ -120,7 +120,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
 impl RealBackgroundService {
     pub async fn new(conf: &InnerConfig) -> Result<Option<Self>> {
         if !conf.background.enable {
-            return Ok(None)
+            return Ok(None);
         }
         let session = create_session().await?;
         let user = UserInfo::new_no_auth(
