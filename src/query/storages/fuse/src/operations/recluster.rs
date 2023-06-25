@@ -78,7 +78,7 @@ impl FuseTable {
         } else {
             1.0
         };
-        let mut mutator = ReclusterMutator::try_create(threshold, block_thresholds)?;
+        let mut mutator = ReclusterMutator::try_create(&ctx, threshold, block_thresholds)?;
 
         let schema = self.table_info.schema();
         let segment_locations = snapshot.segments.clone();

@@ -19,6 +19,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
@@ -30,23 +31,28 @@ use crate::operations::common::MutationLogs;
 use crate::operations::common::Replacement;
 use crate::operations::common::ReplacementLogEntry;
 
-static MAX_BLOCK_COUNT: usize = 50;
-
 #[derive(Clone)]
 pub struct ReclusterMutator {
     selected_blocks: Vec<Arc<BlockMeta>>,
     level: i32,
     threshold: f64,
+    max_memory_usage: u64,
     mutation_logs: MutationLogs,
     block_thresholds: BlockThresholds,
 }
 
 impl ReclusterMutator {
-    pub fn try_create(threshold: f64, block_thresholds: BlockThresholds) -> Result<Self> {
+    pub fn try_create(
+        ctx: &Arc<dyn TableContext>,
+        threshold: f64,
+        block_thresholds: BlockThresholds,
+    ) -> Result<Self> {
+        let max_memory_usage = (ctx.get_settings().get_max_memory_usage()? as f64 * 0.8) as u64;
         Ok(Self {
             selected_blocks: Vec::new(),
             level: 0,
             threshold,
+            max_memory_usage,
             block_thresholds,
             mutation_logs: Default::default(),
         })
@@ -175,21 +181,23 @@ impl ReclusterMutator {
                 selected_idx.insert(*idx);
             });
 
-            self.selected_blocks = selected_idx
-                .iter()
-                .take(MAX_BLOCK_COUNT)
-                .map(|idx| {
-                    let (block_idx, block_meta) = block_metas[*idx].clone();
-                    let entry = ReplacementLogEntry {
-                        index: block_idx,
-                        op: Replacement::Deleted,
-                    };
-                    self.mutation_logs
-                        .entries
-                        .push(MutationLogEntry::Replacement(entry));
-                    block_meta
-                })
-                .collect::<Vec<_>>();
+            let mut memory_usage = 0;
+            for idx in selected_idx {
+                let (block_idx, block_meta) = block_metas[idx].clone();
+                memory_usage += block_meta.block_size;
+                if memory_usage > self.max_memory_usage {
+                    break;
+                }
+                let entry = ReplacementLogEntry {
+                    index: block_idx,
+                    op: Replacement::Deleted,
+                };
+                self.mutation_logs
+                    .entries
+                    .push(MutationLogEntry::Replacement(entry));
+                self.selected_blocks.push(block_meta);
+            }
+
             self.level = level;
             return Ok(true);
         }
