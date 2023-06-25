@@ -42,7 +42,7 @@ INSERT INTO products VALUES (default,"scooter","Small 2-wheel scooter"),
 (default,"hammer","14oz carpenter's hammer"),
 (default,"hammer","16oz carpenter's hammer"),
 (default,"rocks","box of assorted rocks"),
-(default,"jacket","water resistent black wind breaker"),
+(default,"jacket","black wind breaker"),
 (default,"cloud","test for databend"),
 (default,"spare tire","24 inch spare tire");
 ```
