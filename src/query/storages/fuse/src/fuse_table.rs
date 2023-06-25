@@ -723,6 +723,10 @@ impl Table for FuseTable {
     fn support_row_id_column(&self) -> bool {
         true
     }
+
+    fn result_can_be_cached(&self) -> bool {
+        true
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -26,14 +26,16 @@ env:
   RUNNER_PROVIDER: github
 
 jobs:
-  build_linux:
-    name: ${{ matrix.target }}
-    runs-on: ubuntu-latest
+  builds:
+    name: build-${{ matrix.target.name }}
+    runs-on: ${{ matrix.target.runs }}
     strategy:
       matrix:
         target:
-          - x86_64-unknown-linux-gnu
-          - aarch64-unknown-linux-gnu
+          - { name: x86_64-unknown-linux-gnu, runs: ubuntu-latest }
+          - { name: aarch64-unknown-linux-gnu, runs: ubuntu-latest }
+          - { name: x86_64-apple-darwin, runs: macos-11 }
+          - { name: aarch64-apple-darwin, runs: macos-11 }
     steps:
       - uses: actions/checkout@v3
         with:
@@ -51,9 +53,9 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/git/db
           key: |
-            ${{ runner.os }}/${{ matrix.target }}/${{ hashFiles('**/Cargo.lock') }}
+            ${{ runner.os }}/${{ matrix.target.name }}/${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}/${{ matrix.target }}/
+            ${{ runner.os }}/${{ matrix.target.name }}/
             ${{ runner.os }}/
 
       - name: Generate version
@@ -66,11 +68,13 @@ jobs:
           fi
           VERSION=`echo ${GIT_TAG} | grep -Eo '[0-9]+\.[0-9]+\.[0-9]+'`
           echo "building tag and version: $GIT_TAG $VERSION"
-          sed -i "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml
+          sed "s#version = \"0.0.0\"#version = \"$VERSION\"#g" Cargo.toml > Cargo.toml.bak
+          mv Cargo.toml.bak Cargo.toml
 
       - name: Get Toolchain
         id: toolchain
         run: |
+          bash ./scripts/setup/dev_setup.sh -yb
           RUST_TOOLCHAIN=$(awk -F'[ ="]+' '$1 == "channel" { print $2 }' rust-toolchain.toml)
           echo "RUST_TOOLCHAIN=${RUST_TOOLCHAIN}" >> $GITHUB_OUTPUT
 
@@ -95,12 +99,18 @@ jobs:
             echo "BUILD_PROFILE=release" >> $GITHUB_ENV
           fi
 
+      - name: Cross setup
+        if: matrix.target.runs == 'macos-11'
+        shell: bash
+        run: |
+          echo "JEMALLOC_SYS_WITH_LG_PAGE=14" >> $GITHUB_ENV
+
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
           rust-toolchain: ${{ steps.toolchain.outputs.RUST_TOOLCHAIN }}
           working-directory: src/bendpy
-          target: ${{ matrix.target }}
+          target: ${{ matrix.target.name }}
           manylinux: auto
           # Keep them in one line due to https://github.com/PyO3/maturin-action/issues/153
           rustup-components: rust-std rustfmt
@@ -110,25 +120,28 @@ jobs:
 
       - name: Run tests
         working-directory: src/bendpy
-        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        if: matrix.target.name == 'x86_64-unknown-linux-gnu'
         run: |
           pip install dist/*.whl
-          pip install pytest pyarrow pandas
+          pip install pytest pyarrow pandas polars
           pytest -v tests/*
 
       - name: Upload artifact
-        if: github.event_name == 'pull_request'
+        working-directory: src/bendpy
         uses: ./.github/actions/artifact_upload
         with:
-          sha: ${{ github.sha }}
-          target: ${{ matrix.target }}
-          category: python
-          path: src/bendpy/dist
+          name: dist
+          path: dist/*.whl
 
-      - name: Publish package to PyPI
-        if: github.event_name != 'pull_request'
-        uses: pypa/gh-action-pypi-publish@release/v1
+  release:
+    name: Publish in PyPI
+    needs: [build-x86_64-unknown-linux-gnu, build-aarch64-unknown-linux-gnu, build-x86_64-apple-darwin, build-aarch64-apple-darwin]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v3
+      - name: Publish to PyPI
+        # if: github.event_name != 'pull_request'
+        uses: pypa/gh-action-pypi-publish@master
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          packages-dir: src/bendpy/dist/
+          password: ${{ secrets.pypi_password }}
           skip-existing: true

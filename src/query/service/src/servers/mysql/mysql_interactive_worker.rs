@@ -446,7 +446,7 @@ impl<W: AsyncWrite + Send + Unpin> InteractiveWorker<W> {
         InteractiveWorker::<W> {
             base: InteractiveWorkerBase::<W> {
                 session,
-                generic_hold: PhantomData::default(),
+                generic_hold: PhantomData,
             },
             salt: scramble,
             version: format!("{}-{}", MYSQL_VERSION, *DATABEND_COMMIT_VERSION),

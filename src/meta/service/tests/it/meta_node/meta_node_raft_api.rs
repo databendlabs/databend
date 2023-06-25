@@ -46,7 +46,7 @@ async fn test_meta_node_dumping_snapshot_does_not_block_append_entries() -> anyh
     info!("--- block dumping snapshot from state machine for 5 seconds");
     {
         let mut sm = mn1.sto.get_state_machine().await;
-        let mut blocking_config = sm.blocking_config_mut();
+        let blocking_config = sm.blocking_config_mut();
         blocking_config.dump_snapshot = Duration::from_secs(5);
     }
 
@@ -91,7 +91,7 @@ async fn test_meta_node_serializing_snapshot_does_not_block_append_entries() -> 
     info!("--- block dumping snapshot from state machine for 5 seconds");
     {
         let mut sm = mn1.sto.get_state_machine().await;
-        let mut blocking_config = sm.blocking_config_mut();
+        let blocking_config = sm.blocking_config_mut();
         blocking_config.serde_snapshot = Duration::from_secs(5);
     }
 

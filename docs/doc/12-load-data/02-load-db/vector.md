@@ -1,8 +1,5 @@
 ---
-title: Integrating Databend as a Sink for Vector
-sidebar_label: Vector
-description:
-  Integrating Databend as a Sink for Vector.
+title: Vector
 ---
 
 import FunctionDescription from '@site/src/components/FunctionDescription';

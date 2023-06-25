@@ -1,8 +1,5 @@
 ---
-title: Using Databend as a Destination for Airbyte (Alpha)
-sidebar_label: Airbyte
-description:
-  Using Databend as an Airbyte destination.
+title: Airbyte
 ---
 
 <p align="center">
