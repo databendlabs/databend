@@ -53,7 +53,6 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::warn;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
@@ -91,12 +90,10 @@ impl Interpreter for DeleteInterpreter {
     #[tracing::instrument(level = "debug", name = "delete_interpreter_execute", skip(self), fields(ctx.id = self.ctx.get_id().as_str()))]
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        warn!("DeleteInterpreter execute2");
         let is_distributed = !self.ctx.get_cluster().is_empty();
         let catalog_name = self.plan.catalog_name.as_str();
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
-
         let tbl = self
             .ctx
             .get_catalog(catalog_name)?
@@ -205,8 +202,6 @@ impl Interpreter for DeleteInterpreter {
                     tbl.name(),
                     tbl.get_table_info().engine(),
                 )))?;
-        let ss = fuse_table.read_table_snapshot().await?;
-        warn!("ss is none: {}", ss.is_none());
         let mut build_res = PipelineBuildResult::create();
         let query_row_id_col = !self.plan.subquery_desc.is_empty();
         if let Some((partitions, snapshot)) = fuse_table
@@ -230,14 +225,12 @@ impl Interpreter for DeleteInterpreter {
                 is_distributed,
                 query_row_id_col,
             )?;
-            warn!("start build pipeline for delete");
             if is_distributed {
                 build_res = build_distributed_pipeline(&self.ctx, &physical_plan, false).await?
             } else {
                 build_res = build_local_pipeline(&self.ctx, &physical_plan, false).await?
             }
         }
-        warn!("finish build pipeline for delete");
         Ok(build_res)
     }
 }
