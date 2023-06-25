@@ -26,6 +26,7 @@ use common_exception::Result;
 use common_expression::infer_table_schema;
 use common_expression::BlockThresholds;
 use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
@@ -34,6 +35,10 @@ use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
+use common_sql::executor::DistributedCopyIntoTableFromText;
+use common_sql::executor::Exchange;
+use common_sql::executor::FragmentKind;
+use common_sql::executor::PhysicalPlan;
 use common_sql::plans::CopyIntoTableMode;
 use common_sql::plans::CopyIntoTablePlan;
 use common_storage::StageFileInfo;
@@ -45,12 +50,14 @@ use tracing::error;
 use tracing::info;
 
 use crate::interpreters::common::append2table;
+use crate::interpreters::common::append2table_without_commit;
 use crate::interpreters::common::check_deduplicate_label;
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
 use crate::pipelines::processors::transforms::TransformAddConstColumns;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::PipelineBuildResult;
+use crate::schedulers::build_distributed_pipeline;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::CopyPlan;
@@ -132,7 +139,7 @@ impl CopyInterpreter {
             self.ctx.clone(),
             table,
             data_schema,
-            &mut build_res,
+            &mut build_res.main_pipeline,
             None,
             false,
             AppendMode::Normal,
@@ -184,6 +191,66 @@ impl CopyInterpreter {
     fn set_status(&self, status: &str) {
         self.ctx.set_status_info(status);
         info!(status);
+    }
+
+    #[async_backtrace::framed]
+    async fn transform_copy_plan_distributed(
+        &self,
+        plan: &CopyIntoTablePlan,
+    ) -> Result<(Option<PhysicalPlan>, bool)> {
+        let ctx = self.ctx.clone();
+        let to_table = ctx
+            .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
+            .await?;
+        let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
+        let files = plan.collect_files(&table_ctx).await?;
+        if files.is_empty() {
+            return Ok((None, true));
+        }
+        let mut stage_table_info = plan.stage_table_info.clone();
+        stage_table_info.files_to_copy = Some(files.clone());
+        let stage_table = StageTable::try_create(plan.stage_table_info.clone())?;
+        let read_source_plan = {
+            stage_table
+                .read_plan_with_catalog(
+                    self.ctx.clone(),
+                    plan.catalog_name.to_string(),
+                    None,
+                    None,
+                    false,
+                )
+                .await?
+        };
+        // we need to make sure every query-node can read data, if the splits
+        // is less than the number of cluster nodes, we should let it go
+        // standalone execute way.
+        if self.ctx.get_cluster().nodes.len() > read_source_plan.parts.len() {
+            return Ok((None, true));
+        }
+        Ok((
+            Some(PhysicalPlan::DistributedCopyIntoTableFromText(
+                DistributedCopyIntoTableFromText {
+                    // TODO(leiysky): we reuse the id of exchange here,
+                    // which is not correct. We should generate a new id for insert.
+                    plan_id: 0,
+                    catalog_name: plan.catalog_name.clone(),
+                    database_name: plan.database_name.clone(),
+                    table_name: plan.table_name.clone(),
+                    required_values_schema: plan.required_values_schema.clone(),
+                    values_consts: plan.values_consts.clone(),
+                    required_source_schema: plan.required_source_schema.clone(),
+                    write_mode: plan.write_mode,
+                    validation_mode: plan.validation_mode.clone(),
+                    force: plan.force,
+                    stage_table_info: plan.stage_table_info.clone(),
+                    source: Box::new(read_source_plan),
+                    thresholds: to_table.get_block_thresholds(),
+                    files,
+                    table_info: to_table.get_table_info().clone(),
+                },
+            )),
+            false,
+        ))
     }
 
     #[async_backtrace::framed]
@@ -252,7 +319,6 @@ impl CopyInterpreter {
             if files.is_empty() {
                 return Ok(build_res);
             }
-
             self.build_read_stage(
                 &mut build_res.main_pipeline,
                 plan,
@@ -263,130 +329,17 @@ impl CopyInterpreter {
             (build_res, plan.required_source_schema.clone(), files)
         };
 
-        debug!("source schema:{:?}", source_schema);
-        debug!("required source schema:{:?}", plan.required_source_schema);
-        debug!("required values schema:{:?}", plan.required_values_schema);
-
-        if source_schema != plan.required_source_schema {
-            // only parquet need cast
-            let func_ctx = ctx.get_function_context()?;
-            build_res.main_pipeline.add_transform(
-                |transform_input_port, transform_output_port| {
-                    TransformCastSchema::try_create(
-                        transform_input_port,
-                        transform_output_port,
-                        source_schema.clone(),
-                        plan.required_source_schema.clone(),
-                        func_ctx.clone(),
-                    )
-                },
-            )?;
-        }
-
-        if !plan.values_consts.is_empty() {
-            fill_const_columns(
-                ctx.clone(),
-                &mut build_res.main_pipeline,
-                source_schema,
-                plan.required_values_schema.clone(),
-                plan.values_consts.clone(),
-            )?;
-        }
-
-        let stage_info_clone = plan.stage_table_info.stage_info.clone();
-        let force = plan.force;
-        let write_mode = plan.write_mode;
-        let mut purge = true;
-        match write_mode {
-            CopyIntoTableMode::Insert { overwrite } => {
-                append2table(
-                    ctx.clone(),
-                    to_table,
-                    plan.required_values_schema.clone(),
-                    &mut build_res,
-                    None,
-                    overwrite,
-                    AppendMode::Copy,
-                )?;
-            }
-            CopyIntoTableMode::Copy => {
-                if !stage_info_clone.copy_options.purge {
-                    purge = false;
-                }
-                let copied_files = CopyInterpreter::upsert_copied_files_request(
-                    ctx.clone(),
-                    to_table.clone(),
-                    stage_info_clone.clone(),
-                    files.clone(),
-                    force,
-                )?;
-                append2table(
-                    ctx.clone(),
-                    to_table,
-                    plan.required_values_schema.clone(),
-                    &mut build_res,
-                    copied_files,
-                    false,
-                    AppendMode::Copy,
-                )?;
-            }
-            CopyIntoTableMode::Replace => {}
-        }
-
-        build_res.main_pipeline.set_on_finished(move |may_error| {
-            match may_error {
-                None => {
-                    GlobalIORuntime::instance().block_on(async move {
-                        {
-                            let status =
-                                format!("end of commit, number of copied files:{}", files.len());
-                            ctx.set_status_info(&status);
-                            info!(status);
-                        }
-
-                        // 1. log on_error mode errors.
-                        // todo(ariesdevil): persist errors with query_id
-                        if let Some(error_map) = ctx.get_maximum_error_per_file() {
-                            for (file_name, e) in error_map {
-                                error!(
-                                    "copy(on_error={}): file {} encounter error {},",
-                                    stage_info_clone.copy_options.on_error,
-                                    file_name,
-                                    e.to_string()
-                                );
-                            }
-                        }
-
-                        // 2. Try to purge copied files if purge option is true, if error will skip.
-                        // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-                        if purge {
-                            CopyInterpreter::try_purge_files(
-                                ctx.clone(),
-                                &stage_info_clone,
-                                &files,
-                            )
-                            .await;
-                        }
-
-                        // Status.
-                        {
-                            info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
-                        }
-
-                        Ok(())
-                    })?;
-                }
-                Some(error) => {
-                    error!(
-                        "copy failed, elapsed:{}, reason: {}",
-                        start.elapsed().as_secs(),
-                        error
-                    );
-                }
-            }
-            Ok(())
-        });
-
+        append_data_and_set_finish(
+            &mut build_res.main_pipeline,
+            source_schema,
+            Some(plan),
+            None,
+            ctx,
+            to_table,
+            files,
+            start,
+            true,
+        )?;
         Ok(build_res)
     }
 
@@ -454,8 +407,56 @@ impl Interpreter for CopyInterpreter {
         }
 
         match &self.plan {
-            CopyPlan::IntoTable(plan) => self.build_copy_into_table_pipeline(plan).await,
+            CopyPlan::IntoTable(plan) => {
+                if plan.enable_distributed {
+                    let (distributed_plan_op, empty_files) =
+                        self.transform_copy_plan_distributed(plan).await?;
+                    if empty_files {
+                        return self.build_copy_into_table_pipeline(plan).await;
+                    }
+                    let distributed_plan = distributed_plan_op.unwrap();
 
+                    // add exchange plan node to enable distributed
+                    // TODO(leiysky): we reuse the id of exchange here,
+                    // which is not correct. We should generate a new id for insert.
+                    let exchange_plan = PhysicalPlan::Exchange(Exchange {
+                        plan_id: 0,
+                        input: Box::new(distributed_plan.clone()),
+                        kind: FragmentKind::Merge,
+                        keys: Vec::new(),
+                    });
+                    let mut build_res =
+                        build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
+                    match distributed_plan {
+                        PhysicalPlan::DistributedCopyIntoTableFromText(distributed_plan) => {
+                            let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
+                            let to_table =
+                                catalog.get_table_by_info(&distributed_plan.table_info)?;
+                            let copied_files = CopyInterpreter::upsert_copied_files_request(
+                                self.ctx.clone(),
+                                to_table.clone(),
+                                distributed_plan.stage_table_info.stage_info.clone(),
+                                distributed_plan.files.clone(),
+                                distributed_plan.force,
+                            )?;
+                            let mut overwrite_ = false;
+                            if let CopyIntoTableMode::Insert { overwrite } = plan.write_mode {
+                                overwrite_ = overwrite;
+                            }
+                            to_table.commit_insertion(
+                                self.ctx.clone(),
+                                &mut build_res.main_pipeline,
+                                copied_files,
+                                overwrite_,
+                            )?
+                        }
+                        _ => unreachable!(),
+                    }
+                    Ok(build_res)
+                } else {
+                    self.build_copy_into_table_pipeline(plan).await
+                }
+            }
             CopyPlan::IntoStage {
                 stage, from, path, ..
             } => self.build_copy_into_stage_pipeline(stage, path, from).await,
@@ -481,5 +482,181 @@ fn fill_const_columns(
             const_values.clone(),
         )
     })?;
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn append_data_and_set_finish(
+    main_pipeline: &mut Pipeline,
+    source_schema: Arc<DataSchema>,
+    plan1: Option<&CopyIntoTablePlan>,
+    plan2: Option<&DistributedCopyIntoTableFromText>,
+    ctx: Arc<QueryContext>,
+    to_table: Arc<dyn Table>,
+    files: Vec<StageFileInfo>,
+    start: Instant,
+    use_commit: bool,
+) -> Result<()> {
+    let plan_required_source_schema: &DataSchemaRef;
+    let plan_required_values_schema: &DataSchemaRef;
+    let plan_values_consts: &Vec<Scalar>;
+    let plan_stage_table_info: &StageTableInfo;
+    let plan_force: &bool;
+    let plan_write_mode: &CopyIntoTableMode;
+
+    if let Some(plan) = plan1 {
+        plan_required_source_schema = &plan.required_source_schema;
+        plan_required_values_schema = &plan.required_values_schema;
+        plan_values_consts = &plan.values_consts;
+        plan_stage_table_info = &plan.stage_table_info;
+        plan_force = &plan.force;
+        plan_write_mode = &plan.write_mode;
+    } else if let Some(plan) = plan2 {
+        plan_required_source_schema = &plan.required_source_schema;
+        plan_required_values_schema = &plan.required_values_schema;
+        plan_values_consts = &plan.values_consts;
+        plan_stage_table_info = &plan.stage_table_info;
+        plan_force = &plan.force;
+        plan_write_mode = &plan.write_mode;
+    } else {
+        unreachable!();
+    }
+    debug!("source schema:{:?}", source_schema);
+    debug!("required source schema:{:?}", plan_required_source_schema);
+    debug!("required values schema:{:?}", plan_required_values_schema);
+
+    if source_schema != *plan_required_source_schema {
+        // only parquet need cast
+        let func_ctx = ctx.get_function_context()?;
+        main_pipeline.add_transform(|transform_input_port, transform_output_port| {
+            TransformCastSchema::try_create(
+                transform_input_port,
+                transform_output_port,
+                source_schema.clone(),
+                plan_required_source_schema.clone(),
+                func_ctx.clone(),
+            )
+        })?;
+    }
+
+    if !plan_values_consts.is_empty() {
+        fill_const_columns(
+            ctx.clone(),
+            main_pipeline,
+            source_schema,
+            plan_required_values_schema.clone(),
+            plan_values_consts.clone(),
+        )?;
+    }
+
+    let stage_info_clone = plan_stage_table_info.stage_info.clone();
+    let write_mode = plan_write_mode;
+    let mut purge = true;
+    match write_mode {
+        CopyIntoTableMode::Insert { overwrite } => {
+            if use_commit {
+                append2table(
+                    ctx.clone(),
+                    to_table,
+                    plan_required_values_schema.clone(),
+                    main_pipeline,
+                    None,
+                    *overwrite,
+                    AppendMode::Copy,
+                )?;
+            } else {
+                append2table_without_commit(
+                    ctx.clone(),
+                    to_table,
+                    plan_required_values_schema.clone(),
+                    main_pipeline,
+                    AppendMode::Copy,
+                )?
+            }
+        }
+        CopyIntoTableMode::Copy => {
+            if !stage_info_clone.copy_options.purge {
+                purge = false;
+            }
+
+            if use_commit {
+                let copied_files = CopyInterpreter::upsert_copied_files_request(
+                    ctx.clone(),
+                    to_table.clone(),
+                    stage_info_clone.clone(),
+                    files.clone(),
+                    *plan_force,
+                )?;
+                append2table(
+                    ctx.clone(),
+                    to_table,
+                    plan_required_values_schema.clone(),
+                    main_pipeline,
+                    copied_files,
+                    false,
+                    AppendMode::Copy,
+                )?;
+            } else {
+                append2table_without_commit(
+                    ctx.clone(),
+                    to_table,
+                    plan_required_values_schema.clone(),
+                    main_pipeline,
+                    AppendMode::Copy,
+                )?
+            }
+        }
+        CopyIntoTableMode::Replace => {}
+    }
+
+    main_pipeline.set_on_finished(move |may_error| {
+        match may_error {
+            None => {
+                GlobalIORuntime::instance().block_on(async move {
+                    {
+                        let status =
+                            format!("end of commit, number of copied files:{}", files.len());
+                        ctx.set_status_info(&status);
+                        info!(status);
+                    }
+
+                    // 1. log on_error mode errors.
+                    // todo(ariesdevil): persist errors with query_id
+                    if let Some(error_map) = ctx.get_maximum_error_per_file() {
+                        for (file_name, e) in error_map {
+                            error!(
+                                "copy(on_error={}): file {} encounter error {},",
+                                stage_info_clone.copy_options.on_error,
+                                file_name,
+                                e.to_string()
+                            );
+                        }
+                    }
+
+                    // 2. Try to purge copied files if purge option is true, if error will skip.
+                    // If a file is already copied(status with AlreadyCopied) we will try to purge them.
+                    if purge {
+                        CopyInterpreter::try_purge_files(ctx.clone(), &stage_info_clone, &files)
+                            .await;
+                    }
+
+                    // Status.
+                    {
+                        info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                    }
+
+                    Ok(())
+                })?;
+            }
+            Some(error) => {
+                error!(
+                    "copy failed, elapsed:{}, reason: {}",
+                    start.elapsed().as_secs(),
+                    error
+                );
+            }
+        }
+        Ok(())
+    });
     Ok(())
 }

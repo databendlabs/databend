@@ -30,6 +30,7 @@ use crate::optimizer::runtime_filter::try_add_runtime_filter_nodes;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
+use crate::plans::CopyIntoTablePlan;
 use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::BindContext;
@@ -131,7 +132,28 @@ pub fn optimize(
                         from: Box::new(optimize(ctx, opt_ctx, *from)?),
                     }
                 }
-                into_table => into_table,
+                CopyPlan::NoFileToCopy => *v,
+                CopyPlan::IntoTable(into_table) => match into_table.query {
+                    Some(_) => CopyPlan::IntoTable(into_table),
+                    None => CopyPlan::IntoTable(CopyIntoTablePlan {
+                        catalog_name: into_table.catalog_name,
+                        database_name: into_table.database_name,
+                        table_name: into_table.table_name,
+
+                        required_values_schema: into_table.required_values_schema,
+                        values_consts: into_table.values_consts,
+                        required_source_schema: into_table.required_source_schema,
+
+                        write_mode: into_table.write_mode,
+                        validation_mode: into_table.validation_mode,
+                        force: into_table.force,
+
+                        stage_table_info: into_table.stage_table_info,
+                        query: into_table.query,
+
+                        enable_distributed: opt_ctx.config.enable_distributed_optimization,
+                    }),
+                },
             })))
         }
         // Passthrough statements

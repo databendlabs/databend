@@ -19,6 +19,7 @@ use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::executor::DeletePartial;
+use common_sql::executor::DistributedCopyIntoTableFromText;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -163,6 +164,7 @@ impl PlanFragment {
 
         Ok(fragment_actions)
     }
+
     fn redistribute_delete_leaf(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
         let plan = match &self.plan {
             PhysicalPlan::ExchangeSink(plan) => plan,
@@ -204,6 +206,8 @@ impl PlanFragment {
         let mut collect_read_source = |plan: &PhysicalPlan| {
             if let PhysicalPlan::TableScan(scan) = plan {
                 source.push(*scan.source.clone())
+            } else if let PhysicalPlan::DistributedCopyIntoTableFromText(distributed_plan) = plan {
+                source.push(*distributed_plan.source.clone())
             }
         };
 
@@ -238,6 +242,31 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
             stat_info: plan.stat_info.clone(),
             internal_column: plan.internal_column.clone(),
         }))
+    }
+
+    fn replace_copy_into_table_from_text(
+        &mut self,
+        plan: &DistributedCopyIntoTableFromText,
+    ) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DistributedCopyIntoTableFromText(
+            DistributedCopyIntoTableFromText {
+                plan_id: plan.plan_id,
+                catalog_name: plan.catalog_name.clone(),
+                database_name: plan.database_name.clone(),
+                table_name: plan.table_name.clone(),
+                required_values_schema: plan.required_values_schema.clone(),
+                values_consts: plan.values_consts.clone(),
+                required_source_schema: plan.required_source_schema.clone(),
+                write_mode: plan.write_mode,
+                validation_mode: plan.validation_mode.clone(),
+                force: plan.force,
+                stage_table_info: plan.stage_table_info.clone(),
+                source: Box::new(self.source.clone()),
+                thresholds: plan.thresholds,
+                files: plan.files.clone(),
+                table_info: plan.table_info.clone(),
+            },
+        ))
     }
 }
 

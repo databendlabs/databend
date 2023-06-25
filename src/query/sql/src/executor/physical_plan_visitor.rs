@@ -19,6 +19,7 @@ use super::AggregateFinal;
 use super::AggregatePartial;
 use super::DeleteFinal;
 use super::DeletePartial;
+use super::DistributedCopyIntoTableFromText;
 use super::DistributedInsertSelect;
 use super::EvalScalar;
 use super::Exchange;
@@ -63,6 +64,9 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
             PhysicalPlan::DeleteFinal(plan) => self.replace_delete_final(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
+            PhysicalPlan::DistributedCopyIntoTableFromText(plan) => {
+                self.replace_copy_into_table_from_text(plan)
+            }
         }
     }
 
@@ -276,6 +280,13 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
+    fn replace_copy_into_table_from_text(
+        &mut self,
+        plan: &DistributedCopyIntoTableFromText,
+    ) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DistributedCopyIntoTableFromText(plan.clone()))
+    }
+
     fn replace_insert_select(&mut self, plan: &DistributedInsertSelect) -> Result<PhysicalPlan> {
         let input = self.replace(&plan.input)?;
 
@@ -393,6 +404,7 @@ impl PhysicalPlan {
                 PhysicalPlan::ProjectSet(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
+                PhysicalPlan::DistributedCopyIntoTableFromText(_) => {}
                 PhysicalPlan::RuntimeFilterSource(plan) => {
                     Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
