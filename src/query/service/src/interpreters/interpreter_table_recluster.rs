@@ -28,6 +28,8 @@ use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use crate::sql::plans::ReclusterTablePlan;
 
+const MAX_RECLUSTER_TIMES: usize = 1000;
+
 pub struct ReclusterTableInterpreter {
     ctx: Arc<QueryContext>,
     plan: ReclusterTablePlan,
@@ -111,7 +113,7 @@ impl Interpreter for ReclusterTableInterpreter {
                 tracing::info!(status);
             }
 
-            if !plan.is_final {
+            if !plan.is_final || times >= MAX_RECLUSTER_TIMES {
                 break;
             }
         }
