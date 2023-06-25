@@ -205,7 +205,6 @@ impl Table for StageTable {
             projection,
         )?);
         tracing::debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
-        println!("read data at {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         Ok(())
     }

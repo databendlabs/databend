@@ -1,37 +1,37 @@
-statment ok;
+statement ok
 create stage st FILE_FORMAT = (TYPE = CSV);
 
-stagement ok;
+statement ok
 create table table_random(a int,b string,c string) ENGINE = Random;
 
-statement ok;
+statement ok
 copy into @st from (select a,b,c from table_random limit 100000000);
 
-statement ok;
+statement ok
 copy into @st from (select a,b,c from table_random limit 100000000);
 
-statement ok;
+statement ok
 copy into @st from (select a,b,c from table_random limit 100000000);
 
-statement ok;
+statement ok
 copy into @st from (select a,b,c from table_random limit 100000000);
 
-statement ok;
+statement ok
 copy into @st from (select a,b,c from table_random limit 100000000);
 
-statement ok;
+statement ok
 copy into @st from (select a,b,c from table_random limit 100000000);
 
-statement ok;
+statement ok
 copy into @st from (select a,b,c from table_random limit 100000000);
 
-statement ok;
+statement ok
 copy into @st from (select a,b,c from table_random limit 100000000);
 
-statement ok;
+statement ok
 create table t(a int,b string,c string);
 
-statement ok;
+statement ok
 copy into t from @s1 force = true;
 
 query I
@@ -39,7 +39,7 @@ select count(*) from t;
 ----
 800000000
 
-statement ok;
+statement ok
 copy into t from @s1 force = true;
 
 query I
