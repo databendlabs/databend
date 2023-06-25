@@ -707,7 +707,7 @@ impl FallbackKey {
     }
 }
 
-#[cfg(all(any(target_arch = "x86_64"), target_feature = "sse4.2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse4.2"))]
 impl PartialEq for FallbackKey {
     fn eq(&self, other: &Self) -> bool {
         if self.hash == other.hash {

@@ -193,7 +193,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "ceil",
                     |_, _| FunctionDomain::Full,
-                    |val, _| (val.as_(): F64).ceil(),
+                    |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).ceil(),
                 );
             }
         })
@@ -225,7 +225,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "exp",
                     |_, _| FunctionDomain::Full,
-                    |val, _| (val.as_(): F64).exp(),
+                    |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).exp(),
                 );
             }
         })
@@ -249,7 +249,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "round",
                     |_, _| FunctionDomain::Full,
-                    |val, _| (val.as_(): F64).round(),
+                    |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).round(),
                 );
             }
         });
@@ -263,13 +263,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                         |val, to, _| match to.cmp(&0) {
                             Ordering::Greater => {
                                 let z = 10_f64.powi(if to > 30 { 30 } else { to as i32 });
-                                (val.as_(): F64 * z).round() / z
+                                (F64::from(AsPrimitive::<f64>::as_(val)) * z).round() / z
                             }
                             Ordering::Less => {
                                 let z = 10_f64.powi(if to < -30 { 30 } else { -to as i32 });
-                                (val.as_(): F64 / z).round() * z
+                                (F64::from(AsPrimitive::<f64>::as_(val)) / z).round() * z
                             }
-                            Ordering::Equal => (val.as_(): F64).round(),
+                            Ordering::Equal => (F64::from(AsPrimitive::<f64>::as_(val))).round(),
                         },
                     );
             }
@@ -280,7 +280,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "truncate",
                     |_, _| FunctionDomain::Full,
-                    |val, _| (val.as_(): F64).trunc(),
+                    |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).trunc(),
                 );
             }
         });
@@ -294,13 +294,13 @@ pub fn register(registry: &mut FunctionRegistry) {
                         |val, to, _| match to.cmp(&0) {
                             Ordering::Greater => {
                                 let z = 10_f64.powi(if to > 30 { 30 } else { to as i32 });
-                                (val.as_(): F64 * z).trunc() / z
+                                (F64::from(AsPrimitive::<f64>::as_(val)) * z).trunc() / z
                             }
                             Ordering::Less => {
                                 let z = 10_f64.powi(if to < -30 { 30 } else { -to as i32 });
-                                (val.as_(): F64 / z).trunc() * z
+                                (F64::from(AsPrimitive::<f64>::as_(val)) / z).trunc() * z
                             }
-                            Ordering::Equal => (val.as_(): F64).trunc(),
+                            Ordering::Equal => (F64::from(AsPrimitive::<f64>::as_(val))).trunc(),
                         },
                     );
             }
@@ -311,7 +311,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "sqrt",
                     |_, _| FunctionDomain::Full,
-                    |val, _| (val.as_(): F64).sqrt(),
+                    |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).sqrt(),
                 );
             }
         });
@@ -321,7 +321,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<F64>, _, _>(
                     "cbrt",
                     |_, _| FunctionDomain::Full,
-                    |val, _| (val.as_(): F64).cbrt(),
+                    |val, _| (F64::from(AsPrimitive::<f64>::as_(val))).cbrt(),
                 );
             }
         });
@@ -384,7 +384,7 @@ pub fn register(registry: &mut FunctionRegistry) {
                 registry.register_1_arg::<NumberType<NUM_TYPE>, NumberType<i64>, _, _>(
                     "factorial",
                     |_, _| FunctionDomain::Full,
-                    |val, _| factorial(val.as_(): i64),
+                    |val, _| factorial(AsPrimitive::<i64>::as_(val)),
                 );
             }
         })

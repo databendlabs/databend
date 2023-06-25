@@ -15,8 +15,8 @@
 #![allow(clippy::uninlined_format_args)]
 #![feature(type_alias_impl_trait)]
 #![feature(io_error_other)]
-#![feature(once_cell)]
 #![feature(let_chains)]
+#![feature(impl_trait_in_assoc_type)]
 
 mod constants;
 mod fuse_lazy_part;

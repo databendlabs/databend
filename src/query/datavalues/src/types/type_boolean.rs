@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use super::data_type::DataType;
-use super::type_id::TypeID;
 pub use crate::prelude::*;
 
 #[derive(Default, Clone, Hash, serde::Deserialize, serde::Serialize)]
