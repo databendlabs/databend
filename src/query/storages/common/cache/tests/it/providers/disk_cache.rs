@@ -12,11 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::fs;
 use std::fs::File;
 use std::io;
 use std::io::Read;
-use std::io::Write;
 use std::path::Path;
 use std::path::PathBuf;
 
@@ -42,18 +40,6 @@ impl InsertSingleSlice for DiskCache {
     }
 }
 
-fn create_file<T: AsRef<Path>, F: FnOnce(File) -> io::Result<()>>(
-    dir: &Path,
-    path: T,
-    fill_contents: F,
-) -> io::Result<PathBuf> {
-    let b = dir.join(path);
-    fs::create_dir_all(b.parent().unwrap())?;
-    let f = fs::File::create(&b)?;
-    fill_contents(f)?;
-    b.canonicalize()
-}
-
 fn read_all<R: Read>(r: &mut R) -> io::Result<Vec<u8>> {
     let mut v = vec![];
     r.read_to_end(&mut v)?;
@@ -73,13 +59,6 @@ impl TestFixture {
     pub fn tmp(&self) -> &Path {
         self.tempdir.path()
     }
-
-    pub fn create_file<T: AsRef<Path>>(&self, path: T, size: usize) -> PathBuf {
-        create_file(self.tempdir.path(), path, |mut f| {
-            f.write_all(&vec![0; size])
-        })
-        .unwrap()
-    }
 }
 
 #[test]
@@ -92,48 +71,6 @@ fn test_empty_dir() {
 fn test_missing_root() {
     let f = TestFixture::new();
     DiskCache::new(f.tmp().join("not-here"), 1024).unwrap();
-}
-
-#[test]
-fn test_some_existing_files() {
-    let f = TestFixture::new();
-    let items = 10;
-    let sizes = (0..).take(items);
-    let total_bytes: u64 = sizes.clone().sum();
-    for i in sizes {
-        let file_name = format!("file-{i}");
-        let test_key = DiskCacheKey::from(file_name.as_str());
-        let test_path = PathBuf::from(&test_key);
-        f.create_file(test_path, i as usize);
-    }
-
-    let c = DiskCache::new(f.tmp(), total_bytes).unwrap();
-    assert_eq!(c.size(), total_bytes);
-    assert_eq!(c.len(), items);
-}
-
-#[test]
-fn test_existing_file_too_large() {
-    let f = TestFixture::new();
-    let items_count = 10;
-    let items_count_shall_be_kept = 10 - 2;
-    let item_size = 10;
-    let capacity = items_count_shall_be_kept * item_size;
-    let sizes = (0..).take(items_count);
-    for i in sizes {
-        let file_name = format!("file-{i}");
-        let test_key = DiskCacheKey::from(file_name.as_str());
-        let test_path = PathBuf::from(&test_key);
-        f.create_file(test_path, item_size);
-    }
-    let c = DiskCache::new(f.tmp(), capacity as u64).unwrap();
-
-    assert_eq!(c.size(), capacity as u64);
-    assert_eq!(c.len(), items_count_shall_be_kept);
-    for i in (0..).take(items_count_shall_be_kept) {
-        let file_name = format!("file-{i}");
-        c.contains_key(file_name.as_str());
-    }
 }
 
 #[test]

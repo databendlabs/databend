@@ -71,9 +71,6 @@ from
 103
 103
 
-statement ok
-set enable_cbo = 0;
-
 query I
 select
     c_custkey, count(o_orderkey) as c_count
@@ -263,9 +260,6 @@ order by o_custkey
 2
 2
 2
-
-statement ok
-set enable_cbo = 1;
 
 query I
 select
