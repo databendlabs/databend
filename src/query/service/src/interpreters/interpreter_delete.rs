@@ -16,7 +16,6 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::Partitions;
 use common_catalog::table::DeletionFilters;
 use common_exception::ErrorCode;
@@ -54,7 +53,6 @@ use common_storages_factory::Table;
 use common_storages_fuse::FuseTable;
 use futures_util::TryStreamExt;
 use storages_common_table_meta::meta::TableSnapshot;
-use table_lock::TableLockHandlerWrapper;
 
 use crate::interpreters::Interpreter;
 use crate::interpreters::SelectInterpreter;
@@ -98,20 +96,6 @@ impl Interpreter for DeleteInterpreter {
         let tbl_name = self.plan.table_name.as_str();
 
         let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-        let table_info = tbl.get_table_info().clone();
-
-        // Add table lock heartbeat.
-        let handler = TableLockHandlerWrapper::instance(self.ctx.clone());
-        let mut heartbeat = handler
-            .try_lock(self.ctx.clone(), table_info.clone())
-            .await?;
-
-        // refresh table.
-        let tbl = self
-            .ctx
-            .get_catalog(catalog_name)?
-            .get_table(self.ctx.get_tenant().as_str(), db_name, tbl_name)
-            .await?;
 
         let selection = if !self.plan.subquery_desc.is_empty() {
             let support_row_id = tbl.support_row_id_column();
@@ -244,18 +228,6 @@ impl Interpreter for DeleteInterpreter {
             } else {
                 build_res = build_local_pipeline(&self.ctx, &physical_plan, false).await?
             }
-        }
-        if build_res.main_pipeline.is_empty() {
-            heartbeat.shutdown().await?;
-        } else {
-            build_res.main_pipeline.set_on_finished(move |may_error| {
-                // shutdown table lock heartbeat.
-                GlobalIORuntime::instance().block_on(async move { heartbeat.shutdown().await })?;
-                match may_error {
-                    None => Ok(()),
-                    Some(error_code) => Err(error_code.clone()),
-                }
-            });
         }
 
         Ok(build_res)
