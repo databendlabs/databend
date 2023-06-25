@@ -27,7 +27,6 @@ use storages_common_table_meta::meta::ColumnStatistics;
 use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
-use tracing::log::warn;
 use uuid::Uuid;
 
 use crate::metrics::metrics_inc_commit_mutation_resolvable_conflict;
@@ -136,14 +135,12 @@ impl SnapshotGenerator for MutationGenerator {
         cluster_key_meta: Option<ClusterKey>,
         previous: Option<Arc<TableSnapshot>>,
     ) -> Result<TableSnapshot> {
-        warn!("generate_new_snapshot");
         let previous =
             previous.unwrap_or_else(|| Arc::new(TableSnapshot::new_empty_snapshot(schema.clone())));
 
         match self.detect_conflicts(&self.base_snapshot, &previous)? {
             Conflict::Unresolvable => {
                 metrics_inc_commit_mutation_unresolvable_conflict();
-                warn!("Conflict::Unresolvable");
                 Err(ErrorCode::StorageOther(
                     "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
                 ))
@@ -175,7 +172,6 @@ impl SnapshotGenerator for MutationGenerator {
             }
             Conflict::ResolvableDelete => {
                 tracing::info!("resolvable conflicts detected");
-                warn!("resolvable date mutate conflicts detected");
                 metrics_inc_commit_mutation_resolvable_conflict();
                 let DeleteConflictResolveContext {
                     removed_segments,
@@ -186,10 +182,6 @@ impl SnapshotGenerator for MutationGenerator {
                     ConflictResolveContext::Delete(ctx) => ctx.as_ref(),
                     _ => unreachable!(),
                 };
-                warn!("removed segments: {:?}", removed_segments);
-                warn!("added segments: {:?}", added_segments);
-                warn!("removed statistics: {:?}", removed_statistics);
-                warn!("added statistics: {:?}", added_statistics);
                 let mut new_segments = previous.segments.clone();
                 new_segments.retain(|x| !removed_segments.contains(x));
                 new_segments.extend(added_segments.iter().cloned());

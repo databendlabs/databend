@@ -97,8 +97,6 @@ impl Interpreter for DeleteInterpreter {
         let db_name = self.plan.database_name.as_str();
         let tbl_name = self.plan.table_name.as_str();
 
-        let tbl = self.ctx.get_table(catalog_name, db_name, tbl_name).await?;
-
         let tbl = self
             .ctx
             .get_catalog(catalog_name)?
