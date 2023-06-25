@@ -638,7 +638,6 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
 }
 
 pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
-    warn!("start delete");
     let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone())?;
     delete_interpreter.execute(ctx).await?;
     Ok(())

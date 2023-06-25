@@ -45,7 +45,6 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     if let Plan::Delete(delete) = plan {
         do_deletion(ctx.clone(), *delete).await?;
     }
-    warn!("delete done");
 
     // check count
     let expected = vec![

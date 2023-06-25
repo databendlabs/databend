@@ -81,7 +81,6 @@ use common_storages_fuse::operations::MutationKind;
 use common_storages_fuse::operations::SerializeDataTransform;
 use common_storages_fuse::FuseTable;
 use petgraph::matrix_graph::Zero;
-use tracing::log::warn;
 
 use super::processors::transforms::FrameBound;
 use super::processors::transforms::WindowFunctionInfo;
@@ -247,7 +246,6 @@ impl PipelineBuilder {
     /// |TableMutationAggregator| ---> |CommitSink|
     /// +-----------------------+      +----------+
     fn build_delete_final(&mut self, delete: &DeleteFinal) -> Result<()> {
-        warn!("build_delete_final");
         self.build_pipeline(&delete.input)?;
         let table =
             self.ctx
