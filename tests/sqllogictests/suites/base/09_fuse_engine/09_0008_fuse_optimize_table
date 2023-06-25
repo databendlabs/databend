@@ -591,6 +591,30 @@ select count() from fuse_snapshot('db_09_0008', 't10')
 
 
 statement ok
+create table t11(a int) cluster by(abs(a)) row_per_block=3 
+
+statement ok
+insert into t11 values(-5),(4),(2)
+
+statement ok
+insert into t11 values(1),(0),(3)
+
+query TIIFFT
+select * from clustering_information('db_09_0008','t11')
+----
+(abs(a)) 2 0 1.0 2.0 {"00002":2}
+
+statement ok
+optimize table t11 compact
+
+query TIIFFT
+select * from clustering_information('db_09_0008','t11')
+----
+(abs(a)) 2 0 0.0 1.0 {"00001":2}
+
+
+
+statement ok
 DROP TABLE m
 
 statement ok
@@ -625,6 +649,9 @@ DROP TABLE t9
 
 statement ok
 DROP TABLE t10
+
+statement ok
+DROP TABLE t11
 
 statement ok
 DROP DATABASE db_09_0008
