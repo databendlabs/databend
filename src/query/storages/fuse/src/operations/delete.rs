@@ -47,6 +47,7 @@ use storages_common_pruner::RangePruner;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
+use tracing::log::warn;
 
 use crate::metrics::metrics_inc_deletion_block_range_pruned_nums;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;
@@ -80,6 +81,7 @@ impl FuseTable {
             val
         } else {
             // no snapshot, no deletion
+            warn!("no snapshot, no deletion");
             return Ok(None);
         };
 
@@ -140,6 +142,7 @@ impl FuseTable {
             info.num_whole_block_mutation
         );
         if partitions.is_empty() {
+            warn!("no partitions to be deleted");
             return Ok(None);
         }
         Ok(Some((partitions, snapshot.as_ref().clone())))

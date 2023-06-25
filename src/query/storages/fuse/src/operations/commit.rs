@@ -493,7 +493,7 @@ pub enum Conflict {
     // resolvable conflicts with append only operation
     // the range embedded is the range of segments that are appended in the latest snapshot
     ResolvableAppend(Range<usize>),
-    ResolvableDataMutate,
+    ResolvableDelete,
 }
 
 // wraps a namespace, to clarify the who is detecting conflict

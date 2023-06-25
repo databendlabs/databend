@@ -259,6 +259,7 @@ impl FuseTable {
             };
             Ok(Some(reader.read(&params).await?))
         } else {
+            warn!("no location");
             Ok(None)
         }
     }
@@ -298,6 +299,7 @@ impl FuseTable {
             }
             DatabaseType::NormalDB => {
                 let options = self.table_info.options();
+                warn!("options: {:?}", options);
                 Ok(options
                     .get(OPT_KEY_SNAPSHOT_LOCATION)
                     // for backward compatibility, we check the legacy table option

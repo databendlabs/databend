@@ -21,6 +21,7 @@ use databend_query::test_kits::table_test_fixture::execute_command;
 use databend_query::test_kits::table_test_fixture::execute_query;
 use databend_query::test_kits::table_test_fixture::expects_ok;
 use databend_query::test_kits::table_test_fixture::TestFixture;
+use tracing::warn;
 
 #[tokio::test(flavor = "multi_thread")]
 async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
@@ -44,6 +45,7 @@ async fn test_deletion_mutator_multiple_empty_segments() -> Result<()> {
     if let Plan::Delete(delete) = plan {
         do_deletion(ctx.clone(), *delete).await?;
     }
+    warn!("delete done");
 
     // check count
     let expected = vec![

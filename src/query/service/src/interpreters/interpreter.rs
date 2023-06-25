@@ -21,6 +21,7 @@ use common_exception::Result;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::SendableDataBlockStream;
+use tracing::warn;
 
 use crate::interpreters::InterpreterMetrics;
 use crate::interpreters::InterpreterQueryLog;
@@ -57,7 +58,7 @@ pub trait Interpreter: Sync + Send {
             log_query_finished(&ctx, Some(err.clone()));
             return Err(err);
         }
-
+        warn!("start execute2");
         let mut build_res = match self.execute2().await {
             Ok(build_res) => build_res,
             Err(build_error) => {

@@ -60,6 +60,7 @@ use jsonb::Value as JsonbValue;
 use parking_lot::Mutex;
 use storages_common_table_meta::table::OPT_KEY_DATABASE_ID;
 use tempfile::TempDir;
+use tracing::log::warn;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
@@ -637,6 +638,7 @@ pub async fn analyze_table(fixture: &TestFixture) -> Result<()> {
 }
 
 pub async fn do_deletion(ctx: Arc<QueryContext>, plan: DeletePlan) -> Result<()> {
+    warn!("start delete");
     let delete_interpreter = DeleteInterpreter::try_create(ctx.clone(), plan.clone())?;
     delete_interpreter.execute(ctx).await?;
     Ok(())
