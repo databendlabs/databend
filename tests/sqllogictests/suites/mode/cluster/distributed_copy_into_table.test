@@ -32,7 +32,7 @@ statement ok
 create table t(a int,b string,c string);
 
 statement ok
-copy into t from @s1 force = true;
+copy into t from @st force = true;
 
 query I
 select count(*) from t;
@@ -40,7 +40,7 @@ select count(*) from t;
 80000000
 
 statement ok
-copy into t from @s1 force = true;
+copy into t from @st force = true;
 
 query I
 select count(*) from t;
