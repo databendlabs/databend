@@ -100,6 +100,7 @@ pub struct IndexMeta {
     pub created_on: DateTime<Utc>,
     // if used in CreateIndexReq, this field MUST set to None.
     pub drop_on: Option<DateTime<Utc>>,
+    pub update_on: Option<DateTime<Utc>>,
     pub query: String,
 }
 
@@ -110,6 +111,7 @@ impl Default for IndexMeta {
             index_type: IndexType::default(),
             created_on: Utc::now(),
             drop_on: None,
+            update_on: None,
             query: "".to_string(),
         }
     }
@@ -176,6 +178,14 @@ pub struct GetIndexReply {
     pub index_id: u64,
     pub index_meta: IndexMeta,
 }
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpdateIndexReq {
+    pub index_id: u64,
+    pub index_meta: IndexMeta,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct UpdateIndexReply {}
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListIndexesReq {

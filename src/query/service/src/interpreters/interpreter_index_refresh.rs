@@ -14,6 +14,7 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
@@ -22,6 +23,8 @@ use common_expression::infer_table_schema;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::BLOCK_NAME_COL_NAME;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::UpdateIndexReq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -32,6 +35,7 @@ use common_sql::plans::Plan;
 use common_sql::plans::RefreshIndexPlan;
 use common_sql::plans::RelOperator;
 use common_storages_fuse::operations::AggIndexSink;
+use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
 
 use crate::interpreters::Interpreter;
@@ -72,8 +76,38 @@ impl RefreshIndexInterpreter {
                     .to_string(),
             ))
         } else {
-            Ok(source.remove(0))
+            let mut source = source.remove(0);
+
+            // first, sort the partitions by create_on.
+            source.parts.partitions.sort_by(|p1, p2| {
+                let p1 = FusePartInfo::from_part(p1).unwrap();
+                let p2 = FusePartInfo::from_part(p2).unwrap();
+                p1.create_on.partial_cmp(&p2.create_on).unwrap()
+            });
+
+            // then, find the last refresh position.
+            let last = match source.parts.partitions.binary_search_by(|p| {
+                let fp = FusePartInfo::from_part(p).unwrap();
+                fp.create_on
+                    .partial_cmp(&self.plan.index_meta.update_on)
+                    .unwrap()
+            }) {
+                Ok(i) => i + 1,
+                Err(i) => i,
+            };
+
+            // finally, skip the refreshed partitions.
+            source.parts.partitions = source.parts.partitions.iter().skip(last).cloned().collect();
+
+            Ok(source)
         }
+    }
+
+    fn update_index_meta(&self, read_source: &DataSourcePlan) -> Result<IndexMeta> {
+        let fuse_part = FusePartInfo::from_part(read_source.parts.partitions.last().unwrap())?;
+        let mut index_meta = self.plan.index_meta.clone();
+        index_meta.update_on = fuse_part.create_on;
+        Ok(index_meta)
     }
 }
 
@@ -124,9 +158,7 @@ impl Interpreter for RefreshIndexInterpreter {
         };
 
         let new_read_source = self.get_read_source(&query_plan)?;
-        // TODO(ariesdevil): sort and slice parts with limit
-        // new_read_source.parts.partitions =
-        //     new_read_source.parts.partitions.as_slice()[1..].to_vec();
+        let new_index_meta = self.update_index_meta(&new_read_source)?;
 
         let mut replace_read_source = ReplaceReadSource {
             source: new_read_source,
@@ -194,6 +226,26 @@ impl Interpreter for RefreshIndexInterpreter {
             )
         })?;
 
+        let ctx = self.ctx.clone();
+        let req = UpdateIndexReq {
+            index_id: self.plan.index_id,
+            index_meta: new_index_meta,
+        };
+
+        build_res
+            .main_pipeline
+            .set_on_finished(move |may_error| match may_error {
+                None => GlobalIORuntime::instance()
+                    .block_on(async move { modify_last_update(ctx, req).await }),
+                Some(error_code) => Err(error_code.clone()),
+            });
+
         return Ok(build_res);
     }
+}
+
+async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Result<()> {
+    let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;
+    catalog.update_index(req).await?;
+    Ok(())
 }

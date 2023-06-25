@@ -77,6 +77,10 @@ impl FromToProto for mt::IndexMeta {
                 Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
                 None => None,
             },
+            update_on: match p.update_on {
+                Some(update_on) => Some(DateTime::<Utc>::from_pb(update_on)?),
+                None => None,
+            },
             query: p.query,
         };
         Ok(v)
@@ -91,6 +95,10 @@ impl FromToProto for mt::IndexMeta {
             created_on: self.created_on.to_pb()?,
             drop_on: match self.drop_on {
                 Some(drop_on) => Some(drop_on.to_pb()?),
+                None => None,
+            },
+            update_on: match self.update_on {
+                Some(update_on) => Some(update_on.to_pb()?),
                 None => None,
             },
             query: self.query.clone(),

@@ -50,6 +50,7 @@ fn test_decode_v37_index() -> anyhow::Result<()> {
             index_type,
             created_on,
             drop_on: None,
+            update_on: None,
             query,
         }
     };

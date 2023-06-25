@@ -76,6 +76,7 @@ impl Interpreter for CreateIndexInterpreter {
                 index_type: IndexType::AGGREGATING,
                 created_on: Utc::now(),
                 drop_on: None,
+                update_on: None,
                 query: self.plan.query.clone(),
             },
         };

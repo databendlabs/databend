@@ -80,6 +80,7 @@ async fn create_index(ctx: Arc<QueryContext>, index_name: &str, query: &str) -> 
                 index_type: IndexType::AGGREGATING,
                 created_on: Utc::now(),
                 drop_on: None,
+                update_on: None,
                 query: query.to_string(),
             },
         };
