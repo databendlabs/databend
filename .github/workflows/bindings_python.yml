@@ -139,7 +139,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v3
       - name: Publish to PyPI
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
         uses: pypa/gh-action-pypi-publish@master
         with:
           password: ${{ secrets.pypi_password }}
