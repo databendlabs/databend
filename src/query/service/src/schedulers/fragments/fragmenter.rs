@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
-use common_sql::executor::DistributedCopyIntoTableFromText;
+use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::executor::FragmentKind;
 
 use crate::api::BroadcastExchange;
@@ -139,12 +139,9 @@ impl PhysicalPlanReplacer for Fragmenter {
         Ok(PhysicalPlan::TableScan(plan.clone()))
     }
 
-    fn replace_copy_into_table_from_text(
-        &mut self,
-        plan: &DistributedCopyIntoTableFromText,
-    ) -> Result<PhysicalPlan> {
+    fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
         self.state = State::SelectLeaf;
-        Ok(PhysicalPlan::DistributedCopyIntoTableFromText(plan.clone()))
+        Ok(PhysicalPlan::DistributedCopyIntoTable(plan.clone()))
     }
 
     fn replace_delete_partial(

@@ -54,7 +54,7 @@ use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
-use common_sql::executor::DistributedCopyIntoTableFromText;
+use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -204,15 +204,15 @@ impl PipelineBuilder {
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
             PhysicalPlan::DeleteFinal(delete) => self.build_delete_final(delete),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
-            PhysicalPlan::DistributedCopyIntoTableFromText(distributed_plan) => {
-                self.build_distributed_copy_into_table_from_text(distributed_plan)
+            PhysicalPlan::DistributedCopyIntoTable(distributed_plan) => {
+                self.build_distributed_copy_into_table(distributed_plan)
             }
         }
     }
 
-    fn build_distributed_copy_into_table_from_text(
+    fn build_distributed_copy_into_table(
         &mut self,
-        distributed_plan: &DistributedCopyIntoTableFromText,
+        distributed_plan: &DistributedCopyIntoTable,
     ) -> Result<()> {
         let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
         let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;

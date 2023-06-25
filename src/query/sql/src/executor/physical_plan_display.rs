@@ -21,7 +21,7 @@ use itertools::Itertools;
 use super::AggregateExpand;
 use super::DeleteFinal;
 use super::DeletePartial;
-use super::DistributedCopyIntoTableFromText;
+use super::DistributedCopyIntoTable;
 use super::DistributedInsertSelect;
 use super::ProjectSet;
 use super::RowFetch;
@@ -82,8 +82,8 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
-            PhysicalPlan::DistributedCopyIntoTableFromText(copy_into_table_from_text) => {
-                write!(f, "{}", copy_into_table_from_text)?
+            PhysicalPlan::DistributedCopyIntoTable(copy_into_table) => {
+                write!(f, "{}", copy_into_table)?
             }
         }
 
@@ -365,9 +365,9 @@ impl Display for DeleteFinal {
         write!(f, "DeleteFinal")
     }
 }
-impl Display for DistributedCopyIntoTableFromText {
+impl Display for DistributedCopyIntoTable {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "DistributedCopyIntoTableFromText")
+        write!(f, "DistributedCopyIntoTable")
     }
 }
 

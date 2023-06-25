@@ -35,7 +35,7 @@ use common_meta_app::schema::TableCopiedFileInfo;
 use common_meta_app::schema::UpsertTableCopiedFileReq;
 use common_pipeline_core::Pipeline;
 use common_sql::executor::table_read_plan::ToReadDataSourcePlan;
-use common_sql::executor::DistributedCopyIntoTableFromText;
+use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::executor::Exchange;
 use common_sql::executor::FragmentKind;
 use common_sql::executor::PhysicalPlan;
@@ -228,8 +228,8 @@ impl CopyInterpreter {
             return Ok((None, true));
         }
         Ok((
-            Some(PhysicalPlan::DistributedCopyIntoTableFromText(
-                DistributedCopyIntoTableFromText {
+            Some(PhysicalPlan::DistributedCopyIntoTable(
+                DistributedCopyIntoTable {
                     // TODO(leiysky): we reuse the id of exchange here,
                     // which is not correct. We should generate a new id for insert.
                     plan_id: 0,
@@ -428,7 +428,7 @@ impl Interpreter for CopyInterpreter {
                     let mut build_res =
                         build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
                     match distributed_plan {
-                        PhysicalPlan::DistributedCopyIntoTableFromText(distributed_plan) => {
+                        PhysicalPlan::DistributedCopyIntoTable(distributed_plan) => {
                             let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
                             let to_table =
                                 catalog.get_table_by_info(&distributed_plan.table_info)?;
@@ -490,7 +490,7 @@ pub fn append_data_and_set_finish(
     main_pipeline: &mut Pipeline,
     source_schema: Arc<DataSchema>,
     plan1: Option<&CopyIntoTablePlan>,
-    plan2: Option<&DistributedCopyIntoTableFromText>,
+    plan2: Option<&DistributedCopyIntoTable>,
     ctx: Arc<QueryContext>,
     to_table: Arc<dyn Table>,
     files: Vec<StageFileInfo>,

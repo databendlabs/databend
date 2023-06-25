@@ -300,12 +300,12 @@ fn flatten_plan_node_profile(
             plan_node_profs.push(prof);
         }
         PhysicalPlan::DeletePartial(_) | PhysicalPlan::DeleteFinal(_) => unreachable!(),
-        PhysicalPlan::DistributedCopyIntoTableFromText(_) => {
+        PhysicalPlan::DistributedCopyIntoTable(_) => {
             let prof = PlanNodeProfile {
                 // for distributed_copy_into_plan, the id is useless
                 // we don't need it.
                 id: 0,
-                plan_node_name: "DistributedCopyIntoTableFromText".to_string(),
+                plan_node_name: "DistributedCopyIntoTable".to_string(),
                 description: "".to_string(),
                 // We don't record the time spent on table scan for now
                 cpu_time: Default::default(),
