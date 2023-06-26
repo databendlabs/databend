@@ -64,7 +64,8 @@ impl JoinHashTable {
                     }
 
                     for row_ptr in local_build_indexes.iter() {
-                        outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+                        outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] =
+                            true;
                     }
 
                     occupied = 0;
@@ -93,7 +94,7 @@ impl JoinHashTable {
         }
 
         for row_ptr in local_build_indexes.iter().take(occupied) {
-            outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+            outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
         }
 
         Ok(vec![])
@@ -169,7 +170,8 @@ impl JoinHashTable {
 
                         if all_true {
                             for row_ptr in local_build_indexes.iter() {
-                                outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+                                outer_scan_map[row_ptr.chunk_index as usize]
+                                    [row_ptr.row_index as usize] = true;
                             }
                         } else if !all_false {
                             // Safe to unwrap.
@@ -178,8 +180,8 @@ impl JoinHashTable {
                             while idx < occupied {
                                 let valid = unsafe { validity.get_bit_unchecked(idx) };
                                 if valid {
-                                    outer_scan_map[local_build_indexes[idx].chunk_index]
-                                        [local_build_indexes[idx].row_index] = true;
+                                    outer_scan_map[local_build_indexes[idx].chunk_index as usize]
+                                        [local_build_indexes[idx].row_index as usize] = true;
                                 }
                                 idx += 1;
                             }
@@ -233,7 +235,7 @@ impl JoinHashTable {
 
             if all_true {
                 for row_ptr in local_build_indexes.iter().take(occupied) {
-                    outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+                    outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
                 }
             } else if !all_false {
                 // Safe to unwrap.
@@ -242,8 +244,8 @@ impl JoinHashTable {
                 while idx < occupied {
                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                     if valid {
-                        outer_scan_map[local_build_indexes[idx].chunk_index]
-                            [local_build_indexes[idx].row_index] = true;
+                        outer_scan_map[local_build_indexes[idx].chunk_index as usize]
+                            [local_build_indexes[idx].row_index as usize] = true;
                     }
                     idx += 1;
                 }

@@ -111,8 +111,8 @@ impl AggIndexSink {
 
             self.location_data
                 .entry(location)
-                .and_modify(|idx_vec| idx_vec.push((block_id, i, 1)))
-                .or_insert(vec![(block_id, i, 1)]);
+                .and_modify(|idx_vec| idx_vec.push((block_id as u32, i as u32, 1)))
+                .or_insert(vec![(block_id as u32, i as u32, 1)]);
         }
         let mut result = DataBlock::new(vec![], block.num_rows());
         for index in self.projections.iter() {

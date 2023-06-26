@@ -38,7 +38,6 @@ use common_expression::RemoteExpr;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashMap;
 use common_hashtable::HashtableKeyable;
-use common_hashtable::RowPtr;
 use common_hashtable::StringHashJoinHashMap;
 use common_sql::plans::JoinType;
 use ethnum::U256;
@@ -101,16 +100,18 @@ pub struct JoinHashTable {
     pub(crate) entry_size: Arc<AtomicUsize>,
     pub(crate) raw_entry_spaces: Mutex<Vec<Vec<u8>>>,
     pub(crate) hash_join_desc: HashJoinDesc,
-    pub(crate) row_ptrs: RwLock<Vec<RowPtr>>,
     pub(crate) probe_schema: DataSchemaRef,
     pub(crate) interrupt: Arc<AtomicBool>,
-    /// OuterScan map
-    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
     /// Finalize tasks
     pub(crate) build_worker_num: Arc<AtomicU32>,
     pub(crate) finalize_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
-    /// OuterScan tasks
-    pub(crate) outer_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
+    /// Final scan tasks
+    pub(crate) final_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
+    /// OuterScan map
+    pub(crate) outer_scan_map: Arc<SyncUnsafeCell<Vec<Vec<bool>>>>,
+    /// LeftMarkScan map
+    pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
+    pub(crate) mark_scan_map_lock: Mutex<bool>,
 }
 
 impl JoinHashTable {
@@ -172,13 +173,14 @@ impl JoinHashTable {
             entry_size: Arc::new(AtomicUsize::new(0)),
             raw_entry_spaces: Mutex::new(vec![]),
             hash_join_desc,
-            row_ptrs: RwLock::new(vec![]),
             probe_schema: probe_data_schema,
             interrupt: Arc::new(AtomicBool::new(false)),
-            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             build_worker_num: Arc::new(AtomicU32::new(0)),
             finalize_tasks: Arc::new(RwLock::new(VecDeque::new())),
-            outer_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
+            final_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
+            outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
+            mark_scan_map_lock: Mutex::new(false),
         })
     }
 

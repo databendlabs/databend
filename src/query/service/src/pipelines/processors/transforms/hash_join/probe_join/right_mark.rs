@@ -23,9 +23,11 @@ use common_expression::types::NullableType;
 use common_expression::types::ValueType;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::MarkerKind;
 
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 
@@ -51,7 +53,7 @@ impl JoinHashTable {
             };
 
             if contains {
-                markers[i] = MarkerKind::True;
+                markers[i] = MARKER_KIND_TRUE;
             }
         }
 
@@ -147,11 +149,11 @@ impl JoinHashTable {
                         let marker = &mut markers[index as usize];
                         for _ in 0..cnt {
                             if !validity.get_bit(idx) {
-                                if *marker == MarkerKind::False {
-                                    *marker = MarkerKind::Null;
+                                if *marker == MARKER_KIND_FALSE {
+                                    *marker = MARKER_KIND_NULL;
                                 }
                             } else if data.get_bit(idx) {
-                                *marker = MarkerKind::True;
+                                *marker = MARKER_KIND_TRUE;
                             }
                             idx += 1;
                         }
@@ -208,11 +210,11 @@ impl JoinHashTable {
             let marker = &mut markers[index as usize];
             for _ in 0..cnt {
                 if !validity.get_bit(idx) {
-                    if *marker == MarkerKind::False {
-                        *marker = MarkerKind::Null;
+                    if *marker == MARKER_KIND_FALSE {
+                        *marker = MARKER_KIND_NULL;
                     }
                 } else if data.get_bit(idx) {
-                    *marker = MarkerKind::True;
+                    *marker = MARKER_KIND_TRUE;
                 }
                 idx += 1;
             }
