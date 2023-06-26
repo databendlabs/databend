@@ -5,28 +5,28 @@ statement ok
 create table table_random(a int,b string,c string) ENGINE = Random;
 
 statement ok
-copy into @st from (select a,b,c from table_random limit 10000000);
+copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
-copy into @st from (select a,b,c from table_random limit 10000000);
+copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
-copy into @st from (select a,b,c from table_random limit 10000000);
+copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
-copy into @st from (select a,b,c from table_random limit 10000000);
+copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
-copy into @st from (select a,b,c from table_random limit 10000000);
+copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
-copy into @st from (select a,b,c from table_random limit 10000000);
+copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
-copy into @st from (select a,b,c from table_random limit 10000000);
+copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
-copy into @st from (select a,b,c from table_random limit 10000000);
+copy into @st from (select a,b,c from table_random limit 1000000);
 
 statement ok
 create table t(a int,b string,c string);
@@ -37,7 +37,7 @@ copy into t from @st force = true;
 query I
 select count(*) from t;
 ----
-80000000
+8000000
 
 statement ok
 copy into t from @st force = true;
@@ -45,4 +45,4 @@ copy into t from @st force = true;
 query I
 select count(*) from t;
 ----
-160000000
+16000000

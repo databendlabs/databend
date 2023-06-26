@@ -68,6 +68,11 @@ pub struct CopyInterpreter {
     plan: CopyPlan,
 }
 
+pub enum PlanParam {
+    CopyIntoTablePlanOption(CopyIntoTablePlan),
+    DistributedCopyIntoTable(DistributedCopyIntoTable),
+}
+
 impl CopyInterpreter {
     /// Create a CopyInterpreter with context and [`CopyPlan`].
     pub fn try_create(ctx: Arc<QueryContext>, plan: CopyPlan) -> Result<Self> {
@@ -197,7 +202,7 @@ impl CopyInterpreter {
     async fn transform_copy_plan_distributed(
         &self,
         plan: &CopyIntoTablePlan,
-    ) -> Result<(Option<PhysicalPlan>, bool)> {
+    ) -> Result<Option<DistributedCopyIntoTable>> {
         let ctx = self.ctx.clone();
         let to_table = ctx
             .get_table(&plan.catalog_name, &plan.database_name, &plan.table_name)
@@ -205,7 +210,7 @@ impl CopyInterpreter {
         let table_ctx: Arc<dyn TableContext> = self.ctx.clone();
         let files = plan.collect_files(&table_ctx).await?;
         if files.is_empty() {
-            return Ok((None, true));
+            return Ok(None);
         }
         let mut stage_table_info = plan.stage_table_info.clone();
         stage_table_info.files_to_copy = Some(files.clone());
@@ -225,32 +230,27 @@ impl CopyInterpreter {
         // is less than the number of cluster nodes, we should let it go
         // standalone execute way.
         if self.ctx.get_cluster().nodes.len() > read_source_plan.parts.len() {
-            return Ok((None, true));
+            return Ok(None);
         }
-        Ok((
-            Some(PhysicalPlan::DistributedCopyIntoTable(
-                DistributedCopyIntoTable {
-                    // TODO(leiysky): we reuse the id of exchange here,
-                    // which is not correct. We should generate a new id for insert.
-                    plan_id: 0,
-                    catalog_name: plan.catalog_name.clone(),
-                    database_name: plan.database_name.clone(),
-                    table_name: plan.table_name.clone(),
-                    required_values_schema: plan.required_values_schema.clone(),
-                    values_consts: plan.values_consts.clone(),
-                    required_source_schema: plan.required_source_schema.clone(),
-                    write_mode: plan.write_mode,
-                    validation_mode: plan.validation_mode.clone(),
-                    force: plan.force,
-                    stage_table_info: plan.stage_table_info.clone(),
-                    source: Box::new(read_source_plan),
-                    thresholds: to_table.get_block_thresholds(),
-                    files,
-                    table_info: to_table.get_table_info().clone(),
-                },
-            )),
-            false,
-        ))
+        Ok(Some(DistributedCopyIntoTable {
+            // TODO(leiysky): we reuse the id of exchange here,
+            // which is not correct. We should generate a new id for insert.
+            plan_id: 0,
+            catalog_name: plan.catalog_name.clone(),
+            database_name: plan.database_name.clone(),
+            table_name: plan.table_name.clone(),
+            required_values_schema: plan.required_values_schema.clone(),
+            values_consts: plan.values_consts.clone(),
+            required_source_schema: plan.required_source_schema.clone(),
+            write_mode: plan.write_mode,
+            validation_mode: plan.validation_mode.clone(),
+            force: plan.force,
+            stage_table_info: plan.stage_table_info.clone(),
+            source: Box::new(read_source_plan),
+            thresholds: to_table.get_block_thresholds(),
+            files,
+            table_info: to_table.get_table_info().clone(),
+        }))
     }
 
     #[async_backtrace::framed]
@@ -332,8 +332,7 @@ impl CopyInterpreter {
         append_data_and_set_finish(
             &mut build_res.main_pipeline,
             source_schema,
-            Some(plan),
-            None,
+            PlanParam::CopyIntoTablePlanOption(plan.clone()),
             ctx,
             to_table,
             files,
@@ -409,9 +408,8 @@ impl Interpreter for CopyInterpreter {
         match &self.plan {
             CopyPlan::IntoTable(plan) => {
                 if plan.enable_distributed {
-                    let (distributed_plan_op, empty_files) =
-                        self.transform_copy_plan_distributed(plan).await?;
-                    if empty_files {
+                    let distributed_plan_op = self.transform_copy_plan_distributed(plan).await?;
+                    if distributed_plan_op.is_none() {
                         return self.build_copy_into_table_pipeline(plan).await;
                     }
                     let distributed_plan = distributed_plan_op.unwrap();
@@ -421,37 +419,35 @@ impl Interpreter for CopyInterpreter {
                     // which is not correct. We should generate a new id for insert.
                     let exchange_plan = PhysicalPlan::Exchange(Exchange {
                         plan_id: 0,
-                        input: Box::new(distributed_plan.clone()),
+                        input: Box::new(PhysicalPlan::DistributedCopyIntoTable(
+                            distributed_plan.clone(),
+                        )),
                         kind: FragmentKind::Merge,
                         keys: Vec::new(),
                     });
                     let mut build_res =
                         build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
-                    match distributed_plan {
-                        PhysicalPlan::DistributedCopyIntoTable(distributed_plan) => {
-                            let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
-                            let to_table =
-                                catalog.get_table_by_info(&distributed_plan.table_info)?;
-                            let copied_files = CopyInterpreter::upsert_copied_files_request(
-                                self.ctx.clone(),
-                                to_table.clone(),
-                                distributed_plan.stage_table_info.stage_info.clone(),
-                                distributed_plan.files.clone(),
-                                distributed_plan.force,
-                            )?;
-                            let mut overwrite_ = false;
-                            if let CopyIntoTableMode::Insert { overwrite } = plan.write_mode {
-                                overwrite_ = overwrite;
-                            }
-                            to_table.commit_insertion(
-                                self.ctx.clone(),
-                                &mut build_res.main_pipeline,
-                                copied_files,
-                                overwrite_,
-                            )?
-                        }
-                        _ => unreachable!(),
+
+                    let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
+                    let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;
+                    let copied_files = CopyInterpreter::upsert_copied_files_request(
+                        self.ctx.clone(),
+                        to_table.clone(),
+                        distributed_plan.stage_table_info.stage_info.clone(),
+                        distributed_plan.files.clone(),
+                        distributed_plan.force,
+                    )?;
+                    let mut overwrite_ = false;
+                    if let CopyIntoTableMode::Insert { overwrite } = plan.write_mode {
+                        overwrite_ = overwrite;
                     }
+                    to_table.commit_insertion(
+                        self.ctx.clone(),
+                        &mut build_res.main_pipeline,
+                        copied_files,
+                        overwrite_,
+                    )?;
+
                     Ok(build_res)
                 } else {
                     self.build_copy_into_table_pipeline(plan).await
@@ -489,43 +485,44 @@ fn fill_const_columns(
 pub fn append_data_and_set_finish(
     main_pipeline: &mut Pipeline,
     source_schema: Arc<DataSchema>,
-    plan1: Option<&CopyIntoTablePlan>,
-    plan2: Option<&DistributedCopyIntoTable>,
+    plan_option: PlanParam,
     ctx: Arc<QueryContext>,
     to_table: Arc<dyn Table>,
     files: Vec<StageFileInfo>,
     start: Instant,
     use_commit: bool,
 ) -> Result<()> {
-    let plan_required_source_schema: &DataSchemaRef;
-    let plan_required_values_schema: &DataSchemaRef;
-    let plan_values_consts: &Vec<Scalar>;
-    let plan_stage_table_info: &StageTableInfo;
-    let plan_force: &bool;
-    let plan_write_mode: &CopyIntoTableMode;
+    let plan_required_source_schema: DataSchemaRef;
+    let plan_required_values_schema: DataSchemaRef;
+    let plan_values_consts: Vec<Scalar>;
+    let plan_stage_table_info: StageTableInfo;
+    let plan_force: bool;
+    let plan_write_mode: CopyIntoTableMode;
 
-    if let Some(plan) = plan1 {
-        plan_required_source_schema = &plan.required_source_schema;
-        plan_required_values_schema = &plan.required_values_schema;
-        plan_values_consts = &plan.values_consts;
-        plan_stage_table_info = &plan.stage_table_info;
-        plan_force = &plan.force;
-        plan_write_mode = &plan.write_mode;
-    } else if let Some(plan) = plan2 {
-        plan_required_source_schema = &plan.required_source_schema;
-        plan_required_values_schema = &plan.required_values_schema;
-        plan_values_consts = &plan.values_consts;
-        plan_stage_table_info = &plan.stage_table_info;
-        plan_force = &plan.force;
-        plan_write_mode = &plan.write_mode;
-    } else {
-        unreachable!();
+    match plan_option {
+        PlanParam::CopyIntoTablePlanOption(plan) => {
+            plan_required_source_schema = plan.required_source_schema;
+            plan_required_values_schema = plan.required_values_schema;
+            plan_values_consts = plan.values_consts;
+            plan_stage_table_info = plan.stage_table_info;
+            plan_force = plan.force;
+            plan_write_mode = plan.write_mode;
+        }
+        PlanParam::DistributedCopyIntoTable(plan) => {
+            plan_required_source_schema = plan.required_source_schema;
+            plan_required_values_schema = plan.required_values_schema;
+            plan_values_consts = plan.values_consts;
+            plan_stage_table_info = plan.stage_table_info;
+            plan_force = plan.force;
+            plan_write_mode = plan.write_mode;
+        }
     }
+
     debug!("source schema:{:?}", source_schema);
     debug!("required source schema:{:?}", plan_required_source_schema);
     debug!("required values schema:{:?}", plan_required_values_schema);
 
-    if source_schema != *plan_required_source_schema {
+    if source_schema != plan_required_source_schema {
         // only parquet need cast
         let func_ctx = ctx.get_function_context()?;
         main_pipeline.add_transform(|transform_input_port, transform_output_port| {
@@ -545,11 +542,11 @@ pub fn append_data_and_set_finish(
             main_pipeline,
             source_schema,
             plan_required_values_schema.clone(),
-            plan_values_consts.clone(),
+            plan_values_consts,
         )?;
     }
 
-    let stage_info_clone = plan_stage_table_info.stage_info.clone();
+    let stage_info_clone = plan_stage_table_info.stage_info;
     let write_mode = plan_write_mode;
     let mut purge = true;
     match write_mode {
@@ -558,17 +555,17 @@ pub fn append_data_and_set_finish(
                 append2table(
                     ctx.clone(),
                     to_table,
-                    plan_required_values_schema.clone(),
+                    plan_required_values_schema,
                     main_pipeline,
                     None,
-                    *overwrite,
+                    overwrite,
                     AppendMode::Copy,
                 )?;
             } else {
                 append2table_without_commit(
                     ctx.clone(),
                     to_table,
-                    plan_required_values_schema.clone(),
+                    plan_required_values_schema,
                     main_pipeline,
                     AppendMode::Copy,
                 )?
@@ -585,12 +582,12 @@ pub fn append_data_and_set_finish(
                     to_table.clone(),
                     stage_info_clone.clone(),
                     files.clone(),
-                    *plan_force,
+                    plan_force,
                 )?;
                 append2table(
                     ctx.clone(),
                     to_table,
-                    plan_required_values_schema.clone(),
+                    plan_required_values_schema,
                     main_pipeline,
                     copied_files,
                     false,
@@ -600,7 +597,7 @@ pub fn append_data_and_set_finish(
                 append2table_without_commit(
                     ctx.clone(),
                     to_table,
-                    plan_required_values_schema.clone(),
+                    plan_required_values_schema,
                     main_pipeline,
                     AppendMode::Copy,
                 )?

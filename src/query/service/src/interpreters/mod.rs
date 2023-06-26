@@ -118,6 +118,7 @@ pub use interpreter_cluster_key_alter::AlterTableClusterKeyInterpreter;
 pub use interpreter_cluster_key_drop::DropTableClusterKeyInterpreter;
 pub use interpreter_clustering_history::InterpreterClusteringHistory;
 pub use interpreter_copy::append_data_and_set_finish;
+pub use interpreter_copy::PlanParam;
 pub use interpreter_data_mask_create::CreateDataMaskInterpreter;
 pub use interpreter_data_mask_desc::DescDataMaskInterpreter;
 pub use interpreter_data_mask_drop::DropDataMaskInterpreter;
