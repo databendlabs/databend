@@ -46,8 +46,9 @@ copy into @s1 from (select a,b,c from table_random limit 1000000);
 statement ok
 copy into @s1 from (select a,b,c from table_random2 limit 1000000);
 
-statement ok
+statement error 1046
 copy into products from @s1 pattern = '.*[.]csv' purge = true;
+
 
 query I
 select count(*) from products;
