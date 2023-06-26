@@ -425,6 +425,10 @@ impl Interpreter for CopyInterpreter {
                         kind: FragmentKind::Merge,
                         keys: Vec::new(),
                     });
+                    println!(
+                        "distributed copy get {} sources",
+                        distributed_plan.source.parts.len()
+                    );
                     let mut build_res =
                         build_distributed_pipeline(&self.ctx, &exchange_plan, false).await?;
 

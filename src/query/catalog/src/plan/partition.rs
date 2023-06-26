@@ -159,7 +159,14 @@ impl Partitions {
                 break;
             }
         }
-
+        println!("distributed copy sources: {}", partitions.len());
+        for (key, value) in &executor_part {
+            println!(
+                "copy executor: {}, copy partitions len: {}",
+                key,
+                value.len()
+            );
+        }
         Ok(executor_part)
     }
 
