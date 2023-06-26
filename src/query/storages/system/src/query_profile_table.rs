@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
-use common_expression::types::array::ArrayColumnBuilder;
+use common_expression::types::ArgType;
 use common_expression::types::ArrayType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
@@ -163,21 +163,12 @@ impl SyncSystemTable for QueryProfileTable {
             // operator_type
             StringType::from_data(operator_types),
             // operator_children
-            {
-                let mut builder = ArrayColumnBuilder::<UInt32Type>::with_capacity(
-                    operator_childrens.len(),
-                    operator_childrens.iter().map(|v| v.len()).sum(),
-                    &[],
-                );
-                for children in operator_childrens.iter() {
-                    for v in children.iter() {
-                        builder.put_item(*v);
-                    }
-                    builder.commit_row();
-                }
-
-                <ArrayType<UInt32Type> as ValueType>::upcast_column(builder.build())
-            },
+            ArrayType::upcast_column(ArrayType::<UInt32Type>::column_from_iter(
+                operator_childrens
+                    .into_iter()
+                    .map(|children| UInt32Type::column_from_iter(children.into_iter(), &[])),
+                &[],
+            )),
             // process_time
             UInt64Type::from_data(process_times),
             // operator_attribute
