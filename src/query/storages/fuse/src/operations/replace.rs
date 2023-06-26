@@ -129,7 +129,7 @@ impl FuseTable {
             self.cluster_gen_for_append(ctx.clone(), pipeline, self.get_block_thresholds())?;
 
         // 1. resize input to 1, since the UpsertTransform need to de-duplicate inputs "globally"
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         // 2. connect with ReplaceIntoProcessor
 
@@ -329,7 +329,7 @@ impl FuseTable {
         base_snapshot: Arc<TableSnapshot>,
     ) -> Result<()> {
         // resize
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         // a) append TableMutationAggregator
         pipeline.add_transform(|input, output| {

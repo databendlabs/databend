@@ -174,7 +174,7 @@ impl FuseTable {
             )
         })?;
 
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
             let compact_aggregator = CompactAggregator::new(

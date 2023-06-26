@@ -102,7 +102,7 @@ pub fn build_fuse_native_source_pipeline(
                 );
             }
             pipeline.add_pipe(source_builder.finalize());
-            pipeline.resize(max_threads)?;
+            pipeline.try_resize(max_threads)?;
         }
     };
 
@@ -117,7 +117,7 @@ pub fn build_fuse_native_source_pipeline(
         )
     })?;
 
-    pipeline.resize(max_threads)
+    pipeline.try_resize(max_threads)
 }
 
 pub fn build_fuse_parquet_source_pipeline(
@@ -176,7 +176,7 @@ pub fn build_fuse_parquet_source_pipeline(
                 );
             }
             pipeline.add_pipe(source_builder.finalize());
-            pipeline.resize(std::cmp::min(max_threads, max_io_requests))?;
+            pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
 
             info!(
                 "read block pipeline resize from:{} to:{}",

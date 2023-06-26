@@ -250,7 +250,7 @@ impl Table for MemoryTable {
         _copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(MemoryTableSink::create(

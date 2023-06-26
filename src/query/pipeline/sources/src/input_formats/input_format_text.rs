@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::any::Any;
 use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::mem;
@@ -22,6 +23,7 @@ use common_compress::DecompressState;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::string::StringColumnBuilder;
+use common_expression::BlockMetaInfo;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
@@ -352,6 +354,7 @@ impl<T: InputFormatTextBase> InputFormat for T {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct RowBatch {
     pub data: Vec<u8>,
     pub row_ends: Vec<usize>,
@@ -385,6 +388,21 @@ impl RowBatchTrait for RowBatch {
 
     fn rows(&self) -> usize {
         self.row_ends.len()
+    }
+}
+
+#[typetag::serde(name = "row_batch")]
+impl BlockMetaInfo for RowBatch {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
+        unreachable!("RowBatch as BlockMetaInfo is not expected to be compared.")
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        unreachable!("RowBatch as BlockMetaInfo is not expected to be cloned.")
     }
 }
 
