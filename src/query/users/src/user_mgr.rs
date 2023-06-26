@@ -30,23 +30,13 @@ impl UserApiProvider {
     // Get one user from by tenant.
     #[async_backtrace::framed]
     pub async fn get_user(&self, tenant: &str, user: UserIdentity) -> Result<UserInfo> {
-        if user.is_root() {
-            let mut user_info = if let Some(auth_info) = self.get_configured_user(&user.username) {
-                UserInfo::new(&user.username, "%", auth_info.clone())
-            } else {
-                // The default root user does not need check auth password.
-                // If the root user's password has been changed, then auth check is required.
-                let client = self.get_user_api_client(tenant)?;
-                if let Ok(user_info) = client.get_user(user.clone(), MatchSeq::GE(0)).await {
-                    user_info.data
-                } else {
-                    UserInfo::new_no_auth(&user.username, &user.hostname)
-                }
-            };
+        if let Some(auth_info) = self.get_configured_user(&user.username) {
+            let mut user_info = UserInfo::new(&user.username, "%", auth_info.clone());
             user_info.grants.grant_privileges(
                 &GrantObject::Global,
                 UserPrivilegeSet::available_privileges_on_global(),
             );
+            // Grant admin role to all configured users.
             user_info
                 .grants
                 .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
@@ -54,13 +44,6 @@ impl UserApiProvider {
                 .option
                 .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
             user_info.option.set_all_flag();
-            Ok(user_info)
-        } else if let Some(auth_info) = self.get_configured_user(&user.username) {
-            let mut user_info = UserInfo::new(&user.username, "%", auth_info.clone());
-            user_info.grants.grant_privileges(
-                &GrantObject::Global,
-                UserPrivilegeSet::available_privileges_on_global(),
-            );
             Ok(user_info)
         } else {
             let client = self.get_user_api_client(tenant)?;
@@ -130,8 +113,14 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Cannot grant privileges to configured user `{}`",
+                user.username
+            )));
+        }
         if user.is_root() {
-            return Err(ErrorCode::UnknownUser(format!(
+            return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot grant privileges to builtin user `{}`",
                 user.username
             )));
@@ -153,8 +142,14 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Cannot revoke privileges from configured user `{}`",
+                user.username
+            )));
+        }
         if user.is_root() {
-            return Err(ErrorCode::UnknownUser(format!(
+            return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot revoke privileges from builtin user `{}`",
                 user.username
             )));
@@ -175,8 +170,14 @@ impl UserApiProvider {
         user: UserIdentity,
         grant_role: String,
     ) -> Result<Option<u64>> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Cannot grant role to configured user `{}`",
+                user.username
+            )));
+        }
         if user.is_root() {
-            return Err(ErrorCode::UnknownUser(format!(
+            return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot grant role to builtin user `{}`",
                 user.username
             )));
@@ -197,8 +198,14 @@ impl UserApiProvider {
         user: UserIdentity,
         revoke_role: String,
     ) -> Result<Option<u64>> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Cannot revoke role from configured user `{}`",
+                user.username
+            )));
+        }
         if user.is_root() {
-            return Err(ErrorCode::UnknownUser(format!(
+            return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot revoke role from builtin user `{}`",
                 user.username
             )));
@@ -256,15 +263,13 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        let client = self.get_user_api_client(tenant)?;
-        if user.is_root() && auth_info.is_some() {
-            // Root user info is not exist, need to add user info first.
-            let user_info =
-                UserInfo::new(&user.username, &user.hostname, auth_info.clone().unwrap());
-            if let Ok(res) = client.add_user(user_info).await {
-                return Ok(Some(res));
-            }
+        if user.is_root() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Builtin user `{}` cannot be updated",
+                user.username
+            )));
         }
+        let client = self.get_user_api_client(tenant)?;
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_auth_option(auth_info, user_option)

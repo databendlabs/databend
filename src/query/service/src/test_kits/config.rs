@@ -28,6 +28,11 @@ impl ConfigBuilder {
         conf.query.tenant_id = "test".to_string();
         conf.log = common_tracing::Config::new_testing();
 
+        let auth = AuthInfo::None;
+        let mut users = HashMap::new();
+        users.insert("root".to_string(), auth);
+        conf.query.idm = IDMConfig { users };
+
         ConfigBuilder { conf }
     }
 

@@ -13,8 +13,14 @@ DROP USER IF EXISTS 'test-i'
 statement ok
 CREATE USER 'test-e' IDENTIFIED BY 'password'
 
+statement ok
+ALTER USER 'test-e' IDENTIFIED BY 'new-password'
+
+statement ok
+ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password2'
+
 statement error 1005
-ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password'
+ALTER USER 'test-e'@'127.0.0.1' IDENTIFIED BY 'new-password3'
 
 statement ok
 ALTER USER 'test-e' IDENTIFIED BY 'new-password'

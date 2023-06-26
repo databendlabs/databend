@@ -168,11 +168,11 @@ error:
 create user 'test-e'@'localhost' identified by 'password';
 ---------- Output ---------
 error: 
-  --> SQL:1:21
+  --> SQL:1:22
   |
 1 | create user 'test-e'@'localhost' identified by 'password';
-  | ------              ^ expected `IDENTIFIED`
-  | |                    
+  | ------               ^^^^^^^^^^^ expected `IDENTIFIED` or `'%'`
+  | |                     
   | while parsing `CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`
 
 
@@ -193,7 +193,7 @@ error:
   --> SQL:1:21
   |
 1 | alter user 'test-e' identifies by 'new-password';
-  |                     ^^^^^^^^^^ expected `IDENTIFIED`, `WITH`, `FORMAT`, or `;`
+  |                     ^^^^^^^^^^ expected `@`, `IDENTIFIED`, `WITH`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
@@ -248,7 +248,7 @@ error:
   --> SQL:1:27
   |
 1 | GRANT ROLE 'test' TO ROLE test-user;
-  |                           ^^^^ expected <QuotedString>, `FORMAT`, or `;`
+  |                           ^^^^ expected <QuotedString>, `@`, `FORMAT`, or `;`
 
 
 ---------- Input ----------

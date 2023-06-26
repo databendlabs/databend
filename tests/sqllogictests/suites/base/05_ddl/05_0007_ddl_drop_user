@@ -8,10 +8,10 @@ statement ok
 CREATE USER 'test-j' IDENTIFIED BY 'password'
 
 statement error 1005
-DROP USER 'test-j'@'%'
+DROP USER 'test-j'@'127.0.0.1'
 
 statement ok
-DROP USER 'test-j'
+DROP USER 'test-j'@'%'
 
 statement ok
 DROP USER IF EXISTS 'test-j'

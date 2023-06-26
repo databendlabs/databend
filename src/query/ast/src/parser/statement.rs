@@ -2150,9 +2150,9 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #parameter_to_string
+            #parameter_to_string ~ ( "@" ~  "'%'" )?
         },
-        |username| {
+        |(username, _)| {
             let hostname = "%".to_string();
             UserIdentity { username, hostname }
         },

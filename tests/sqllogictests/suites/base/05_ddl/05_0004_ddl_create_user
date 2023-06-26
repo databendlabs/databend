@@ -13,11 +13,8 @@ DROP USER IF EXISTS 'test-d'
 statement ok
 DROP USER IF EXISTS 'test-e'
 
-statement error 1005
-CREATE USER 'test-a'@'127.0.0.1' IDENTIFIED BY 'password'
-
-statement error 1005
-CREATE USER 'test-a'@'%' IDENTIFIED BY 'password'
+statement ok
+DROP USER IF EXISTS 'test-f'
 
 statement ok
 CREATE USER 'test-a' IDENTIFIED BY 'password'
@@ -40,6 +37,15 @@ CREATE USER IF NOT EXISTS 'test-d' IDENTIFIED WITH sha256_password BY 'password'
 statement ok
 CREATE USER IF NOT EXISTS 'test-e' IDENTIFIED BY '123' WITH DEFAULT_ROLE = 'role1'
 
+statement error 1005
+CREATE USER 'test-f'@'127.0.0.1' IDENTIFIED BY 'password'
+
+statement ok
+CREATE USER 'test-f'@'%' IDENTIFIED BY 'password'
+
+statement error 2202
+CREATE USER 'test-f' IDENTIFIED BY 'password'
+
 statement ok
 DROP USER IF EXISTS 'test-a'
 
@@ -57,3 +63,6 @@ DROP USER IF EXISTS 'test-d'
 
 statement ok
 DROP USER IF EXISTS 'test-e'
+
+statement ok
+DROP USER IF EXISTS 'test-f'
