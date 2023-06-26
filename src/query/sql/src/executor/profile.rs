@@ -14,238 +14,424 @@
 
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_profile::PlanNodeProfile;
+use common_functions::BUILTIN_FUNCTIONS;
+use common_profile::AggregateAttribute;
+use common_profile::AggregateExpandAttribute;
+use common_profile::EvalScalarAttribute;
+use common_profile::ExchangeAttribute;
+use common_profile::FilterAttribute;
+use common_profile::JoinAttribute;
+use common_profile::LimitAttribute;
+use common_profile::OperatorAttribute;
+use common_profile::OperatorProfile;
+use common_profile::OperatorType;
 use common_profile::ProcessorProfiles;
+use common_profile::ProjectSetAttribute;
 use common_profile::QueryProfile;
+use common_profile::SortAttribute;
+use common_profile::TableScanAttribute;
+use common_profile::WindowAttribute;
+use itertools::Itertools;
 
+use crate::executor::format::pretty_display_agg_desc;
+use crate::executor::FragmentKind;
 use crate::executor::PhysicalPlan;
+use crate::executor::WindowFunction;
+use crate::MetadataRef;
 
 pub struct ProfileHelper;
 
 impl ProfileHelper {
     pub fn build_query_profile(
         query_id: &str,
+        metadata: &MetadataRef,
         plan: &PhysicalPlan,
         profs: &ProcessorProfiles,
     ) -> Result<QueryProfile> {
         let mut plan_node_profs = vec![];
-        flatten_plan_node_profile(plan, profs, &mut plan_node_profs)?;
+        flatten_plan_node_profile(metadata, plan, profs, &mut plan_node_profs)?;
 
         Ok(QueryProfile::new(query_id.to_string(), plan_node_profs))
     }
 }
 
 fn flatten_plan_node_profile(
+    metadata: &MetadataRef,
     plan: &PhysicalPlan,
     profs: &ProcessorProfiles,
-    plan_node_profs: &mut Vec<PlanNodeProfile>,
+    plan_node_profs: &mut Vec<OperatorProfile>,
 ) -> Result<()> {
     match plan {
         PhysicalPlan::TableScan(scan) => {
-            let prof = PlanNodeProfile {
+            let table = metadata.read().table(scan.table_index).clone();
+            let qualified_name = format!("{}.{}", table.database(), table.name());
+
+            let prof = OperatorProfile {
                 id: scan.plan_id,
-                plan_node_name: "TableScan".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::TableScan,
                 // We don't record the time spent on table scan for now
+                children: vec![],
                 cpu_time: Default::default(),
+                attribute: OperatorAttribute::TableScan(TableScanAttribute { qualified_name }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::Filter(filter) => {
-            flatten_plan_node_profile(&filter.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &filter.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&filter.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: filter.plan_id,
-                plan_node_name: "Filter".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Filter,
+                children: vec![filter.input.get_id()],
                 cpu_time: proc_prof.cpu_time,
+                attribute: OperatorAttribute::Filter(FilterAttribute {
+                    predicate: filter
+                        .predicates
+                        .iter()
+                        .map(|pred| pred.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .join(" AND "),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::Project(project) => {
-            flatten_plan_node_profile(&project.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &project.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&project.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: project.plan_id,
-                plan_node_name: "Project".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Project,
+                children: vec![project.input.get_id()],
                 cpu_time: proc_prof.cpu_time,
+                attribute: OperatorAttribute::Empty,
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::EvalScalar(eval) => {
-            flatten_plan_node_profile(&eval.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &eval.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&eval.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: eval.plan_id,
-                plan_node_name: "EvalScalar".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::EvalScalar,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![eval.input.get_id()],
+                attribute: OperatorAttribute::EvalScalar(EvalScalarAttribute {
+                    scalars: eval
+                        .exprs
+                        .iter()
+                        .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .join(", "),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::ProjectSet(project_set) => {
-            flatten_plan_node_profile(&project_set.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &project_set.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&project_set.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: project_set.plan_id,
-                plan_node_name: "ProjectSet".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::ProjectSet,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![project_set.input.get_id()],
+                attribute: OperatorAttribute::ProjectSet(ProjectSetAttribute {
+                    functions: project_set
+                        .srf_exprs
+                        .iter()
+                        .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .join(", "),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::AggregateExpand(expand) => {
-            flatten_plan_node_profile(&expand.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &expand.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&expand.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: expand.plan_id,
-                plan_node_name: "AggregateExpand".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::AggregateExpand,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![expand.input.get_id()],
+                attribute: OperatorAttribute::AggregateExpand(AggregateExpandAttribute {
+                    group_keys: expand
+                        .grouping_sets
+                        .iter()
+                        .map(|columns| {
+                            format!(
+                                "[{}]",
+                                columns
+                                    .iter()
+                                    .map(|column| metadata.read().column(*column).name())
+                                    .join(", ")
+                            )
+                        })
+                        .join(", "),
+                    aggr_exprs: "".to_string(),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::AggregatePartial(agg_partial) => {
-            flatten_plan_node_profile(&agg_partial.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &agg_partial.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&agg_partial.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: agg_partial.plan_id,
-                plan_node_name: "AggregatePartial".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Aggregate,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![agg_partial.input.get_id()],
+                attribute: OperatorAttribute::Aggregate(AggregateAttribute {
+                    group_keys: agg_partial
+                        .group_by
+                        .iter()
+                        .map(|column| metadata.read().column(*column).name())
+                        .join(", "),
+                    functions: agg_partial
+                        .agg_funcs
+                        .iter()
+                        .map(|desc| pretty_display_agg_desc(desc, metadata))
+                        .join(", "),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::AggregateFinal(agg_final) => {
-            flatten_plan_node_profile(&agg_final.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &agg_final.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&agg_final.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: agg_final.plan_id,
-                plan_node_name: "AggregateFinal".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Aggregate,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![agg_final.input.get_id()],
+                attribute: OperatorAttribute::Aggregate(AggregateAttribute {
+                    group_keys: agg_final
+                        .group_by
+                        .iter()
+                        .map(|column| metadata.read().column(*column).name())
+                        .join(", "),
+                    functions: agg_final
+                        .agg_funcs
+                        .iter()
+                        .map(|desc| pretty_display_agg_desc(desc, metadata))
+                        .join(", "),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::Window(window) => {
-            flatten_plan_node_profile(&window.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &window.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&window.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let partition_by = window
+                .partition_by
+                .iter()
+                .map(|&index| {
+                    let name = metadata.read().column(index).name();
+                    Ok(name)
+                })
+                .collect::<Result<Vec<_>>>()?
+                .join(", ");
+
+            let order_by = window
+                .order_by
+                .iter()
+                .map(|v| {
+                    let name = metadata.read().column(v.order_by).name();
+                    Ok(name)
+                })
+                .collect::<Result<Vec<_>>>()?
+                .join(", ");
+
+            let frame = window.window_frame.to_string();
+
+            let func = match &window.func {
+                WindowFunction::Aggregate(agg) => pretty_display_agg_desc(agg, metadata),
+                func => format!("{}", func),
+            };
+            let prof = OperatorProfile {
                 id: window.plan_id,
-                plan_node_name: "Window".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Window,
+                children: vec![window.input.get_id()],
                 cpu_time: proc_prof.cpu_time,
+                attribute: OperatorAttribute::Window(WindowAttribute {
+                    functions: format!(
+                        "{} OVER (PARTITION BY {} ORDER BY {} {})",
+                        func, partition_by, order_by, frame
+                    ),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::Sort(sort) => {
-            flatten_plan_node_profile(&sort.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &sort.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&sort.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: sort.plan_id,
-                plan_node_name: "Sort".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Sort,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![sort.input.get_id()],
+                attribute: OperatorAttribute::Sort(SortAttribute {
+                    sort_keys: sort
+                        .order_by
+                        .iter()
+                        .map(|desc| {
+                            format!(
+                                "{} {}",
+                                metadata.read().column(desc.order_by).name(),
+                                if desc.asc { "ASC" } else { "DESC" }
+                            )
+                        })
+                        .join(", "),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::Limit(limit) => {
-            flatten_plan_node_profile(&limit.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &limit.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&limit.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: limit.plan_id,
-                plan_node_name: "Limit".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Limit,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![limit.input.get_id()],
+                attribute: OperatorAttribute::Limit(LimitAttribute {
+                    limit: limit.limit.unwrap_or_default(),
+                    offset: limit.offset,
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::RowFetch(fetch) => {
-            flatten_plan_node_profile(&fetch.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &fetch.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&fetch.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: fetch.plan_id,
-                plan_node_name: "RowFetch".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::RowFetch,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![fetch.input.get_id()],
+                attribute: OperatorAttribute::Empty,
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::HashJoin(hash_join) => {
-            flatten_plan_node_profile(&hash_join.probe, profs, plan_node_profs)?;
-            flatten_plan_node_profile(&hash_join.build, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &hash_join.probe, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &hash_join.build, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&hash_join.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: hash_join.plan_id,
-                plan_node_name: "HashJoin".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Join,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![hash_join.probe.get_id(), hash_join.build.get_id()],
+                attribute: OperatorAttribute::Join(JoinAttribute {
+                    join_type: hash_join.join_type.to_string(),
+                    equi_conditions: hash_join
+                        .probe_keys
+                        .iter()
+                        .zip(hash_join.build_keys.iter())
+                        .map(|(l, r)| {
+                            format!(
+                                "{} = {}",
+                                l.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                                r.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                            )
+                        })
+                        .join(" AND "),
+                    non_equi_conditions: hash_join
+                        .non_equi_conditions
+                        .iter()
+                        .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .join(" AND "),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::RangeJoin(range_join) => {
-            flatten_plan_node_profile(&range_join.left, profs, plan_node_profs)?;
-            flatten_plan_node_profile(&range_join.right, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &range_join.left, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &range_join.right, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&range_join.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: range_join.plan_id,
-                plan_node_name: "RangeJoin".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Join,
+                children: vec![range_join.left.get_id(), range_join.right.get_id()],
                 cpu_time: proc_prof.cpu_time,
+                attribute: OperatorAttribute::Join(JoinAttribute {
+                    join_type: range_join.join_type.to_string(),
+                    equi_conditions: range_join
+                        .conditions
+                        .iter()
+                        .map(|expr| {
+                            format!(
+                                "{} {} {}",
+                                expr.left_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                                expr.operator,
+                                expr.right_expr.as_expr(&BUILTIN_FUNCTIONS).sql_display(),
+                            )
+                        })
+                        .join(" AND "),
+                    non_equi_conditions: range_join
+                        .other_conditions
+                        .iter()
+                        .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+                        .join(" AND "),
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::Exchange(exchange) => {
-            flatten_plan_node_profile(&exchange.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &exchange.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&exchange.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: exchange.plan_id,
-                plan_node_name: "Exchange".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Exchange,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![exchange.input.get_id()],
+                attribute: OperatorAttribute::Exchange(ExchangeAttribute {
+                    exchange_mode: match exchange.kind {
+                        FragmentKind::Init => "Init".to_string(),
+                        FragmentKind::Normal => "Hash".to_string(),
+                        FragmentKind::Expansive => "Broadcast".to_string(),
+                        FragmentKind::Merge => "Merge".to_string(),
+                    },
+                }),
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::UnionAll(union) => {
-            flatten_plan_node_profile(&union.left, profs, plan_node_profs)?;
-            flatten_plan_node_profile(&union.right, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &union.left, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &union.right, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&union.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: union.plan_id,
-                plan_node_name: "UnionAll".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::UnionAll,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![union.left.get_id(), union.right.get_id()],
+                attribute: OperatorAttribute::Empty,
             };
             plan_node_profs.push(prof);
         }
@@ -253,24 +439,26 @@ fn flatten_plan_node_profile(
             let proc_prof = profs
                 .get(&source.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: source.plan_id,
-                plan_node_name: "RuntimeFilterSource".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::RuntimeFilter,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![],
+                attribute: OperatorAttribute::Empty,
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::DistributedInsertSelect(select) => {
-            flatten_plan_node_profile(&select.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &select.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&select.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: select.plan_id,
-                plan_node_name: "DistributedInsertSelect".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Insert,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![],
+                attribute: OperatorAttribute::Empty,
             };
             plan_node_profs.push(prof);
         }
@@ -278,24 +466,26 @@ fn flatten_plan_node_profile(
             let proc_prof = profs
                 .get(&source.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: source.plan_id,
-                plan_node_name: "ExchangeSource".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Exchange,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![],
+                attribute: OperatorAttribute::Empty,
             };
             plan_node_profs.push(prof);
         }
         PhysicalPlan::ExchangeSink(sink) => {
-            flatten_plan_node_profile(&sink.input, profs, plan_node_profs)?;
+            flatten_plan_node_profile(metadata, &sink.input, profs, plan_node_profs)?;
             let proc_prof = profs
                 .get(&sink.plan_id)
                 .ok_or_else(|| ErrorCode::Internal("Plan node profile not found"))?;
-            let prof = PlanNodeProfile {
+            let prof = OperatorProfile {
                 id: sink.plan_id,
-                plan_node_name: "ExchangeSink".to_string(),
-                description: "".to_string(),
+                operator_type: OperatorType::Exchange,
                 cpu_time: proc_prof.cpu_time,
+                children: vec![],
+                attribute: OperatorAttribute::Empty,
             };
             plan_node_profs.push(prof);
         }
