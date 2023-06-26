@@ -202,7 +202,7 @@ impl RangeJoinState {
             data_schema,
             block_size,
             ie_join_state.l1_sort_descriptions.clone(),
-            &left_sorted_blocks,
+            left_sorted_blocks,
         )?;
 
         // Add a column at the end of `left_sorted_blocks`, named `_pos`, which is used to record the position of the block in the original table
@@ -247,7 +247,7 @@ impl RangeJoinState {
             ie_join_state.data_schema.clone(),
             block_size,
             ie_join_state.l2_sort_descriptions.clone(),
-            &l2_sorted_blocks,
+            l2_sorted_blocks,
         )?)?;
 
         // The pos col of l2 sorted blocks is permutation array
@@ -276,7 +276,6 @@ impl RangeJoinState {
             merged_blocks.num_rows(),
         );
 
-        drop(l2_sorted_blocks);
         drop(left_sorted_blocks);
 
         self.ie_join_finalize(l1, l2, l1_index_column, &p_array, bit_array, task_id)

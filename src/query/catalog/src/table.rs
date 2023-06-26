@@ -359,10 +359,11 @@ pub trait Table: Sync + Send {
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        let (_, _, _) = (ctx, pipeline, push_downs);
+        let (_, _, _, _) = (ctx, push_downs, limit, pipeline);
 
         Err(ErrorCode::Unimplemented(format!(
             "table {},  of engine type {}, does not support recluster",

@@ -143,7 +143,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
         }
     });
 
-    let mut mutator = ReclusterMutator::try_create(&ctx, 1.0, BlockThresholds::default())?;
+    let mut mutator = ReclusterMutator::try_create(ctx, 1.0, BlockThresholds::default())?;
 
     let need_recluster = mutator.target_select(blocks_map).await?;
     assert!(need_recluster);

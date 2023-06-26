@@ -1872,11 +1872,12 @@ pub fn alter_table_action(i: Input) -> IResult<AlterTableAction> {
 
     let recluster_table = map(
         rule! {
-            RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )?
+            RECLUSTER ~ FINAL? ~ ( WHERE ~ ^#expr )? ~ ( LIMIT ~ #literal_u64 )?
         },
-        |(_, opt_is_final, opt_selection)| AlterTableAction::ReclusterTable {
+        |(_, opt_is_final, opt_selection, opt_limit)| AlterTableAction::ReclusterTable {
             is_final: opt_is_final.is_some(),
             selection: opt_selection.map(|(_, selection)| selection),
+            limit: opt_limit.map(|(_, limit)| limit),
         },
     );
 

@@ -51,8 +51,9 @@ impl FuseTable {
     pub(crate) async fn do_recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
         if self.cluster_key_meta.is_none() {
             return Ok(());
@@ -78,14 +79,17 @@ impl FuseTable {
         } else {
             1.0
         };
-        let mut mutator = ReclusterMutator::try_create(&ctx, threshold, block_thresholds)?;
+        let mut mutator = ReclusterMutator::try_create(ctx.clone(), threshold, block_thresholds)?;
 
         let schema = self.table_info.schema();
         let segment_locations = snapshot.segments.clone();
         let segment_locations = create_segment_location_vector(segment_locations, None);
         let pruner = FusePruner::create(&ctx, self.operator.clone(), schema, &push_downs)?;
-        let chunk_size = pruner.max_concurrency;
-        for chunk in segment_locations.chunks(chunk_size) {
+        let limit = std::cmp::min(
+            pruner.max_concurrency,
+            limit.unwrap_or(segment_locations.len()),
+        );
+        for chunk in segment_locations.chunks(limit) {
             let block_metas = pruner.pruning(chunk.to_vec()).await?;
 
             let mut blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>> =
@@ -227,7 +231,15 @@ impl FuseTable {
 
         let snapshot_gen = MutationGenerator::new(snapshot);
         pipeline.add_sink(|input| {
-            CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
+            CommitSink::try_create(
+                self,
+                ctx.clone(),
+                None,
+                snapshot_gen.clone(),
+                input,
+                None,
+                true,
+            )
         })?;
         Ok(())
     }

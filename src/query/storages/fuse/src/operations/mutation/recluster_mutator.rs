@@ -24,6 +24,7 @@ use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
 use storages_common_table_meta::meta::BlockMeta;
+use tracing::info;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -33,26 +34,25 @@ use crate::operations::common::ReplacementLogEntry;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
+    ctx: Arc<dyn TableContext>,
     selected_blocks: Vec<Arc<BlockMeta>>,
     level: i32,
     threshold: f64,
-    max_memory_usage: u64,
     mutation_logs: MutationLogs,
     block_thresholds: BlockThresholds,
 }
 
 impl ReclusterMutator {
     pub fn try_create(
-        ctx: &Arc<dyn TableContext>,
+        ctx: Arc<dyn TableContext>,
         threshold: f64,
         block_thresholds: BlockThresholds,
     ) -> Result<Self> {
-        let max_memory_usage = (ctx.get_settings().get_max_memory_usage()? as f64 * 0.8) as u64;
         Ok(Self {
+            ctx,
             selected_blocks: Vec::new(),
             level: 0,
             threshold,
-            max_memory_usage,
             block_thresholds,
             mutation_logs: Default::default(),
         })
@@ -75,6 +75,8 @@ impl ReclusterMutator {
         &mut self,
         blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>>,
     ) -> Result<bool> {
+        let max_memory_usage =
+            (self.ctx.get_settings().get_max_memory_usage()? as f64 * 0.5) as u64;
         for (level, block_metas) in blocks_map.into_iter() {
             if block_metas.len() <= 1 {
                 continue;
@@ -116,6 +118,17 @@ impl ReclusterMutator {
                         block_meta
                     })
                     .collect();
+
+                // Status.
+                {
+                    let status = format!(
+                        "recluster: select block files: {}, total bytes: {}",
+                        self.selected_blocks.len(),
+                        total_bytes
+                    );
+                    self.ctx.set_status_info(&status);
+                    info!(status);
+                }
                 self.level = level;
 
                 return Ok(true);
@@ -184,10 +197,10 @@ impl ReclusterMutator {
             let mut memory_usage = 0;
             for idx in selected_idx {
                 let (block_idx, block_meta) = block_metas[idx].clone();
-                memory_usage += block_meta.block_size;
-                if memory_usage > self.max_memory_usage {
+                if memory_usage >= max_memory_usage {
                     break;
                 }
+                memory_usage += block_meta.block_size;
                 let entry = ReplacementLogEntry {
                     index: block_idx,
                     op: Replacement::Deleted,
@@ -196,6 +209,17 @@ impl ReclusterMutator {
                     .entries
                     .push(MutationLogEntry::Replacement(entry));
                 self.selected_blocks.push(block_meta);
+            }
+
+            // Status.
+            {
+                let status = format!(
+                    "recluster: select block files: {}, total bytes: {}",
+                    self.selected_blocks.len(),
+                    memory_usage
+                );
+                self.ctx.set_status_info(&status);
+                info!(status);
             }
 
             self.level = level;

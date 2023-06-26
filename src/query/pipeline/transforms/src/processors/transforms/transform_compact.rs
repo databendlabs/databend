@@ -48,7 +48,7 @@ pub trait Compactor {
     }
 
     /// `compact_final` is called when all the blocks are pushed to finish the compaction
-    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>>;
+    fn compact_final(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>>;
 }
 
 impl<T: Compactor + Send + 'static> TransformCompact<T> {
@@ -71,11 +71,10 @@ impl<T: Compactor + Send + 'static> TransformCompact<T> {
     fn consume_event(&mut self) -> Result<Event> {
         if let ProcessorState::Consume(state) = &mut self.state {
             if !state.output_data_blocks.is_empty() {
-                if !state.output_port.can_push() {
-                    return Ok(Event::NeedConsume);
+                if state.output_port.can_push() {
+                    let block = state.output_data_blocks.pop_front().unwrap();
+                    state.output_port.push_data(Ok(block));
                 }
-                let block = state.output_data_blocks.pop_front().unwrap();
-                state.output_port.push_data(Ok(block));
                 return Ok(Event::NeedConsume);
             }
 
@@ -160,7 +159,9 @@ impl<T: Compactor + Send + 'static> Processor for TransformCompact<T> {
                 Ok(())
             }
             ProcessorState::Compacting(state) => {
-                let compacted_blocks = self.compactor.compact_final(&state.blocks)?;
+                let compacted_blocks = self
+                    .compactor
+                    .compact_final(std::mem::take(&mut state.blocks))?;
 
                 let mut temp_state = ProcessorState::Finished;
                 std::mem::swap(&mut self.state, &mut temp_state);

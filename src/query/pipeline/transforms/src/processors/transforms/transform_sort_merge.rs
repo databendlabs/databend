@@ -104,16 +104,15 @@ where
         self.aborting.store(true, Ordering::Release);
     }
 
-    fn compact_final(&mut self, blocks: &[DataBlock]) -> Result<Vec<DataBlock>> {
+    fn compact_final(&mut self, blocks: Vec<DataBlock>) -> Result<Vec<DataBlock>> {
         if blocks.is_empty() {
             return Ok(vec![]);
         }
 
         let output_size = blocks.iter().map(|b| b.num_rows()).sum::<usize>();
         let mut blocks = blocks
-            .iter()
+            .into_iter()
             .filter(|b| !b.is_empty())
-            .cloned()
             .collect::<Vec<_>>();
 
         if output_size == 0 {
@@ -300,7 +299,7 @@ pub fn sort_merge(
     data_schema: DataSchemaRef,
     block_size: usize,
     sort_desc: Vec<SortColumnDescription>,
-    data_blocks: &[DataBlock],
+    data_blocks: Vec<DataBlock>,
 ) -> Result<Vec<DataBlock>> {
     let mut compactor = CommonCompactor::try_create(data_schema, block_size, sort_desc, false)?;
     compactor.compact_final(data_blocks)

@@ -54,21 +54,17 @@ impl Interpreter for OptimizeTableInterpreter {
         let plan = self.plan.clone();
         match self.plan.action.clone() {
             OptimizeTableAction::CompactBlocks => {
-                self.build_compact_pipeline(CompactTarget::Blocks, plan.limit)
-                    .await
+                self.build_compact_pipeline(CompactTarget::Blocks).await
             }
             OptimizeTableAction::CompactSegments => {
-                self.build_compact_pipeline(CompactTarget::Segments, plan.limit)
-                    .await
+                self.build_compact_pipeline(CompactTarget::Segments).await
             }
             OptimizeTableAction::Purge(point) => {
                 purge(ctx, plan, point).await?;
                 Ok(PipelineBuildResult::create())
             }
             OptimizeTableAction::All => {
-                let mut build_res = self
-                    .build_compact_pipeline(CompactTarget::Blocks, plan.limit)
-                    .await?;
+                let mut build_res = self.build_compact_pipeline(CompactTarget::Blocks).await?;
 
                 if build_res.main_pipeline.is_empty() {
                     purge(ctx, plan, None).await?;
@@ -88,11 +84,7 @@ impl Interpreter for OptimizeTableInterpreter {
 }
 
 impl OptimizeTableInterpreter {
-    async fn build_compact_pipeline(
-        &self,
-        target: CompactTarget,
-        limit: Option<usize>,
-    ) -> Result<PipelineBuildResult> {
+    async fn build_compact_pipeline(&self, target: CompactTarget) -> Result<PipelineBuildResult> {
         let mut table = self
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
@@ -112,7 +104,7 @@ impl OptimizeTableInterpreter {
 
         let mut pipeline = Pipeline::create();
         table
-            .compact(self.ctx.clone(), target, limit, &mut pipeline)
+            .compact(self.ctx.clone(), target, self.plan.limit, &mut pipeline)
             .await?;
 
         let mut build_res = PipelineBuildResult::create();
@@ -133,7 +125,12 @@ impl OptimizeTableInterpreter {
             }
 
             table
-                .recluster(self.ctx.clone(), &mut build_res.main_pipeline, None)
+                .recluster(
+                    self.ctx.clone(),
+                    None,
+                    self.plan.limit,
+                    &mut build_res.main_pipeline,
+                )
                 .await?;
         } else {
             build_res.main_pipeline = pipeline;

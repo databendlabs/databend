@@ -82,6 +82,7 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     abort_operation: AbortOperation,
     heartbeat: TableLockHeartbeat,
+    need_lock: bool,
 }
 
 impl<F> CommitSink<F>
@@ -94,6 +95,7 @@ where F: SnapshotGenerator + Send + 'static
         snapshot_gen: F,
         input: Arc<InputPort>,
         max_retry_elapsed: Option<Duration>,
+        need_lock: bool,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(CommitSink {
             state: State::None,
@@ -110,6 +112,7 @@ where F: SnapshotGenerator + Send + 'static
             retries: 0,
             max_retry_elapsed,
             input,
+            need_lock,
         })))
     }
 
@@ -139,7 +142,7 @@ where F: SnapshotGenerator + Send + 'static
 
         self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
 
-        if meta.need_lock {
+        if self.need_lock {
             self.state = State::TryLock;
         } else {
             self.state = State::FillDefault;

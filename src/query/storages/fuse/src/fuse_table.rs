@@ -690,10 +690,11 @@ impl Table for FuseTable {
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
-        pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
+        limit: Option<usize>,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_recluster(ctx, pipeline, push_downs).await
+        self.do_recluster(ctx, push_downs, limit, pipeline).await
     }
 
     #[async_backtrace::framed]

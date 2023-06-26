@@ -1378,11 +1378,18 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
                 let action_format_ctx = AstFormatContext::new(action_name);
                 FormatTreeNode::new(action_format_ctx)
             }
-            AlterTableAction::ReclusterTable { selection, .. } => {
+            AlterTableAction::ReclusterTable {
+                selection, limit, ..
+            } => {
                 let mut children = Vec::new();
                 if let Some(selection) = selection {
                     self.visit_expr(selection);
                     children.push(self.children.pop().unwrap());
+                }
+                if let Some(limit) = limit {
+                    let name = format!("Limit {}", limit);
+                    let limit_format_ctx = AstFormatContext::new(name);
+                    children.push(FormatTreeNode::new(limit_format_ctx));
                 }
                 let action_name = "Action Recluster".to_string();
                 let action_format_ctx =

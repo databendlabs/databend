@@ -358,7 +358,15 @@ impl FuseTable {
         // b) append  CommitSink
         let snapshot_gen = MutationGenerator::new(base_snapshot);
         pipeline.add_sink(|input| {
-            CommitSink::try_create(self, ctx.clone(), None, snapshot_gen.clone(), input, None)
+            CommitSink::try_create(
+                self,
+                ctx.clone(),
+                None,
+                snapshot_gen.clone(),
+                input,
+                None,
+                false,
+            )
         })?;
         Ok(())
     }

@@ -86,7 +86,7 @@ impl Interpreter for ReclusterTableInterpreter {
 
             let mut pipeline = Pipeline::create();
             table
-                .recluster(ctx.clone(), &mut pipeline, extras.clone())
+                .recluster(ctx.clone(), extras.clone(), plan.limit, &mut pipeline)
                 .await?;
             if pipeline.is_empty() {
                 break;
