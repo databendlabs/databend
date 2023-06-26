@@ -34,19 +34,19 @@ create table t(a int,b string,c string);
 query T
 explain pipeline copy into t from @st force = true;
 ----
- MutationSink × 1 processor
-   MutationAggregator × 1 processor
-     Merge (TransformExchangeDeserializer × 10 processors) to (MutationAggregator × 1)
-       TransformExchangeDeserializer × 10 processors
-         Merge (DummyTransform × 12 processors) to (TransformExchangeDeserializer × 10)
-           Merge (AppendTransform × 10 processors) to (Resize × 12)
-             AppendTransform × 10 processors
-               Merge (BlockCompactTransform × 1 processor) to (AppendTransform × 10)
-                 BlockCompactTransform × 1 processor
-                   Merge (DeserializeTransformer × 10 processors) to (BlockCompactTransform × 1)
-                     DeserializeTransformer × 10 processors
-                       Merge (Aligner × 3 processors) to (DeserializeTransformer × 10)
-                         Aligner × 3 processors
+MutationSink × 1 processor
+ MutationAggregator × 1 processor
+   Merge (TransformExchangeDeserializer × 6 processors) to (MutationAggregator × 1)
+     TransformExchangeDeserializer × 6 processors
+       Merge (DummyTransform × 8 processors) to (TransformExchangeDeserializer × 6)
+         Merge (AppendTransform × 6 processors) to (Resize × 8)
+           AppendTransform × 6 processors
+             Merge (BlockCompactTransform × 1 processor) to (AppendTransform × 6)
+               BlockCompactTransform × 1 processor
+                 Merge (DeserializeTransformer × 6 processors) to (BlockCompactTransform × 1)
+                   DeserializeTransformer × 6 processors
+                     Merge (Aligner × 3 processors) to (DeserializeTransformer × 6)
+                       Aligner × 3 processors
 
 statement ok
 copy into t from @st force = true;
