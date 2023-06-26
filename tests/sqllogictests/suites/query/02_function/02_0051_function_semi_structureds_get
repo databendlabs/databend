@@ -432,7 +432,7 @@ select get_path(obj, '["car_no"]') from t5
 20
 
 query T
-select get(obj, '测试\"💎') from t5
+select get(obj, '测试"💎') from t5
 ----
 "a"
 NULL

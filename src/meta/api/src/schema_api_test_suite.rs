@@ -133,7 +133,7 @@ fn calc_and_compare_drop_on_db_result(result: Vec<Arc<DatabaseInfo>>, expected: 
     let mut get = BTreeMap::new();
     for item in result.iter() {
         let name = item.name_ident.to_string_key();
-        let mut drop_on_info = match get.get_mut(&name) {
+        let drop_on_info = match get.get_mut(&name) {
             Some(drop_on_info) => drop_on_info,
             None => {
                 let info = DroponInfo {
@@ -165,7 +165,7 @@ fn calc_and_compare_drop_on_table_result(result: Vec<Arc<TableInfo>>, expected: 
     let mut get = BTreeMap::new();
     for item in result.iter() {
         let name = item.name.clone();
-        let mut drop_on_info = match get.get_mut(&name) {
+        let drop_on_info = match get.get_mut(&name) {
             Some(drop_on_info) => drop_on_info,
             None => {
                 let info = DroponInfo {

@@ -145,8 +145,11 @@ impl BackgroundServiceHandler for RealBackgroundService {
 }
 
 impl RealBackgroundService {
-    pub async fn new(conf: &InnerConfig) -> Result<Self> {
-        let mut session = create_session().await?;
+    pub async fn new(conf: &InnerConfig) -> Result<Option<Self>> {
+        if !conf.background.enable {
+            return Ok(None);
+        }
+        let session = create_session().await?;
         let user = UserInfo::new_no_auth(
             format!(
                 "{}-{}-background-svc",
@@ -177,7 +180,7 @@ impl RealBackgroundService {
             scheduler: Arc::new(scheduler),
             meta_api,
         };
-        Ok(rm)
+        Ok(Some(rm))
     }
 
     async fn get_compactor_job(
@@ -262,8 +265,10 @@ impl RealBackgroundService {
 
     pub async fn init(conf: &InnerConfig) -> Result<()> {
         let rm = RealBackgroundService::new(conf).await?;
-        let wrapper = BackgroundServiceHandlerWrapper::new(Box::new(rm));
-        GlobalInstance::set(Arc::new(wrapper));
+        if let Some(rm) = rm {
+            let wrapper = BackgroundServiceHandlerWrapper::new(Box::new(rm));
+            GlobalInstance::set(Arc::new(wrapper));
+        }
         Ok(())
     }
 

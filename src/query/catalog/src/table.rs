@@ -387,6 +387,10 @@ pub trait Table: Sync + Send {
     fn is_stage_table(&self) -> bool {
         false
     }
+
+    fn result_can_be_cached(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -532,6 +536,7 @@ pub struct NavigationDescriptor {
     pub point: NavigationPoint,
 }
 
+#[derive(Debug, Clone)]
 pub struct DeletionFilters {
     // the filter expression for the deletion
     pub filter: RemoteExpr<String>,

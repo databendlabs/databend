@@ -23,7 +23,7 @@ use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
 use pyo3::prelude::*;
 
-use crate::dataframe::PyBoxSize;
+use crate::dataframe::default_box_size;
 use crate::dataframe::PyDataFrame;
 use crate::utils::wait_for_future;
 use crate::utils::RUNTIME;
@@ -84,15 +84,88 @@ impl PySessionContext {
             }
         }
     }
+
+    fn register_parquet(
+        &mut self,
+        name: &str,
+        path: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        self.register_table(name, path, "parquet", pattern, py)
+    }
+
+    fn register_csv(
+        &mut self,
+        name: &str,
+        path: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        self.register_table(name, path, "csv", pattern, py)
+    }
+
+    fn register_ndjson(
+        &mut self,
+        name: &str,
+        path: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        self.register_table(name, path, "ndjson", pattern, py)
+    }
+
+    fn register_tsv(
+        &mut self,
+        name: &str,
+        path: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        self.register_table(name, path, "tsv", pattern, py)
+    }
+
+    fn register_table(
+        &mut self,
+        name: &str,
+        path: &str,
+        file_format: &str,
+        pattern: Option<&str>,
+        py: Python,
+    ) -> PyResult<()> {
+        let mut path = path.to_owned();
+        if path.starts_with('/') {
+            path = format!("fs://{}", path);
+        }
+
+        if !path.contains("://") {
+            path = format!(
+                "fs://{}/{}",
+                std::env::current_dir().unwrap().to_str().unwrap(),
+                path.as_str()
+            );
+        }
+
+        // Example: select * from '/home/sundy/dataset/hits_p/' (file_format => 'parquet', pattern => '.*.parquet') limit 3;
+        let sql = if let Some(pattern) = pattern {
+            format!(
+                "create view {} as select * from '{}' (file_format => '{}', pattern => '{}')",
+                name, path, file_format, pattern
+            )
+        } else {
+            format!(
+                "create view {} as select * from '{}' (file_format => '{}')",
+                name, path, file_format
+            )
+        };
+
+        let _ = self.sql(&sql, py)?.collect(py)?;
+        Ok(())
+    }
 }
 
 async fn plan_sql(ctx: &Arc<QueryContext>, sql: &str) -> Result<PyDataFrame> {
     let mut planner = Planner::new(ctx.clone());
     let (plan, _) = planner.plan_sql(sql).await?;
-    let display_width = PyBoxSize {
-        bs_max_display_rows: 40,
-        bs_max_width: 0,
-        bs_max_col_width: 20,
-    };
-    Ok(PyDataFrame::new(ctx.clone(), plan, display_width))
+    Ok(PyDataFrame::new(ctx.clone(), plan, default_box_size()))
 }

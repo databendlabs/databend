@@ -27,7 +27,6 @@ metrics = "0.20.1"
 parking_lot = "0.12.1"
 siphasher = "0.3.10"
 tracing = "0.1.36"
-walkdir = "2.3.2"
 
 [dev-dependencies]
 tempfile = "3.4.0"

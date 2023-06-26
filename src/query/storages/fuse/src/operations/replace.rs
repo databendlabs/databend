@@ -262,8 +262,7 @@ impl FuseTable {
         //    ┌───────────────────┐       ┌───────────────────────┐         ┌───────────────────┐
         //    │ResizeProcessor(1) ├──────►│TableMutationAggregator├────────►│     CommitSink    │
         //    └───────────────────┘       └───────────────────────┘         └───────────────────┘
-        self.chain_mutation_pipes(&ctx, pipeline, base_snapshot)
-            .await?;
+        self.chain_mutation_pipes(&ctx, pipeline, base_snapshot)?;
 
         Ok(())
     }
@@ -323,8 +322,7 @@ impl FuseTable {
         chunks
     }
 
-    #[async_backtrace::framed]
-    pub async fn chain_mutation_pipes(
+    pub fn chain_mutation_pipes(
         &self,
         ctx: &Arc<dyn TableContext>,
         pipeline: &mut Pipeline,

@@ -46,8 +46,8 @@ onlyif mysql
 query T
 select * from t_str order by a
 ----
-a"b"c'd
-a"b"c\'d
+a"b\"c'd
+a"b\"c\'d
 
 statement ok
 create table if not exists st1(a string)

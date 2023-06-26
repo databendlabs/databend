@@ -4,9 +4,12 @@ title: SET_VAR
 
 SET_VAR is used to specify optimizer hints within a single SQL statement, allowing for finer control over the execution plan of that specific statement. This includes:
 
-- Configure settings temporarily, affecting only the duration of the SQL statement execution. It's important to note that the settings specified with SET_VAR will solely impact the result of the current statement being executed and will not have any lasting effects on the overall database configuration. For a list of available settings that can be configured using SET_VAR, see [SHOW SETTINGS](../40-show/show-settings.md). To understand how it works, see [Example 1. Temporarily Set Timezone](#example-1-temporarily-configure-timezone).
+- Configure settings temporarily, affecting only the duration of the SQL statement execution. It's important to note that the settings specified with SET_VAR will solely impact the result of the current statement being executed and will not have any lasting effects on the overall database configuration. For a list of available settings that can be configured using SET_VAR, see [SHOW SETTINGS](../40-show/show-settings.md). To understand how it works, see these examples:
 
-- Control the deduplication behavior on [INSERT](../10-dml/dml-insert.md), [UPDATE](../10-dml/dml-update.md), or [REPLACE](../10-dml/dml-replace.md) operations with the label *deduplicate_label*. For those operations with a deduplicate_label in the SQL statements, Databend executes only the first statement, and subsequent statements with the same deduplicate_label value are ignored, regardless of their intended data modifications. Please note that once you set a deduplicate_label, it will remain in effect for a period of 24 hours. To understand how the deduplicate_label assists in deduplication, see [Example 2: Set Deduplicate Label](#example-2-set-deduplicate-label).
+    - [Example 1. Temporarily Set Timezone](#example-1-temporarily-set-timezone)
+    - [Example 2: Control Parallel Processing for COPY INTO](#example-2-control-parallel-processing-for-copy-into)
+
+- Control the deduplication behavior on [INSERT](../10-dml/dml-insert.md), [UPDATE](../10-dml/dml-update.md), or [REPLACE](../10-dml/dml-replace.md) operations with the label *deduplicate_label*. For those operations with a deduplicate_label in the SQL statements, Databend executes only the first statement, and subsequent statements with the same deduplicate_label value are ignored, regardless of their intended data modifications. Please note that once you set a deduplicate_label, it will remain in effect for a period of 24 hours. To understand how the deduplicate_label assists in deduplication, see [Example 3: Set Deduplicate Label](#example-3-set-deduplicate-label).
 
 See also: [SET](01-set-global.md)
 
@@ -69,8 +72,17 @@ SELECT
 
 1 row in 0.010 sec. Processed 1 rows, 1B (104.34 rows/s, 104B/s)
 ```
+### Example 2: Control Parallel Processing for COPY INTO
 
-### Example 2: Set Deduplicate Label
+In Databend, the *max_threads* setting specifies the maximum number of threads that can be utilized to execute a request. By default, this value is typically set to match the number of CPU cores available on the machine.
+
+When loading data into Databend with COPY INTO, you can control the parallel processing capabilities by injecting hints into the COPY INTO command and setting the *max_threads* parameter. For example:
+
+```sql
+COPY /*+ set_var(max_threads=6) */ INTO mytable FROM @mystage/ pattern='.*[.]parq' FILE_FORMAT=(TYPE=parquet);
+```
+
+### Example 3: Set Deduplicate Label
 
 ```sql
 CREATE TABLE t1(a Int, b bool);

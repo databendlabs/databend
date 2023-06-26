@@ -86,6 +86,18 @@ impl PyDataFrame {
         self.display_width.clone()
     }
 
+    fn set_max_display_rows(&mut self, max_display_rows: usize) {
+        self.display_width.bs_max_display_rows = max_display_rows;
+    }
+
+    fn set_max_width(&mut self, max_width: usize) {
+        self.display_width.bs_max_width = max_width;
+    }
+
+    fn set_max_col_width(&mut self, max_col_width: usize) {
+        self.display_width.bs_max_col_width = max_col_width;
+    }
+
     pub fn schema(&self) -> PySchema {
         PySchema {
             schema: self.df.schema(),
@@ -132,5 +144,26 @@ impl PyDataFrame {
             let result = table.call_method0(py, "to_pandas")?;
             Ok(result)
         })
+    }
+
+    /// Convert to polars dataframe with pyarrow
+    /// Collect the batches, pass to Arrow Table & then convert to polars DataFrame
+    fn to_polars(&self, py: Python) -> PyResult<PyObject> {
+        let table = self.to_arrow_table(py)?;
+
+        Python::with_gil(|py| {
+            let dataframe = py.import("polars")?.getattr("DataFrame")?;
+            let args = PyTuple::new(py, &[table]);
+            let result: PyObject = dataframe.call1(args)?.into();
+            Ok(result)
+        })
+    }
+}
+
+pub(crate) fn default_box_size() -> PyBoxSize {
+    PyBoxSize {
+        bs_max_display_rows: 40,
+        bs_max_width: 0,
+        bs_max_col_width: 20,
     }
 }

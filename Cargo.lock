@@ -9946,7 +9946,6 @@ dependencies = [
  "siphasher",
  "tempfile",
  "tracing",
- "walkdir",
 ]
 
 [[package]]

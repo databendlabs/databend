@@ -108,7 +108,7 @@ macro_rules! register_plus {
                 })()
                 .unwrap_or(FunctionDomain::Full)
             },
-            |a, b, _| (a.as_(): T) + (b.as_(): T),
+            |a, b, _| (AsPrimitive::<T>::as_(a)) + (AsPrimitive::<T>::as_(b)),
         );
     };
 }
@@ -134,7 +134,7 @@ macro_rules! register_minus {
                 })()
                 .unwrap_or(FunctionDomain::Full)
             },
-            |a, b, _| (a.as_(): T) - (b.as_(): T),
+            |a, b, _| (AsPrimitive::<T>::as_(a)) - (AsPrimitive::<T>::as_(b)),
         );
     };
 }
@@ -165,7 +165,7 @@ macro_rules! register_multiply {
                 })()
                 .unwrap_or(FunctionDomain::Full)
             },
-            |a, b, _| (a.as_(): T) * (b.as_(): T),
+            |a, b, _| (AsPrimitive::<T>::as_(a)) * (AsPrimitive::<T>::as_(b)),
         );
     };
 }
@@ -181,12 +181,12 @@ macro_rules! register_divide {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                 |a, b, output, ctx| {
-                    let b = (b.as_() : T);
+                    let b: T = b.as_();
                     if std::intrinsics::unlikely(b == 0.0) {
                         ctx.set_error(output.len(), "divided by zero");
                         output.push(F64::default());
                     } else {
-                        output.push(((a.as_() : T) / b));
+                        output.push(((AsPrimitive::<T>::as_(a)) / b));
                     }
                 }),
         );
@@ -204,12 +204,12 @@ macro_rules! register_div {
             |_, _, _| FunctionDomain::MayThrow,
             vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>, NumberType<T>>(
                 |a, b, output, ctx| {
-                    let b = (b.as_() : F64);
+                    let b: F64 = b.as_();
                     if std::intrinsics::unlikely(b == 0.0) {
                         ctx.set_error(output.len(), "divided by zero");
                         output.push(T::default());
                     } else {
-                        output.push(((a.as_() : F64) / b).as_() : T);
+                        output.push(AsPrimitive::<T>::as_((F64::from(AsPrimitive::<f64>::as_(a))) / b));
                     }
                 }
             ),
@@ -239,12 +239,12 @@ macro_rules! register_modulo {
                 |_, _, _| FunctionDomain::MayThrow,
                 vectorize_with_builder_2_arg::<NumberType<L>, NumberType<R>,  NumberType<T>>(
                     |a, b, output, ctx| {
-                        let b = (b.as_() : F64);
+                        let b: F64 = b.as_();
                         if std::intrinsics::unlikely(b == 0.0) {
                             ctx.set_error(output.len(), "divided by zero");
                             output.push(T::default());
                         } else {
-                            output.push(((a.as_() : M) % (b.as_() : M)).as_(): T);
+                            output.push(AsPrimitive::<T>::as_((AsPrimitive::<M>::as_(a)) % (AsPrimitive::<M>::as_(b))));
                         }
                     }
                 ),
@@ -288,7 +288,7 @@ macro_rules! register_bitwise_and {
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_and",
             |_, _, _| FunctionDomain::Full,
-            |a, b, _| (a.as_(): i64).bitand(b.as_(): i64),
+            |a, b, _| (AsPrimitive::<i64>::as_(a)).bitand(AsPrimitive::<i64>::as_(b)),
         );
     };
 }
@@ -300,7 +300,7 @@ macro_rules! register_bitwise_or {
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_or",
             |_, _, _| FunctionDomain::Full,
-            |a, b, _| (a.as_(): i64).bitor(b.as_(): i64),
+            |a, b, _| (AsPrimitive::<i64>::as_(a)).bitor(AsPrimitive::<i64>::as_(b)),
         );
     };
 }
@@ -312,7 +312,7 @@ macro_rules! register_bitwise_xor {
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_xor",
             |_, _, _| FunctionDomain::Full,
-            |a, b, _| (a.as_(): i64).bitxor(b.as_(): i64),
+            |a, b, _| (AsPrimitive::<i64>::as_(a)).bitxor(AsPrimitive::<i64>::as_(b)),
         );
     };
 }
@@ -324,7 +324,7 @@ macro_rules! register_bitwise_shift_left {
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_shift_left",
             |_, _, _| FunctionDomain::Full,
-            |a, b, _| (a.as_(): i64) << (b.as_(): u64),
+            |a, b, _| (AsPrimitive::<i64>::as_(a)) << (AsPrimitive::<u64>::as_(b)),
         );
     };
 }
@@ -336,7 +336,7 @@ macro_rules! register_bitwise_shift_right {
         $registry.register_2_arg::<NumberType<L>, NumberType<R>, NumberType<i64>, _, _>(
             "bit_shift_right",
             |_, _, _| FunctionDomain::Full,
-            |a, b, _| (a.as_(): i64) >> (b.as_(): u64),
+            |a, b, _| (AsPrimitive::<i64>::as_(a)) >> (AsPrimitive::<u64>::as_(b)),
         );
     };
 }
@@ -459,7 +459,7 @@ macro_rules! register_bitwise_not {
         $registry.register_1_arg::<NumberType<N>, NumberType<i64>, _, _>(
             "bit_not",
             |_, _| FunctionDomain::Full,
-            |a, _| !(a.as_(): i64),
+            |a, _| !(AsPrimitive::<i64>::as_(a)),
         );
     };
 }
@@ -490,11 +490,11 @@ fn register_unary_minus(registry: &mut FunctionRegistry) {
                     "minus",
                     |_, val| {
                         FunctionDomain::Domain(SimpleDomain::<T> {
-                            min: -(val.max.as_(): T),
-                            max: -(val.min.as_(): T),
+                            min: -(AsPrimitive::<T>::as_(val.max)),
+                            max: -(AsPrimitive::<T>::as_(val.min)),
                         })
                     },
-                    |a, _| -(a.as_(): T),
+                    |a, _| -(AsPrimitive::<T>::as_(a)),
                 );
             }
             NumberClass::Decimal128 => {
