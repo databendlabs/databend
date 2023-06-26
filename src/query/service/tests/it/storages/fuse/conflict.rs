@@ -25,6 +25,15 @@ use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
 
 #[test]
+/// base snapshot contains segments 1, 2, 3,
+///
+/// a delete operation wants to remove segment 2,
+///
+/// but it finds that the latest snapshot does not contain segment 2, which means segment 2 has been modified by other operations
+///
+/// i.e. in this test, segment 2 and 3 are compacted into segment 4
+///
+/// so the delete operation cannot be applied
 fn test_unresolvable_delete_conflict() {
     let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
     base_snapshot.segments = vec![
@@ -55,6 +64,15 @@ fn test_unresolvable_delete_conflict() {
 }
 
 #[test]
+/// base snapshot contains segments 1, 2, 3,
+///
+/// a delete operation wants to remove segment 2,3, and add segment 8
+///
+/// the latest snapshot contains segments 2, 3, 4
+///
+/// the segments 2, 3 are still in the latest snapshot, so the delete operation can be applied
+///
+/// the delete operation is merged into the latest snapshot, by removing segments 2, 3, and adding segment 8 in the latest snapshot
 fn test_resolvable_delete_conflict() {
     let mut base_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
     base_snapshot.segments = vec![
@@ -127,7 +145,7 @@ fn test_resolvable_delete_conflict() {
     );
     let snapshot = result.unwrap();
     let mut actual = snapshot.segments.clone();
-    actual.sort();
+    actual.sort(); // sort segment for easy comparison
     let expected = vec![("4".to_string(), 1), ("8".to_string(), 1)];
     assert_eq!(actual, expected);
 
