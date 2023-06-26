@@ -227,7 +227,16 @@ impl JoinHashTable {
             .collect::<Result<Vec<_>>>()?;
 
         if self.hash_join_desc.join_type == JoinType::RightMark {
-            probe_state.markers = Some(Self::init_markers(&probe_keys, input.num_rows()));
+            if input.num_rows() > probe_state.markers.as_ref().unwrap().len() {
+                probe_state.markers = Some(vec![0; input.num_rows()]);
+            }
+            if self.hash_join_desc.other_predicate.is_none() {
+                Self::init_markers(
+                    &probe_keys,
+                    input.num_rows(),
+                    probe_state.markers.as_mut().unwrap(),
+                );
+            }
         }
 
         if probe_keys

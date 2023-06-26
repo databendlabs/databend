@@ -65,6 +65,11 @@ impl ProbeState {
             }
             _ => (None, None, None),
         };
+        let markers = if matches!(&join_type, JoinType::RightMark) {
+            Some(vec![0; JOIN_MAX_BLOCK_SIZE])
+        } else {
+            None
+        };
         ProbeState {
             probe_indexes: vec![(0, 0); JOIN_MAX_BLOCK_SIZE],
             build_indexes: vec![
@@ -79,7 +84,7 @@ impl ProbeState {
             func_ctx,
             row_state,
             row_state_indexes,
-            markers: None,
+            markers,
             probe_unmatched_indexes,
         }
     }

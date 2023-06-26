@@ -397,25 +397,7 @@ impl HashJoinState for JoinHashTable {
             match self.hash_join_desc.join_type {
                 JoinType::LeftMark => {
                     let markers = &mut mark_scan_map[chunk_index];
-                    if columns
-                        .iter()
-                        .any(|(c, _)| matches!(c, Column::Null { .. } | Column::Nullable(_)))
-                    {
-                        for (col, _) in columns.iter() {
-                            if let Column::Nullable(c) = col {
-                                let bitmap = &c.validity;
-                                if bitmap.unset_bits() == 0 {
-                                    break;
-                                } else {
-                                    for (idx, marker) in markers.iter_mut().enumerate() {
-                                        if !bitmap.get_bit(idx) {
-                                            *marker = MARKER_KIND_NULL;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    Self::init_markers(&columns, chunk.num_rows(), markers);
                 }
                 JoinType::RightMark => {
                     if !has_null && !columns.is_empty() {

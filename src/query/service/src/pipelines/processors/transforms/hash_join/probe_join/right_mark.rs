@@ -58,7 +58,7 @@ impl JoinHashTable {
         }
 
         Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers.clone())?,
+            &self.create_marker_block(has_null, markers)?,
             input,
         )?])
     }
@@ -81,7 +81,8 @@ impl JoinHashTable {
             .iter()
             .map(|c| (c.value.as_column().unwrap().clone(), c.data_type.clone()))
             .collect::<Vec<_>>();
-        let mut markers = Self::init_markers(&cols, input.num_rows());
+        let markers = probe_state.markers.as_mut().unwrap();
+        Self::init_markers(&cols, input.num_rows(), markers);
 
         let _func_ctx = self.ctx.get_function_context()?;
         let other_predicate = self.hash_join_desc.other_predicate.as_ref().unwrap();

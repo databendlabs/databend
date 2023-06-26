@@ -17,6 +17,7 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_expression::arrow::constant_bitmap;
+use common_expression::arrow::or_validities;
 use common_expression::types::nullable::NullableColumn;
 use common_expression::types::AnyType;
 use common_expression::types::BooleanType;
@@ -90,16 +91,16 @@ impl JoinHashTable {
     pub(crate) fn create_marker_block(
         &self,
         has_null: bool,
-        markers: Vec<u8>,
+        markers: &mut Vec<u8>,
     ) -> Result<DataBlock> {
         let mut validity = MutableBitmap::with_capacity(markers.len());
         let mut boolean_bit_map = MutableBitmap::with_capacity(markers.len());
 
         for m in markers {
-            let marker = if m == MARKER_KIND_FALSE && has_null {
+            let marker = if *m == MARKER_KIND_FALSE && has_null {
                 MARKER_KIND_NULL
             } else {
-                m
+                *m
             };
             if marker == MARKER_KIND_NULL {
                 validity.push(false);
@@ -111,6 +112,7 @@ impl JoinHashTable {
             } else {
                 boolean_bit_map.push(false);
             }
+            *m = MARKER_KIND_FALSE;
         }
         let boolean_column = Column::Boolean(boolean_bit_map.into());
         let marker_column = Column::Nullable(Box::new(NullableColumn {
@@ -120,28 +122,42 @@ impl JoinHashTable {
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
-    pub(crate) fn init_markers(cols: &[(Column, DataType)], num_rows: usize) -> Vec<u8> {
-        let mut markers = vec![MARKER_KIND_FALSE; num_rows];
+    pub(crate) fn init_markers(cols: &[(Column, DataType)], num_rows: usize, markers: &mut [u8]) {
         if cols
             .iter()
             .any(|(c, _)| matches!(c, Column::Null { .. } | Column::Nullable(_)))
         {
+            let mut valids = None;
             for (col, _) in cols.iter() {
-                if let Column::Nullable(c) = col {
-                    let bitmap = &c.validity;
-                    if bitmap.unset_bits() == 0 {
-                        break;
-                    } else {
-                        for (idx, marker) in markers.iter_mut().enumerate() {
-                            if !bitmap.get_bit(idx) {
-                                *marker = MARKER_KIND_NULL;
-                            }
+                match col {
+                    Column::Nullable(c) => {
+                        let bitmap = &c.validity;
+                        if bitmap.unset_bits() == 0 {
+                            let mut m = MutableBitmap::with_capacity(num_rows);
+                            m.extend_constant(num_rows, true);
+                            valids = Some(m.into());
+                            break;
+                        } else {
+                            valids = or_validities(valids, Some(bitmap.clone()));
                         }
+                    }
+                    Column::Null { .. } => {}
+                    _c => {
+                        let mut m = MutableBitmap::with_capacity(num_rows);
+                        m.extend_constant(num_rows, true);
+                        valids = Some(m.into());
+                        break;
+                    }
+                }
+            }
+            if let Some(v) = valids {
+                for (idx, marker) in markers.iter_mut().enumerate() {
+                    if !v.get_bit(idx) {
+                        *marker = MARKER_KIND_NULL;
                     }
                 }
             }
         }
-        markers
     }
 
     pub(crate) fn set_validity(
