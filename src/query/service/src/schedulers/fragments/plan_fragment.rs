@@ -245,25 +245,12 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
     }
 
     fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DistributedCopyIntoTable(
+        Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
             DistributedCopyIntoTable {
-                plan_id: plan.plan_id,
-                catalog_name: plan.catalog_name.clone(),
-                database_name: plan.database_name.clone(),
-                table_name: plan.table_name.clone(),
-                required_values_schema: plan.required_values_schema.clone(),
-                values_consts: plan.values_consts.clone(),
-                required_source_schema: plan.required_source_schema.clone(),
-                write_mode: plan.write_mode,
-                validation_mode: plan.validation_mode.clone(),
-                force: plan.force,
-                stage_table_info: plan.stage_table_info.clone(),
                 source: Box::new(self.source.clone()),
-                thresholds: plan.thresholds,
-                files: plan.files.clone(),
-                table_info: plan.table_info.clone(),
+                ..plan.clone()
             },
-        ))
+        )))
     }
 }
 

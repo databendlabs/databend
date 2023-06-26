@@ -141,7 +141,9 @@ impl PhysicalPlanReplacer for Fragmenter {
 
     fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
         self.state = State::SelectLeaf;
-        Ok(PhysicalPlan::DistributedCopyIntoTable(plan.clone()))
+        Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
+            plan.clone(),
+        )))
     }
 
     fn replace_delete_partial(

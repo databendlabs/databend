@@ -419,9 +419,9 @@ impl Interpreter for CopyInterpreter {
                     // which is not correct. We should generate a new id for insert.
                     let exchange_plan = PhysicalPlan::Exchange(Exchange {
                         plan_id: 0,
-                        input: Box::new(PhysicalPlan::DistributedCopyIntoTable(
+                        input: Box::new(PhysicalPlan::DistributedCopyIntoTable(Box::new(
                             distributed_plan.clone(),
-                        )),
+                        ))),
                         kind: FragmentKind::Merge,
                         keys: Vec::new(),
                     });

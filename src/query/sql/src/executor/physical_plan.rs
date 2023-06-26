@@ -810,7 +810,7 @@ pub enum PhysicalPlan {
     /// For insert into ... select ... in cluster
     DistributedInsertSelect(Box<DistributedInsertSelect>),
     /// add distributed copy into table from @stage
-    DistributedCopyIntoTable(DistributedCopyIntoTable),
+    DistributedCopyIntoTable(Box<DistributedCopyIntoTable>),
     /// Synthesized by fragmenter
     ExchangeSource(ExchangeSource),
     ExchangeSink(ExchangeSink),

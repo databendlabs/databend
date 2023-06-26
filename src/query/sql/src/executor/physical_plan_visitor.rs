@@ -279,7 +279,9 @@ pub trait PhysicalPlanReplacer {
     }
 
     fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DistributedCopyIntoTable(plan.clone()))
+        Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
+            plan.clone(),
+        )))
     }
 
     fn replace_insert_select(&mut self, plan: &DistributedInsertSelect) -> Result<PhysicalPlan> {
