@@ -54,7 +54,7 @@ Discover some fascinating code snippets or projects that showcase our work or le
 
 ### Register External Tables with Databend's Python Binding
 
-Databend's Python Binding now supports Register External Table. You can use the following functions to register external tables in Databend:
+Databend's Python binding now allows the registration of external tables. You can use the following functions to register external tables in Databend:
 
 - `register_parquet`
 - `register_ndjson`
@@ -86,7 +86,7 @@ If you are interested in learning more, please check out the resources listed be
 We have also made these improvements to Databend that we hope you will find helpful:
 
 - Added support for renaming columns with `ALTER TABLE [ IF EXISTS ] <name> RENAME COLUMN <col_name> TO <new_col_name>`.
-- Added support for column position to TSV format.
+- Added support for using column position when querying CSV and TSV files.
 - Added `system.background_jobs` and `system.background_tasks` tables.
 - Added http query deduplication via `X-DATABEND-DEDUPLICATE-LABEL` header.
 - Added support for distributed deletion.
@@ -97,9 +97,9 @@ We're always open to cutting-edge technologies and innovative ideas. You're more
 
 ### Implement Read-Only Mode for Databend Clusters
 
-Databend is planning to introduce a new feature called "Read-Only Mode" for Databend clusters. This will improve control and resource allocation for users.
+Databend plans to introduce a Read-Only Mode for clusters. This will provide users with more control over resource allocation.
 
-With this new feature, users will be able to create separate clusters for read and write operations. This will help prevent any accidental writes in the read cluster, which can cause data loss or corruption. The read-only mode will also help improve performance by reducing the number of write operations in the read cluster.
+Introducing Read-Only Mode allows separate clusters for read and write operations, preventing accidental writes in the read cluster, avoiding data loss, and enhancing performance.
 
 [Issue #11836 | feat: read-only mode for Databend clusters](https://github.com/datafuselabs/databend/issues/11836)
 
