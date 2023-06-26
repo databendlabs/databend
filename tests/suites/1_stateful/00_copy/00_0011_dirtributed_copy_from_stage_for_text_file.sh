@@ -3,6 +3,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
+echo "set global max_threads = 1" | $MYSQL_CLIENT_CONNECT
 echo "drop table if exists products;" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists s1;" | $MYSQL_CLIENT_CONNECT
 echo "CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV);" | $MYSQL_CLIENT_CONNECT
