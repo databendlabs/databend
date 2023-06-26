@@ -268,10 +268,10 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let n_threads = ctx.settings.get_max_threads()? as usize;
-        let max_aligner = match ctx.plan {
+        let max_aligner = match &ctx.plan {
             InputPlan::CopyInto(_) => ctx.splits.len(),
             InputPlan::StreamingLoad(StreamPlan { is_multi_part, .. }) => {
-                if is_multi_part {
+                if *is_multi_part {
                     3
                 } else {
                     1
@@ -282,7 +282,9 @@ pub trait InputFormatPipe: Sized + Send + 'static {
             |output| Aligner::<Self>::try_create(output, ctx.clone(), split_rx.clone()),
             std::cmp::min(max_aligner, n_threads),
         )?;
-        pipeline.resize(n_threads)?;
+        // aligners may own files of different sizes, so we need to balance the load
+        let force_balance = matches!(&ctx.plan, InputPlan::CopyInto(_));
+        pipeline.resize(n_threads, force_balance)?;
         pipeline.add_transform(|input, output| {
             DeserializeTransformer::<Self>::create(ctx.clone(), input, output)
         })?;

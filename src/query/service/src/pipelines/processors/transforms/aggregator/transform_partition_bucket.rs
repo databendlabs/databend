@@ -423,7 +423,7 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
         vec![output],
     )]));
 
-    pipeline.resize(input_nums)?;
+    pipeline.try_resize(input_nums)?;
 
     let settings = ctx.get_settings();
     if !settings.get_spilling_bytes_threshold_per_proc()?.is_zero() {
