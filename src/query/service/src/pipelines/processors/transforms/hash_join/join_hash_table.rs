@@ -50,6 +50,7 @@ use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
+use crate::pipelines::processors::HashJoinState;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 
@@ -111,6 +112,8 @@ pub struct JoinHashTable {
     pub(crate) finalize_tasks: Arc<RwLock<VecDeque<(usize, usize)>>>,
     /// OuterScan tasks
     pub(crate) outer_scan_tasks: Arc<RwLock<VecDeque<usize>>>,
+    /// fast return
+    pub(crate) fast_return: Arc<RwLock<bool>>,
 }
 
 impl JoinHashTable {
@@ -179,6 +182,7 @@ impl JoinHashTable {
             build_worker_num: Arc::new(AtomicU32::new(0)),
             finalize_tasks: Arc::new(RwLock::new(VecDeque::new())),
             outer_scan_tasks: Arc::new(RwLock::new(VecDeque::new())),
+            fast_return: Default::default(),
         })
     }
 
@@ -242,6 +246,15 @@ impl JoinHashTable {
                 }
             }
             probe_state.valids = valids;
+        }
+
+        if self.fast_return()?
+            && matches!(
+                self.hash_join_desc.join_type,
+                JoinType::Left | JoinType::Single | JoinType::Full | JoinType::LeftAnti
+            )
+        {
+            return self.left_fast_return(&input);
         }
 
         let hash_table = unsafe { &*self.hash_table.get() };

@@ -23,6 +23,7 @@ use common_base::runtime::TrySpawn;
 use common_compress::CompressAlgorithm;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
 use common_pipeline_core::Pipeline;
 use futures::AsyncRead;
@@ -81,7 +82,7 @@ impl ReadBatchTrait for Vec<u8> {
     }
 }
 
-pub trait RowBatchTrait: Send {
+pub trait RowBatchTrait: Send + BlockMetaInfo {
     fn size(&self) -> usize;
     fn rows(&self) -> usize;
 }
@@ -267,31 +268,25 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let n_threads = ctx.settings.get_max_threads()? as usize;
-        let max_aligner = match ctx.plan {
+        let max_aligner = match &ctx.plan {
             InputPlan::CopyInto(_) => ctx.splits.len(),
             InputPlan::StreamingLoad(StreamPlan { is_multi_part, .. }) => {
-                if is_multi_part {
+                if *is_multi_part {
                     3
                 } else {
                     1
                 }
             }
         };
-        let (row_batch_tx, row_batch_rx) = crossbeam_channel::bounded(n_threads);
         pipeline.add_source(
-            |output| {
-                Aligner::<Self>::try_create(
-                    output,
-                    ctx.clone(),
-                    split_rx.clone(),
-                    row_batch_tx.clone(),
-                )
-            },
+            |output| Aligner::<Self>::try_create(output, ctx.clone(), split_rx.clone()),
             std::cmp::min(max_aligner, n_threads),
         )?;
-        pipeline.resize(n_threads)?;
+        // aligners may own files of different sizes, so we need to balance the load
+        let force_balance = matches!(&ctx.plan, InputPlan::CopyInto(_));
+        pipeline.resize(n_threads, force_balance)?;
         pipeline.add_transform(|input, output| {
-            DeserializeTransformer::<Self>::create(ctx.clone(), input, output, row_batch_rx.clone())
+            DeserializeTransformer::<Self>::create(ctx.clone(), input, output)
         })?;
         Ok(())
     }
