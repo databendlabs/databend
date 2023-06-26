@@ -19,11 +19,18 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::infer_table_schema;
+use common_expression::DataField;
+use common_expression::DataSchemaRefExt;
+use common_expression::BLOCK_NAME_COL_NAME;
+use common_pipeline_core::processors::processor::ProcessorPtr;
+use common_sql::evaluator::BlockOperator;
+use common_sql::evaluator::CompoundBlockOperator;
 use common_sql::executor::PhysicalPlan;
 use common_sql::executor::PhysicalPlanBuilder;
 use common_sql::executor::PhysicalPlanReplacer;
 use common_sql::plans::Plan;
 use common_sql::plans::RefreshIndexPlan;
+use common_sql::plans::RelOperator;
 use common_storages_fuse::operations::AggIndexSink;
 use common_storages_fuse::FuseTable;
 
@@ -78,18 +85,34 @@ impl Interpreter for RefreshIndexInterpreter {
 
     #[async_backtrace::framed]
     async fn execute2(&self) -> Result<PipelineBuildResult> {
-        let (mut query_plan, schema, select_column_bindings) = match self.plan.query_plan.as_ref() {
+        let (mut query_plan, output_schema, select_columns) = match self.plan.query_plan.as_ref() {
             Plan::Query {
                 s_expr,
                 metadata,
                 bind_context,
                 ..
             } => {
-                let mut builder2 =
+                let schema = if let RelOperator::EvalScalar(eval) = s_expr.plan() {
+                    let fields = eval
+                        .items
+                        .iter()
+                        .map(|item| {
+                            let ty = item.scalar.data_type()?;
+                            Ok(DataField::new(&item.index.to_string(), ty))
+                        })
+                        .collect::<Result<Vec<_>>>()?;
+                    DataSchemaRefExt::create(fields)
+                } else {
+                    return Err(ErrorCode::SemanticError(
+                        "The last operator of the plan of aggregate index query should be EvalScalar",
+                    ));
+                };
+
+                let mut builder =
                     PhysicalPlanBuilder::new(metadata.clone(), self.ctx.clone(), false);
                 (
-                    builder2.build(s_expr.as_ref()).await?,
-                    bind_context.output_schema(),
+                    builder.build(s_expr.as_ref()).await?,
+                    schema,
                     bind_context.columns.clone(),
                 )
             }
@@ -115,22 +138,58 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let input_schema = query_plan.output_schema()?;
 
-        let fuse_table = FuseTable::do_create(self.plan.table_info.clone())?;
-        let fuse_table: Arc<FuseTable> = fuse_table.into();
-        let table_schema = infer_table_schema(&schema)?;
+        // Build projection
+        let mut projections = Vec::with_capacity(output_schema.num_fields());
+        for field in output_schema.fields().iter() {
+            let index = input_schema.index_of(field.name())?;
+            projections.push(index);
+        }
+        let num_input_columns = input_schema.num_fields();
+        let func_ctx = self.ctx.get_function_context()?;
+        build_res.main_pipeline.add_transform(|input, output| {
+            Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                input,
+                output,
+                num_input_columns,
+                func_ctx.clone(),
+                vec![BlockOperator::Project {
+                    projection: projections.clone(),
+                }],
+            )))
+        })?;
+
+        // Find the block name column offset in the block.
+        let block_name_col = select_columns
+            .iter()
+            .find(|col| col.column_name.eq_ignore_ascii_case(BLOCK_NAME_COL_NAME))
+            .ok_or_else(|| {
+                ErrorCode::Internal(
+                    "_block_name should contained in the input of refresh processor",
+                )
+            })?;
+        let block_name_offset = output_schema.index_of(&block_name_col.index.to_string())?;
+
+        // Build the final sink schema.
+        let mut sink_schema = infer_table_schema(&output_schema)?.as_ref().clone();
+        if !self.plan.user_defined_block_name {
+            sink_schema.drop_column(&block_name_col.index.to_string())?;
+        }
+        let sink_schema = Arc::new(sink_schema);
 
         let data_accessor = self.ctx.get_data_operator()?;
+        let fuse_table = FuseTable::do_create(self.plan.table_info.clone())?;
+        let fuse_table: Arc<FuseTable> = fuse_table.into();
+        let write_settings = fuse_table.get_write_settings();
 
-        build_res.main_pipeline.try_resize(1)?;
+        build_res.main_pipeline.resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
                 data_accessor.operator(),
                 self.plan.index_id,
-                fuse_table.get_write_settings(),
-                table_schema.clone(),
-                input_schema.clone(),
-                &select_column_bindings,
+                write_settings.clone(),
+                sink_schema.clone(),
+                block_name_offset,
                 self.plan.user_defined_block_name,
             )
         })?;
