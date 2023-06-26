@@ -37,6 +37,8 @@ table_engine_memory_enabled = true
 default_storage_format = 'parquet'
 default_compression = 'zstd'
 
+share_endpoint_address = "127.0.0.1:23103"
+
 [[query.users]]
 name = "root"
 auth_type = "no_password"
@@ -60,8 +62,6 @@ auth_type = "no_password"
 # auth_type = "sha256_password"
 # #  echo -n "datafuselabs" | sha256sum
 # auth_string = "6db1a2f5da402b43c066fcadcbf78f04260b3236d9035e44dd463f21e29e6f3b"
-
-share_endpoint_address = "127.0.0.1:23103"
 
 [log]
 
