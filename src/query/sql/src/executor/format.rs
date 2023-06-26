@@ -252,7 +252,7 @@ fn table_scan_to_format_tree(
         let agg_sel = agg_index
             .selection
             .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
             .join(", ");
         let agg_filter = agg_index
             .filter

@@ -121,7 +121,7 @@ impl Interpreter for RefreshIndexInterpreter {
 
         let data_accessor = self.ctx.get_data_operator()?;
 
-        build_res.main_pipeline.resize(1)?;
+        build_res.main_pipeline.try_resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,

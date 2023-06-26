@@ -188,13 +188,17 @@ impl Pipeline {
     }
 
     /// Add a ResizePipe to pipes
-    pub fn resize(&mut self, new_size: usize) -> Result<()> {
+    pub fn try_resize(&mut self, new_size: usize) -> Result<()> {
+        self.resize(new_size, false)
+    }
+
+    pub fn resize(&mut self, new_size: usize, force: bool) -> Result<()> {
         match self.pipes.last() {
             None => Err(ErrorCode::Internal("Cannot resize empty pipe.")),
             Some(pipe) if pipe.output_length == 0 => {
                 Err(ErrorCode::Internal("Cannot resize empty pipe."))
             }
-            Some(pipe) if pipe.output_length == new_size => Ok(()),
+            Some(pipe) if !force && pipe.output_length == new_size => Ok(()),
             Some(pipe) => {
                 let processor = ResizeProcessor::create(pipe.output_length, new_size);
                 let inputs_port = processor.get_inputs().to_vec();
