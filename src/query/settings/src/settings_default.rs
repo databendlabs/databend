@@ -310,6 +310,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: false,
                 }),
+                ("enable_distributed_copy_into", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable distributed execution of copy into.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {
