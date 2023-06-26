@@ -6958,6 +6958,132 @@ DropRole {
 
 
 ---------- Input ----------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT SEGMENT LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Segment,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t COMPACT LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t COMPACT BLOCK LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Compact {
+            target: Block,
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (SNAPSHOT => '9828b23f74664ff3806f44bbc1925ea5') LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (SNAPSHOT => 9828b23f74664ff3806f44bbc1925ea5) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Snapshot(
+                    "9828b23f74664ff3806f44bbc1925ea5",
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
+OPTIMIZE TABLE t PURGE BEFORE (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10;
+---------- Output ---------
+OPTIMIZE TABLE t PURGE BEFORE  (TIMESTAMP => '2023-06-26 09:49:02.038483'::TIMESTAMP) LIMIT 10
+---------- AST ------------
+OptimizeTable(
+    OptimizeTableStmt {
+        catalog: None,
+        database: None,
+        table: Identifier {
+            name: "t",
+            quote: None,
+            span: Some(
+                15..16,
+            ),
+        },
+        action: Purge {
+            before: Some(
+                Timestamp(
+                    Cast {
+                        span: Some(
+                            72..83,
+                        ),
+                        expr: Literal {
+                            span: Some(
+                                44..72,
+                            ),
+                            lit: String(
+                                "2023-06-26 09:49:02.038483",
+                            ),
+                        },
+                        target_type: Timestamp,
+                        pg_style: true,
+                    },
+                ),
+            ),
+        },
+        limit: Some(
+            10,
+        ),
+    },
+)
+
+
+---------- Input ----------
 ALTER TABLE t CLUSTER BY(c1);
 ---------- Output ---------
 ALTER TABLE t CLUSTER BY c1
@@ -7039,9 +7165,9 @@ AlterTable(
 
 
 ---------- Input ----------
-ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0;
+ALTER TABLE t RECLUSTER FINAL WHERE c1 > 0 LIMIT 10;
 ---------- Output ---------
-ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0)
+ALTER TABLE t RECLUSTER FINAL WHERE (c1 > 0) LIMIT 10
 ---------- AST ------------
 AlterTable(
     AlterTableStmt {
@@ -7098,7 +7224,9 @@ AlterTable(
                     },
                 },
             ),
-            limit: None,
+            limit: Some(
+                10,
+            ),
         },
     },
 )

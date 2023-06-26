@@ -118,7 +118,7 @@ impl FuseTable {
             .iter()
             .map(|meta| (None, meta.clone()))
             .collect();
-        if block_metas.is_empty() {
+        if block_metas.len() < 2 {
             return Ok(());
         }
 
