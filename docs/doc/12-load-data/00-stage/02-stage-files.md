@@ -1,5 +1,5 @@
 ---
-title: Staging Files with API
+title: Staging Files
 ---
 
 You can use the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md) to stage a file by uploading a local file to a stage. This API can be called using curl or other HTTP client tools. Alternatively, you can also upload files directly to the folder in your bucket that maps to a stage using a web browser. Once uploaded, Databend can recognize them as staged files. 

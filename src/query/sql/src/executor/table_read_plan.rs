@@ -56,8 +56,9 @@ pub trait ToReadDataSourcePlan {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        dry_run: bool,
     ) -> Result<DataSourcePlan> {
-        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs, None)
+        self.read_plan_with_catalog(ctx, "default".to_owned(), push_downs, None, dry_run)
             .await
     }
 
@@ -67,6 +68,7 @@ pub trait ToReadDataSourcePlan {
         catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        dry_run: bool,
     ) -> Result<DataSourcePlan>;
 }
 
@@ -79,6 +81,7 @@ impl ToReadDataSourcePlan for dyn Table {
         catalog: String,
         push_downs: Option<PushDownInfo>,
         internal_columns: Option<BTreeMap<FieldIndex, InternalColumn>>,
+        dry_run: bool,
     ) -> Result<DataSourcePlan> {
         let (statistics, parts) = if let Some(PushDownInfo {
             filter:
@@ -91,7 +94,8 @@ impl ToReadDataSourcePlan for dyn Table {
         {
             Ok((PartStatistics::default(), Partitions::default()))
         } else {
-            self.read_partitions(ctx.clone(), push_downs.clone()).await
+            self.read_partitions(ctx.clone(), push_downs.clone(), dry_run)
+                .await
         }?;
 
         ctx.incr_total_scan_value(ProgressValues {

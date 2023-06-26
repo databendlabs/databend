@@ -66,6 +66,7 @@ common-meta-app = { path = "../../meta/app" }
 jsonb = { workspace = true }
 # common-meta-embedded = { path = "../../meta/embedded" }
 aggregating-index = { path = "../ee-features/aggregating-index" }
+background-service = { path = "../ee-features/background-service" }
 common-license = { path = "../../common/license" }
 common-meta-kvapi = { path = "../../meta/kvapi" }
 common-meta-store = { path = "../../meta/store" }
@@ -104,7 +105,6 @@ storages-common-table-meta = { path = "../storages/common/table-meta" }
 table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
 virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
-
 # GitHub dependencies
 
 # Crates.io dependencies
@@ -150,7 +150,6 @@ prost = { version = "0.11", default-features = false }
 rand = "0.8.5"
 regex = "1.8.1"
 reqwest = { workspace = true }
-scopeguard = "1.1.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_urlencoded = "0.7.1"

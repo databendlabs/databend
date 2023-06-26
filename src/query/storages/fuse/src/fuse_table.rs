@@ -489,8 +489,9 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        self.do_read_partitions(ctx, push_downs).await
+        self.do_read_partitions(ctx, push_downs, dyn_run).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read_data", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
@@ -634,14 +635,13 @@ impl Table for FuseTable {
     #[async_backtrace::framed]
     async fn delete(
         &self,
-        ctx: Arc<dyn TableContext>,
-        filters: Option<DeletionFilters>,
-        col_indices: Vec<usize>,
-        query_row_id_col: bool,
-        pipeline: &mut Pipeline,
+        _ctx: Arc<dyn TableContext>,
+        _filter: Option<DeletionFilters>,
+        _col_indices: Vec<usize>,
+        _query_row_id_col: bool,
+        _pipeline: &mut Pipeline,
     ) -> Result<()> {
-        self.do_delete(ctx, filters, col_indices, query_row_id_col, pipeline)
-            .await
+        panic!("deprecated")
     }
 
     #[async_backtrace::framed]
@@ -721,6 +721,10 @@ impl Table for FuseTable {
     }
 
     fn support_row_id_column(&self) -> bool {
+        true
+    }
+
+    fn result_can_be_cached(&self) -> bool {
         true
     }
 }

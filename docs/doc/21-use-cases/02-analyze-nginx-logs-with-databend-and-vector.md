@@ -8,7 +8,7 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced: v1.1.55"/>
 
-Databend can be integrated as a sink for Vector, allowing for real-time gathering and analysis of Nginx access logs. This guide offers detailed, step-by-step instructions on how to utilize Databend and Vector for this purpose. For more information about the integration with Vector, see [Integrating Databend as a Sink for Vector](../11-integrations/10-data-tool/00-vector.md).
+Databend can be integrated as a sink for Vector, allowing for real-time gathering and analysis of Nginx access logs. This guide offers detailed, step-by-step instructions on how to utilize Databend and Vector for this purpose. For more information about the integration with Vector, see [Integrating Databend as a Sink for Vector](../12-load-data/02-load-db/vector.md).
 
 ## Step 1. Deploy Databend
 

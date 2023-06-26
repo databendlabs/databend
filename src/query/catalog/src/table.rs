@@ -154,6 +154,7 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
+        _dyn_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
         Err(ErrorCode::Unimplemented(format!(
@@ -386,6 +387,10 @@ pub trait Table: Sync + Send {
     fn is_stage_table(&self) -> bool {
         false
     }
+
+    fn result_can_be_cached(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -531,6 +536,7 @@ pub struct NavigationDescriptor {
     pub point: NavigationPoint,
 }
 
+#[derive(Debug, Clone)]
 pub struct DeletionFilters {
     // the filter expression for the deletion
     pub filter: RemoteExpr<String>,

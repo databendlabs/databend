@@ -1,5 +1,5 @@
 [build-system]
-requires = ["maturin>=0.14,<0.15"]
+requires = ["maturin>1.1.0"]
 build-backend = "maturin"
 
 [project]
@@ -15,7 +15,7 @@ classifiers = [
 [project.optional-dependencies]
 benchmark = []
 docs = ["pdoc"]
-test = ["pytest", "pandas"]
+test = ["pytest", "pandas", "polars"]
 
 [project.urls]
 Documentation = "https://databend.rs"

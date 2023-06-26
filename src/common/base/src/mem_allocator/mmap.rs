@@ -28,7 +28,7 @@ pub struct MmapAllocator {
 impl MmapAllocator {
     pub fn new() -> Self {
         Self {
-            allocator: JEAllocator::default(),
+            allocator: JEAllocator,
         }
     }
 }
