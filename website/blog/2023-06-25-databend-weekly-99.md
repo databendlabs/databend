@@ -88,7 +88,7 @@ We have also made these improvements to Databend that we hope you will find help
 - Added support for renaming columns with `ALTER TABLE [ IF EXISTS ] <name> RENAME COLUMN <col_name> TO <new_col_name>`.
 - Added support for column position to TSV format.
 - Added `system.background_jobs` and `system.background_tasks` tables.
-- Added http query deduplication via `X-DATABEND-QUERY-ID` header.
+- Added http query deduplication via `X-DATABEND-DEDUPLICATE-LABEL` header.
 - Added support for distributed deletion.
 
 ## What's Up Next
