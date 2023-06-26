@@ -15,6 +15,7 @@
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
+use common_sql::plans::JoinType;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
@@ -101,4 +102,7 @@ pub trait HashJoinState: Send + Sync {
 
     /// Get `merged_schema` which is `probe_schema` + `build_schema`
     fn merged_schema(&self) -> Result<DataSchemaRef>;
+
+    /// Get join type
+    fn join_type(&self) -> JoinType;
 }

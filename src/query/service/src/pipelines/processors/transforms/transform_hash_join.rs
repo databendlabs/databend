@@ -16,6 +16,7 @@ use std::any::Any;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
 use common_sql::plans::JoinType;
@@ -219,7 +220,25 @@ impl Processor for TransformHashJoinProbe {
             HashJoinStep::Build => {
                 self.join_state.wait_finalize_finish().await?;
                 if self.join_state.fast_return()? {
-                    self.step = HashJoinStep::Finished;
+                    match self.join_state.join_type() {
+                        JoinType::Inner
+                        | JoinType::Right
+                        | JoinType::Cross
+                        | JoinType::RightAnti
+                        | JoinType::RightSemi
+                        | JoinType::LeftSemi => {
+                            self.step = HashJoinStep::Finished;
+                        }
+                        JoinType::Left | JoinType::Full | JoinType::Single | JoinType::LeftAnti => {
+                            self.step = HashJoinStep::Probe;
+                        }
+                        _ => {
+                            return Err(ErrorCode::Internal(format!(
+                                "Join type: {:?} is unexpected",
+                                self.join_state.join_type()
+                            )));
+                        }
+                    }
                     return Ok(());
                 }
                 self.step = HashJoinStep::Probe;
@@ -227,7 +246,11 @@ impl Processor for TransformHashJoinProbe {
             HashJoinStep::Finalize => unreachable!(),
             HashJoinStep::Probe => {
                 self.join_state.wait_probe_finish().await?;
-                self.step = HashJoinStep::FinalScan;
+                if self.join_state.fast_return()? {
+                    self.step = HashJoinStep::Finished;
+                } else {
+                    self.step = HashJoinStep::FinalScan;
+                }
             }
             HashJoinStep::FinalScan | HashJoinStep::Finished => unreachable!(),
         };
