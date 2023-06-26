@@ -118,13 +118,9 @@ impl HashJoinState for JoinHashTable {
             }
             // Fast path for hash join
             if row_num == 0
-                && matches!(
+                && !matches!(
                     self.hash_join_desc.join_type,
-                    JoinType::Inner
-                        | JoinType::Right
-                        | JoinType::Cross
-                        | JoinType::RightAnti
-                        | JoinType::RightSemi
+                    JoinType::LeftMark | JoinType::RightMark
                 )
                 && self.ctx.get_cluster().is_empty()
             {
@@ -792,5 +788,9 @@ impl HashJoinState for JoinHashTable {
             .cloned()
             .collect::<Vec<_>>();
         Ok(DataSchemaRefExt::create(merged_fields))
+    }
+
+    fn join_type(&self) -> JoinType {
+        self.hash_join_desc.join_type.clone()
     }
 }
