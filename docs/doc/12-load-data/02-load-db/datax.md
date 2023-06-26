@@ -6,7 +6,11 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 <FunctionDescription description="Introduced: v1.1.70"/>
 
-[DataX](https://github.com/alibaba/DataX) is an open-source data integration tool developed by Alibaba. It is designed to efficiently and reliably transfer data between various data storage systems and platforms, such as relational databases, big data platforms, and cloud storage services. DataX supports a wide range of data sources and data sinks, including but not limited to MySQL, Oracle, SQL Server, PostgreSQL, HDFS, Hive, HBase, MongoDB, and more. 
+[DataX](https://github.com/alibaba/DataX) is an open-source data integration tool developed by Alibaba. It is designed to efficiently and reliably transfer data between various data storage systems and platforms, such as relational databases, big data platforms, and cloud storage services. DataX supports a wide range of data sources and data sinks, including but not limited to MySQL, Oracle, SQL Server, PostgreSQL, HDFS, Hive, HBase, MongoDB, and more.
+
+:::tip
+[Apache DolphinScheduler](https://dolphinscheduler.apache.org/) now has added support for Databend as a data source. This enhancement enables you to leverage DolphinScheduler for managing DataX tasks and effortlessly load data from MySQL to Databend.
+:::
 
 For information about the system requirements, download, and deployment steps for DataX, refer to DataX's [Quick Start Guide](https://github.com/alibaba/DataX/blob/master/userGuid.md). The guide provides detailed instructions and guidelines for setting up and using DataX.
 
