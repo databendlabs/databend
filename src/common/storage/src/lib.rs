@@ -30,7 +30,6 @@
 
 #![allow(clippy::uninlined_format_args)]
 #![feature(io_error_other)]
-#![feature(once_cell)]
 
 mod config;
 pub use config::ShareTableConfig;
