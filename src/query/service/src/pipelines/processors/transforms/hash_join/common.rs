@@ -91,16 +91,17 @@ impl JoinHashTable {
     pub(crate) fn create_marker_block(
         &self,
         has_null: bool,
-        markers: &mut Vec<u8>,
+        markers: &mut [u8],
+        num_rows: usize,
     ) -> Result<DataBlock> {
-        let mut validity = MutableBitmap::with_capacity(markers.len());
-        let mut boolean_bit_map = MutableBitmap::with_capacity(markers.len());
-
-        for m in markers {
-            let marker = if *m == MARKER_KIND_FALSE && has_null {
+        let mut validity = MutableBitmap::with_capacity(num_rows);
+        let mut boolean_bit_map = MutableBitmap::with_capacity(num_rows);
+        let mut row_index = 0;
+        while row_index < num_rows {
+            let marker = if markers[row_index] == MARKER_KIND_FALSE && has_null {
                 MARKER_KIND_NULL
             } else {
-                *m
+                markers[row_index]
             };
             if marker == MARKER_KIND_NULL {
                 validity.push(false);
@@ -112,7 +113,8 @@ impl JoinHashTable {
             } else {
                 boolean_bit_map.push(false);
             }
-            *m = MARKER_KIND_FALSE;
+            markers[row_index] = MARKER_KIND_FALSE;
+            row_index += 1;
         }
         let boolean_column = Column::Boolean(boolean_bit_map.into());
         let marker_column = Column::Nullable(Box::new(NullableColumn {

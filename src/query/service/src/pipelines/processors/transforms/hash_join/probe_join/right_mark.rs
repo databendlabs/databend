@@ -58,7 +58,7 @@ impl JoinHashTable {
         }
 
         Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers)?,
+            &self.create_marker_block(has_null, markers, input.num_rows())?,
             input,
         )?])
     }
@@ -222,7 +222,7 @@ impl JoinHashTable {
         }
 
         Ok(vec![self.merge_eq_block(
-            &self.create_marker_block(has_null, markers)?,
+            &self.create_marker_block(has_null, markers, input.num_rows())?,
             input,
         )?])
     }
