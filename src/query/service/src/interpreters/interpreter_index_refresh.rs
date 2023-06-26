@@ -181,7 +181,7 @@ impl Interpreter for RefreshIndexInterpreter {
         let fuse_table: Arc<FuseTable> = fuse_table.into();
         let write_settings = fuse_table.get_write_settings();
 
-        build_res.main_pipeline.resize(1)?;
+        build_res.main_pipeline.try_resize(1)?;
         build_res.main_pipeline.add_sink(|input| {
             AggIndexSink::try_create(
                 input,
