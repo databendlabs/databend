@@ -23,6 +23,7 @@ use common_base::runtime::TrySpawn;
 use common_compress::CompressAlgorithm;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
 use common_pipeline_core::Pipeline;
 use futures::AsyncRead;
@@ -81,7 +82,7 @@ impl ReadBatchTrait for Vec<u8> {
     }
 }
 
-pub trait RowBatchTrait: Send {
+pub trait RowBatchTrait: Send + BlockMetaInfo {
     fn size(&self) -> usize;
     fn rows(&self) -> usize;
 }
@@ -277,21 +278,13 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 }
             }
         };
-        let (row_batch_tx, row_batch_rx) = crossbeam_channel::bounded(n_threads);
         pipeline.add_source(
-            |output| {
-                Aligner::<Self>::try_create(
-                    output,
-                    ctx.clone(),
-                    split_rx.clone(),
-                    row_batch_tx.clone(),
-                )
-            },
+            |output| Aligner::<Self>::try_create(output, ctx.clone(), split_rx.clone()),
             std::cmp::min(max_aligner, n_threads),
         )?;
         pipeline.resize(n_threads)?;
         pipeline.add_transform(|input, output| {
-            DeserializeTransformer::<Self>::create(ctx.clone(), input, output, row_batch_rx.clone())
+            DeserializeTransformer::<Self>::create(ctx.clone(), input, output)
         })?;
         Ok(())
     }
