@@ -859,6 +859,9 @@ impl PipelineBuilder {
                         v,
                         &mut self.main_pipeline,
                         params.clone(),
+                        self.enable_profiling,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
                     )
                 }
             }),
@@ -880,6 +883,9 @@ impl PipelineBuilder {
                         v,
                         &mut self.main_pipeline,
                         params.clone(),
+                        self.enable_profiling,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
                     )
                 }
             }),
