@@ -23,6 +23,8 @@ use common_expression::types::DataType;
 use common_expression::BlockEntry;
 use common_expression::Column;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_expression::DataSchemaRefExt;
 use common_expression::Evaluator;
 use common_expression::HashMethod;
 use common_expression::HashMethodKind;
@@ -118,6 +120,31 @@ impl HashJoinState for JoinHashTable {
             for chunk in chunks.iter() {
                 row_num += chunk.num_rows();
             }
+            // Fast path for hash join
+            if row_num == 0
+                && matches!(
+                    self.hash_join_desc.join_type,
+                    JoinType::Inner
+                        | JoinType::Right
+                        | JoinType::Cross
+                        | JoinType::RightAnti
+                        | JoinType::RightSemi
+                )
+                && self.ctx.get_cluster().is_empty()
+            {
+                {
+                    let mut fast_return = self.fast_return.write();
+                    *fast_return = true;
+                }
+                let mut build_done = self.build_done.lock();
+                *build_done = true;
+                self.build_done_notify.notify_waiters();
+
+                let mut finalize_done = self.finalize_done.lock();
+                *finalize_done = true;
+                self.finalize_done_notify.notify_waiters();
+                return Ok(());
+            }
 
             // Create a fixed size hash table.
             let hashjoin_hashtable = match (*self.method).clone() {
@@ -199,10 +226,11 @@ impl HashJoinState for JoinHashTable {
 
     fn generate_finalize_task(&self) -> Result<()> {
         {
-            let buffer = self.row_space.buffer.write();
+            let mut buffer = self.row_space.buffer.write();
             if !buffer.is_empty() {
                 let data_block = DataBlock::concat(&buffer)?;
                 self.add_build_block(data_block)?;
+                buffer.clear();
             }
         }
 
@@ -776,13 +804,11 @@ impl HashJoinState for JoinHashTable {
     async fn wait_finalize_finish(&self) -> Result<()> {
         let notified = {
             let finalized_guard = self.finalize_done.lock();
-
             match *finalized_guard {
                 true => None,
                 false => Some(self.finalize_done_notify.notified()),
             }
         };
-
         if let Some(notified) = notified {
             notified.await;
         }
@@ -804,5 +830,22 @@ impl HashJoinState for JoinHashTable {
             notified.await;
         }
         Ok(())
+    }
+
+    fn fast_return(&self) -> Result<bool> {
+        let fast_return = self.fast_return.read();
+        Ok(*fast_return)
+    }
+
+    fn merged_schema(&self) -> Result<DataSchemaRef> {
+        let build_schema = self.row_space.data_schema.clone();
+        let probe_schema = self.probe_schema.clone();
+        let merged_fields = probe_schema
+            .fields()
+            .iter()
+            .chain(build_schema.fields().iter())
+            .cloned()
+            .collect::<Vec<_>>();
+        Ok(DataSchemaRefExt::create(merged_fields))
     }
 }

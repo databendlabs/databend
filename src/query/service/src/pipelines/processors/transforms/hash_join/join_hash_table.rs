@@ -112,6 +112,8 @@ pub struct JoinHashTable {
     /// LeftMarkScan map
     pub(crate) mark_scan_map: Arc<SyncUnsafeCell<Vec<Vec<u8>>>>,
     pub(crate) mark_scan_map_lock: Mutex<bool>,
+    /// fast return
+    pub(crate) fast_return: Arc<RwLock<bool>>,
 }
 
 impl JoinHashTable {
@@ -181,6 +183,7 @@ impl JoinHashTable {
             outer_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map: Arc::new(SyncUnsafeCell::new(Vec::new())),
             mark_scan_map_lock: Mutex::new(false),
+            fast_return: Default::default(),
         })
     }
 

@@ -14,6 +14,7 @@
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
@@ -94,4 +95,10 @@ pub trait HashJoinState: Send + Sync {
 
     /// Wait until the probe phase is finished.
     async fn wait_probe_finish(&self) -> Result<()>;
+
+    /// Get `fast_return`
+    fn fast_return(&self) -> Result<bool>;
+
+    /// Get `merged_schema` which is `probe_schema` + `build_schema`
+    fn merged_schema(&self) -> Result<DataSchemaRef>;
 }
