@@ -267,7 +267,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let n_threads = ctx.settings.get_max_threads()? as usize;
-        let mut max_aligner = match ctx.plan {
+        let max_aligner = match ctx.plan {
             InputPlan::CopyInto(_) => ctx.splits.len(),
             InputPlan::StreamingLoad(StreamPlan { is_multi_part, .. }) => {
                 if is_multi_part {
@@ -277,9 +277,6 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 }
             }
         };
-        if max_aligner == 0 {
-            max_aligner = 1;
-        }
         let (row_batch_tx, row_batch_rx) = crossbeam_channel::bounded(n_threads);
         pipeline.add_source(
             |output| {
