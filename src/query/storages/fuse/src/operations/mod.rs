@@ -16,7 +16,7 @@ mod agg_index_sink;
 mod analyze;
 mod append;
 mod commit;
-mod common;
+pub mod common;
 mod compact;
 mod delete;
 mod gc;
