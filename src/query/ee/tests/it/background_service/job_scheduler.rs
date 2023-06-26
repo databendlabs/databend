@@ -88,7 +88,7 @@ async fn test_one_shot_job() -> Result<()> {
         ),
         finish_tx: scheduler.finish_tx.clone(),
     };
-    scheduler.add_job(job.clone())?;
+    scheduler.add_job(job.clone()).await?;
     // println!("what happened");
     scheduler.start().await?;
     // // atomic operation is flaky, so we need to sleep for a while

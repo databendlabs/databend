@@ -71,11 +71,12 @@ impl JobScheduler {
             .map(|job| job.value().box_clone())
     }
 
-    pub fn add_job(&mut self, job: impl Job + Send + Sync + Clone + 'static) -> Result<()> {
-        if job.get_info().job_params.is_none() {
+    pub async fn add_job(&mut self, job: impl Job + Send + Sync + Clone + 'static) -> Result<()> {
+        let info =& job.get_info().await?;
+        if info.job_params.is_none() {
             return Ok(());
         }
-        match job.get_info().job_params.unwrap().job_type {
+        match info.job_params.as_ref().unwrap().job_type {
             BackgroundJobType::ONESHOT => {
                 self.one_shot_jobs
                     .insert(job.get_name().name, Box::new(job) as BoxedJob);
@@ -147,15 +148,15 @@ impl JobScheduler {
     }
     // Checks and runs a single [Job](crate::Job)
     pub async fn check_and_run_job(mut job: BoxedJob, force_execute: bool) -> Result<()> {
-        if !Self::should_run_job(&job.get_info(), Utc::now(), force_execute) {
+        let info = &job.get_info().await?;
+        if !Self::should_run_job(info, Utc::now(), force_execute) {
             return Ok(());
         }
 
         // update job status only if it is not forced to run
         if !force_execute {
-            let info = job.get_info();
-            let params = info.job_params.unwrap();
-            let mut status = info.job_status.unwrap();
+            let params = info.job_params.as_ref().unwrap();
+            let mut status = info.job_status.clone().unwrap();
             status.next_task_scheduled_time = params.get_next_running_time(Utc::now());
             job.update_job_status(status.clone()).await?;
             info!(background = true, next_scheduled_time = ?status.next_task_scheduled_time, "Running job");

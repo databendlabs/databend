@@ -29,7 +29,7 @@ use common_base::base::uuid::Uuid;
 use common_config::InnerConfig;
 use common_exception::Result;
 use common_meta_api::BackgroundApi;
-use common_meta_app::background::{BackgroundJobIdent, BackgroundJobParams, ManualTriggerParams, UpdateBackgroundJobParamsReq};
+use common_meta_app::background::{BackgroundJobIdent, BackgroundJobParams, GetBackgroundJobReq, ManualTriggerParams, UpdateBackgroundJobParamsReq};
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobStatus;
 use common_meta_app::background::BackgroundJobType::ONESHOT;
@@ -95,8 +95,11 @@ impl Job for CompactionJob {
             .expect("failed to do compaction job");
     }
 
-    fn get_info(&self) -> BackgroundJobInfo {
-        self.info.lock().clone()
+    async fn get_info(&self) -> Result<BackgroundJobInfo> {
+        let job = self.meta_api.get_background_job(GetBackgroundJobReq{
+            name: self.creator.clone(),
+        }).await?;
+        Ok(job.info)
     }
 
     fn get_name(&self) -> BackgroundJobIdent {
@@ -281,7 +284,7 @@ impl CompactionJob {
             info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
             return Ok(());
         }
-        let job_info = self.get_info();
+        let job_info = self.get_info().await?;
         let id = Uuid::new_v4().to_string();
 
         let (params, manual) = Self::sync_compact_params(&job_info).await;

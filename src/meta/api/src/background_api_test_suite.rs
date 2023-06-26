@@ -51,6 +51,7 @@ fn new_background_task(
         message: "".to_string(),
         compaction_task_stats: None,
         vacuum_stats: None,
+        manual_trigger: None,
         creator: None,
         created_at,
     }

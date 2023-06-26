@@ -16,6 +16,7 @@ test = false
 arrow-array = { version = "37.0.0" }
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
+common-meta-app = { path = "../../../meta/app" }
 common-base = { path = "../../../common/base" }
 common-exception = { path = "../../../common/exception" }
 

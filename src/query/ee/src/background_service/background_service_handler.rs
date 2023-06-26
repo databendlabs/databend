@@ -40,7 +40,7 @@ use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
 use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::{QueryContext, Session};
+use databend_query::sessions::Session;
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
@@ -95,7 +95,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
     }
 
     #[async_backtrace::framed]
-    async fn execute_scheduled_job(&self, ctx: Arc<QueryContext>, name: String) -> Result<()> {
+    async fn execute_scheduled_job(&self, tenant: String, user: UserIdentity, name: String) -> Result<()> {
         self.check_license().await?;
         if self.conf.background.enable {
             return if let Some(job) = self.scheduler.get_scheduled_job(name.as_str()) {
@@ -113,7 +113,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
             // when many execute scheduled job requests are sent to the meta store,
             // only one of them will be executed and the others will be ignored.
             let name = BackgroundJobIdent {
-                tenant: ctx.get_tenant().to_string(),
+                tenant,
                 name,
             };
             let info = self.meta_api.get_background_job(GetBackgroundJobReq {
@@ -121,7 +121,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
             }).await?;
             let mut params = info.info.job_params.clone().unwrap_or_default();
             let id = Uuid::new_v4().to_string();
-            let trigger = ctx.get_current_user()?.identity();
+            let trigger = user;
             params.manual_trigger_params = Some(ManualTriggerParams::new(id, trigger));
             self.meta_api.update_background_job_params(UpdateBackgroundJobParamsReq {
                 job_name: name,
@@ -172,7 +172,7 @@ impl RealBackgroundService {
             scheduler.finish_tx.clone(),
         )
         .await?;
-        scheduler.add_job(compactor_job)?;
+        scheduler.add_job(compactor_job).await?;
 
         let rm = RealBackgroundService {
             conf: conf.clone(),
