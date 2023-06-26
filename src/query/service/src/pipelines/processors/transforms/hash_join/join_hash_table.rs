@@ -46,6 +46,7 @@ use parking_lot::RwLock;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::HashJoinDesc;
+use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::row::RowSpace;
 use crate::pipelines::processors::transforms::hash_join::util::build_schema_wrap_nullable;
 use crate::pipelines::processors::transforms::hash_join::util::probe_schema_wrap_nullable;
@@ -229,7 +230,7 @@ impl JoinHashTable {
 
         if self.hash_join_desc.join_type == JoinType::RightMark {
             if input.num_rows() > probe_state.markers.as_ref().unwrap().len() {
-                probe_state.markers = Some(vec![0; input.num_rows()]);
+                probe_state.markers = Some(vec![MARKER_KIND_FALSE; input.num_rows()]);
             }
             if self.hash_join_desc.other_predicate.is_none() {
                 Self::init_markers(

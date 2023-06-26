@@ -20,6 +20,8 @@ use common_hashtable::RowPtr;
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::sql::plans::JoinType;
 
+use super::desc::MARKER_KIND_FALSE;
+
 /// ProbeState used for probe phase of hash join.
 /// We may need some reusable state for probe phase.
 pub struct ProbeState {
@@ -66,7 +68,7 @@ impl ProbeState {
             _ => (None, None, None),
         };
         let markers = if matches!(&join_type, JoinType::RightMark) {
-            Some(vec![0; JOIN_MAX_BLOCK_SIZE])
+            Some(vec![MARKER_KIND_FALSE; JOIN_MAX_BLOCK_SIZE])
         } else {
             None
         };
