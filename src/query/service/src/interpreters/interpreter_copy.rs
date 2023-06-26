@@ -250,6 +250,7 @@ impl CopyInterpreter {
             thresholds: to_table.get_block_thresholds(),
             files,
             table_info: to_table.get_table_info().clone(),
+            local_node_id: self.ctx.get_cluster().local_id.clone(),
         }))
     }
 
@@ -498,7 +499,7 @@ pub fn append_data_and_set_finish(
     let plan_stage_table_info: StageTableInfo;
     let plan_force: bool;
     let plan_write_mode: CopyIntoTableMode;
-
+    let mut local_id = String::from("dummy");
     match plan_option {
         PlanParam::CopyIntoTablePlanOption(plan) => {
             plan_required_source_schema = plan.required_source_schema;
@@ -515,6 +516,7 @@ pub fn append_data_and_set_finish(
             plan_stage_table_info = plan.stage_table_info;
             plan_force = plan.force;
             plan_write_mode = plan.write_mode;
+            local_id = plan.local_node_id.clone();
         }
     }
 
@@ -605,55 +607,64 @@ pub fn append_data_and_set_finish(
         }
         CopyIntoTableMode::Replace => {}
     }
-
-    main_pipeline.set_on_finished(move |may_error| {
-        match may_error {
-            None => {
-                GlobalIORuntime::instance().block_on(async move {
-                    {
-                        let status =
-                            format!("end of commit, number of copied files:{}", files.len());
-                        ctx.set_status_info(&status);
-                        info!(status);
-                    }
-
-                    // 1. log on_error mode errors.
-                    // todo(ariesdevil): persist errors with query_id
-                    if let Some(error_map) = ctx.get_maximum_error_per_file() {
-                        for (file_name, e) in error_map {
-                            error!(
-                                "copy(on_error={}): file {} encounter error {},",
-                                stage_info_clone.copy_options.on_error,
-                                file_name,
-                                e.to_string()
-                            );
+    if local_id == ctx.get_cluster().local_id {
+        main_pipeline.set_on_finished(move |may_error| {
+            match may_error {
+                None => {
+                    GlobalIORuntime::instance().block_on(async move {
+                        {
+                            let status =
+                                format!("end of commit, number of copied files:{}", files.len());
+                            ctx.set_status_info(&status);
+                            info!(status);
                         }
-                    }
 
-                    // 2. Try to purge copied files if purge option is true, if error will skip.
-                    // If a file is already copied(status with AlreadyCopied) we will try to purge them.
-                    if purge {
-                        CopyInterpreter::try_purge_files(ctx.clone(), &stage_info_clone, &files)
+                        // 1. log on_error mode errors.
+                        // todo(ariesdevil): persist errors with query_id
+                        if let Some(error_map) = ctx.get_maximum_error_per_file() {
+                            for (file_name, e) in error_map {
+                                error!(
+                                    "copy(on_error={}): file {} encounter error {},",
+                                    stage_info_clone.copy_options.on_error,
+                                    file_name,
+                                    e.to_string()
+                                );
+                            }
+                        }
+
+                        // 2. Try to purge copied files if purge option is true, if error will skip.
+                        // If a file is already copied(status with AlreadyCopied) we will try to purge them.
+                        if purge {
+                            CopyInterpreter::try_purge_files(
+                                ctx.clone(),
+                                &stage_info_clone,
+                                &files,
+                            )
                             .await;
-                    }
+                        }
 
-                    // Status.
-                    {
-                        info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
-                    }
+                        // Status.
+                        {
+                            info!("all copy finished, elapsed:{}", start.elapsed().as_secs());
+                        }
 
-                    Ok(())
-                })?;
+                        Ok(())
+                    })?;
+                }
+                Some(error) => {
+                    error!(
+                        "copy failed, elapsed:{}, reason: {}",
+                        start.elapsed().as_secs(),
+                        error
+                    );
+                }
             }
-            Some(error) => {
-                error!(
-                    "copy failed, elapsed:{}, reason: {}",
-                    start.elapsed().as_secs(),
-                    error
-                );
-            }
-        }
-        Ok(())
-    });
+            Ok(())
+        });
+    } else {
+        // remote node does nothing.
+        main_pipeline.set_on_finished(move |_| Ok(()))
+    }
+
     Ok(())
 }

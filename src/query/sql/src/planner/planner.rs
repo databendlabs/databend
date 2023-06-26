@@ -107,7 +107,8 @@ impl Planner {
 
                 // Step 4: Optimize the SExpr with optimizers, and generate optimized physical SExpr
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                    enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
+                    enable_distributed_optimization: !self.ctx.get_cluster().is_empty()
+                        && self.ctx.get_settings().get_enable_distributed_copy()?,
                 }));
 
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, plan)?;
