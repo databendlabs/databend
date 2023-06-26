@@ -32,6 +32,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
+use common_expression::TableSchemaRef;
 use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
@@ -68,14 +69,21 @@ pub struct TableScan {
 }
 
 impl TableScan {
-    pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        let mut fields = Vec::with_capacity(self.name_mapping.len());
-        let schema = self.source.schema();
-        for (name, id) in self.name_mapping.iter() {
+    pub fn output_fields(
+        schema: TableSchemaRef,
+        name_mapping: &BTreeMap<String, IndexType>,
+    ) -> Result<Vec<DataField>> {
+        let mut fields = Vec::with_capacity(name_mapping.len());
+        for (name, id) in name_mapping.iter() {
             let orig_field = schema.field_with_name(name)?;
             let data_type = DataType::from(orig_field.data_type());
             fields.push(DataField::new(&id.to_string(), data_type));
         }
+        Ok(fields)
+    }
+
+    pub fn output_schema(&self) -> Result<DataSchemaRef> {
+        let fields = TableScan::output_fields(self.source.schema(), &self.name_mapping)?;
         Ok(DataSchemaRefExt::create(fields))
     }
 }

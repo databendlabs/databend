@@ -238,7 +238,7 @@ impl Table for StageTable {
         }
 
         // final compact unload
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         // Add sink pipe.
         pipeline.add_sink(|input| {

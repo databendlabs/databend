@@ -15,9 +15,11 @@
 use std::sync::Arc;
 use std::vec;
 
+use common_catalog::plan::AggIndexMeta;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_functions::aggregates::StateAddr;
@@ -83,6 +85,9 @@ pub struct TransformPartialAggregate<Method: HashMethodBounds> {
     hash_table: HashTable<Method>,
 
     params: Arc<AggregatorParams>,
+
+    /// A temporary place to hold aggregating state from index data.
+    temp_place: StateAddr,
 }
 
 impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
@@ -113,6 +118,7 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                 params,
                 hash_table,
                 settings: AggregateSettings::try_from(ctx)?,
+                temp_place: StateAddr::new(0),
             },
         ))
     }
@@ -160,8 +166,8 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         // This will help improve the performance ~hundreds of megabits per second
         let aggr_arg_columns_slice = &aggregate_arguments_columns;
 
+        let rows = block.num_rows();
         for index in 0..aggregate_functions.len() {
-            let rows = block.num_rows();
             let function = &aggregate_functions[index];
             let state_offset = offsets_aggregate_states[index];
             let function_arguments = &aggr_arg_columns_slice[index];
@@ -171,7 +177,41 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
         Ok(())
     }
 
+    #[inline(always)]
+    #[allow(clippy::ptr_arg)] // &[StateAddr] slower than &StateAddrs ~20%
+    fn execute_index_block(&self, block: &DataBlock, places: &StateAddrs) -> Result<()> {
+        let aggregate_functions = &self.params.aggregate_functions;
+        let offsets_aggregate_states = &self.params.offsets_aggregate_states;
+
+        for index in 0..aggregate_functions.len() {
+            // Aggregation states are in the back of the block.
+            let agg_index = block.num_columns() - aggregate_functions.len() + index;
+            let function = &aggregate_functions[index];
+            let offset = offsets_aggregate_states[index];
+            let agg_state = block
+                .get_by_offset(agg_index)
+                .value
+                .as_column()
+                .unwrap()
+                .as_string()
+                .unwrap();
+
+            for (row, mut raw_state) in agg_state.iter().enumerate() {
+                let place = &places[row];
+                function.deserialize(self.temp_place, &mut raw_state)?;
+                function.merge(place.next(offset), self.temp_place)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn execute_one_block(&mut self, block: DataBlock) -> Result<()> {
+        let is_agg_index_block = block
+            .get_meta()
+            .and_then(AggIndexMeta::downcast_ref_from)
+            .is_some();
+
         let block = block.convert_to_full();
 
         let group_columns = self
@@ -202,7 +242,14 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                         })
                     }
 
-                    Self::execute(&self.params, &block, &places)
+                    if is_agg_index_block {
+                        if self.temp_place.addr() == 0 {
+                            self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
+                        }
+                        self.execute_index_block(&block, &places)
+                    } else {
+                        Self::execute(&self.params, &block, &places)
+                    }
                 }
                 HashTable::PartitionedHashTable(hashtable) => {
                     let mut places = Vec::with_capacity(rows_num);
@@ -218,7 +265,14 @@ impl<Method: HashMethodBounds> TransformPartialAggregate<Method> {
                         })
                     }
 
-                    Self::execute(&self.params, &block, &places)
+                    if is_agg_index_block {
+                        if self.temp_place.addr() == 0 {
+                            self.temp_place = self.params.alloc_layout(&mut hashtable.arena);
+                        }
+                        self.execute_index_block(&block, &places)
+                    } else {
+                        Self::execute(&self.params, &block, &places)
+                    }
                 }
             }
         }

@@ -13,11 +13,16 @@
 // limitations under the License.
 
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_exception::Result;
 use common_expression::types::DataType;
+use common_expression::DataField;
+use common_expression::DataSchema;
 use common_expression::Scalar;
+use itertools::Itertools;
+use tracing::info;
 
 use crate::binder::split_conjunctions;
 use crate::optimizer::SExpr;
@@ -29,6 +34,7 @@ use crate::plans::ConstantExpr;
 use crate::plans::EvalScalar;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
+use crate::plans::ScalarItem;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::ColumnSet;
@@ -59,7 +65,7 @@ pub fn try_rewrite(
     let query_group_items = query_info.formatted_group_items();
 
     // Search all index plans, find the first matched index to rewrite the query.
-    for (index_id, _, plan) in index_plans.iter() {
+    for (index_id, sql, plan) in index_plans.iter() {
         let plan = rewrite_index_plan(&col_index_map, plan);
 
         let index_info = collect_information(&plan)?;
@@ -73,17 +79,79 @@ pub fn try_rewrite(
         }
 
         // 2. Check query output and try to rewrite it.
-        let index_selection = index_info.formatted_selection();
+        let index_selection = index_info.formatted_selection()?;
+        // group items should be in selection.
+        if !query_group_items
+            .iter()
+            .all(|item| index_selection.contains_key(item))
+        {
+            continue;
+        }
+
         let mut new_selection = Vec::with_capacity(query_info.selection.items.len());
         let mut flag = true;
-        for item in query_info.selection.items.iter() {
-            if let Some(rewritten) =
-                rewrite_by_selection(&query_info, &item.scalar, &index_selection)
-            {
-                new_selection.push(rewritten);
-            } else {
-                flag = false;
-                break;
+        let agg_func_indices = index_info
+            .aggregation
+            .as_ref()
+            .map(|(agg, _)| {
+                agg.aggregate_functions
+                    .iter()
+                    .map(|f| f.index)
+                    .collect::<HashSet<_>>()
+            })
+            .unwrap_or_default();
+
+        if let Some((query_agg, _)) = query_info.aggregation {
+            // If the query is an aggregation query, the index selection is to rewrite the input `EvalScalar` operator of `Aggregate` operators.
+            // In another word, is to rewrite the input items of the aggregation.
+            // The input of aggregation will only have the arguments of the aggregate functions and group by columns (expressions).
+            // So just need to find if the aggregate functions call and group by exprs exist in index selection.
+            for expr in query_agg.group_items.iter() {
+                if let Some(rewritten) = try_create_column_binding(
+                    &index_selection,
+                    &query_info.format_scalar(&expr.scalar),
+                ) {
+                    new_selection.push(ScalarItem {
+                        index: expr.index,
+                        scalar: rewritten.into(),
+                    });
+                } else {
+                    flag = false;
+                    break;
+                }
+            }
+            if flag {
+                for agg in query_agg.aggregate_functions.iter() {
+                    if let Some(mut rewritten) = try_create_column_binding(
+                        &index_selection,
+                        &query_info.format_scalar(&agg.scalar),
+                    ) {
+                        rewritten.column.data_type = Box::new(DataType::String);
+                        new_selection.push(ScalarItem {
+                            index: agg.index,
+                            scalar: rewritten.into(),
+                        });
+                    } else {
+                        flag = false;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // If the query is not an aggregation query, the index selection is to rewrite the final output `EvalScalar` operator.
+            // In another word, is to rewrite `query_info.selection`.
+            for item in query_info.selection.items.iter() {
+                if let Some(rewritten) =
+                    rewrite_by_selection(&query_info, &item.scalar, &index_selection)
+                {
+                    new_selection.push(ScalarItem {
+                        index: item.index,
+                        scalar: rewritten,
+                    });
+                } else {
+                    flag = false;
+                    break;
+                }
             }
         }
         if !flag {
@@ -135,11 +203,33 @@ pub fn try_rewrite(
             (None, None) => { /* Matched */ }
         }
 
+        let index_fields = index_selection
+            .iter()
+            .sorted_by_key(|(_, (idx, _))| *idx)
+            .map(|(_, (idx, ty))| {
+                if let ScalarExpr::BoundColumnRef(col) = &index_info.selection.items[*idx].scalar {
+                    if agg_func_indices.contains(&col.column.index) {
+                        // If the item is an aggregation function,
+                        // the actual data in the index is the temp state of the function.
+                        // (E.g. `sum` function will store serialized `sum_state` in index data.)
+                        // So the data type will be `String`.
+                        return DataField::new(&format!("index_col_{idx}"), DataType::String);
+                    }
+                }
+
+                DataField::new(&format!("index_col_{idx}"), ty.clone())
+            })
+            .collect::<Vec<_>>();
+
         let result = push_down_index_scan(s_expr, AggIndexInfo {
             index_id: *index_id,
             selection: new_selection,
             predicates: new_predicates,
+            schema: DataSchema::new(index_fields),
         })?;
+
+        info!("Use aggregating index: {sql}");
+
         return Ok(Some(result));
     }
 
@@ -430,7 +520,12 @@ type Predicates<'a> = (
 );
 
 type AggregationInfo<'a> = (&'a Aggregate, HashMap<IndexType, &'a ScalarExpr>);
-type SelectionMap<'a> = HashMap<String, (IndexType, &'a ScalarExpr)>;
+
+/// The data structure to record the selection.
+///
+/// - Key: the formatted expression.
+/// - Value: (index, data type) of the expression
+type SelectionMap<'a> = HashMap<String, (IndexType, DataType)>;
 
 // Record information helping to rewrite the query plan.
 pub struct RewriteInfomartion<'a> {
@@ -475,13 +570,14 @@ impl RewriteInfomartion<'_> {
         vec![]
     }
 
-    fn formatted_selection(&self) -> SelectionMap<'_> {
+    fn formatted_selection(&self) -> Result<SelectionMap<'_>> {
         let mut outputs = HashMap::with_capacity(self.selection.items.len());
         for (index, item) in self.selection.items.iter().enumerate() {
+            let ty = item.scalar.data_type()?;
             let key = self.format_scalar(&item.scalar);
-            outputs.insert(key, (index, &item.scalar));
+            outputs.insert(key, (index, ty));
         }
-        outputs
+        Ok(outputs)
     }
 
     // If the column ref is already rewritten, recover it.
@@ -572,12 +668,12 @@ fn collect_information_impl<'a>(
             let child = s_expr.child(0)?;
             if let RelOperator::EvalScalar(eval) = child.plan() {
                 // This eval scalar hold aggregation's arguments.
-                let args_map = eval
+                let inputs = eval
                     .items
                     .iter()
                     .map(|item| (item.index, &item.scalar))
                     .collect();
-                info.aggregation.replace((agg, args_map));
+                info.aggregation.replace((agg, inputs));
                 collect_information_impl(child.child(0)?, info)
             } else {
                 collect_information_impl(child, info)
@@ -710,15 +806,15 @@ fn check_predicates_range(
                 if !index_output_bound_cols.contains(col) {
                     return None;
                 }
-                let (new_index, scalar) = index_selection[&format_col_name(*col)];
-                out.push((*col, new_index, scalar.data_type().ok()?))
+                let (new_index, ty) = &index_selection[&format_col_name(*col)];
+                out.push((*col, *new_index, ty))
             }
         } else if !index_output_bound_cols.contains(col) {
             // If the column is not in index predicates, it should be in index output columns.
             return None;
         } else {
-            let (new_index, scalar) = index_selection[&format_col_name(*col)];
-            out.push((*col, new_index, scalar.data_type().ok()?))
+            let (new_index, ty) = &index_selection[&format_col_name(*col)];
+            out.push((*col, *new_index, ty))
         }
     }
 
@@ -750,7 +846,7 @@ fn try_create_column_binding(
     index_selection: &SelectionMap<'_>,
     formatted_scalar: &str,
 ) -> Option<BoundColumnRef> {
-    if let Some((index, scalar)) = index_selection.get(formatted_scalar) {
+    if let Some((index, ty)) = index_selection.get(formatted_scalar) {
         Some(BoundColumnRef {
             span: None,
             column: ColumnBinding {
@@ -760,7 +856,7 @@ fn try_create_column_binding(
                 table_index: None,
                 column_name: format!("index_col_{index}"),
                 index: *index,
-                data_type: Box::new(scalar.data_type().ok()?),
+                data_type: Box::new(ty.clone()),
                 visibility: Visibility::Visible,
                 virtual_computed_expr: None,
             },
@@ -797,14 +893,9 @@ fn rewrite_query_item(
     // Every call will format the scalars,
     // a more efficient way to be determined.
     match query_item {
-        ScalarExpr::BoundColumnRef(_) => match query_info.actual_column_ref(query_item) {
-            ScalarExpr::BoundColumnRef(col) => {
-                let col =
-                    try_create_column_binding(index_selection, &format_col_name(col.column.index))?;
-                Some(col.into())
-            }
-            s => rewrite_by_selection(query_info, s, index_selection),
-        },
+        ScalarExpr::BoundColumnRef(col) => Some(
+            try_create_column_binding(index_selection, &format_col_name(col.column.index))?.into(),
+        ),
         ScalarExpr::ConstantExpr(_) => Some(query_item.clone()),
         ScalarExpr::CastExpr(cast) => {
             let new_arg = rewrite_by_selection(query_info, &cast.argument, index_selection)?;

@@ -189,11 +189,11 @@ fn create_resize_pipeline(ctx: Arc<QueryContext>) -> Result<RunningGraph> {
 
     let mut pipeline = Pipeline::create();
     pipeline.add_pipe(source_pipe);
-    pipeline.resize(2)?;
+    pipeline.try_resize(2)?;
     pipeline.add_pipe(create_transform_pipe(2)?);
-    pipeline.resize(1)?;
+    pipeline.try_resize(1)?;
     pipeline.add_pipe(create_transform_pipe(1)?);
-    pipeline.resize(2)?;
+    pipeline.try_resize(2)?;
     pipeline.add_pipe(sink_pipe);
 
     RunningGraph::create(pipeline)

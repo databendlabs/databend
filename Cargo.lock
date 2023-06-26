@@ -2446,7 +2446,6 @@ dependencies = [
  "common-pipeline-core",
  "common-settings",
  "common-storage",
- "crossbeam-channel",
  "csv-core",
  "dashmap",
  "futures",
