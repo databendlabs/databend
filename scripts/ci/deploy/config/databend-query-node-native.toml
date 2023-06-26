@@ -36,6 +36,10 @@ table_engine_memory_enabled = true
 name = "root"
 auth_type = "no_password"
 
+[[query.users]]
+name = "default"
+auth_type = "no_password"
+
 # [[query.users]]
 # name = "admin"
 # auth_type = "no_password"

@@ -43,6 +43,10 @@ default_compression = 'zstd'
 name = "root"
 auth_type = "no_password"
 
+[[query.users]]
+name = "default"
+auth_type = "no_password"
+
 [log]
 
 [log.file]
