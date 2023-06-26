@@ -57,7 +57,7 @@ select count(*) from t;
 8000000
 
 statement ok
-copy into t from @st force = true;
+copy into t from @st force = true purge = true;
 
 query I
 select count(*) from t;
