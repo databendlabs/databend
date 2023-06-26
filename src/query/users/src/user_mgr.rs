@@ -85,12 +85,6 @@ impl UserApiProvider {
                 user_info.name
             )));
         }
-        if user_info.is_root() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "User cannot be created with builtin user `{}`",
-                user_info.name
-            )));
-        }
         let client = self.get_user_api_client(tenant)?;
         let add_user = client.add_user(user_info);
         match add_user.await {
@@ -119,12 +113,6 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        if user.is_root() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "Cannot grant privileges to builtin user `{}`",
-                user.username
-            )));
-        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -145,12 +133,6 @@ impl UserApiProvider {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Cannot revoke privileges from configured user `{}`",
-                user.username
-            )));
-        }
-        if user.is_root() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "Cannot revoke privileges from builtin user `{}`",
                 user.username
             )));
         }
@@ -176,12 +158,6 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        if user.is_root() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "Cannot grant role to builtin user `{}`",
-                user.username
-            )));
-        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -204,12 +180,6 @@ impl UserApiProvider {
                 user.username
             )));
         }
-        if user.is_root() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "Cannot revoke role from builtin user `{}`",
-                user.username
-            )));
-        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -225,12 +195,6 @@ impl UserApiProvider {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Configured user `{}` cannot be dropped",
-                user.username
-            )));
-        }
-        if user.is_root() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "Builtin user `{}` cannot be dropped",
                 user.username
             )));
         }
@@ -260,12 +224,6 @@ impl UserApiProvider {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
                 "Configured user `{}` cannot be updated",
-                user.username
-            )));
-        }
-        if user.is_root() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "Builtin user `{}` cannot be updated",
                 user.username
             )));
         }
