@@ -118,7 +118,6 @@ impl Interpreter for ExplainInterpreter {
                         .await?
                 }
                 Plan::Copy(copy) => {
-                    eprintln!("copy plan {:?}", copy);
                     let interpreter =
                         CopyInterpreter::try_create(self.ctx.clone(), copy.as_ref().clone())?;
                     let build_res = interpreter.execute2().await?;
