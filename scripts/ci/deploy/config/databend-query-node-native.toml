@@ -32,6 +32,10 @@ cluster_id = "test_cluster"
 
 table_engine_memory_enabled = true
 
+[[query.users]]
+name = "root"
+auth_type = "no_password"
+
 # [[query.users]]
 # name = "admin"
 # auth_type = "no_password"

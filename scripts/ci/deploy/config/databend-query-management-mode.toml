@@ -33,6 +33,9 @@ cluster_id = "system_mgr_1"
 # Management mode enable.
 management_mode = true
 
+[[query.users]]
+name = "root"
+auth_type = "no_password"
 
 [log]
 

@@ -38,6 +38,10 @@ table_engine_memory_enabled = true
 default_storage_format = 'parquet'
 default_compression = 'zstd'
 
+[[query.users]]
+name = "root"
+auth_type = "no_password"
+
 [log]
 
 [log.file]
