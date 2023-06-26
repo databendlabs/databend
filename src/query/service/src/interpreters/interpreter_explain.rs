@@ -29,6 +29,7 @@ use common_profile::SharedProcessorProfiles;
 use common_sql::executor::ProfileHelper;
 use common_sql::MetadataRef;
 
+use crate::interpreters::interpreter_copy::CopyInterpreter;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -115,6 +116,14 @@ impl Interpreter for ExplainInterpreter {
                 } => {
                     self.explain_pipeline(*s_expr.clone(), metadata.clone(), *ignore_result)
                         .await?
+                }
+                Plan::Copy(copy) => {
+                    eprintln!("copy plan {:?}", copy);
+                    let interpreter =
+                        CopyInterpreter::try_create(self.ctx.clone(), copy.as_ref().clone())?;
+                    let build_res = interpreter.execute2().await?;
+
+                    Self::format_pipeline(&build_res)
                 }
                 _ => {
                     return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
@@ -205,7 +214,10 @@ impl ExplainInterpreter {
         let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone(), true);
         let plan = builder.build(&s_expr).await?;
         let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result, false).await?;
+        Ok(Self::format_pipeline(&build_res))
+    }
 
+    fn format_pipeline(build_res: &PipelineBuildResult) -> Vec<DataBlock> {
         let mut blocks = Vec::with_capacity(1 + build_res.sources_pipelines.len());
         // Format root pipeline
         let line_split_result = format!("{}", build_res.main_pipeline.display_indent())
@@ -223,7 +235,7 @@ impl ExplainInterpreter {
             let column = StringType::from_data(line_split_result);
             blocks.push(DataBlock::new_from_columns(vec![column]));
         }
-        Ok(blocks)
+        blocks
     }
 
     #[async_backtrace::framed]
