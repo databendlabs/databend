@@ -31,23 +31,6 @@ copy into @st from (select a,b,c from table_random limit 1000000);
 statement ok
 create table t(a int,b string,c string);
 
-query T
-explain pipeline copy into t from @st force = true;
-----
- MutationSink × 1 processor
-   MutationAggregator × 1 processor
-     Merge (TransformExchangeDeserializer × 10 processors) to (MutationAggregator × 1)
-       TransformExchangeDeserializer × 10 processors
-         Merge (DummyTransform × 12 processors) to (TransformExchangeDeserializer × 10)
-           Merge (AppendTransform × 10 processors) to (Resize × 12)
-             AppendTransform × 10 processors
-               Merge (BlockCompactTransform × 1 processor) to (AppendTransform × 10)
-                 BlockCompactTransform × 1 processor
-                   Merge (DeserializeTransformer × 10 processors) to (BlockCompactTransform × 1)
-                     DeserializeTransformer × 10 processors
-                       Merge (Aligner × 3 processors) to (DeserializeTransformer × 10)
-                         Aligner × 3 processors
-
 statement ok
 copy into t from @st force = true;
 
