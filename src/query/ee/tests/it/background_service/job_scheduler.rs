@@ -60,8 +60,8 @@ impl Job for TestJob {
         let _ = self.finish_tx.clone().lock().await.send(1).await;
     }
 
-    fn get_info(&self) -> BackgroundJobInfo {
-        self.info.clone()
+    async fn get_info(&self) -> Result<BackgroundJobInfo> {
+        Ok(self.info.clone())
     }
 
     fn get_name(&self) -> BackgroundJobIdent {
@@ -72,6 +72,10 @@ impl Job for TestJob {
     }
 
     async fn update_job_status(&mut self, _status: BackgroundJobStatus) -> Result<()> {
+        Ok(())
+    }
+
+    async fn update_job_params(&mut self, _params: BackgroundJobParams) -> Result<()> {
         Ok(())
     }
 }
@@ -113,7 +117,7 @@ async fn test_interval_job() -> Result<()> {
         ),
         finish_tx: scheduler.finish_tx.clone(),
     };
-    scheduler.add_job(job.clone())?;
+    scheduler.add_job(job.clone()).await?;
     let suspend_tx = scheduler.suspend_tx.clone();
     tokio::spawn(async move {
         tokio::time::sleep(Duration::from_millis(100)).await;
