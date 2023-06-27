@@ -34,7 +34,7 @@ enum HashJoinStep {
     Build,
     Finalize,
     Probe,
-    OuterScan,
+    FinalScan,
     Finished,
 }
 
@@ -86,9 +86,9 @@ impl TransformHashJoinProbe {
         Ok(())
     }
 
-    fn outer_scan(&mut self, task: usize) -> Result<()> {
+    fn final_scan(&mut self, task: usize) -> Result<()> {
         self.output_data_blocks
-            .extend(self.join_state.outer_scan(task, &mut self.probe_state)?);
+            .extend(self.join_state.final_scan(task, &mut self.probe_state)?);
         Ok(())
     }
 }
@@ -115,7 +115,7 @@ impl Processor for TransformHashJoinProbe {
                 if self.output_port.is_finished() {
                     self.input_port.finish();
 
-                    if self.join_state.need_outer_scan() {
+                    if self.join_state.need_outer_scan() || self.join_state.need_mark_scan() {
                         self.join_state.probe_done()?;
                     }
 
@@ -149,7 +149,8 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
-                    return if self.join_state.need_outer_scan() {
+                    return if self.join_state.need_outer_scan() || self.join_state.need_mark_scan()
+                    {
                         self.join_state.probe_done()?;
                         Ok(Event::Async)
                     } else {
@@ -161,7 +162,7 @@ impl Processor for TransformHashJoinProbe {
                 self.input_port.set_need_data();
                 Ok(Event::NeedData)
             }
-            HashJoinStep::OuterScan => {
+            HashJoinStep::FinalScan => {
                 if self.output_port.is_finished() {
                     return Ok(Event::Finished);
                 }
@@ -202,9 +203,9 @@ impl Processor for TransformHashJoinProbe {
                 }
                 Ok(())
             }
-            HashJoinStep::OuterScan => {
-                if let Some(task) = self.join_state.outer_scan_task() {
-                    self.outer_scan(task)?;
+            HashJoinStep::FinalScan => {
+                if let Some(task) = self.join_state.final_scan_task() {
+                    self.final_scan(task)?;
                 } else {
                     self.outer_scan_finished = true;
                 }
@@ -248,10 +249,10 @@ impl Processor for TransformHashJoinProbe {
                 if self.join_state.fast_return()? {
                     self.step = HashJoinStep::Finished;
                 } else {
-                    self.step = HashJoinStep::OuterScan;
+                    self.step = HashJoinStep::FinalScan;
                 }
             }
-            HashJoinStep::OuterScan | HashJoinStep::Finished => unreachable!(),
+            HashJoinStep::FinalScan | HashJoinStep::Finished => unreachable!(),
         };
         Ok(())
     }
@@ -324,7 +325,7 @@ impl Processor for TransformHashJoinBuild {
                 true => Ok(Event::Finished),
             },
             HashJoinStep::Probe => unreachable!(),
-            HashJoinStep::OuterScan => unreachable!(),
+            HashJoinStep::FinalScan => unreachable!(),
             HashJoinStep::Finished => Ok(Event::Finished),
         }
     }
@@ -349,7 +350,7 @@ impl Processor for TransformHashJoinBuild {
                     self.join_state.finalize_done()
                 }
             }
-            HashJoinStep::Probe | HashJoinStep::OuterScan | HashJoinStep::Finished => {
+            HashJoinStep::Probe | HashJoinStep::FinalScan | HashJoinStep::Finished => {
                 unreachable!()
             }
         }
