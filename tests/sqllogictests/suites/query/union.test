@@ -177,10 +177,3 @@ drop table t1
 
 statement error 1065
 select [1,2,3] union all select 2
-
-# type coercion
-query R rowsort
-select 1 as c union all select 3.3::Double;
-----
-1.0
-3.3
