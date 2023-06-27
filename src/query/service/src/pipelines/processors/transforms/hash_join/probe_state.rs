@@ -17,10 +17,9 @@ use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::FunctionContext;
 use common_hashtable::RowPtr;
 
+use super::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::sql::plans::JoinType;
-
-use super::desc::MARKER_KIND_FALSE;
 
 /// ProbeState used for probe phase of hash join.
 /// We may need some reusable state for probe phase.
