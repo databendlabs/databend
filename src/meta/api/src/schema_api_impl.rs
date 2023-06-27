@@ -895,7 +895,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
         let tenant_index = &req.name_ident;
 
-        if req.meta.drop_on.is_some() {
+        if req.meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::CreateIndexWithDropTime(
                 CreateIndexWithDropTime::new(&tenant_index.index_name),
             )));
@@ -1001,13 +1001,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             debug!(index_id, name_key = debug(&tenant_index), "drop_index");
 
             // drop an index with drop time
-            if index_meta.drop_on.is_some() {
+            if index_meta.dropped_on.is_some() {
                 return Err(KVAppError::AppError(AppError::DropIndexWithDropTime(
                     DropIndexWithDropTime::new(&tenant_index.index_name),
                 )));
             }
             // update drop on time
-            index_meta.drop_on = Some(Utc::now());
+            index_meta.dropped_on = Some(Utc::now());
 
             // Delete index by these operations:
             // del (tenant, index_name) -> index_id
@@ -1066,7 +1066,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         debug!(index_id, name_key = debug(&tenant_index), "drop_index");
 
         // get an index with drop time
-        if index_meta.drop_on.is_some() {
+        if index_meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::GetIndexWithDropTIme(
                 GetIndexWithDropTime::new(&tenant_index.index_name),
             )));
@@ -1120,7 +1120,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     // 1. index is not dropped.
                     // 2. table_id is not specified
                     //    or table_id is specified and equals to the given table_id.
-                    meta.drop_on.is_none()
+                    meta.dropped_on.is_none()
                         && req.table_id.filter(|id| *id != meta.table_id).is_none()
                 })
                 .collect::<Vec<_>>()

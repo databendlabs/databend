@@ -73,11 +73,11 @@ impl FromToProto for mt::IndexMeta {
                 reason: format!("invalid IndexType: {}", p.index_type),
             })?,
             created_on: DateTime::<Utc>::from_pb(p.created_on)?,
-            drop_on: match p.drop_on {
+            dropped_on: match p.dropped_on {
                 Some(drop_on) => Some(DateTime::<Utc>::from_pb(drop_on)?),
                 None => None,
             },
-            update_on: match p.update_on {
+            updated_on: match p.updated_on {
                 Some(update_on) => Some(DateTime::<Utc>::from_pb(update_on)?),
                 None => None,
             },
@@ -93,11 +93,11 @@ impl FromToProto for mt::IndexMeta {
             table_id: self.table_id,
             index_type: self.index_type.clone() as i32,
             created_on: self.created_on.to_pb()?,
-            drop_on: match self.drop_on {
+            dropped_on: match self.dropped_on {
                 Some(drop_on) => Some(drop_on.to_pb()?),
                 None => None,
             },
-            update_on: match self.update_on {
+            updated_on: match self.updated_on {
                 Some(update_on) => Some(update_on.to_pb()?),
                 None => None,
             },

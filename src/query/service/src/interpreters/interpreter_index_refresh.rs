@@ -138,14 +138,12 @@ impl RefreshIndexInterpreter {
             let last = match source.parts.partitions.binary_search_by(|p| {
                 let fp = FusePartInfo::from_part(p).unwrap();
                 fp.create_on
-                    .partial_cmp(&self.plan.index_meta.update_on)
+                    .partial_cmp(&self.plan.index_meta.updated_on)
                     .unwrap()
             }) {
                 Ok(i) => i + 1,
                 Err(i) => i,
             };
-
-            dbg!(last);
 
             // finally, skip the refreshed partitions.
             source.parts.partitions = source.parts.partitions.into_iter().skip(last).collect();
@@ -160,7 +158,7 @@ impl RefreshIndexInterpreter {
     fn update_index_meta(&self, read_source: &DataSourcePlan) -> Result<IndexMeta> {
         let fuse_part = FusePartInfo::from_part(read_source.parts.partitions.last().unwrap())?;
         let mut index_meta = self.plan.index_meta.clone();
-        index_meta.update_on = fuse_part.create_on;
+        index_meta.updated_on = fuse_part.create_on;
         Ok(index_meta)
     }
 }
@@ -215,6 +213,7 @@ impl Interpreter for RefreshIndexInterpreter {
         let fuse_table = FuseTable::do_create(self.plan.table_info.clone())?;
         let fuse_table: Arc<FuseTable> = fuse_table.into();
 
+        // generate new `DataSourcePlan` that skip refreshed parts.
         let new_read_source = self
             .get_read_source(&query_plan, fuse_table.clone(), data_accessor.operator())
             .await?;

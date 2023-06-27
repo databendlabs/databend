@@ -98,9 +98,9 @@ pub struct IndexMeta {
 
     pub index_type: IndexType,
     pub created_on: DateTime<Utc>,
-    // if used in CreateIndexReq, this field MUST set to None.
-    pub drop_on: Option<DateTime<Utc>>,
-    pub update_on: Option<DateTime<Utc>>,
+    // if used in CreateIndexReq, `dropped_on` and `updated_on` MUST set to None.
+    pub dropped_on: Option<DateTime<Utc>>,
+    pub updated_on: Option<DateTime<Utc>>,
     pub query: String,
 }
 
@@ -110,8 +110,8 @@ impl Default for IndexMeta {
             table_id: 0,
             index_type: IndexType::default(),
             created_on: Utc::now(),
-            drop_on: None,
-            update_on: None,
+            dropped_on: None,
+            updated_on: None,
             query: "".to_string(),
         }
     }
