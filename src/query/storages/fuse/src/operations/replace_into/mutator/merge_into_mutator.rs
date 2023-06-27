@@ -13,10 +13,9 @@
 // limitations under the License.
 
 use std::collections::HashMap;
-use std::collections::HashSet;
-use std::hash::Hasher;
 use std::sync::Arc;
 
+use ahash::AHashMap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_base::base::tokio::sync::OwnedSemaphorePermit;
 use common_base::base::tokio::sync::Semaphore;
@@ -35,8 +34,6 @@ use common_expression::Scalar;
 use common_expression::TableSchema;
 use common_sql::evaluator::BlockOperator;
 use opendal::Operator;
-use siphasher::sip128;
-use siphasher::sip128::Hasher128;
 use storages_common_cache::LoadParams;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ColumnStatistics;
@@ -59,10 +56,11 @@ use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
+use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::mutator::deletion_accumulator::DeletionAccumulator;
 use crate::operations::replace_into::OnConflictField;
 struct AggregationContext {
-    segment_locations: HashMap<SegmentIndex, Location>,
+    segment_locations: AHashMap<SegmentIndex, Location>,
     // the fields specified in ON CONFLICT clause
     on_conflict_fields: Vec<OnConflictField>,
     // table fields excludes `on_conflict_fields`
@@ -151,7 +149,7 @@ impl MergeIntoOperationAggregator {
         Ok(Self {
             deletion_accumulator,
             aggregation_ctx: Arc::new(AggregationContext {
-                segment_locations: HashMap::from_iter(segment_locations.into_iter()),
+                segment_locations: AHashMap::from_iter(segment_locations.into_iter()),
                 on_conflict_fields,
                 remain_column_field_ids,
                 key_column_reader,
@@ -172,7 +170,7 @@ impl MergeIntoOperationAggregator {
     #[async_backtrace::framed]
     pub async fn accumulate(&mut self, merge_action: MergeIntoOperation) -> Result<()> {
         let aggregation_ctx = &self.aggregation_ctx;
-        match &merge_action {
+        match merge_action {
             MergeIntoOperation::Delete(DeletionByColumn {
                 columns_min_max,
                 key_hashes,
@@ -189,15 +187,15 @@ impl MergeIntoOperationAggregator {
                     let segment_info: SegmentInfo = segment_info.as_ref().try_into()?;
 
                     // segment level
-                    if aggregation_ctx.overlapped(&segment_info.summary.col_stats, columns_min_max)
+                    if aggregation_ctx.overlapped(&segment_info.summary.col_stats, &columns_min_max)
                     {
                         // block level
                         for (block_index, block_meta) in segment_info.blocks.iter().enumerate() {
-                            if aggregation_ctx.overlapped(&block_meta.col_stats, columns_min_max) {
+                            if aggregation_ctx.overlapped(&block_meta.col_stats, &columns_min_max) {
                                 self.deletion_accumulator.add_block_deletion(
                                     *segment_index,
                                     block_index,
-                                    key_hashes,
+                                    &key_hashes,
                                 )
                             }
                         }
@@ -288,7 +286,7 @@ impl AggregationContext {
         segment_index: SegmentIndex,
         block_index: BlockIndex,
         block_meta: &BlockMeta,
-        deleted_key_hashes: &HashSet<UniqueKeyDigest>,
+        deleted_key_hashes: &ahash::HashSet<UniqueKeyDigest>,
     ) -> Result<Option<MutationLogEntry>> {
         info!(
             "apply delete to segment idx {}, block idx {}, num of deletion key hashes: {}",
@@ -331,13 +329,7 @@ impl AggregationContext {
 
         let mut bitmap = MutableBitmap::new();
         for row in 0..num_rows {
-            let mut sip = sip128::SipHasher24::new();
-            for column in &columns {
-                let value = column.index(row).unwrap();
-                let string = value.to_string();
-                sip.write(string.as_bytes());
-            }
-            let hash = sip.finish128().as_u128();
+            let hash = row_hash_of_columns(&columns, row);
             bitmap.push(!deleted_key_hashes.contains(&hash));
         }
 

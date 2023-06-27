@@ -155,52 +155,64 @@ error:
 
 
 ---------- Input ----------
-create user 'test-e'@'localhost' identified bi 'password';
----------- Output ---------
-error: 
-  --> SQL:1:45
-  |
-1 | create user 'test-e'@'localhost' identified bi 'password';
-  |                                             ^^ expected `WITH`, `BY`, `FORMAT`, or `;`
-
-
----------- Input ----------
-drop usar if exists 'test-j'@'localhost';
----------- Output ---------
-error: 
-  --> SQL:1:6
-  |
-1 | drop usar if exists 'test-j'@'localhost';
-  |      ^^^^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `AGGREGATING`, `VIRTUAL`, or 8 more ...
-
-
----------- Input ----------
-alter user 'test-e'@'localhost' identifies by 'new-password';
+create user 'test-e' identified bi 'password';
 ---------- Output ---------
 error: 
   --> SQL:1:33
   |
-1 | alter user 'test-e'@'localhost' identifies by 'new-password';
-  |                                 ^^^^^^^^^^ expected `IDENTIFIED`, `WITH`, `FORMAT`, or `;`
+1 | create user 'test-e' identified bi 'password';
+  |                                 ^^ expected `WITH`, `BY`, `FORMAT`, or `;`
 
 
 ---------- Input ----------
-create role 'test'@'localhost';
+create user 'test-e'@'localhost' identified by 'password';
+---------- Output ---------
+error: 
+  --> SQL:1:22
+  |
+1 | create user 'test-e'@'localhost' identified by 'password';
+  | ------               ^^^^^^^^^^^ expected `IDENTIFIED` or `'%'`
+  | |                     
+  | while parsing `CREATE USER [IF NOT EXISTS] '<username>'@'hostname' IDENTIFIED [WITH <auth_type>] [BY <password>] [WITH <user_option>, ...]`
+
+
+---------- Input ----------
+drop usar if exists 'test-j';
+---------- Output ---------
+error: 
+  --> SQL:1:6
+  |
+1 | drop usar if exists 'test-j';
+  |      ^^^^ expected `DATABASE`, `SCHEMA`, `TABLE`, `VIEW`, `AGGREGATING`, `VIRTUAL`, or 8 more ...
+
+
+---------- Input ----------
+alter user 'test-e' identifies by 'new-password';
+---------- Output ---------
+error: 
+  --> SQL:1:21
+  |
+1 | alter user 'test-e' identifies by 'new-password';
+  |                     ^^^^^^^^^^ expected `@`, `IDENTIFIED`, `WITH`, `FORMAT`, or `;`
+
+
+---------- Input ----------
+create role 'test'@'%';
 ---------- Output ---------
 error: 
   --> SQL:1:19
   |
-1 | create role 'test'@'localhost';
+1 | create role 'test'@'%';
   |                   ^ expected `FORMAT` or `;`
 
 
 ---------- Input ----------
-drop role 'test'@'localhost';
+drop role 'test'@'%';
 ---------- Output ---------
 error: 
   --> SQL:1:17
   |
-1 | drop role 'test'@'localhost';
+1 | drop role 'test'@'%';
   |                 ^ expected `FORMAT` or `;`
 
 
@@ -240,12 +252,12 @@ error:
 
 
 ---------- Input ----------
-GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';
+GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
 ---------- Output ---------
 error: 
   --> SQL:1:15
   |
-1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant'@'localhost';
+1 | GRANT SELECT, ALL PRIVILEGES, CREATE ON * TO 'test-grant';
   | ----- ------  ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 5 more ...
   | |     |        
   | |     while parsing <privileges> ON <privileges_level>
@@ -253,12 +265,12 @@ error:
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON *.c TO 'test-grant';
 ---------- Output ---------
 error: 
   --> SQL:1:27
   |
-1 | GRANT SELECT, CREATE ON *.c TO 'test-grant'@'localhost';
+1 | GRANT SELECT, CREATE ON *.c TO 'test-grant';
   | -----                     ^ expected `TO` or `*`
   | |                          
   | while parsing `GRANT { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } TO { [ROLE <role_name>] | [USER] <user> }`
@@ -275,12 +287,12 @@ error:
 
 
 ---------- Input ----------
-REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';
+REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
 ---------- Output ---------
 error: 
   --> SQL:1:24
   |
-1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant'@'localhost';
+1 | REVOKE SELECT, CREATE, ALL PRIVILEGES ON * FROM 'test-grant';
   | ------ ------          ^^^ expected `USAGE`, `SELECT`, `INSERT`, `UPDATE`, `DELETE`, `ALTER`, or 5 more ...
   | |      |                
   | |      while parsing <privileges> ON <privileges_level>
@@ -288,12 +300,12 @@ error:
 
 
 ---------- Input ----------
-REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';
+REVOKE SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
 error: 
   --> SQL:1:28
   |
-1 | REVOKE SELECT, CREATE ON * TO 'test-grant'@'localhost';
+1 | REVOKE SELECT, CREATE ON * TO 'test-grant';
   | ------                     ^^ expected `FROM` or `.`
   | |                           
   | while parsing `REVOKE { ROLE <role_name> | schemaObjectPrivileges | ALL [ PRIVILEGES ] ON <privileges_level> } FROM { [ROLE <role_name>] | [USER] <user> }`

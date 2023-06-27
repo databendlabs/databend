@@ -37,9 +37,6 @@ Grant privileges for the user:
 GRANT SELECT ON *.* TO grafana;
 ```
 
-See also [How To Create User](../../14-sql-commands/00-ddl/30-user/01-user-create-user.md).
-
-
 ### Install Grafana
 
 Please refer [Grafana Installation](https://grafana.com/docs/grafana/latest/setup-grafana/installation/)

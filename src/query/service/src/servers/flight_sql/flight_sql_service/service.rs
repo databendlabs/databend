@@ -125,11 +125,9 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Response<Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send>>>,
         Status,
     > {
-        let remote_addr = request.remote_addr();
-
         let (user, password) = FlightSqlServiceImpl::get_user_password(request.metadata())
             .map_err(Status::invalid_argument)?;
-        let session = FlightSqlServiceImpl::auth_user_password(user, password, remote_addr).await?;
+        let session = FlightSqlServiceImpl::auth_user_password(user, password).await?;
         let token = Uuid::new_v4().to_string();
         let result = HandshakeResponse {
             protocol_version: 0,

@@ -111,7 +111,7 @@ impl Table for AsyncCrashMeTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
-        _dyn_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         // dummy statistics
         Ok((PartStatistics::new_exact(1, 1, 1, 1), Partitions::default()))
