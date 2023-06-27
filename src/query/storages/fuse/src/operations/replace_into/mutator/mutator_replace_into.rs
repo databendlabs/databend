@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashSet;
-use std::hash::Hasher;
-
+use ahash::HashSet;
+use ahash::HashSetExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::Column;
 use common_expression::DataBlock;
 use common_expression::Scalar;
 use common_functions::aggregates::eval_aggr;
-use siphasher::sip128;
-use siphasher::sip128::Hasher128;
 
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
 use crate::operations::replace_into::meta::merge_into_operation_meta::MergeIntoOperation;
 use crate::operations::replace_into::meta::merge_into_operation_meta::UniqueKeyDigest;
+use crate::operations::replace_into::mutator::column_hash::row_hash_of_columns;
 use crate::operations::replace_into::OnConflictField;
 
 // Replace is somehow a simplified merge_into, which
@@ -91,14 +89,8 @@ impl ReplaceIntoMutator {
         num_rows: usize,
     ) -> Result<ColumnHash> {
         let mut digests = HashSet::new();
-        for i in 0..num_rows {
-            let mut sip = sip128::SipHasher24::new();
-            for column in columns {
-                let value = column.index(i).unwrap();
-                let string = value.to_string();
-                sip.write(string.as_bytes());
-            }
-            let hash = sip.finish128().as_u128();
+        for row_idx in 0..num_rows {
+            let hash = row_hash_of_columns(columns, row_idx);
             if saw.contains(&hash) {
                 return Ok(ColumnHash::Conflict);
             } else {
