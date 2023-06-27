@@ -24,19 +24,19 @@ echo "list @s1 PATTERN = 'ontime.*'" | $MYSQL_CLIENT_CONNECT | awk '{print $1}' 
 
 copy_from_stage_cases=(
   # copy parquet
-  "copy into ontime200 from @s1 PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = 'PARQUET');"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @s1 PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = 'PARQUET');"
   # copy gzip csv
-  "copy into ontime200 from @s1 FILES = ('ontime_200.csv.gz') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1);"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @s1 FILES = ('ontime_200.csv.gz') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1);"
   # copy zstd csv
-  "copy into ontime200 from @s1 FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @s1 FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
   # copy bz2 csv
-  "copy into ontime200 from @s1 FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @s1 FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
   # copy xz csv
-  "copy into ontime200 from @s1 FILES = ('ontime_200.csv.xz') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'xz'  record_delimiter = '\n' skip_header = 1);"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @s1 FILES = ('ontime_200.csv.xz') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'xz'  record_delimiter = '\n' skip_header = 1);"
   # copy auto csv
-  "copy into ontime200 from @s1 FILES = ('ontime_200.csv.gz', 'ontime_200.csv.zst', 'ontime_200.csv.bz2', 'ontime_200.csv.xz') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = AUTO  record_delimiter = '\n' skip_header = 1);"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @s1 FILES = ('ontime_200.csv.gz', 'ontime_200.csv.zst', 'ontime_200.csv.bz2', 'ontime_200.csv.xz') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = AUTO  record_delimiter = '\n' skip_header = 1);"
    # copy ndjson
-  "copy into ontime200 from @s1 PATTERN = 'ontime.*ndjson$' FILE_FORMAT = (type = 'ndjson');"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @s1 PATTERN = 'ontime.*ndjson$' FILE_FORMAT = (type = 'ndjson');"
 )
 
 ## Copy file twiice but return the same result to test idempotent-copy
@@ -55,15 +55,15 @@ echo "list @named_external_stage PATTERN = 'ontime.*parquet$'" | $MYSQL_CLIENT_C
 
 copy_from_named_external_stage_cases=(
   # copy parquet
-  "copy into ontime200 from @named_external_stage  PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = PARQUET)"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @named_external_stage  PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = PARQUET)"
   # copy gzip csv
-  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1);"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1);"
   # copy zstd csv
-  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.zst') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1);"
   # copy bz2 csv
-  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.bz2') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1);"
   # copy auto csv
-  "copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz','ontime_200.csv.bz2','ontime_200.csv.zst') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1) FORCE = true;"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from @named_external_stage FILES = ('ontime_200.csv.gz','ontime_200.csv.bz2','ontime_200.csv.zst') FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1) FORCE = true;"
 )
 
 ## Copy file twice but return the same result to test idempotent-copy
@@ -82,7 +82,7 @@ curl -s -u root: -XPOST "http://localhost:${QUERY_HTTP_HANDLER_PORT}/v1/query" -
 
 
 ## copy with purge
-cmd="copy into ontime200 from @s1  PATTERN = 'ontime_200.csv.*$' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1) purge = true;"
+cmd="set enable_distributed_copy_into = 1;copy into ontime200 from @s1  PATTERN = 'ontime_200.csv.*$' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'auto'  record_delimiter = '\n' skip_header = 1) purge = true;"
 echo $cmd | $MYSQL_CLIENT_CONNECT
 
 ## list stage has metacache, so we just we aws client to ensure the data are purged
@@ -90,7 +90,7 @@ aws --endpoint-url ${STORAGE_S3_ENDPOINT_URL} s3 ls s3://testbucket/admin/stage/
 
 ## copy with force=true
 echo "truncate table ontime200" | $MYSQL_CLIENT_CONNECT
-cmd="copy into ontime200 from @s1 PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = PARQUET) force=true;"
+cmd="set enable_distributed_copy_into = 1;copy into ontime200 from @s1 PATTERN = 'ontime.*parquet$' FILE_FORMAT = (type = PARQUET) force=true;"
 echo $cmd | $MYSQL_CLIENT_CONNECT
 echo $cmd | $MYSQL_CLIENT_CONNECT
 echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIENT_CONNECT
@@ -99,3 +99,4 @@ echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIEN
 echo "drop table ontime200" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists named_external_stage" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT
+echo "set enable_distributed_copy_into = 0;"

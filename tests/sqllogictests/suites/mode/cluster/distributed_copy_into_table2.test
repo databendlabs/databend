@@ -1,4 +1,7 @@
 statement ok
+set enable_distributed_copy_into = 1;
+
+statement ok
 set global max_threads = 1;
 
 statement ok
@@ -43,3 +46,6 @@ query I
 select block_count from fuse_snapshot('default','products');
 ----
 2
+
+statement ok
+set enable_distributed_copy_into = 0;

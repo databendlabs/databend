@@ -1,4 +1,7 @@
 statement ok
+set enable_distributed_copy_into = 1;
+
+statement ok
 drop table if exists products;
 
 statement ok
@@ -58,3 +61,6 @@ query I
 select block_count from fuse_snapshot('default','products');
 ----
 0
+
+statement ok
+set enable_distributed_copy_into = 0;

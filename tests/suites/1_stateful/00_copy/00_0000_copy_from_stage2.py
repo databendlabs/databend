@@ -15,7 +15,7 @@ endpoint_url = os.environ.get("STORAGE_S3_ENDPOINT_URL")
 
 with NativeClient(name="client1>") as client1:
     client1.expect(prompt)
-
+    client1.send("set enable_distributed_copy_into = 1;")
     client1.send("drop table if exists ontime200;")
     client1.expect(prompt)
 
@@ -47,4 +47,5 @@ with NativeClient(name="client1>") as client1:
     client1.expect("199")
 
     client1.send("drop table ontime200;")
+    client1.send("set enable_distributed_copy_into = 0;")
     client1.expect(prompt)

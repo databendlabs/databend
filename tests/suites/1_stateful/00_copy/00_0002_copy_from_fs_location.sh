@@ -16,21 +16,21 @@ DATADIR=$(realpath $CURDIR/../../../data/)
 
 copy_from_location_cases=(
   # copy csv
-  "copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv' FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1)"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv' FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1)"
   # copy gzip csv
-  "copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv.gz' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1)"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv.gz' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'gzip'  record_delimiter = '\n' skip_header = 1)"
   # copy zstd csv
-  "copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv.zst' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1)"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv.zst' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'zstd'  record_delimiter = '\n' skip_header = 1)"
   # copy bz2 csv
-  "copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv.bz2' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1)"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv.bz2' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'bz2'  record_delimiter = '\n' skip_header = 1)"
   # copy xz csv
-  "copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv.xz' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'xz'  record_delimiter = '\n' skip_header = 1)"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from 'fs://${DATADIR}/ontime_200.csv.xz' FILE_FORMAT = (type = CSV field_delimiter = ',' compression = 'xz'  record_delimiter = '\n' skip_header = 1)"
   # copy dir with pattern
-  "copy into ontime200 from 'fs://${DATADIR}/' PATTERN = 'ontime.*csv$' FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1)"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from 'fs://${DATADIR}/' PATTERN = 'ontime.*csv$' FILE_FORMAT = (type = CSV field_delimiter = ','  record_delimiter = '\n' skip_header = 1)"
   # copy parquet
-  "copy into ontime200 from 'fs://${DATADIR}/' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = PARQUET)"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from 'fs://${DATADIR}/' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = PARQUET)"
   # copy ndjson with split size
-  "copy into ontime200 from 'fs://${DATADIR}/ontime_200.ndjson' FILE_FORMAT = (type = ndjson) split_size = 10240"
+  "set enable_distributed_copy_into = 1;copy into ontime200 from 'fs://${DATADIR}/ontime_200.ndjson' FILE_FORMAT = (type = ndjson) split_size = 10240"
 )
 
 for i in "${copy_from_location_cases[@]}"; do
@@ -42,7 +42,7 @@ done
 
 ## test copy from parquet with auto cast schema
 echo "create table test_decimal(Year Decimal(15,2), DayOfWeek Decimal(15,2),  OriginCityMarketID Decimal(15,2) )" | $MYSQL_CLIENT_CONNECT
-echo "copy into test_decimal from 'fs://${DATADIR}/' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = PARQUET)" | $MYSQL_CLIENT_CONNECT
+echo "set enable_distributed_copy_into = 1;copy into test_decimal from 'fs://${DATADIR}/' PATTERN = 'ontime.*parquet' FILE_FORMAT = (type = PARQUET)" | $MYSQL_CLIENT_CONNECT
 echo "select count(1), avg(Year), sum(DayOfWeek)  from test_decimal" | $MYSQL_CLIENT_CONNECT
 
 

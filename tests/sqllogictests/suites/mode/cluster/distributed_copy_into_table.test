@@ -1,4 +1,7 @@
 statement ok
+set enable_distributed_copy_into = 1;
+
+statement ok
 create stage st FILE_FORMAT = (TYPE = CSV);
 
 statement ok
@@ -47,4 +50,5 @@ select count(*) from t;
 ----
 16000000
 
-
+statement ok
+set enable_distributed_copy_into = 0;
