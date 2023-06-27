@@ -79,3 +79,25 @@ select d:b, d, e from t_lazy order by a desc limit 2
 statement ok
 drop table t_lazy
 
+# ISSUE 11882
+statement ok
+drop table if exists t_11882
+
+statement ok
+create table t_11882(a int, b string)
+
+statement ok
+insert into t_11882 values(1,'asdsa')
+
+statement ok
+insert into t_11882 values(2,'aaaa'), (3,'bbb')
+
+# Construct the case that one of the blocks will be fitlered into a empty block (`num_rows` = 0)
+# P.S. The block will exist in the computing pipeline, but its `num_rows` = 0.
+query IT
+select * from t_11882 where substr(b,1,1)='b' limit 2
+----
+3 bbb
+
+statement ok
+drop table t_11882
