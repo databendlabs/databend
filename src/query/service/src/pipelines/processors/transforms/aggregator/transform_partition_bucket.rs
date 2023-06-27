@@ -34,7 +34,7 @@ use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_core::Pipeline;
-use common_pipeline_transforms::processors::ProfileWrapper;
+use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
 use common_profile::SharedProcessorProfiles;
 use common_storage::DataOperator;
 use petgraph::matrix_graph::Zero;
@@ -452,7 +452,7 @@ pub fn build_partition_bucket<Method: HashMethodBounds, V: Copy + Send + Sync + 
             }
         };
         if enable_profiling {
-            Ok(ProcessorPtr::create(ProfileWrapper::create(
+            Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                 transform,
                 prof_id,
                 prof_set.clone(),
