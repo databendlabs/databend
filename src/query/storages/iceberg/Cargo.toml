@@ -20,7 +20,7 @@ async-backtrace = { workspace = true }
 async-trait = "0.1"
 chrono = { workspace = true }
 futures = "0.3"
-icelake = "0.0.1"
+icelake = { path = "../../../../../../icelake-io/icelake" }
 itertools = "0.10"
 opendal = { workspace = true }
 tracing = "0.1"
