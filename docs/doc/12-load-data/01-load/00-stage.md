@@ -94,9 +94,9 @@ CREATE STAGE my_internal_stage;
 ```sql
 SHOW STAGES;
 
-name             |stage_type|number_of_files|creator           |comment|
------------------+----------+---------------+------------------+-------+
-my_internal_stage|Internal  |              0|'root'@'127.0.0.1'|       |
+name             |stage_type|number_of_files|creator   |comment|
+-----------------+----------+---------------+----------+-------+
+my_internal_stage|Internal  |              0|'root'@'%'|       |
 ```
 
 ### Step 2: Upload Sample File
@@ -160,7 +160,7 @@ SHOW STAGES;
 
 name             |stage_type|number_of_files|creator           |comment|
 -----------------+----------+---------------+------------------+-------+
-my_external_stage|External  |               |'root'@'127.0.0.1'|       |
+my_external_stage|External  |               |'root'@'%'|       |
 ```
 
 ### Step 2: Upload Sample File
