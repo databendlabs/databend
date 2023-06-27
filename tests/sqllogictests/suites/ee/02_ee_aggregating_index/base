@@ -99,7 +99,7 @@ statement ok
 REFRESH AGGREGATING INDEX testi
 
 query 1
-select sum(a) + 1 from t group by b
+select sum(a) + 1 as s from t group by b order by s
 ----
 2
 5
@@ -141,7 +141,7 @@ statement ok
 REFRESH AGGREGATING INDEX testi
 
 query 1
-select sum(a) + 1 from t where c > 1 group by b
+select sum(a) + 1 as s from t where c > 1 group by b order by s
 ----
 2
 4
