@@ -226,10 +226,8 @@ impl CopyInterpreter {
                 )
                 .await?
         };
-        // we need to make sure every query-node can read data, if the splits
-        // is less than the number of cluster nodes, we should let it go
-        // standalone execute way.
-        if self.ctx.get_cluster().nodes.len() > read_source_plan.parts.len() {
+
+        if read_source_plan.parts.len() <= 1 {
             return Ok(None);
         }
         Ok(Some(DistributedCopyIntoTable {
