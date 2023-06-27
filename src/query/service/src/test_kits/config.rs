@@ -30,7 +30,6 @@ impl ConfigBuilder {
         // add idm users for test
         let mut users = HashMap::new();
         users.insert("root".to_string(), AuthInfo::None);
-        users.insert("default".to_string(), AuthInfo::None);
         conf.query.idm = IDMConfig { users };
 
         ConfigBuilder { conf }
