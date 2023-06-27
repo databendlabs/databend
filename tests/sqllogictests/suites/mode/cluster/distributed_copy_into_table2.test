@@ -11,10 +11,10 @@ statement ok
 drop table if exists table_random;
 
 statement ok
-drop stage if exists s1;
+drop stage if exists s3;
 
 statement ok
-create stage s1 FILE_FORMAT = (TYPE = CSV);
+create stage s3 FILE_FORMAT = (TYPE = CSV);
 
 statement ok
 create table products (id int, name string, description string);
@@ -23,19 +23,19 @@ statement ok
 create table table_random(a int,b string,c string) ENGINE = Random;
 
 statement ok
-copy into @s1 from (select a,b,c from table_random limit 10);
+copy into @s3 from (select a,b,c from table_random limit 10);
 
 statement ok
-copy into @s1 from (select a,b,c from table_random limit 10);
+copy into @s3 from (select a,b,c from table_random limit 10);
 
 statement ok
-copy into @s1 from (select a,b,c from table_random limit 10);
+copy into @s3 from (select a,b,c from table_random limit 10);
 
 statement ok
-copy into @s1 from (select a,b,c from table_random limit 10);
+copy into @s3 from (select a,b,c from table_random limit 10);
 
 statement ok
-copy into products from @s1 pattern = '.*[.]csv' purge = true;
+copy into products from @s3 pattern = '.*[.]csv' purge = true;
 
 query I
 select count(*) from products;
