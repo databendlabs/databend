@@ -181,6 +181,7 @@ build_exceptions! {
 
     // Index related errors.
     UnsupportedIndex(1601),
+    IndexAlreadyRefreshed(1602),
 }
 
 // Meta service errors [2001, 3000].

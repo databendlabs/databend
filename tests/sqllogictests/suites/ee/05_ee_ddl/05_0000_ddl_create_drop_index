@@ -33,16 +33,16 @@ CREATE TABLE t1(a int,b int) Engine = Fuse
 statement ok
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b
 
-statement error 2719
+statement error 1601
 CREATE AGGREGATING INDEX idx1 AS SELECT a, b, SUM(a) FROM t1 WHERE b > 3 GROUP BY GROUPING SETS((1), (2))
 
-statement error 2719
+statement error 1601
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b HAVING COUNT(a) > 2
 
-statement error 2719
+statement error 1601
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a), b FROM t1 WHERE b > 3 GROUP BY b ORDER BY b
 
-statement error 2719
+statement error 1601
 CREATE AGGREGATING INDEX idx1 AS SELECT SUM(a) OVER (), b FROM t1 WHERE b > 3
 
 # Should be able to query internal columns after creating aggreagting index.
