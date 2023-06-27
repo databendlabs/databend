@@ -42,6 +42,7 @@ fn build_custom_claims(license_type: String, org: String) -> LicenseInfo {
         r#type: Some(license_type),
         org: Some(org),
         tenants: Some(vec!["test".to_string()]),
+        features: None,
     }
 }
 

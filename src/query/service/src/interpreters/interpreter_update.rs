@@ -22,6 +22,7 @@ use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::ROW_ID_COL_NAME;
+use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 use common_sql::ColumnBinding;
@@ -163,7 +164,7 @@ impl Interpreter for UpdateInterpreter {
             license_manager.manager.check_enterprise_enabled(
                 &self.ctx.get_settings(),
                 self.ctx.get_tenant(),
-                "update_computed_column".to_string(),
+                ComputedColumn,
             )?;
         }
 

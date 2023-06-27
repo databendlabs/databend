@@ -20,6 +20,7 @@ use common_exception::Result;
 use common_settings::Settings;
 use jwt_simple::claims::JWTClaims;
 
+use crate::license::Feature;
 use crate::license::LicenseInfo;
 
 pub trait LicenseManager: Sync + Send {
@@ -34,7 +35,7 @@ pub trait LicenseManager: Sync + Send {
         &self,
         settings: &Arc<Settings>,
         tenant: String,
-        feature: String,
+        feature: Feature,
     ) -> Result<()>;
 
     /// Encodes a raw license string as a JWT using the constant public key.
@@ -84,7 +85,7 @@ impl LicenseManager for OssLicenseManager {
         &self,
         _settings: &Arc<Settings>,
         _tenant: String,
-        _feature: String,
+        _feature: Feature,
     ) -> Result<()> {
         Err(ErrorCode::LicenseKeyInvalid(
             "Need Commercial License".to_string(),

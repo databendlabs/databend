@@ -164,7 +164,6 @@ impl JoinHashTable {
         let dummy_probed_rows = vec![RowPtr {
             chunk_index: 0,
             row_index: 0,
-            marker: None,
         }];
 
         for (i, key) in keys_iter.enumerate() {

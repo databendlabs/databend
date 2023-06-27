@@ -52,6 +52,7 @@ use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
 use common_functions::BUILTIN_FUNCTIONS;
+use common_license::license::Feature::AggregateIndex;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::principal::FileFormatParams;
 use common_meta_app::principal::StageFileFormatType;
@@ -235,7 +236,7 @@ impl Binder {
                         .check_enterprise_enabled(
                             &self.ctx.get_settings(),
                             self.ctx.get_tenant(),
-                            "aggregating_index".to_string(),
+                            AggregateIndex,
                         )
                         .is_ok()
                     {

@@ -523,7 +523,11 @@ jobs:
 
   benchmark:
     needs: [create_release, linux]
-    uses: ./.github/workflows/benchmark.yml
+    uses: ./.github/workflows/reuse.benchmark.yml
     secrets: inherit
     with:
-      tag: ${{ needs.create_release.outputs.version }}
+      sha: ${{ github.sha }}
+      run_id: ${{ github.run_id }}
+      source: release
+      source_id: ${{ needs.create_release.outputs.version }}
+      version: ${{ needs.create_release.outputs.version }}

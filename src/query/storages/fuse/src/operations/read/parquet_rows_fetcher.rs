@@ -78,7 +78,7 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
             .iter()
             .map(|(prefix, row_idx)| {
                 let block_idx = idx_map[prefix];
-                (block_idx, *row_idx as usize, 1_usize)
+                (block_idx as u32, *row_idx as u32, 1_usize)
             })
             .collect::<Vec<_>>();
 
