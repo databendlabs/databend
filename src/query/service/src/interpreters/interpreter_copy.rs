@@ -516,7 +516,7 @@ pub fn append_data_and_set_finish(
             plan_stage_table_info = plan.stage_table_info;
             plan_force = plan.force;
             plan_write_mode = plan.write_mode;
-            local_id = plan.local_node_id.clone();
+            local_id = plan.local_node_id;
         }
     }
 
