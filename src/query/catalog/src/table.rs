@@ -496,7 +496,7 @@ pub trait ColumnStatisticsProvider {
                         max.push(0);
                     }
                 }
-                for idx in (0..min.len()).rev() {
+                for idx in 0..min.len() {
                     min_value = min_value * 128 + min[idx] as u32;
                     max_value = max_value * 128 + max[idx] as u32;
                 }
