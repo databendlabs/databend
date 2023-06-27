@@ -43,6 +43,7 @@ distro/
 dist/
 test/
 tests/longrun/_*.csv
+tests/longrun/**/_*.csv
 
 # fuzz
 hfuzz_target/
