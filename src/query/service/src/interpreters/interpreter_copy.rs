@@ -499,7 +499,7 @@ pub fn append_data_and_set_finish(
     let plan_stage_table_info: StageTableInfo;
     let plan_force: bool;
     let plan_write_mode: CopyIntoTableMode;
-    let mut local_id = String::from("dummy");
+    let local_id;
     match plan_option {
         PlanParam::CopyIntoTablePlanOption(plan) => {
             plan_required_source_schema = plan.required_source_schema;
@@ -508,6 +508,7 @@ pub fn append_data_and_set_finish(
             plan_stage_table_info = plan.stage_table_info;
             plan_force = plan.force;
             plan_write_mode = plan.write_mode;
+            local_id = ctx.get_cluster().local_id.clone();
         }
         PlanParam::DistributedCopyIntoTable(plan) => {
             plan_required_source_schema = plan.required_source_schema;
