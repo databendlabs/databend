@@ -13,8 +13,9 @@
 // limitations under the License.
 
 use std::collections::hash_map::Entry;
-use std::collections::HashMap;
-use std::collections::HashSet;
+
+use ahash::HashMap;
+use ahash::HashSet;
 
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
