@@ -70,7 +70,6 @@ use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
 use common_sql::executor::Window;
-use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
@@ -96,7 +95,6 @@ use crate::pipelines::processors::transforms::RangeJoinState;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
@@ -105,7 +103,6 @@ use crate::pipelines::processors::transforms::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::JoinHashTable;
-use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinBuild;
@@ -272,7 +269,7 @@ impl PipelineBuilder {
     ) -> Result<()> {
         self.build_pipeline(&range_join.left)?;
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        self.main_pipeline.resize(max_threads)?;
+        self.main_pipeline.try_resize(max_threads)?;
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformRangeJoinLeft::create(input, output, state.clone());
             if self.enable_profiling {
@@ -812,7 +809,7 @@ impl PipelineBuilder {
 
         if params.group_columns.is_empty() {
             self.build_pipeline(&aggregate.input)?;
-            self.main_pipeline.resize(1)?;
+            self.main_pipeline.try_resize(1)?;
             return self.main_pipeline.add_transform(|input, output| {
                 let transform = FinalSingleStateAggregator::try_create(input, output, &params)?;
 
@@ -859,6 +856,9 @@ impl PipelineBuilder {
                         v,
                         &mut self.main_pipeline,
                         params.clone(),
+                        self.enable_profiling,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
                     )
                 }
             }),
@@ -880,6 +880,9 @@ impl PipelineBuilder {
                         v,
                         &mut self.main_pipeline,
                         params.clone(),
+                        self.enable_profiling,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
                     )
                 }
             }),
@@ -973,7 +976,7 @@ impl PipelineBuilder {
             self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None, false)?;
         }
         // `TransformWindow` is a pipeline breaker.
-        self.main_pipeline.resize(1)?;
+        self.main_pipeline.try_resize(1)?;
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
@@ -1034,7 +1037,7 @@ impl PipelineBuilder {
             Ok(ProcessorPtr::create(transform))
         })?;
 
-        self.main_pipeline.resize(old_output_len)
+        self.main_pipeline.try_resize(old_output_len)
     }
 
     fn build_sort(&mut self, sort: &Sort) -> Result<()> {
@@ -1078,7 +1081,7 @@ impl PipelineBuilder {
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
-            self.main_pipeline.resize(max_threads)?;
+            self.main_pipeline.try_resize(max_threads)?;
         }
         let prof_info = if self.enable_profiling {
             Some((plan_id, self.prof_span_set.clone()))
@@ -1101,7 +1104,7 @@ impl PipelineBuilder {
     fn build_limit(&mut self, limit: &Limit) -> Result<()> {
         self.build_pipeline(&limit.input)?;
 
-        self.main_pipeline.resize(1)?;
+        self.main_pipeline.try_resize(1)?;
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformLimit::try_create(limit.limit, limit.offset, input, output)?;
 
@@ -1152,27 +1155,6 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })?;
-
-        if join.join_type == JoinType::LeftMark {
-            self.main_pipeline.resize(1)?;
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformMarkJoin::try_create(
-                    input,
-                    output,
-                    MarkJoinCompactor::create(state.clone()),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        join.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
 
         Ok(())
     }

@@ -31,12 +31,14 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_hashtable::HashJoinHashtableLike;
-use common_hashtable::MarkerKind;
 use common_hashtable::RowPtr;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
+use super::desc::JOIN_MAX_BLOCK_SIZE;
+use super::desc::MARKER_KIND_FALSE;
+use super::desc::MARKER_KIND_NULL;
+use super::desc::MARKER_KIND_TRUE;
 use super::HashJoinState;
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::row::Chunk;
 use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
@@ -89,27 +91,30 @@ impl JoinHashTable {
     pub(crate) fn create_marker_block(
         &self,
         has_null: bool,
-        markers: Vec<MarkerKind>,
+        markers: &mut [u8],
+        num_rows: usize,
     ) -> Result<DataBlock> {
-        let mut validity = MutableBitmap::with_capacity(markers.len());
-        let mut boolean_bit_map = MutableBitmap::with_capacity(markers.len());
-
-        for m in markers {
-            let marker = if m == MarkerKind::False && has_null {
-                MarkerKind::Null
+        let mut validity = MutableBitmap::with_capacity(num_rows);
+        let mut boolean_bit_map = MutableBitmap::with_capacity(num_rows);
+        let mut row_index = 0;
+        while row_index < num_rows {
+            let marker = if markers[row_index] == MARKER_KIND_FALSE && has_null {
+                MARKER_KIND_NULL
             } else {
-                m
+                markers[row_index]
             };
-            if marker == MarkerKind::Null {
+            if marker == MARKER_KIND_NULL {
                 validity.push(false);
             } else {
                 validity.push(true);
             }
-            if marker == MarkerKind::True {
+            if marker == MARKER_KIND_TRUE {
                 boolean_bit_map.push(true);
             } else {
                 boolean_bit_map.push(false);
             }
+            markers[row_index] = MARKER_KIND_FALSE;
+            row_index += 1;
         }
         let boolean_column = Column::Boolean(boolean_bit_map.into());
         let marker_column = Column::Nullable(Box::new(NullableColumn {
@@ -119,8 +124,7 @@ impl JoinHashTable {
         Ok(DataBlock::new_from_columns(vec![marker_column]))
     }
 
-    pub(crate) fn init_markers(cols: &[(Column, DataType)], num_rows: usize) -> Vec<MarkerKind> {
-        let mut markers = vec![MarkerKind::False; num_rows];
+    pub(crate) fn init_markers(cols: &[(Column, DataType)], num_rows: usize, markers: &mut [u8]) {
         if cols
             .iter()
             .any(|(c, _)| matches!(c, Column::Null { .. } | Column::Nullable(_)))
@@ -149,14 +153,15 @@ impl JoinHashTable {
                 }
             }
             if let Some(v) = valids {
-                for (idx, marker) in markers.iter_mut().enumerate() {
+                let mut idx = 0;
+                while idx < num_rows {
                     if !v.get_bit(idx) {
-                        *marker = MarkerKind::Null;
+                        markers[idx] = MARKER_KIND_NULL;
                     }
+                    idx += 1;
                 }
             }
         }
-        markers
     }
 
     pub(crate) fn set_validity(
@@ -268,8 +273,12 @@ impl JoinHashTable {
             // Acquire write lock in current scope
             let mut chunks = self.row_space.chunks.write();
             if self.need_outer_scan() {
-                let outer_scan_bitmap = unsafe { &mut *self.outer_scan_map.get() };
-                outer_scan_bitmap.push(vec![false; chunk.num_rows()]);
+                let outer_scan_map = unsafe { &mut *self.outer_scan_map.get() };
+                outer_scan_map.push(vec![false; chunk.num_rows()]);
+            }
+            if self.need_mark_scan() {
+                let mark_scan_map = unsafe { &mut *self.mark_scan_map.get() };
+                mark_scan_map.push(vec![MARKER_KIND_FALSE; chunk.num_rows()]);
             }
             chunks.push(chunk);
         }

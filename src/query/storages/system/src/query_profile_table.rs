@@ -16,10 +16,14 @@ use std::sync::Arc;
 
 use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
+use common_expression::types::ArgType;
+use common_expression::types::ArrayType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::UInt32Type;
 use common_expression::types::UInt64Type;
+use common_expression::types::ValueType;
+use common_expression::types::VariantType;
 use common_expression::DataBlock;
 use common_expression::FromData;
 use common_expression::TableDataType;
@@ -28,9 +32,60 @@ use common_expression::TableSchemaRefExt;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
+use common_profile::OperatorAttribute;
+use common_profile::QueryProfileManager;
 
 use crate::SyncOneBlockSystemTable;
 use crate::SyncSystemTable;
+
+// Encode an `OperatorAttribute` into jsonb::Value.
+fn encode_operator_attribute(attr: &OperatorAttribute) -> jsonb::Value {
+    match attr {
+        OperatorAttribute::Join(join_attr) => (&serde_json::json! ({
+            "join_type": join_attr.join_type,
+            "equi_conditions": join_attr.equi_conditions,
+            "non_equi_conditions": join_attr.non_equi_conditions,
+        }))
+            .into(),
+        OperatorAttribute::Aggregate(agg_attr) => (&serde_json::json!({
+            "group_keys": agg_attr.group_keys,
+            "functions": agg_attr.functions,
+        }))
+            .into(),
+        OperatorAttribute::AggregateExpand(expand_attr) => (&serde_json::json!({
+            "group_keys": expand_attr.group_keys,
+            "aggr_exprs": expand_attr.aggr_exprs,
+        }))
+            .into(),
+        OperatorAttribute::Filter(filter_attr) => {
+            (&serde_json::json!({ "predicate": filter_attr.predicate })).into()
+        }
+        OperatorAttribute::EvalScalar(scalar_attr) => {
+            (&serde_json::json!({ "scalars": scalar_attr.scalars })).into()
+        }
+        OperatorAttribute::ProjectSet(project_attr) => {
+            (&serde_json::json!({ "functions": project_attr.functions })).into()
+        }
+        OperatorAttribute::Limit(limit_attr) => (&serde_json::json!({
+            "limit": limit_attr.limit,
+            "offset": limit_attr.offset,
+        }))
+            .into(),
+        OperatorAttribute::TableScan(scan_attr) => {
+            (&serde_json::json!({ "qualified_name": scan_attr.qualified_name })).into()
+        }
+        OperatorAttribute::Sort(sort_attr) => {
+            (&serde_json::json!({ "sort_keys": sort_attr.sort_keys })).into()
+        }
+        OperatorAttribute::Window(window_attr) => {
+            (&serde_json::json!({ "functions": window_attr.functions })).into()
+        }
+        OperatorAttribute::Exchange(exchange_attr) => {
+            (&serde_json::json!({ "exchange_mode": exchange_attr.exchange_mode })).into()
+        }
+        OperatorAttribute::Empty => jsonb::Value::Null,
+    }
+}
 
 pub struct QueryProfileTable {
     table_info: TableInfo,
@@ -40,10 +95,17 @@ impl QueryProfileTable {
     pub fn create(table_id: u64) -> Arc<dyn Table> {
         let schema = TableSchemaRefExt::create(vec![
             TableField::new("query_id", TableDataType::String),
-            TableField::new("plan_id", TableDataType::Number(NumberDataType::UInt32)),
-            TableField::new("plan_name", TableDataType::String),
-            TableField::new("description", TableDataType::String),
-            TableField::new("cpu_time", TableDataType::Number(NumberDataType::UInt64)),
+            TableField::new("operator_id", TableDataType::Number(NumberDataType::UInt32)),
+            TableField::new("operator_type", TableDataType::String),
+            TableField::new(
+                "operator_children",
+                TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt32))),
+            ),
+            TableField::new(
+                "process_time",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new("operator_attribute", TableDataType::Variant),
         ]);
 
         let table_info = TableInfo {
@@ -69,32 +131,48 @@ impl SyncSystemTable for QueryProfileTable {
         &self.table_info
     }
 
-    fn get_full_data(&self, ctx: Arc<dyn TableContext>) -> common_exception::Result<DataBlock> {
-        let profile_mgr = ctx.get_query_profile_manager();
+    fn get_full_data(&self, _ctx: Arc<dyn TableContext>) -> common_exception::Result<DataBlock> {
+        let profile_mgr = QueryProfileManager::instance();
         let query_profs = profile_mgr.list_all();
 
         let mut query_ids: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
-        let mut plan_ids: Vec<u32> = Vec::with_capacity(query_profs.len());
-        let mut plan_names: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
-        let mut descriptions: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
-        let mut cpu_times: Vec<u64> = Vec::with_capacity(query_profs.len());
+        let mut operator_ids: Vec<u32> = Vec::with_capacity(query_profs.len());
+        let mut operator_types: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
+        let mut operator_childrens: Vec<Vec<u32>> = Vec::with_capacity(query_profs.len());
+        let mut process_times: Vec<u64> = Vec::with_capacity(query_profs.len());
+        let mut operator_attributes: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
 
         for prof in query_profs.iter() {
-            for plan_prof in prof.plan_node_profs.iter() {
+            for plan_prof in prof.operator_profiles.iter() {
                 query_ids.push(prof.query_id.clone().into_bytes());
-                plan_ids.push(plan_prof.id);
-                plan_names.push(plan_prof.plan_node_name.clone().into_bytes());
-                descriptions.push(plan_prof.description.clone().into_bytes());
-                cpu_times.push(plan_prof.cpu_time.as_nanos() as u64);
+                operator_ids.push(plan_prof.id);
+                operator_types.push(plan_prof.operator_type.to_string().into_bytes());
+                operator_childrens.push(plan_prof.children.clone());
+                process_times.push(plan_prof.cpu_time.as_nanos() as u64);
+
+                let attribute_value = encode_operator_attribute(&plan_prof.attribute);
+                operator_attributes.push(attribute_value.to_vec());
             }
         }
 
         let block = DataBlock::new_from_columns(vec![
+            // query_id
             StringType::from_data(query_ids),
-            UInt32Type::from_data(plan_ids),
-            StringType::from_data(plan_names),
-            StringType::from_data(descriptions),
-            UInt64Type::from_data(cpu_times),
+            // operator_id
+            UInt32Type::from_data(operator_ids),
+            // operator_type
+            StringType::from_data(operator_types),
+            // operator_children
+            ArrayType::upcast_column(ArrayType::<UInt32Type>::column_from_iter(
+                operator_childrens
+                    .into_iter()
+                    .map(|children| UInt32Type::column_from_iter(children.into_iter(), &[])),
+                &[],
+            )),
+            // process_time
+            UInt64Type::from_data(process_times),
+            // operator_attribute
+            VariantType::from_data(operator_attributes),
         ]);
 
         Ok(block)

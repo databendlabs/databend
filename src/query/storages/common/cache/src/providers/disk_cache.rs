@@ -121,61 +121,19 @@ where C: Cache<String, u64, DefaultHashBuilder, FileSize>
         self.root.join(rel_path)
     }
 
-    /// Scan `self.root` for existing files and store them.
-    fn init(mut self) -> self::result::Result<Self> {
-        fs::create_dir_all(&self.root)?;
-        for (file, size) in get_all_files(&self.root) {
-            if !self.can_store(size) {
-                fs::remove_file(file).unwrap_or_else(|e| {
-                    error!(
-                        "Error removing file `{}` which is too large for the cache ({} bytes)",
-                        e, size
-                    )
-                });
-            } else {
-                while self.cache.size() + size > self.cache.capacity() {
-                    let (rel_path, _) = self
-                        .cache
-                        .pop_by_policy()
-                        .expect("Unexpectedly empty cache!");
-                    let cache_item_path = self.abs_path_of_cache_key(&DiskCacheKey(rel_path));
-                    fs::remove_file(&cache_item_path).unwrap_or_else(|e| {
-                        error!(
-                            "Error removing file from cache: `{:?}`: {}",
-                            cache_item_path, e
-                        )
-                    });
-                }
-                let relative_path = file
-                    .strip_prefix(&self.root)
-                    .map_err(|_e| self::Error::MalformedPath)?;
-                let cache_key = Self::recovery_from(relative_path);
-                self.cache.put(cache_key, size);
-            }
+    fn init(self) -> self::result::Result<Self> {
+        // remove dir when init, ignore remove error
+        if let Err(e) = fs::remove_dir_all(&self.root) {
+            warn!("remove disk cache dir {:?} error {}", self.root, e);
         }
+        fs::create_dir_all(&self.root)?;
+
         Ok(self)
     }
 
     /// Returns `true` if the disk cache can store a file of `size` bytes.
     pub fn can_store(&self, size: u64) -> bool {
         size <= self.cache.capacity()
-    }
-
-    fn recovery_from(relative_path: &Path) -> String {
-        let key_string = match relative_path.file_name() {
-            Some(file_name) => match file_name.to_str() {
-                Some(str) => str.to_owned(),
-                None => {
-                    // relative_path is constructed by ourself, and shall be valid utf8 string
-                    unreachable!()
-                }
-            },
-            None => {
-                // only called during init, and only path of files are passed in
-                unreachable!()
-            }
-        };
-        key_string
     }
 
     fn cache_key(&self, key: &str) -> DiskCacheKey {
@@ -408,23 +366,6 @@ fn validate_checksum(bytes: &[u8]) -> Result<()> {
             )))
         }
     }
-}
-
-/// Return an iterator of `(path, size)` of files under `path` sorted by ascending last-modified
-/// time, such that the oldest modified file is returned first.
-fn get_all_files<P: AsRef<Path>>(path: P) -> impl Iterator<Item = (PathBuf, u64)> {
-    walkdir::WalkDir::new(path.as_ref())
-        .into_iter()
-        .filter_map(|e| {
-            e.ok().and_then(|f| {
-                // Only look at files
-                if f.file_type().is_file() {
-                    f.metadata().ok().map(|m| (f.path().to_owned(), m.len()))
-                } else {
-                    None
-                }
-            })
-        })
 }
 
 pub type LruDiskCache = DiskCache<LruCache<String, u64, DefaultHashBuilder, FileSize>>;

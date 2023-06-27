@@ -2446,7 +2446,6 @@ dependencies = [
  "common-pipeline-core",
  "common-settings",
  "common-storage",
- "crossbeam-channel",
  "csv-core",
  "dashmap",
  "futures",
@@ -2942,6 +2941,7 @@ dependencies = [
  "common-metrics",
  "common-pipeline-core",
  "common-pipeline-sources",
+ "common-profile",
  "common-sql",
  "common-storages-fuse",
  "common-storages-result-cache",
@@ -9946,7 +9946,6 @@ dependencies = [
  "siphasher",
  "tempfile",
  "tracing",
- "walkdir",
 ]
 
 [[package]]

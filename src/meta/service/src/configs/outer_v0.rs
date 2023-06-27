@@ -214,6 +214,10 @@ impl Config {
         // Load from config file first.
         {
             let config_file = if !arg_conf.config_file.is_empty() {
+                // TODO: remove this `allow(clippy::redundant_clone)`
+                // as soon as this issue is fixed:
+                // https://github.com/rust-lang/rust-clippy/issues/10940
+                #[allow(clippy::redundant_clone)]
                 arg_conf.config_file.clone()
             } else if let Ok(path) = env::var("METASRV_CONFIG_FILE") {
                 path
