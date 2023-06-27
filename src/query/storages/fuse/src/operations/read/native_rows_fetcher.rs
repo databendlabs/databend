@@ -94,7 +94,7 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
             .iter()
             .map(|(prefix, page_idx, idx)| {
                 let block_idx = idx_map[&(*prefix, *page_idx)];
-                (block_idx, *idx as usize, 1_usize)
+                (block_idx as u32, *idx as u32, 1_usize)
             })
             .collect::<Vec<_>>();
 

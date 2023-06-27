@@ -47,7 +47,8 @@ if __name__ == "__main__":
         license[0] = license[0][:5]
         print(license)
         mycursor = mydb.cursor()
-        mycursor.execute("select count(*) from system.processes where type = 'FlightSQL';")
+        mycursor.execute(
+            "select count(*) from system.processes where type = 'FlightSQL';"
+        )
         all_process = mycursor.fetchall()
         print(all_process)
-
