@@ -436,11 +436,7 @@ fn aggregate_partial_to_format_tree(
     let group_by = plan
         .group_by
         .iter()
-        .map(|&index| {
-            let name = metadata.read().column(index).name();
-            Ok(name)
-        })
-        .collect::<Result<Vec<_>>>()?
+        .map(|&index| metadata.read().column(index).name())
         .join(", ");
     let agg_funcs = plan
         .agg_funcs

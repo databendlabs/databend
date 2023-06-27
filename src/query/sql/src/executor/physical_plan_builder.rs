@@ -1287,7 +1287,7 @@ impl PhysicalPlanBuilder {
     fn build_eval_scalar(
         &mut self,
         input: PhysicalPlan,
-        eval_scalar: &crate::planner::plans::EvalScalar,
+        eval_scalar: &planner::plans::EvalScalar,
         stat_info: PlanStatsInfo,
     ) -> Result<PhysicalPlan> {
         let input_schema = input.output_schema()?;

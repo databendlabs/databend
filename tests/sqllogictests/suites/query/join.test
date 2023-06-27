@@ -238,7 +238,7 @@ create table t2(c smallint unsigned null)
 statement ok
 insert into t2 values(1),(2),(null)
 
-query IF
+query I
 select TRY_CAST((c + 1) AS Int64 NULL) from t2;
 ----
 2
@@ -246,7 +246,7 @@ select TRY_CAST((c + 1) AS Int64 NULL) from t2;
 NULL
 
 
-query IF
+query IR
 select * from t inner join t1 on t.a = t1.b order by a, b
 ----
 1 1.0
@@ -275,7 +275,7 @@ select * from t inner join t2 on t.a = t2.c + 1 and t.a - 1 = t2.c order by a, c
 3 2
 
 
-query FI
+query RI
 select * from t1 inner join t on t.a = t1.b order by a, b
 ----
 1.0 1
@@ -491,8 +491,24 @@ INSERT INTO t2(c1float) VALUES (0.9702655076980591);
 statement ok
 INSERT INTO t2(c1float, c2varchar) VALUES (0.5340723991394043, '02'), (0.4661566913127899, '1261837');
 
-statement ok
-SELECT t0.c0boolean, t1.c0boolean, t1.c1float FROM t0, t1 RIGHT JOIN t2 ON t1.c0boolean;
+query IIR
+SELECT t0.c0boolean, t1.c0boolean, t1.c1float FROM t0, t1 RIGHT JOIN t2 ON t1.c0boolean order by t0.c0boolean;
+----
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+0 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
+1 NULL NULL
 
 
 statement ok
@@ -530,3 +546,87 @@ select * from t1 join t2 on t1.a < t2.b order by t1.a;
 ----
 1 3
 2 3
+
+statement ok
+drop table t1;
+
+statement ok
+drop table t2;
+
+statement ok
+create table t1 (a int);
+
+# right join with empty build side
+query II
+select * from (select * from numbers(100)) n right join t1 on n.number = t1.a;
+----
+
+# inner join with empty build side
+query II
+select * from (select * from numbers(100)) n join t1 on n.number = t1.a;
+----
+
+# right semi with empty build side
+query II
+select * from (select * from numbers(100)) n right semi join t1 on n.number = t1.a;
+----
+
+# right anti with empty build side
+query II
+select * from (select * from numbers(100)) n right anti join t1 on n.number = t1.a;
+----
+
+# left semi with empty build side
+query II
+select * from (select * from numbers(100)) n left semi join t1 on n.number = t1.a;
+----
+
+# left anti join with empty build side
+query I
+select * from (select * from numbers(10)) n left anti join t1 on n.number = t1.a order by number;
+----
+0
+1
+2
+3
+4
+5
+6
+7
+8
+9
+
+
+# left join with empty build side
+query II
+select * from (select * from numbers(10)) n left join t1 on n.number = t1.a order by n.number;
+----
+0 NULL
+1 NULL
+2 NULL
+3 NULL
+4 NULL
+5 NULL
+6 NULL
+7 NULL
+8 NULL
+9 NULL
+
+
+# full join with empty build side
+query II
+select * from (select * from numbers(10)) n full join t1 on n.number = t1.a order by n.number;
+----
+0 NULL
+1 NULL
+2 NULL
+3 NULL
+4 NULL
+5 NULL
+6 NULL
+7 NULL
+8 NULL
+9 NULL
+
+statement ok
+drop table t1;
