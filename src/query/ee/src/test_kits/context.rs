@@ -74,7 +74,7 @@ pub async fn create_ee_query_context(
         .await?;
 
     if current_user.is_none() {
-        let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+        let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
             hash_value: Vec::from("pass"),
         });
