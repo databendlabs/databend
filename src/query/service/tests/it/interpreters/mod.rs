@@ -1,4 +1,4 @@
-// Copyright 2021 Datafuse Labs
+// Copyright 2021 Datafuse Labs.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,15 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod decorrelate;
-#[allow(clippy::module_inception)]
-mod heuristic;
-mod prune_unused_columns;
-mod rule_list;
-mod subquery_rewriter;
-
-pub use heuristic::HeuristicOptimizer;
-pub use heuristic::COMMUTE_JOIN_RULES;
-pub use heuristic::DEFAULT_REWRITE_RULES;
-pub use rule_list::RuleList;
-pub use subquery_rewriter::SubqueryRewriter;
+mod union;
