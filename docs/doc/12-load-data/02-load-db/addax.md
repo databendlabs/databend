@@ -10,6 +10,8 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 For information about the system requirements, download, and deployment steps for Addax, refer to Addax's [Getting Started Guide](https://github.com/wgzhao/Addax#getting-started). The guide provides detailed instructions and guidelines for setting up and using Addax.
 
+See also: [DataX](datax.md)
+
 ## DatabendReader & DatabendWriter
 
 DatabendReader and DatabendWriter are integrated plugins of Addax, allowing seamless integration with Databend.
