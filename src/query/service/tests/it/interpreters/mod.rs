@@ -12,25 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![allow(clippy::uninlined_format_args)]
-#![feature(thread_local)]
-#![feature(io_error_other)]
-
-extern crate core;
-
-mod api;
-mod auth;
-mod catalogs;
-mod clusters;
-mod configs;
-mod databases;
-mod frame;
-mod interpreters;
-mod metrics;
-mod pipelines;
-mod servers;
-mod sessions;
-mod sql;
-mod storages;
-mod table_functions;
-mod tests;
+mod union;
