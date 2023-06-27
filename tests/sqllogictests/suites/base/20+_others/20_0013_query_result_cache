@@ -256,5 +256,41 @@ DROP TABLE t1;
 statement ok
 DROP TABLE t2;
 
+# ISSUE 11870
+
+statement ok
+create table ab(a int null, b double null);
+
+statement ok
+insert into ab values( 1, 2.3 ), ( 1, 3.3 )
+
+statement ok
+create table a(a int null)
+
+statement ok
+insert into a values( 1 ), ( 2 )
+
+statement ok
+SET enable_query_result_cache = 1;
+
+query I
+select 3, a as price from a union all select a, b from ab order by price
+----
+3 1.0
+3 2.0
+1 2.3
+1 3.3
+
+query I
+select 3, a as price from a union all select a, b from ab order by price
+----
+3 1.0
+3 2.0
+1 2.3
+1 3.3
+
+statement ok
+SET enable_query_result_cache = 0;
+
 statement ok
 DROP DATABASE db20_13;
