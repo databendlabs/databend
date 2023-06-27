@@ -201,7 +201,7 @@ impl FuseTable {
             false,
         )?;
 
-        pipeline.resize(max_threads)?;
+        pipeline.try_resize(max_threads)?;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             let proc = TransformSerializeBlock::new(
                 ctx.clone(),
@@ -213,7 +213,7 @@ impl FuseTable {
             proc.into_processor()
         })?;
 
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
         pipeline.add_transform(|input, output| {
             let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
             proc.into_processor()
