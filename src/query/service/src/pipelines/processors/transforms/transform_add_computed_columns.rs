@@ -21,6 +21,7 @@ use common_expression::ComputedExpr;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::Expr;
+use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -52,7 +53,7 @@ where Self: Transform
         license_manager.manager.check_enterprise_enabled(
             &ctx.get_settings(),
             ctx.get_tenant(),
-            "insert_computed_column".to_string(),
+            ComputedColumn,
         )?;
 
         let mut exprs = Vec::with_capacity(output_schema.fields().len());

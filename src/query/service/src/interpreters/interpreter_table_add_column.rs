@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::UpdateTableMetaReq;
@@ -84,7 +85,7 @@ impl Interpreter for AddTableColumnInterpreter {
                 license_manager.manager.check_enterprise_enabled(
                     &self.ctx.get_settings(),
                     self.plan.tenant.clone(),
-                    "add_computed_column".to_string(),
+                    ComputedColumn,
                 )?;
             }
 
