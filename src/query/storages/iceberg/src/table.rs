@@ -18,8 +18,10 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use chrono::Utc;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::PartInfo;
 use common_catalog::plan::PartStatistics;
 use common_catalog::plan::Partitions;
+use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::PushDownInfo;
 use common_catalog::table::Table;
 use common_catalog::table_args::TableArgs;
@@ -34,19 +36,12 @@ use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
 
 use crate::converters::schema_iceberg_to_databend;
+use crate::partition::IcebergPartInfo;
 
 /// accessor wrapper as a table
 ///
 /// TODO: we should use icelake Table instead.
-#[allow(unused)]
 pub struct IcebergTable {
-    /// database that belongs to
-    database: String,
-    /// name of the current table
-    name: String,
-    /// root of the table
-    tbl_root: DataOperator,
-    /// table information
     info: TableInfo,
 
     table: icelake::Table,
@@ -96,14 +91,7 @@ impl IcebergTable {
             ..Default::default()
         };
 
-        // finish making table
-        Ok(Self {
-            database: database.to_string(),
-            name: table_name.to_string(),
-            tbl_root,
-            info,
-            table,
-        })
+        Ok(Self { info, table })
     }
 
     pub fn do_read_data(
@@ -121,7 +109,24 @@ impl IcebergTable {
         &self,
         _ctx: Arc<dyn TableContext>,
     ) -> Result<(PartStatistics, Partitions)> {
-        todo!()
+        let data_files = self.table.current_data_files().await.map_err(|e| {
+            ErrorCode::ReadTableDataError(format!("Cannot get current data files: {e:?}"))
+        })?;
+
+        let partitions = data_files
+            .into_iter()
+            .map(|v: icelake::types::DataFile| {
+                Arc::new(Box::new(IcebergPartInfo {
+                    path: v.file_path,
+                    size: v.file_size_in_bytes as u64,
+                }) as Box<dyn PartInfo>)
+            })
+            .collect();
+
+        Ok((
+            PartStatistics::default(),
+            Partitions::create_nolazy(PartitionsShuffleKind::Seq, partitions),
+        ))
     }
 }
 
