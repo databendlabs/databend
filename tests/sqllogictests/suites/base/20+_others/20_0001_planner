@@ -1258,7 +1258,7 @@ default default default
 query TTT
 select user(), currentuser(), current_user()
 ----
-'root'@'127.0.0.1' 'root'@'127.0.0.1' 'root'@'127.0.0.1'
+'root'@'%' 'root'@'%' 'root'@'%'
 
 
 query TTTT

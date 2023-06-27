@@ -32,6 +32,7 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
+use common_license::license::Feature::DataMask;
 use common_license::license_manager::get_license_manager;
 use common_settings::Settings;
 use common_users::UserApiProvider;
@@ -162,7 +163,7 @@ impl ToReadDataSourcePlan for dyn Table {
                 let ret = license_manager.manager.check_enterprise_enabled(
                     &ctx.get_settings(),
                     tenant.clone(),
-                    "data_mask".to_string(),
+                    DataMask,
                 );
                 if ret.is_err() {
                     None

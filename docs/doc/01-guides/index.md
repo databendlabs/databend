@@ -27,9 +27,9 @@ import TabItem from '@theme/TabItem';
 
 <TabItem value="Connect" label="Connect">
 
-* [Connecting to Databend with BendSQL](../11-integrations/30-access-tool/01-bendsql.md)
-* [Connecting to Databend with JDBC](../11-integrations/30-access-tool/02-jdbc.md)
-* [Connecting to Databend with MySQL-Compatible Clients](../11-integrations/30-access-tool/00-mysql.md)
+* [Connecting to Databend with BendSQL](../13-sql-clients/01-bendsql.md)
+* [Connecting to Databend with JDBC](../13-sql-clients/02-jdbc.md)
+* [Connecting to Databend with MySQL-Compatible Clients](../13-sql-clients/00-mysql.md)
 
 </TabItem>
 
@@ -52,7 +52,7 @@ Databend makes it easy to load data from various sources, stage, Amazon S3, loca
 
 * [Understanding Stages](../12-load-data/00-stage/00-whystage.md)
 * [Managing Stages](../12-load-data/00-stage/01-manage-stages.md)
-* [Staging Files with API](../12-load-data/00-stage/01-manage-stages.md)
+* [Staging Files](../12-load-data/00-stage/01-manage-stages.md)
 
 </TabItem>
 
@@ -149,20 +149,20 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 <Tabs>
 <TabItem value="Visualizations" label="Visualizations" default>
 
-* [Jupyter Notebook](../11-integrations/20-gui-tool/00-jupyter.md)
-* [Grafana](../11-integrations/20-gui-tool/02-grafana.md)
-* [Metabase](../11-integrations/20-gui-tool/03-metabase.md)
-* [Redash](../11-integrations/20-gui-tool/04-redash.md)
+* [Jupyter Notebook](../13-integrations/00-jupyter.md)
+* [Grafana](../13-integrations/02-grafana.md)
+* [Metabase](../13-integrations/03-metabase.md)
+* [Redash](../13-integrations/04-redash.md)
 
 </TabItem>
 
 <TabItem value="APIs" label="APIs" default>
 
-* [HTTP Handler](../11-integrations/00-api/00-rest.md)
-* [MySQL Handler](../11-integrations/00-api/01-mysql-handler.md)
-* [ClickHouse Handler](../11-integrations/00-api/02-clickhouse-handler.md)
-* [Streaming Load API](../11-integrations/00-api/03-streaming-load.md)
-* [File Upload API](../11-integrations/00-api/10-put-to-stage.md)
+* [HTTP Handler](../03-develop/00-api/00-rest.md)
+* [MySQL Handler](../03-develop/00-api/01-mysql-handler.md)
+* [ClickHouse Handler](../03-develop/00-api/02-clickhouse-handler.md)
+* [Streaming Load API](../03-develop/00-api/03-streaming-load.md)
+* [File Upload API](../03-develop/00-api/10-put-to-stage.md)
 
 </TabItem>
 

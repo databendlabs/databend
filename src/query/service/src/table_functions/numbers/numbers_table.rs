@@ -137,7 +137,7 @@ impl Table for NumbersTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        _dyn_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let max_block_size = ctx.get_settings().get_max_block_size()?;
         let mut limit = None;

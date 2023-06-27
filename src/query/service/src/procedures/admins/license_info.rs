@@ -27,6 +27,7 @@ use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::Scalar;
 use common_expression::Value;
+use common_license::license::Feature;
 use common_license::license::LicenseInfo;
 use common_license::license_manager::get_license_manager;
 use humantime::Duration as HumanDuration;
@@ -74,7 +75,7 @@ impl OneBlockProcedure for LicenseInfoProcedure {
         get_license_manager().manager.check_enterprise_enabled(
             &settings,
             ctx.get_tenant(),
-            "license_info".to_string(),
+            Feature::LicenseInfo,
         )?;
 
         let info = get_license_manager()
