@@ -100,7 +100,7 @@ For the available parameters and their descriptions, refer to the documentation 
 }
 ```
 
-4. Run DataX:
+4. Run Addax:
 
 ```shell
 cd {YOUR_ADDAX_DIR_BIN}
