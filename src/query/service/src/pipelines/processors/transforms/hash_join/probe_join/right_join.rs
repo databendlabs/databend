@@ -107,7 +107,8 @@ impl JoinHashTable {
                         if self.hash_join_desc.other_predicate.is_none() {
                             result_blocks.push(merged_block);
                             for row_ptr in local_build_indexes.iter() {
-                                outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+                                outer_scan_map[row_ptr.chunk_index as usize]
+                                    [row_ptr.row_index as usize] = true;
                             }
                         } else {
                             let (bm, all_true, all_false) = self.get_other_filters(
@@ -118,7 +119,8 @@ impl JoinHashTable {
                             if all_true {
                                 result_blocks.push(merged_block);
                                 for row_ptr in local_build_indexes.iter() {
-                                    outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+                                    outer_scan_map[row_ptr.chunk_index as usize]
+                                        [row_ptr.row_index as usize] = true;
                                 }
                             } else if !all_false {
                                 // Safe to unwrap.
@@ -127,8 +129,9 @@ impl JoinHashTable {
                                 while idx < JOIN_MAX_BLOCK_SIZE {
                                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                                     if valid {
-                                        outer_scan_map[local_build_indexes[idx].chunk_index]
-                                            [local_build_indexes[idx].row_index] = true;
+                                        outer_scan_map
+                                            [local_build_indexes[idx].chunk_index as usize]
+                                            [local_build_indexes[idx].row_index as usize] = true;
                                     }
                                     idx += 1;
                                 }
@@ -195,7 +198,7 @@ impl JoinHashTable {
             if self.hash_join_desc.other_predicate.is_none() {
                 result_blocks.push(merged_block);
                 for row_ptr in local_build_indexes.iter().take(matched_num) {
-                    outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+                    outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] = true;
                 }
             } else {
                 let (bm, all_true, all_false) = self.get_other_filters(
@@ -206,7 +209,8 @@ impl JoinHashTable {
                 if all_true {
                     result_blocks.push(merged_block);
                     for row_ptr in local_build_indexes.iter().take(matched_num) {
-                        outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+                        outer_scan_map[row_ptr.chunk_index as usize][row_ptr.row_index as usize] =
+                            true;
                     }
                 } else if !all_false {
                     // Safe to unwrap.
@@ -215,8 +219,8 @@ impl JoinHashTable {
                     while idx < matched_num {
                         let valid = unsafe { validity.get_bit_unchecked(idx) };
                         if valid {
-                            outer_scan_map[local_build_indexes[idx].chunk_index]
-                                [local_build_indexes[idx].row_index] = true;
+                            outer_scan_map[local_build_indexes[idx].chunk_index as usize]
+                                [local_build_indexes[idx].row_index as usize] = true;
                         }
                         idx += 1;
                     }
