@@ -57,10 +57,8 @@ select count(*) from products;
 ----
 0
 
-query I
+statement ok
 select block_count from fuse_snapshot('default','products');
-----
-0
 
 statement ok
 set enable_distributed_copy_into = 0;

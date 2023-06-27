@@ -16,19 +16,18 @@ null
 5	'Shenzhen'	55
 6	'Beijing'	99
 6	'Beijing'	99
-6   'HangZhou'	92
+6	'HangZhou'	92
 9	'Changsha'	91
 10	'Hong Kong‘	88
 10	'Hong Kong‘	88
-10  'Suzhou‘	66
-101 scooter	Small 2-wheel scooter
+10	'Suzhou‘	66
+101	scooter	Small 2-wheel scooter
 102	car battery	12V car battery
 103	12-pack drill bits	12-pack of drill bits with sizes ranging from #40 to #3
 104	hammer	12oz carpenter's hammer
 105	hammer	14oz carpenter's hammer
 24
-2
 null
 ERROR 1105 (HY000) at line 1: Code: 1046, Text = expect 3 fields, only found 2 , split sample_2_columns.csv(77 bytes), row=0=0+0, offset=0=0+0, options=Csv(CsvFileFormatParams { compression: None, headers: 0, field_delimiter: ",", record_delimiter: "\n", nan_display: "NaN", escape: "", quote: "\"" }), schema=[TableField { name: "id", default_expr: None, data_type: Number(Int32), column_id: 0, computed_expr: None }, TableField { name: "name", default_expr: None, data_type: String, column_id: 1, computed_expr: None }, TableField { name: 
 24
-    5
+5

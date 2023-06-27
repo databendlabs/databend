@@ -99,4 +99,3 @@ echo "select count(1), avg(Year), sum(DayOfWeek)  from ontime200" | $MYSQL_CLIEN
 echo "drop table ontime200" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists named_external_stage" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists s1" | $MYSQL_CLIENT_CONNECT
-echo "set enable_distributed_copy_into = 0;"
