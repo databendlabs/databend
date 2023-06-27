@@ -1224,13 +1224,13 @@ limit 5;
 ----
 HashJoin: INNER
 ├── Build
-│   └── Scan: default.tpch.lineitem, rows: 600572
+│   └── HashJoin: INNER
+│       ├── Build
+│       │   └── Scan: default.tpch.customer, rows: 15000
+│       └── Probe
+│           └── Scan: default.tpch.orders, rows: 150000
 └── Probe
-    └── HashJoin: INNER
-        ├── Build
-        │   └── Scan: default.tpch.customer, rows: 15000
-        └── Probe
-            └── Scan: default.tpch.orders, rows: 150000
+    └── Scan: default.tpch.lineitem, rows: 600572
 
 # Q4
 query I
