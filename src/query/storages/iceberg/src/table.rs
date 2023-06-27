@@ -154,7 +154,6 @@ impl Table for IcebergTable {
         ctx: Arc<dyn TableContext>,
         // TODO: we will support push down later.
         _push_downs: Option<PushDownInfo>,
-        _dry_run: bool,
         // TODO: we will support dry run later.
         _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
