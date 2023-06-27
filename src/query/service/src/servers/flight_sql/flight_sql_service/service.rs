@@ -32,6 +32,7 @@ use arrow_flight::sql::CommandGetPrimaryKeys;
 use arrow_flight::sql::CommandGetSqlInfo;
 use arrow_flight::sql::CommandGetTableTypes;
 use arrow_flight::sql::CommandGetTables;
+use arrow_flight::sql::CommandGetXdbcTypeInfo;
 use arrow_flight::sql::CommandPreparedStatementQuery;
 use arrow_flight::sql::CommandPreparedStatementUpdate;
 use arrow_flight::sql::CommandStatementQuery;
@@ -619,6 +620,24 @@ impl FlightSqlService for FlightSqlServiceImpl {
     #[async_backtrace::framed]
     async fn register_sql_info(&self, id: i32, result: &SqlInfo) {
         tracing::info!("register_sql_info({id}, {result:?})");
+    }
+
+    /// Get a FlightInfo to extract information about the supported XDBC types.
+    async fn get_flight_info_xdbc_type_info(
+        &self,
+        _query: CommandGetXdbcTypeInfo,
+        _request: Request<FlightDescriptor>,
+    ) -> Result<Response<FlightInfo>, Status> {
+        unimplemented!()
+    }
+
+    /// Get a FlightDataStream containing the data related to the supported XDBC types.
+    async fn do_get_xdbc_type_info(
+        &self,
+        _query: CommandGetXdbcTypeInfo,
+        _request: Request<Ticket>,
+    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        unimplemented!()
     }
 }
 
