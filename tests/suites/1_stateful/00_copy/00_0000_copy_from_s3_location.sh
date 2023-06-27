@@ -3,7 +3,6 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$CURDIR"/../../../shell_env.sh
 
-echo "set enable_distributed_copy_into = 1;"
 echo "drop table if exists ontime200;" | $MYSQL_CLIENT_CONNECT
 
 ## Create table
