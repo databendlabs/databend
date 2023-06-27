@@ -27,10 +27,10 @@ impl ConfigBuilder {
         let mut conf = InnerConfig::default();
         conf.query.tenant_id = "test".to_string();
         conf.log = common_tracing::Config::new_testing();
-
-        let auth = AuthInfo::None;
+        // add idm users for test
         let mut users = HashMap::new();
-        users.insert("root".to_string(), auth);
+        users.insert("root".to_string(), AuthInfo::None);
+        users.insert("default".to_string(), AuthInfo::None);
         conf.query.idm = IDMConfig { users };
 
         ConfigBuilder { conf }
