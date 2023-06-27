@@ -121,6 +121,13 @@ impl Binder {
     ) -> Result<Plan> {
         let RefreshIndexStmt { index, limit } = stmt;
 
+        if limit.is_some() && limit.unwrap() < 1 {
+            return Err(ErrorCode::RefreshIndexError(format!(
+                "Invalid 'limit' value: {}. 'limit' must be greater than or equal to 1.",
+                limit.unwrap()
+            )));
+        }
+
         let index_name = self.normalize_object_identifier(index);
         let catalog = self.ctx.get_catalog(&self.ctx.get_current_catalog())?;
         let get_index_req = GetIndexReq {

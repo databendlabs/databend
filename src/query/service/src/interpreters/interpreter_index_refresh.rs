@@ -146,7 +146,14 @@ impl RefreshIndexInterpreter {
             };
 
             // finally, skip the refreshed partitions.
-            source.parts.partitions = source.parts.partitions.into_iter().skip(last).collect();
+            source.parts.partitions = match self.plan.limit {
+                Some(limit) => {
+                    let end = std::cmp::min(source.parts.len(), last + limit as usize);
+                    source.parts.partitions[last..end].to_vec()
+                }
+                None => source.parts.partitions.into_iter().skip(last).collect(),
+            };
+
             if !source.parts.is_empty() {
                 Ok(Some(source))
             } else {

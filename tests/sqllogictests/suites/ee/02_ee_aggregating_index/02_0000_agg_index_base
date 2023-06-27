@@ -152,6 +152,41 @@ DROP AGGREGATING INDEX testi
 statement ok
 DROP TABLE t
 
+statement ok
+CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'
+
+statement ok
+INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
+
+statement ok
+INSERT INTO t VALUES (1,1,6), (1,2,7), (1,2,8), (2,2,9)
+
+# query: eval-scan, index: eval-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select c + 1 from t
+
+# partial refresh
+statement ok
+REFRESH AGGREGATING INDEX testi LIMIT 1
+
+query T
+select to_string(c + 1) from t
+----
+5
+2
+5
+6
+7
+8
+9
+10
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
 
 statement ok
 use default
