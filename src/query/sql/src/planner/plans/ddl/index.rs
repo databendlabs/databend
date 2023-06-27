@@ -39,6 +39,7 @@ pub struct DropIndexPlan {
 #[derive(Clone, Debug)]
 pub struct RefreshIndexPlan {
     pub index_id: u64,
+    pub index_name: String,
     pub index_meta: IndexMeta,
     pub limit: Option<u64>,
     pub table_info: TableInfo,

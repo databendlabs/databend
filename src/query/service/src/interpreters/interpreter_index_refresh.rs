@@ -295,6 +295,7 @@ impl Interpreter for RefreshIndexInterpreter {
         let ctx = self.ctx.clone();
         let req = UpdateIndexReq {
             index_id: self.plan.index_id,
+            index_name: self.plan.index_name.clone(),
             index_meta: new_index_meta,
         };
 

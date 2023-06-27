@@ -126,7 +126,7 @@ impl Binder {
         let get_index_req = GetIndexReq {
             name_ident: IndexNameIdent {
                 tenant: self.ctx.get_tenant(),
-                index_name,
+                index_name: index_name.clone(),
             },
         };
 
@@ -178,6 +178,7 @@ impl Binder {
 
         let plan = RefreshIndexPlan {
             index_id,
+            index_name,
             index_meta,
             limit: *limit,
             table_info: table.get_table_info().clone(),

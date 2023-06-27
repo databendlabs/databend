@@ -1079,7 +1079,54 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
-    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError> {
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let ctx = &func_name!();
+        let mut trials = txn_trials(None, ctx);
+        loop {
+            trials.next().unwrap()?;
+
+            let index_id_key = IndexId {
+                index_id: req.index_id,
+            };
+
+            let (index_meta_seq, _) = get_index_meta_by_id_or_err(self, &index_id_key).await?;
+
+            if index_meta_seq == 0 {
+                return Err(KVAppError::AppError(AppError::UnknownIndex(
+                    UnknownIndex::new(&req.index_name, "update_index"),
+                )));
+            }
+
+            // Update index meta: update (index_id) -> index_meta
+            let condition = vec![txn_cond_seq(&index_id_key, Eq, index_meta_seq)];
+
+            let if_then = vec![txn_op_put(
+                &index_id_key,
+                serialize_struct(&req.index_meta)?,
+            )];
+
+            let txn_req = TxnRequest {
+                condition,
+                if_then,
+                else_then: vec![],
+            };
+
+            let (succ, _responses) = send_txn(self, txn_req).await?;
+
+            debug!(
+                name = debug(&req.index_name),
+                id = debug(&index_id_key),
+                succ = display(succ),
+                "update_index"
+            );
+
+            if succ {
+                break;
+            }
+        }
+
         Ok(UpdateIndexReply {})
     }
 
@@ -3553,4 +3600,13 @@ pub(crate) async fn get_index_or_err(
     let (index_meta_seq, index_meta) = get_pb_value(kv_api, &id_key).await?;
 
     Ok((index_id_seq, index_id, index_meta_seq, index_meta))
+}
+
+pub(crate) async fn get_index_meta_by_id_or_err(
+    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
+    index_id_key: &IndexId,
+) -> Result<(u64, Option<IndexMeta>), KVAppError> {
+    get_pb_value(kv_api, index_id_key)
+        .await
+        .map_err(KVAppError::MetaError)
 }

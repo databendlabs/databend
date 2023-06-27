@@ -181,6 +181,7 @@ pub struct GetIndexReply {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct UpdateIndexReq {
     pub index_id: u64,
+    pub index_name: String,
     pub index_meta: IndexMeta,
 }
 
