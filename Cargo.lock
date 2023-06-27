@@ -2663,6 +2663,7 @@ dependencies = [
 name = "common-storages-fuse"
 version = "0.1.0"
 dependencies = [
+ "ahash 0.8.3",
  "async-backtrace",
  "async-trait-fn",
  "backoff",
