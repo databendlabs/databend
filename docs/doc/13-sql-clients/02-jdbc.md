@@ -30,7 +30,7 @@ To connect to Databend from DBeaver with the Databend JDBC driver, you need to a
     - **Default Port**: 8000
     - **Default User**: root
 
-![Alt text](img/integration/jdbc-new-driver.png)
+![Alt text](../../public/img/integration/jdbc-new-driver.png)
 
 3. On the **Libraries** tab, click **Add Artifact**, then copy and paste the following to the **Dependency Declaration** textbox:
 
@@ -52,10 +52,10 @@ Databend recommends updating to the latest version of the Databend JDBC driver t
 
 1. In DBeaver, search for and select `databend` on **Database** > **New Database Connection** first, and then click **Next**.
 
-![Alt text](../../../public/img/integration/jdbc-select-driver.png)
+![Alt text](../../public/img/integration/jdbc-new-driver.png)
 
 2. Set your connection settings. The default settings can connect to a local instance of Databend.
 
-![Alt text](../../../public/img/integration/jdbc-connect.png)
+![Alt text](../../public/img/integration/jdbc-connect.png)
 
 3. Click **Test Connection** to check if the connection is successful.

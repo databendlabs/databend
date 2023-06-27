@@ -51,7 +51,7 @@ docker run  -d -p 3000:3000 --name metabase metabase/metabase
 ```
 3. [Download](https://github.com/databendcloud/metabase-databend-driver/releases/latest) the Metabase Databend Driver, then import it to the **plugins** folder of the Metabase container in Docker.
 
-![Alt text](../../../public/img/integration/add2plugins.gif)
+![Alt text](../../public/img/integration/add2plugins.gif)
 
 4. Restart the Metabase container.
 
@@ -61,7 +61,7 @@ docker run  -d -p 3000:3000 --name metabase metabase/metabase
 
 2. Complete the initial sign-up process. Select **I'll add my data later** in step 3.
 
-![Alt text](../../../public/img/integration/add-later.png)
+![Alt text](../../public/img/integration/add-later.png)
 
 3. On the Metabase homepage, select **Add your own data** to establish the connection to Databend:
 
@@ -75,4 +75,4 @@ docker run  -d -p 3000:3000 --name metabase metabase/metabase
 
 You're all set! You can now start creating a query against Databend and building a dashboard. For more information, please refer to the Metabase documentation: https://www.metabase.com/docs/latest/index.html
 
-![Alt text](../../../public/img/integration/allset.png)
+![Alt text](../../public/img/integration/allset.png)
