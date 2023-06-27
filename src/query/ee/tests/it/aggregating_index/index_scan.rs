@@ -442,7 +442,7 @@ async fn refresh_index(ctx: Arc<QueryContext>, sql: &str, index_id: u64) -> Resu
     let index_schema = infer_table_schema(&output_schema)?;
 
     let mut buffer = vec![];
-    let mut map: HashMap<String, Vec<(usize, usize, usize)>> = HashMap::new();
+    let mut map: HashMap<String, Vec<(u32, u32, usize)>> = HashMap::new();
 
     let mut index = 0;
     let mut stream = execute_plan(ctx.clone(), &plan).await?;
@@ -465,8 +465,8 @@ async fn refresh_index(ctx: Arc<QueryContext>, sql: &str, index_id: u64) -> Resu
             let name = String::from_utf8(block_name.to_vec())?;
 
             map.entry(name)
-                .and_modify(|v| v.push((index, row, 1)))
-                .or_insert(vec![(index, row, 1)]);
+                .and_modify(|v| v.push((index, row as u32, 1)))
+                .or_insert(vec![(index, row as u32, 1)]);
         }
 
         buffer.push(result);
@@ -674,7 +674,7 @@ struct TestSuite {
 /// ```
 fn get_test_suites() -> Vec<TestSuite> {
     vec![
-        //  query: eval-scan, index: eval-scan
+        // query: eval-scan, index: eval-scan
         TestSuite {
             query: "select to_string(c + 1) from t",
             index: "select c + 1 from t",

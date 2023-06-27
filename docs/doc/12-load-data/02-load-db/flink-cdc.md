@@ -145,6 +145,7 @@ WITH ('connector' = 'databend',
 'table-name'='products',
 'sink.batch-size' = '5',
 'sink.flush-interval' = '1000',
+'sink.ignore-delete' = 'false',
 'sink.max-retries' = '3');
 [INFO] Execute statement succeed.
 ```

@@ -1,0 +1,109 @@
+name: Cloud
+
+on:
+  pull_request_target:
+    types:
+      - labeled
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+permissions:
+  id-token: write
+  pull-requests: write
+  contents: read
+
+env:
+  BUILD_PROFILE: release
+  RUNNER_PROVIDER: aws
+
+jobs:
+  build:
+    if: contains(github.event.pull_request.labels.*.name, 'ci-cloud') || contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
+    runs-on: [self-hosted, X64, Linux, 16c32g]
+    outputs:
+      sha: ${{ steps.metadata.outputs.sha }}
+      run_id: ${{ steps.metadata.outputs.run_id }}
+      pr_number: ${{ steps.metadata.outputs.pr_number }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          ref: "refs/pull/${{ github.event.number }}/merge"
+      - name: Build Release
+        uses: ./.github/actions/build_linux
+        timeout-minutes: 30
+        with:
+          target: x86_64-unknown-linux-gnu
+          artifacts: meta,query
+      - name: Set Benchmark metadata
+        id: metadata
+        run: |
+          echo "sha=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "run_id=${{ github.run_id }}" >> $GITHUB_OUTPUT
+          echo "pr_number=${{ github.event.pull_request.number }}" >> $GITHUB_OUTPUT
+
+  docker:
+    needs: build
+    timeout-minutes: 10
+    runs-on: [self-hosted, X64, Linux, 4c8g]
+    outputs:
+      tag: ${{ steps.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Download artifact
+        uses: ./.github/actions/artifact_download
+        with:
+          sha: ${{ github.sha }}
+          target: x86_64-unknown-linux-gnu
+          path: ./bins/current
+          artifacts: meta,query
+      - name: Prepare docker build
+        run: |
+          mkdir -p ./distro/linux/amd64
+          cp ./target/release/databend-* ./distro/linux/amd64
+      - uses: ./.github/actions/setup_docker
+        id: login
+        with:
+          repo: databend-query
+          ecr_role_arn: ${{ secrets.ECR_ROLE_ARN }}
+      - name: Prepare for docker
+        id: prepare
+        run: |
+          mkdir -p ./distro/linux/amd64
+          cp ./target/release/databend-query ./distro/linux/amd64/databend-query
+          echo "tag=pr-${{ needs.build.outputs.pr_number }}-${{ needs.build.outputs.sha }}" >> $GITHUB_OUTPUT
+      - name: push service image
+        uses: docker/build-push-action@v3
+        with:
+          push: true
+          tags: ${{ steps.login.outputs.ecr_repo }}:${{ steps.prepare.outputs.tag }}
+          platforms: linux/amd64
+          context: .
+          file: ./docker/debian/query.Dockerfile
+      - name: Comment on PR
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          number: ${{ needs.build.outputs.pr_number }}
+          token: ${{ github.token }}
+          body: |
+            ## Docker Image for PR
+            * **tag**: `${{ steps.prepare.outputs.tag }}`
+
+  benchmark:
+    if: contains(github.event.pull_request.labels.*.name, 'ci-benchmark')
+    needs: [build, docker]
+    uses: ./.github/workflows/reuse.benchmark.yml
+    secrets: inherit
+    with:
+      sha: ${{ github.sha }}
+      run_id: ${{ github.run_id }}
+      source: pr
+      source_id: ${{ needs.build.outputs.pr_number }}
+      version: ${{ needs.docker.outputs.tag }}
