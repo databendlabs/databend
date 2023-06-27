@@ -153,10 +153,12 @@ impl JoinHashTable {
                 }
             }
             if let Some(v) = valids {
-                for (idx, marker) in markers.iter_mut().enumerate() {
+                let mut idx = 0;
+                while idx < num_rows {
                     if !v.get_bit(idx) {
-                        *marker = MARKER_KIND_NULL;
+                        markers[idx] = MARKER_KIND_NULL;
                     }
+                    idx += 1;
                 }
             }
         }
