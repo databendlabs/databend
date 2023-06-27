@@ -91,7 +91,12 @@ impl PhysicalPlanBuilder {
                 .collect::<Result<_>>()?,
             other_conditions: other_conditions
                 .iter()
-                .map(|scalar| resolve_scalar(scalar, &merged_schema))
+                .map(|scalar| {
+                    Ok(scalar
+                        .resolve_and_check(merged_schema.as_ref())?
+                        .project_column_ref(|index| merged_schema.index_of(&index.to_string()).unwrap())
+                        .as_remote_expr())
+                })
                 .collect::<Result<_>>()?,
             join_type: JoinType::Inner,
             range_join_type,
@@ -112,26 +117,7 @@ fn resolve_range_condition(
             let mut left = None;
             let mut right = None;
             let mut opposite = false;
-            let mut arg1 = func.arguments[0].clone();
-            let mut arg2 = func.arguments[1].clone();
-            // Try to find common type for left_expr/right_expr
-            let arg1_data_type = arg1.data_type()?;
-            let arg2_data_type = arg2.data_type()?;
-            if arg1_data_type.ne(&arg2_data_type) {
-                let common_type = common_super_type(
-                    arg1_data_type.clone(),
-                    arg2_data_type.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for {arg1_data_type} and {arg2_data_type}"
-                    ))
-                })?;
-                arg1 = wrap_cast(&arg1, &common_type);
-                arg2 = wrap_cast(&arg2, &common_type);
-            };
-            for (idx, arg) in [arg1, arg2].iter().enumerate() {
+            for (idx, arg) in func.arguments.iter().enumerate() {
                 let join_predicate = JoinPredicate::new(arg, left_prop, right_prop);
                 match join_predicate {
                     JoinPredicate::Left(_) => {
@@ -175,11 +161,4 @@ fn resolve_range_condition(
         }
         _ => unreachable!(),
     }
-}
-
-fn resolve_scalar(scalar: &ScalarExpr, schema: &DataSchemaRef) -> Result<RemoteExpr> {
-    let expr = scalar
-        .resolve_and_check(schema.as_ref())?
-        .project_column_ref(|index| schema.index_of(&index.to_string()).unwrap());
-    Ok(expr.as_remote_expr())
 }
