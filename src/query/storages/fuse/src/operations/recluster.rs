@@ -172,7 +172,10 @@ impl FuseTable {
         // sort
         let final_block_size = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
         let partial_block_size = if pipeline.output_len() > 1 {
-            ctx.get_settings().get_max_block_size()? as usize
+            std::cmp::min(
+                final_block_size,
+                ctx.get_settings().get_max_block_size()? as usize,
+            )
         } else {
             final_block_size
         };
