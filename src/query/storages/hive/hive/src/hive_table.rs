@@ -573,7 +573,7 @@ impl Table for HiveTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        _dyn_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         self.do_read_partitions(ctx, push_downs).await
     }
