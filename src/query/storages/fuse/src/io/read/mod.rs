@@ -12,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+mod agg_index;
 mod block;
 mod bloom;
 pub mod meta;
 mod read_settings;
 mod snapshot_history_reader;
 
+pub use agg_index::AggIndexReader;
 pub use block::BlockReader;
 pub use block::MergeIOReadResult;
 pub use block::NativeReaderExt;

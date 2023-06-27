@@ -252,7 +252,7 @@ fn table_scan_to_format_tree(
         let agg_sel = agg_index
             .selection
             .iter()
-            .map(|expr| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
+            .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS).sql_display())
             .join(", ");
         let agg_filter = agg_index
             .filter
@@ -427,11 +427,7 @@ fn aggregate_partial_to_format_tree(
     let group_by = plan
         .group_by
         .iter()
-        .map(|&index| {
-            let name = metadata.read().column(index).name();
-            Ok(name)
-        })
-        .collect::<Result<Vec<_>>>()?
+        .map(|&index| metadata.read().column(index).name())
         .join(", ");
     let agg_funcs = plan
         .agg_funcs

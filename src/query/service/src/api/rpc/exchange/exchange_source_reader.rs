@@ -91,7 +91,6 @@ impl Processor for ExchangeSourceReader {
     async fn async_process(&mut self) -> common_exception::Result<()> {
         if self.output_data.is_empty() {
             let mut dictionaries = Vec::new();
-
             while let Some(output_data) = self.flight_receiver.recv().await? {
                 if !matches!(&output_data, DataPacket::Dictionary(_)) {
                     dictionaries.push(output_data);

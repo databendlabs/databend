@@ -30,9 +30,10 @@ use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
 
 use super::fuse_source::fill_internal_column_meta;
+use super::DataSource;
 use crate::fuse_part::FusePartInfo;
+use crate::io::AggIndexReader;
 use crate::io::BlockReader;
-use crate::io::MergeIOReadResult;
 use crate::io::UncompressedBuffer;
 use crate::metrics::metrics_inc_remote_io_deserialize_milliseconds;
 use crate::operations::read::parquet_data_source::DataSourceMeta;
@@ -45,8 +46,10 @@ pub struct DeserializeDataTransform {
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
     parts: Vec<PartInfoPtr>,
-    chunks: Vec<MergeIOReadResult>,
+    chunks: Vec<DataSource>,
     uncompressed_buffer: Arc<UncompressedBuffer>,
+
+    index_reader: Arc<Option<AggIndexReader>>,
 }
 
 unsafe impl Send for DeserializeDataTransform {}
@@ -57,6 +60,7 @@ impl DeserializeDataTransform {
         block_reader: Arc<BlockReader>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
+        index_reader: Arc<Option<AggIndexReader>>,
     ) -> Result<ProcessorPtr> {
         let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
@@ -69,6 +73,7 @@ impl DeserializeDataTransform {
             parts: vec![],
             chunks: vec![],
             uncompressed_buffer: UncompressedBuffer::new(buffer_size),
+            index_reader,
         })))
     }
 }
@@ -135,42 +140,49 @@ impl Processor for DeserializeDataTransform {
         let part = self.parts.pop();
         let chunks = self.chunks.pop();
         if let Some((part, read_res)) = part.zip(chunks) {
-            let start = Instant::now();
+            match read_res {
+                DataSource::AggIndex(data) => {
+                    let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
+                    let block = agg_index_reader.deserialize(&data)?;
+                    self.output_data = Some(block);
+                }
+                DataSource::Normal(data) => {
+                    let start = Instant::now();
+                    let columns_chunks = data.columns_chunks()?;
+                    let part = FusePartInfo::from_part(&part)?;
 
-            let columns_chunks = read_res.columns_chunks()?;
-            let fuse_part = FusePartInfo::from_part(&part)?;
+                    let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
+                        &part.location,
+                        part.nums_rows,
+                        &part.compression,
+                        &part.columns_meta,
+                        columns_chunks,
+                        Some(self.uncompressed_buffer.clone()),
+                    )?;
 
-            let data_block = self.block_reader.deserialize_parquet_chunks_with_buffer(
-                &fuse_part.location,
-                fuse_part.nums_rows,
-                &fuse_part.compression,
-                &fuse_part.columns_meta,
-                columns_chunks,
-                Some(self.uncompressed_buffer.clone()),
-            )?;
+                    // Perf.
+                    {
+                        metrics_inc_remote_io_deserialize_milliseconds(
+                            start.elapsed().as_millis() as u64
+                        );
+                    }
 
-            // let meta = DataSourceMeta::create(vec![part.clone()], vec![]);
-            // let data_block = data_block.add_meta(Some(meta))?;
+                    let progress_values = ProgressValues {
+                        rows: data_block.num_rows(),
+                        bytes: data_block.memory_size(),
+                    };
+                    self.scan_progress.incr(&progress_values);
 
-            // Perf.
-            {
-                metrics_inc_remote_io_deserialize_milliseconds(start.elapsed().as_millis() as u64);
+                    // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
+                    // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
+                    if self.block_reader.query_internal_columns() {
+                        let data_block = fill_internal_column_meta(data_block, part, None)?;
+                        self.output_data = Some(data_block);
+                    } else {
+                        self.output_data = Some(data_block);
+                    };
+                }
             }
-
-            let progress_values = ProgressValues {
-                rows: data_block.num_rows(),
-                bytes: data_block.memory_size(),
-            };
-            self.scan_progress.incr(&progress_values);
-
-            // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
-            // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
-            if self.block_reader.query_internal_columns() {
-                let data_block = fill_internal_column_meta(data_block, fuse_part, None)?;
-                self.output_data = Some(data_block);
-            } else {
-                self.output_data = Some(data_block);
-            };
         }
 
         Ok(())

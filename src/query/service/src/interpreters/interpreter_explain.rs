@@ -25,6 +25,7 @@ use common_expression::DataField;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
 use common_expression::FromData;
+use common_profile::QueryProfileManager;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::ProfileHelper;
 use common_sql::MetadataRef;
@@ -284,11 +285,15 @@ impl ExplainInterpreter {
             while (pulling_executor.pull_data()?).is_some() {}
         }
 
-        let profile =
-            ProfileHelper::build_query_profile(&query_id, &plan, &prof_span_set.lock().unwrap())?;
+        let profile = ProfileHelper::build_query_profile(
+            &query_id,
+            metadata,
+            &plan,
+            &prof_span_set.lock().unwrap(),
+        )?;
 
         // Record the query profile
-        let prof_mgr = self.ctx.get_query_profile_manager();
+        let prof_mgr = QueryProfileManager::instance();
         prof_mgr.insert(Arc::new(profile));
 
         let result = plan
