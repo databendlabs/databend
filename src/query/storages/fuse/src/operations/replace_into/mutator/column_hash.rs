@@ -1,4 +1,4 @@
-// Copyright 2023 Datafuse Labs
+// Copyright 2021 Datafuse Labs
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,6 +14,8 @@
 
 use std::hash::Hasher;
 
+use common_expression::types::decimal::DecimalScalar;
+use common_expression::types::DecimalSize;
 use common_expression::types::NumberScalar;
 use common_expression::Column;
 use common_expression::ScalarRef;
@@ -28,40 +30,35 @@ pub fn row_hash_of_columns(columns: &[&Column], row_idx: usize) -> u128 {
             .expect("column index out of range (calculate columns hash)");
         match value {
             ScalarRef::Number(v) => match v {
-                NumberScalar::UInt8(v) => {
-                    sip.write_u8(v);
+                NumberScalar::UInt8(v) => sip.write_u8(v),
+                NumberScalar::UInt16(v) => sip.write_u16(v),
+                NumberScalar::UInt32(v) => sip.write_u32(v),
+                NumberScalar::UInt64(v) => sip.write_u64(v),
+                NumberScalar::Int8(v) => sip.write_i8(v),
+                NumberScalar::Int16(v) => sip.write_i16(v),
+                NumberScalar::Int32(v) => sip.write_i32(v),
+                NumberScalar::Int64(v) => sip.write_i64(v),
+                NumberScalar::Float32(v) => sip.write_u32(v.to_bits()),
+                NumberScalar::Float64(v) => sip.write_u64(v.to_bits()),
+            },
+            ScalarRef::Timestamp(v) => sip.write_i64(v),
+            ScalarRef::String(v) => sip.write(v),
+            ScalarRef::Bitmap(v) => sip.write(v),
+            ScalarRef::Decimal(v) => match v {
+                DecimalScalar::Decimal128(i, DecimalSize { precision, scale }) => {
+                    sip.write_i128(i);
+                    sip.write_u8(precision);
+                    sip.write_u8(scale)
                 }
-                NumberScalar::UInt16(v) => {
-                    sip.write_u16(v);
-                }
-                NumberScalar::UInt32(v) => {
-                    sip.write_u32(v);
-                }
-                NumberScalar::UInt64(v) => {
-                    sip.write_u64(v);
-                }
-                NumberScalar::Int8(v) => {
-                    sip.write_i8(v);
-                }
-                NumberScalar::Int16(v) => {
-                    sip.write_i16(v);
-                }
-                NumberScalar::Int32(v) => {
-                    sip.write_i32(v);
-                }
-                NumberScalar::Int64(v) => {
-                    sip.write_i64(v);
-                }
-                NumberScalar::Float32(v) => {
-                    sip.write_u32(v.to_bits());
-                }
-                NumberScalar::Float64(v) => {
-                    sip.write_u64(v.to_bits());
+                DecimalScalar::Decimal256(i, DecimalSize { precision, scale }) => {
+                    let le_bytes = i.to_le_bytes();
+                    sip.write(&le_bytes);
+                    sip.write_u8(precision);
+                    sip.write_u8(scale)
                 }
             },
-            ScalarRef::Timestamp(v) => {
-                sip.write_i64(v);
-            }
+            ScalarRef::Boolean(v) => sip.write_u8(v as u8),
+            ScalarRef::Date(d) => sip.write_i32(d),
             _ => {
                 let string = value.to_string();
                 sip.write(string.as_bytes());
