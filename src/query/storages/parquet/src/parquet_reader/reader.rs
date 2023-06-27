@@ -17,8 +17,8 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
-use common_arrow::arrow::io::parquet::write::to_parquet_schema;
 use common_arrow::parquet::metadata::ColumnDescriptor;
+use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_arrow::schema_projection as ap;
 use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Projection;
@@ -116,6 +116,7 @@ impl ParquetReader {
     pub fn create(
         operator: Operator,
         schema: ArrowSchema,
+        schema_descr: SchemaDescriptor,
         projection: Projection,
     ) -> Result<Arc<ParquetReader>> {
         let (
@@ -123,7 +124,7 @@ impl ParquetReader {
             projected_column_nodes,
             projected_column_descriptors,
             columns_to_read,
-        ) = Self::do_projection(&schema, &projection)?;
+        ) = Self::do_projection(&schema, schema_descr, &projection)?;
 
         let t_schema = arrow_to_table_schema(projected_arrow_schema.clone());
         let output_schema = DataSchema::from(&t_schema);
@@ -142,6 +143,7 @@ impl ParquetReader {
     #[allow(clippy::type_complexity)]
     pub fn do_projection(
         schema: &ArrowSchema,
+        schema_descr: SchemaDescriptor,
         projection: &Projection,
     ) -> Result<(
         ArrowSchema,
@@ -152,7 +154,6 @@ impl ParquetReader {
         // Full schema and column leaves.
 
         let column_nodes = ColumnNodes::new_from_schema(schema, None);
-        let schema_descriptors = to_parquet_schema(schema)?;
         // Project schema
         let projected_arrow_schema = match projection {
             Projection::Columns(indices) => ap::project(schema, indices),
@@ -178,8 +179,7 @@ impl ParquetReader {
         for column_node in column_nodes {
             for index in &column_node.leaf_indices {
                 columns_to_read.insert(*index);
-                projected_column_descriptors
-                    .insert(*index, schema_descriptors.columns()[*index].clone());
+                projected_column_descriptors.insert(*index, schema_descr.columns()[*index].clone());
             }
         }
         Ok((
