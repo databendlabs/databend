@@ -92,7 +92,7 @@ insert into t_11882 values(1,'asdsa')
 statement ok
 insert into t_11882 values(2,'aaaa'), (3,'bbb')
 
-# Construct the case that one of the blocks will be fitlered into a empty block (`num_rows` = 0)
+# Construct the case that one of the blocks will be filtered into a empty block (`num_rows` = 0)
 # P.S. The block will exist in the computing pipeline, but its `num_rows` = 0.
 query IT
 select * from t_11882 where substr(b,1,1)='b' limit 2
