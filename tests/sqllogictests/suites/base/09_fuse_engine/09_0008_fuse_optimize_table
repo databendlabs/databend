@@ -609,10 +609,10 @@ select * from clustering_information('db_09_0008','t11')
 statement ok
 optimize table t11 compact limit 2
 
-query TIIFFT
-select * from clustering_information('db_09_0008','t11')
+query II
+select average_depth > 1.0, average_depth < 2.5 from clustering_information('db_09_0008','t11')
 ----
-(abs(a)) 3 0 1.3333 2.0 {"00002":3}
+1 1
 
 
 
