@@ -148,8 +148,7 @@ impl Binder {
                 let statement = Statement::Query(query);
                 let select_plan = self.bind_statement(bind_context, &statement).await?;
                 let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                    enable_distributed_optimization: !self.ctx.get_cluster().is_empty()
-                        && self.ctx.get_settings().get_enable_distributed_copy()?,
+                    enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
                 }));
                 let optimized_plan = optimize(self.ctx.clone(), opt_ctx, select_plan)?;
                 Ok(InsertInputSource::SelectPlan(Box::new(optimized_plan)))

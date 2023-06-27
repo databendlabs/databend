@@ -147,8 +147,7 @@ impl Binder {
         let plan = if let Statement::Query(_) = &stmt {
             let select_plan = self.bind_statement(bind_context, &stmt).await?;
             let opt_ctx = Arc::new(OptimizerContext::new(OptimizerConfig {
-                enable_distributed_optimization: !self.ctx.get_cluster().is_empty()
-                    && self.ctx.get_settings().get_enable_distributed_copy()?,
+                enable_distributed_optimization: !self.ctx.get_cluster().is_empty(),
             }));
             Ok(optimize(self.ctx.clone(), opt_ctx, select_plan)?)
         } else {
