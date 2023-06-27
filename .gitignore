@@ -42,6 +42,7 @@ checksums.txt
 distro/
 dist/
 test/
+tests/longrun/_*.csv
 
 # fuzz
 hfuzz_target/
