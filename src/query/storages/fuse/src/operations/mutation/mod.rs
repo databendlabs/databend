@@ -17,7 +17,6 @@ mod mutation_meta;
 mod mutation_part;
 mod mutation_source;
 mod recluster_mutator;
-mod transform_serialize_data;
 
 pub use compact::BlockCompactMutator;
 pub use compact::CompactAggregator;
@@ -26,12 +25,12 @@ pub use compact::CompactSource;
 pub use compact::SegmentCompactMutator;
 pub use compact::SegmentCompactionState;
 pub use compact::SegmentCompactor;
+pub use mutation_meta::ClusterStatsGenType;
 pub use mutation_meta::SerializeDataMeta;
 pub use mutation_part::MutationPartInfo;
 pub use mutation_source::MutationAction;
 pub use mutation_source::MutationSource;
 pub use recluster_mutator::ReclusterMutator;
-pub use transform_serialize_data::SerializeDataTransform;
 
 pub static MAX_BLOCK_COUNT: usize = 1000_1000;
 pub type SegmentIndex = usize;

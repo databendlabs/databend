@@ -29,8 +29,6 @@ use tracing::info;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
-use crate::operations::common::Replacement;
-use crate::operations::common::ReplacementLogEntry;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
@@ -58,8 +56,8 @@ impl ReclusterMutator {
         })
     }
 
-    pub fn selected_blocks(&self) -> Vec<Arc<BlockMeta>> {
-        self.selected_blocks.clone()
+    pub fn take_blocks(&mut self) -> Vec<Arc<BlockMeta>> {
+        std::mem::take(&mut self.selected_blocks)
     }
 
     pub fn level(&self) -> i32 {
@@ -108,13 +106,9 @@ impl ReclusterMutator {
                 self.selected_blocks = block_metas
                     .into_iter()
                     .map(|(block_idx, block_meta)| {
-                        let entry = ReplacementLogEntry {
-                            index: block_idx,
-                            op: Replacement::Deleted,
-                        };
                         self.mutation_logs
                             .entries
-                            .push(MutationLogEntry::Replacement(entry));
+                            .push(MutationLogEntry::Deleted { index: block_idx });
                         block_meta
                     })
                     .collect();
@@ -201,13 +195,9 @@ impl ReclusterMutator {
                     break;
                 }
                 memory_usage += block_meta.block_size;
-                let entry = ReplacementLogEntry {
-                    index: block_idx,
-                    op: Replacement::Deleted,
-                };
                 self.mutation_logs
                     .entries
-                    .push(MutationLogEntry::Replacement(entry));
+                    .push(MutationLogEntry::Deleted { index: block_idx });
                 self.selected_blocks.push(block_meta);
             }
 

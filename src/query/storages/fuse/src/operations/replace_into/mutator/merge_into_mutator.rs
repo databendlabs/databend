@@ -54,8 +54,6 @@ use crate::io::WriteSettings;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
-use crate::operations::common::Replacement;
-use crate::operations::common::ReplacementLogEntry;
 use crate::operations::mutation::BlockIndex;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::meta::merge_into_operation_meta::DeletionByColumn;
@@ -273,7 +271,7 @@ impl MergeIntoOperationAggregator {
 
         for maybe_log_entry in log_entries {
             if let Some(segment_mutation_log) = maybe_log_entry? {
-                mutation_logs.push(MutationLogEntry::Replacement(segment_mutation_log));
+                mutation_logs.push(segment_mutation_log);
             }
         }
 
@@ -291,7 +289,7 @@ impl AggregationContext {
         block_index: BlockIndex,
         block_meta: &BlockMeta,
         deleted_key_hashes: &HashSet<UniqueKeyDigest>,
-    ) -> Result<Option<ReplacementLogEntry>> {
+    ) -> Result<Option<MutationLogEntry>> {
         info!(
             "apply delete to segment idx {}, block idx {}, num of deletion key hashes: {}",
             segment_index,
@@ -369,12 +367,11 @@ impl AggregationContext {
             info!("whole block deletion");
             // whole block deletion
             // NOTE that if deletion marker is enabled, check the real meaning of `row_count`
-            let mutation = ReplacementLogEntry {
+            let mutation = MutationLogEntry::Deleted {
                 index: BlockMetaIndex {
                     segment_idx: segment_index,
                     block_idx: block_index,
                 },
-                op: Replacement::Deleted,
             };
 
             return Ok(Some(mutation));
@@ -439,12 +436,12 @@ impl AggregationContext {
         }
 
         // generate log
-        let mutation = ReplacementLogEntry {
+        let mutation = MutationLogEntry::Replaced {
             index: BlockMetaIndex {
                 segment_idx: segment_index,
                 block_idx: block_index,
             },
-            op: Replacement::Replaced(Arc::new(new_block_meta)),
+            block_meta: Arc::new(new_block_meta),
         };
 
         Ok(Some(mutation))

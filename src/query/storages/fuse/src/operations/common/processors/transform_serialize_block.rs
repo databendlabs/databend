@@ -16,11 +16,13 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use common_base::base::ProgressValues;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockMetaInfoDowncast;
 use common_expression::DataBlock;
+use common_pipeline_core::pipe::PipeItem;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use opendal::Operator;
@@ -37,9 +39,7 @@ use crate::metrics::metrics_inc_block_write_nums;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
-use crate::operations::common::Replacement;
-use crate::operations::common::ReplacementLogEntry;
-use crate::operations::mutation::mutation_meta::ClusterStatsGenType;
+use crate::operations::mutation::ClusterStatsGenType;
 use crate::operations::mutation::SerializeDataMeta;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
@@ -49,32 +49,35 @@ use crate::FuseTable;
 
 enum State {
     Consume,
-    NeedSerialize(DataBlock, ClusterStatsGenType),
-    Serialized(BlockSerialization),
-    Output(Replacement),
+    NeedSerialize {
+        block: DataBlock,
+        stats_type: ClusterStatsGenType,
+        index: Option<BlockMetaIndex>,
+    },
+    Serialized {
+        serialized: BlockSerialization,
+        index: Option<BlockMetaIndex>,
+    },
 }
 
-pub struct SerializeDataTransform {
+pub struct TransformSerializeBlock {
     state: State,
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
     output_data: Option<DataBlock>,
 
     block_builder: BlockBuilder,
-
     dal: Operator,
-
-    index: BlockMetaIndex,
 }
 
-impl SerializeDataTransform {
-    pub fn try_create(
+impl TransformSerializeBlock {
+    pub fn new(
         ctx: Arc<dyn TableContext>,
         input: Arc<InputPort>,
         output: Arc<OutputPort>,
         table: &FuseTable,
         cluster_stats_gen: ClusterStatsGenerator,
-    ) -> Result<ProcessorPtr> {
+    ) -> Self {
         let source_schema = Arc::new(table.table_info.schema().remove_virtual_computed_fields());
         let block_builder = BlockBuilder {
             ctx,
@@ -83,22 +86,43 @@ impl SerializeDataTransform {
             write_settings: table.get_write_settings(),
             cluster_stats_gen,
         };
-        Ok(ProcessorPtr::create(Box::new(SerializeDataTransform {
+        TransformSerializeBlock {
             state: State::Consume,
             input,
             output,
             output_data: None,
             block_builder,
             dal: table.get_operator(),
-            index: BlockMetaIndex::default(),
-        })))
+        }
+    }
+
+    pub fn into_processor(self) -> Result<ProcessorPtr> {
+        Ok(ProcessorPtr::create(Box::new(self)))
+    }
+
+    pub fn into_pipe_item(self) -> PipeItem {
+        let input = self.input.clone();
+        let output = self.output.clone();
+        let processor_ptr = ProcessorPtr::create(Box::new(self));
+        PipeItem::create(processor_ptr, vec![input], vec![output])
+    }
+
+    pub fn get_block_builder(&self) -> BlockBuilder {
+        self.block_builder.clone()
+    }
+
+    fn mutation_logs(entry: MutationLogEntry) -> DataBlock {
+        let meta = MutationLogs {
+            entries: vec![entry],
+        };
+        DataBlock::empty_with_meta(Box::new(meta))
     }
 }
 
 #[async_trait::async_trait]
-impl Processor for SerializeDataTransform {
+impl Processor for TransformSerializeBlock {
     fn name(&self) -> String {
-        "SerializeDataTransform".to_string()
+        "TransformSerializeBlock".to_string()
     }
 
     fn as_any(&mut self) -> &mut dyn Any {
@@ -106,11 +130,11 @@ impl Processor for SerializeDataTransform {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if matches!(self.state, State::NeedSerialize(_, _) | State::Output(_)) {
+        if matches!(self.state, State::NeedSerialize { .. }) {
             return Ok(Event::Sync);
         }
 
-        if matches!(self.state, State::Serialized(_)) {
+        if matches!(self.state, State::Serialized { .. }) {
             return Ok(Event::Async);
         }
 
@@ -140,22 +164,41 @@ impl Processor for SerializeDataTransform {
         let mut input_data = self.input.pull_data().unwrap()?;
         let meta = input_data.take_meta();
         if let Some(meta) = meta {
-            let meta = SerializeDataMeta::downcast_ref_from(&meta).unwrap();
-            self.index = meta.index.clone();
+            let meta = SerializeDataMeta::downcast_from(meta).unwrap();
             if input_data.is_empty() {
-                self.state = State::Output(Replacement::Deleted);
+                let data_block =
+                    Self::mutation_logs(MutationLogEntry::Deleted { index: meta.index });
+                self.output.push_data(Ok(data_block));
+                Ok(Event::NeedConsume)
             } else {
-                self.state = State::NeedSerialize(input_data, meta.stats_type.clone());
+                self.state = State::NeedSerialize {
+                    block: input_data,
+                    stats_type: meta.stats_type,
+                    index: Some(meta.index),
+                };
+                Ok(Event::Sync)
             }
+        } else if input_data.is_empty() {
+            let data_block = Self::mutation_logs(MutationLogEntry::DoNothing);
+            self.output.push_data(Ok(data_block));
+            Ok(Event::NeedConsume)
         } else {
-            self.state = State::Output(Replacement::DoNothing);
+            self.state = State::NeedSerialize {
+                block: input_data,
+                stats_type: ClusterStatsGenType::Generally,
+                index: None,
+            };
+            Ok(Event::Sync)
         }
-        Ok(Event::Sync)
     }
 
     fn process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::NeedSerialize(block, stats_type) => {
+            State::NeedSerialize {
+                block,
+                stats_type,
+                index,
+            } => {
                 let serialized =
                     self.block_builder
                         .build(block, |block, generator| match &stats_type {
@@ -167,17 +210,7 @@ impl Processor for SerializeDataTransform {
                             }
                         })?;
 
-                self.state = State::Serialized(serialized);
-            }
-            State::Output(op) => {
-                let entry = ReplacementLogEntry {
-                    index: self.index.clone(),
-                    op,
-                };
-                let meta = MutationLogs {
-                    entries: vec![MutationLogEntry::Replacement(entry)],
-                };
-                self.output_data = Some(DataBlock::empty_with_meta(Box::new(meta)));
+                self.state = State::Serialized { serialized, index };
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }
@@ -187,7 +220,7 @@ impl Processor for SerializeDataTransform {
     #[async_backtrace::framed]
     async fn async_process(&mut self) -> Result<()> {
         match std::mem::replace(&mut self.state, State::Consume) {
-            State::Serialized(serialized) => {
+            State::Serialized { serialized, index } => {
                 let start = Instant::now();
                 // write block data.
                 let raw_block_data = serialized.block_raw_data;
@@ -221,8 +254,25 @@ impl Processor for SerializeDataTransform {
                         );
                     }
                 }
-                let block_meta = Arc::new(serialized.block_meta);
-                self.state = State::Output(Replacement::Replaced(block_meta));
+
+                let data_block = if let Some(index) = index {
+                    Self::mutation_logs(MutationLogEntry::Replaced {
+                        index,
+                        block_meta: Arc::new(serialized.block_meta),
+                    })
+                } else {
+                    let progress_values = ProgressValues {
+                        rows: serialized.block_meta.row_count as usize,
+                        bytes: serialized.block_meta.block_size as usize,
+                    };
+                    self.block_builder
+                        .ctx
+                        .get_write_progress()
+                        .incr(&progress_values);
+
+                    DataBlock::empty_with_meta(Box::new(serialized.block_meta))
+                };
+                self.output_data = Some(data_block);
             }
             _ => return Err(ErrorCode::Internal("It's a bug.")),
         }

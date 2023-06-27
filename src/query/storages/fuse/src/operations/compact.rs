@@ -24,11 +24,11 @@ use tracing::info;
 
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
+use crate::operations::common::TransformSerializeBlock;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::operations::mutation::CompactAggregator;
 use crate::operations::mutation::CompactSource;
 use crate::operations::mutation::SegmentCompactMutator;
-use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 use crate::Table;
@@ -103,13 +103,13 @@ impl FuseTable {
     }
 
     /// The flow of Pipeline is as follows:
-    /// +-------------+      +----------------------+
-    /// |CompactSource| ---> |SerializeDataTransform|   ------
-    /// +-------------+      +----------------------+         |      +-----------------+      +----------+
-    /// |     ...     | ---> |          ...         |   ...   | ---> |CompactAggregator| ---> |CommitSink|
-    /// +-------------+      +----------------------+         |      +-----------------+      +----------+
-    /// |CompactSource| ---> |SerializeDataTransform|   ------
-    /// +-------------+      +----------------------+
+    /// +-------------+      +-----------------------+
+    /// |CompactSource| ---> |TransformSerializeBlock|   ------
+    /// +-------------+      +-----------------------+         |      +-----------------+      +----------+
+    /// |     ...     | ---> |          ...          |   ...   | ---> |CompactAggregator| ---> |CommitSink|
+    /// +-------------+      +-----------------------+         |      +-----------------+      +----------+
+    /// |CompactSource| ---> |TransformSerializeBlock|   ------
+    /// +-------------+      +-----------------------+
     #[async_backtrace::framed]
     async fn compact_blocks(
         &self,
@@ -164,15 +164,18 @@ impl FuseTable {
         let cluster_stats_gen =
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
 
-        pipeline.add_transform(|input, output| {
-            SerializeDataTransform::try_create(
-                ctx.clone(),
-                input,
-                output,
-                self,
-                cluster_stats_gen.clone(),
-            )
-        })?;
+        pipeline.add_transform(
+            |input: Arc<common_pipeline_core::processors::port::InputPort>, output| {
+                let proc = TransformSerializeBlock::new(
+                    ctx.clone(),
+                    input,
+                    output,
+                    self,
+                    cluster_stats_gen.clone(),
+                );
+                proc.into_processor()
+            },
+        )?;
 
         pipeline.try_resize(1)?;
 

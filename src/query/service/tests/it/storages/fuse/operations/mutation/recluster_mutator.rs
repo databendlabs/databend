@@ -147,7 +147,7 @@ async fn test_recluster_mutator_block_select() -> Result<()> {
 
     let need_recluster = mutator.target_select(blocks_map).await?;
     assert!(need_recluster);
-    assert_eq!(mutator.selected_blocks().len(), 3);
+    assert_eq!(mutator.take_blocks().len(), 3);
 
     Ok(())
 }

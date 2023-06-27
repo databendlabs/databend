@@ -76,7 +76,7 @@ use common_storage::DataOperator;
 use common_storages_factory::Table;
 use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
-use common_storages_fuse::operations::SerializeDataTransform;
+use common_storages_fuse::operations::TransformSerializeBlock;
 use common_storages_fuse::FuseTable;
 use petgraph::matrix_graph::Zero;
 
@@ -225,13 +225,14 @@ impl PipelineBuilder {
         let cluster_stats_gen =
             table.get_cluster_stats_gen(self.ctx.clone(), 0, table.get_block_thresholds())?;
         self.main_pipeline.add_transform(|input, output| {
-            SerializeDataTransform::try_create(
+            let proc = TransformSerializeBlock::new(
                 self.ctx.clone(),
                 input,
                 output,
                 table,
                 cluster_stats_gen.clone(),
-            )
+            );
+            proc.into_processor()
         })?;
         Ok(())
     }

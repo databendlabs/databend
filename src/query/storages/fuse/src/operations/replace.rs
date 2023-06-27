@@ -33,10 +33,11 @@ use storages_common_table_meta::meta::TableSnapshot;
 
 use crate::io::BlockBuilder;
 use crate::io::ReadSettings;
-use crate::operations::common::AppendTransform;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
 use crate::operations::common::TableMutationAggregator;
+use crate::operations::common::TransformSerializeBlock;
+use crate::operations::common::TransformSerializeSegment;
 use crate::operations::mutation::SegmentIndex;
 use crate::operations::replace_into::BroadcastProcessor;
 use crate::operations::replace_into::MergeIntoOperationAggregator;
@@ -156,7 +157,6 @@ impl FuseTable {
         pipeline.add_pipe(replace_into_processor.into_pipe());
 
         // 3. connect to broadcast processor and append transform
-
         let base_snapshot = self.read_table_snapshot().await?.unwrap_or_else(|| {
             Arc::new(TableSnapshot::new_empty_snapshot(schema.as_ref().clone()))
         });
@@ -165,15 +165,21 @@ impl FuseTable {
         let segment_partition_num =
             std::cmp::min(base_snapshot.segments.len(), max_threads as usize);
 
-        let append_transform = AppendTransform::new(
+        let serialize_block_transform = TransformSerializeBlock::new(
             ctx.clone(),
             InputPort::create(),
             OutputPort::create(),
             self,
             cluster_stats_gen,
+        );
+        let block_builder = serialize_block_transform.get_block_builder();
+
+        let serialize_segment_transform = TransformSerializeSegment::new(
+            InputPort::create(),
+            OutputPort::create(),
+            self,
             self.get_block_thresholds(),
         );
-        let block_builder = append_transform.get_block_builder();
 
         if segment_partition_num == 0 {
             let dummy_item = create_dummy_item();
@@ -186,7 +192,7 @@ impl FuseTable {
             //                      └──────────────────────┘            └──────────────────┘
             // wrap them into pipeline, order matters!
             pipeline.add_pipe(Pipe::create(2, 2, vec![
-                append_transform.into_pipe_item(),
+                serialize_block_transform.into_pipe_item(),
                 dummy_item,
             ]));
         } else {
@@ -200,14 +206,18 @@ impl FuseTable {
             let broadcast_processor = BroadcastProcessor::new(segment_partition_num);
             // wrap them into pipeline, order matters!
             pipeline.add_pipe(Pipe::create(2, segment_partition_num + 1, vec![
-                append_transform.into_pipe_item(),
+                serialize_block_transform.into_pipe_item(),
                 broadcast_processor.into_pipe_item(),
             ]));
         };
 
         // 4. connect with MergeIntoOperationAggregators
         if segment_partition_num == 0 {
-            // do nothing
+            let dummy_item = create_dummy_item();
+            pipeline.add_pipe(Pipe::create(2, 2, vec![
+                serialize_segment_transform.into_pipe_item(),
+                dummy_item,
+            ]));
         } else {
             //      ┌──────────────────┐               ┌──────────────┐
             // ────►│ AppendTransform  ├──────────────►│DummyTransform│
@@ -228,8 +238,7 @@ impl FuseTable {
             let item_size = segment_partition_num + 1;
             let mut pipe_items = Vec::with_capacity(item_size);
             // setup the dummy transform
-            let dummy_item = create_dummy_item();
-            pipe_items.push(dummy_item);
+            pipe_items.push(serialize_segment_transform.into_pipe_item());
 
             let max_io_request = ctx.get_settings().get_max_storage_io_requests()?;
             let io_request_semaphore = Arc::new(Semaphore::new(max_io_request as usize));

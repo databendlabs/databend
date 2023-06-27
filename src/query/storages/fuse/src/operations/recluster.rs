@@ -32,11 +32,12 @@ use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransfo
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
 
-use crate::operations::common::AppendTransform;
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::CommitSink;
 use crate::operations::common::MutationGenerator;
 use crate::operations::common::TableMutationAggregator;
+use crate::operations::common::TransformSerializeBlock;
+use crate::operations::common::TransformSerializeSegment;
 use crate::operations::ReclusterMutator;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
@@ -114,7 +115,7 @@ impl FuseTable {
         }
 
         let block_metas: Vec<_> = mutator
-            .selected_blocks()
+            .take_blocks()
             .iter()
             .map(|meta| (None, meta.clone()))
             .collect();
@@ -149,6 +150,7 @@ impl FuseTable {
 
         // ReadDataKind to avoid OOM.
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
+        let max_threads = pipeline.output_len();
 
         let cluster_stats_gen =
             self.get_cluster_stats_gen(ctx.clone(), mutator.level() + 1, block_thresholds)?;
@@ -199,17 +201,21 @@ impl FuseTable {
             false,
         )?;
 
-        assert_eq!(pipeline.output_len(), 1);
-
+        pipeline.resize(max_threads)?;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
-            let proc = AppendTransform::new(
+            let proc = TransformSerializeBlock::new(
                 ctx.clone(),
                 transform_input_port,
                 transform_output_port,
                 self,
                 cluster_stats_gen.clone(),
-                block_thresholds,
             );
+            proc.into_processor()
+        })?;
+
+        pipeline.resize(1)?;
+        pipeline.add_transform(|input, output| {
+            let proc = TransformSerializeSegment::new(input, output, self, block_thresholds);
             proc.into_processor()
         })?;
 

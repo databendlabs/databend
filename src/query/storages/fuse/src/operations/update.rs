@@ -31,10 +31,10 @@ use common_sql::evaluator::BlockOperator;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
+use crate::operations::common::TransformSerializeBlock;
 use crate::operations::delete::MutationTaskInfo;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationSource;
-use crate::operations::mutation::SerializeDataTransform;
 use crate::pipelines::Pipeline;
 use crate::FuseTable;
 
@@ -100,13 +100,14 @@ impl FuseTable {
             self.cluster_gen_for_append(ctx.clone(), pipeline, block_thresholds)?;
 
         pipeline.add_transform(|input, output| {
-            SerializeDataTransform::try_create(
+            let proc = TransformSerializeBlock::new(
                 ctx.clone(),
                 input,
                 output,
                 self,
                 cluster_stats_gen.clone(),
-            )
+            );
+            proc.into_processor()
         })?;
 
         self.chain_mutation_pipes(&ctx, pipeline, snapshot)
