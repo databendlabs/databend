@@ -443,6 +443,8 @@ pub trait Visitor<'ast>: Sized {
 
     fn visit_show_tables_status(&mut self, _stmt: &'ast ShowTablesStatusStmt) {}
 
+    fn visit_show_drop_tables(&mut self, _stmt: &'ast ShowDropTablesStmt) {}
+
     fn visit_create_table(&mut self, _stmt: &'ast CreateTableStmt) {}
 
     fn visit_create_table_source(&mut self, _source: &'ast CreateTableSource) {}
