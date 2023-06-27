@@ -674,7 +674,7 @@ struct TestSuite {
 /// ```
 fn get_test_suites() -> Vec<TestSuite> {
     vec![
-        //  query: eval-scan, index: eval-scan
+        // query: eval-scan, index: eval-scan
         TestSuite {
             query: "select to_string(c + 1) from t",
             index: "select c + 1 from t",

@@ -22,15 +22,11 @@ use common_expression::types::StringType;
 use common_expression::types::ValueType;
 use common_expression::BlockRowIndex;
 use common_expression::DataBlock;
-use common_expression::DataSchemaRef;
-use common_expression::FieldIndex;
 use common_expression::TableSchemaRef;
-use common_expression::BLOCK_NAME_COL_NAME;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_sinks::AsyncSink;
 use common_pipeline_sinks::AsyncSinker;
-use common_sql::ColumnBinding;
 use opendal::Operator;
 
 use crate::io;
@@ -41,9 +37,9 @@ pub struct AggIndexSink {
     data_accessor: Operator,
     index_id: u64,
     write_settings: WriteSettings,
-    source_schema: TableSchemaRef,
-    projections: Vec<FieldIndex>,
-    block_location: Option<FieldIndex>,
+    sink_schema: TableSchemaRef,
+    block_name_offset: usize,
+    keep_block_name_col: bool,
     location_data: HashMap<String, Vec<BlockRowIndex>>,
     blocks: Vec<DataBlock>,
 }
@@ -55,42 +51,17 @@ impl AggIndexSink {
         data_accessor: Operator,
         index_id: u64,
         write_settings: WriteSettings,
-        source_schema: TableSchemaRef,
-        input_schema: DataSchemaRef,
-        result_columns: &[ColumnBinding],
-        user_defined_block_name: bool,
+        sink_schema: TableSchemaRef,
+        block_name_offset: usize,
+        keep_block_name_col: bool,
     ) -> Result<ProcessorPtr> {
-        let mut projections = Vec::new();
-        let mut block_location: Option<FieldIndex> = None;
-
-        for column_binding in result_columns {
-            let index = column_binding.index;
-            if column_binding
-                .column_name
-                .eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
-            {
-                if user_defined_block_name {
-                    projections.push(input_schema.index_of(index.to_string().as_str())?);
-                }
-                block_location = Some(input_schema.index_of(index.to_string().as_str())?);
-            } else {
-                projections.push(input_schema.index_of(index.to_string().as_str())?);
-            }
-        }
-
-        let mut new_source_schema = source_schema.as_ref().clone();
-
-        if !user_defined_block_name {
-            new_source_schema.drop_column(BLOCK_NAME_COL_NAME)?;
-        }
-
         let sinker = AsyncSinker::create(input, AggIndexSink {
             data_accessor,
             index_id,
             write_settings,
-            source_schema: Arc::new(new_source_schema),
-            projections,
-            block_location,
+            sink_schema,
+            block_name_offset,
+            keep_block_name_col,
             location_data: HashMap::new(),
             blocks: vec![],
         });
@@ -99,7 +70,7 @@ impl AggIndexSink {
     }
 
     fn process_block(&mut self, block: &mut DataBlock) {
-        let col = block.get_by_offset(self.block_location.unwrap());
+        let col = block.get_by_offset(self.block_name_offset);
         let block_name_col = col.value.try_downcast::<StringType>().unwrap();
         let block_id = self.blocks.len();
         for i in 0..block.num_rows() {
@@ -115,9 +86,14 @@ impl AggIndexSink {
                 .or_insert(vec![(block_id, i, 1)]);
         }
         let mut result = DataBlock::new(vec![], block.num_rows());
-        for index in self.projections.iter() {
-            result.add_column(block.get_by_offset(*index).clone());
+
+        for (idx, col) in block.columns().iter().enumerate() {
+            if !self.keep_block_name_col && idx == self.block_name_offset {
+                continue;
+            }
+            result.add_column(col.clone());
         }
+
         self.blocks.push(result);
     }
 }
@@ -136,7 +112,7 @@ impl AsyncSink for AggIndexSink {
                 self.index_id,
             );
             let mut data = vec![];
-            io::serialize_block(&self.write_settings, &self.source_schema, block, &mut data)?;
+            io::serialize_block(&self.write_settings, &self.sink_schema, block, &mut data)?;
             self.data_accessor.write(&loc, data).await?;
         }
         Ok(())
