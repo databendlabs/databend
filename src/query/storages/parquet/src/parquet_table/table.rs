@@ -21,6 +21,7 @@ use chrono::Utc;
 use common_arrow::arrow::datatypes::DataType as ArrowDataType;
 use common_arrow::arrow::datatypes::Field as ArrowField;
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::DataSourceInfo;
 use common_catalog::plan::DataSourcePlan;
 use common_catalog::plan::ParquetReadOptions;
@@ -51,6 +52,7 @@ pub struct ParquetTable {
 
     pub(super) table_info: TableInfo,
     pub(super) arrow_schema: ArrowSchema,
+    pub(super) schema_descr: SchemaDescriptor,
     pub(super) files_to_read: Option<Vec<StageFileInfo>>,
 }
 
@@ -66,6 +68,7 @@ impl ParquetTable {
             stage_info: info.stage_info.clone(),
             files_info: info.files_info.clone(),
             files_to_read: info.files_to_read.clone(),
+            schema_descr: info.schema_descr.clone(),
         }))
     }
 }
@@ -102,6 +105,7 @@ impl Table for ParquetTable {
             arrow_schema: self.arrow_schema.clone(),
             read_options: self.read_options,
             stage_info: self.stage_info.clone(),
+            schema_descr: self.schema_descr.clone(),
             files_info: self.files_info.clone(),
             files_to_read: self.files_to_read.clone(),
         })
