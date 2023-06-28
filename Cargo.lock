@@ -2755,12 +2755,15 @@ dependencies = [
  "common-expression",
  "common-meta-app",
  "common-meta-types",
+ "common-pipeline-core",
  "common-storage",
  "futures",
  "icelake",
  "itertools",
  "opendal",
+ "serde",
  "tracing",
+ "typetag",
 ]
 
 [[package]]
@@ -6128,9 +6131,9 @@ dependencies = [
 
 [[package]]
 name = "icelake"
-version = "0.0.1"
+version = "0.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "957d32762079ca84d0102c13411f66cccc72062c960f3ba8fb289bfa2cb84b47"
+checksum = "cc9337eeb3d4c7f1d37a521e6962a539ce66eb835beca2b604adbeea54f5d764"
 dependencies = [
  "anyhow",
  "apache-avro",
@@ -10925,9 +10928,9 @@ checksum = "497961ef93d974e23eb6f433eb5fe1b7930b659f06d12dec6fc44a8f554c0bba"
 
 [[package]]
 name = "typetag"
-version = "0.2.6"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69bf9bd14fed1815295233a0eee76a963283b53ebcbd674d463f697d3bfcae0c"
+checksum = "6a6898cc6f6a32698cc3e14d5632a14d2b23ed9f7b11e6b8e05ce685990acc22"
 dependencies = [
  "erased-serde",
  "inventory",
@@ -10938,13 +10941,13 @@ dependencies = [
 
 [[package]]
 name = "typetag-impl"
-version = "0.2.6"
+version = "0.2.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf9f5f225956dc2254c6c27500deac9390a066b2e8a1a571300627a7c4400a33"
+checksum = "2c3e1c30cedd24fc597f7d37a721efdbdc2b1acae012c1ef1218f4c7c2c0f3e7"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 1.0.109",
+ "syn 2.0.15",
 ]
 
 [[package]]
