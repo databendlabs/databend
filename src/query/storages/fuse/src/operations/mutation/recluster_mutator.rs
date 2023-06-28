@@ -24,7 +24,6 @@ use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
 use storages_common_table_meta::meta::BlockMeta;
-use tracing::info;
 
 use crate::operations::common::BlockMetaIndex;
 use crate::operations::common::MutationLogEntry;
@@ -32,12 +31,16 @@ use crate::operations::common::MutationLogs;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
-    ctx: Arc<dyn TableContext>,
-    selected_blocks: Vec<Arc<BlockMeta>>,
-    level: i32,
+    max_memory_usage: u64,
     threshold: f64,
-    mutation_logs: MutationLogs,
     block_thresholds: BlockThresholds,
+
+    mutation_logs: MutationLogs,
+    selected_blocks: Vec<Arc<BlockMeta>>,
+
+    pub(crate) total_rows: u64,
+    pub(crate) total_bytes: u64,
+    pub(crate) level: i32,
 }
 
 impl ReclusterMutator {
@@ -46,22 +49,21 @@ impl ReclusterMutator {
         threshold: f64,
         block_thresholds: BlockThresholds,
     ) -> Result<Self> {
+        let max_memory_usage = (ctx.get_settings().get_max_memory_usage()? as f64 * 0.5) as u64;
         Ok(Self {
-            ctx,
-            selected_blocks: Vec::new(),
-            level: 0,
+            max_memory_usage,
             threshold,
             block_thresholds,
             mutation_logs: Default::default(),
+            selected_blocks: Vec::new(),
+            total_rows: 0,
+            total_bytes: 0,
+            level: 0,
         })
     }
 
     pub fn take_blocks(&mut self) -> Vec<Arc<BlockMeta>> {
         std::mem::take(&mut self.selected_blocks)
-    }
-
-    pub fn level(&self) -> i32 {
-        self.level
     }
 
     pub fn mutation_logs(&self) -> MutationLogs {
@@ -73,10 +75,8 @@ impl ReclusterMutator {
         &mut self,
         blocks_map: BTreeMap<i32, Vec<(BlockMetaIndex, Arc<BlockMeta>)>>,
     ) -> Result<bool> {
-        let max_memory_usage =
-            (self.ctx.get_settings().get_max_memory_usage()? as f64 * 0.5) as u64;
         for (level, block_metas) in blocks_map.into_iter() {
-            if block_metas.len() <= 1 {
+            if block_metas.len() < 2 {
                 continue;
             }
 
@@ -112,19 +112,9 @@ impl ReclusterMutator {
                         block_meta
                     })
                     .collect();
-
-                // Status.
-                {
-                    let status = format!(
-                        "recluster: select block files: {}, total bytes: {}",
-                        self.selected_blocks.len(),
-                        total_bytes
-                    );
-                    self.ctx.set_status_info(&status);
-                    info!(status);
-                }
+                self.total_rows = total_rows;
+                self.total_bytes = total_bytes;
                 self.level = level;
-
                 return Ok(true);
             }
 
@@ -188,28 +178,19 @@ impl ReclusterMutator {
                 selected_idx.insert(*idx);
             });
 
-            let mut memory_usage = 0;
             for idx in selected_idx {
                 let (block_idx, block_meta) = block_metas[idx].clone();
-                if memory_usage >= max_memory_usage {
+                let memory_usage = self.total_bytes + block_meta.block_size;
+                if memory_usage > self.max_memory_usage {
                     break;
                 }
-                memory_usage += block_meta.block_size;
+
                 self.mutation_logs
                     .entries
                     .push(MutationLogEntry::Deleted { index: block_idx });
+                self.total_rows += block_meta.row_count;
+                self.total_bytes = memory_usage;
                 self.selected_blocks.push(block_meta);
-            }
-
-            // Status.
-            {
-                let status = format!(
-                    "recluster: select block files: {}, total bytes: {}",
-                    self.selected_blocks.len(),
-                    memory_usage
-                );
-                self.ctx.set_status_info(&status);
-                info!(status);
             }
 
             self.level = level;

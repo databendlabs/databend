@@ -143,6 +143,18 @@ impl FuseTable {
             return Ok(());
         }
 
+        // Status.
+        {
+            let status = format!(
+                "recluster: select block files: {}, total bytes: {}, total rows: {}",
+                block_metas.len(),
+                mutator.total_bytes,
+                mutator.total_rows,
+            );
+            ctx.set_status_info(&status);
+            tracing::info!(status);
+        }
+
         let (statistics, parts) = self.read_partitions_with_metas(
             self.table_info.schema(),
             None,
@@ -170,10 +182,10 @@ impl FuseTable {
 
         // ReadDataKind to avoid OOM.
         self.do_read_data(ctx.clone(), &plan, pipeline)?;
-        let max_threads = pipeline.output_len();
+        let pipe_size = pipeline.output_len();
 
         let cluster_stats_gen =
-            self.get_cluster_stats_gen(ctx.clone(), mutator.level() + 1, block_thresholds)?;
+            self.get_cluster_stats_gen(ctx.clone(), mutator.level + 1, block_thresholds)?;
         let operators = cluster_stats_gen.operators.clone();
         if !operators.is_empty() {
             let num_input_columns = self.table_info.schema().fields().len();
@@ -223,6 +235,8 @@ impl FuseTable {
             None,
         )?;
 
+        let block_num = (mutator.total_rows as f64 / final_block_size as f64).ceil() as usize;
+        let max_threads = std::cmp::min(pipe_size, block_num);
         pipeline.try_resize(max_threads)?;
         pipeline.add_transform(|transform_input_port, transform_output_port| {
             let proc = TransformSerializeBlock::new(
