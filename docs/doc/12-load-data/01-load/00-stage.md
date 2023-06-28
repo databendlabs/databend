@@ -37,25 +37,29 @@ Follow this tutorial to upload the sample file to the user stage and load data f
 
 ### Step 1: Upload Sample File
 
-1. Use cURL to make a request to the [File Upload API](../../03-develop/00-api/10-put-to-stage.md):
+Upload sample file using the Presigned URL method:
 
-```shell title='Upload to User Stage:'
-curl -u root: -H "stage_name:~" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
+```sql
+PRESIGN UPLOAD @~/books.parquet;
+
+Name   |Value                                                                                                                                                                                                                                                                                                                                                       |
+-------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+method |PUT                                                                                                                                                                                                                                                                                                                                                         |
+headers|{"host":"s3.us-east-2.amazonaws.com"}                                                                                                                                                                                                                                                                                                                       |
+url    |https://s3.us-east-2.amazonaws.com/databend-toronto/stage/user/root/books.parquet?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIASTQNLUZWP2UY2HSN%2F20230627%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20230627T153448Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=84f1c280bff52f33c1914d64b2091d19650ad4882137013601fc44d26b607933|
+```
+```shell
+curl -X PUT -T books.parquet "https://s3.us-east-2.amazonaws.com/databend-toronto/stage/user/root/books.parquet?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIASTQNLUZWP2UY2HSN%2F20230627%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20230627T153448Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=84f1c280bff52f33c1914d64b2091d19650ad4882137013601fc44d26b607933"
 ```
 
-```shell title='Response:'
-{"id":"6e45fb1e-562c-496b-8500-f0b103cae3c7","stage_name":"~","state":"SUCCESS","files":["books.parquet"]}    
-```
-
-2. Check the uploaded file:
+Check the staged file:
 
 ```sql
 LIST @~;
 
----
 name         |size|md5                               |last_modified                |creator|
 -------------+----+----------------------------------+-----------------------------+-------+
-books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-04-24 14:45:26.753 +0000|       |
+books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-06-27 16:03:51.000 +0000|       |
 ```
 
 ### Step 2. Copy Data into Table
@@ -101,25 +105,33 @@ my_internal_stage|Internal  |              0|'root'@'%'|       |
 
 ### Step 2: Upload Sample File
 
-1. Use cURL to make a request to the [File Upload API](../../03-develop/00-api/10-put-to-stage.md):
+Upload sample file using the Presigned URL method:
 
-```shell title='Upload to Internal Stage:'
-curl -u root: -H "stage_name:my_internal_stage" -F "upload=@books.parquet" -XPUT "http://localhost:8000/v1/upload_to_stage"
+```sql
+CREATE STAGE my_internal_stage;
+```
+```sql
+PRESIGN UPLOAD @my_internal_stage/books.parquet;
+
+Name   |Value                                                                                                                                                                                                                                                                                                                                                                        |
+-------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+method |PUT                                                                                                                                                                                                                                                                                                                                                                          |
+headers|{"host":"s3.us-east-2.amazonaws.com"}                                                                                                                                                                                                                                                                                                                                        |
+url    |https://s3.us-east-2.amazonaws.com/databend-toronto/stage/internal/my_internal_stage/books.parquet?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIASTQNLUZWP2UY2HSN%2F20230628%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20230628T022951Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=9cfcdf3b3554280211f88629d60358c6d6e6a5e49cd83146f1daea7dfe37f5c1|
 ```
 
-```shell title='Response:'
-{"id":"2828649a-1eee-4feb-9222-68cefd8cd096","stage_name":"my_internal_stage","state":"SUCCESS","files":["books.parquet"]}
+```shell
+curl -X PUT -T books.parquet "https://s3.us-east-2.amazonaws.com/databend-toronto/stage/internal/my_internal_stage/books.parquet?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIASTQNLUZWP2UY2HSN%2F20230628%2Fus-east-2%2Fs3%2Faws4_request&X-Amz-Date=20230628T022951Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=9cfcdf3b3554280211f88629d60358c6d6e6a5e49cd83146f1daea7dfe37f5c1"
 ```
 
-2. Check the uploaded file:
+Check the staged file:
 
 ```sql
 LIST @my_internal_stage;
 
----
-name         |size|md5                               |last_modified                |creator|
--------------+----+----------------------------------+-----------------------------+-------+
-books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-04-24 15:17:44.205 +0000|       |
+name                               |size  |md5                               |last_modified                |creator|
+-----------------------------------+------+----------------------------------+-----------------------------+-------+
+books.parquet                      |   998|"88432bf90aadb79073682988b39d461c"|2023-06-28 02:32:15.000 +0000|       |
 ```
 
 ### Step 3. Copy Data into Table
@@ -165,25 +177,29 @@ my_external_stage|External  |               |'root'@'%'|       |
 
 ### Step 2: Upload Sample File
 
-1. Use cURL to make a request to the [File Upload API](../../03-develop/00-api/10-put-to-stage.md):
+Upload sample file using the Presigned URL method:
 
-```shell title='Upload to External Stage:'
-curl  -u root: -H "stage_name:my_external_stage" -F "upload=@books.parquet" -XPUT "http://127.0.0.1:8000/v1/upload_to_stage"
+```sql
+PRESIGN UPLOAD @my_external_stage/books.parquet;
+
+Name   |Value                                                                                                                                                                                                                                                                                                      |
+-------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+method |PUT                                                                                                                                                                                                                                                                                                        |
+headers|{"host":"127.0.0.1:9000"}                                                                                                                                                                                                                                                                                  |
+url    |http://127.0.0.1:9000/databend/books.parquet?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ROOTUSER%2F20230628%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20230628T040959Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=697d608750fdcfe4a0b739b409cd340272201351023baa823382bf8c3718a4bd|
+```
+```shell
+curl -X PUT -T books.parquet "http://127.0.0.1:9000/databend/books.parquet?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=ROOTUSER%2F20230628%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20230628T040959Z&X-Amz-Expires=3600&X-Amz-SignedHeaders=host&X-Amz-Signature=697d608750fdcfe4a0b739b409cd340272201351023baa823382bf8c3718a4bd"
 ```
 
-```shell title='Response:'
-{"id":"a21844fc-4c06-4b95-85a0-d57c28b9a142","stage_name":"my_external_stage","state":"SUCCESS","files":["books.parquet"]}
-```
-
-2. Check the uploaded file:
+Check the staged file:
 
 ```sql
 LIST @my_external_stage;
 
----
 name         |size|md5                               |last_modified                |creator|
 -------------+----+----------------------------------+-----------------------------+-------+
-books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-04-24 15:47:40.727 +0000|       |
+books.parquet| 998|"88432bf90aadb79073682988b39d461c"|2023-06-28 04:13:15.178 +0000|       |
 ```
 
 ### Step 3. Copy Data into Table
