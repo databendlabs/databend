@@ -6,7 +6,7 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "set global max_threads = 1" | $MYSQL_CLIENT_CONNECT
 echo "drop table if exists products;" | $MYSQL_CLIENT_CONNECT
 echo "drop stage if exists s0011;" | $MYSQL_CLIENT_CONNECT
-echo "CREATE STAGE s1 FILE_FORMAT = (TYPE = CSV);" | $MYSQL_CLIENT_CONNECT
+echo "CREATE STAGE s0011 FILE_FORMAT = (TYPE = CSV);" | $MYSQL_CLIENT_CONNECT
 echo "create table products (id int, name string, description string);" | $MYSQL_CLIENT_CONNECT
 
 #multi files to trigger distributed test
