@@ -9,8 +9,7 @@ Databend offers a variety of powerful APIs, allowing you to seamlessly interact 
 | HTTP Handler       	| Allows interaction with Databend through HTTP requests.                                                        	|
 | MySQL Handler      	| Enables communication between Databend and MySQL databases.                                                    	|
 | ClickHouse Handler 	| Facilitates data exchange between Databend and ClickHouse.                                                     	|
-| Streaming Load API 	| Designed for real-time data ingestion into Databend, allowing seamless streaming of data from various sources. 	|
-| File Upload API    	| Enables uploading files directly into Databend, simplifying the process of importing data stored in files.     	|                                 	|
+| Streaming Load API 	| Designed for real-time data ingestion into Databend, allowing seamless streaming of data from various sources. 	|                               	|
 
 Learn to use programming languages such as Go, Python, Node.js, Java, and Rust to develop applications that interact with Databend. Drivers described in the table below can be used to access Databend or Databend Cloud from these applications, enabling communication with Databend from the supported languages.
 

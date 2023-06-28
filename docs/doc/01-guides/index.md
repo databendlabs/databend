@@ -162,7 +162,6 @@ Databend's rich ecosystem offers a range of powerful tools and integrations, all
 * [MySQL Handler](../03-develop/00-api/01-mysql-handler.md)
 * [ClickHouse Handler](../03-develop/00-api/02-clickhouse-handler.md)
 * [Streaming Load API](../03-develop/00-api/03-streaming-load.md)
-* [File Upload API](../03-develop/00-api/10-put-to-stage.md)
 
 </TabItem>
 
