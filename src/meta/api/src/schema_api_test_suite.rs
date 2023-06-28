@@ -66,6 +66,7 @@ use common_meta_app::schema::TableIdListKey;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
 use common_meta_app::schema::TableStatistics;
@@ -2800,6 +2801,32 @@ impl SchemaApiTestSuite {
         let tb_count = mt.count_tables(Self::req_count_table(tenant)).await?;
         assert_eq!(expected_tb_count, tb_count.count);
 
+        // list drop tables
+        info!("--- check drop table");
+        {
+            let plan = ListTableReq {
+                inner: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                filter: Some(TableInfoFilter::Dropped),
+            };
+            let resp = mt.get_table_history(plan).await?;
+            assert_eq!(resp.len(), 0);
+
+            let plan = ListTableReq {
+                inner: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                filter: None,
+            };
+            let resp = mt.get_table_history(plan).await?;
+            assert_eq!(resp.len(), 1);
+            assert_eq!(resp[0].name, tbl_name.to_string());
+            assert!(resp[0].meta.drop_on.is_none());
+        }
+
         info!("--- drop and undrop table");
         {
             // first drop table
@@ -2828,6 +2855,34 @@ impl SchemaApiTestSuite {
                 non_drop_on_cnt: 0,
             }]);
 
+            // list drop tables
+            info!("--- check drop table");
+            {
+                let plan = ListTableReq {
+                    inner: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
+                    filter: Some(TableInfoFilter::Dropped),
+                };
+                let resp = mt.get_table_history(plan).await?;
+                assert_eq!(resp.len(), 1);
+                assert_eq!(resp[0].name, tbl_name.to_string());
+                assert!(resp[0].meta.drop_on.is_some());
+
+                let plan = ListTableReq {
+                    inner: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
+                    filter: None,
+                };
+                let resp = mt.get_table_history(plan).await?;
+                assert_eq!(resp.len(), 1);
+                assert_eq!(resp[0].name, tbl_name.to_string());
+                assert!(resp[0].meta.drop_on.is_some());
+            }
+
             // then undrop table
             let old_db = mt.get_database(Self::req_get_db(tenant, db_name)).await?;
             let plan = UndropTableReq {
@@ -2852,6 +2907,32 @@ impl SchemaApiTestSuite {
                 drop_on_cnt: 0,
                 non_drop_on_cnt: 1,
             }]);
+
+            // list drop tables
+            info!("--- check drop table");
+            {
+                let plan = ListTableReq {
+                    inner: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
+                    filter: Some(TableInfoFilter::Dropped),
+                };
+                let resp = mt.get_table_history(plan).await?;
+                assert_eq!(resp.len(), 0);
+
+                let plan = ListTableReq {
+                    inner: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
+                    filter: None,
+                };
+                let resp = mt.get_table_history(plan).await?;
+                assert_eq!(resp.len(), 1);
+                assert_eq!(resp[0].name, tbl_name.to_string());
+                assert!(resp[0].meta.drop_on.is_none());
+            }
         }
 
         info!("--- drop and create table");

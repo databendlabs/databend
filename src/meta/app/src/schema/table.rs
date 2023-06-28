@@ -645,8 +645,15 @@ impl GetTableReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum TableInfoFilter {
+    // filter only dropped tables
+    Dropped,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListTableReq {
     pub inner: DatabaseNameIdent,
+    pub filter: Option<TableInfoFilter>,
 }
 
 impl Deref for ListTableReq {
@@ -664,6 +671,7 @@ impl ListTableReq {
                 tenant: tenant.into(),
                 db_name: db_name.into(),
             },
+            filter: None,
         }
     }
 }
