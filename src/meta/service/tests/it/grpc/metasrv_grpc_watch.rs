@@ -131,13 +131,13 @@ async fn test_watch() -> anyhow::Result<()> {
             filter_type: FilterType::All.into(),
         };
 
-        let key_a = "a".to_string();
-        let key_b = "b".to_string();
+        let key_a = s("a");
+        let key_b = s("b");
 
-        let val_a = "a".as_bytes().to_vec();
-        let val_b = "b".as_bytes().to_vec();
-        let val_new = "new".as_bytes().to_vec();
-        let val_z = "z".as_bytes().to_vec();
+        let val_a = b("a");
+        let val_b = b("b");
+        let val_new = b("new");
+        let val_z = b("z");
 
         let watch_events = vec![
             // set a->a
@@ -198,15 +198,15 @@ async fn test_watch() -> anyhow::Result<()> {
     {
         let key_str = "1";
         let watch = WatchRequest {
-            key: key_str.to_string(),
+            key: s(key_str),
             key_end: None,
             // filter only delete events
             filter_type: FilterType::Delete.into(),
         };
 
-        let key = key_str.to_string();
-        let val = "old".as_bytes().to_vec();
-        let val_new = "new".as_bytes().to_vec();
+        let key = s(key_str);
+        let val = b("old");
+        let val_new = b("new");
 
         // has only delete events
         let watch_events = vec![
@@ -249,18 +249,8 @@ async fn test_watch() -> anyhow::Result<()> {
             let client = make_client(&addr)?;
 
             let updates = vec![
-                UpsertKVReq::new(
-                    delete_key,
-                    MatchSeq::GE(0),
-                    Operation::Update(delete_key.as_bytes().to_vec()),
-                    None,
-                ),
-                UpsertKVReq::new(
-                    watch_delete_by_prefix_key,
-                    MatchSeq::GE(0),
-                    Operation::Update(watch_delete_by_prefix_key.as_bytes().to_vec()),
-                    None,
-                ),
+                UpsertKVReq::update(delete_key, &b(delete_key)),
+                UpsertKVReq::update(watch_delete_by_prefix_key, &b(watch_delete_by_prefix_key)),
             ];
 
             for update in updates {
@@ -272,8 +262,8 @@ async fn test_watch() -> anyhow::Result<()> {
 
         let k1 = "watch_txn_key";
 
-        let txn_key = k1.to_string();
-        let txn_val = "txn_val".as_bytes().to_vec();
+        let txn_key = s(k1);
+        let txn_val = b("txn_val");
 
         let (start, end) = kvapi::prefix_to_range(watch_prefix)?;
 
@@ -332,18 +322,18 @@ async fn test_watch() -> anyhow::Result<()> {
                 prev: None,
             },
             Event {
-                key: delete_key.to_string(),
+                key: s(delete_key),
                 prev: Some(SeqV {
                     seq,
-                    data: delete_key.as_bytes().to_vec(),
+                    data: b(delete_key),
                 }),
                 current: None,
             },
             Event {
-                key: watch_delete_by_prefix_key.to_string(),
+                key: s(watch_delete_by_prefix_key),
                 prev: Some(SeqV {
                     seq: seq + 1,
-                    data: watch_delete_by_prefix_key.as_bytes().to_vec(),
+                    data: b(watch_delete_by_prefix_key),
                 }),
                 current: None,
             },
@@ -521,7 +511,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
 
     let watcher_count = Arc::new(std::sync::Mutex::new(0usize));
 
-    tracing::info!("one watcher");
+    info!("one watcher");
     {
         let cnt = watcher_count.clone();
 
@@ -534,7 +524,7 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
         assert_eq!(1, *watcher_count.lock().unwrap());
     }
 
-    tracing::info!("second watcher");
+    info!("second watcher");
     {
         let client2 = make_client(&addr)?;
         let _watch_stream2 = client2.request(watch_req()).await?;
@@ -550,10 +540,10 @@ async fn test_watch_stream_count() -> anyhow::Result<()> {
         assert_eq!(2, *watcher_count.lock().unwrap());
     }
 
-    tracing::info!("wait a while for MetaNode to process stream cleanup");
+    info!("wait a while for MetaNode to process stream cleanup");
     sleep(Duration::from_millis(2_000)).await;
 
-    tracing::info!("second watcher is removed");
+    info!("second watcher is removed");
     {
         let cnt = watcher_count.clone();
 
