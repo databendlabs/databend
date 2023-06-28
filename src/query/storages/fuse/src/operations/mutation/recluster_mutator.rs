@@ -50,12 +50,9 @@ impl ReclusterMutator {
         depth_threshold: f64,
         block_thresholds: BlockThresholds,
     ) -> Result<Self> {
-        let avail_memory_usage = sys_info::mem_info()
-            .map_err(ErrorCode::from_std_error)?
-            .avail
-            * 1024;
+        let mem_info = sys_info::mem_info().map_err(ErrorCode::from_std_error)?;
         let max_memory_usage = ctx.get_settings().get_max_memory_usage()?;
-        let memory_threshold = cmp::min(avail_memory_usage, max_memory_usage) * 50 / 100;
+        let memory_threshold = cmp::min(mem_info.avail * 1024, max_memory_usage) * 50 / 100;
         Ok(Self {
             memory_threshold,
             depth_threshold,
