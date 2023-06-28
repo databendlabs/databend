@@ -537,4 +537,10 @@ fn test_agg_bitmap_count(file: &mut impl Write, simulator: impl AggregationSimul
         get_example().as_slice(),
         simulator,
     );
+    run_agg_ast(
+        file,
+        "bitmap_not_count(bm)",
+        get_example().as_slice(),
+        simulator
+    );
 }

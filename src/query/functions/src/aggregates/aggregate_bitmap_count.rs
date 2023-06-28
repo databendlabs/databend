@@ -18,6 +18,7 @@ use std::marker::PhantomData;
 use std::ops::BitAndAssign;
 use std::ops::BitOrAssign;
 use std::ops::BitXorAssign;
+use std::ops::SubAssign;
 use std::sync::Arc;
 
 use common_arrow::arrow::bitmap::Bitmap;
@@ -56,6 +57,7 @@ where OP: BitmapOperate
 const BITMAP_AND: u8 = 0;
 const BITMAP_OR: u8 = 1;
 const BITMAP_XOR: u8 = 2;
+const BITMAP_NOT: u8 = 3;
 
 macro_rules! with_bitmap_mapped_type {
     (| $t:tt | $($tail:tt)*) => {
@@ -64,6 +66,7 @@ macro_rules! with_bitmap_mapped_type {
                 BITMAP_AND => BitmapAndOp,
                 BITMAP_OR  => BitmapOrOp,
                 BITMAP_XOR => BitmapXorOp,
+                BITMAP_NOT => BitmapNotOp,
             ],
             $($tail)*
         }
@@ -77,6 +80,7 @@ trait BitmapOperate: Send + Sync + 'static {
 struct BitmapAndOp;
 struct BitmapOrOp;
 struct BitmapXorOp;
+struct BitmapNotOp;
 
 impl BitmapOperate for BitmapAndOp {
     fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
@@ -93,6 +97,12 @@ impl BitmapOperate for BitmapOrOp {
 impl BitmapOperate for BitmapXorOp {
     fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
         lhs.bitxor_assign(rhs);
+    }
+}
+
+impl BitmapOperate for BitmapNotOp {
+    fn operate(lhs: &mut RoaringTreemap, rhs: RoaringTreemap) {
+        lhs.sub_assign(rhs);
     }
 }
 
@@ -285,6 +295,17 @@ pub fn aggregate_bitmap_and_count_function_desc() -> AggregateFunctionDescriptio
     };
     AggregateFunctionDescription::creator_with_features(
         Box::new(try_create_aggregate_bitmap_count_function::<BITMAP_AND>),
+        features,
+    )
+}
+
+pub fn aggregate_bitmap_not_count_function_desc() -> AggregateFunctionDescription {
+    let features = super::aggregate_function_factory::AggregateFunctionFeatures {
+        is_decomposable: true,
+        ..Default::default()
+    };
+    AggregateFunctionDescription::creator_with_features(
+        Box::new(try_create_aggregate_bitmap_count_function::<BITMAP_NOT>),
         features,
     )
 }
