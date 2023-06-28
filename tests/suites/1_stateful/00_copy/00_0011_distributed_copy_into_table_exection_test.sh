@@ -22,5 +22,5 @@ echo "select count(*) from products;" | $MYSQL_CLIENT_CONNECT
 curl -s -u root: -H "stage_name:s0011" -F "upload=@${CURDIR}/../../../data/sample_2_columns.csv" -XPUT "http://localhost:8000/v1/upload_to_stage" -u root: | jq ".data"
 echo "set enable_distributed_copy_into = 1;copy into products from @s0011 pattern = '.*[.]csv' purge = true;" | $MYSQL_CLIENT_CONNECT
 echo "select count(*) from products;" | $MYSQL_CLIENT_CONNECT
-echo "list @s1;" | $MYSQL_CLIENT_CONNECT | grep -o 'csv' | wc -l
+echo "list @s0011;" | $MYSQL_CLIENT_CONNECT | grep -o 'csv' | wc -l
 
