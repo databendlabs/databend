@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::time::SystemTime;
 
 use common_catalog::plan::PushDownInfo;
+use common_exception::ErrorCode;
 use common_exception::Result;
 
 use crate::interpreters::Interpreter;
@@ -83,6 +84,18 @@ impl Interpreter for ReclusterTableInterpreter {
                 .get_catalog(&plan.catalog)?
                 .get_table(tenant.as_str(), &plan.database, &plan.table)
                 .await?;
+
+            // check if the table is locked.
+            let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
+            let reply = catalog
+                .list_table_lock_revs(table.get_table_info().ident.table_id)
+                .await?;
+            if !reply.is_empty() {
+                return Err(ErrorCode::TableAlreadyLocked(format!(
+                    "table '{}' is locked, please retry recluster later",
+                    self.plan.table
+                )));
+            }
 
             let mut pipeline = Pipeline::create();
             table

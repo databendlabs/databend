@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::sync::Arc;
+use std::time::SystemTime;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::CompactTarget;
@@ -25,6 +26,7 @@ use common_sql::plans::OptimizeTablePlan;
 use common_storages_factory::NavigationPoint;
 
 use crate::interpreters::Interpreter;
+use crate::interpreters::InterpreterClusteringHistory;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
 use crate::pipelines::PipelineBuildResult;
@@ -54,41 +56,31 @@ impl Interpreter for OptimizeTableInterpreter {
         let plan = self.plan.clone();
         match self.plan.action.clone() {
             OptimizeTableAction::CompactBlocks => {
-                self.build_compact_pipeline(CompactTarget::Blocks).await
+                self.build_pipeline(CompactTarget::Blocks, false).await
             }
             OptimizeTableAction::CompactSegments => {
-                self.build_compact_pipeline(CompactTarget::Segments).await
+                self.build_pipeline(CompactTarget::Segments, false).await
             }
             OptimizeTableAction::Purge(point) => {
                 purge(ctx, plan, point).await?;
                 Ok(PipelineBuildResult::create())
             }
-            OptimizeTableAction::All => {
-                let mut build_res = self.build_compact_pipeline(CompactTarget::Blocks).await?;
-
-                if build_res.main_pipeline.is_empty() {
-                    purge(ctx, plan, None).await?;
-                } else {
-                    build_res
-                        .main_pipeline
-                        .set_on_finished(move |may_error| match may_error {
-                            None => GlobalIORuntime::instance()
-                                .block_on(async move { purge(ctx, plan, None).await }),
-                            Some(error_code) => Err(error_code.clone()),
-                        });
-                }
-                Ok(build_res)
-            }
+            OptimizeTableAction::All => self.build_pipeline(CompactTarget::Blocks, true).await,
         }
     }
 }
 
 impl OptimizeTableInterpreter {
-    async fn build_compact_pipeline(&self, target: CompactTarget) -> Result<PipelineBuildResult> {
+    async fn build_pipeline(
+        &self,
+        target: CompactTarget,
+        need_purge: bool,
+    ) -> Result<PipelineBuildResult> {
         let mut table = self
             .ctx
             .get_table(&self.plan.catalog, &self.plan.database, &self.plan.table)
             .await?;
+        let need_recluster = !table.cluster_keys(self.ctx.clone()).is_empty();
 
         // check if the table is locked.
         let catalog = self.ctx.get_catalog(&self.plan.catalog)?;
@@ -109,7 +101,7 @@ impl OptimizeTableInterpreter {
 
         let mut build_res = PipelineBuildResult::create();
         let settings = self.ctx.get_settings();
-        if !table.cluster_keys(self.ctx.clone()).is_empty() {
+        if need_recluster {
             if !pipeline.is_empty() {
                 pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
@@ -134,6 +126,36 @@ impl OptimizeTableInterpreter {
                 .await?;
         } else {
             build_res.main_pipeline = pipeline;
+        }
+
+        let ctx = self.ctx.clone();
+        let plan = self.plan.clone();
+        if build_res.main_pipeline.is_empty() {
+            if need_purge {
+                purge(ctx, plan, None).await?;
+            }
+        } else {
+            let start = SystemTime::now();
+            build_res
+                .main_pipeline
+                .set_on_finished(move |may_error| match may_error {
+                    None => {
+                        if need_recluster {
+                            InterpreterClusteringHistory::write_log(
+                                &ctx,
+                                start,
+                                &plan.database,
+                                &plan.table,
+                            )?;
+                        }
+                        if need_purge {
+                            GlobalIORuntime::instance()
+                                .block_on(async move { purge(ctx, plan, None).await })?;
+                        }
+                        Ok(())
+                    }
+                    Some(error_code) => Err(error_code.clone()),
+                });
         }
 
         Ok(build_res)
