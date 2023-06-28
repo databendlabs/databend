@@ -842,7 +842,7 @@ impl<'a> Evaluator<'a> {
 
     /// Evaluate a set-returning-function. Return multiple sets of results
     /// for each input row, along with the number of rows in each set.
-    pub fn run_srf(&self, expr: &Expr) -> Result<Vec<(Value<AnyType>, usize)>> {
+    pub fn run_srf(&self, expr: &Expr) -> Result<(Value<AnyType>, Vec<usize>)> {
         if let Expr::FunctionCall {
             span,
             id,
@@ -869,7 +869,7 @@ impl<'a> Evaluator<'a> {
                 };
                 let result = (eval)(&cols_ref, &mut ctx);
                 ctx.render_error(*span, id.params(), &args, &function.signature.name)?;
-                assert_eq!(result.len(), self.input_columns.num_rows());
+                assert_eq!(result.1.len(), self.input_columns.num_rows());
                 return Ok(result);
             }
         }

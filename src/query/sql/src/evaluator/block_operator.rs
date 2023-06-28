@@ -16,7 +16,6 @@ use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
-use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
@@ -144,81 +143,83 @@ impl BlockOperator {
                     .map(|srf_expr| eval.run_srf(srf_expr))
                     .collect::<Result<Vec<_>>>()?;
 
-                let mut result_data_blocks = Vec::with_capacity(input.num_rows());
-                for i in 0..input.num_rows() {
-                    let mut row = Vec::with_capacity(input.num_columns() + srf_exprs.len());
-
-                    // Get the max number of rows of all result sets.
-                    let mut max_num_rows = 0;
-                    srf_results.iter().for_each(|srf_result| {
-                        let (_, result_set_rows) = &srf_result[i];
-                        if *result_set_rows > max_num_rows {
-                            max_num_rows = *result_set_rows;
+                let mut max_number_rows = vec![0; input.num_rows()];
+                for (_, lengths) in &srf_results {
+                    for (i, length) in lengths.iter().enumerate() {
+                        if length > &max_number_rows[i] {
+                            max_number_rows[i] = *length;
                         }
-                    });
-
-                    if max_num_rows == 0 && !result_data_blocks.is_empty() {
-                        // Skip current row
-                        continue;
                     }
-
-                    for entry in input.columns() {
-                        // Take the i-th row of input data block and add it to the row.
-                        let mut builder =
-                            ColumnBuilder::with_capacity(&entry.data_type, max_num_rows);
-                        let scalar_ref = entry.value.index(i).unwrap();
-                        (0..max_num_rows).for_each(|_| {
-                            builder.push(scalar_ref.clone());
-                        });
-                        row.push(BlockEntry::new(
-                            entry.data_type.clone(),
-                            Value::Column(builder.build()),
-                        ));
-                    }
-
-                    for (srf_expr, srf_results) in srf_exprs.iter().zip(&srf_results) {
-                        let (mut row_result, repeat_times) = srf_results[i].clone();
-
-                        if let Value::Column(Column::Tuple(fields)) = &mut row_result {
-                            // If the current result set has less rows than the max number of rows,
-                            // we need to pad the result set with null values.
-                            // TODO(leiysky): this can be optimized by using a `zip` array function
-                            if repeat_times < max_num_rows {
-                                for field in fields {
-                                    match field {
-                                        Column::Null { .. } => {
-                                            *field = ColumnBuilder::repeat(
-                                                &ScalarRef::Null,
-                                                max_num_rows,
-                                                &DataType::Null,
-                                            )
-                                            .build();
-                                        }
-                                        Column::Nullable(box nullable_column) => {
-                                            let mut column_builder =
-                                                NullableColumnBuilder::from_column(
-                                                    (*nullable_column).clone(),
-                                                );
-                                            (0..(max_num_rows - repeat_times)).for_each(|_| {
-                                                column_builder.push_null();
-                                            });
-                                            *field =
-                                                Column::Nullable(Box::new(column_builder.build()));
-                                        }
-                                        _ => unreachable!(),
-                                    }
-                                }
+                }
+                let mut need_pad = false;
+                if srf_results.len() > 1 {
+                    for (_, lengths) in &srf_results {
+                        for (i, length) in lengths.iter().enumerate() {
+                            if length < &max_number_rows[i] {
+                                need_pad = true;
                             }
                         }
-
-                        row.push(BlockEntry::new(srf_expr.data_type().clone(), row_result))
+                        if need_pad {
+                            break;
+                        }
                     }
-
-                    result_data_blocks.push(DataBlock::new(row, max_num_rows));
                 }
+                let total_rows = max_number_rows.iter().sum();
 
-                let result = DataBlock::concat(&result_data_blocks)?;
-                Ok(result)
+                let mut cols = Vec::with_capacity(input.num_columns() + srf_exprs.len());
+                for entry in input.columns() {
+                    // Take the i-th row of input data block and add it to the row.
+                    let mut builder = ColumnBuilder::with_capacity(&entry.data_type, total_rows);
+                    for (row, max_number_row) in
+                        max_number_rows.iter().enumerate().take(input.num_rows())
+                    {
+                        let scalar_ref = entry.value.index(row).unwrap();
+                        (0..*max_number_row).for_each(|_| {
+                            builder.push(scalar_ref.clone());
+                        });
+                    }
+                    cols.push(BlockEntry::new(
+                        entry.data_type.clone(),
+                        Value::Column(builder.build()),
+                    ));
+                }
+                // If the current result set has less rows than the max number of rows,
+                // we need to pad the result set with null values.
+                if need_pad {
+                    for (srf_expr, (value, lengths)) in srf_exprs.iter().zip(&srf_results) {
+                        if let Value::Column(Column::Tuple(fields)) = value {
+                            let mut new_fields = Vec::with_capacity(fields.len());
+                            for field in fields {
+                                let mut offset = 0;
+                                let mut builder =
+                                    ColumnBuilder::with_capacity(&field.data_type(), total_rows);
+                                for (length, max_number_row) in
+                                    lengths.iter().zip(max_number_rows.iter())
+                                {
+                                    for i in offset..offset + length {
+                                        let item = unsafe { field.index_unchecked(i) };
+                                        builder.push(item);
+                                    }
+                                    offset += length;
+                                    if length < max_number_row {
+                                        for _ in 0..max_number_row - length {
+                                            builder.push(ScalarRef::Null);
+                                        }
+                                    }
+                                }
+                                new_fields.push(builder.build());
+                            }
+                            let new_value = Value::Column(Column::Tuple(new_fields));
+                            cols.push(BlockEntry::new(srf_expr.data_type().clone(), new_value));
+                        }
+                    }
+                } else {
+                    for (srf_expr, (value, _)) in srf_exprs.iter().zip(&srf_results) {
+                        cols.push(BlockEntry::new(srf_expr.data_type().clone(), value.clone()));
+                    }
+                }
+                let block = DataBlock::new(cols, total_rows);
+                Ok(block)
             }
         }
     }
