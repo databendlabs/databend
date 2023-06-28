@@ -38,7 +38,7 @@ do
 		for i in {1..3}
 		do
 			table="test_max_files_force_${force}_purge_${purge}"
-			echo "set enable_distributed_copy_into = 1;copy into ${table} from (select * from @s5 t) max_files=2 force=${force} purge=${purge}" | $MYSQL_CLIENT_CONNECT
+			echo "copy into ${table} from (select * from @s5 t) max_files=2 force=${force} purge=${purge}" | $MYSQL_CLIENT_CONNECT
 			echo "select count(*) from ${table}" | $MYSQL_CLIENT_CONNECT
 		  remain=$(ls -1 /tmp/00_0005/data/ | wc -l |  sed 's/ //g')
 			echo "remain ${remain} files"

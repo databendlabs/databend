@@ -11,5 +11,5 @@ echo "drop table if exists copy_compactor;" | $MYSQL_CLIENT_CONNECT
 echo "create table copy_compactor (a int) row_per_block=10;" | $MYSQL_CLIENT_CONNECT
 
 
-echo "set enable_distributed_copy_into = 1;copy into copy_compactor from @data_csv files=('numbers.csv');" | $MYSQL_CLIENT_CONNECT
+echo "copy into copy_compactor from @data_csv files=('numbers.csv');" | $MYSQL_CLIENT_CONNECT
 echo "SELECT row_count FROM FUSE_BLOCK('default', 'copy_compactor') order by row_count;" | $MYSQL_CLIENT_CONNECT

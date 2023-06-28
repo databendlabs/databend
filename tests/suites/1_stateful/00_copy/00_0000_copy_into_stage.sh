@@ -18,12 +18,12 @@ for i in `seq 1 10`;do
 done
 
 
-echo "set enable_distributed_copy_into = 1;copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $MYSQL_CLIENT_CONNECT
-echo "set enable_distributed_copy_into = 1;copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV);" | $MYSQL_CLIENT_CONNECT
+echo "copy into @s2 from (select name, age, id from test_table limit 100) FILE_FORMAT = (type = 'PARQUET');" | $MYSQL_CLIENT_CONNECT
 echo "list @s2;" | $MYSQL_CLIENT_CONNECT | wc -l | sed 's/ //g'
 
 
-echo "set enable_distributed_copy_into = 1;copy into @s2 from test_table FILE_FORMAT = (type = CSV) MAX_FILE_SIZE = 10;" | $MYSQL_CLIENT_CONNECT
+echo "copy into @s2 from test_table FILE_FORMAT = (type = CSV) MAX_FILE_SIZE = 10;" | $MYSQL_CLIENT_CONNECT
 
 lines=`echo "list @s2;" | $MYSQL_CLIENT_CONNECT | wc -l`
 

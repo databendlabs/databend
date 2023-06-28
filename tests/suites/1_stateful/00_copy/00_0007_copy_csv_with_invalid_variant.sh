@@ -12,7 +12,7 @@ echo "drop table if exists test_csv_variant;" | $MYSQL_CLIENT_CONNECT
 echo "create table test_csv_variant(a int, b variant);" | $MYSQL_CLIENT_CONNECT
 
 copy_from_test_csv_variant=(
-  "set enable_distributed_copy_into = 1;copy into test_csv_variant from 'fs://${DATADIR}/invalid_variant.csv' FILE_FORMAT = (field_delimiter = '\t' record_delimiter = '\n' type = CSV) disable_variant_check = false ON_ERROR = CONTINUE"
+  "copy into test_csv_variant from 'fs://${DATADIR}/invalid_variant.csv' FILE_FORMAT = (field_delimiter = '\t' record_delimiter = '\n' type = CSV) disable_variant_check = false ON_ERROR = CONTINUE"
 )
 echo "---test csv field check invalid variant"
 for i in "${copy_from_test_csv_variant[@]}"; do
@@ -22,7 +22,7 @@ for i in "${copy_from_test_csv_variant[@]}"; do
 done
 
 copy_from_test_csv_disable_variant_check=(
-  "set enable_distributed_copy_into = 1;copy into test_csv_variant from 'fs://${DATADIR}/invalid_variant.csv' FILE_FORMAT = (field_delimiter = '\t' record_delimiter = '\n' type = CSV) disable_variant_check = true ON_ERROR = CONTINUE"
+  "copy into test_csv_variant from 'fs://${DATADIR}/invalid_variant.csv' FILE_FORMAT = (field_delimiter = '\t' record_delimiter = '\n' type = CSV) disable_variant_check = true ON_ERROR = CONTINUE"
 )
 echo "---test csv field disable check invalid variant"
 for i in "${copy_from_test_csv_disable_variant_check[@]}"; do
