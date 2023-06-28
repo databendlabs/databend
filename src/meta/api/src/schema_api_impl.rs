@@ -133,16 +133,19 @@ use common_meta_app::share::ShareNameIdent;
 use common_meta_app::share::ShareTableInfoMap;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::txn_op::Request;
 use common_meta_types::txn_op_response::Response;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::InvalidReply;
+use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaNetworkError;
+use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnGetRequest;
@@ -1082,52 +1085,26 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
     async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError> {
         debug!(req = debug(&req), "SchemaApi: {}", func_name!());
 
-        let ctx = &func_name!();
-        let mut trials = txn_trials(None, ctx);
-        loop {
-            trials.next().unwrap()?;
+        let index_id_key = IndexId {
+            index_id: req.index_id,
+        };
 
-            let index_id_key = IndexId {
-                index_id: req.index_id,
-            };
+        let reply = self
+            .upsert_kv(UpsertKVReq::new(
+                &index_id_key.to_string_key(),
+                MatchSeq::GE(1),
+                Operation::Update(serialize_struct(&req.index_meta)?),
+                None,
+            ))
+            .await?;
 
-            let (index_meta_seq, _) = get_index_meta_by_id_or_err(self, &index_id_key).await?;
-
-            if index_meta_seq == 0 {
-                return Err(KVAppError::AppError(AppError::UnknownIndex(
-                    UnknownIndex::new(&req.index_name, "update_index"),
-                )));
-            }
-
-            // Update index meta: update (index_id) -> index_meta
-            let condition = vec![txn_cond_seq(&index_id_key, Eq, index_meta_seq)];
-
-            let if_then = vec![txn_op_put(
-                &index_id_key,
-                serialize_struct(&req.index_meta)?,
-            )];
-
-            let txn_req = TxnRequest {
-                condition,
-                if_then,
-                else_then: vec![],
-            };
-
-            let (succ, _responses) = send_txn(self, txn_req).await?;
-
-            debug!(
-                name = debug(&req.index_name),
-                id = debug(&index_id_key),
-                succ = display(succ),
-                "update_index"
-            );
-
-            if succ {
-                break;
-            }
+        if !reply.is_changed() {
+            Err(KVAppError::AppError(AppError::UnknownIndex(
+                UnknownIndex::new(&req.index_name, "update_index"),
+            )))
+        } else {
+            Ok(UpdateIndexReply {})
         }
-
-        Ok(UpdateIndexReply {})
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
@@ -3600,13 +3577,4 @@ pub(crate) async fn get_index_or_err(
     let (index_meta_seq, index_meta) = get_pb_value(kv_api, &id_key).await?;
 
     Ok((index_id_seq, index_id, index_meta_seq, index_meta))
-}
-
-pub(crate) async fn get_index_meta_by_id_or_err(
-    kv_api: &(impl kvapi::KVApi<Error = MetaError> + ?Sized),
-    index_id_key: &IndexId,
-) -> Result<(u64, Option<IndexMeta>), KVAppError> {
-    get_pb_value(kv_api, index_id_key)
-        .await
-        .map_err(KVAppError::MetaError)
 }

@@ -227,8 +227,8 @@ impl Interpreter for RefreshIndexInterpreter {
 
         if new_read_source.is_none() {
             return Err(ErrorCode::IndexAlreadyRefreshed(format!(
-                "index-{} already refreshed",
-                self.plan.index_id
+                "Aggregating Index {} already refreshed",
+                self.plan.index_name.clone()
             )));
         }
 
