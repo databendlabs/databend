@@ -27,7 +27,7 @@ use common_expression::DataSchemaRefExt;
 use common_expression::SortColumnDescription;
 use common_io::constants::DEFAULT_BLOCK_MAX_ROWS;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
+use common_pipeline_transforms::processors::transforms::build_merge_sort_pipeline;
 use common_pipeline_transforms::processors::transforms::AsyncAccumulatingTransformer;
 use common_sql::evaluator::CompoundBlockOperator;
 use storages_common_table_meta::meta::BlockMeta;
@@ -48,17 +48,17 @@ use crate::FUSE_OPT_KEY_ROW_AVG_DEPTH_THRESHOLD;
 use crate::FUSE_OPT_KEY_ROW_PER_BLOCK;
 
 impl FuseTable {
-    /// The flow of Pipeline is as follows(ignore CompoundBlockOperator):
-    // ┌──────────┐     ┌───────────┐     ┌─────────┐
-    // │FuseSource├────►│SortPartial├────►│SortMerge├────┐
-    // └──────────┘     └───────────┘     └─────────┘    │
-    // ┌──────────┐     ┌───────────┐     ┌─────────┐    │     ┌──────────────┐     ┌─────────┐
-    // │FuseSource├────►│SortPartial├────►│SortMerge├────┤────►│MultiSortMerge├────►│Resize(N)├───┐
-    // └──────────┘     └───────────┘     └─────────┘    │     └──────────────┘     └─────────┘   │
-    // ┌──────────┐     ┌───────────┐     ┌─────────┐    │                                        │
-    // │FuseSource├────►│SortPartial├────►│SortMerge├────┘                                        │
-    // └──────────┘     └───────────┘     └─────────┘                                             │
-    // ┌──────────────────────────────────────────────────────────────────────────────────────────┘
+    /// The flow of Pipeline is as follows:
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┐
+    // └──────────┘     └───────────────┘     └─────────┘    │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │     ┌──────────────┐     ┌─────────┐
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┤────►│MultiSortMerge├────►│Resize(N)├───┐
+    // └──────────┘     └───────────────┘     └─────────┘    │     └──────────────┘     └─────────┘   │
+    // ┌──────────┐     ┌───────────────┐     ┌─────────┐    │                                        │
+    // │FuseSource├────►│CompoundBlockOp├────►│SortMerge├────┘                                        │
+    // └──────────┘     └───────────────┘     └─────────┘                                             │
+    // ┌──────────────────────────────────────────────────────────────────────────────────────────────┘
     // │         ┌──────────────┐
     // │    ┌───►│SerializeBlock├───┐
     // │    │    └──────────────┘   │
@@ -189,7 +189,7 @@ impl FuseTable {
             })?;
         }
 
-        // sort
+        // merge sort
         let final_block_size = self.get_option(FUSE_OPT_KEY_ROW_PER_BLOCK, DEFAULT_BLOCK_MAX_ROWS);
         let partial_block_size = if pipeline.output_len() > 1 {
             std::cmp::min(
@@ -213,7 +213,7 @@ impl FuseTable {
             })
             .collect();
 
-        build_full_sort_pipeline(
+        build_merge_sort_pipeline(
             pipeline,
             schema,
             sort_descs,
@@ -221,7 +221,6 @@ impl FuseTable {
             partial_block_size,
             final_block_size,
             None,
-            false,
         )?;
 
         pipeline.try_resize(max_threads)?;
