@@ -90,33 +90,26 @@ impl VisitorMut for AggregatingIndexRewriter {
             SelectTarget::QualifiedName { .. } => false,
         }) {
             self.user_defined_block_name = true;
-            // check group by also has `BLOCK_NAME_COL_NAME`
-            if let Some(group_by) = group_by {
-                match group_by {
-                    GroupBy::Normal(groups) => {
-                        if !groups.iter().any(|expr| match (*expr).clone() {
-                            Expr::ColumnRef { column, .. } => {
-                                column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
-                            }
-                            _ => false,
-                        }) {
-                            groups.extend_one(block_name_expr)
-                        }
-                    }
-                    _ => unreachable!(),
-                }
-            }
         } else {
             select_list.extend_one(SelectTarget::AliasedExpr {
                 expr: Box::new(block_name_expr.clone()),
                 alias: None,
             });
+        }
 
-            if let Some(group_by) = group_by {
-                match group_by {
-                    GroupBy::Normal(groups) => groups.extend_one(block_name_expr),
-                    _ => unreachable!(),
+        if let Some(group_by) = group_by {
+            match group_by {
+                GroupBy::Normal(groups) => {
+                    if !groups.iter().any(|expr| match (*expr).clone() {
+                        Expr::ColumnRef { column, .. } => {
+                            column.name().eq_ignore_ascii_case(BLOCK_NAME_COL_NAME)
+                        }
+                        _ => false,
+                    }) {
+                        groups.extend_one(block_name_expr)
+                    }
                 }
+                _ => unreachable!(),
             }
         }
     }

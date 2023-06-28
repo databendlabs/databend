@@ -16,6 +16,8 @@ use std::fmt::Display;
 use std::fmt::Formatter;
 use std::time::Duration;
 
+use crate::ProcessorProfile;
+
 #[derive(Debug, Clone)]
 pub struct QueryProfile {
     /// Query ID of the query profile
@@ -45,8 +47,8 @@ pub struct OperatorProfile {
     /// IDs of the children plan nodes
     pub children: Vec<u32>,
 
-    /// The time spent to process data
-    pub cpu_time: Duration,
+    /// The execution information of the plan operator
+    pub execution_info: OperatorExecutionInfo,
 
     /// Attribute of the plan operator
     pub attribute: OperatorAttribute,
@@ -91,6 +93,33 @@ impl Display for OperatorType {
             OperatorType::Exchange => write!(f, "Exchange"),
             OperatorType::RuntimeFilter => write!(f, "RuntimeFilter"),
             OperatorType::Insert => write!(f, "Insert"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct OperatorExecutionInfo {
+    pub process_time: Duration,
+    pub input_rows: usize,
+    pub input_bytes: usize,
+    pub output_rows: usize,
+    pub output_bytes: usize,
+}
+
+impl From<ProcessorProfile> for OperatorExecutionInfo {
+    fn from(value: ProcessorProfile) -> Self {
+        (&value).into()
+    }
+}
+
+impl From<&ProcessorProfile> for OperatorExecutionInfo {
+    fn from(value: &ProcessorProfile) -> Self {
+        OperatorExecutionInfo {
+            process_time: value.cpu_time,
+            input_rows: value.input_rows,
+            input_bytes: value.input_bytes,
+            output_rows: value.output_rows,
+            output_bytes: value.output_bytes,
         }
     }
 }

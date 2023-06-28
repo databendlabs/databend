@@ -25,6 +25,7 @@ use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_meta_api::BackgroundApi;
 use common_meta_app::background::BackgroundJobIdent;
@@ -254,7 +255,7 @@ impl RealBackgroundService {
         get_license_manager().manager.check_enterprise_enabled(
             &settings,
             self.conf.query.tenant_id.clone(),
-            "background_service".to_string(),
+            Feature::BackgroundService,
         )
     }
 }

@@ -14,9 +14,11 @@ import FunctionDescription from '@site/src/components/FunctionDescription';
 
 For information about the system requirements, download, and deployment steps for DataX, refer to DataX's [Quick Start Guide](https://github.com/alibaba/DataX/blob/master/userGuid.md). The guide provides detailed instructions and guidelines for setting up and using DataX.
 
-## Introducing DatabendWriter
+See also: [Addax](addax.md)
 
-DatabendWriter is an integrated component of DataX, which means it comes pre-installed and does not require any manual installation. It acts as a seamless connector that enables the effortless transfer of data from other databases to Databend. With DatabendWriter, you can leverage the capabilities of DataX to efficiently load data from various databases into Databend. 
+## DatabendWriter
+
+DatabendWriter is an integrated plugin of DataX, which means it comes pre-installed and does not require any manual installation. It acts as a seamless connector that enables the effortless transfer of data from other databases to Databend. With DatabendWriter, you can leverage the capabilities of DataX to efficiently load data from various databases into Databend. 
 
 If you need more information about DatabendWriter and its functionalities, you can refer to the documentation available at https://github.com/alibaba/DataX/blob/master/databendwriter/doc/databendwriter.md
 

@@ -6873,16 +6873,16 @@ ListStage {
 
 
 ---------- Input ----------
-create user 'test-e'@'localhost' identified by 'password';
+create user 'test-e' identified by 'password';
 ---------- Output ---------
-CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
+CREATE USER 'test-e'@'%' IDENTIFIED BY 'password'
 ---------- AST ------------
 CreateUser(
     CreateUserStmt {
         if_not_exists: false,
         user: UserIdentity {
             username: "test-e",
-            hostname: "localhost",
+            hostname: "%",
         },
         auth_option: AuthOption {
             auth_type: None,
@@ -6896,30 +6896,30 @@ CreateUser(
 
 
 ---------- Input ----------
-drop user if exists 'test-j'@'localhost';
+drop user if exists 'test-j';
 ---------- Output ---------
-DROP USER IF EXISTS 'test-j'@'localhost'
+DROP USER IF EXISTS 'test-j'@'%'
 ---------- AST ------------
 DropUser {
     if_exists: true,
     user: UserIdentity {
         username: "test-j",
-        hostname: "localhost",
+        hostname: "%",
     },
 }
 
 
 ---------- Input ----------
-alter user 'test-e'@'localhost' identified by 'new-password';
+alter user 'test-e' identified by 'new-password';
 ---------- Output ---------
-ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
+ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password'
 ---------- AST ------------
 AlterUser(
     AlterUserStmt {
         user: Some(
             UserIdentity {
                 username: "test-e",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
         auth_option: Some(
@@ -7568,9 +7568,9 @@ CreateTable(
 
 
 ---------- Input ----------
-GRANT CREATE, CREATE USER ON * TO 'test-grant'@'localhost';
+GRANT CREATE, CREATE USER ON * TO 'test-grant';
 ---------- Output ---------
-GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'localhost'
+GRANT CREATE, CREATE USER ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7586,7 +7586,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7594,9 +7594,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON * TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7612,7 +7612,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7620,9 +7620,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON *.* TO 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7636,7 +7636,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7644,9 +7644,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost';
+GRANT SELECT, CREATE ON * TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT, CREATE ON * TO USER 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7662,7 +7662,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7693,9 +7693,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL ON *.* TO 'test-grant'@'localhost';
+GRANT ALL ON *.* TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'localhost'
+GRANT ALL PRIVILEGES ON *.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7705,7 +7705,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7730,9 +7730,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost';
+GRANT ALL PRIVILEGES ON * TO 'test-grant';
 ---------- Output ---------
-GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'localhost'
+GRANT ALL PRIVILEGES ON * TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7744,7 +7744,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7828,9 +7828,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO 'test-grant'@'localhost';
+GRANT SELECT ON db01.* TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7847,7 +7847,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7855,9 +7855,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost';
+GRANT SELECT ON db01.* TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.* TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.* TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7874,7 +7874,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7906,9 +7906,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost';
+GRANT SELECT ON db01.tb1 TO 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7926,7 +7926,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -7934,9 +7934,9 @@ Grant(
 
 
 ---------- Input ----------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost';
+GRANT SELECT ON db01.tb1 TO USER 'test-grant';
 ---------- Output ---------
-GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'localhost'
+GRANT SELECT ON db01.tb1 TO USER 'test-grant'@'%'
 ---------- AST ------------
 Grant(
     GrantStmt {
@@ -7954,7 +7954,7 @@ Grant(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
@@ -8043,16 +8043,16 @@ ShowGrants {
 
 
 ---------- Input ----------
-SHOW GRANTS FOR 'test-grant'@'localhost';
+SHOW GRANTS FOR 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'localhost'
+SHOW GRANTS FOR USER 'test-grant'@'%'
 ---------- AST ------------
 ShowGrants {
     principal: Some(
         User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     ),
@@ -8060,16 +8060,16 @@ ShowGrants {
 
 
 ---------- Input ----------
-SHOW GRANTS FOR USER 'test-grant'@'localhost';
+SHOW GRANTS FOR USER 'test-grant';
 ---------- Output ---------
-SHOW GRANTS FOR USER 'test-grant'@'localhost'
+SHOW GRANTS FOR USER 'test-grant'@'%'
 ---------- AST ------------
 ShowGrants {
     principal: Some(
         User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     ),
@@ -8091,9 +8091,9 @@ ShowGrants {
 
 
 ---------- Input ----------
-REVOKE SELECT, CREATE ON * FROM 'test-grant'@'localhost';
+REVOKE SELECT, CREATE ON * FROM 'test-grant';
 ---------- Output ---------
-REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'localhost'
+REVOKE SELECT, CREATE ON * FROM USER 'test-grant'@'%'
 ---------- AST ------------
 Revoke(
     RevokeStmt {
@@ -8109,7 +8109,7 @@ Revoke(
         principal: User(
             UserIdentity {
                 username: "test-grant",
-                hostname: "localhost",
+                hostname: "%",
             },
         ),
     },
