@@ -14,6 +14,7 @@
 
 use std::convert::TryFrom;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
@@ -55,6 +56,7 @@ use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
+use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -80,6 +82,7 @@ use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 use common_storages_fuse::operations::SerializeDataTransform;
 use common_storages_fuse::FuseTable;
+use common_storages_stage::StageTable;
 use petgraph::matrix_graph::Zero;
 
 use super::processors::transforms::FrameBound;
@@ -87,7 +90,9 @@ use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
+use crate::interpreters::append_data_and_set_finish;
 use crate::interpreters::fill_missing_columns;
+use crate::interpreters::PlanParam;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
@@ -199,7 +204,37 @@ impl PipelineBuilder {
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
             PhysicalPlan::DeleteFinal(delete) => self.build_delete_final(delete),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
+            PhysicalPlan::DistributedCopyIntoTable(distributed_plan) => {
+                self.build_distributed_copy_into_table(distributed_plan)
+            }
         }
+    }
+
+    fn build_distributed_copy_into_table(
+        &mut self,
+        distributed_plan: &DistributedCopyIntoTable,
+    ) -> Result<()> {
+        let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
+        let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;
+        let stage_table_info = distributed_plan.stage_table_info.clone();
+        let stage_table = StageTable::try_create(stage_table_info)?;
+        stage_table.set_block_thresholds(distributed_plan.thresholds);
+        let ctx = self.ctx.clone();
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let start = Instant::now();
+        stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
+        // append data
+        append_data_and_set_finish(
+            &mut self.main_pipeline,
+            distributed_plan.required_source_schema.clone(),
+            PlanParam::DistributedCopyIntoTable(distributed_plan.clone()),
+            ctx,
+            to_table,
+            distributed_plan.files.clone(),
+            start,
+            false,
+        )?;
+        Ok(())
     }
 
     /// The flow of Pipeline is as follows:
