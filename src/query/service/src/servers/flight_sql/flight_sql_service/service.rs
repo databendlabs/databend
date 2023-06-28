@@ -32,6 +32,7 @@ use arrow_flight::sql::CommandGetPrimaryKeys;
 use arrow_flight::sql::CommandGetSqlInfo;
 use arrow_flight::sql::CommandGetTableTypes;
 use arrow_flight::sql::CommandGetTables;
+use arrow_flight::sql::CommandGetXdbcTypeInfo;
 use arrow_flight::sql::CommandPreparedStatementQuery;
 use arrow_flight::sql::CommandPreparedStatementUpdate;
 use arrow_flight::sql::CommandStatementQuery;
@@ -125,11 +126,9 @@ impl FlightSqlService for FlightSqlServiceImpl {
         Response<Pin<Box<dyn Stream<Item = Result<HandshakeResponse, Status>> + Send>>>,
         Status,
     > {
-        let remote_addr = request.remote_addr();
-
         let (user, password) = FlightSqlServiceImpl::get_user_password(request.metadata())
             .map_err(Status::invalid_argument)?;
-        let session = FlightSqlServiceImpl::auth_user_password(user, password, remote_addr).await?;
+        let session = FlightSqlServiceImpl::auth_user_password(user, password).await?;
         let token = Uuid::new_v4().to_string();
         let result = HandshakeResponse {
             protocol_version: 0,
@@ -619,6 +618,24 @@ impl FlightSqlService for FlightSqlServiceImpl {
     #[async_backtrace::framed]
     async fn register_sql_info(&self, id: i32, result: &SqlInfo) {
         tracing::info!("register_sql_info({id}, {result:?})");
+    }
+
+    /// Get a FlightInfo to extract information about the supported XDBC types.
+    async fn get_flight_info_xdbc_type_info(
+        &self,
+        _query: CommandGetXdbcTypeInfo,
+        _request: Request<FlightDescriptor>,
+    ) -> Result<Response<FlightInfo>, Status> {
+        unimplemented!()
+    }
+
+    /// Get a FlightDataStream containing the data related to the supported XDBC types.
+    async fn do_get_xdbc_type_info(
+        &self,
+        _query: CommandGetXdbcTypeInfo,
+        _request: Request<Ticket>,
+    ) -> Result<Response<<Self as FlightService>::DoGetStream>, Status> {
+        unimplemented!()
     }
 }
 

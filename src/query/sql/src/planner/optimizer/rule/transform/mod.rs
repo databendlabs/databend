@@ -12,21 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod rule_commute_join;
 mod rule_commute_join_base_table;
 mod rule_eager_aggregation;
-mod rule_exchange_join;
-mod rule_left_associate_join;
 mod rule_left_exchange_join;
-mod rule_right_associate_join;
-mod rule_right_exchange_join;
 mod util;
 
-pub use rule_commute_join::RuleCommuteJoin;
 pub use rule_commute_join_base_table::RuleCommuteJoinBaseTable;
 pub use rule_eager_aggregation::RuleEagerAggregation;
-pub use rule_exchange_join::RuleExchangeJoin;
-pub use rule_left_associate_join::RuleLeftAssociateJoin;
 pub use rule_left_exchange_join::RuleLeftExchangeJoin;
-pub use rule_right_associate_join::RuleRightAssociateJoin;
-pub use rule_right_exchange_join::RuleRightExchangeJoin;
