@@ -58,6 +58,7 @@ serde_json = { workspace = true }
 sha2 = "0.10.6"
 siphasher = "0.3.10"
 streaming-decompression = "0.1.2"
+sys-info = "0.9"
 tracing = "0.1.36"
 typetag = "0.2.3"
 uuid = { version = "1.1.2", features = ["serde", "v4"] }

@@ -20,6 +20,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::table_context::TableContext;
+use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::BlockThresholds;
 use common_expression::Scalar;
@@ -31,8 +32,8 @@ use crate::operations::common::MutationLogs;
 
 #[derive(Clone)]
 pub struct ReclusterMutator {
-    max_memory_usage: u64,
-    threshold: f64,
+    memory_threshold: u64,
+    depth_threshold: f64,
     block_thresholds: BlockThresholds,
 
     mutation_logs: MutationLogs,
@@ -46,13 +47,18 @@ pub struct ReclusterMutator {
 impl ReclusterMutator {
     pub fn try_create(
         ctx: Arc<dyn TableContext>,
-        threshold: f64,
+        depth_threshold: f64,
         block_thresholds: BlockThresholds,
     ) -> Result<Self> {
-        let max_memory_usage = (ctx.get_settings().get_max_memory_usage()? as f64 * 0.5) as u64;
+        let avail_memory_usage = sys_info::mem_info()
+            .map_err(ErrorCode::from_std_error)?
+            .avail
+            * 1024;
+        let max_memory_usage = ctx.get_settings().get_max_memory_usage()?;
+        let memory_threshold = cmp::min(avail_memory_usage, max_memory_usage) * 50 / 100;
         Ok(Self {
-            max_memory_usage,
-            threshold,
+            memory_threshold,
+            depth_threshold,
             block_thresholds,
             mutation_logs: Default::default(),
             selected_blocks: Vec::new(),
@@ -168,7 +174,7 @@ impl ReclusterMutator {
                 average_depth,
                 level
             );
-            if average_depth <= self.threshold {
+            if average_depth <= self.depth_threshold {
                 continue;
             }
 
@@ -181,7 +187,7 @@ impl ReclusterMutator {
             for idx in selected_idx {
                 let (block_idx, block_meta) = block_metas[idx].clone();
                 let memory_usage = self.total_bytes + block_meta.block_size;
-                if memory_usage > self.max_memory_usage {
+                if memory_usage > self.memory_threshold {
                     break;
                 }
 
