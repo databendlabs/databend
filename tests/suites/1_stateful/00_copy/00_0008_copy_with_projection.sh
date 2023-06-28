@@ -24,8 +24,8 @@ prepare=(
   "create table test_copy_p3(a int, b int, c int);"
 
   # gen parquet
-  "set enable_distributed_copy_into = 1;copy into test_copy_p2 from 'fs://${CSV_PATH}' FILE_FORMAT = (type = CSV)"
-  "set enable_distributed_copy_into = 1;copy into 'fs://${PARQUET_PATH}' from test_copy_p2 FILE_FORMAT = (type = PARQUET)"
+  "copy into test_copy_p2 from 'fs://${CSV_PATH}' FILE_FORMAT = (type = CSV)"
+  "copy into 'fs://${PARQUET_PATH}' from test_copy_p2 FILE_FORMAT = (type = PARQUET)"
   "create stage s_copy_p url='fs://${PARQUET_PATH}/'"
 )
 
@@ -34,9 +34,9 @@ for i in "${prepare[@]}"; do
 done
 
 tests=(
-  "set enable_distributed_copy_into = 1;copy into test_copy_p3(b, c) from 'fs://${CSV_PATH}' FILE_FORMAT = (type = CSV)"
-  "set enable_distributed_copy_into = 1;copy into test_copy_p3(b, c) from @s_copy_p FILE_FORMAT = (type = PARQUET)"
-  "set enable_distributed_copy_into = 1;copy into test_copy_p3(b, c) from (select t.b+1, t.c+1 from @s_copy_p t) FILE_FORMAT = (type = PARQUET)"
+  "copy into test_copy_p3(b, c) from 'fs://${CSV_PATH}' FILE_FORMAT = (type = CSV)"
+  "copy into test_copy_p3(b, c) from @s_copy_p FILE_FORMAT = (type = PARQUET)"
+  "copy into test_copy_p3(b, c) from (select t.b+1, t.c+1 from @s_copy_p t) FILE_FORMAT = (type = PARQUET)"
 )
 
 for i in "${tests[@]}"; do
