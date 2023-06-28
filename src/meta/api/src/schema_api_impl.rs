@@ -2072,15 +2072,22 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let mut filter_tb_infos = Vec::with_capacity(tb_info_list.len());
 
             for tb_info in tb_info_list {
-                match filter {
-                    TableInfoFilter::Dropped => {
-                        if tb_info.meta.drop_on.is_none() {
-                            continue;
+                let filter_out = match filter {
+                    TableInfoFilter::Dropped(drop_on) => match tb_info.meta.drop_on {
+                        Some(tb_drop_on) => {
+                            if let Some(drop_on) = &drop_on {
+                                tb_drop_on.timestamp() > drop_on.timestamp()
+                            } else {
+                                false
+                            }
                         }
-                    }
-                }
+                        None => true,
+                    },
+                };
 
-                filter_tb_infos.push(tb_info);
+                if !filter_out {
+                    filter_tb_infos.push(tb_info);
+                }
             }
 
             return Ok(filter_tb_infos);

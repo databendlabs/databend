@@ -646,8 +646,9 @@ impl GetTableReq {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub enum TableInfoFilter {
-    // filter only dropped tables
-    Dropped,
+    // if datatime is some, filter only dropped tables which drop time before that,
+    // else filter all dropped tables
+    Dropped(Option<DateTime<Utc>>),
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]

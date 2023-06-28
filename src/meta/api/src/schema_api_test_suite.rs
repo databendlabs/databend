@@ -2804,12 +2804,23 @@ impl SchemaApiTestSuite {
         // list drop tables
         info!("--- check drop table");
         {
+            let now = Utc::now();
             let plan = ListTableReq {
                 inner: DatabaseNameIdent {
                     tenant: tenant.to_string(),
                     db_name: db_name.to_string(),
                 },
-                filter: Some(TableInfoFilter::Dropped),
+                filter: Some(TableInfoFilter::Dropped(Some(now))),
+            };
+            let resp = mt.get_table_history(plan).await?;
+            assert_eq!(resp.len(), 0);
+
+            let plan = ListTableReq {
+                inner: DatabaseNameIdent {
+                    tenant: tenant.to_string(),
+                    db_name: db_name.to_string(),
+                },
+                filter: Some(TableInfoFilter::Dropped(None)),
             };
             let resp = mt.get_table_history(plan).await?;
             assert_eq!(resp.len(), 0);
@@ -2858,12 +2869,25 @@ impl SchemaApiTestSuite {
             // list drop tables
             info!("--- check drop table");
             {
+                let now = Utc::now();
                 let plan = ListTableReq {
                     inner: DatabaseNameIdent {
                         tenant: tenant.to_string(),
                         db_name: db_name.to_string(),
                     },
-                    filter: Some(TableInfoFilter::Dropped),
+                    filter: Some(TableInfoFilter::Dropped(Some(now))),
+                };
+                let resp = mt.get_table_history(plan).await?;
+                assert_eq!(resp.len(), 1);
+                assert_eq!(resp[0].name, tbl_name.to_string());
+                assert!(resp[0].meta.drop_on.is_some());
+
+                let plan = ListTableReq {
+                    inner: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
+                    filter: Some(TableInfoFilter::Dropped(None)),
                 };
                 let resp = mt.get_table_history(plan).await?;
                 assert_eq!(resp.len(), 1);
@@ -2911,12 +2935,23 @@ impl SchemaApiTestSuite {
             // list drop tables
             info!("--- check drop table");
             {
+                let now = Utc::now();
                 let plan = ListTableReq {
                     inner: DatabaseNameIdent {
                         tenant: tenant.to_string(),
                         db_name: db_name.to_string(),
                     },
-                    filter: Some(TableInfoFilter::Dropped),
+                    filter: Some(TableInfoFilter::Dropped(Some(now))),
+                };
+                let resp = mt.get_table_history(plan).await?;
+                assert_eq!(resp.len(), 0);
+
+                let plan = ListTableReq {
+                    inner: DatabaseNameIdent {
+                        tenant: tenant.to_string(),
+                        db_name: db_name.to_string(),
+                    },
+                    filter: Some(TableInfoFilter::Dropped(None)),
                 };
                 let resp = mt.get_table_history(plan).await?;
                 assert_eq!(resp.len(), 0);
