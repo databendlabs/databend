@@ -43,7 +43,7 @@ table-lock = { path = "../ee-features/table-lock" }
 vacuum-handler = { path = "../ee-features/vacuum-handler" }
 virtual-columns-handler = { path = "../ee-features/virtual-columns-handler" }
 
-arrow-array = { version = "37.0.0" }
+arrow-array = { version = "40.0.0" }
 async-trait = "0.1.57"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
