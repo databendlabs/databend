@@ -180,18 +180,18 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.is_finished() {
+                    if self.output_buffer_size > 0 {
+                        let data = DataBlock::concat(self.output_buffer.as_slice())?;
+                        // self.output_port.can_push() is true, so we can push data.
+                        self.output_port.push_data(Ok(data));
+                        self.output_buffer_size = 0;
+                        return Ok(Event::NeedConsume);
+                    }
                     return if self.join_state.need_outer_scan() || self.join_state.need_mark_scan()
                     {
                         self.join_state.probe_done()?;
                         Ok(Event::Async)
                     } else {
-                        if self.output_buffer_size > 0 {
-                            let data = DataBlock::concat(self.output_buffer.as_slice())?;
-                            // self.output_port.can_push() is true, so we can push data.
-                            self.output_port.push_data(Ok(data));
-                            self.output_buffer_size = 0;
-                            return Ok(Event::NeedConsume);
-                        }
                         self.output_port.finish();
                         Ok(Event::Finished)
                     };
