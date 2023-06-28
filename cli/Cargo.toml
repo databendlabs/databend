@@ -1,6 +1,6 @@
 [package]
 name = "bendsql"
-version = "0.3.11"
+version = "0.3.12"
 edition = "2021"
 license = "Apache-2.0"
 description = "Databend Native Command Line Tool"
