@@ -13,7 +13,7 @@ test = false
 
 [dependencies]
 # Workspace dependencies
-arrow-array = { version = "37.0.0" }
+arrow-array = { version = "40.0.0" }
 async-backtrace = { workspace = true }
 async-trait = "0.1.57"
 common-base = { path = "../../../common/base" }

@@ -127,7 +127,7 @@ jobs:
           pytest -v tests/*
 
       - name: Upload artifact
-        uses: ./.github/actions/artifact_upload
+        uses: actions/upload-artifact@v3
         with:
           name: dist
           path: src/bendpy/dist/*.whl

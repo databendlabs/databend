@@ -21,7 +21,7 @@ use crate::plan::ParquetTableInfo;
 use crate::plan::ResultScanTableInfo;
 use crate::plan::StageTableInfo;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub enum DataSourceInfo {
     // Normal table source, `fuse/system`.
     TableSource(TableInfo),
