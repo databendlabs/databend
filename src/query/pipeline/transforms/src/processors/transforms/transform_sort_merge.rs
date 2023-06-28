@@ -110,13 +110,31 @@ where
         }
 
         let output_size = blocks.iter().map(|b| b.num_rows()).sum::<usize>();
+        if output_size == 0 {
+            return Ok(vec![]);
+        }
+
         let mut blocks = blocks
             .into_iter()
             .filter(|b| !b.is_empty())
             .collect::<Vec<_>>();
 
-        if output_size == 0 {
-            return Ok(vec![]);
+        if blocks.len() == 1 {
+            if self.gen_order_col {
+                let block = blocks.get_mut(0).ok_or(ErrorCode::Internal("It's a bug"))?;
+                let columns = self
+                    .order_by_cols
+                    .iter()
+                    .map(|i| block.get_by_offset(*i).clone())
+                    .collect::<Vec<_>>();
+                let rows = self.row_converter.convert(&columns, block.num_rows())?;
+                let order_col = rows.to_column();
+                block.add_column(BlockEntry {
+                    data_type: order_col.data_type(),
+                    value: Value::Column(order_col),
+                });
+            }
+            return Ok(blocks);
         }
 
         let output_block_num = output_size.div_ceil(self.block_size);
