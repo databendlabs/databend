@@ -53,7 +53,7 @@ impl HttpHandlerKind {
         match self {
             HttpHandlerKind::Query => {
                 format!(
-                    r#" curl -u root: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
+                    r#" curl -u${{USER}} -p${{PASSWORD}}: --request POST '{:?}/v1/query/' --header 'Content-Type: application/json' --data-raw '{{"sql": "SELECT avg(number) FROM numbers(100000000)"}}'
 "#,
                     sock,
                 )
@@ -61,8 +61,8 @@ impl HttpHandlerKind {
             HttpHandlerKind::Clickhouse => {
                 let json = r#"{"foo": "bar"}"#;
                 format!(
-                    r#" echo 'create table test(foo string)' | curl -u root: '{:?}' --data-binary  @-
-echo '{}' | curl -u root: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
+                    r#" echo 'create table test(foo string)' | curl -u${{USER}} -p${{PASSWORD}}: '{:?}' --data-binary  @-
+echo '{}' | curl -u${{USER}} -p${{PASSWORD}}: '{:?}/?query=INSERT%20INTO%20test%20FORMAT%20JSONEachRow' --data-binary @-"#,
                     sock, json, sock,
                 )
             }

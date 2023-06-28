@@ -20,8 +20,8 @@ common-io = { path = "../../common/io" }
 # GitHub dependencies
 
 # Crates.io dependencies
-arrow-array = "37.0.0"
-arrow-schema = "37.0.0"
+arrow-array = "40.0.0"
+arrow-schema = "40.0.0"
 base64 = "0.21.0"
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -51,7 +51,7 @@ typetag = "0.2.3"
 unicode-segmentation = "1.10.1"
 
 [dev-dependencies]
-arrow-ord = "37.0.0"
+arrow-ord = "40.0.0"
 common-ast = { path = "../ast" }
 goldenfile = "1.4"
 pretty_assertions = "1.3.0"

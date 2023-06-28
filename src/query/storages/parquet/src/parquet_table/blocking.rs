@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
 use common_arrow::arrow::io::parquet::read as pread;
+use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_catalog::plan::ParquetReadOptions;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
@@ -41,13 +42,15 @@ impl ParquetTable {
             None => files_info.blocking_first_file(&operator)?.path,
         };
 
-        let arrow_schema = Self::blocking_prepare_metas(&first_file, operator.clone())?;
+        let (arrow_schema, schema_descr) =
+            Self::blocking_prepare_metas(&first_file, operator.clone())?;
 
         let table_info = create_parquet_table_info(arrow_schema.clone());
 
         Ok(Arc::new(ParquetTable {
             table_info,
             arrow_schema,
+            schema_descr,
             operator,
             read_options,
             stage_info,
@@ -56,7 +59,10 @@ impl ParquetTable {
         }))
     }
 
-    fn blocking_prepare_metas(path: &str, operator: Operator) -> Result<ArrowSchema> {
+    fn blocking_prepare_metas(
+        path: &str,
+        operator: Operator,
+    ) -> Result<(ArrowSchema, SchemaDescriptor)> {
         // Infer schema from the first parquet file.
         // Assume all parquet files have the same schema.
         // If not, throw error during reading.
@@ -66,7 +72,7 @@ impl ParquetTable {
         })?;
 
         let arrow_schema = pread::infer_schema(&first_meta)?;
-
-        Ok(arrow_schema)
+        let schema_descr = first_meta.schema_descr;
+        Ok((arrow_schema, schema_descr))
     }
 }

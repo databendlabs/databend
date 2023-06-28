@@ -2161,13 +2161,11 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #parameter_to_string ~ ( "@" ~ #literal_string )?
+            #parameter_to_string ~ ( "@" ~  "'%'" )?
         },
-        |(username, opt_hostname)| UserIdentity {
-            username,
-            hostname: opt_hostname
-                .map(|(_, hostname)| hostname)
-                .unwrap_or_else(|| "%".to_string()),
+        |(username, _)| {
+            let hostname = "%".to_string();
+            UserIdentity { username, hostname }
         },
     )(i)
 }

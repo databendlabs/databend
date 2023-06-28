@@ -23,7 +23,7 @@ use super::transform_multi_sort_merge::try_add_multi_sort_merge;
 use super::transform_sort_merge::try_create_transform_sort_merge;
 use super::transform_sort_merge_limit::try_create_transform_sort_merge_limit;
 use super::TransformSortPartial;
-use crate::processors::ProfileWrapper;
+use crate::processors::profile_wrapper::ProcessorProfileWrapper;
 
 #[allow(clippy::too_many_arguments)]
 pub fn build_full_sort_pipeline(
@@ -43,7 +43,7 @@ pub fn build_full_sort_pipeline(
             let transform =
                 TransformSortPartial::try_create(input, output, limit, sort_desc.clone())?;
             if let Some((plan_id, prof)) = &prof_info {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
                     *plan_id,
                     prof.clone(),
@@ -78,7 +78,7 @@ pub fn build_full_sort_pipeline(
         };
 
         if let Some((plan_id, prof)) = &prof_info {
-            Ok(ProcessorPtr::create(ProfileWrapper::create(
+            Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                 transform,
                 *plan_id,
                 prof.clone(),

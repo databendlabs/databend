@@ -41,7 +41,12 @@ use crate::parquet_source::SyncParquetSource;
 
 impl ParquetTable {
     pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
-        ParquetReader::create(self.operator.clone(), self.arrow_schema.clone(), projection)
+        ParquetReader::create(
+            self.operator.clone(),
+            self.arrow_schema.clone(),
+            self.schema_descr.clone(),
+            projection,
+        )
     }
 
     fn build_filter(filter: &RemoteExpr<String>, schema: &DataSchema) -> Expr {
@@ -72,6 +77,7 @@ impl ParquetTable {
         let source_reader = ParquetReader::create(
             self.operator.clone(),
             self.arrow_schema.clone(),
+            self.schema_descr.clone(),
             source_projection,
         )?;
 
@@ -107,6 +113,7 @@ impl ParquetTable {
             ParquetReader::create(
                 self.operator.clone(),
                 self.arrow_schema.clone(),
+                self.schema_descr.clone(),
                 p.remain_columns.clone(),
             )?
         } else {
@@ -118,6 +125,7 @@ impl ParquetTable {
                 let reader = ParquetReader::create(
                     self.operator.clone(),
                     self.arrow_schema.clone(),
+                    self.schema_descr.clone(),
                     p.prewhere_columns,
                 )?;
                 src_fields.extend_from_slice(reader.output_schema.fields());

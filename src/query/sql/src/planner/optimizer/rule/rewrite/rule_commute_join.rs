@@ -18,6 +18,7 @@ use common_exception::Result;
 
 use crate::optimizer::rule::Rule;
 use crate::optimizer::rule::TransformResult;
+use crate::optimizer::RelExpr;
 use crate::optimizer::RuleID;
 use crate::optimizer::SExpr;
 use crate::plans::Join;
@@ -28,9 +29,6 @@ use crate::plans::RelOp;
 /// Rule to apply commutativity of join operator.
 /// Since we will always use the right child as build side, this
 /// rule will help us measure which child is the better one.
-///
-/// TODO(leiysky): currently, we only support commutate for inner/cross join.
-/// Other join types will be added as soon as we implement them in Processor.
 pub struct RuleCommuteJoin {
     id: RuleID,
     patterns: Vec<SExpr>,
@@ -67,48 +65,49 @@ impl Rule for RuleCommuteJoin {
         let mut join: Join = s_expr.plan().clone().try_into()?;
         let left_child = s_expr.child(0)?;
         let right_child = s_expr.child(1)?;
+        let left_rel_expr = RelExpr::with_s_expr(left_child);
+        let right_rel_expr = RelExpr::with_s_expr(right_child);
+        let left_card = left_rel_expr.derive_cardinality()?.cardinality;
+        let right_card = right_rel_expr.derive_cardinality()?.cardinality;
 
-        match join.join_type {
-            JoinType::Inner
-            | JoinType::Cross
-            | JoinType::Left
-            | JoinType::Right
-            | JoinType::LeftSemi
-            | JoinType::RightSemi
-            | JoinType::LeftAnti
-            | JoinType::LeftMark
-            | JoinType::RightAnti => {
-                // Swap the join conditions side
-                (join.left_conditions, join.right_conditions) =
-                    (join.right_conditions, join.left_conditions);
-                join.join_type = join.join_type.opposite();
-                let mut result = SExpr::create_binary(
-                    Arc::new(join.into()),
-                    Arc::new(right_child.clone()),
-                    Arc::new(left_child.clone()),
-                );
-
-                // Disable the following rules for the generated expression
-                result.set_applied_rule(&RuleID::CommuteJoin);
-                result.set_applied_rule(&RuleID::LeftAssociateJoin);
-                result.set_applied_rule(&RuleID::LeftExchangeJoin);
-                result.set_applied_rule(&RuleID::RightAssociateJoin);
-                result.set_applied_rule(&RuleID::RightExchangeJoin);
-                result.set_applied_rule(&RuleID::ExchangeJoin);
-
-                state.add_result(result);
-            }
-            _ => {}
+        let need_commute = if left_card < right_card {
+            matches!(
+                join.join_type,
+                JoinType::Inner
+                    | JoinType::Cross
+                    | JoinType::Left
+                    | JoinType::Right
+                    | JoinType::LeftSemi
+                    | JoinType::RightSemi
+                    | JoinType::LeftAnti
+                    | JoinType::RightAnti
+                    | JoinType::LeftMark
+            )
+        } else if left_card == right_card {
+            matches!(
+                join.join_type,
+                JoinType::Right | JoinType::RightSemi | JoinType::RightAnti
+            )
+        } else {
+            false
+        };
+        if need_commute {
+            // Swap the join conditions side
+            (join.left_conditions, join.right_conditions) =
+                (join.right_conditions, join.left_conditions);
+            join.join_type = join.join_type.opposite();
+            let mut result = SExpr::create_binary(
+                Arc::new(join.into()),
+                Arc::new(right_child.clone()),
+                Arc::new(left_child.clone()),
+            );
+            result.set_applied_rule(&self.id);
+            state.add_result(result);
         }
-
         Ok(())
     }
 
     fn patterns(&self) -> &Vec<SExpr> {
         &self.patterns
-    }
-
-    fn transformation(&self) -> bool {
-        false
     }
 }
