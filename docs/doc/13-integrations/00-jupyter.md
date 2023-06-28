@@ -54,13 +54,13 @@ jupyter notebook
 
   This will start up Jupyter and your default browser should start (or open a new tab) to the following URL: http://localhost:8888/tree
 
-![Alt text](../../../public/img/integration/notebook-tree.png)
+![Alt text](../../public/img/integration/notebook-tree.png)
 
 2. On the **Files** tab, navigate to the sample notebook you downloaded and open it.
 
 3. In the sample notebook, run the cells sequentially. By doing so, you create a table containing 5 rows in your local Databend, and visualize the data with a bar chart.
 
-![Alt text](../../../public/img/integration/integration-gui-jupyter.png)
+![Alt text](../../public/img/integration/integration-gui-jupyter.png)
 
 ## Tutorial: Integrate with Jupyter Notebook using ipython-sql
 
@@ -103,7 +103,7 @@ jupyter notebook
 
   This will start up Jupyter and your default browser should start (or open a new tab) to the following URL: http://localhost:8888/tree
 
-![Alt text](../../../public/img/integration/notebook-tree.png)
+![Alt text](../../public/img/integration/notebook-tree.png)
 
 2. Select **New** > **Python 3** to create a notebook.
 
@@ -136,4 +136,4 @@ df.plot.bar(x='date', y='count')
 ```
 You can now see a bar chart on the notebook:
 
-![Alt text](../../../public/img/integration/jupyter-ipython-sql.png)
+![Alt text](../../public/img/integration/jupyter-ipython-sql.png)

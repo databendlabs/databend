@@ -30,78 +30,25 @@ impl UserApiProvider {
     // Get one user from by tenant.
     #[async_backtrace::framed]
     pub async fn get_user(&self, tenant: &str, user: UserIdentity) -> Result<UserInfo> {
-        if user.is_root() {
-            let mut user_info = if let Some(auth_info) = self.get_configured_user(&user.username) {
-                UserInfo::new(&user.username, "%", auth_info.clone())
-            } else {
-                // The default root user does not need check auth password.
-                // If the root user's password has been changed, then auth check is required.
-                let client = self.get_user_api_client(tenant)?;
-                if let Ok(user_info) = client.get_user(user.clone(), MatchSeq::GE(0)).await {
-                    user_info.data
-                } else {
-                    UserInfo::new_no_auth(&user.username, &user.hostname)
-                }
-            };
-            if user.is_localhost() {
-                user_info.grants.grant_privileges(
-                    &GrantObject::Global,
-                    UserPrivilegeSet::available_privileges_on_global(),
-                );
-                user_info
-                    .grants
-                    .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
-                user_info
-                    .option
-                    .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
-                user_info.option.set_all_flag();
-            } else {
-                return Err(ErrorCode::UnknownUser(format!(
-                    "only accept root from localhost, current: '{}'@'{}'",
-                    user.username, user.hostname
-                )));
-            }
-            Ok(user_info)
-        } else if let Some(auth_info) = self.get_configured_user(&user.username) {
+        if let Some(auth_info) = self.get_configured_user(&user.username) {
             let mut user_info = UserInfo::new(&user.username, "%", auth_info.clone());
             user_info.grants.grant_privileges(
                 &GrantObject::Global,
                 UserPrivilegeSet::available_privileges_on_global(),
             );
+            // Grant admin role to all configured users.
+            user_info
+                .grants
+                .grant_role(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string());
+            user_info
+                .option
+                .set_default_role(Some(BUILTIN_ROLE_ACCOUNT_ADMIN.to_string()));
+            user_info.option.set_all_flag();
             Ok(user_info)
         } else {
             let client = self.get_user_api_client(tenant)?;
             let get_user = client.get_user(user, MatchSeq::GE(0));
             Ok(get_user.await?.data)
-        }
-    }
-
-    /// find the matched user with the client ip address, like 'u1'@'127.0.0.1', if the specific
-    /// user@host is not found, try 'u1'@'%'.
-    #[async_backtrace::framed]
-    pub async fn get_user_with_client_ip(
-        &self,
-        tenant: &str,
-        username: &str,
-        client_ip: &str,
-    ) -> Result<UserInfo> {
-        let user = self
-            .get_user(tenant, UserIdentity::new(username, client_ip))
-            .await
-            .map(Some)
-            .or_else(|e| {
-                if e.code() == ErrorCode::UNKNOWN_USER && !client_ip.eq("%") {
-                    Ok(None)
-                } else {
-                    Err(e)
-                }
-            })?;
-        match user {
-            Some(user) => Ok(user),
-            None => {
-                self.get_user(tenant, UserIdentity::new(username, "%"))
-                    .await
-            }
         }
     }
 
@@ -133,13 +80,8 @@ impl UserApiProvider {
         if_not_exists: bool,
     ) -> Result<u64> {
         if self.get_configured_user(&user_info.name).is_some() {
-            return Err(ErrorCode::UserAlreadyExists(
-                "same name with configured user",
-            ));
-        }
-        if user_info.is_root() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "User cannot be created with builtin user name {}",
+                "Same name with configured user `{}`",
                 user_info.name
             )));
         }
@@ -165,6 +107,12 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Cannot grant privileges to configured user `{}`",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -182,6 +130,12 @@ impl UserApiProvider {
         object: GrantObject,
         privileges: UserPrivilegeSet,
     ) -> Result<Option<u64>> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Cannot revoke privileges from configured user `{}`",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -198,6 +152,12 @@ impl UserApiProvider {
         user: UserIdentity,
         grant_role: String,
     ) -> Result<Option<u64>> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Cannot grant role to configured user `{}`",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -214,6 +174,12 @@ impl UserApiProvider {
         user: UserIdentity,
         revoke_role: String,
     ) -> Result<Option<u64>> {
+        if self.get_configured_user(&user.username).is_some() {
+            return Err(ErrorCode::UserAlreadyExists(format!(
+                "Cannot revoke role from configured user `{}`",
+                user.username
+            )));
+        }
         let client = self.get_user_api_client(tenant)?;
         client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
@@ -228,13 +194,7 @@ impl UserApiProvider {
     pub async fn drop_user(&self, tenant: &str, user: UserIdentity, if_exists: bool) -> Result<()> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Configured user {} cannot be dropped",
-                user.username
-            )));
-        }
-        if user.is_root() {
-            return Err(ErrorCode::UserAlreadyExists(format!(
-                "Builtin user {} cannot be dropped",
+                "Configured user `{}` cannot be dropped",
                 user.username
             )));
         }
@@ -263,19 +223,11 @@ impl UserApiProvider {
     ) -> Result<Option<u64>> {
         if self.get_configured_user(&user.username).is_some() {
             return Err(ErrorCode::UserAlreadyExists(format!(
-                "Configured user {} cannot be updated",
+                "Configured user `{}` cannot be updated",
                 user.username
             )));
         }
         let client = self.get_user_api_client(tenant)?;
-        if user.is_root() && auth_info.is_some() {
-            // Root user info is not exist, need to add user info first.
-            let user_info =
-                UserInfo::new(&user.username, &user.hostname, auth_info.clone().unwrap());
-            if let Ok(res) = client.add_user(user_info).await {
-                return Ok(Some(res));
-            }
-        }
         let update_user = client
             .update_user_with(user, MatchSeq::GE(1), |ui: &mut UserInfo| {
                 ui.update_auth_option(auth_info, user_option)
@@ -293,12 +245,12 @@ impl UserApiProvider {
     pub async fn update_user_default_role(
         &self,
         tenant: &str,
-        user_name: UserIdentity,
+        user: UserIdentity,
         default_role: Option<String>,
     ) -> Result<Option<u64>> {
-        let mut user = self.get_user(tenant, user_name.clone()).await?;
-        user.option.set_default_role(default_role);
-        self.update_user(tenant, user_name, None, Some(user.option))
+        let mut user_info = self.get_user(tenant, user.clone()).await?;
+        user_info.option.set_default_role(default_role);
+        self.update_user(tenant, user, None, Some(user_info.option))
             .await
     }
 }

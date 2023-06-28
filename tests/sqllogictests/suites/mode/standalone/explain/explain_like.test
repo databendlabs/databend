@@ -46,13 +46,13 @@ explain select * from t1 where s like 'abcd' order by s;
 ----
 EvalScalar
 ├── expressions: [t1.s (#0)]
-├── estimated rows: 1.00
+├── estimated rows: 2.00
 └── Sort
     ├── sort keys: [s ASC NULLS LAST]
-    ├── estimated rows: 1.00
+    ├── estimated rows: 2.00
     └── Filter
         ├── filters: [t1.s (#0) = 'abcd']
-        ├── estimated rows: 1.00
+        ├── estimated rows: 2.00
         └── TableScan
             ├── table: default.default.t1
             ├── read rows: 4

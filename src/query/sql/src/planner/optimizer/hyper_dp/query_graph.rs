@@ -48,7 +48,7 @@ impl QueryEdge {
 pub struct QueryGraph {
     root_edge: QueryEdge,
     // cache neighbors
-    cached_neighbors: HashMap<Vec<IndexType>, Vec<IndexType>>,
+    pub cached_neighbors: HashMap<Vec<IndexType>, Vec<IndexType>>,
 }
 
 impl QueryGraph {
@@ -93,12 +93,13 @@ impl QueryGraph {
     ) -> Result<Vec<IndexType>> {
         if let Some(neighbor) = self.cached_neighbors.get(nodes) {
             let mut neighbors = neighbor.clone();
+            // `retain` will not change the original order, there is no need to sort.
             neighbors.retain(|node| !forbidden_nodes.contains(node));
-            neighbors.sort();
             return Ok(neighbors);
         }
         let mut cached_neighbors = vec![];
         let mut neighbors = vec![];
+        let mut visit = HashSet::new();
         // Find neighbors for nodes that aren't in `forbidden_nodes`
         let nodes_size = nodes.len();
         for i in 0..nodes_size {
@@ -110,19 +111,23 @@ impl QueryGraph {
                     break;
                 }
                 for neighbor_info in edge.neighbors.iter() {
-                    cached_neighbors.push(neighbor_info.neighbors[0]);
-                    if !forbidden_nodes.contains(&neighbor_info.neighbors[0])
-                        && !nodes.contains(&neighbor_info.neighbors[0])
-                    {
-                        neighbors.push(neighbor_info.neighbors[0]);
+                    let min_neighbor = neighbor_info.neighbors[0];
+                    if !visit.contains(&min_neighbor) {
+                        visit.insert(min_neighbor);
+                        cached_neighbors.push(min_neighbor);
+                        if !forbidden_nodes.contains(&min_neighbor)
+                            && !nodes.contains(&min_neighbor)
+                        {
+                            neighbors.push(min_neighbor);
+                        }
                     }
                 }
             }
         }
+        cached_neighbors.sort();
+        neighbors.sort();
         self.cached_neighbors
             .insert(nodes.to_vec(), cached_neighbors);
-        neighbors.dedup();
-        neighbors.sort();
         Ok(neighbors)
     }
 
@@ -165,10 +170,6 @@ impl QueryGraph {
             .entry(left_set.to_vec())
             .and_modify(|val| val.push(right_set[0]))
             .or_insert(vec![right_set[0]]);
-        self.cached_neighbors
-            .entry(right_set.to_vec())
-            .and_modify(|val| val.push(left_set[0]))
-            .or_insert(vec![left_set[0]]);
         Ok(())
     }
 }

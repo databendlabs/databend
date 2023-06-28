@@ -91,7 +91,7 @@ Please be aware that the command above also creates a SQL user (databend/databen
 
 ### Step 3. Connecting to Databend
 
-To establish a connection with Databend, you'll use the BendSQL CLI tool in this step. For instructions on how to install and operate BendSQL, see [BendSQL](../11-integrations/30-access-tool/01-bendsql.md).
+To establish a connection with Databend, you'll use the BendSQL CLI tool in this step. For instructions on how to install and operate BendSQL, see [BendSQL](../13-sql-clients/01-bendsql.md).
 
 1. To establish a connection with Databend using the SQL user (databend/databend), run the following command:
 
@@ -177,7 +177,7 @@ eric             12776   0.0  0.3 408654368  24848 s003  S     2:15pm   0:00.06 
 
 ### Step 3. Connecting to Databend
 
-To establish a connection with Databend, you'll use the BendSQL CLI tool in this step. For instructions on how to install and operate BendSQL, see [BendSQL](../11-integrations/30-access-tool/01-bendsql.md).
+To establish a connection with Databend, you'll use the BendSQL CLI tool in this step. For instructions on how to install and operate BendSQL, see [BendSQL](../13-sql-clients/01-bendsql.md).
 
 1. To establish a connection with a local Databend, execute the following command:
 

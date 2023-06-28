@@ -70,7 +70,7 @@ docker-compose up
 
 2. Select `Databend` from the list on **Settings** > **New Data Source**.
 
-![Alt text](../../../public/img/integration/redash-select.png)
+![Alt text](../../public/img/integration/redash-select.png)
 
 3. Configure your Databend data source.
 
@@ -80,7 +80,7 @@ docker-compose up
     - Database: `default`
     - Secure: Enable this option if you enabled HTTPS on your Databend server.
 
-![Alt text](../../../public/img/integration/redash-cfg-local.png)
+![Alt text](../../public/img/integration/redash-cfg-local.png)
 
 4. Click **Create**, then **Test Connection** to see check if the connection is successful.
 

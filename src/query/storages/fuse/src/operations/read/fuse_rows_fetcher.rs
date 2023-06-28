@@ -22,7 +22,11 @@ use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
+use common_expression::BlockEntry;
+use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
+use common_expression::Value;
 use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
@@ -130,6 +134,7 @@ pub fn build_row_fetcher_pipeline(
 pub trait RowsFetcher {
     async fn on_start(&mut self) -> Result<()>;
     async fn fetch(&mut self, row_ids: &[u64]) -> Result<DataBlock>;
+    fn schema(&self) -> DataSchema;
 }
 
 pub struct TransformRowsFetcher<F: RowsFetcher> {
@@ -152,6 +157,13 @@ where F: RowsFetcher + Send + Sync + 'static
     async fn transform(&mut self, mut data: DataBlock) -> Result<DataBlock> {
         let num_rows = data.num_rows();
         if num_rows == 0 {
+            // Although the data block is empty, we need to add empty columns to align the schema.
+            let fetched_schema = self.fetcher.schema();
+            for f in fetched_schema.fields().iter() {
+                let builder = ColumnBuilder::with_capacity(f.data_type(), 0);
+                let col = builder.build();
+                data.add_column(BlockEntry::new(f.data_type().clone(), Value::Column(col)));
+            }
             return Ok(data);
         }
 
