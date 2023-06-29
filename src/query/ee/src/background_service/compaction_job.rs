@@ -257,19 +257,22 @@ impl CompactionJob {
         db_id: u64,
         tb_id: u64,
     ) -> Result<()> {
-        let (seg, blk, stats) = Self::do_check_table(
-            svc,
-            database.clone(),
-            table.clone(),
-            SEGMENT_SIZE,
-            PER_SEGMENT_BLOCK,
-            PER_BLOCK_SIZE,
-        )
-        .await?;
-        if !seg && !blk {
-            info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
-            return Ok(());
+        if !self.conf.background.compaction.has_target_tables() {
+            let (seg, blk, stats) = Self::do_check_table(
+                svc,
+                database.clone(),
+                table.clone(),
+                SEGMENT_SIZE,
+                PER_SEGMENT_BLOCK,
+                PER_BLOCK_SIZE,
+            )
+                .await?;
+            if !seg && !blk {
+                info!(job = "compaction", background = true, database = database.clone(), table = table.clone(), should_compact_segment = seg, should_compact_blk = blk, table_stats = ?stats, "skip compact");
+                return Ok(());
+            }
         }
+
         let id = Uuid::new_v4().to_string();
         let status = self.sync_compact_status(id.clone()).await?;
         if status.is_none() {
