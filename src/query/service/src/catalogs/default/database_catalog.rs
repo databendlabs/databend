@@ -54,6 +54,7 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -308,6 +309,7 @@ impl Catalog for DatabaseCatalog {
         &self,
         tenant: &str,
         db_name: &str,
+        filter: Option<TableInfoFilter>,
     ) -> Result<Vec<Arc<dyn Table>>> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -317,14 +319,14 @@ impl Catalog for DatabaseCatalog {
 
         let r = self
             .immutable_catalog
-            .list_tables_history(tenant, db_name)
+            .list_tables_history(tenant, db_name, filter.clone())
             .await;
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog
-                        .list_tables_history(tenant, db_name)
+                        .list_tables_history(tenant, db_name, filter)
                         .await
                 } else {
                     Err(e)
