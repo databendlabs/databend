@@ -120,6 +120,37 @@ impl ConflictResolveContext {
         }
         Some(positions)
     }
+
+    pub fn merge_segments(
+        mut base_segments: Vec<Location>,
+        added_segments: Vec<Option<Location>>,
+        removed_segment_indexes: Vec<usize>,
+    ) -> Vec<Location> {
+        let mut blanks = vec![];
+        for (position, added_segment) in removed_segment_indexes
+            .into_iter()
+            .zip(added_segments.into_iter())
+        {
+            if let Some(added) = added_segment {
+                base_segments[position] = added;
+            } else {
+                blanks.push(position);
+            }
+        }
+        blanks.sort_unstable();
+        let mut merged_segments = Vec::with_capacity(base_segments.len() - blanks.len());
+        if !blanks.is_empty() {
+            let mut last = 0;
+            for blank in blanks {
+                merged_segments.extend_from_slice(&base_segments[last..blank]);
+                last = blank + 1;
+            }
+            merged_segments.extend_from_slice(&base_segments[last..]);
+        } else {
+            merged_segments = base_segments;
+        }
+        merged_segments
+    }
 }
 
 #[derive(Clone)]
@@ -198,20 +229,11 @@ impl SnapshotGenerator for MutationGenerator {
                 {
                     tracing::info!("resolvable conflicts detected");
                     metrics_inc_commit_mutation_resolvable_conflict();
-                    let mut new_segments = previous.segments.clone();
-                    let mut blanks = vec![];
-                    for (i, position) in positions.iter().enumerate() {
-                        if let Some(added) = ctx.added_segments[i].clone() {
-                            new_segments[*position] = added;
-                        } else {
-                            blanks.push(position);
-                        }
-                    }
-                    let new_segments = new_segments
-                        .into_iter()
-                        .enumerate()
-                        .filter_map(|(i, s)| if blanks.contains(&&i) { None } else { Some(s) })
-                        .collect::<Vec<_>>();
+                    let new_segments = ConflictResolveContext::merge_segments(
+                        previous.segments.clone(),
+                        ctx.added_segments.clone(),
+                        positions,
+                    );
                     let new_summary = merge_statistics(&ctx.added_statistics, &previous.summary);
                     let new_summary = deduct_statistics(&new_summary, &ctx.removed_statistics);
                     let new_snapshot = TableSnapshot::new(
