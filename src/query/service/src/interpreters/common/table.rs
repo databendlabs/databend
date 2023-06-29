@@ -29,7 +29,6 @@ use common_sql::parse_computed_expr;
 
 use crate::pipelines::processors::transforms::TransformAddComputedColumns;
 use crate::pipelines::processors::TransformResortAddOn;
-use crate::pipelines::PipelineBuildResult;
 use crate::sessions::QueryContext;
 
 pub fn fill_missing_columns(
@@ -77,21 +76,30 @@ pub fn append2table(
     ctx: Arc<QueryContext>,
     table: Arc<dyn Table>,
     source_schema: DataSchemaRef,
-    build_res: &mut PipelineBuildResult,
+    main_pipeline: &mut Pipeline,
     copied_files: Option<UpsertTableCopiedFileReq>,
     overwrite: bool,
     append_mode: AppendMode,
 ) -> Result<()> {
-    fill_missing_columns(
-        ctx.clone(),
-        table.clone(),
-        source_schema,
-        &mut build_res.main_pipeline,
-    )?;
+    fill_missing_columns(ctx.clone(), table.clone(), source_schema, main_pipeline)?;
 
-    table.append_data(ctx.clone(), &mut build_res.main_pipeline, append_mode)?;
+    table.append_data(ctx.clone(), main_pipeline, append_mode)?;
 
-    table.commit_insertion(ctx, &mut build_res.main_pipeline, copied_files, overwrite)?;
+    table.commit_insertion(ctx, main_pipeline, copied_files, overwrite)?;
+
+    Ok(())
+}
+
+pub fn append2table_without_commit(
+    ctx: Arc<QueryContext>,
+    table: Arc<dyn Table>,
+    source_schema: DataSchemaRef,
+    main_pipeline: &mut Pipeline,
+    append_mode: AppendMode,
+) -> Result<()> {
+    fill_missing_columns(ctx.clone(), table.clone(), source_schema, main_pipeline)?;
+
+    table.append_data(ctx, main_pipeline, append_mode)?;
 
     Ok(())
 }

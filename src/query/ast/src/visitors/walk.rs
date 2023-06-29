@@ -372,6 +372,7 @@ pub fn walk_statement<'a, V: Visitor<'a>>(visitor: &mut V, statement: &'a Statem
         Statement::ShowCreateTable(stmt) => visitor.visit_show_create_table(stmt),
         Statement::DescribeTable(stmt) => visitor.visit_describe_table(stmt),
         Statement::ShowTablesStatus(stmt) => visitor.visit_show_tables_status(stmt),
+        Statement::ShowDropTables(stmt) => visitor.visit_show_drop_tables(stmt),
         Statement::CreateTable(stmt) => visitor.visit_create_table(stmt),
         Statement::DropTable(stmt) => visitor.visit_drop_table(stmt),
         Statement::UndropTable(stmt) => visitor.visit_undrop_table(stmt),

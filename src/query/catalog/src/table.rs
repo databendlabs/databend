@@ -91,7 +91,7 @@ pub trait Table: Sync + Send {
     }
 
     /// whether column prune(projection) can help in table read
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         false
     }
 
