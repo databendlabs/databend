@@ -128,7 +128,9 @@ impl Processor for TransformRangeJoinLeft {
         match self.step {
             RangeJoinStep::Sink => {
                 if let Some(data_block) = self.input_data.take() {
-                    self.state.sink_left(data_block)?;
+                    if !data_block.is_empty() {
+                        self.state.sink_left(data_block)?;
+                    }
                 }
             }
             RangeJoinStep::Execute => {
@@ -181,6 +183,10 @@ impl Sink for TransformRangeJoinRight {
     }
 
     fn consume(&mut self, data_block: DataBlock) -> Result<()> {
-        self.state.sink_right(data_block)
+        if !data_block.is_empty() {
+            self.state.sink_right(data_block)
+        } else {
+            Ok(())
+        }
     }
 }
