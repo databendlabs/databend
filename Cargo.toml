@@ -3,5 +3,6 @@ members = [
     "core",
     "driver",
     "cli",
-    "bindings/python"
+    "bindings/python",
+    "bindings/nodejs",
 ]

@@ -24,24 +24,15 @@ jobs:
 
   build:
     runs-on: ${{ matrix.os }}-latest
-    name: build-${{ matrix.os }}
+    name: build-${{ matrix.os }}-${{ matrix.arch }}
     strategy:
       matrix:
         include:
-          - os: ubuntu
-            target: x86_64-unknown-linux-gnu
-          - os: macos
-            target: x86_64-apple-darwin
-          - os: windows
-            target: x86_64-pc-windows-msvc
+          - { os: ubuntu, arch: x86_64, target: x86_64-unknown-linux-gnu }
+          - { os: macos, arch: x86_64, target: x86_64-apple-darwin }
+          - { os: windows, arch: x86_64, target: x86_64-pc-windows-msvc }
     steps:
       - uses: actions/checkout@v3
-
-      - name: Setup Python-3.10
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
-
       - uses: ./.github/actions/setup
         with:
           cache-key: build

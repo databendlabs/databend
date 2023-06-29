@@ -1,0 +1,34 @@
+baseDir = "."
+
+excludes = [
+    # hidden files
+    ".cargo",
+    ".github",
+    ".dockerignore",
+    ".gitignore",
+    ".gitattributes",
+    ".editorconfig",
+
+    "LICENSE",
+    "Makefile",
+
+    # docs and generated files
+    "**/*.md",
+    "**/*.hbs",
+    "**/*.template",
+    "**/*.cue",
+    "**/*.json",
+    "**/*.sql",
+    "**/*.proto",
+    "**/*.yml",
+    "**/*.yaml",
+    "**/*.toml",
+    "**/*.lock",
+    "**/*.yapf",
+    "**/*.test",
+    "**/*.txt",
+]
+
+[properties]
+inceptionYear = 2021
+copyrightOwner = "Datafuse Labs"

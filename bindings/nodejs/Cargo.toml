@@ -1,0 +1,22 @@
+[package]
+name = "bindings-nodejs"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+doc = false
+
+[dependencies]
+databend-driver = { path = "../../driver", version = "0.2.24", features = ["rustls", "flight-sql"] }
+futures = "0.3.28"
+napi = { version = "2.13.2", default-features = false, features = [
+    "napi6",
+    "async",
+] }
+napi-derive = "2.13.0"
+
+[build-dependencies]
+napi-build = "2"

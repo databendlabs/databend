@@ -1,0 +1,15 @@
+{
+  "entryPoints": ["index.d.ts"],
+  "out": "docs",
+  "name": "Databend Driver",
+  "tsconfig": "tsconfig.json",
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "excludeExternals": true,
+  "includeVersion": true,
+  "githubPages": false,
+  "navigationLinks": {
+    "Homepage": "https://databend.rs/doc/sql-clients/bendsql",
+    "GitHub": "https://github.com/datafuselabs/bendsql"
+  }
+}

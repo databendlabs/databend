@@ -1,0 +1,67 @@
+{
+  "name": "databend-driver",
+  "author": "Databend Authors <opensource@datafuselabs.com>",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "description": "Databend Driver Node.js Binding",
+  "repository": "https://github.com/datafuselabs/bendsql.git",
+  "napi": {
+    "name": "databend-driver",
+    "package": {
+      "name": "@databend-driver/lib"
+    },
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "aarch64-apple-darwin"
+      ]
+    }
+  },
+  "keywords": [
+    "api",
+    "databend",
+    "driver"
+  ],
+  "files": [
+    "index.d.ts",
+    "index.js",
+    "generated.js",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "@cucumber/cucumber": "^9.2.0",
+    "@napi-rs/cli": "^2.15.1",
+    "@types/node": "^18.14.5",
+    "prettier": "^2.8.8",
+    "typedoc": "^0.24",
+    "typescript": "^5.1.5"
+  },
+  "engines": {
+    "node": ">= 10"
+  },
+  "scripts": {
+    "build": "napi build --platform --target \"${NAPI_TARGET:-}\" --release --js generated.js && node ./scripts/header.js",
+    "build:debug": "napi build --platform --target \"${NAPI_TARGET:-}\" --js generated.js && node ./scripts/header.js",
+    "docs": "typedoc",
+    "format": "prettier --write .",
+    "test": "cucumber-js",
+    "prepublishOnly": "napi prepublish -t npm"
+  },
+  "prettier": {
+    "overrides": [
+      {
+        "files": "./**/*.{js,ts,mjs}",
+        "options": {
+          "printWidth": 120
+        }
+      }
+    ]
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "packageManager": "yarn@3.5.1"
+}
