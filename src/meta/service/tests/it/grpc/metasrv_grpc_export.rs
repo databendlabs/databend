@@ -19,8 +19,6 @@ use common_meta_client::MetaGrpcClient;
 use common_meta_kvapi::kvapi::KVApi;
 use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::protobuf::Empty;
-use common_meta_types::MatchSeq;
-use common_meta_types::Operation;
 use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 use regex::Regex;
@@ -48,14 +46,7 @@ async fn test_export() -> anyhow::Result<()> {
     info!("--- upsert kv");
     {
         for k in ["foo", "bar", "wow"] {
-            client
-                .upsert_kv(UpsertKVReq::new(
-                    k,
-                    MatchSeq::GE(0),
-                    Operation::Update(k.as_bytes().to_vec()),
-                    None,
-                ))
-                .await?;
+            client.upsert_kv(UpsertKVReq::update(k, &b(k))).await?;
         }
     }
 
@@ -119,4 +110,8 @@ async fn test_export() -> anyhow::Result<()> {
     assert_eq!(want, lines);
 
     Ok(())
+}
+
+fn b(s: impl ToString) -> Vec<u8> {
+    s.to_string().into_bytes()
 }

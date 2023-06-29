@@ -274,7 +274,7 @@ impl Interpreter for InsertInterpreter {
             self.ctx.clone(),
             table.clone(),
             plan.schema(),
-            &mut build_res,
+            &mut build_res.main_pipeline,
             None,
             self.plan.overwrite,
             append_mode,

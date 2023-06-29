@@ -33,6 +33,5 @@ fi
 
 echo "drop STAGE s2;" | $MYSQL_CLIENT_CONNECT
 echo "drop table test_table;" | $MYSQL_CLIENT_CONNECT
-
 aws --endpoint-url http://127.0.0.1:9900/ s3 rm s3://testbucket/admin/stage/s2 --recursive  > /dev/null 2>&1
 
