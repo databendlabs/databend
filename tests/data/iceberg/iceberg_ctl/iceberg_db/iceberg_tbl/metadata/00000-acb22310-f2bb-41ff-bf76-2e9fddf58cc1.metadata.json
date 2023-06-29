@@ -1,8 +1,8 @@
 {
   "format-version" : 1,
-  "table-uuid" : "bf530b84-8e0a-4949-b2c4-b50f02a1334f",
-  "location" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl",
-  "last-updated-ms" : 1672980637554,
+  "table-uuid" : "75a96d30-9573-4685-9a0f-83f1aa7d1862",
+  "location" : "s3://testbucket/iceberg_ctl/iceberg_db/iceberg_tbl",
+  "last-updated-ms" : 1688050882357,
   "last-column-id" : 2,
   "schema" : {
     "type" : "struct",

@@ -1,8 +1,8 @@
 {
   "format-version" : 1,
-  "table-uuid" : "bf530b84-8e0a-4949-b2c4-b50f02a1334f",
-  "location" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl",
-  "last-updated-ms" : 1672980884490,
+  "table-uuid" : "75a96d30-9573-4685-9a0f-83f1aa7d1862",
+  "location" : "s3://testbucket/iceberg_ctl/iceberg_db/iceberg_tbl",
+  "last-updated-ms" : 1688050885860,
   "last-column-id" : 2,
   "schema" : {
     "type" : "struct",
@@ -50,19 +50,19 @@
   "properties" : {
     "owner" : "root"
   },
-  "current-snapshot-id" : 8380191719297762539,
+  "current-snapshot-id" : 8111683045919920282,
   "refs" : {
     "main" : {
-      "snapshot-id" : 8380191719297762539,
+      "snapshot-id" : 8111683045919920282,
       "type" : "branch"
     }
   },
   "snapshots" : [ {
-    "snapshot-id" : 8380191719297762539,
-    "timestamp-ms" : 1672980884490,
+    "snapshot-id" : 8111683045919920282,
+    "timestamp-ms" : 1688050885860,
     "summary" : {
       "operation" : "append",
-      "spark.app.id" : "local-1672980515314",
+      "spark.app.id" : "local-1688050874633",
       "added-data-files" : "3",
       "added-records" : "3",
       "added-files-size" : "1857",
@@ -74,16 +74,16 @@
       "total-position-deletes" : "0",
       "total-equality-deletes" : "0"
     },
-    "manifest-list" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/snap-8380191719297762539-1-b51968b3-8837-4c13-a9ec-74d71bac3565.avro",
+    "manifest-list" : "s3://testbucket/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/snap-8111683045919920282-1-455d0995-f7a9-4ff4-a8ca-0e161ff0ca13.avro",
     "schema-id" : 0
   } ],
   "statistics" : [ ],
   "snapshot-log" : [ {
-    "timestamp-ms" : 1672980884490,
-    "snapshot-id" : 8380191719297762539
+    "timestamp-ms" : 1688050885860,
+    "snapshot-id" : 8111683045919920282
   } ],
   "metadata-log" : [ {
-    "timestamp-ms" : 1672980637554,
-    "metadata-file" : "s3://testbucket/iceberg_data/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/00000-74d4bfd7-0dee-46ab-85c5-ef90df8b2c20.metadata.json"
+    "timestamp-ms" : 1688050882357,
+    "metadata-file" : "s3://testbucket/iceberg_ctl/iceberg_db/iceberg_tbl/metadata/00000-acb22310-f2bb-41ff-bf76-2e9fddf58cc1.metadata.json"
   } ]
 }
