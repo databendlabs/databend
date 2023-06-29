@@ -87,16 +87,10 @@
 //! SELECT * FROM icb_ctl.default.icbg_tbl_0;
 //! ```
 
-/// the Iceberg Catalog implementation
 mod catalog;
-/// data converters
 mod converters;
-/// database implementation
 mod database;
-/// table metadata reader
-#[allow(unused)]
-mod meta_reader;
-/// table implementation
+mod partition;
 mod table;
 
 pub use catalog::IcebergCatalog;

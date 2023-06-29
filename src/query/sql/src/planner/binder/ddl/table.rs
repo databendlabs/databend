@@ -35,6 +35,7 @@ use common_ast::ast::OptimizeTableAction as AstOptimizeTableAction;
 use common_ast::ast::OptimizeTableStmt;
 use common_ast::ast::RenameTableStmt;
 use common_ast::ast::ShowCreateTableStmt;
+use common_ast::ast::ShowDropTablesStmt;
 use common_ast::ast::ShowLimit;
 use common_ast::ast::ShowTablesStatusStmt;
 use common_ast::ast::ShowTablesStmt;
@@ -288,6 +289,47 @@ impl Binder {
         let tokens = tokenize_sql(query.as_str())?;
         let (stmt, _) = parse_sql(&tokens, Dialect::PostgreSQL)?;
         self.bind_statement(bind_context, &stmt).await
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_show_drop_tables(
+        &mut self,
+        bind_context: &mut BindContext,
+        stmt: &ShowDropTablesStmt,
+    ) -> Result<Plan> {
+        let ShowDropTablesStmt { database } = stmt;
+
+        let database = self.check_database_exist(&None, database).await?;
+
+        let mut select_builder = SelectBuilder::from("system.tables_with_history");
+
+        select_builder
+            .with_column("name AS Tables")
+            .with_column("'BASE TABLE' AS Table_type")
+            .with_column("database AS Database")
+            .with_column("catalog AS Catalog")
+            .with_column("engine")
+            .with_column("created_on AS create_time");
+        select_builder.with_column("dropped_on AS drop_time");
+
+        select_builder
+            .with_column("num_rows")
+            .with_column("data_size")
+            .with_column("data_compressed_size")
+            .with_column("index_size");
+
+        select_builder
+            .with_order_by("catalog")
+            .with_order_by("database")
+            .with_order_by("name");
+
+        select_builder.with_filter(format!("database = '{database}'"));
+        select_builder.with_filter("dropped_on != 'NULL'".to_string());
+
+        let query = select_builder.build();
+        debug!("show drop tables rewrite to: {:?}", query);
+        self.bind_rewrite_to_query(bind_context, query.as_str(), RewriteKind::ShowTables)
+            .await
     }
 
     #[async_backtrace::framed]

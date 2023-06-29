@@ -268,7 +268,7 @@ pub trait InputFormatPipe: Sized + Send + 'static {
         pipeline: &mut Pipeline,
     ) -> Result<()> {
         let n_threads = ctx.settings.get_max_threads()? as usize;
-        let max_aligner = match &ctx.plan {
+        let mut max_aligner = match &ctx.plan {
             InputPlan::CopyInto(_) => ctx.splits.len(),
             InputPlan::StreamingLoad(StreamPlan { is_multi_part, .. }) => {
                 if *is_multi_part {
@@ -278,6 +278,9 @@ pub trait InputFormatPipe: Sized + Send + 'static {
                 }
             }
         };
+        if max_aligner == 0 {
+            max_aligner = 1;
+        }
         pipeline.add_source(
             |output| Aligner::<Self>::try_create(output, ctx.clone(), split_rx.clone()),
             std::cmp::min(max_aligner, n_threads),
