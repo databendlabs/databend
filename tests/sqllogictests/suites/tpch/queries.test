@@ -1295,19 +1295,19 @@ HashJoin: INNER
 └── Probe
     └── HashJoin: INNER
         ├── Build
-        │   └── HashJoin: INNER
-        │       ├── Build
-        │       │   └── HashJoin: INNER
-        │       │       ├── Build
-        │       │       │   └── Scan: default.tpch.region, rows: 5
-        │       │       └── Probe
-        │       │           └── Scan: default.tpch.nation, rows: 25
-        │       └── Probe
-        │           └── Scan: default.tpch.supplier, rows: 1000
+        │   └── Scan: default.tpch.orders, rows: 150000
         └── Probe
             └── HashJoin: INNER
                 ├── Build
-                │   └── Scan: default.tpch.orders, rows: 150000
+                │   └── HashJoin: INNER
+                │       ├── Build
+                │       │   └── HashJoin: INNER
+                │       │       ├── Build
+                │       │       │   └── Scan: default.tpch.region, rows: 5
+                │       │       └── Probe
+                │       │           └── Scan: default.tpch.nation, rows: 25
+                │       └── Probe
+                │           └── Scan: default.tpch.supplier, rows: 1000
                 └── Probe
                     └── Scan: default.tpch.lineitem, rows: 600572
 
