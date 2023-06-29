@@ -43,8 +43,8 @@ impl ParquetTable {
     pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
         ParquetReader::create(
             self.operator.clone(),
-            self.arrow_schema.clone(),
-            self.schema_descr.clone(),
+            &self.arrow_schema,
+            &self.schema_descr,
             projection,
         )
     }
@@ -76,8 +76,8 @@ impl ParquetTable {
         // Build the reader for parquet source.
         let source_reader = ParquetReader::create(
             self.operator.clone(),
-            self.arrow_schema.clone(),
-            self.schema_descr.clone(),
+            &self.arrow_schema,
+            &self.schema_descr,
             source_projection,
         )?;
 
@@ -112,8 +112,8 @@ impl ParquetTable {
         let remain_reader = if let Some(p) = &push_down_prewhere {
             ParquetReader::create(
                 self.operator.clone(),
-                self.arrow_schema.clone(),
-                self.schema_descr.clone(),
+                &self.arrow_schema,
+                &self.schema_descr,
                 p.remain_columns.clone(),
             )?
         } else {
@@ -124,8 +124,8 @@ impl ParquetTable {
             .map(|p| {
                 let reader = ParquetReader::create(
                     self.operator.clone(),
-                    self.arrow_schema.clone(),
-                    self.schema_descr.clone(),
+                    &self.arrow_schema,
+                    &self.schema_descr,
                     p.prewhere_columns,
                 )?;
                 src_fields.extend_from_slice(reader.output_schema.fields());
@@ -193,7 +193,7 @@ fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [usize]) -> usize 
     sizes.len()
 }
 
-fn calc_parallelism(
+pub fn calc_parallelism(
     ctx: &Arc<dyn TableContext>,
     plan: &DataSourcePlan,
     is_blocking: bool,

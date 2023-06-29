@@ -23,4 +23,11 @@ mod parquet_table;
 mod pruning;
 mod statistics;
 
+pub use deserialize_transform::ParquetDeserializeTransform;
+pub use parquet_reader::ParquetReader;
+pub use parquet_source::AsyncParquetSource;
+pub use parquet_source::SyncParquetSource;
+/// FIXME: it seems not a good idea to expose this function directly.
+pub use parquet_table::calc_parallelism;
 pub use parquet_table::ParquetTable;
+pub use pruning::PartitionPruner;

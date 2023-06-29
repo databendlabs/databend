@@ -2747,9 +2747,11 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
+ "arrow-schema",
  "async-backtrace",
  "async-trait",
  "chrono",
+ "common-arrow",
  "common-base",
  "common-catalog",
  "common-exception",
@@ -6135,11 +6137,10 @@ dependencies = [
 [[package]]
 name = "icelake"
 version = "0.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "beb907fc172ade11df1e0653e002db86af5b2cb5009b33fce93c8afbc5a89ea6"
 dependencies = [
  "anyhow",
  "apache-avro",
+ "arrow-schema",
  "futures",
  "opendal",
  "serde",
