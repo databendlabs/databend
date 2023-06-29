@@ -2925,6 +2925,7 @@ dependencies = [
  "dashmap",
  "opendal",
  "parking_lot 0.12.1",
+ "tracing",
  "uuid",
 ]
 

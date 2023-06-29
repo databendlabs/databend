@@ -149,7 +149,7 @@ impl Table for RandomTable {
         Ok((statistics, parts))
     }
 
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         true
     }
 
