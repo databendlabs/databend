@@ -540,3 +540,27 @@ jobs:
     secrets: inherit
     with:
       tag: ${{ needs.create_release.outputs.version }}
+
+  notify:
+    runs-on: ubuntu-latest
+    if: always()
+    needs:
+      - create_release
+      - linux
+      - docker_combined
+      - docker_separate
+      - distribution
+      - deb
+    steps:
+      - uses: actions/checkout@v3
+      - run: |
+          status="${{ (contains(needs.*.result, 'failure') && 'failure') || (contains(needs.*.result, 'cancelled') && 'cancelled') || 'success' }}"
+          jq -n -f .github/release-report.jq \
+            --arg title "[Release] ${{ needs.create_release.outputs.version }}" \
+            --arg content "Build result: ${status}" \
+            --arg link "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            > /tmp/release-report.json
+          curl -X POST "${{ secrets.RELEASE_REPORT_WEBHOOK }}" \
+            -H 'Content-Type: application/json' \
+            -H 'cache-control: no-cache' \
+            -d @/tmp/release-report.json
