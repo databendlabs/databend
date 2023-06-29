@@ -192,16 +192,16 @@ To establish a connection with Databend, you'll use the BendSQL CLI tool in this
 1. To establish a connection with a local Databend, execute the following command:
 
 ```shell
-eric@bogon ~ % bendsql -uadmin
+eric@bogon ~ % bendsql      
 Welcome to BendSQL 0.3.11-17b0d8b(2023-06-08T15:23:29.206137000Z).
-Trying connect to localhost:8000 as user admin.
+Trying connect to localhost:8000 as user root.
 Connected to DatabendQuery v1.1.75-nightly-59eea5df495245b9475f81a28c7b688f013aac05(rust-1.72.0-nightly-2023-06-28T01:04:32.054683000Z)
 ```
 
 2. Query the Databend version to verify the connection:
 
 ```sql
-admin@localhost> SELECT VERSION();
+root@localhost> SELECT VERSION();
 
 SELECT
   VERSION()
