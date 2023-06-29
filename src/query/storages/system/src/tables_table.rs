@@ -67,7 +67,9 @@ impl HistoryAware for TablesTable<true> {
         tenant: &str,
         database_name: &str,
     ) -> Result<Vec<Arc<dyn Table>>> {
-        catalog.list_tables_history(tenant, database_name).await
+        catalog
+            .list_tables_history(tenant, database_name, None)
+            .await
     }
 }
 

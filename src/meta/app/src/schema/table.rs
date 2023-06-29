@@ -675,6 +675,20 @@ impl ListTableReq {
             filter: None,
         }
     }
+
+    pub fn new_with_filter(
+        tenant: impl Into<String>,
+        db_name: impl Into<String>,
+        filter: Option<TableInfoFilter>,
+    ) -> ListTableReq {
+        ListTableReq {
+            inner: DatabaseNameIdent {
+                tenant: tenant.into(),
+                db_name: db_name.into(),
+            },
+            filter,
+        }
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq, Default)]

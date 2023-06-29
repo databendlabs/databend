@@ -114,7 +114,7 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
-        let mut output_schema = match (self.benefit_column_prune(), &push_downs) {
+        let mut output_schema = match (self.support_column_projection(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
                 Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
                 _ => {
