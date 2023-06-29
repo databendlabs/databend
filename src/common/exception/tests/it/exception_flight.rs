@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::backtrace::Backtrace;
 use std::sync::Arc;
 
+use backtrace::Backtrace;
 use common_arrow::arrow_format::flight::data::FlightData;
 use common_exception::exception::ErrorCodeBacktrace;
 use common_exception::ErrorCode;
@@ -26,7 +26,7 @@ fn test_serialize() -> Result<()> {
         1,
         String::from("test_message"),
         None,
-        Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+        Some(ErrorCodeBacktrace::Symbols(Arc::new(Backtrace::new()))),
     )
     .set_span(Some((0..1).into()));
     let backtrace_str = error_code.backtrace_str();

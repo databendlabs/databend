@@ -14,30 +14,37 @@
 
 #![allow(non_snake_case)]
 
-use std::backtrace::Backtrace;
-use std::backtrace::BacktraceStatus;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use backtrace::Backtrace;
 use thiserror::Error;
 
+use crate::exception_backtrace::capture;
 use crate::span::pretty_print_error;
 use crate::Span;
 
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
     Serialized(Arc<String>),
-    Origin(Arc<Backtrace>),
+    Symbols(Arc<Backtrace>),
+    Address(Arc<Backtrace>),
 }
 
 impl ToString for ErrorCodeBacktrace {
     fn to_string(&self) -> String {
         match self {
             ErrorCodeBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
-            ErrorCodeBacktrace::Origin(backtrace) => {
-                format!("{:?}", backtrace)
+            ErrorCodeBacktrace::Symbols(backtrace) => format!("{:?}", backtrace),
+            ErrorCodeBacktrace::Address(backtrace) => {
+                let frames_address = backtrace
+                    .frames()
+                    .iter()
+                    .map(|f| (f.ip() as usize, f.symbol_address() as usize))
+                    .collect::<Vec<_>>();
+                format!("{:?}", frames_address)
             }
         }
     }
@@ -63,19 +70,19 @@ impl From<Arc<String>> for ErrorCodeBacktrace {
 
 impl From<Backtrace> for ErrorCodeBacktrace {
     fn from(bt: Backtrace) -> Self {
-        Self::Origin(Arc::new(bt))
+        Self::Symbols(Arc::new(bt))
     }
 }
 
 impl From<&Backtrace> for ErrorCodeBacktrace {
     fn from(bt: &Backtrace) -> Self {
-        Self::Serialized(Arc::new(bt.to_string()))
+        Self::Serialized(Arc::new(format!("{:?}", bt)))
     }
 }
 
 impl From<Arc<Backtrace>> for ErrorCodeBacktrace {
     fn from(bt: Arc<Backtrace>) -> Self {
-        Self::Origin(bt)
+        Self::Symbols(bt)
     }
 }
 
@@ -166,21 +173,23 @@ impl Debug for ErrorCode {
         write!(f, "Code: {}, Text = {}.", self.code(), self.message(),)?;
 
         match self.backtrace.as_ref() {
-            None => Ok(()), // no backtrace
+            None => write!(
+                f,
+                "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
+            ),
             Some(backtrace) => {
                 // TODO: Custom stack frame format for print
                 match backtrace {
-                    ErrorCodeBacktrace::Origin(backtrace) => {
-                        if backtrace.status() == BacktraceStatus::Disabled {
-                            write!(
-                                f,
-                                "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
-                            )
-                        } else {
-                            write!(f, "\n\n{}", backtrace)
-                        }
-                    }
+                    ErrorCodeBacktrace::Symbols(backtrace) => write!(f, "\n\n{:?}", backtrace),
                     ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{}", backtrace),
+                    ErrorCodeBacktrace::Address(backtrace) => {
+                        let frames_address = backtrace
+                            .frames()
+                            .iter()
+                            .map(|f| (f.ip() as usize, f.symbol_address() as usize))
+                            .collect::<Vec<_>>();
+                        write!(f, "\n\n{:?}", frames_address)
+                    }
                 }
             }
         }
@@ -201,7 +210,7 @@ impl ErrorCode {
             display_text: error.to_string(),
             span: None,
             cause: None,
-            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+            backtrace: capture(),
         }
     }
 
@@ -211,7 +220,7 @@ impl ErrorCode {
             display_text: error,
             span: None,
             cause: None,
-            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+            backtrace: capture(),
         }
     }
 
