@@ -200,11 +200,11 @@ impl SnapshotGenerator for MutationGenerator {
                     metrics_inc_commit_mutation_resolvable_conflict();
                     let mut new_segments = previous.segments.clone();
                     let mut blanks = vec![];
-                    for removed_index in &ctx.removed_segment_indexes {
-                        if let Some(added) = ctx.added_segments[*removed_index].clone() {
-                            new_segments[positions[*removed_index]] = added;
+                    for (i, position) in positions.iter().enumerate() {
+                        if let Some(added) = ctx.added_segments[i].clone() {
+                            new_segments[*position] = added;
                         } else {
-                            blanks.push(removed_index);
+                            blanks.push(position);
                         }
                     }
                     let new_segments = new_segments

@@ -46,8 +46,8 @@ fn test_unresolvable_delete_conflict() {
     latest_snapshot.segments = vec![("1".to_string(), 1), ("4".to_string(), 1)];
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
-        removed_segment_indexes: vec![1],
         added_segments: vec![],
+        removed_segment_indexes: vec![1],
         removed_statistics: Statistics::default(),
         added_statistics: Statistics::default(),
     });
@@ -129,7 +129,7 @@ fn test_resolvable_delete_conflict() {
     };
 
     let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
-        removed_segment_indexes: vec![0, 1],
+        removed_segment_indexes: vec![1, 2],
         added_segments: vec![None, Some(("8".to_string(), 1))],
         removed_statistics,
         added_statistics,
