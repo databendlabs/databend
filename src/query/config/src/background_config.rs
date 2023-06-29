@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::collections::HashMap;
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::str::FromStr;
@@ -24,7 +23,6 @@ use common_meta_app::background::BackgroundJobParams;
 use common_meta_app::background::BackgroundJobType;
 use serde::Deserialize;
 use serde::Serialize;
-use crate::InnerConfig;
 
 #[derive(Clone, Debug, PartialEq, Default, Eq, Serialize, Deserialize, Args)]
 #[serde(default)]
@@ -48,11 +46,8 @@ pub struct BackgroundCompactionConfig {
     // Only compact tables in this list.
     // if it is empty, compact job would discover target tables automatically
     // otherwise, the job would only compact tables in this list
-    // For example:
-    //   target_tables:
-    //     db1: [table1, table2]
     #[clap(long)]
-    pub target_tables: Option<HashMap<String, Vec<String>>>,
+    pub target_tables: Option<Vec<String>>,
 
     // Compact segments if a table has too many small segments
     // `segment_limit` is the maximum number of segments that would be compacted in a batch
@@ -116,7 +111,7 @@ pub struct InnerBackgroundConfig {
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InnerBackgroundCompactionConfig {
     pub enable: bool,
-    pub target_tables : Option<HashMap<String, Vec<String>>>,
+    pub target_tables : Option<Vec<String>>,
     pub segment_limit: Option<u64>,
     pub block_limit: Option<u64>,
     pub params: BackgroundJobParams,

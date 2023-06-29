@@ -23,7 +23,6 @@ use arrow_array::UInt64Array;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
 use background_service::get_background_service_handler;
 use chrono::Utc;
-use futures_util::StreamExt;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::time::Instant;
@@ -419,7 +418,7 @@ impl CompactionJob {
     // vec!("t1", "t2", "t3")
     // into
     // "('t1', 't2', 't3')"
-    fn format_tables(tables: &Vec<String>) -> String {
+    fn format_tables(tables: Vec<String>) -> String {
         let formatted_tables: Vec<String> = tables
             .iter()
             .map(|table| format!("'{}'", table))
@@ -428,8 +427,8 @@ impl CompactionJob {
         format!("({})", formatted_tables.join(", "))
     }
     pub fn get_target_from_config_sql(
-        database: &String,
-        tables: &Vec<String>
+        database: String,
+        tables: Vec<String>
     ) -> String {
         format!(
          "
@@ -449,14 +448,46 @@ impl CompactionJob {
         )
     }
 
-    pub  async fn do_get_target_tables(
+    pub fn parse_all_target_tables(original: Option<&Vec<String>>) -> HashMap<String, Vec<String>> {
+        let mut result: HashMap<String, Vec<String>> = HashMap::new();
+
+        if let Some(original_vec) = original {
+            for entry in original_vec {
+                let parts: Vec<&str> = entry.split('.').collect();
+
+                match parts.len() {
+                    1 => {
+                        // Only table name provided, assuming no database
+                        let table = parts[0].to_owned();
+                        result.entry("default".to_owned()).or_insert(Vec::new()).push(table);
+                    }
+                    2 => {
+                        // Both database and table names provided
+                        let db = parts[0].to_owned();
+                        let table = parts[1].to_owned();
+                        result.entry(db).or_insert(Vec::new()).push(table);
+                    }
+                    _ => {
+                        // Invalid input, skipping entry
+                    }
+                }
+            }
+        }
+
+        result
+    }
+
+    pub async fn do_get_target_tables(
         configs: &InnerConfig,
         svc: &Arc<BackgroundServiceHandlerWrapper>,
     ) -> Result<Vec<RecordBatch>> {
         let all_target_tables = configs.background.compaction.target_tables.as_ref();
-        let future_res = all_target_tables.unwrap().into_iter().map(|(k, v)|
-
-            svc.execute_sql(Self::get_target_from_config_sql(k, v).as_str())
+        let all_target_tables = Self::parse_all_target_tables(all_target_tables);
+        let future_res = all_target_tables.into_iter().map(|(k, v) | {
+            let sql = Self::get_target_from_config_sql(k, v);
+            let cloned_sql = sql.clone();
+            svc.execute_sql(cloned_sql)
+        }
         ).collect::<Vec<_>>();
         let mut res = Vec::new();
         for f in future_res {
@@ -469,7 +500,7 @@ impl CompactionJob {
     pub async fn do_get_all_suggested_tables(
         svc: &Arc<BackgroundServiceHandlerWrapper>,
     ) -> Result<Vec<RecordBatch>> {
-        let res = svc.execute_sql(GET_ALL_TARGET_TABLES).await?;
+        let res = svc.execute_sql(GET_ALL_TARGET_TABLES.to_string()).await?;
         let num_of_tables = res.as_ref().map_or_else(|| 0, |r| r.num_rows());
         info!(
             job = "compaction",
@@ -496,7 +527,7 @@ impl CompactionJob {
             sql = sql.as_str(),
             "check target_table"
         );
-        let res = svc.execute_sql(sql.as_str()).await?;
+        let res = svc.execute_sql(sql).await?;
         if res.is_none() {
             return Ok((false, false, TableStatistics::default()));
         }
@@ -575,7 +606,7 @@ impl CompactionJob {
             sql = sql.as_str(),
             "segment_compactor"
         );
-        svc.execute_sql(sql.as_str()).await?;
+        svc.execute_sql(sql).await?;
         Ok(())
     }
 
@@ -596,7 +627,7 @@ impl CompactionJob {
             sql = sql.as_str(),
             "block_compaction"
         );
-        svc.execute_sql(sql.as_str()).await?;
+        svc.execute_sql(sql).await?;
         Ok(())
     }
 

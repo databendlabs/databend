@@ -20,7 +20,7 @@ use common_exception::Result;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {
-    async fn execute_sql(&self, sql: &str) -> Result<Option<RecordBatch>>;
+    async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>>;
     async fn execute_scheduled_job(&self, name: String) -> Result<()>;
     async fn start(&self) -> Result<()>;
 }
@@ -35,7 +35,7 @@ impl BackgroundServiceHandlerWrapper {
     }
 
     #[async_backtrace::framed]
-    pub async fn execute_sql(&self, sql: &str) -> Result<Option<RecordBatch>> {
+    pub async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>> {
         self.handler.execute_sql(sql).await
     }
 

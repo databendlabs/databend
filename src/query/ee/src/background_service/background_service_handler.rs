@@ -62,10 +62,10 @@ pub struct RealBackgroundService {
 #[async_trait::async_trait]
 impl BackgroundServiceHandler for RealBackgroundService {
     #[async_backtrace::framed]
-    async fn execute_sql(&self, sql: &str) -> Result<Option<RecordBatch>> {
+    async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>> {
         let ctx = self.session.create_query_context().await?;
         let mut planner = Planner::new(ctx.clone());
-        let (plan, plan_extras) = planner.plan_sql(sql).await?;
+        let (plan, plan_extras) = planner.plan_sql(sql.as_str()).await?;
         ctx.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
         let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
         let data_schema = interpreter.schema();
