@@ -46,11 +46,11 @@ use common_storage::DataOperator;
 use common_storages_parquet::calc_parallelism;
 use common_storages_parquet::AsyncParquetSource;
 use common_storages_parquet::ParquetDeserializeTransform;
+use common_storages_parquet::ParquetPart;
 use common_storages_parquet::ParquetReader;
+use common_storages_parquet::ParquetSmallFilesPart;
 use common_storages_parquet::PartitionPruner;
 use common_storages_parquet::SyncParquetSource;
-
-use crate::partition::IcebergPartInfo;
 
 /// accessor wrapper as a table
 ///
@@ -218,11 +218,24 @@ impl IcebergTable {
 
         let partitions = data_files
             .into_iter()
-            .map(|v: icelake::types::DataFile| {
-                Arc::new(Box::new(IcebergPartInfo {
-                    path: v.file_path,
-                    size: v.file_size_in_bytes as u64,
-                }) as Box<dyn PartInfo>)
+            .map(|v: icelake::types::DataFile| match v.file_format {
+                icelake::types::DataFileFormat::Parquet => {
+                    // FIXME: this is wrong of course.
+                    //
+                    // We should return the real part while possible.
+                    Arc::new(Box::new(ParquetPart::SmallFiles(ParquetSmallFilesPart {
+                        files: vec![(
+                            // FIXME: we need better API.
+                            self.table
+                                .rel_path(&v.file_path)
+                                .expect("rel_path must be correct"),
+                            v.file_size_in_bytes as u64,
+                        )],
+                    })) as Box<dyn PartInfo>)
+                }
+                _ => {
+                    unimplemented!("Only parquet format is supported for iceberg table")
+                }
             })
             .collect();
 

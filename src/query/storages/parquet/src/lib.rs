@@ -24,6 +24,8 @@ mod pruning;
 mod statistics;
 
 pub use deserialize_transform::ParquetDeserializeTransform;
+pub use parquet_part::ParquetPart;
+pub use parquet_part::ParquetSmallFilesPart;
 pub use parquet_reader::ParquetReader;
 pub use parquet_source::AsyncParquetSource;
 pub use parquet_source::SyncParquetSource;
