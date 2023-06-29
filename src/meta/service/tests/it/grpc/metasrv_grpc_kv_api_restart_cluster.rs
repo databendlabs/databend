@@ -53,14 +53,7 @@ async fn test_kv_api_restart_cluster_write_read() -> anyhow::Result<()> {
             let client = tc.grpc_client().await?;
 
             let k = make_key(tc, key_suffix);
-            let res = client
-                .upsert_kv(UpsertKVReq {
-                    key: k.clone(),
-                    seq: MatchSeq::GE(0),
-                    value: Operation::Update(k.clone().into_bytes()),
-                    value_meta: None,
-                })
-                .await?;
+            let res = client.upsert_kv(UpsertKVReq::update(&k, &b(&k))).await?;
 
             info!("--- upsert res: {:?}", res);
 
@@ -244,4 +237,8 @@ async fn test_kv_api_restart_cluster_token_expired() -> anyhow::Result<()> {
 // A raft node waits for a interval of election timeout before starting election
 fn timeout() -> Option<Duration> {
     Some(Duration::from_millis(30_000))
+}
+
+fn b(s: impl ToString) -> Vec<u8> {
+    s.to_string().into_bytes()
 }

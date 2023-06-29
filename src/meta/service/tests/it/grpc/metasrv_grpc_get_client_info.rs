@@ -12,10 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::time::Duration;
-
 use common_base::base::tokio;
-use common_meta_client::MetaGrpcClient;
 use databend_meta::init_meta_ut;
 use pretty_assertions::assert_eq;
 use regex::Regex;
@@ -25,17 +22,9 @@ async fn test_get_client_info() -> anyhow::Result<()> {
     // - Start a metasrv server.
     // - Get client ip
 
-    let (_tc, addr) = crate::tests::start_metasrv().await?;
+    let (tc, _addr) = crate::tests::start_metasrv().await?;
 
-    let client = MetaGrpcClient::try_create(
-        vec![addr],
-        "root",
-        "xxx",
-        None,
-        Some(Duration::from_secs(10)),
-        Duration::from_secs(10),
-        None,
-    )?;
+    let client = tc.grpc_client().await?;
 
     let resp = client.get_client_info().await?;
 
