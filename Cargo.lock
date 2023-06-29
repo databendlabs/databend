@@ -2750,6 +2750,7 @@ dependencies = [
  "async-backtrace",
  "async-trait",
  "chrono",
+ "common-base",
  "common-catalog",
  "common-exception",
  "common-expression",
@@ -2757,6 +2758,7 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
+ "common-storages-parquet",
  "futures",
  "icelake",
  "itertools",
@@ -6131,9 +6133,9 @@ dependencies = [
 
 [[package]]
 name = "icelake"
-version = "0.0.3"
+version = "0.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc9337eeb3d4c7f1d37a521e6962a539ce66eb835beca2b604adbeea54f5d764"
+checksum = "beb907fc172ade11df1e0653e002db86af5b2cb5009b33fce93c8afbc5a89ea6"
 dependencies = [
  "anyhow",
  "apache-avro",

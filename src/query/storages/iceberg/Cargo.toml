@@ -9,6 +9,7 @@ publish = false
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+common-base = { path = "../../../common/base" }
 common-catalog = { path = "../../catalog" }
 common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
@@ -16,12 +17,13 @@ common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
 common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }
+common-storages-parquet = { path = "../parquet" }
 
 async-backtrace = { workspace = true }
 async-trait = "0.1"
 chrono = { workspace = true }
 futures = "0.3"
-icelake = { version = "0.0.3" }
+icelake = { version = "0.0.4" }
 itertools = "0.10"
 opendal = { workspace = true }
 serde = { workspace = true }

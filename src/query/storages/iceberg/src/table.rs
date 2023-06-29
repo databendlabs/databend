@@ -28,14 +28,15 @@ use common_catalog::table_args::TableArgs;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataSchema;
 use common_expression::TableSchema;
+use common_expression::TableSchemaRef;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_pipeline_core::Pipeline;
 use common_storage::DataOperator;
 
-use crate::converters::schema_iceberg_to_databend;
 use crate::partition::IcebergPartInfo;
 
 /// accessor wrapper as a table
@@ -43,6 +44,7 @@ use crate::partition::IcebergPartInfo;
 /// TODO: we should use icelake Table instead.
 pub struct IcebergTable {
     info: TableInfo,
+    op: opendal::Operator,
 
     table: icelake::Table,
 }
@@ -58,7 +60,8 @@ impl IcebergTable {
         table_name: &str,
         tbl_root: DataOperator,
     ) -> Result<IcebergTable> {
-        let mut table = icelake::Table::new(tbl_root.operator());
+        let op = tbl_root.operator();
+        let mut table = icelake::Table::new(op.clone());
         table
             .load()
             .await
@@ -91,15 +94,30 @@ impl IcebergTable {
             ..Default::default()
         };
 
-        Ok(Self { info, table })
+        Ok(Self { info, op, table })
     }
 
     pub fn do_read_data(
         &self,
-        _ctx: Arc<dyn TableContext>,
-        _plan: &DataSourcePlan,
-        _pipeline: &mut Pipeline,
+        ctx: Arc<dyn TableContext>,
+        plan: &DataSourcePlan,
+        pipeline: &mut Pipeline,
     ) -> Result<()> {
+        let table_schema: TableSchemaRef = self.info.schema();
+        let source_projection =
+            PushDownInfo::projection_of_push_downs(&table_schema, &plan.push_downs);
+
+        // The schema of the data block `read_data` output.
+        let output_schema: Arc<DataSchema> = Arc::new(plan.schema().into());
+
+        // Build the reader for parquet source.
+        let source_reader = ParquetReader::create(
+            self.op.clone(),
+            self.arrow_schema.clone(),
+            self.schema_descr.clone(),
+            source_projection,
+        )?;
+
         todo!()
     }
 

@@ -88,10 +88,10 @@
 //! ```
 
 mod catalog;
-mod converters;
 mod database;
 mod partition;
 mod table;
+mod table_source;
 
 pub use catalog::IcebergCatalog;
 pub use catalog::ICEBERG_CATALOG;
