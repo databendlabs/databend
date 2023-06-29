@@ -268,12 +268,12 @@ impl IcebergTable {
 
 #[async_trait]
 impl Table for IcebergTable {
-    fn is_local(&self) -> bool {
-        false
-    }
-
     fn as_any(&self) -> &dyn Any {
         self
+    }
+
+    fn is_local(&self) -> bool {
+        false
     }
 
     fn get_table_info(&self) -> &TableInfo {
