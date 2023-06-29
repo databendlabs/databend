@@ -65,8 +65,9 @@ pub fn register(registry: &mut FunctionRegistry) {
         if args_type.len() != 2 {
             return None;
         }
-        if args_type[0].remove_nullable() != DataType::Variant
-            || args_type[1].remove_nullable() != DataType::String
+        if (args_type[0].remove_nullable() != DataType::Variant && args_type[0] != DataType::Null)
+            || (args_type[1].remove_nullable() != DataType::String
+                && args_type[1] != DataType::Null)
         {
             return None;
         }
@@ -82,25 +83,27 @@ pub fn register(registry: &mut FunctionRegistry) {
                 eval: Box::new(|args, ctx| {
                     let val_arg = args[0].clone().to_owned();
                     let path_arg = args[1].clone().to_owned();
-                    let mut lengths = vec![0; ctx.num_rows];
-                    let mut builder =
-                        StringColumnBuilder::with_capacity(ctx.num_rows, ctx.num_rows * 20);
+                    let mut results = Vec::with_capacity(ctx.num_rows);
                     match path_arg {
-                        Value::Scalar(Scalar::Null) => {}
                         Value::Scalar(Scalar::String(path)) => match parse_json_path(&path) {
                             Ok(json_path) => {
-                                for (row, length) in
-                                    lengths.iter_mut().enumerate().take(ctx.num_rows)
-                                {
+                                for row in 0..ctx.num_rows {
                                     let val = unsafe { val_arg.index_unchecked(row) };
+                                    let mut builder = StringColumnBuilder::with_capacity(0, 0);
                                     if let ScalarRef::Variant(val) = val {
                                         let vals = get_by_path(val, json_path.clone());
-                                        *length = vals.len();
                                         for val in vals {
                                             builder.put(&val);
                                             builder.commit_row();
                                         }
                                     }
+                                    let array =
+                                        Column::Variant(builder.build()).wrap_nullable(None);
+                                    let array_len = array.len();
+                                    results.push((
+                                        Value::Column(Column::Tuple(vec![array])),
+                                        array_len,
+                                    ));
                                 }
                             }
                             Err(_) => {
@@ -114,15 +117,15 @@ pub fn register(registry: &mut FunctionRegistry) {
                             }
                         },
                         _ => {
-                            for (row, length) in lengths.iter_mut().enumerate().take(ctx.num_rows) {
+                            for row in 0..ctx.num_rows {
                                 let val = unsafe { val_arg.index_unchecked(row) };
                                 let path = unsafe { path_arg.index_unchecked(row) };
+                                let mut builder = StringColumnBuilder::with_capacity(0, 0);
                                 if let ScalarRef::String(path) = path {
                                     match parse_json_path(path) {
                                         Ok(json_path) => {
                                             if let ScalarRef::Variant(val) = val {
                                                 let vals = get_by_path(val, json_path);
-                                                *length = vals.len();
                                                 for val in vals {
                                                     builder.put(&val);
                                                     builder.commit_row();
@@ -140,11 +143,14 @@ pub fn register(registry: &mut FunctionRegistry) {
                                         }
                                     }
                                 }
+                                let array = Column::Variant(builder.build()).wrap_nullable(None);
+                                let array_len = array.len();
+                                results
+                                    .push((Value::Column(Column::Tuple(vec![array])), array_len));
                             }
                         }
                     }
-                    let array = Column::Variant(builder.build()).wrap_nullable(None);
-                    (Value::Column(Column::Tuple(vec![array])), lengths)
+                    results
                 }),
             },
         }))
@@ -165,10 +171,7 @@ fn build_unnest(
                 },
                 eval: FunctionEval::SRF {
                     eval: Box::new(|_, ctx| {
-                        (
-                            Value::Scalar(Scalar::Tuple(vec![Scalar::Null])),
-                            vec![0; ctx.num_rows],
-                        )
+                        vec![(Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0); ctx.num_rows]
                     }),
                 },
             })
@@ -182,23 +185,27 @@ fn build_unnest(
             eval: FunctionEval::SRF {
                 eval: Box::new(|args, ctx| {
                     let arg = args[0].clone().to_owned();
-                    let mut lengths = vec![0; ctx.num_rows];
-                    let mut builder =
-                        StringColumnBuilder::with_capacity(ctx.num_rows, ctx.num_rows * 20);
-                    for (row, length) in lengths.iter_mut().enumerate().take(ctx.num_rows) {
-                        let value = unsafe { arg.index_unchecked(row) };
-                        if let ScalarRef::Variant(value) = value {
-                            if let Some(vals) = array_values(value) {
-                                *length = vals.len();
-                                for val in vals {
-                                    builder.put_slice(&val);
-                                    builder.commit_row();
-                                }
+                    (0..ctx.num_rows)
+                        .map(|row| match arg.index(row).unwrap() {
+                            ScalarRef::Null => {
+                                (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
                             }
-                        }
-                    }
-                    let col = Column::Variant(builder.build()).wrap_nullable(None);
-                    (Value::Column(Column::Tuple(vec![col])), lengths)
+                            ScalarRef::Variant(val) => {
+                                let mut len = 0;
+                                let mut builder = StringColumnBuilder::with_capacity(0, 0);
+                                if let Some(vals) = array_values(val) {
+                                    len = vals.len();
+                                    for val in vals {
+                                        builder.put_slice(&val);
+                                        builder.commit_row();
+                                    }
+                                }
+                                let col = Column::Variant(builder.build()).wrap_nullable(None);
+                                (Value::Column(Column::Tuple(vec![col])), len)
+                            }
+                            _ => unreachable!(),
+                        })
+                        .collect()
                 }),
             },
         }),
@@ -225,26 +232,33 @@ fn build_unnest(
             eval: FunctionEval::SRF {
                 eval: Box::new(|args, ctx| {
                     let arg = args[0].clone().to_owned();
-                    match arg {
-                        Value::Scalar(Scalar::Array(col)) => {
-                            (Value::Column(Column::Tuple(vec![col.clone()])), vec![
-                                col.len(),
-                            ])
-                        }
-                        Value::Column(Column::Array(col))
-                        | Value::Column(Column::Nullable(box NullableColumn {
-                            column: Column::Array(col),
-                            ..
-                        })) => {
-                            let mut lengths = Vec::with_capacity(ctx.num_rows);
-                            for i in 1..=col.len() {
-                                lengths.push((col.offsets[i] - col.offsets[i - 1]) as usize);
+                    (0..ctx.num_rows)
+                        .map(|row| {
+                            fn unnest_column(col: Column) -> Column {
+                                match col {
+                                    Column::Array(col) => unnest_column(col.underlying_column()),
+                                    // Assuming that the invalid array has zero elements in the underlying column.
+                                    Column::Nullable(box NullableColumn {
+                                        column: Column::Array(col),
+                                        ..
+                                    }) => unnest_column(col.underlying_column()),
+                                    _ => col,
+                                }
                             }
-                            let column = col.values.clone().wrap_nullable(None);
-                            (Value::Column(Column::Tuple(vec![column])), lengths)
-                        }
-                        _ => unreachable!(),
-                    }
+
+                            match arg.index(row).unwrap() {
+                                ScalarRef::Null => {
+                                    (Value::Scalar(Scalar::Tuple(vec![Scalar::Null])), 0)
+                                }
+                                ScalarRef::Array(col) => {
+                                    let unnest_array = unnest_column(col);
+                                    let array_len = unnest_array.len();
+                                    (Value::Column(Column::Tuple(vec![unnest_array])), array_len)
+                                }
+                                _ => unreachable!(),
+                            }
+                        })
+                        .collect()
                 }),
             },
         }),

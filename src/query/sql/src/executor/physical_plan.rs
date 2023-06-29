@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -175,6 +176,8 @@ pub struct ProjectSet {
 
     pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
 
+    pub unused_indices: HashSet<IndexType>,
+
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -182,7 +185,12 @@ pub struct ProjectSet {
 impl ProjectSet {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
-        let mut fields = input_schema.fields().clone();
+        let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if !self.unused_indices.contains(&i) {
+                fields.push(field.clone());
+            }
+        }
         fields.extend(self.srf_exprs.iter().map(|(srf, index)| {
             DataField::new(
                 &index.to_string(),

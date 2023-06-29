@@ -622,6 +622,7 @@ impl PipelineBuilder {
                 .iter()
                 .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
                 .collect(),
+            unused_indices: project_set.unused_indices.clone(),
         };
 
         let func_ctx = self.ctx.get_function_context()?;
