@@ -30,3 +30,4 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tonic = { workspace = true }
+backtrace = "0.3.67"

@@ -14,15 +14,15 @@
 
 #![allow(non_snake_case)]
 
-use std::backtrace::Backtrace;
-use std::backtrace::BacktraceStatus;
 use std::fmt::Debug;
 use std::fmt::Display;
 use std::fmt::Formatter;
 use std::sync::Arc;
 
+use backtrace::Backtrace;
 use thiserror::Error;
 
+use crate::exception_backtrace::capture;
 use crate::span::pretty_print_error;
 use crate::Span;
 
@@ -37,7 +37,13 @@ impl ToString for ErrorCodeBacktrace {
         match self {
             ErrorCodeBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
             ErrorCodeBacktrace::Origin(backtrace) => {
-                format!("{:?}", backtrace)
+                let ss = backtrace
+                    .frames()
+                    .iter()
+                    .map(|f| f.ip() as usize)
+                    .collect::<Vec<_>>();
+                // backtrace.resolve()
+                format!("{:?}", ss)
             }
         }
     }
@@ -69,7 +75,7 @@ impl From<Backtrace> for ErrorCodeBacktrace {
 
 impl From<&Backtrace> for ErrorCodeBacktrace {
     fn from(bt: &Backtrace) -> Self {
-        Self::Serialized(Arc::new(bt.to_string()))
+        Self::Serialized(Arc::new(format!("{:?}", bt)))
     }
 }
 
@@ -171,14 +177,19 @@ impl Debug for ErrorCode {
                 // TODO: Custom stack frame format for print
                 match backtrace {
                     ErrorCodeBacktrace::Origin(backtrace) => {
-                        if backtrace.status() == BacktraceStatus::Disabled {
-                            write!(
-                                f,
-                                "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
-                            )
-                        } else {
-                            write!(f, "\n\n{}", backtrace)
-                        }
+                        // if backtrace.status() == BacktraceStatus::Disabled {
+                        //     write!(
+                        //         f,
+                        //         "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
+                        //     )
+                        // } else {
+                        let ss = backtrace
+                            .frames()
+                            .iter()
+                            .map(|f| f.ip() as usize)
+                            .collect::<Vec<_>>();
+                        write!(f, "\n\n{:?}", ss)
+                        // }
                     }
                     ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{}", backtrace),
                 }
@@ -201,7 +212,7 @@ impl ErrorCode {
             display_text: error.to_string(),
             span: None,
             cause: None,
-            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+            backtrace: capture(),
         }
     }
 
@@ -211,7 +222,7 @@ impl ErrorCode {
             display_text: error,
             span: None,
             cause: None,
-            backtrace: Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+            backtrace: capture(),
         }
     }
 

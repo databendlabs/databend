@@ -14,10 +14,7 @@
 
 #![allow(non_snake_case)]
 
-use std::backtrace::Backtrace;
-use std::sync::Arc;
-
-use crate::exception::ErrorCodeBacktrace;
+use crate::exception_backtrace::capture;
 use crate::ErrorCode;
 
 macro_rules! build_exceptions {
@@ -35,7 +32,7 @@ macro_rules! build_exceptions {
                     #[$meta]
                 )*
                 pub fn $body(display_text: impl Into<String>) -> ErrorCode {
-                    let bt = Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture())));
+                    let bt = capture();
                     ErrorCode::create(
                         $code,
                         display_text.into(),

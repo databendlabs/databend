@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::backtrace::Backtrace;
 use std::error::Error;
 use std::fmt::Debug;
 use std::fmt::Display;
@@ -24,6 +23,7 @@ use common_meta_types::MetaAPIError;
 use common_meta_types::MetaError;
 
 use crate::exception::ErrorCodeBacktrace;
+use crate::exception_backtrace::capture;
 use crate::ErrorCode;
 use crate::Span;
 
@@ -66,7 +66,7 @@ impl From<anyhow::Error> for ErrorCode {
             1002,
             format!("{}, source: {:?}", error, error.source()),
             Some(Box::new(OtherErrors::AnyHow { error })),
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+            capture(),
         )
     }
 }
@@ -131,23 +131,13 @@ impl From<bincode::error::DecodeError> for ErrorCode {
 
 impl From<bincode::serde::EncodeError> for ErrorCode {
     fn from(error: bincode::serde::EncodeError) -> Self {
-        ErrorCode::create(
-            1002,
-            format!("{error:?}"),
-            None,
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
-        )
+        ErrorCode::create(1002, format!("{error:?}"), None, capture())
     }
 }
 
 impl From<bincode::serde::DecodeError> for ErrorCode {
     fn from(error: bincode::serde::DecodeError) -> Self {
-        ErrorCode::create(
-            1002,
-            format!("{error:?}"),
-            None,
-            Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
-        )
+        ErrorCode::create(1002, format!("{error:?}"), None, capture())
     }
 }
 
