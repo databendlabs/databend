@@ -826,6 +826,7 @@ impl PhysicalPlanBuilder {
                     .collect(),
                 limit: sort.limit,
                 after_exchange: sort.after_exchange,
+                pre_projection: sort.pre_projection.clone(),
                 stat_info: Some(stat_info),
             })),
 

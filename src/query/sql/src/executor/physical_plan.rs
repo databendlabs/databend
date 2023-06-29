@@ -381,6 +381,7 @@ pub struct Sort {
 
     // If the sort plan is after the exchange plan
     pub after_exchange: bool,
+    pub pre_projection: Option<Vec<IndexType>>,
 
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
@@ -388,7 +389,17 @@ pub struct Sort {
 
 impl Sort {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
-        self.input.output_schema()
+        let input_schema = self.input.output_schema()?;
+        if let Some(proj) = &self.pre_projection {
+            let mut fields = Vec::with_capacity(proj.len());
+            for index in proj.iter() {
+                let field = input_schema.field_with_name(&index.to_string())?.clone();
+                fields.push(field);
+            }
+            Ok(DataSchemaRefExt::create(fields))
+        } else {
+            Ok(input_schema)
+        }
     }
 }
 

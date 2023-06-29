@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use itertools::Itertools;
 
 use crate::optimizer::util::contains_project_set;
 use crate::optimizer::ColumnSet;
@@ -218,11 +219,13 @@ impl UnusedColumnPruner {
                 ))
             }
             RelOperator::Sort(p) => {
+                let mut p = p.clone();
                 p.items.iter().for_each(|s| {
                     required.insert(s.index);
                 });
+                p.pre_projection = Some(required.iter().sorted().copied().collect());
                 Ok(SExpr::create_unary(
-                    Arc::new(RelOperator::Sort(p.clone())),
+                    Arc::new(RelOperator::Sort(p)),
                     Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }
