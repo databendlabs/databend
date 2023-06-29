@@ -45,12 +45,12 @@ fn test_unresolvable_delete_conflict() {
     let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
     latest_snapshot.segments = vec![("1".to_string(), 1), ("4".to_string(), 1)];
 
-    let ctx = ConflictResolveContext::Delete(Box::new(SnapshotChanges {
-        removed_segments: vec![("2".to_string(), 1)],
+    let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
+        removed_segment_indexes: vec![1],
         added_segments: vec![],
         removed_statistics: Statistics::default(),
         added_statistics: Statistics::default(),
-    }));
+    });
 
     let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
     generator.set_conflict_resolve_context(ctx);
@@ -128,12 +128,12 @@ fn test_resolvable_delete_conflict() {
         col_stats: HashMap::new(),
     };
 
-    let ctx = ConflictResolveContext::Delete(Box::new(SnapshotChanges {
-        removed_segments: vec![("2".to_string(), 1), ("3".to_string(), 1)],
-        added_segments: vec![("8".to_string(), 1)],
+    let ctx = ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
+        removed_segment_indexes: vec![0, 1],
+        added_segments: vec![None, Some(("8".to_string(), 1))],
         removed_statistics,
         added_statistics,
-    }));
+    });
 
     let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
     generator.set_conflict_resolve_context(ctx);
