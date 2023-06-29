@@ -161,16 +161,22 @@ impl BlockBuilder {
         let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
         let (block_location, block_id) = self.meta_locations.gen_block_location();
 
-        let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
-        let bloom_index_state = BloomIndexState::try_create(
-            self.ctx.clone(),
-            self.source_schema.clone(),
-            &data_block,
-            bloom_index_location,
-        )?;
-        let column_distinct_count = bloom_index_state
-            .as_ref()
-            .map(|i| i.column_distinct_count.clone());
+        // let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
+        let bloom_index_state: Option<BloomIndexState> = {
+            // BloomIndexState::try_create(
+            //     self.ctx.clone(),
+            //     self.source_schema.clone(),
+            //     &data_block,
+            //     bloom_index_location,
+            // )?;
+            None
+        };
+        let column_distinct_count = {
+            // bloom_index_state
+            //     .as_ref()
+            //     .map(|i| i.column_distinct_count.clone());
+            None
+        };
 
         let row_count = data_block.num_rows() as u64;
         let block_size = data_block.memory_size() as u64;
