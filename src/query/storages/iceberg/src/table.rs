@@ -102,12 +102,12 @@ impl IcebergTable {
             })?;
 
         // Build arrow2 schema from arrow schema.
-        let fileds: Vec<Arrow2Field> = arrow_schema
+        let fields: Vec<Arrow2Field> = arrow_schema
             .fields()
             .into_iter()
             .map(|f| f.into())
             .collect();
-        let arrow2_schema = Arrow2Schema::from(fileds);
+        let arrow2_schema = Arrow2Schema::from(fields);
 
         // Build parquet schema from arrow2 schema.
         let parquet2_schema = to_parquet_schema(&arrow2_schema).map_err(|err| {
