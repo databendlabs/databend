@@ -201,6 +201,8 @@ fn calc_parallelism(
     if plan.parts.partitions.is_empty() {
         return Ok((1, 1));
     }
+    let num_partitions = plan.parts.partitions.len();
+    let max_threads = ctx.get_settings().get_max_threads()? as usize;
     let mut sizes = vec![];
     for p in plan.parts.partitions.iter() {
         sizes.push(ParquetPart::from_part(p)?.uncompressed_size() as usize);
@@ -220,12 +222,10 @@ fn calc_parallelism(
     .min(max_by_memory)
     .max(1);
 
-    let num_deserializer = (ctx.get_settings().get_max_threads()? as usize)
-        .min(max_by_memory)
-        .max(1);
+    let num_deserializer = max_threads.min(max_by_memory).max(1);
 
     tracing::info!(
-        "loading row groups with {num_readers} readers and {num_deserializer} deserializers, blocking = {is_blocking}, according to max_memory={max_memory}, num_chunks={num_chunks}, max_storage_io_requests={max_storage_io_requests}, max_split_size={}",
+        "loading {num_partitions} partitions with {num_readers} readers and {num_deserializer} deserializers, blocking = {is_blocking}, according to max_memory={max_memory}, num_chunks={num_chunks}, max_storage_io_requests={max_storage_io_requests}, max_split_size={}, max_threads={max_threads}",
         sizes[0]
     );
     Ok((num_readers, num_deserializer))
