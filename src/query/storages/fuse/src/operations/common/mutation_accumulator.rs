@@ -32,7 +32,8 @@ use storages_common_table_meta::meta::Versioned;
 use tracing::info;
 
 use super::ConflictResolveContext;
-use super::DeleteConflictResolveContext;
+use super::SnapshotChanges;
+use super::SnapshotMerged;
 use crate::io::SegmentsIO;
 use crate::io::SerializedSegment;
 use crate::io::TableMetaLocationGenerator;
@@ -79,6 +80,7 @@ impl BlockMutations {
 }
 
 #[derive(Clone, Copy)]
+/// This is used by MutationAccumulator, so no compact here.
 pub enum MutationKind {
     Delete,
     Update,
@@ -193,10 +195,6 @@ impl MutationAccumulator {
 
         let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         let segment_indices = self.mutations.keys().cloned().collect::<Vec<_>>();
-        let removed_segments = segment_indices
-            .iter()
-            .map(|i| self.base_segments[*i].clone())
-            .collect::<Vec<_>>();
         let mut added_segments = vec![];
         let mut removed_statistics = Statistics::default();
         let mut added_statistics = Statistics::default();
@@ -209,10 +207,11 @@ impl MutationAccumulator {
                     segments_editor.insert(result.index, (location.clone(), SegmentInfo::VERSION));
                     merge_statistics_mut(&mut self.summary, &summary);
                     merge_statistics_mut(&mut added_statistics, &summary);
-                    added_segments.push((location, SegmentInfo::VERSION));
+                    added_segments.push(Some((location, SegmentInfo::VERSION)));
                 } else {
                     // remove the old segment location.
                     segments_editor.remove(&result.index);
+                    added_segments.push(None);
                 }
                 merge_statistics_mut(&mut removed_statistics, &result.origin_summary);
                 if !recalc_stats {
@@ -251,23 +250,25 @@ impl MutationAccumulator {
 
         let conflict_resolve_context = match self.kind {
             MutationKind::Delete => {
-                ConflictResolveContext::Delete(Box::new(DeleteConflictResolveContext {
-                    removed_segments,
+                ConflictResolveContext::ModifiedSegmentExistsInLatest(SnapshotChanges {
+                    removed_segment_indexes: segment_indices,
                     added_segments,
                     removed_statistics,
                     added_statistics,
-                }))
+                })
             }
-            MutationKind::Update => ConflictResolveContext::Update,
-            MutationKind::Replace => ConflictResolveContext::Replace,
-            MutationKind::Recluster => ConflictResolveContext::Recluster,
-            MutationKind::Insert => ConflictResolveContext::Insert,
+            MutationKind::Insert => ConflictResolveContext::AppendOnly(SnapshotMerged {
+                merged_segments: new_segments,
+                merged_statistics: self.summary.clone(),
+            }),
+            _ => ConflictResolveContext::LatestSnapshotAppendOnly(SnapshotMerged {
+                merged_segments: new_segments,
+                merged_statistics: self.summary.clone(),
+            }),
         };
 
         let meta = CommitMeta::new(
-            new_segments,
             conflict_resolve_context,
-            self.summary.clone(),
             self.abort_operation.clone(),
             false,
         );

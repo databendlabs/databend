@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
-use std::ops::Range;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -59,6 +58,7 @@ use crate::metrics::metrics_inc_commit_mutation_unresolvable_conflict;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::AppendGenerator;
 use crate::operations::common::CommitSink;
+use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::TableMutationAggregator;
 use crate::statistics::merge_statistics;
 use crate::FuseTable;
@@ -353,26 +353,24 @@ impl FuseTable {
                             latest_table_info = &latest_fuse_table.table_info;
 
                             // Check if there is only insertion during the operation.
-                            match MutatorConflictDetector::detect_conflicts(
-                                base_snapshot.as_ref(),
-                                latest_snapshot.as_ref(),
-                            ) {
-                                Conflict::Unresolvable => {
-                                    abort_operation
-                                        .abort(ctx.clone(), self.operator.clone())
-                                        .await?;
-                                    metrics_inc_commit_mutation_unresolvable_conflict();
-                                    break Err(ErrorCode::StorageOther(
-                                        "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
-                                    ));
-                                }
-                                Conflict::ResolvableAppend(range_of_newly_append) => {
-                                    info!("resolvable conflicts detected");
-                                    metrics_inc_commit_mutation_resolvable_conflict();
-                                    concurrently_appended_segment_locations =
-                                        &latest_snapshot.segments[range_of_newly_append];
-                                }
-                                _ => unreachable!(),
+                            if let Some(range_of_newly_append) =
+                                ConflictResolveContext::is_latest_snapshot_append_only(
+                                    &base_snapshot,
+                                    &latest_snapshot,
+                                )
+                            {
+                                info!("resolvable conflicts detected");
+                                metrics_inc_commit_mutation_resolvable_conflict();
+                                concurrently_appended_segment_locations =
+                                    &latest_snapshot.segments[range_of_newly_append];
+                            } else {
+                                abort_operation
+                                    .abort(ctx.clone(), self.operator.clone())
+                                    .await?;
+                                metrics_inc_commit_mutation_unresolvable_conflict();
+                                break Err(ErrorCode::StorageOther(
+                                    "mutation conflicts, concurrent mutation detected while committing segment compaction operation",
+                                ));
                             }
 
                             retries += 1;
@@ -485,36 +483,5 @@ impl FuseTable {
     // check if there are any fuse table legacy options
     pub fn remove_legacy_options(table_options: &mut BTreeMap<String, String>) {
         table_options.remove(OPT_KEY_LEGACY_SNAPSHOT_LOC);
-    }
-}
-
-pub enum Conflict {
-    Unresolvable,
-    // resolvable conflicts with append only operation
-    // the range embedded is the range of segments that are appended in the latest snapshot
-    ResolvableAppend(Range<usize>),
-    ResolvableDelete,
-}
-
-// wraps a namespace, to clarify the who is detecting conflict
-pub struct MutatorConflictDetector;
-
-impl MutatorConflictDetector {
-    // detects conflicts, as a mutator, working on the base snapshot, with latest snapshot
-    pub fn detect_conflicts(base: &TableSnapshot, latest: &TableSnapshot) -> Conflict {
-        let base_segments = &base.segments;
-        let latest_segments = &latest.segments;
-
-        let base_segments_len = base_segments.len();
-        let latest_segments_len = latest_segments.len();
-
-        if latest_segments_len >= base_segments_len
-            && base_segments[0..base_segments_len]
-                == latest_segments[(latest_segments_len - base_segments_len)..latest_segments_len]
-        {
-            Conflict::ResolvableAppend(0..(latest_segments_len - base_segments_len))
-        } else {
-            Conflict::Unresolvable
-        }
     }
 }

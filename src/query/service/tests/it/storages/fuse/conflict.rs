@@ -18,8 +18,8 @@ use std::vec;
 
 use common_expression::TableSchema;
 use common_storages_fuse::operations::common::ConflictResolveContext;
-use common_storages_fuse::operations::common::DeleteConflictResolveContext;
 use common_storages_fuse::operations::common::MutationGenerator;
+use common_storages_fuse::operations::common::SnapshotChanges;
 use common_storages_fuse::operations::common::SnapshotGenerator;
 use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::TableSnapshot;
@@ -45,7 +45,7 @@ fn test_unresolvable_delete_conflict() {
     let mut latest_snapshot = TableSnapshot::new_empty_snapshot(TableSchema::default());
     latest_snapshot.segments = vec![("1".to_string(), 1), ("4".to_string(), 1)];
 
-    let ctx = ConflictResolveContext::Delete(Box::new(DeleteConflictResolveContext {
+    let ctx = ConflictResolveContext::Delete(Box::new(SnapshotChanges {
         removed_segments: vec![("2".to_string(), 1)],
         added_segments: vec![],
         removed_statistics: Statistics::default(),
@@ -53,7 +53,7 @@ fn test_unresolvable_delete_conflict() {
     }));
 
     let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
-    generator.set_context(ctx);
+    generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
         TableSchema::default(),
@@ -128,7 +128,7 @@ fn test_resolvable_delete_conflict() {
         col_stats: HashMap::new(),
     };
 
-    let ctx = ConflictResolveContext::Delete(Box::new(DeleteConflictResolveContext {
+    let ctx = ConflictResolveContext::Delete(Box::new(SnapshotChanges {
         removed_segments: vec![("2".to_string(), 1), ("3".to_string(), 1)],
         added_segments: vec![("8".to_string(), 1)],
         removed_statistics,
@@ -136,7 +136,7 @@ fn test_resolvable_delete_conflict() {
     }));
 
     let mut generator = MutationGenerator::new(Arc::new(base_snapshot));
-    generator.set_context(ctx);
+    generator.set_conflict_resolve_context(ctx);
 
     let result = generator.generate_new_snapshot(
         TableSchema::default(),

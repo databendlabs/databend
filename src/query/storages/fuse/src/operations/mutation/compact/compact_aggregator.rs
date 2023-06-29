@@ -42,6 +42,7 @@ use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::MutationLogEntry;
 use crate::operations::common::MutationLogs;
 use crate::operations::common::Replacement;
+use crate::operations::common::SnapshotMerged;
 use crate::operations::mutation::BlockCompactMutator;
 use crate::statistics::reducers::merge_statistics_mut;
 use crate::statistics::reducers::reduce_block_metas;
@@ -182,13 +183,11 @@ impl AsyncAccumulatingTransform for CompactAggregator {
         let merged_segments = std::mem::take(&mut self.merged_segments)
             .into_values()
             .collect();
-        let meta = CommitMeta::new(
+        let ctx = ConflictResolveContext::LatestSnapshotAppendOnly(SnapshotMerged {
             merged_segments,
-            ConflictResolveContext::Compact,
-            std::mem::take(&mut self.merged_statistics),
-            std::mem::take(&mut self.abort_operation),
-            true,
-        );
+            merged_statistics: std::mem::take(&mut self.merged_statistics),
+        });
+        let meta = CommitMeta::new(ctx, std::mem::take(&mut self.abort_operation), true);
         Ok(Some(DataBlock::empty_with_meta(Box::new(meta))))
     }
 }

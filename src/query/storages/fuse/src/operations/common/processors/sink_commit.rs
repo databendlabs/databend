@@ -38,7 +38,6 @@ use crate::metrics::metrics_inc_commit_aborts;
 use crate::metrics::metrics_inc_commit_mutation_success;
 use crate::operations::common::AbortOperation;
 use crate::operations::common::CommitMeta;
-use crate::operations::common::ConflictResolveContext;
 use crate::operations::common::SnapshotGenerator;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::processor::Event;
@@ -83,8 +82,6 @@ pub struct CommitSink<F: SnapshotGenerator> {
 
     abort_operation: AbortOperation,
     heartbeat: TableLockHeartbeat,
-
-    conflict_resolve_context: ConflictResolveContext,
 }
 
 impl<F> CommitSink<F>
@@ -113,7 +110,6 @@ where F: SnapshotGenerator + Send + 'static
             retries: 0,
             max_retry_elapsed,
             input,
-            conflict_resolve_context: ConflictResolveContext::default(),
         })))
     }
 
@@ -137,13 +133,12 @@ where F: SnapshotGenerator + Send + 'static
         let meta = CommitMeta::downcast_from(input_meta)
             .ok_or(ErrorCode::Internal("No commit meta. It's a bug"))?;
 
-        self.snapshot_gen.set_merged_segments(meta.segments);
-        self.snapshot_gen.set_merged_summary(meta.summary);
         self.abort_operation = meta.abort_operation;
 
         self.backoff = FuseTable::set_backoff(self.max_retry_elapsed);
 
-        self.conflict_resolve_context = meta.conflict_resolve_context;
+        self.snapshot_gen
+            .set_conflict_resolve_context(meta.conflict_resolve_context.clone());
 
         if meta.need_lock {
             self.state = State::TryLock;
@@ -205,8 +200,6 @@ where F: SnapshotGenerator + Send + 'static
                 cluster_key_meta,
             } => {
                 let schema = self.table.schema().as_ref().clone();
-                self.snapshot_gen
-                    .set_context(std::mem::take(&mut self.conflict_resolve_context));
                 match self
                     .snapshot_gen
                     .generate_new_snapshot(schema, cluster_key_meta, previous)
