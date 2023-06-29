@@ -92,6 +92,7 @@ impl Plan {
             Plan::TruncateTable(truncate_table) => Ok(format!("{:?}", truncate_table)),
             Plan::OptimizeTable(optimize_table) => Ok(format!("{:?}", optimize_table)),
             Plan::VacuumTable(vacuum_table) => Ok(format!("{:?}", vacuum_table)),
+            Plan::VacuumDropTable(vacuum_drop_table) => Ok(format!("{:?}", vacuum_drop_table)),
             Plan::AnalyzeTable(analyze_table) => Ok(format!("{:?}", analyze_table)),
             Plan::ExistsTable(exists_table) => Ok(format!("{:?}", exists_table)),
 

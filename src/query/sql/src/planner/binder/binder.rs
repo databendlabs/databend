@@ -254,6 +254,7 @@ impl<'a> Binder {
             Statement::TruncateTable(stmt) => self.bind_truncate_table(stmt).await?,
             Statement::OptimizeTable(stmt) => self.bind_optimize_table(bind_context, stmt).await?,
             Statement::VacuumTable(stmt) => self.bind_vacuum_table(bind_context, stmt).await?,
+            Statement::VacuumDropTable(stmt) => self.bind_vacuum_drop_table(bind_context, stmt).await?,
             Statement::AnalyzeTable(stmt) => self.bind_analyze_table(stmt).await?,
             Statement::ExistsTable(stmt) => self.bind_exists_table(stmt).await?,
 
@@ -582,6 +583,20 @@ impl<'a> Binder {
             .unwrap_or_else(|| self.ctx.get_current_database());
         let object_name = normalize_identifier(object, &self.name_resolution_ctx).name;
         (catalog_name, database_name, object_name)
+    }
+
+    /// Normalize [[<catalog>].<database>]
+    pub fn normalize_object_identifier_double(
+        &self,
+        catalog: &Option<Identifier>,
+        database: &Identifier,
+    ) -> (String, String) {
+        let catalog_name = catalog
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_catalog());
+        let database_name = normalize_identifier(database, &self.name_resolution_ctx).name;
+        (catalog_name, database_name)
     }
 
     /// Normalize <identifier>

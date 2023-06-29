@@ -614,6 +614,22 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let vacuum_drop_table = map(
+        rule! {
+            VACUUM ~ DROP ~ TABLE ~ (FROM ~ #period_separated_idents_1_to_2)? ~ #vacuum_table_option
+        },
+        |(_, _, _, database_option, option)| {
+            let (catalog, database) = database_option.map_or_else(
+                || (None, None),
+                |(_, catalog_database)| (catalog_database.0, Some(catalog_database.1)),
+            );
+            Statement::VacuumDropTable(VacuumDropTableStmt {
+                catalog,
+                database,
+                option,
+            })
+        },
+    );
     let analyze_table = map(
         rule! {
             ANALYZE ~ TABLE ~ #period_separated_idents_1_to_3
@@ -1325,6 +1341,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #truncate_table : "`TRUNCATE TABLE [<database>.]<table> [PURGE]`"
             | #optimize_table : "`OPTIMIZE TABLE [<database>.]<table> (ALL | PURGE | COMPACT [SEGMENT])`"
             | #vacuum_table : "`VACUUM TABLE [<database>.]<table> [RETAIN number HOURS] [DRY RUN]`"
+            | #vacuum_drop_table : "`VACUUM DROP TABLE [FROM [<catalog>.]<database>] [RETAIN number HOURS] [DRY RUN]`"
             | #analyze_table : "`ANALYZE TABLE [<database>.]<table>`"
             | #exists_table : "`EXISTS TABLE [<database>.]<table>`"
             | #show_table_functions : "`SHOW TABLE_FUNCTIONS [<show_limit>]`"

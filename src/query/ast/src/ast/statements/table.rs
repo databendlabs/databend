@@ -451,6 +451,23 @@ impl Display for VacuumTableStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct VacuumDropTableStmt {
+    pub catalog: Option<Identifier>,
+    pub database: Option<Identifier>,
+    pub option: VacuumTableOption,
+}
+
+impl Display for VacuumDropTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "VACUUM DROP TABLE ")?;
+        write_period_separated_list(f, self.catalog.iter().chain(&self.database))?;
+        write!(f, " {}", &self.option)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct OptimizeTableStmt {
     pub catalog: Option<Identifier>,
     pub database: Option<Identifier>,
