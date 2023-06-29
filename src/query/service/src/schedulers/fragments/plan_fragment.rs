@@ -19,6 +19,7 @@ use common_catalog::plan::Partitions;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_sql::executor::DeletePartial;
+use common_sql::executor::DistributedCopyIntoTable;
 
 use crate::api::DataExchange;
 use crate::schedulers::Fragmenter;
@@ -163,6 +164,7 @@ impl PlanFragment {
 
         Ok(fragment_actions)
     }
+
     fn redistribute_delete_leaf(&self, ctx: Arc<QueryContext>) -> Result<QueryFragmentActions> {
         let plan = match &self.plan {
             PhysicalPlan::ExchangeSink(plan) => plan,
@@ -204,6 +206,8 @@ impl PlanFragment {
         let mut collect_read_source = |plan: &PhysicalPlan| {
             if let PhysicalPlan::TableScan(scan) = plan {
                 source.push(*scan.source.clone())
+            } else if let PhysicalPlan::DistributedCopyIntoTable(distributed_plan) = plan {
+                source.push(*distributed_plan.source.clone())
             }
         };
 
@@ -238,6 +242,15 @@ impl PhysicalPlanReplacer for ReplaceReadSource {
             stat_info: plan.stat_info.clone(),
             internal_column: plan.internal_column.clone(),
         }))
+    }
+
+    fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
+            DistributedCopyIntoTable {
+                source: Box::new(self.source.clone()),
+                ..plan.clone()
+            },
+        )))
     }
 }
 

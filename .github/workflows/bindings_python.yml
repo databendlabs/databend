@@ -134,7 +134,7 @@ jobs:
 
   release:
     name: Publish in PyPI
-    needs: [build-x86_64-unknown-linux-gnu, build-aarch64-unknown-linux-gnu, build-x86_64-apple-darwin, build-aarch64-apple-darwin]
+    needs: [builds]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3

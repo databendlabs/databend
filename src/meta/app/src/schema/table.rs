@@ -645,8 +645,16 @@ impl GetTableReq {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub enum TableInfoFilter {
+    // if datatime is some, filter only dropped tables which drop time before that,
+    // else filter all dropped tables
+    Dropped(Option<DateTime<Utc>>),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct ListTableReq {
     pub inner: DatabaseNameIdent,
+    pub filter: Option<TableInfoFilter>,
 }
 
 impl Deref for ListTableReq {
@@ -664,6 +672,21 @@ impl ListTableReq {
                 tenant: tenant.into(),
                 db_name: db_name.into(),
             },
+            filter: None,
+        }
+    }
+
+    pub fn new_with_filter(
+        tenant: impl Into<String>,
+        db_name: impl Into<String>,
+        filter: Option<TableInfoFilter>,
+    ) -> ListTableReq {
+        ListTableReq {
+            inner: DatabaseNameIdent {
+                tenant: tenant.into(),
+                db_name: db_name.into(),
+            },
+            filter,
         }
     }
 }
