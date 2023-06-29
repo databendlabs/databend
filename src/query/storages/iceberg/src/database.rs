@@ -29,6 +29,7 @@ use common_storage::DataOperator;
 use opendal::EntryMode;
 use opendal::Metakey;
 
+use crate::context::IcebergContext;
 use crate::table::IcebergTable;
 
 #[derive(Clone, Debug)]
@@ -39,34 +40,18 @@ pub struct IcebergDatabase {
     db_root: DataOperator,
     /// database information
     info: DatabaseInfo,
+    /// Context of the entire iceberg catalog.
+    context: IcebergContext,
 }
 
 impl IcebergDatabase {
-    /// create an void database naming `default`
-    ///
-    /// *for flatten catalogs only*
-    pub fn create_database_omitted_default(ctl_name: &str, db_root: DataOperator) -> Self {
-        let info = DatabaseInfo {
-            ident: DatabaseIdent { db_id: 0, seq: 0 },
-            name_ident: DatabaseNameIdent {
-                db_name: "default".to_string(),
-                ..Default::default()
-            },
-            meta: DatabaseMeta {
-                engine: "iceberg".to_string(),
-                created_on: chrono::Utc::now(),
-                updated_on: chrono::Utc::now(),
-                ..Default::default()
-            },
-        };
-        Self {
-            ctl_name: ctl_name.to_string(),
-            db_root,
-            info,
-        }
-    }
     /// create a new database, but from reading
-    pub fn create_database_from_read(ctl_name: &str, db_name: &str, db_root: DataOperator) -> Self {
+    pub fn create(
+        ctx: IcebergContext,
+        ctl_name: &str,
+        db_name: &str,
+        db_root: DataOperator,
+    ) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
             name_ident: DatabaseNameIdent {
@@ -84,6 +69,7 @@ impl IcebergDatabase {
             ctl_name: ctl_name.to_string(),
             db_root,
             info,
+            context: ctx,
         }
     }
 }
@@ -112,14 +98,19 @@ impl Database for IcebergDatabase {
         let table_sp = self.db_root.params().map_root(|r| format!("{r}{path}"));
         let tbl_root = DataOperator::try_create(&table_sp).await?;
 
-        let tbl = IcebergTable::try_create_table_from_read(
+        let tbl = IcebergTable::try_create(
             &self.ctl_name,
             &self.info.name_ident.db_name,
             table_name,
             tbl_root,
         )
         .await?;
-        return Ok(Arc::new(tbl) as Arc<dyn Table>);
+        let tbl = Arc::new(tbl) as Arc<dyn Table>;
+
+        // Update context
+        self.context.insert(&tbl.get_table_info().desc, tbl.clone());
+
+        Ok(tbl)
     }
 
     #[async_backtrace::framed]

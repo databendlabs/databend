@@ -2761,6 +2761,7 @@ dependencies = [
  "common-pipeline-core",
  "common-storage",
  "common-storages-parquet",
+ "dashmap",
  "futures",
  "icelake",
  "itertools",

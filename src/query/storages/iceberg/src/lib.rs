@@ -88,6 +88,7 @@
 //! ```
 
 mod catalog;
+mod context;
 mod database;
 mod partition;
 mod table;

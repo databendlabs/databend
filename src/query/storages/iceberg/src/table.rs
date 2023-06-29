@@ -71,7 +71,7 @@ impl IcebergTable {
     ///
     /// TODO: we should use icelake Table instead.
     #[async_backtrace::framed]
-    pub async fn try_create_table_from_read(
+    pub async fn try_create(
         catalog: &str,
         database: &str,
         table_name: &str,
@@ -121,7 +121,7 @@ impl IcebergTable {
         // construct table info
         let info = TableInfo {
             ident: TableIdent::new(0, 0),
-            desc: format!("IcebergTable: '{database}'.'{table_name}'"),
+            desc: format!("{database}.{table_name}"),
             name: table_name.to_string(),
             meta: TableMeta {
                 schema: Arc::new(table_schema),

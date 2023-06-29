@@ -26,6 +26,7 @@ async-trait = "0.1"
 chrono = { workspace = true }
 futures = "0.3"
 # icelake = { version = "0.0.4", features = ["arrow_schema"] }
+dashmap = "5"
 icelake = { path = "../../../../../../icelake-io/icelake", features = ["arrow_schema"] }
 itertools = "0.10"
 opendal = { workspace = true }
