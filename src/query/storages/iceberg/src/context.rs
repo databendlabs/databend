@@ -15,12 +15,21 @@
 use std::fmt::Debug;
 use std::fmt::Formatter;
 use std::sync::Arc;
+use std::sync::LazyLock;
 
 use common_catalog::table::Table;
 use dashmap::DashMap;
 
+/// FIXME
+///
+/// Maintains a global context for iceberg tables is definitely not a good
+/// idea. We use this to make the iceberg table work with the current
+/// codebase.
+pub static ICEBERG_CONTEXT: LazyLock<IcebergContext> = LazyLock::new(|| IcebergContext::default());
+
 #[derive(Default, Clone)]
 pub struct IcebergContext {
+    /// table.info.desc -> Table instance
     tables: DashMap<String, Arc<dyn Table>>,
 }
 

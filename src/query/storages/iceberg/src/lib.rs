@@ -87,6 +87,8 @@
 //! SELECT * FROM icb_ctl.default.icbg_tbl_0;
 //! ```
 
+#![feature(lazy_cell)]
+
 mod catalog;
 mod context;
 mod database;

@@ -29,7 +29,7 @@ use common_storage::DataOperator;
 use opendal::EntryMode;
 use opendal::Metakey;
 
-use crate::context::IcebergContext;
+use crate::context::ICEBERG_CONTEXT;
 use crate::table::IcebergTable;
 
 #[derive(Clone, Debug)]
@@ -40,18 +40,11 @@ pub struct IcebergDatabase {
     db_root: DataOperator,
     /// database information
     info: DatabaseInfo,
-    /// Context of the entire iceberg catalog.
-    context: IcebergContext,
 }
 
 impl IcebergDatabase {
     /// create a new database, but from reading
-    pub fn create(
-        ctx: IcebergContext,
-        ctl_name: &str,
-        db_name: &str,
-        db_root: DataOperator,
-    ) -> Self {
+    pub fn create(ctl_name: &str, db_name: &str, db_root: DataOperator) -> Self {
         let info = DatabaseInfo {
             ident: DatabaseIdent { db_id: 0, seq: 0 },
             name_ident: DatabaseNameIdent {
@@ -69,7 +62,6 @@ impl IcebergDatabase {
             ctl_name: ctl_name.to_string(),
             db_root,
             info,
-            context: ctx,
         }
     }
 }
@@ -108,7 +100,7 @@ impl Database for IcebergDatabase {
         let tbl = Arc::new(tbl) as Arc<dyn Table>;
 
         // Update context
-        self.context.insert(&tbl.get_table_info().desc, tbl.clone());
+        ICEBERG_CONTEXT.insert(&tbl.get_table_info().desc, tbl.clone());
 
         Ok(tbl)
     }

@@ -76,7 +76,7 @@ use common_storage::DataOperator;
 use futures::TryStreamExt;
 use opendal::Metakey;
 
-use crate::context::IcebergContext;
+use crate::context::ICEBERG_CONTEXT;
 use crate::database::IcebergDatabase;
 
 pub const ICEBERG_CATALOG: &str = "iceberg";
@@ -93,8 +93,6 @@ pub struct IcebergCatalog {
     name: String,
     /// underlying storage access operator
     operator: DataOperator,
-    /// Context for iceberg catalog.
-    context: IcebergContext,
 }
 
 impl IcebergCatalog {
@@ -117,7 +115,6 @@ impl IcebergCatalog {
         Ok(Self {
             name: name.to_string(),
             operator,
-            context: IcebergContext::default(),
         })
     }
 
@@ -168,10 +165,7 @@ impl Catalog for IcebergCatalog {
         let db_root = DataOperator::try_create(&db_sp).await?;
 
         Ok(Arc::new(IcebergDatabase::create(
-            self.context.clone(),
-            &self.name,
-            db_name,
-            db_root,
+            &self.name, db_name, db_root,
         )))
     }
 
@@ -201,7 +195,7 @@ impl Catalog for IcebergCatalog {
     }
 
     fn get_table_by_info(&self, table_info: &TableInfo) -> Result<Arc<dyn Table>> {
-        self.context.get(&table_info.desc).ok_or_else(|| {
+        ICEBERG_CONTEXT.get(&table_info.desc).ok_or_else(|| {
             ErrorCode::UnknownTable(format!("Table {} does not exist", table_info.desc))
         })
     }
