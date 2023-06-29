@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,6 +23,7 @@ use arrow_array::UInt64Array;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
 use background_service::get_background_service_handler;
 use chrono::Utc;
+use futures_util::StreamExt;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::time::Instant;
@@ -161,7 +163,7 @@ impl CompactionJob {
     }
     async fn do_compaction_job(&mut self) -> Result<()> {
         let svc = get_background_service_handler();
-        if let Some(records) = Self::do_get_all_target_tables(&svc).await? {
+        for records in Self::do_get_target_tables_from_config(&self.conf, &svc).await? {
             debug!(?records, "target_tables");
             let db_names = records
                 .column(0)
@@ -407,9 +409,66 @@ impl CompactionJob {
         Ok(true)
     }
 
-    pub async fn do_get_all_target_tables(
+    pub async fn do_get_target_tables_from_config(config: &InnerConfig, svc: &Arc<BackgroundServiceHandlerWrapper>) -> Result<Vec<RecordBatch>> {
+        if !config.background.compaction.has_target_tables() {
+            return Self::do_get_all_suggested_tables(svc).await;
+        }
+        Self::do_get_target_tables(config, svc).await
+    }
+    // format a vec of tables into a sql string
+    // vec!("t1", "t2", "t3")
+    // into
+    // "('t1', 't2', 't3')"
+    fn format_tables(tables: &Vec<String>) -> String {
+        let formatted_tables: Vec<String> = tables
+            .iter()
+            .map(|table| format!("'{}'", table))
+            .collect();
+
+        format!("({})", formatted_tables.join(", "))
+    }
+    pub fn get_target_from_config_sql(
+        database: &String,
+        tables: &Vec<String>
+    ) -> String {
+        format!(
+         "
+        SELECT t.database as database, d.database_id as database_id, t.name as table, t.table_id as table_id
+        FROM system.tables as t
+        JOIN system.databases as d
+        ON t.database = d.name
+        WHERE t.database != 'system'
+            AND t.database != 'information_schema'
+            AND t.engine = 'FUSE'
+            AND t.database = '{}'
+            AND t.name IN {}
+            ;
+        ",
+        database,
+        Self::format_tables(tables)
+        )
+    }
+
+    pub  async fn do_get_target_tables(
+        configs: &InnerConfig,
         svc: &Arc<BackgroundServiceHandlerWrapper>,
-    ) -> Result<Option<RecordBatch>> {
+    ) -> Result<Vec<RecordBatch>> {
+        let all_target_tables = configs.background.compaction.target_tables.as_ref();
+        let future_res = all_target_tables.unwrap().into_iter().map(|(k, v)|
+
+            svc.execute_sql(Self::get_target_from_config_sql(k, v).as_str())
+        ).collect::<Vec<_>>();
+        let mut res = Vec::new();
+        for f in future_res {
+            res.push(f.await?);
+        }
+        let res = res.into_iter().filter_map(|r| r).collect::<Vec<_>>();
+        Ok(res)
+
+    }
+    pub async fn do_get_all_suggested_tables(
+        svc: &Arc<BackgroundServiceHandlerWrapper>,
+    ) -> Result<Vec<RecordBatch>> {
         let res = svc.execute_sql(GET_ALL_TARGET_TABLES).await?;
         let num_of_tables = res.as_ref().map_or_else(|| 0, |r| r.num_rows());
         info!(
@@ -418,6 +477,7 @@ impl CompactionJob {
             tables = num_of_tables,
             "get all target tables"
         );
+        let res = res.map(|r| vec![r]).unwrap_or_else(|| vec![]);
         Ok(res)
     }
 

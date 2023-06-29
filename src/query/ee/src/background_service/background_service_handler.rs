@@ -138,15 +138,16 @@ impl RealBackgroundService {
             .await?;
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let mut scheduler = JobScheduler::new();
-
-        let compactor_job = RealBackgroundService::get_compactor_job(
-            meta_api.clone(),
-            conf,
-            &user.identity(),
-            scheduler.finish_tx.clone(),
-        )
-        .await?;
-        scheduler.add_job(compactor_job)?;
+        if conf.background.compaction.enable {
+            let compactor_job = RealBackgroundService::get_compactor_job(
+                meta_api.clone(),
+                conf,
+                &user.identity(),
+                scheduler.finish_tx.clone(),
+            )
+            .await?;
+            scheduler.add_job(compactor_job)?;
+        }
 
         let rm = RealBackgroundService {
             conf: conf.clone(),
