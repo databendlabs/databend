@@ -108,7 +108,7 @@ impl<T: Transform + 'static> Processor for Transformer<T> {
 
         if let Some(data_block) = self.input_data.take() {
             let data_block = self.transform.transform(data_block)?;
-            if !data_block.is_empty() {
+            if !data_block.is_empty() || data_block.get_meta().is_some() {
                 self.output_data = Some(data_block);
             }
             return Ok(());
