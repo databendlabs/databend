@@ -26,7 +26,7 @@ fn test_serialize() -> Result<()> {
         1,
         String::from("test_message"),
         None,
-        Some(ErrorCodeBacktrace::Origin(Arc::new(Backtrace::capture()))),
+        Some(ErrorCodeBacktrace::Symbols(Arc::new(Backtrace::capture()))),
     )
     .set_span(Some((0..1).into()));
     let backtrace_str = error_code.backtrace_str();

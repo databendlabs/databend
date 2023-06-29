@@ -29,21 +29,22 @@ use crate::Span;
 #[derive(Clone)]
 pub enum ErrorCodeBacktrace {
     Serialized(Arc<String>),
-    Origin(Arc<Backtrace>),
+    Symbols(Arc<Backtrace>),
+    Address(Arc<Backtrace>),
 }
 
 impl ToString for ErrorCodeBacktrace {
     fn to_string(&self) -> String {
         match self {
             ErrorCodeBacktrace::Serialized(backtrace) => Arc::as_ref(backtrace).clone(),
-            ErrorCodeBacktrace::Origin(backtrace) => {
-                let ss = backtrace
+            ErrorCodeBacktrace::Symbols(backtrace) => format!("{:?}", backtrace),
+            ErrorCodeBacktrace::Address(backtrace) => {
+                let frames_address = backtrace
                     .frames()
                     .iter()
-                    .map(|f| f.ip() as usize)
+                    .map(|f| (f.ip() as usize, f.symbol_address() as usize))
                     .collect::<Vec<_>>();
-                // backtrace.resolve()
-                format!("{:?}", ss)
+                format!("{:?}", frames_address)
             }
         }
     }
@@ -69,7 +70,7 @@ impl From<Arc<String>> for ErrorCodeBacktrace {
 
 impl From<Backtrace> for ErrorCodeBacktrace {
     fn from(bt: Backtrace) -> Self {
-        Self::Origin(Arc::new(bt))
+        Self::Symbols(Arc::new(bt))
     }
 }
 
@@ -81,7 +82,7 @@ impl From<&Backtrace> for ErrorCodeBacktrace {
 
 impl From<Arc<Backtrace>> for ErrorCodeBacktrace {
     fn from(bt: Arc<Backtrace>) -> Self {
-        Self::Origin(bt)
+        Self::Symbols(bt)
     }
 }
 
@@ -172,26 +173,23 @@ impl Debug for ErrorCode {
         write!(f, "Code: {}, Text = {}.", self.code(), self.message(),)?;
 
         match self.backtrace.as_ref() {
-            None => Ok(()), // no backtrace
+            None => write!(
+                f,
+                "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
+            ),
             Some(backtrace) => {
                 // TODO: Custom stack frame format for print
                 match backtrace {
-                    ErrorCodeBacktrace::Origin(backtrace) => {
-                        // if backtrace.status() == BacktraceStatus::Disabled {
-                        //     write!(
-                        //         f,
-                        //         "\n\n<Backtrace disabled by default. Please use RUST_BACKTRACE=1 to enable> "
-                        //     )
-                        // } else {
-                        let ss = backtrace
+                    ErrorCodeBacktrace::Symbols(backtrace) => write!(f, "\n\n{:?}", backtrace),
+                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{}", backtrace),
+                    ErrorCodeBacktrace::Address(backtrace) => {
+                        let frames_address = backtrace
                             .frames()
                             .iter()
-                            .map(|f| f.ip() as usize)
+                            .map(|f| (f.ip() as usize, f.symbol_address() as usize))
                             .collect::<Vec<_>>();
-                        write!(f, "\n\n{:?}", ss)
-                        // }
+                        write!(f, "\n\n{:?}", frames_address)
                     }
-                    ErrorCodeBacktrace::Serialized(backtrace) => write!(f, "\n\n{}", backtrace),
                 }
             }
         }
