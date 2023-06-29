@@ -25,7 +25,6 @@ use super::hash_join::ProbeState;
 use crate::pipelines::processors::port::InputPort;
 use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
 use crate::sessions::QueryContext;
@@ -36,7 +35,7 @@ enum HashJoinStep {
     Finalize,
     Probe,
     FinalScan,
-    Finished,
+    FastReturn,
 }
 
 pub struct TransformHashJoinProbe {
@@ -48,7 +47,7 @@ pub struct TransformHashJoinProbe {
     step: HashJoinStep,
     join_state: Arc<dyn HashJoinState>,
     probe_state: ProbeState,
-    block_size: u64,
+    block_size: usize,
     outer_scan_finished: bool,
     output_buffer: Vec<DataBlock>,
     output_buffer_size: usize,
@@ -63,7 +62,7 @@ impl TransformHashJoinProbe {
         join_type: &JoinType,
         with_conjunct: bool,
     ) -> Result<Box<dyn Processor>> {
-        let default_block_size = ctx.get_settings().get_max_block_size()?;
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
         Ok(Box::new(TransformHashJoinProbe {
             input_data: VecDeque::new(),
             output_data_blocks: VecDeque::new(),
@@ -72,7 +71,7 @@ impl TransformHashJoinProbe {
             step: HashJoinStep::Build,
             join_state,
             probe_state: ProbeState::create(join_type, with_conjunct, ctx.get_function_context()?),
-            block_size: default_block_size,
+            block_size,
             outer_scan_finished: false,
             output_buffer: vec![],
             output_buffer_size: 0,
@@ -84,42 +83,44 @@ impl TransformHashJoinProbe {
         Ok(join_state)
     }
 
-    fn probe(&mut self, block: &DataBlock) -> Result<()> {
-        self.probe_state.clear();
-        let data_blocks = self.join_state.probe(block, &mut self.probe_state)?;
+    fn add_data_to_buffer(&mut self, data_blocks: Vec<DataBlock>) -> Result<()> {
         for datablock in data_blocks.into_iter() {
-            if datablock.num_rows() >= JOIN_MAX_BLOCK_SIZE {
+            if datablock.num_rows() >= self.block_size / 2 {
                 self.output_data_blocks.push_back(datablock);
                 continue;
             }
             self.output_buffer_size += datablock.num_rows();
             self.output_buffer.push(datablock);
-            if self.output_buffer_size >= JOIN_MAX_BLOCK_SIZE {
+            if self.output_buffer_size >= self.block_size {
                 let data_block = DataBlock::concat(self.output_buffer.as_slice())?;
-                self.output_data_blocks.push_back(data_block);
                 self.output_buffer_size = 0;
                 self.output_buffer.clear();
+                self.output_data_blocks.push_back(data_block);
             }
         }
         Ok(())
     }
 
+    fn clear_buffer(&mut self) -> Result<()> {
+        debug_assert!(self.output_buffer_size > 0);
+        let data_block = DataBlock::concat(self.output_buffer.as_slice())?;
+        self.output_buffer_size = 0;
+        self.output_buffer.clear();
+        // self.output_port.can_push() is true, so we can push data.
+        self.output_port.push_data(Ok(data_block));
+        Ok(())
+    }
+
+    fn probe(&mut self, block: &DataBlock) -> Result<()> {
+        self.probe_state.clear();
+        let data_blocks = self.join_state.probe(block, &mut self.probe_state)?;
+        self.add_data_to_buffer(data_blocks)?;
+        Ok(())
+    }
+
     fn final_scan(&mut self, task: usize) -> Result<()> {
         let data_blocks = self.join_state.final_scan(task, &mut self.probe_state)?;
-        for datablock in data_blocks.into_iter() {
-            if datablock.num_rows() >= JOIN_MAX_BLOCK_SIZE {
-                self.output_data_blocks.push_back(datablock);
-                continue;
-            }
-            self.output_buffer_size += datablock.num_rows();
-            self.output_buffer.push(datablock);
-            if self.output_buffer_size >= JOIN_MAX_BLOCK_SIZE {
-                let data_block = DataBlock::concat(self.output_buffer.as_slice())?;
-                self.output_data_blocks.push_back(data_block);
-                self.output_buffer_size = 0;
-                self.output_buffer.clear();
-            }
-        }
+        self.add_data_to_buffer(data_blocks)?;
         Ok(())
     }
 }
@@ -138,7 +139,11 @@ impl Processor for TransformHashJoinProbe {
         match self.step {
             HashJoinStep::Build => Ok(Event::Async),
             HashJoinStep::Finalize => unreachable!(),
-            HashJoinStep::Finished => {
+            HashJoinStep::FastReturn => {
+                if self.output_buffer_size > 0 {
+                    self.clear_buffer()?;
+                    return Ok(Event::NeedConsume);
+                }
                 self.output_port.finish();
                 Ok(Event::Finished)
             }
@@ -169,22 +174,23 @@ impl Processor for TransformHashJoinProbe {
                 }
 
                 if self.input_port.has_data() {
-                    let data = self.input_port.pull_data().unwrap()?;
-                    // Split data to `block_size` rows per sub block.
-                    let (sub_blocks, remain_block) = data.split_by_rows(self.block_size as usize);
-                    self.input_data.extend(sub_blocks);
-                    if let Some(remain) = remain_block {
-                        self.input_data.push_back(remain);
+                    let data_block = self.input_port.pull_data().unwrap()?;
+                    if data_block.num_rows() > self.block_size * 4 {
+                        // Split data to `block_size` rows per sub block.
+                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size as usize);
+                        self.input_data.extend(sub_blocks);
+                        if let Some(remain) = remain_block {
+                            self.input_data.push_back(remain);
+                        }
+                    } else {
+                        self.input_data.push_back(data_block);
                     }
                     return Ok(Event::Sync);
                 }
 
                 if self.input_port.is_finished() {
                     if self.output_buffer_size > 0 {
-                        let data = DataBlock::concat(self.output_buffer.as_slice())?;
-                        // self.output_port.can_push() is true, so we can push data.
-                        self.output_port.push_data(Ok(data));
-                        self.output_buffer_size = 0;
+                        self.clear_buffer()?;
                         return Ok(Event::NeedConsume);
                     }
                     return if self.join_state.need_outer_scan() || self.join_state.need_mark_scan()
@@ -219,10 +225,7 @@ impl Processor for TransformHashJoinProbe {
                     false => Ok(Event::Sync),
                     true => {
                         if self.output_buffer_size > 0 {
-                            let data = DataBlock::concat(self.output_buffer.as_slice())?;
-                            // self.output_port.can_push() is true, so we can push data.
-                            self.output_port.push_data(Ok(data));
-                            self.output_buffer_size = 0;
+                            self.clear_buffer()?;
                             return Ok(Event::NeedConsume);
                         }
                         self.output_port.finish();
@@ -240,7 +243,7 @@ impl Processor for TransformHashJoinProbe {
     fn process(&mut self) -> Result<()> {
         match self.step {
             HashJoinStep::Build => Ok(()),
-            HashJoinStep::Finalize | HashJoinStep::Finished => unreachable!(),
+            HashJoinStep::Finalize | HashJoinStep::FastReturn => unreachable!(),
             HashJoinStep::Probe => {
                 if let Some(data) = self.input_data.pop_front() {
                     let data = data.convert_to_full();
@@ -272,7 +275,7 @@ impl Processor for TransformHashJoinProbe {
                         | JoinType::RightAnti
                         | JoinType::RightSemi
                         | JoinType::LeftSemi => {
-                            self.step = HashJoinStep::Finished;
+                            self.step = HashJoinStep::FastReturn;
                         }
                         JoinType::Left | JoinType::Full | JoinType::Single | JoinType::LeftAnti => {
                             self.step = HashJoinStep::Probe;
@@ -292,12 +295,12 @@ impl Processor for TransformHashJoinProbe {
             HashJoinStep::Probe => {
                 self.join_state.wait_probe_finish().await?;
                 if self.join_state.fast_return()? {
-                    self.step = HashJoinStep::Finished;
+                    self.step = HashJoinStep::FastReturn;
                 } else {
                     self.step = HashJoinStep::FinalScan;
                 }
             }
-            HashJoinStep::FinalScan | HashJoinStep::Finished => unreachable!(),
+            HashJoinStep::FinalScan | HashJoinStep::FastReturn => unreachable!(),
         };
         Ok(())
     }
@@ -371,7 +374,7 @@ impl Processor for TransformHashJoinBuild {
             },
             HashJoinStep::Probe => unreachable!(),
             HashJoinStep::FinalScan => unreachable!(),
-            HashJoinStep::Finished => Ok(Event::Finished),
+            HashJoinStep::FastReturn => Ok(Event::Finished),
         }
     }
 
@@ -395,7 +398,7 @@ impl Processor for TransformHashJoinBuild {
                     self.join_state.finalize_done()
                 }
             }
-            HashJoinStep::Probe | HashJoinStep::FinalScan | HashJoinStep::Finished => {
+            HashJoinStep::Probe | HashJoinStep::FinalScan | HashJoinStep::FastReturn => {
                 unreachable!()
             }
         }
@@ -406,7 +409,7 @@ impl Processor for TransformHashJoinBuild {
         if let HashJoinStep::Build = &self.step {
             self.join_state.wait_build_finish().await?;
             if self.join_state.fast_return()? {
-                self.step = HashJoinStep::Finished;
+                self.step = HashJoinStep::FastReturn;
                 return Ok(());
             }
             self.step = HashJoinStep::Finalize;

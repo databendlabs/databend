@@ -16,6 +16,7 @@ use std::any::Any;
 use std::sync::Arc;
 use std::time::Instant;
 
+use std::collections::VecDeque;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
@@ -44,10 +45,11 @@ pub struct DeserializeDataTransform {
 
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
+    output_data_blocks: VecDeque<DataBlock>,
     parts: Vec<PartInfoPtr>,
     chunks: Vec<DataSource>,
     uncompressed_buffer: Arc<UncompressedBuffer>,
+    block_size: usize,
 
     index_reader: Arc<Option<AggIndexReader>>,
 }
@@ -62,17 +64,20 @@ impl DeserializeDataTransform {
         output: Arc<OutputPort>,
         index_reader: Arc<Option<AggIndexReader>>,
     ) -> Result<ProcessorPtr> {
-        let buffer_size = ctx.get_settings().get_parquet_uncompressed_buffer_size()? as usize;
+        let settings = ctx.get_settings();
+        let buffer_size = settings.get_parquet_uncompressed_buffer_size()? as usize;
+        let block_size = settings.get_max_block_size()? as usize;
         let scan_progress = ctx.get_scan_progress();
         Ok(ProcessorPtr::create(Box::new(DeserializeDataTransform {
             scan_progress,
             block_reader,
             input,
             output,
-            output_data: None,
+            output_data_blocks: VecDeque::new(),
             parts: vec![],
             chunks: vec![],
             uncompressed_buffer: UncompressedBuffer::new(buffer_size),
+            block_size,
             index_reader,
         })))
     }
@@ -100,7 +105,9 @@ impl Processor for DeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.take() {
+        
+        if !self.output_data_blocks.is_empty() {
+            let data_block = self.output_data_blocks.pop_front().unwrap();
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
@@ -143,8 +150,16 @@ impl Processor for DeserializeDataTransform {
             match read_res {
                 DataSource::AggIndex(data) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
-                    let block = agg_index_reader.deserialize(&data)?;
-                    self.output_data = Some(block);
+                    let data_block = agg_index_reader.deserialize(&data)?;
+                    if data_block.num_rows() > self.block_size && false {
+                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
+                        self.output_data_blocks.extend(sub_blocks);
+                        if let Some(remain) = remain_block {
+                            self.output_data_blocks.push_back(remain);
+                        }
+                    } else {
+                        self.output_data_blocks.push_back(data_block);
+                    }
                 }
                 DataSource::Normal(data) => {
                     let start = Instant::now();
@@ -175,12 +190,20 @@ impl Processor for DeserializeDataTransform {
 
                     // Fill `BlockMetaIndex` as `DataBlock.meta` if query internal columns,
                     // `FillInternalColumnProcessor` will generate internal columns using `BlockMetaIndex` in next pipeline.
-                    if self.block_reader.query_internal_columns() {
-                        let data_block = fill_internal_column_meta(data_block, part, None)?;
-                        self.output_data = Some(data_block);
+                    let data_block = if self.block_reader.query_internal_columns() {
+                        fill_internal_column_meta(data_block, part, None)?
                     } else {
-                        self.output_data = Some(data_block);
+                        data_block
                     };
+                    if data_block.num_rows() > self.block_size && false {
+                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
+                        self.output_data_blocks.extend(sub_blocks);
+                        if let Some(remain) = remain_block {
+                            self.output_data_blocks.push_back(remain);
+                        }
+                    } else {
+                        self.output_data_blocks.push_back(data_block);
+                    }
                 }
             }
         }

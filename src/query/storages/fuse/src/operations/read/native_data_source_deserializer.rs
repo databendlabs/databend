@@ -77,7 +77,7 @@ pub struct NativeDeserializeDataTransform {
 
     input: Arc<InputPort>,
     output: Arc<OutputPort>,
-    output_data: Option<DataBlock>,
+    output_data_blocks: VecDeque<DataBlock>,
     parts: VecDeque<PartInfoPtr>,
     chunks: VecDeque<DataChunks>,
 
@@ -105,6 +105,8 @@ pub struct NativeDeserializeDataTransform {
     array_iters: BTreeMap<usize, ArrayIter<'static>>,
     // The Page numbers of each ArrayIter can skip.
     array_skip_pages: BTreeMap<usize, usize>,
+    // The default block size.
+    block_size: usize,
 }
 
 impl NativeDeserializeDataTransform {
@@ -117,6 +119,7 @@ impl NativeDeserializeDataTransform {
         output: Arc<OutputPort>,
     ) -> Result<ProcessorPtr> {
         let scan_progress = ctx.get_scan_progress();
+        let block_size = ctx.get_settings().get_max_block_size()? as usize;
 
         let mut src_schema: DataSchema = (block_reader.schema().as_ref()).into();
 
@@ -210,7 +213,7 @@ impl NativeDeserializeDataTransform {
                 column_leaves,
                 input,
                 output,
-                output_data: None,
+                output_data_blocks: VecDeque::new(),
                 parts: VecDeque::new(),
                 chunks: VecDeque::new(),
 
@@ -230,6 +233,7 @@ impl NativeDeserializeDataTransform {
                 array_iters: BTreeMap::new(),
                 array_skip_pages: BTreeMap::new(),
                 offset_in_part: 0,
+                block_size,
             },
         )))
     }
@@ -262,7 +266,16 @@ impl NativeDeserializeDataTransform {
             bytes: data_block.memory_size(),
         };
         self.scan_progress.incr(&progress_values);
-        self.output_data = Some(data_block);
+
+        if data_block.num_rows() > self.block_size && false {
+            let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
+            self.output_data_blocks.extend(sub_blocks);
+            if let Some(remain) = remain_block {
+                self.output_data_blocks.push_back(remain);
+            }
+        } else {
+            self.output_data_blocks.push_back(data_block);
+        }
         Ok(())
     }
 
@@ -534,7 +547,8 @@ impl Processor for NativeDeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        if let Some(data_block) = self.output_data.take() {
+        if !self.output_data_blocks.is_empty() {
+            let data_block = self.output_data_blocks.pop_front().unwrap();
             self.output.push_data(Ok(data_block));
             return Ok(Event::NeedConsume);
         }
