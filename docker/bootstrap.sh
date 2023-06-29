@@ -24,6 +24,12 @@ name = "$QUERY_DEFAULT_USER"
 auth_type = "double_sha1_password"
 auth_string = "$DOUBLE_SHA1_PASSWORD"
 EOF
+    else
+        cat <<EOF >>"$QUERY_CONFIG_FILE"
+[[query.users]]
+name = "root"
+auth_type = "no_password"
+EOF
     fi
 }
 
