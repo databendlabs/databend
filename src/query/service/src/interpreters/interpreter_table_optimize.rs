@@ -17,6 +17,7 @@ use std::time::SystemTime;
 
 use common_base::runtime::GlobalIORuntime;
 use common_catalog::table::CompactTarget;
+use common_catalog::table::Table;
 use common_catalog::table::TableExt;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -71,6 +72,44 @@ impl Interpreter for OptimizeTableInterpreter {
 }
 
 impl OptimizeTableInterpreter {
+    pub async fn build_compact_pipeline(
+        ctx: &Arc<QueryContext>,
+        mut table: Arc<dyn Table>,
+        target: CompactTarget,
+    ) -> Result<PipelineBuildResult> {
+        let need_recluster = !table.cluster_keys(ctx.clone()).is_empty();
+        // check if the table is locked.
+        let mut pipeline = Pipeline::create();
+        table
+            .compact(ctx.clone(), target, None, &mut pipeline)
+            .await?;
+
+        let mut build_res = PipelineBuildResult::create();
+        let settings = ctx.get_settings();
+        if need_recluster {
+            if !pipeline.is_empty() {
+                pipeline.set_max_threads(settings.get_max_threads()? as usize);
+
+                let query_id = ctx.get_id();
+                let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
+                let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+
+                ctx.set_executor(executor.get_inner())?;
+                executor.execute()?;
+
+                // refresh table.
+                table = table.as_ref().refresh(ctx.as_ref()).await?;
+            }
+
+            table
+                .recluster(ctx.clone(), None, None, &mut build_res.main_pipeline)
+                .await?;
+        } else {
+            build_res.main_pipeline = pipeline;
+        }
+
+        Ok(build_res)
+    }
     async fn build_pipeline(
         &self,
         target: CompactTarget,

@@ -99,6 +99,7 @@ pub struct BloomIndexState {
     pub(crate) data: Vec<u8>,
     pub(crate) size: u64,
     pub(crate) location: Location,
+    #[allow(dead_code)]
     pub(crate) column_distinct_count: HashMap<FieldIndex, usize>,
 }
 
@@ -159,7 +160,7 @@ impl BlockBuilder {
     where F: Fn(DataBlock, &ClusterStatsGenerator) -> Result<(Option<ClusterStatistics>, DataBlock)>
     {
         let (cluster_stats, data_block) = f(data_block, &self.cluster_stats_gen)?;
-        let (block_location, block_id) = self.meta_locations.gen_block_location();
+        let (block_location, _block_id) = self.meta_locations.gen_block_location();
 
         // let bloom_index_location = self.meta_locations.block_bloom_index_location(&block_id);
         let bloom_index_state: Option<BloomIndexState> = {
