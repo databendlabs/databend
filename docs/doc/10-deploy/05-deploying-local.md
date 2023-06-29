@@ -141,7 +141,7 @@ The following steps will guide you through the process of locally deploying Data
 
 ```sql
 [[query.users]]
-name = "admin"
+name = "root"
 auth_type = "no_password"
 ```
 
