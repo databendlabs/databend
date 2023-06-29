@@ -1,0 +1,72 @@
+statement ok
+drop database if exists test_index
+
+statement ok
+create database test_index
+
+statement ok
+use test_index
+
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS testi1
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS testi2
+
+statement ok
+CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'
+
+statement ok
+INSERT INTO t VALUES (1,1,4), (1,2,1)
+
+statement ok
+CREATE AGGREGATING INDEX testi1 AS select c + 1 from t
+
+statement ok
+CREATE AGGREGATING INDEX testi2 AS select sum(a), b from t group by b
+
+statement ok
+REFRESH AGGREGATING INDEX testi1
+
+statement ok
+REFRESH AGGREGATING INDEX testi2
+
+statement ok
+INSERT INTO t VALUES (1,2,2), (1,1,3)
+
+query I
+SELECT c + 1 as x FROM t ORDER BY x
+----
+2
+3
+4
+5
+
+query II
+select sum(a), b from t group by b order by sum(a)
+----
+2 1
+2 2
+
+query II
+select sum(a), b from t group by b order by b desc
+----
+2 2
+2 1
+
+statement ok
+DROP AGGREGATING INDEX testi1
+
+statement ok
+DROP AGGREGATING INDEX testi2
+
+statement ok
+DROP TABLE t
+
+
+statement ok
+use default
+
+statement ok
+drop database test_index
