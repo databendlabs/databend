@@ -87,7 +87,7 @@ docker run \
     datafuselabs/databend
 ```
 
-Please be aware that the command above also creates a SQL user (databend/databend) which you will need to use to connect to Databend in the next step. If you make changes to the SQL user at this point, ensure that you maintain consistency throughout the entire process.
+When starting the Databend Docker container, you can specify the username and password using the environment variables QUERY_DEFAULT_USER and QUERY_DEFAULT_PASSWORD. If these variables are not provided, a default root user will be created without a password. The command above creates a SQL user (databend/databend) which you will need to use to connect to Databend in the next step. If you make changes to the SQL user at this point, ensure that you maintain consistency throughout the entire process.
 
 ### Step 3. Connecting to Databend
 
@@ -96,27 +96,29 @@ To establish a connection with Databend, you'll use the BendSQL CLI tool in this
 1. To establish a connection with Databend using the SQL user (databend/databend), run the following command:
 
 ```shell
-(base) eric@Erics-iMac Downloads % bendsql -u databend -p databend
-Connected to Databend on Host: localhost
-Version: DatabendQuery v1.0.26-nightly-d9b7f4a8080b54d2b4c4a515296ee7557fc135f1(rust-1.70.0-nightly-2023-03-21T04:39:27.097687988Z)
+eric@bogon ~ % bendsql -udatabend -pdatabend
+Welcome to BendSQL 0.3.11-17b0d8b(2023-06-08T15:23:29.206137000Z).
+Trying connect to localhost:8000 as user databend.
+Connected to DatabendQuery v1.1.75-nightly-59eea5df495245b9475f81a28c7b688f013aac05(rust-1.72.0-nightly-2023-06-28T01:04:32.054683000Z)
 ```
 
 2. To verify the deployment, you can create a table and insert some data with BendSQL:
 
 ```shell
-(base) eric@Erics-iMac Downloads % bendsql query
-Connected with driver databend (DatabendQuery v1.0.26-nightly-d9b7f4a8080b54d2b4c4a515296ee7557fc135f1(rust-1.70.0-nightly-2023-03-21T04:39:27.097687988Z))
-Type "help" for help.
-dd:databend@localhost/default=> create database eric;
-CREATE DATABASE
-dd:databend@localhost/default=> CREATE TABLE mytable(a int);
-CREATE TABLE
-dd:databend@localhost/default=> INSERT INTO mytable VALUES(1);
-INSERT
-dd:databend@localhost/default=> INSERT INTO mytable VALUES(2);
-INSERT
-dd:databend@localhost/default=> INSERT INTO mytable VALUES(3);
-INSERT
+databend@localhost> CREATE DATABASE eric;
+Processed in (0.083 sec)
+
+databend@localhost> CREATE TABLE mytable(a int);
+Processed in (0.051 sec)
+
+databend@localhost> INSERT INTO mytable VALUES(1);
+1 rows affected in (0.242 sec)
+
+databend@localhost> INSERT INTO mytable VALUES(2);
+1 rows affected in (0.060 sec)
+
+databend@localhost> INSERT INTO mytable VALUES(3);
+1 rows affected in (0.053 sec)
 ```
 
 As the table data is stored in the bucket, you will notice an increase in the bucket size from 0.
@@ -135,9 +137,17 @@ The following steps will guide you through the process of locally deploying Data
 
 ### Step 2. Starting Databend
 
-1. Open a terminal and navigate to the folder where the extracted files and folders are stored.
+1. Configure an admin user. You will utilize this account to connect to Databend. For more information, see [Configuring Admin Users](../13-sql-clients/00-admin-users.md). For this example, uncomment the following lines to choose this account:
 
-2. Run the script **start.sh** in the folder **scripts**:
+```sql
+[[query.users]]
+name = "root"
+auth_type = "no_password"
+```
+
+2. Open a terminal and navigate to the folder where the extracted files and folders are stored.
+
+3. Run the script **start.sh** in the folder **scripts**:
 
     MacOS might prompt an error saying "*databend-meta can't be opened because Apple cannot check it for malicious software.*". To proceed, open **System Settings** on your Mac, select **Privacy & Security** on the left menu, and click **Open Anyway** for databend-meta in the **Security** section on the right side. Do the same for the error on databend-query.
 
@@ -182,23 +192,25 @@ To establish a connection with Databend, you'll use the BendSQL CLI tool in this
 1. To establish a connection with a local Databend, execute the following command:
 
 ```shell
-(base) eric@Erics-iMac ~ % bendsql
-Connected to Databend on Host: localhost
-Version: DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z)
+eric@bogon ~ % bendsql      
+Welcome to BendSQL 0.3.11-17b0d8b(2023-06-08T15:23:29.206137000Z).
+Trying connect to localhost:8000 as user root.
+Connected to DatabendQuery v1.1.75-nightly-59eea5df495245b9475f81a28c7b688f013aac05(rust-1.72.0-nightly-2023-06-28T01:04:32.054683000Z)
 ```
 
 2. Query the Databend version to verify the connection:
 
-```shell
-(base) eric@Erics-iMac ~ % bendsql query
-Connected with driver databend (DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z))
-Type "help" for help.
+```sql
+root@localhost> SELECT VERSION();
 
-dd:root@localhost/default=> SELECT VERSION();
-+---------------------------------------------------------------------------------------------------------------------------+
-|                                                         version()                                                         |
-+---------------------------------------------------------------------------------------------------------------------------+
-| DatabendQuery v1.1.3-nightly-f9a0c3e5025e95d121acde426181d0d675475821(rust-1.70.0-nightly-2023-04-16T16:35:59.085130000Z) |
-+---------------------------------------------------------------------------------------------------------------------------+
-(1 row)
+SELECT
+  VERSION()
+
+┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                          version()                                                         │
+│                                                           String                                                           │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ DatabendQuery v1.1.75-nightly-59eea5df495245b9475f81a28c7b688f013aac05(rust-1.72.0-nightly-2023-06-28T01:04:32.054683000Z) │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+1 row in 0.024 sec. Processed 1 rows, 1B (41.85 rows/s, 41B/s)
 ```
