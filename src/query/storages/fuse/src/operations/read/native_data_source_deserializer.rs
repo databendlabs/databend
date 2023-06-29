@@ -267,7 +267,7 @@ impl NativeDeserializeDataTransform {
         };
         self.scan_progress.incr(&progress_values);
 
-        if data_block.num_rows() > self.block_size && false {
+        if data_block.num_rows() > self.block_size {
             let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
             self.output_data_blocks.extend(sub_blocks);
             if let Some(remain) = remain_block {

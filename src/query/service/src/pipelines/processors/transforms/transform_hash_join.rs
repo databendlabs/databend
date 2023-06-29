@@ -177,7 +177,7 @@ impl Processor for TransformHashJoinProbe {
                     let data_block = self.input_port.pull_data().unwrap()?;
                     if data_block.num_rows() > self.block_size * 4 {
                         // Split data to `block_size` rows per sub block.
-                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size as usize);
+                        let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
                         self.input_data.extend(sub_blocks);
                         if let Some(remain) = remain_block {
                             self.input_data.push_back(remain);

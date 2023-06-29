@@ -13,10 +13,10 @@
 // limitations under the License.
 
 use std::any::Any;
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Instant;
 
-use std::collections::VecDeque;
 use common_base::base::Progress;
 use common_base::base::ProgressValues;
 use common_catalog::plan::PartInfoPtr;
@@ -105,7 +105,6 @@ impl Processor for DeserializeDataTransform {
             return Ok(Event::NeedConsume);
         }
 
-        
         if !self.output_data_blocks.is_empty() {
             let data_block = self.output_data_blocks.pop_front().unwrap();
             self.output.push_data(Ok(data_block));
@@ -151,7 +150,7 @@ impl Processor for DeserializeDataTransform {
                 DataSource::AggIndex(data) => {
                     let agg_index_reader = self.index_reader.as_ref().as_ref().unwrap();
                     let data_block = agg_index_reader.deserialize(&data)?;
-                    if data_block.num_rows() > self.block_size && false {
+                    if data_block.num_rows() > self.block_size {
                         let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
                         self.output_data_blocks.extend(sub_blocks);
                         if let Some(remain) = remain_block {
@@ -195,7 +194,7 @@ impl Processor for DeserializeDataTransform {
                     } else {
                         data_block
                     };
-                    if data_block.num_rows() > self.block_size && false {
+                    if data_block.num_rows() > self.block_size {
                         let (sub_blocks, remain_block) = data_block.split_by_rows(self.block_size);
                         self.output_data_blocks.extend(sub_blocks);
                         if let Some(remain) = remain_block {
