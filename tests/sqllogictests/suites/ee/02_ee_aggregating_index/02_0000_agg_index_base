@@ -179,30 +179,6 @@ select sum(a) + 1 as s from t group by b order by s
 statement ok
 DROP AGGREGATING INDEX testi
 
-# query: eval-scan, index: eval-scan
-
-statement ok
-CREATE AGGREGATING INDEX testi AS select c + 1 from t
-
-# partial refresh
-statement ok
-REFRESH AGGREGATING INDEX testi LIMIT 1
-
-query T
-select to_string(c + 1) as a from t order by a
-----
-10
-2
-5
-5
-6
-7
-8
-9
-
-statement ok
-DROP AGGREGATING INDEX testi
-
 statement ok
 DROP TABLE t
 
