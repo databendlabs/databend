@@ -231,6 +231,15 @@ pub struct CompoundBlockOperator {
 }
 
 impl CompoundBlockOperator {
+    pub fn new(
+        operators: Vec<BlockOperator>,
+        ctx: FunctionContext,
+        input_num_columns: usize,
+    ) -> Self {
+        let operators = Self::compact_map(operators, input_num_columns);
+        Self { operators, ctx }
+    }
+
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,

@@ -27,6 +27,7 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropTableReply;
@@ -98,7 +99,10 @@ pub trait Database: DynClone + Sync + Send {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables_history(
+        &self,
+        _filter: Option<TableInfoFilter>,
+    ) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::Unimplemented(format!(
             "UnImplement list_tables_history in {} Database",
             self.name()

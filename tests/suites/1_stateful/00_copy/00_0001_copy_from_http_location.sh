@@ -28,3 +28,4 @@ done
 
 ## Drop table
 echo "drop table if exists ontime200;" | $MYSQL_CLIENT_CONNECT
+

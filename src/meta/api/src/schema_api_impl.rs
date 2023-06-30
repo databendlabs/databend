@@ -106,6 +106,7 @@ use common_meta_app::schema::TableIdListKey;
 use common_meta_app::schema::TableIdToName;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableLockKey;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TableNameIdent;
@@ -2065,6 +2066,27 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     }
                 }
             }
+        }
+
+        if let Some(filter) = req.filter {
+            let filter_tb_infos = tb_info_list
+                .clone()
+                .into_iter()
+                .filter(|tb_info| match filter {
+                    TableInfoFilter::Dropped(drop_on) => match tb_info.meta.drop_on {
+                        Some(tb_drop_on) => {
+                            if let Some(drop_on) = &drop_on {
+                                tb_drop_on.timestamp() <= drop_on.timestamp()
+                            } else {
+                                true
+                            }
+                        }
+                        None => false,
+                    },
+                })
+                .collect::<Vec<_>>();
+
+            return Ok(filter_tb_infos);
         }
 
         return Ok(tb_info_list);

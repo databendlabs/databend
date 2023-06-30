@@ -38,7 +38,6 @@ use common_meta_store::MetaStore;
 use common_meta_store::MetaStoreProvider;
 use common_meta_types::MatchSeq;
 use common_meta_types::MetaError;
-use tracing::warn;
 
 use crate::idm_config::IDMConfig;
 
@@ -71,14 +70,6 @@ impl UserApiProvider {
         idm_config: IDMConfig,
     ) -> Result<Arc<UserApiProvider>> {
         let client = MetaStoreProvider::new(conf).create_meta_store().await?;
-        for user in idm_config.users.keys() {
-            match user.as_str() {
-                "root" | "default" => {
-                    warn!("Reserved built-in user `{}` will be ignored", user);
-                }
-                _ => {}
-            }
-        }
         Ok(Arc::new(UserApiProvider {
             meta: client.clone(),
             client: client.arc(),

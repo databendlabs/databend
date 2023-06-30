@@ -24,6 +24,7 @@ use common_catalog::plan::Projection;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
 use storages_common_cache::LoadParams;
@@ -84,6 +85,10 @@ impl<const BLOCKING_IO: bool> RowsFetcher for ParquetRowsFetcher<BLOCKING_IO> {
 
         let blocks = blocks.iter().collect::<Vec<_>>();
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
+    }
+
+    fn schema(&self) -> DataSchema {
+        self.reader.data_schema()
     }
 }
 

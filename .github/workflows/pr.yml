@@ -1,0 +1,105 @@
+name: "PR Assistant"
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+      - ready_for_review
+      - converted_to_draft
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  title:
+    runs-on: ubuntu-latest
+    if: '!github.event.pull_request.draft'
+    steps:
+      - name: Check PR title if not sematic
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const title = context.payload.pull_request.title;
+            const regex = /^(rfc|feat|fix|refactor|ci|docs|chore)(\([a-z0-9-]+\))?:/;
+            if (!regex.test(title)) {
+              core.setFailed('PR title is not semantic');
+            }
+      - name: Delete Comment
+        if: success()
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          identifier: 'pr-assistant-title'
+          delete: true
+      - name: Comment on PR
+        if: failure()
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          identifier: 'pr-assistant-title'
+          body: |
+            This pull request's title is not fulfill the requirements. @${{ github.event.pull_request.user.login }} please update it 🙏.
+
+            Valid format:
+
+            ```
+            fix(query): fix group by string bug
+              ^         ^---------------------^
+              |         |
+              |         +-> Summary in present tense.
+              |
+              +-------> Type: rfc, feat, fix, refactor, ci, docs, chore
+            ```
+
+            Valid types:
+
+            - `rfc`: this PR proposes a new RFC
+            - `feat`: this PR introduces a new feature to the codebase
+            - `fix`: this PR patches a bug in codebase
+            - `refactor`: this PR changes the code base without new features or bugfix
+            - `ci`: this PR changes build/testing/ci steps
+            - `docs`: this PR changes the documents or websites
+            - `chore`: this PR only has small changes that no need to record
+
+  cla:
+    runs-on: ubuntu-latest
+    if: '!github.event.pull_request.draft'
+    steps:
+      - name: Check CLA if not signed
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const body = context.payload.pull_request.body;
+            const regex = /I hereby agree to the terms of the CLA available at: https:\/\/databend\.rs\/dev\/policies\/cla\//;
+            if (!regex.test(body)) {
+              core.setFailed('CLA is not signed');
+            }
+      - name: Delete Comment
+        if: success()
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          identifier: 'pr-assistant-cla'
+          delete: true
+      - name: Comment on PR
+        if: failure()
+        uses: everpcpc/comment-on-pr-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          identifier: 'pr-assistant-cla'
+          body: |
+            Pull request description must contain [CLA](https://databend.rs/doc/contributing/good-pr) like the following:
+
+            ```
+            I hereby agree to the terms of the CLA available at: https://databend.rs/dev/policies/cla/
+
+            ## Summary
+
+            Summary about this PR
+
+            - Close #issue
+            ```

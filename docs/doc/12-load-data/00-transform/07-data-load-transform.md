@@ -24,7 +24,7 @@ This section provides several brief tutorials that offer practical guidance on h
 
 ### Before You Begin
 
-Download the sample file [employees.parquet](https://datasets.databend.rs/employees.parquet) and then upload it to your user stage using the [File Upload API](../../03-develop/00-api/10-put-to-stage.md). If you query the file, you will find that it contains these records:
+Download the sample file [employees.parquet](https://datasets.databend.rs/employees.parquet) and then upload it to your user stage with [PRESIGN](../../14-sql-commands/00-ddl/80-presign/presign.md). If you query the file, you will find that it contains these records:
 
 ```sql
 -- Query remote sample file directly

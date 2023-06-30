@@ -15,40 +15,14 @@
 //! this module is used for converting iceberg data types, schemas and other metadata
 //! to databend
 
-use chrono::Utc;
 use common_expression::types::decimal::DecimalSize;
 use common_expression::types::DecimalDataType;
 use common_expression::types::NumberDataType;
 use common_expression::TableDataType;
 use common_expression::TableField;
 use common_expression::TableSchema;
-use common_meta_app::schema::TableMeta;
-use common_meta_app::storage::StorageParams;
 use icelake::types;
 use itertools::Itertools;
-
-/// generate TableMeta from Iceberg table meta
-pub(crate) fn meta_iceberg_to_databend(
-    catalog: &str,
-    storage_params: &StorageParams,
-    meta: &types::TableMetadata,
-) -> TableMeta {
-    let schema = match meta.schemas.last() {
-        Some(scm) => schema_iceberg_to_databend(scm),
-        // empty schema
-        None => TableSchema::empty(),
-    }
-    .into();
-
-    TableMeta {
-        schema,
-        catalog: catalog.to_string(),
-        engine: "iceberg".to_string(),
-        created_on: Utc::now(),
-        storage_params: Some(storage_params.clone()),
-        ..Default::default()
-    }
-}
 
 /// generate databend DataSchema from Iceberg
 pub(super) fn schema_iceberg_to_databend(schema: &types::Schema) -> TableSchema {
@@ -138,84 +112,5 @@ fn primitive_iceberg_to_databend(prim: &types::Any) -> TableDataType {
             // wait for new expression support to complete
             unimplemented!()
         }
-    }
-}
-
-#[cfg(test)]
-mod convert_test {
-    use common_meta_app::storage::StorageFsConfig;
-    use common_meta_app::storage::StorageParams;
-    use icelake::types;
-
-    use super::meta_iceberg_to_databend;
-
-    /// example metadata file
-    const METADATA_FILE: &str = r#"
-    {
-        "format-version" : 2,
-        "table-uuid": "fb072c92-a02b-11e9-ae9c-1bb7bc9eca94",
-        "location": "s3://b/wh/data.db/table",
-        "last-sequence-number" : 1,
-        "last-updated-ms": 1515100955770,
-        "last-column-id": 1,
-        "schemas": [
-            {
-                "schema-id" : 1,
-                "type" : "struct",
-                "fields" :[
-                    {
-                        "id": 1,
-                        "name": "struct_name",
-                        "required": true,
-                        "type": "fixed[1]"
-                    }
-                ]
-            }
-        ],
-        "current-schema-id" : 1,
-        "partition-specs": [
-            {
-                "spec-id": 1,
-                "fields": [
-                    {
-                        "source-id": 4,
-                        "field-id": 1000,
-                        "name": "ts_day",
-                        "transform": "day"
-                    }
-                ]
-            }
-        ],
-        "default-spec-id": 1,
-        "last-partition-id": 1,
-        "properties": {
-            "commit.retry.num-retries": "1"
-        },
-        "metadata-log": [
-            {
-                "metadata-file": "s3://bucket/.../v1.json",
-                "timestamp-ms": 1515100
-            }
-        ],
-        "sort-orders": [],
-        "default-sort-order-id": 0
-    }
-"#;
-
-    fn gen_iceberg_meta() -> types::TableMetadata {
-        types::parse_table_metadata(METADATA_FILE.as_bytes()).unwrap()
-    }
-
-    #[test]
-    fn test_parse_metadata() {
-        let metadata = gen_iceberg_meta();
-        let mock_sp = StorageParams::Fs(StorageFsConfig {
-            root: "/".to_string(),
-        });
-
-        let converted = meta_iceberg_to_databend("ctl", &mock_sp, &metadata);
-
-        assert_eq!(converted.engine, "iceberg");
-        assert_eq!(converted.catalog, "ctl");
     }
 }

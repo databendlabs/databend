@@ -1,5 +1,5 @@
 statement ok
-DROP USER IF EXISTS 'test-grant'@'localhost'
+DROP USER IF EXISTS 'test-grant'
 
 statement ok
 DROP DATABASE IF EXISTS `db01`
@@ -14,43 +14,43 @@ statement ok
 CREATE TABLE IF NOT EXISTS `db01`.`tb1` (id int)
 
 statement ok
-CREATE USER 'test-grant'@'localhost' IDENTIFIED BY 'password'
+CREATE USER 'test-grant' IDENTIFIED BY 'password'
 
 statement ok
-GRANT SELECT ON * TO 'test-grant'@'localhost'
+GRANT SELECT ON * TO 'test-grant'
 
 statement error 2201
-GRANT SELECT ON * TO 'test-grant1'@'localhost'
+GRANT SELECT ON * TO 'test-grant1'
 
 statement ok
-GRANT SELECT, CREATE ON * TO 'test-grant'@'localhost'
+GRANT SELECT, CREATE ON * TO 'test-grant'
 
 statement ok
-GRANT ALL ON * TO 'test-grant'@'localhost'
+GRANT ALL ON * TO 'test-grant'
 
 statement ok
-GRANT ALL PRIVILEGES ON * TO 'test-grant'@'localhost'
+GRANT ALL PRIVILEGES ON * TO 'test-grant'
 
 statement ok
-GRANT SELECT ON db01.* TO 'test-grant'@'localhost'
+GRANT SELECT ON db01.* TO 'test-grant'
 
 statement ok
-GRANT SELECT ON db01.tb1 TO 'test-grant'@'localhost'
+GRANT SELECT ON db01.tb1 TO 'test-grant'
 
 statement ok
-GRANT SELECT ON `db01`.`tb1` TO 'test-grant'@'localhost'
+GRANT SELECT ON `db01`.`tb1` TO 'test-grant'
 
 statement error 1025
-GRANT SELECT ON db01.tbnotexists TO 'test-grant'@'localhost'
+GRANT SELECT ON db01.tbnotexists TO 'test-grant'
 
 statement error 1003
-GRANT SELECT ON dbnotexists.* TO 'test-grant'@'localhost'
+GRANT SELECT ON dbnotexists.* TO 'test-grant'
 
 onlyif mysql
 query T
 select current_user()
 ----
-'root'@'127.0.0.1'
+'root'@'%'
 
 onlyif mysql
 statement ok
@@ -81,31 +81,31 @@ GRANT ALL ON *.* TO 'account_admin'
 GRANT SELECT ON 'default'.'system'.'one' TO 'account_admin'
 
 query T
-SHOW GRANTS FOR 'test-grant'@'localhost'
+SHOW GRANTS FOR 'test-grant'
 ----
-GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'localhost'
-GRANT SELECT ON 'default'.'db01'.* TO 'test-grant'@'localhost'
-GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'localhost'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'localhost'
+GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'db01'.* TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
 
 statement ok
-REVOKE SELECT ON db01.* FROM 'test-grant'@'localhost'
+REVOKE SELECT ON db01.* FROM 'test-grant'
 
 query T
-SHOW GRANTS FOR 'test-grant'@'localhost'
+SHOW GRANTS FOR 'test-grant'
 ----
-GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'localhost'
-GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'localhost'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'localhost'
+GRANT ALL ON 'default'.'default'.* TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
 
 statement ok
-REVOKE ALL PRIVILEGES ON * FROM 'test-grant'@'localhost'
+REVOKE ALL PRIVILEGES ON * FROM 'test-grant'
 
 query T
-SHOW GRANTS FOR 'test-grant'@'localhost'
+SHOW GRANTS FOR 'test-grant'
 ----
-GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'localhost'
-GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'localhost'
+GRANT SELECT ON 'default'.'db01'.'tb1' TO 'test-grant'@'%'
+GRANT SELECT ON 'default'.'system'.'one' TO 'test-grant'@'%'
 
 statement ok
 CREATE ROLE 'test-grant-role'
@@ -126,7 +126,7 @@ statement ok
 DROP ROLE 'test-grant-role'
 
 statement ok
-DROP USER 'test-grant'@'localhost'
+DROP USER 'test-grant'
 
 statement ok
 DROP DATABASE `db01`

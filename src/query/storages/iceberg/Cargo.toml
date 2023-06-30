@@ -14,13 +14,16 @@ common-exception = { path = "../../../common/exception" }
 common-expression = { path = "../../expression" }
 common-meta-app = { path = "../../../meta/app" }
 common-meta-types = { path = "../../../meta/types" }
+common-pipeline-core = { path = "../../pipeline/core" }
 common-storage = { path = "../../../common/storage" }
 
 async-backtrace = { workspace = true }
 async-trait = "0.1"
 chrono = { workspace = true }
 futures = "0.3"
-icelake = "0.0.1"
+icelake = { version = "0.0.3" }
 itertools = "0.10"
 opendal = { workspace = true }
+serde = { workspace = true }
 tracing = "0.1"
+typetag = "0.2"

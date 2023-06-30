@@ -112,6 +112,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'example'                       | 'system'             | 'functions'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'exception_code'                | 'system'             | 'query_log'           | 'Int32'            | 'INT'               | ''       | ''       | 'NO'     | ''       |
 | 'exception_text'                | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
+| 'execution_info'                | 'system'             | 'query_profile'       | 'Variant'          | 'VARIANT'           | ''       | ''       | 'NO'     | ''       |
 | 'extra'                         | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'extra'                         | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'extra_info'                    | 'system'             | 'processes'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -206,7 +207,6 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'port'                          | 'system'             | 'clusters'            | 'UInt16'           | 'SMALLINT UNSIGNED' | ''       | ''       | 'NO'     | ''       |
 | 'position_in_unique_constraint' | 'information_schema' | 'key_column_usage'    | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
 | 'privileges'                    | 'information_schema' | 'columns'             | 'NULL'             | 'NULL'              | ''       | ''       | 'NO'     | ''       |
-| 'process_time'                  | 'system'             | 'query_profile'       | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'projections'                   | 'system'             | 'query_log'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'query_duration_ms'             | 'system'             | 'query_log'           | 'Int64'            | 'BIGINT'            | ''       | ''       | 'NO'     | ''       |
 | 'query_id'                      | 'system'             | 'query_cache'         | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

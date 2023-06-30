@@ -21,7 +21,6 @@ use common_expression::types::ArrayType;
 use common_expression::types::NumberDataType;
 use common_expression::types::StringType;
 use common_expression::types::UInt32Type;
-use common_expression::types::UInt64Type;
 use common_expression::types::ValueType;
 use common_expression::types::VariantType;
 use common_expression::DataBlock;
@@ -33,6 +32,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_profile::OperatorAttribute;
+use common_profile::OperatorExecutionInfo;
 use common_profile::QueryProfileManager;
 
 use crate::SyncOneBlockSystemTable;
@@ -87,6 +87,19 @@ fn encode_operator_attribute(attr: &OperatorAttribute) -> jsonb::Value {
     }
 }
 
+fn encode_operator_execution_info(info: &OperatorExecutionInfo) -> jsonb::Value {
+    // Process time represent with number of milliseconds.
+    let process_time = info.process_time.as_nanos() as f64 / 1e6;
+    (&serde_json::json!({
+        "process_time": process_time,
+        "input_rows": info.input_rows,
+        "input_bytes": info.input_bytes,
+        "output_rows": info.output_rows,
+        "output_bytes": info.output_bytes,
+    }))
+        .into()
+}
+
 pub struct QueryProfileTable {
     table_info: TableInfo,
 }
@@ -101,10 +114,7 @@ impl QueryProfileTable {
                 "operator_children",
                 TableDataType::Array(Box::new(TableDataType::Number(NumberDataType::UInt32))),
             ),
-            TableField::new(
-                "process_time",
-                TableDataType::Number(NumberDataType::UInt64),
-            ),
+            TableField::new("execution_info", TableDataType::Variant),
             TableField::new("operator_attribute", TableDataType::Variant),
         ]);
 
@@ -139,7 +149,7 @@ impl SyncSystemTable for QueryProfileTable {
         let mut operator_ids: Vec<u32> = Vec::with_capacity(query_profs.len());
         let mut operator_types: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
         let mut operator_childrens: Vec<Vec<u32>> = Vec::with_capacity(query_profs.len());
-        let mut process_times: Vec<u64> = Vec::with_capacity(query_profs.len());
+        let mut execution_infos: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
         let mut operator_attributes: Vec<Vec<u8>> = Vec::with_capacity(query_profs.len());
 
         for prof in query_profs.iter() {
@@ -148,7 +158,9 @@ impl SyncSystemTable for QueryProfileTable {
                 operator_ids.push(plan_prof.id);
                 operator_types.push(plan_prof.operator_type.to_string().into_bytes());
                 operator_childrens.push(plan_prof.children.clone());
-                process_times.push(plan_prof.cpu_time.as_nanos() as u64);
+
+                let execution_info = encode_operator_execution_info(&plan_prof.execution_info);
+                execution_infos.push(execution_info.to_vec());
 
                 let attribute_value = encode_operator_attribute(&plan_prof.attribute);
                 operator_attributes.push(attribute_value.to_vec());
@@ -169,8 +181,8 @@ impl SyncSystemTable for QueryProfileTable {
                     .map(|children| UInt32Type::column_from_iter(children.into_iter(), &[])),
                 &[],
             )),
-            // process_time
-            UInt64Type::from_data(process_times),
+            // execution_info
+            VariantType::from_data(execution_infos),
             // operator_attribute
             VariantType::from_data(operator_attributes),
         ]);

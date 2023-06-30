@@ -48,9 +48,9 @@ EvalScalar
 ├── expressions: [t.a (#0), t1.a (#1)]
 ├── estimated rows: 10.00
 └── HashJoin
-    ├── join type: RIGHT OUTER
-    ├── build keys: [t1.a (#1)]
-    ├── probe keys: [t.a (#0)]
+    ├── join type: LEFT OUTER
+    ├── build keys: [t.a (#0)]
+    ├── probe keys: [t1.a (#1)]
     ├── filters: []
     ├── estimated rows: 10.00
     ├── TableScan(Build)

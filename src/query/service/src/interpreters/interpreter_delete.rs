@@ -328,7 +328,7 @@ pub async fn subquery_filter(
     let mock_bind_context = Box::new(BindContext::new());
     let heuristic_optimizer = HeuristicOptimizer::new(
         ctx.get_function_context()?,
-        mock_bind_context,
+        &mock_bind_context,
         metadata.clone(),
     );
     let mut expr = heuristic_optimizer.optimize_expression(&expr, &DEFAULT_REWRITE_RULES)?;
