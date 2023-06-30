@@ -482,11 +482,7 @@ impl Operator for Join {
         } else if ctx.get_settings().get_prefer_broadcast_join()?
             && !matches!(
                 self.join_type,
-                JoinType::Right
-                    | JoinType::Full
-                    | JoinType::RightAnti
-                    | JoinType::RightSemi
-                    | JoinType::RightMark
+                JoinType::Right | JoinType::Full | JoinType::RightAnti | JoinType::RightSemi
             )
         {
             let left_stat_info = rel_expr.derive_cardinality_child(0)?;
