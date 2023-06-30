@@ -46,7 +46,6 @@ use opendal::Operator;
 use parking_lot::Mutex;
 
 use crate::stage_table_sink::StageTableSink;
-
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
     table_info: StageTableInfo,
@@ -205,7 +204,7 @@ impl Table for StageTable {
             self.table_info.is_select,
             projection,
         )?);
-
+        tracing::debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         Ok(())
     }

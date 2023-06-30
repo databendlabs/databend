@@ -30,7 +30,7 @@ use tracing::info;
 
 use crate::plans::Plan;
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum ValidationMode {
     None,
     ReturnNRows(u64),
@@ -59,7 +59,7 @@ impl FromStr for ValidationMode {
     }
 }
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug, serde::Serialize, serde::Deserialize)]
 pub enum CopyIntoTableMode {
     Insert { overwrite: bool },
     Replace,
@@ -82,6 +82,8 @@ pub struct CopyIntoTablePlan {
 
     pub stage_table_info: StageTableInfo,
     pub query: Option<Box<Plan>>,
+
+    pub enable_distributed: bool,
 }
 
 fn set_and_log_status(ctx: &Arc<dyn TableContext>, status: &str) {

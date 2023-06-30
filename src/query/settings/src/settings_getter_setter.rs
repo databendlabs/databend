@@ -362,4 +362,12 @@ impl Settings {
     pub fn set_deduplicate_label(&self, val: String) -> Result<()> {
         self.set_setting("deduplicate_label".to_string(), val)
     }
+
+    pub fn get_enable_distributed_copy(&self) -> Result<bool> {
+        Ok(self.try_get_u64("enable_distributed_copy_into")? != 0)
+    }
+
+    pub fn set_enable_distributed_copy(&self, val: bool) -> Result<()> {
+        self.try_set_u64("enable_distributed_copy_into", u64::from(val))
+    }
 }

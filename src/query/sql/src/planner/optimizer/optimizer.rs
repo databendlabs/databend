@@ -19,6 +19,7 @@ use common_ast::ast::ExplainKind;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use tracing::info;
 
 use super::cost::CostContext;
 use super::format::display_memo;
@@ -133,7 +134,22 @@ pub fn optimize(
                         from: Box::new(optimize(ctx, opt_ctx, *from)?),
                     }
                 }
-                into_table => into_table,
+                CopyPlan::NoFileToCopy => *v,
+                CopyPlan::IntoTable(mut into_table) => match into_table.query {
+                    // Todo:(JackTna25):for now, we just support copy into table from raw stage, copy from query
+                    // will be given later.
+                    Some(_) => CopyPlan::IntoTable(into_table),
+                    None => {
+                        into_table.enable_distributed =
+                            opt_ctx.config.enable_distributed_optimization
+                                && ctx.get_settings().get_enable_distributed_copy()?;
+                        info!(
+                            "after optimization enable_distributed_copy? : {}",
+                            into_table.enable_distributed
+                        );
+                        CopyPlan::IntoTable(into_table)
+                    }
+                },
             })))
         }
         // Passthrough statements

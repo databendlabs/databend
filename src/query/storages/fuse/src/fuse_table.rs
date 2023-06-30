@@ -351,7 +351,7 @@ impl Table for FuseTable {
         Some(self.data_metrics.clone())
     }
 
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         true
     }
 

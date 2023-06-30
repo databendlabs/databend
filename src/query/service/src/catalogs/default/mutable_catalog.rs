@@ -62,6 +62,7 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -328,9 +329,10 @@ impl Catalog for MutableCatalog {
         &self,
         tenant: &str,
         db_name: &str,
+        filter: Option<TableInfoFilter>,
     ) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.list_tables_history().await
+        db.list_tables_history(filter).await
     }
 
     #[async_backtrace::framed]

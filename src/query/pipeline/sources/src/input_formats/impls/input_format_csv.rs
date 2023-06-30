@@ -277,7 +277,6 @@ impl AligningStateTextBased for CsvReaderState {
     fn align(&mut self, buf_in: &[u8]) -> Result<Vec<RowBatch>> {
         let mut out_tmp = vec![0u8; buf_in.len()];
         let mut buf = buf_in;
-
         while self.common.rows_to_skip > 0 {
             let (_, n_in, _) = self.read_record(buf, &mut out_tmp)?;
             buf = &buf[n_in..];
@@ -333,7 +332,6 @@ impl AligningStateTextBased for CsvReaderState {
 
             self.common.batch_id += 1;
             self.out.extend_from_slice(&out_tmp[row_batch_end..]);
-
             tracing::debug!(
                 "csv aligner: {} + {} bytes => {} rows + {} bytes remain",
                 last_remain.len(),

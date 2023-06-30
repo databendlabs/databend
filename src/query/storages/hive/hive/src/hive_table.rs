@@ -560,7 +560,7 @@ impl Table for HiveTable {
         &self.table_info
     }
 
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         true
     }
 
