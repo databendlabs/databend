@@ -319,6 +319,7 @@ pub trait PhysicalPlanReplacer {
             plan_id: plan.plan_id,
             input: Box::new(input),
             srf_exprs: plan.srf_exprs.clone(),
+            unused_indices: plan.unused_indices.clone(),
             stat_info: plan.stat_info.clone(),
         }))
     }
