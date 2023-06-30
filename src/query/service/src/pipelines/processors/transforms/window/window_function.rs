@@ -32,13 +32,15 @@ use crate::pipelines::processors::transforms::group_by::Area;
 
 #[derive(Clone)]
 pub enum WindowFunctionInfo {
-    Aggregate(Arc<dyn AggregateFunction>, Vec<usize>), // (func instance, argument offsets)
+    // (func instance, argument offsets)
+    Aggregate(Arc<dyn AggregateFunction>, Vec<usize>),
     RowNumber,
     Rank,
     DenseRank,
     PercentRank,
     LagLead(WindowFuncLagLeadImpl),
     NthValue(WindowFuncNthValueImpl),
+    Ntile(WindowFuncNtileImpl),
 }
 
 pub struct WindowFuncAggImpl {
@@ -104,6 +106,65 @@ pub struct WindowFuncNthValueImpl {
     pub return_type: DataType,
 }
 
+#[derive(Clone)]
+pub struct WindowFuncNtileImpl {
+    /// number of buckets
+    pub n: usize,
+    pub return_type: DataType,
+}
+
+impl WindowFuncNtileImpl {
+    pub(crate) fn compute_nitle(
+        &self,
+        current_row_in_partition: usize,
+        num_partition_rows: usize,
+    ) -> usize {
+        if self.n > num_partition_rows {
+            // buckets more than partition rows
+            current_row_in_partition
+        } else {
+            NtileBucket::new(self.n, num_partition_rows)
+                .compute_bucket_value(current_row_in_partition - 1)
+        }
+    }
+}
+
+struct NtileBucket {
+    // number of rows in a bucket: `(number of rows in partition) / (number of buckets)`.
+    rows_per_bucket: usize,
+    // partition rows might not be exactly divisible by number of buckets,
+    // so some buckets could have `rows_per_bucket + 1` rows
+    // `extra_buckets`: (number of rows in partition) % (number of buckets).
+    extra_buckets: usize,
+    // the first extra_buckets will have (rows_per_bucket + 1) rows.
+    // this row number in partition at this boundary is extra_buckets_boundary.
+    // `extra_buckets_boundary`: extra_buckets * (rows_per_bucket + 1).
+    // for each rows in partition beyond this row number,
+    // their belong to bucket have only `rows_per_bucket` number of rows.
+    // this field is used to computing the bucket value.
+    extra_buckets_boundary: usize,
+}
+
+impl NtileBucket {
+    fn new(num_buckets: usize, num_partition_rows: usize) -> Self {
+        let rows_per_bucket = num_partition_rows / num_buckets;
+        let extra_buckets = num_partition_rows % num_buckets;
+        let extra_buckets_boundary = (rows_per_bucket + 1) * extra_buckets;
+        Self {
+            rows_per_bucket,
+            extra_buckets,
+            extra_buckets_boundary,
+        }
+    }
+
+    fn compute_bucket_value(&self, row_number: usize) -> usize {
+        if row_number < self.extra_buckets_boundary {
+            return row_number / (self.rows_per_bucket + 1) + 1;
+        }
+        (row_number - self.extra_buckets) / self.rows_per_bucket + 1
+    }
+}
+
 pub enum WindowFunctionImpl {
     Aggregate(WindowFuncAggImpl),
     RowNumber,
@@ -112,6 +173,7 @@ pub enum WindowFunctionImpl {
     PercentRank,
     LagLead(WindowFuncLagLeadImpl),
     NthValue(WindowFuncNthValueImpl),
+    Ntile(WindowFuncNtileImpl),
 }
 
 impl WindowFunctionInfo {
@@ -160,6 +222,10 @@ impl WindowFunctionInfo {
                     return_type: func.return_type.clone(),
                 })
             }
+            WindowFunction::Ntile(func) => Self::Ntile(WindowFuncNtileImpl {
+                n: func.n as usize,
+                return_type: func.return_type.clone(),
+            }),
         })
     }
 }
@@ -188,6 +254,7 @@ impl WindowFunctionImpl {
             WindowFunctionInfo::PercentRank => Self::PercentRank,
             WindowFunctionInfo::LagLead(ll) => Self::LagLead(ll),
             WindowFunctionInfo::NthValue(func) => Self::NthValue(func),
+            WindowFunctionInfo::Ntile(func) => Self::Ntile(func),
         })
     }
 
@@ -200,6 +267,7 @@ impl WindowFunctionImpl {
             Self::PercentRank => DataType::Number(NumberDataType::Float64),
             Self::LagLead(f) => f.return_type.clone(),
             Self::NthValue(f) => f.return_type.clone(),
+            Self::Ntile(f) => f.return_type.clone(),
         })
     }
 

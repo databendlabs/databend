@@ -68,6 +68,7 @@ use crate::executor::table_read_plan::ToReadDataSourcePlan;
 use crate::executor::FragmentKind;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
+use crate::executor::NtileFunctionDesc;
 use crate::executor::PhysicalJoinType;
 use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
@@ -1267,6 +1268,10 @@ impl PhysicalPlanBuilder {
                         "Window's nth_value function argument must be a BoundColumnRef".to_string(),
                     ))
                 }?,
+            }),
+            WindowFuncType::Ntile(func) => WindowFunction::Ntile(NtileFunctionDesc {
+                n: func.n,
+                return_type: *func.return_type.clone(),
             }),
             WindowFuncType::RowNumber => WindowFunction::RowNumber,
             WindowFuncType::Rank => WindowFunction::Rank,

@@ -318,6 +318,7 @@ pub enum WindowFunction {
     PercentRank,
     LagLead(LagLeadFunctionDesc),
     NthValue(NthValueFunctionDesc),
+    Ntile(NtileFunctionDesc),
 }
 
 impl WindowFunction {
@@ -330,6 +331,7 @@ impl WindowFunction {
             WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
             WindowFunction::LagLead(f) => Ok(f.return_type.clone()),
             WindowFunction::NthValue(f) => Ok(f.return_type.clone()),
+            WindowFunction::Ntile(f) => Ok(f.return_type.clone()),
         }
     }
 }
@@ -345,6 +347,7 @@ impl Display for WindowFunction {
             WindowFunction::LagLead(lag_lead) if lag_lead.is_lag => write!(f, "lag"),
             WindowFunction::LagLead(_) => write!(f, "lead"),
             WindowFunction::NthValue(_) => write!(f, "nth_value"),
+            WindowFunction::Ntile(_) => write!(f, "ntile"),
         }
     }
 }
@@ -691,9 +694,12 @@ pub struct DistributedCopyIntoTable {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
-    pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
-    pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
-    pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
+    // ... into table(<columns>) ..  -> <columns>
+    pub required_values_schema: DataSchemaRef,
+    // (1, ?, 'a', ?) -> (1, 'a')
+    pub values_consts: Vec<Scalar>,
+    // (1, ?, 'a', ?) -> (?, ?)
+    pub required_source_schema: DataSchemaRef,
 
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,
@@ -733,6 +739,7 @@ impl DistributedInsertSelect {
         Ok(DataSchemaRef::default())
     }
 }
+
 // Build runtime predicate data from join build side
 // Then pass it to runtime filter on join probe side
 // It's the children of join node
@@ -1031,6 +1038,12 @@ pub struct LagLeadFunctionDesc {
 pub struct NthValueFunctionDesc {
     pub n: Option<u64>,
     pub arg: usize,
+    pub return_type: DataType,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct NtileFunctionDesc {
+    pub n: u64,
     pub return_type: DataType,
 }
 
