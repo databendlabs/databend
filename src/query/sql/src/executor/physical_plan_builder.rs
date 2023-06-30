@@ -37,7 +37,6 @@ use common_expression::DataField;
 use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
-use common_expression::RawExpr;
 use common_expression::RemoteExpr;
 use common_expression::TableSchema;
 use common_expression::ROW_ID_COL_NAME;
@@ -865,10 +864,8 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::UnionAll(op) => {
-                let left_plan = self.build(s_expr.child(0)?).await?;
-                let right_plan = self.build(s_expr.child(1)?).await?;
-                let left_schema = left_plan.output_schema()?;
-                let right_schema = right_plan.output_schema()?;
+                let left_schema = self.build(s_expr.child(0)?).await?.output_schema()?;
+                let right_schema = self.build(s_expr.child(1)?).await?.output_schema()?;
 
                 let common_types = op.pairs.iter().map(|(l, r)| {
                     let left_field = left_schema.field_with_name(&l.to_string()).unwrap();
@@ -892,11 +889,10 @@ impl PhysicalPlanBuilder {
 
                 async fn cast_plan(
                     plan_builder: &mut PhysicalPlanBuilder,
-                    plan: PhysicalPlan,
+                    plan: SExpr,
                     plan_schema: &DataSchema,
                     indexes: &[IndexType],
                     common_types: &[DataType],
-                    stat_info: PlanStatsInfo,
                 ) -> Result<PhysicalPlan> {
                     debug_assert!(indexes.len() == common_types.len());
                     let scalar_items = indexes
@@ -932,14 +928,17 @@ impl PhysicalPlanBuilder {
                     let new_plan = if scalar_items.is_empty() {
                         plan
                     } else {
-                        plan_builder.build_eval_scalar(
-                            plan,
-                            &crate::plans::EvalScalar {
-                                items: scalar_items,
-                            },
-                            stat_info,
-                        )?
+                        SExpr::create_unary(
+                            Arc::new(
+                                crate::plans::EvalScalar {
+                                    items: scalar_items,
+                                }
+                                .into(),
+                            ),
+                            Arc::new(plan),
+                        )
                     };
+                    let new_plan = plan_builder.build(&new_plan).await?;
 
                     Ok(new_plan)
                 }
@@ -948,20 +947,18 @@ impl PhysicalPlanBuilder {
                 let right_indexes = op.pairs.iter().map(|(_, r)| *r).collect::<Vec<_>>();
                 let left_plan = cast_plan(
                     self,
-                    left_plan,
+                    s_expr.child(0)?.clone(),
                     left_schema.as_ref(),
                     &left_indexes,
                     &common_types,
-                    stat_info.clone(),
                 )
                 .await?;
                 let right_plan = cast_plan(
                     self,
-                    right_plan,
+                    s_expr.child(1)?.clone(),
                     right_schema.as_ref(),
                     &right_indexes,
                     &common_types,
-                    stat_info.clone(),
                 )
                 .await?;
 
@@ -1089,96 +1086,6 @@ impl PhysicalPlanBuilder {
         w: &LogicalWindow,
     ) -> Result<PhysicalPlan> {
         let input = self.build(s_expr.child(0)?).await?;
-        let input_schema = input.output_schema()?;
-
-        let mut w = w.clone();
-
-        // Unify the data type for range frame.
-        if w.frame.units.is_range() && w.order_by.len() == 1 {
-            let order_by = &mut w.order_by[0].order_by_item.scalar;
-
-            let mut start = match &mut w.frame.start_bound {
-                WindowFuncFrameBound::Preceding(scalar)
-                | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
-                _ => None,
-            };
-            let mut end = match &mut w.frame.end_bound {
-                WindowFuncFrameBound::Preceding(scalar)
-                | WindowFuncFrameBound::Following(scalar) => scalar.as_mut(),
-                _ => None,
-            };
-
-            let mut common_ty = order_by
-                .resolve_and_check(&*input_schema)?
-                .data_type()
-                .clone();
-            for scalar in start.iter_mut().chain(end.iter_mut()) {
-                let ty = scalar.as_ref().infer_data_type();
-                common_ty = common_super_type(
-                    common_ty.clone(),
-                    ty.clone(),
-                    &BUILTIN_FUNCTIONS.default_cast_rules,
-                )
-                .ok_or_else(|| {
-                    ErrorCode::IllegalDataType(format!(
-                        "Cannot find common type for {:?} and {:?}",
-                        &common_ty, &ty
-                    ))
-                })?;
-            }
-
-            *order_by = wrap_cast(order_by, &common_ty);
-            for scalar in start.iter_mut().chain(end.iter_mut()) {
-                let raw_expr = RawExpr::<usize>::Cast {
-                    span: w.span,
-                    is_try: false,
-                    expr: Box::new(RawExpr::Constant {
-                        span: w.span,
-                        scalar: scalar.clone(),
-                    }),
-                    dest_type: common_ty.clone(),
-                };
-                let expr = type_check::check(&raw_expr, &BUILTIN_FUNCTIONS)?;
-                let (expr, _) =
-                    ConstantFolder::fold(&expr, &FunctionContext::default(), &BUILTIN_FUNCTIONS);
-                if let common_expression::Expr::Constant {
-                    scalar: new_scalar, ..
-                } = expr
-                {
-                    if new_scalar.is_positive() {
-                        **scalar = new_scalar;
-                        continue;
-                    }
-                }
-                return Err(ErrorCode::SemanticError(
-                    "Only positive numbers are allowed in RANGE offset".to_string(),
-                )
-                .set_span(w.span));
-            }
-        }
-
-        // Generate a `EvalScalar` as the input of `Window`.
-        let mut scalar_items: Vec<ScalarItem> = Vec::new();
-        for arg in &w.arguments {
-            scalar_items.push(arg.clone());
-        }
-        for part in &w.partition_by {
-            scalar_items.push(part.clone());
-        }
-        for order in &w.order_by {
-            scalar_items.push(order.order_by_item.clone())
-        }
-        let input = if !scalar_items.is_empty() {
-            self.build_eval_scalar(
-                input,
-                &crate::planner::plans::EvalScalar {
-                    items: scalar_items,
-                },
-                stat_info.clone(),
-            )?
-        } else {
-            input
-        };
 
         let order_by_items = w
             .order_by

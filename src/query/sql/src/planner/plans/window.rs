@@ -19,11 +19,9 @@ use std::sync::Arc;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_exception::Span;
 use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::Scalar;
-use educe::Educe;
 use enum_as_inner::EnumAsInner;
 use serde::Deserialize;
 use serde::Serialize;
@@ -45,12 +43,8 @@ use crate::plans::RelOp;
 use crate::plans::ScalarItem;
 use crate::IndexType;
 
-#[derive(Clone, Debug, Educe)]
-#[educe(PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Window {
-    #[educe(PartialEq(ignore), Eq(ignore), Hash(ignore))]
-    pub span: Span,
-
     // aggregate scalar expressions, such as: sum(col1), count(*);
     // or general window functions, such as: row_number(), rank();
     pub index: IndexType,

@@ -94,7 +94,9 @@ impl PhysicalPlanBuilder {
                 .map(|scalar| {
                     Ok(scalar
                         .resolve_and_check(merged_schema.as_ref())?
-                        .project_column_ref(|index| merged_schema.index_of(&index.to_string()).unwrap())
+                        .project_column_ref(|index| {
+                            merged_schema.index_of(&index.to_string()).unwrap()
+                        })
                         .as_remote_expr())
                 })
                 .collect::<Result<_>>()?,

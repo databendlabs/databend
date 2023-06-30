@@ -160,7 +160,6 @@ impl RulePushDownFilterEvalScalar {
                     .collect::<Result<Vec<_>>>()?;
 
                 Ok(ScalarExpr::WindowFunction(WindowFunc {
-                    span: window.span,
                     display_name: window.display_name.clone(),
                     func,
                     partition_by,
