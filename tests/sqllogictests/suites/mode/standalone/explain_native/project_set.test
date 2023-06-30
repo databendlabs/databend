@@ -24,21 +24,19 @@ EvalScalar
         ├── group by: []
         ├── aggregate functions: [count()]
         ├── estimated rows: 1.00
-        └── EvalScalar
-            ├── expressions: [fold_count.c1 (#1), get(1)(unnest (#2))]
+        └── ProjectSet
             ├── estimated rows: 1.00
-            └── ProjectSet
-                ├── estimated rows: 1.00
-                ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL)))
-                └── TableScan
-                    ├── table: default.default.fold_count
-                    ├── read rows: 1
-                    ├── read bytes: 76
-                    ├── partitions total: 1
-                    ├── partitions scanned: 1
-                    ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
-                    ├── push downs: [filters: [], limit: NONE]
-                    └── estimated rows: 1.00
+            ├── set returning functions: unnest(CAST(fold_count.id (#0) AS Array(Int32 NULL)))
+            └── TableScan
+                ├── table: default.default.fold_count
+                ├── read rows: 1
+                ├── read bytes: 43
+                ├── partitions total: 1
+                ├── partitions scanned: 1
+                ├── pruning stats: [segments: <range pruning: 1 to 1>, blocks: <range pruning: 1 to 1, bloom pruning: 0 to 0>]
+                ├── push downs: [filters: [], limit: NONE]
+                ├── output columns: [id]
+                └── estimated rows: 1.00
 
 statement ok
 drop table fold_count;
@@ -56,7 +54,7 @@ query T
 explain select number from (select unnest([1,2,3]), number from numbers(10)) t
 ----
 EvalScalar
-├── expressions: [t.number (#0), numbers.number (#0), get(1)(unnest (#1))]
+├── expressions: [t.number (#0), numbers.number (#0)]
 ├── estimated rows: 10.00
 └── ProjectSet
     ├── estimated rows: 10.00
@@ -74,7 +72,7 @@ query T
 explain select number from (select unnest([1,2,3,number]), number from numbers(10)) t
 ----
 EvalScalar
-├── expressions: [t.number (#0), numbers.number (#0), get(1)(unnest (#1))]
+├── expressions: [t.number (#0), numbers.number (#0)]
 ├── estimated rows: 10.00
 └── ProjectSet
     ├── estimated rows: 10.00

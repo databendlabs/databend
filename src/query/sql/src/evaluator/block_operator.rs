@@ -179,7 +179,7 @@ impl BlockOperator {
                         // Take the i-th row of input data block and add it to the row.
                         let mut builder =
                             ColumnBuilder::with_capacity(&entry.data_type, max_num_rows);
-                        let scalar_ref = entry.value.index(i).unwrap();
+                        let scalar_ref = unsafe { entry.value.index_unchecked(i) };
                         (0..max_num_rows).for_each(|_| {
                             builder.push(scalar_ref.clone());
                         });
@@ -222,6 +222,15 @@ impl BlockOperator {
                                     }
                                 }
                             }
+                        } else {
+                            row_result = Value::Column(
+                                ColumnBuilder::repeat(
+                                    &ScalarRef::Tuple(vec![ScalarRef::Null]),
+                                    max_num_rows,
+                                    srf_expr.data_type(),
+                                )
+                                .build(),
+                            );
                         }
 
                         row.push(BlockEntry::new(srf_expr.data_type().clone(), row_result))
