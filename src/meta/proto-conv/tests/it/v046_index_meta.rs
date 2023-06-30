@@ -30,12 +30,12 @@ use crate::common;
 //
 // The message bytes are built from the output of `proto_conv::test_build_pb_buf()`
 #[test]
-fn test_decode_v37_index() -> anyhow::Result<()> {
-    let index_v037 = vec![
+fn test_decode_v46_index() -> anyhow::Result<()> {
+    let index_v046 = vec![
         8, 7, 16, 1, 26, 23, 50, 48, 49, 53, 45, 48, 51, 45, 48, 57, 32, 50, 48, 58, 48, 48, 58,
         48, 57, 32, 85, 84, 67, 42, 55, 83, 69, 76, 69, 67, 84, 32, 97, 44, 32, 115, 117, 109, 40,
         98, 41, 32, 70, 82, 79, 77, 32, 100, 101, 102, 97, 117, 108, 116, 46, 116, 49, 32, 87, 72,
-        69, 82, 69, 32, 97, 32, 62, 32, 51, 32, 71, 82, 79, 85, 80, 32, 66, 89, 32, 98, 160, 6, 37,
+        69, 82, 69, 32, 97, 32, 62, 32, 51, 32, 71, 82, 79, 85, 80, 32, 66, 89, 32, 98, 160, 6, 46,
         168, 6, 24,
     ];
 
@@ -56,7 +56,7 @@ fn test_decode_v37_index() -> anyhow::Result<()> {
     };
 
     common::test_pb_from_to(func_name!(), want())?;
-    common::test_load_old(func_name!(), index_v037.as_slice(), 37, want())?;
+    common::test_load_old(func_name!(), index_v046.as_slice(), 46, want())?;
 
     Ok(())
 }

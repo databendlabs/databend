@@ -35,10 +35,12 @@ use common_catalog::table::Table;
 use common_catalog::table::TableStatistics;
 pub use common_catalog::table_context::TableContext;
 pub use constants::*;
+pub use fuse_lazy_part::FuseLazyPartInfo;
 pub use fuse_part::FusePartInfo;
 pub use fuse_table::FuseStorageFormat;
 pub use fuse_table::FuseTable;
 pub use io::MergeIOReadResult;
+pub use pruning::SegmentLocation;
 
 pub use crate::metrics::metrics_reset;
 

@@ -72,7 +72,8 @@ async fn create_index(ctx: Arc<QueryContext>, index_name: &str, query: &str) -> 
                 table_id: plan.table_id,
                 index_type: IndexType::AGGREGATING,
                 created_on: Utc::now(),
-                drop_on: None,
+                dropped_on: None,
+                updated_on: None,
                 query: query.to_string(),
             },
         };
@@ -86,8 +87,15 @@ async fn create_index(ctx: Arc<QueryContext>, index_name: &str, query: &str) -> 
     unreachable!()
 }
 
-async fn refresh_index(ctx: Arc<QueryContext>, index_name: &str) -> Result<()> {
-    let sql = format!("REFRESH AGGREGATING INDEX {index_name}");
+async fn refresh_index(
+    ctx: Arc<QueryContext>,
+    index_name: &str,
+    limit: Option<usize>,
+) -> Result<()> {
+    let sql = match limit {
+        Some(l) => format!("REFRESH AGGREGATING INDEX {index_name} LIMIT {l}"),
+        None => format!("REFRESH AGGREGATING INDEX {index_name}"),
+    };
     execute_sql(ctx, &sql).await?;
 
     Ok(())
@@ -101,29 +109,29 @@ async fn test_index_refresh() -> Result<()> {
     // Create table
     execute_sql(
         fixture.ctx(),
-        "CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'",
+        "CREATE TABLE t0 (a int, b int, c int) storage_format = 'parquet'",
     )
     .await?;
 
     // Insert data
     execute_sql(
         fixture.ctx(),
-        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+        "INSERT INTO t0 VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
     )
     .await?;
 
     // Create index
-    let index_name = "index1";
+    let index_name = "index0";
 
     let index_id = create_index(
         fixture.ctx(),
         index_name,
-        "SELECT b, SUM(a) from t WHERE c > 1 GROUP BY b",
+        "SELECT b, SUM(a) from t0 WHERE c > 1 GROUP BY b",
     )
     .await?;
 
     // Refresh Index
-    refresh_index(fixture.ctx(), "index1").await?;
+    refresh_index(fixture.ctx(), index_name, None).await?;
 
     let block_path = find_block_path(&root)?.unwrap();
     let block_name_prefix = PathBuf::from(
@@ -143,7 +151,7 @@ async fn test_index_refresh() -> Result<()> {
     {
         let res = execute_sql(
             fixture.ctx(),
-            "SELECT b, SUM_STATE(a) from t WHERE c > 1 GROUP BY b",
+            "SELECT b, SUM_STATE(a) from t0 WHERE c > 1 GROUP BY b",
         )
         .await?;
         let data_blocks: Vec<DataBlock> = res.try_collect().await?;
@@ -164,7 +172,7 @@ async fn test_index_refresh() -> Result<()> {
     // Insert more data
     execute_sql(
         fixture.ctx(),
-        "INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+        "INSERT INTO t0 VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
     )
     .await?;
 
@@ -173,7 +181,7 @@ async fn test_index_refresh() -> Result<()> {
     assert!(blocks.len() > indexes.len());
 
     // Refresh Index again
-    refresh_index(fixture.ctx(), "index1").await?;
+    refresh_index(fixture.ctx(), index_name, None).await?;
 
     // check the new added index is correct.
     {
@@ -194,7 +202,7 @@ async fn test_index_refresh() -> Result<()> {
         let data_blocks: Vec<DataBlock> = execute_sql(
             fixture.ctx(),
             &format!(
-                "SELECT b, SUM_STATE(a) from t WHERE c > 1 and _block_name = '{}' GROUP BY b",
+                "SELECT b, SUM_STATE(a) from t0 WHERE c > 1 and _block_name = '{}' GROUP BY b",
                 block_name_prefix.join(&new_block).to_str().unwrap()
             ),
         )
@@ -219,6 +227,72 @@ async fn test_index_refresh() -> Result<()> {
             &agg_data_blocks,
         );
     }
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_index_refresh_with_limit() -> Result<()> {
+    let (_guard, ctx, root) = create_ee_query_context(None).await.unwrap();
+    let fixture = TestFixture::new_with_ctx(_guard, ctx).await;
+
+    // Create table
+    execute_sql(
+        fixture.ctx(),
+        "CREATE TABLE t1 (a int, b int, c int) storage_format = 'parquet'",
+    )
+    .await?;
+
+    // Insert data
+    execute_sql(
+        fixture.ctx(),
+        "INSERT INTO t1 VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+    )
+    .await?;
+
+    // Create index
+    let index_name = "index1";
+
+    let index_id = create_index(
+        fixture.ctx(),
+        index_name,
+        "SELECT b, SUM(a) from t1 WHERE c > 1 GROUP BY b",
+    )
+    .await?;
+
+    // Insert more data
+    execute_sql(
+        fixture.ctx(),
+        "INSERT INTO t1 VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+    )
+    .await?;
+
+    execute_sql(
+        fixture.ctx(),
+        "INSERT INTO t1 VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)",
+    )
+    .await?;
+
+    // Refresh index with limit 1
+    refresh_index(fixture.ctx(), index_name, Some(1)).await?;
+
+    let block_path = find_block_path(&root)?.unwrap();
+    let blocks = collect_file_names(&block_path)?;
+
+    // Get aggregating index files
+    let agg_index_path = find_agg_index_path(&root, index_id)?.unwrap();
+    let indexes = collect_file_names(&agg_index_path)?;
+    assert_eq!(blocks.len() - indexes.len(), 2);
+
+    // Refresh index with limit 1 again.
+    refresh_index(fixture.ctx(), index_name, Some(1)).await?;
+    let indexes = collect_file_names(&agg_index_path)?;
+    assert_eq!(blocks.len() - indexes.len(), 1);
+
+    // Refresh index with limit 1 again.
+    refresh_index(fixture.ctx(), index_name, Some(1)).await?;
+    let indexes = collect_file_names(&agg_index_path)?;
+    assert_eq!(blocks.len(), indexes.len());
 
     Ok(())
 }

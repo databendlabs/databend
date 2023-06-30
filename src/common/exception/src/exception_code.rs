@@ -177,7 +177,12 @@ build_exceptions! {
     LicenseKeyInvalid(1402),
 
     BackgroundJobAlreadyExists(1501),
-    UnknownBackgroundJob(1502)
+    UnknownBackgroundJob(1502),
+
+    // Index related errors.
+    UnsupportedIndex(1601),
+    IndexAlreadyRefreshed(1602),
+    RefreshIndexError(1603),
 }
 
 // Meta service errors [2001, 3000].
@@ -279,7 +284,6 @@ build_exceptions! {
     CannotShareDatabaseCreatedFromShare(2718),
 
     // Index error codes.
-    UnsupportedIndex(2719),
     CreateIndexWithDropTime(2720),
     IndexAlreadyExists(2721),
     UnknownIndex(2722),

@@ -79,7 +79,8 @@ async fn create_index(ctx: Arc<QueryContext>, index_name: &str, query: &str) -> 
                 table_id: plan.table_id,
                 index_type: IndexType::AGGREGATING,
                 created_on: Utc::now(),
-                drop_on: None,
+                dropped_on: None,
+                updated_on: None,
                 query: query.to_string(),
             },
         };

@@ -14,7 +14,9 @@
 
 use std::sync::Arc;
 
+use common_base::runtime::GlobalIORuntime;
 use common_catalog::plan::DataSourcePlan;
+use common_catalog::plan::Partitions;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -22,6 +24,8 @@ use common_expression::infer_table_schema;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_expression::BLOCK_NAME_COL_NAME;
+use common_meta_app::schema::IndexMeta;
+use common_meta_app::schema::UpdateIndexReq;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -32,7 +36,11 @@ use common_sql::plans::Plan;
 use common_sql::plans::RefreshIndexPlan;
 use common_sql::plans::RelOperator;
 use common_storages_fuse::operations::AggIndexSink;
+use common_storages_fuse::FuseLazyPartInfo;
+use common_storages_fuse::FusePartInfo;
 use common_storages_fuse::FuseTable;
+use common_storages_fuse::SegmentLocation;
+use opendal::Operator;
 
 use crate::interpreters::Interpreter;
 use crate::pipelines::PipelineBuildResult;
@@ -50,7 +58,48 @@ impl RefreshIndexInterpreter {
         Ok(RefreshIndexInterpreter { ctx, plan })
     }
 
-    fn get_read_source(&self, query_plan: &PhysicalPlan) -> Result<DataSourcePlan> {
+    #[async_backtrace::framed]
+    async fn get_partitions(
+        &self,
+        plan: &DataSourcePlan,
+        fuse_table: Arc<FuseTable>,
+        dal: Operator,
+    ) -> Result<Option<Partitions>> {
+        let snapshot_loc = plan.statistics.snapshot.clone();
+        let mut lazy_init_segments = Vec::with_capacity(plan.parts.len());
+
+        for part in &plan.parts.partitions {
+            if let Some(lazy_part_info) = part.as_any().downcast_ref::<FuseLazyPartInfo>() {
+                lazy_init_segments.push(SegmentLocation {
+                    segment_idx: lazy_part_info.segment_index,
+                    location: lazy_part_info.segment_location.clone(),
+                    snapshot_loc: snapshot_loc.clone(),
+                });
+            }
+        }
+
+        if !lazy_init_segments.is_empty() {
+            let table_info = self.plan.table_info.clone();
+            let push_downs = plan.push_downs.clone();
+            let ctx = self.ctx.clone();
+
+            let (_statistics, partitions) = fuse_table
+                .prune_snapshot_blocks(ctx, dal, push_downs, table_info, lazy_init_segments, 0)
+                .await?;
+
+            return Ok(Some(partitions));
+        }
+
+        Ok(None)
+    }
+
+    #[async_backtrace::framed]
+    async fn get_read_source(
+        &self,
+        query_plan: &PhysicalPlan,
+        fuse_table: Arc<FuseTable>,
+        dal: Operator,
+    ) -> Result<Option<DataSourcePlan>> {
         let mut source = vec![];
 
         let mut collect_read_source = |plan: &PhysicalPlan| {
@@ -72,8 +121,52 @@ impl RefreshIndexInterpreter {
                     .to_string(),
             ))
         } else {
-            Ok(source.remove(0))
+            let mut source = source.remove(0);
+            let partitions = self.get_partitions(&source, fuse_table, dal).await?;
+            if let Some(parts) = partitions {
+                source.parts = parts;
+            }
+
+            // first, sort the partitions by create_on.
+            source.parts.partitions.sort_by(|p1, p2| {
+                let p1 = FusePartInfo::from_part(p1).unwrap();
+                let p2 = FusePartInfo::from_part(p2).unwrap();
+                p1.create_on.partial_cmp(&p2.create_on).unwrap()
+            });
+
+            // then, find the last refresh position.
+            let last = match source.parts.partitions.binary_search_by(|p| {
+                let fp = FusePartInfo::from_part(p).unwrap();
+                fp.create_on
+                    .partial_cmp(&self.plan.index_meta.updated_on)
+                    .unwrap()
+            }) {
+                Ok(i) => i + 1,
+                Err(i) => i,
+            };
+
+            // finally, skip the refreshed partitions.
+            source.parts.partitions = match self.plan.limit {
+                Some(limit) => {
+                    let end = std::cmp::min(source.parts.len(), last + limit as usize);
+                    source.parts.partitions[last..end].to_vec()
+                }
+                None => source.parts.partitions.into_iter().skip(last).collect(),
+            };
+
+            if !source.parts.is_empty() {
+                Ok(Some(source))
+            } else {
+                Ok(None)
+            }
         }
+    }
+
+    fn update_index_meta(&self, read_source: &DataSourcePlan) -> Result<IndexMeta> {
+        let fuse_part = FusePartInfo::from_part(read_source.parts.partitions.last().unwrap())?;
+        let mut index_meta = self.plan.index_meta.clone();
+        index_meta.updated_on = fuse_part.create_on;
+        Ok(index_meta)
     }
 }
 
@@ -123,10 +216,25 @@ impl Interpreter for RefreshIndexInterpreter {
             }
         };
 
-        let new_read_source = self.get_read_source(&query_plan)?;
-        // TODO(ariesdevil): sort and slice parts with limit
-        // new_read_source.parts.partitions =
-        //     new_read_source.parts.partitions.as_slice()[1..].to_vec();
+        let data_accessor = self.ctx.get_data_operator()?;
+        let fuse_table = FuseTable::do_create(self.plan.table_info.clone())?;
+        let fuse_table: Arc<FuseTable> = fuse_table.into();
+
+        // generate new `DataSourcePlan` that skip refreshed parts.
+        let new_read_source = self
+            .get_read_source(&query_plan, fuse_table.clone(), data_accessor.operator())
+            .await?;
+
+        if new_read_source.is_none() {
+            return Err(ErrorCode::IndexAlreadyRefreshed(format!(
+                "Aggregating Index {} already refreshed",
+                self.plan.index_name.clone()
+            )));
+        }
+
+        let new_read_source = new_read_source.unwrap();
+
+        let new_index_meta = self.update_index_meta(&new_read_source)?;
 
         let mut replace_read_source = ReplaceReadSource {
             source: new_read_source,
@@ -176,9 +284,6 @@ impl Interpreter for RefreshIndexInterpreter {
         }
         let sink_schema = Arc::new(sink_schema);
 
-        let data_accessor = self.ctx.get_data_operator()?;
-        let fuse_table = FuseTable::do_create(self.plan.table_info.clone())?;
-        let fuse_table: Arc<FuseTable> = fuse_table.into();
         let write_settings = fuse_table.get_write_settings();
 
         build_res.main_pipeline.try_resize(1)?;
@@ -194,6 +299,27 @@ impl Interpreter for RefreshIndexInterpreter {
             )
         })?;
 
+        let ctx = self.ctx.clone();
+        let req = UpdateIndexReq {
+            index_id: self.plan.index_id,
+            index_name: self.plan.index_name.clone(),
+            index_meta: new_index_meta,
+        };
+
+        build_res
+            .main_pipeline
+            .set_on_finished(move |may_error| match may_error {
+                None => GlobalIORuntime::instance()
+                    .block_on(async move { modify_last_update(ctx, req).await }),
+                Some(error_code) => Err(error_code.clone()),
+            });
+
         return Ok(build_res);
     }
+}
+
+async fn modify_last_update(ctx: Arc<QueryContext>, req: UpdateIndexReq) -> Result<()> {
+    let catalog = ctx.get_catalog(&ctx.get_current_catalog())?;
+    catalog.update_index(req).await?;
+    Ok(())
 }
