@@ -57,7 +57,7 @@ echo "DROP WAREHOUSE IF EXISTS '${CLOUD_WAREHOUSE}';" | bendsql
 echo "CREATE WAREHOUSE '${CLOUD_WAREHOUSE}' WITH version='${BENCHMARK_VERSION}' warehouse_size='${BENCHMARK_SIZE}';" | bendsql
 echo "SHOW WAREHOUSES;" | bendsql --output table
 
-max_retry=15
+max_retry=20
 counter=0
 until bendsql --query="SHOW WAREHOUSES LIKE '${CLOUD_WAREHOUSE}'" | grep -q "Running"; do
     if [[ $counter -gt $max_retry ]]; then
