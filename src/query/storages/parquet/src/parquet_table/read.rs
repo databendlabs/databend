@@ -202,8 +202,9 @@ fn calc_parallelism(
     if plan.parts.partitions.is_empty() {
         return Ok((1, 1));
     }
+    let settings = ctx.get_settings();
     let num_partitions = plan.parts.partitions.len();
-    let max_threads = ctx.get_settings().get_max_threads()? as usize;
+    let max_threads = settings.get_max_threads()? as usize;
     let mut sizes = vec![];
     for p in plan.parts.partitions.iter() {
         sizes.push(ParquetPart::from_part(p)?.uncompressed_size() as usize);
@@ -211,10 +212,10 @@ fn calc_parallelism(
     let num_chunks = ParquetPart::from_part(&plan.parts.partitions[0])?
         .num_io()
         .max(1);
-    let max_memory = ctx.get_settings().get_max_memory_usage()? as usize;
+    let max_memory = settings.get_max_memory_usage()? as usize;
     let max_by_memory = limit_parallelism_by_memory(max_memory, &mut sizes).max(1);
 
-    let max_storage_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+    let max_storage_io_requests = settings.get_max_storage_io_requests()? as usize;
     let num_readers = if is_blocking {
         max_storage_io_requests
     } else {
