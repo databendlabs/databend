@@ -57,8 +57,6 @@ use super::RowFetch;
 use super::Sort;
 use super::TableScan;
 use super::WindowFunction;
-use crate::IndexType;
-use crate::binder::wrap_cast;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_join;
@@ -84,11 +82,11 @@ use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
 use crate::plans::Scan;
 use crate::plans::Window as LogicalWindow;
-use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
+use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::TableInternalColumn;
@@ -994,8 +992,8 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|s| s.data_type())
                         .collect::<Result<_>>()?,
-                        params: agg.params.clone(),
-                        return_type: *agg.return_type.clone(),
+                    params: agg.params.clone(),
+                    return_type: *agg.return_type.clone(),
                 },
                 output_column: w.index,
                 args: agg

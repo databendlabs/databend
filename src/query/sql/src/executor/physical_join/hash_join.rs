@@ -12,17 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::check_cast;
-use common_expression::type_check::common_super_type;
 use common_expression::ConstantFolder;
 use common_expression::DataField;
 use common_expression::DataSchemaRefExt;
 use common_functions::BUILTIN_FUNCTIONS;
 
 use crate::executor::explain::PlanStatsInfo;
-use crate::executor::Exchange;
 use crate::executor::HashJoin;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;

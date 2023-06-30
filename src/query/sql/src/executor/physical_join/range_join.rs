@@ -12,15 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::type_check::common_super_type;
 use common_expression::DataSchemaRef;
 use common_expression::DataSchemaRefExt;
-use common_expression::RemoteExpr;
-use common_functions::BUILTIN_FUNCTIONS;
 
-use crate::binder::wrap_cast;
 use crate::binder::JoinPredicate;
 use crate::executor::PhysicalPlan;
 use crate::executor::PhysicalPlanBuilder;

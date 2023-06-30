@@ -31,7 +31,6 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableSchemaRef;
-use common_functions::aggregates::AggregateFunctionFactory;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_meta_app::schema::TableInfo;
 use storages_common_table_meta::meta::TableSnapshot;
