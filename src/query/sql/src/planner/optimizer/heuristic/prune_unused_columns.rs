@@ -223,7 +223,12 @@ impl UnusedColumnPruner {
                 p.items.iter().for_each(|s| {
                     required.insert(s.index);
                 });
-                p.pre_projection = Some(required.iter().sorted().copied().collect());
+
+                // If the query will be optimized by lazy reading, we don't need to do pre-projection.
+                if self.metadata.read().lazy_columns().is_empty() {
+                    p.pre_projection = Some(required.iter().sorted().copied().collect());
+                }
+
                 Ok(SExpr::create_unary(
                     Arc::new(RelOperator::Sort(p)),
                     Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
