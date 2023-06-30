@@ -110,6 +110,10 @@ To query data files in a bucket or container, provide necessary connection infor
 
 They are explained in [Create Stage](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
 
+:::tip
+If you're using S3 storage and your bucket has public read access, you can access and query the stage anonymously without providing credentials. To enable this feature, add the **allow_anonymous** parameter to the [storage.s3] section in the *databend-query.toml* configuration file and set it to **true**.
+:::
+
 ## Limitations
 
 When querying a staged file, the following limitations are applicable in terms of format-specific constraints:
