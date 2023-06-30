@@ -34,7 +34,6 @@ use common_expression::types::DataType;
 use common_expression::ConstantFolder;
 use common_expression::DataBlock;
 use common_expression::DataField;
-use common_expression::DataSchema;
 use common_expression::DataSchemaRefExt;
 use common_expression::FunctionContext;
 use common_expression::RemoteExpr;
@@ -49,7 +48,6 @@ use super::AggregateFinal;
 use super::AggregateFunctionDesc;
 use super::AggregateFunctionSignature;
 use super::AggregatePartial;
-use super::EvalScalar;
 use super::Exchange as PhysicalExchange;
 use super::Filter;
 use super::Limit;
@@ -59,11 +57,13 @@ use super::RowFetch;
 use super::Sort;
 use super::TableScan;
 use super::WindowFunction;
+use crate::IndexType;
 use crate::binder::wrap_cast;
 use crate::binder::INTERNAL_COLUMN_FACTORY;
 use crate::executor::explain::PlanStatsInfo;
 use crate::executor::physical_join;
 use crate::executor::table_read_plan::ToReadDataSourcePlan;
+use crate::executor::EvalScalar;
 use crate::executor::FragmentKind;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
@@ -78,27 +78,22 @@ use crate::optimizer::RelExpr;
 use crate::optimizer::SExpr;
 use crate::planner;
 use crate::plans::AggregateMode;
-use crate::plans::BoundColumnRef;
 use crate::plans::Exchange;
 use crate::plans::FunctionCall;
 use crate::plans::RelOperator;
 use crate::plans::ScalarExpr;
-use crate::plans::ScalarItem;
 use crate::plans::Scan;
 use crate::plans::Window as LogicalWindow;
 use crate::plans::WindowFuncFrameBound;
 use crate::plans::WindowFuncType;
 use crate::BaseTableColumn;
-use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::DerivedColumn;
-use crate::IndexType;
 use crate::Metadata;
 use crate::MetadataRef;
 use crate::TableInternalColumn;
 use crate::TypeCheck;
 use crate::VirtualColumn;
-use crate::Visibility;
 use crate::DUMMY_COLUMN_INDEX;
 use crate::DUMMY_TABLE_INDEX;
 
@@ -573,15 +568,10 @@ impl PhysicalPlanBuilder {
                                     sig: AggregateFunctionSignature {
                                         name: agg.func_name.clone(),
                                         args: agg.args.iter().map(|s| {
-                                            if let ScalarExpr::BoundColumnRef(col) = s {
-                                                Ok(input_schema.field_with_name(&col.column.index.to_string())?.data_type().clone())
-                                            } else {
-                                                Err(ErrorCode::Internal(
-                                                    "Aggregate function argument must be a BoundColumnRef".to_string()
-                                                ))
-                                            }
+                                            s.data_type()
                                         }).collect::<Result<_>>()?,
                                         params: agg.params.clone(),
+                                        return_type: *agg.return_type.clone(),
                                     },
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
@@ -725,15 +715,10 @@ impl PhysicalPlanBuilder {
                                     sig: AggregateFunctionSignature {
                                         name: agg.func_name.clone(),
                                         args: agg.args.iter().map(|s| {
-                                            if let ScalarExpr::BoundColumnRef(col) = s {
-                                                Ok(input_schema.field_with_name(&col.column.index.to_string())?.data_type().clone())
-                                            } else {
-                                                Err(ErrorCode::Internal(
-                                                    "Aggregate function argument must be a BoundColumnRef".to_string()
-                                                ))
-                                            }
+                                            s.data_type()
                                         }).collect::<Result<_>>()?,
                                         params: agg.params.clone(),
+                                        return_type: *agg.return_type.clone(),
                                     },
                                     output_column: v.index,
                                     args: agg.args.iter().map(|arg| {
@@ -810,7 +795,7 @@ impl PhysicalPlanBuilder {
 
                 Ok(result)
             }
-            RelOperator::Window(w) => self.build_physical_window(s_expr, &stat_info, w).await,
+            RelOperator::Window(w) => self.build_physical_window(s_expr, w).await,
             RelOperator::Sort(sort) => Ok(PhysicalPlan::Sort(Sort {
                 plan_id: self.next_plan_id(),
                 input: Box::new(self.build(s_expr.child(0)?).await?),
@@ -864,119 +849,22 @@ impl PhysicalPlanBuilder {
             }
 
             RelOperator::UnionAll(op) => {
-                let left_schema = self.build(s_expr.child(0)?).await?.output_schema()?;
-                let right_schema = self.build(s_expr.child(1)?).await?.output_schema()?;
-
-                let common_types = op.pairs.iter().map(|(l, r)| {
-                    let left_field = left_schema.field_with_name(&l.to_string()).unwrap();
-                    let right_field = right_schema.field_with_name(&r.to_string()).unwrap();
-
-                    let common_type = common_super_type(
-                        left_field.data_type().clone(),
-                        right_field.data_type().clone(),
-                        &BUILTIN_FUNCTIONS.default_cast_rules,
-                    );
-                    common_type.ok_or_else(|| {
-                        ErrorCode::SemanticError(format!(
-                            "SetOperation's types cannot be matched, left column {:?}, type: {:?}, right column {:?}, type: {:?}",
-                            left_field.name(),
-                            left_field.data_type(),
-                            right_field.name(),
-                            right_field.data_type()
-                        ))
-                    })
-                }).collect::<Result<Vec<_>>>()?;
-
-                async fn cast_plan(
-                    plan_builder: &mut PhysicalPlanBuilder,
-                    plan: SExpr,
-                    plan_schema: &DataSchema,
-                    indexes: &[IndexType],
-                    common_types: &[DataType],
-                ) -> Result<PhysicalPlan> {
-                    debug_assert!(indexes.len() == common_types.len());
-                    let scalar_items = indexes
-                        .iter()
-                        .map(|index| plan_schema.field_with_name(&index.to_string()).unwrap())
-                        .zip(common_types)
-                        .filter(|(f, common_ty)| f.data_type() != *common_ty)
-                        .map(|(f, common_ty)| {
-                            let cast_expr = wrap_cast(
-                                &ScalarExpr::BoundColumnRef(BoundColumnRef {
-                                    span: None,
-                                    column: ColumnBinding {
-                                        database_name: None,
-                                        table_name: None,
-                                        column_position: None,
-                                        table_index: None,
-                                        column_name: f.name().clone(),
-                                        index: f.name().parse().unwrap(),
-                                        data_type: Box::new(f.data_type().clone()),
-                                        visibility: Visibility::Visible,
-                                        virtual_computed_expr: None,
-                                    },
-                                }),
-                                common_ty,
-                            );
-                            ScalarItem {
-                                scalar: cast_expr,
-                                index: f.name().parse().unwrap(),
-                            }
-                        })
-                        .collect::<Vec<_>>();
-
-                    let new_plan = if scalar_items.is_empty() {
-                        plan
-                    } else {
-                        SExpr::create_unary(
-                            Arc::new(
-                                crate::plans::EvalScalar {
-                                    items: scalar_items,
-                                }
-                                .into(),
-                            ),
-                            Arc::new(plan),
-                        )
-                    };
-                    let new_plan = plan_builder.build(&new_plan).await?;
-
-                    Ok(new_plan)
-                }
-
-                let left_indexes = op.pairs.iter().map(|(l, _)| *l).collect::<Vec<_>>();
-                let right_indexes = op.pairs.iter().map(|(_, r)| *r).collect::<Vec<_>>();
-                let left_plan = cast_plan(
-                    self,
-                    s_expr.child(0)?.clone(),
-                    left_schema.as_ref(),
-                    &left_indexes,
-                    &common_types,
-                )
-                .await?;
-                let right_plan = cast_plan(
-                    self,
-                    s_expr.child(1)?.clone(),
-                    right_schema.as_ref(),
-                    &right_indexes,
-                    &common_types,
-                )
-                .await?;
-
+                let left = self.build(s_expr.child(0)?).await?;
+                let right = self.build(s_expr.child(1)?).await?;
+                let left_schema = left.output_schema()?;
                 let pairs = op
                     .pairs
                     .iter()
                     .map(|(l, r)| (l.to_string(), r.to_string()))
                     .collect::<Vec<_>>();
-                let fields = left_indexes
+                let fields = pairs
                     .iter()
-                    .zip(&common_types)
-                    .map(|(index, ty)| DataField::new(&index.to_string(), ty.clone()))
-                    .collect::<Vec<_>>();
-
+                    .map(|(left, _)| Ok(left_schema.field_with_name(left)?.clone()))
+                    .collect::<Result<Vec<_>>>()?;
                 Ok(PhysicalPlan::UnionAll(UnionAll {
                     plan_id: self.next_plan_id(),
-                    left: Box::new(left_plan),
-                    right: Box::new(right_plan),
+                    left: Box::new(left),
+                    right: Box::new(right),
                     pairs,
                     schema: DataSchemaRefExt::create(fields),
 
@@ -1082,7 +970,6 @@ impl PhysicalPlanBuilder {
     async fn build_physical_window(
         &mut self,
         s_expr: &SExpr,
-        stat_info: &PlanStatsInfo,
         w: &LogicalWindow,
     ) -> Result<PhysicalPlan> {
         let input = self.build(s_expr.child(0)?).await?;
@@ -1107,7 +994,8 @@ impl PhysicalPlanBuilder {
                         .iter()
                         .map(|s| s.data_type())
                         .collect::<Result<_>>()?,
-                    params: agg.params.clone(),
+                        params: agg.params.clone(),
+                        return_type: *agg.return_type.clone(),
                 },
                 output_column: w.index,
                 args: agg

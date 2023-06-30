@@ -50,6 +50,7 @@ use crate::binder::project_set::SrfCollector;
 use crate::binder::scalar_common::split_conjunctions;
 use crate::binder::CteInfo;
 use crate::binder::ExprContext;
+use crate::binder::Visibility;
 use crate::optimizer::SExpr;
 use crate::planner::binder::scalar::ScalarBinder;
 use crate::planner::binder::BindContext;
@@ -65,7 +66,6 @@ use crate::plans::UnionAll;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::IndexType;
-use crate::Visibility;
 
 // A normalized IR for `SELECT` clause.
 #[derive(Debug, Default)]

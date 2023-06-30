@@ -289,7 +289,7 @@ impl AggregateFinal {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let mut fields = Vec::with_capacity(self.agg_funcs.len() + self.group_by.len());
         for agg in self.agg_funcs.iter() {
-            let data_type = agg.sig.return_type()?;
+            let data_type = agg.sig.return_type.clone();
             fields.push(DataField::new(&agg.output_column.to_string(), data_type));
         }
         for id in self.group_by.iter() {
@@ -316,15 +316,15 @@ pub enum WindowFunction {
 }
 
 impl WindowFunction {
-    fn data_type(&self) -> Result<DataType> {
+    fn data_type(&self) -> DataType {
         match self {
-            WindowFunction::Aggregate(agg) => agg.sig.return_type(),
+            WindowFunction::Aggregate(agg) => agg.sig.return_type.clone(),
             WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
-                Ok(DataType::Number(NumberDataType::UInt64))
+                DataType::Number(NumberDataType::UInt64)
             }
-            WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
-            WindowFunction::LagLead(f) => Ok(f.return_type.clone()),
-            WindowFunction::NthValue(f) => Ok(f.return_type.clone()),
+            WindowFunction::PercentRank => DataType::Number(NumberDataType::Float64),
+            WindowFunction::LagLead(f) => f.return_type.clone(),
+            WindowFunction::NthValue(f) => f.return_type.clone(),
         }
     }
 }
@@ -362,7 +362,7 @@ impl Window {
         fields.extend_from_slice(input_schema.fields());
         fields.push(DataField::new(
             &self.index.to_string(),
-            self.func.data_type()?,
+            self.func.data_type(),
         ));
         Ok(DataSchemaRefExt::create(fields))
     }
@@ -985,8 +985,9 @@ pub struct NthValueFunctionDesc {
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateFunctionSignature {
     pub name: String,
-    pub params: Vec<Scalar>,
     pub args: Vec<DataType>,
+    pub params: Vec<Scalar>,
+    pub return_type: DataType,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -994,12 +995,4 @@ pub struct SortDesc {
     pub asc: bool,
     pub nulls_first: bool,
     pub order_by: IndexType,
-}
-
-impl AggregateFunctionSignature {
-    pub fn return_type(&self) -> Result<DataType> {
-        AggregateFunctionFactory::instance()
-            .get(&self.name, self.params.clone(), self.args.clone())?
-            .return_type()
-    }
 }
