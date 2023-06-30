@@ -17,6 +17,7 @@ use std::sync::Arc;
 use arrow_array::RecordBatch;
 use common_base::base::GlobalInstance;
 use common_exception::Result;
+use crate::Suggestion;
 
 #[async_trait::async_trait]
 pub trait BackgroundServiceHandler: Sync + Send {

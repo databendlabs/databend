@@ -13,5 +13,8 @@
 // limitations under the License.
 
 pub mod background_service;
+mod management_suggestions;
+
 pub use background_service::get_background_service_handler;
 pub use background_service::BackgroundServiceHandler;
+pub use management_suggestions::Suggestion;

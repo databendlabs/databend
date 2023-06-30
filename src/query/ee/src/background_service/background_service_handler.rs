@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
-use background_service::BackgroundServiceHandler;
+use background_service::{BackgroundServiceHandler, Suggestion};
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::GlobalInstance;
@@ -41,16 +41,18 @@ use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
 use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::Session;
+use databend_query::sessions::{QueryContext, Session};
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
 use futures_util::StreamExt;
 use tracing::error;
 use tracing::info;
+use background_service::Suggestion::Compaction;
+use databend_query::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
 
 use crate::background_service::session::create_session;
-use crate::background_service::CompactionJob;
+use crate::background_service::{CompactionJob, Job};
 use crate::background_service::JobScheduler;
 
 pub struct RealBackgroundService {
@@ -64,33 +66,7 @@ impl BackgroundServiceHandler for RealBackgroundService {
     #[async_backtrace::framed]
     async fn execute_sql(&self, sql: String) -> Result<Option<RecordBatch>> {
         let ctx = self.session.create_query_context().await?;
-        let mut planner = Planner::new(ctx.clone());
-        let (plan, plan_extras) = planner.plan_sql(sql.as_str()).await?;
-        ctx.attach_query_str(plan.to_string(), plan_extras.statement.to_mask_sql());
-        let interpreter = InterpreterFactory::get(ctx.clone(), &plan).await?;
-        let data_schema = interpreter.schema();
-        let stream = interpreter.execute(ctx.clone()).await?;
-        let blocks = stream.map(|v| v).collect::<Vec<_>>().await;
-
-        let mut result = vec![];
-        for block in blocks {
-            match block {
-                Ok(block) => {
-                    result.push(block);
-                }
-                Err(e) => {
-                    error!("execute sql error: {:?}", e);
-                }
-            }
-        }
-        if result.is_empty() {
-            return Ok(None);
-        }
-        let record = DataBlock::concat(&result)?;
-        let record = record
-            .to_record_batch(data_schema.as_ref())
-            .map_err(|e| ErrorCode::Internal(format!("{e:?}")))?;
-        Ok(Some(record))
+        SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, sql).await
     }
 
     #[async_backtrace::framed]

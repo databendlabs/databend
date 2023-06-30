@@ -21,7 +21,7 @@ use arrow_array::LargeBinaryArray;
 use arrow_array::RecordBatch;
 use arrow_array::UInt64Array;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
-use background_service::get_background_service_handler;
+use background_service::{get_background_service_handler, Suggestion};
 use chrono::Utc;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
@@ -45,35 +45,15 @@ use common_users::UserApiProvider;
 use tracing::debug;
 use tracing::error;
 use tracing::info;
+use databend_query::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
+use databend_query::sessions::QueryContext;
 
 use crate::background_service::job::Job;
-
-// TODO(zhihanz) add more configs to filter out tables need to be compacted
-const GET_ALL_TARGET_TABLES: &str = "
-SELECT t.database as database, d.database_id as database_id, t.name as table, t.table_id as table_id
-FROM system.tables as t
-JOIN system.databases as d
-ON t.database = d.name
-WHERE t.database != 'system'
-    AND t.database != 'information_schema'
-    AND t.engine = 'FUSE'
-    AND t.num_rows > 1 * 1000 * 100
-    AND t.table_id NOT IN (
-        SELECT
-          table_id
-        FROM
-          system.background_tasks
-        WHERE
-          state = 'DONE'
-          AND table_id = t.table_id
-          AND type = 'COMPACTION'
-          AND updated_on > t.updated_on
-    )
-    ;
-";
+use crate::background_service::RealBackgroundService;
+use crate::background_service::session::create_session;
 
 const SEGMENT_SIZE: u64 = 1;
-const PER_SEGMENT_BLOCK: u64 = 100;
+const PER_SEGMENT_BLOCK: u64 = 500;
 const PER_BLOCK_SIZE: u64 = 50; // MB
 
 const EXPIRE_SEC: u64 = 60 * 60 * 24 * 7; // 7 days
@@ -413,7 +393,9 @@ impl CompactionJob {
 
     pub async fn do_get_target_tables_from_config(config: &InnerConfig, svc: &Arc<BackgroundServiceHandlerWrapper>) -> Result<Vec<RecordBatch>> {
         if !config.background.compaction.has_target_tables() {
-            return Self::do_get_all_suggested_tables(svc).await;
+            let session = create_session().await?;
+            let res =  SuggestedBackgroundTasksProcedure::do_get_all_suggested_compaction_tables(session.create_query_context()).await;
+            return res
         }
         Self::do_get_target_tables(config, svc).await
     }
@@ -499,20 +481,6 @@ impl CompactionJob {
         let res = res.into_iter().filter_map(|r| r).collect::<Vec<_>>();
         Ok(res)
 
-    }
-    pub async fn do_get_all_suggested_tables(
-        svc: &Arc<BackgroundServiceHandlerWrapper>,
-    ) -> Result<Vec<RecordBatch>> {
-        let res = svc.execute_sql(GET_ALL_TARGET_TABLES.to_string()).await?;
-        let num_of_tables = res.as_ref().map_or_else(|| 0, |r| r.num_rows());
-        info!(
-            job = "compaction",
-            background = true,
-            tables = num_of_tables,
-            "get all target tables"
-        );
-        let res = res.map(|r| vec![r]).unwrap_or_else(|| vec![]);
-        Ok(res)
     }
 
     pub async fn do_check_table(

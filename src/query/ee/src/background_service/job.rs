@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::sync::Arc;
 use async_trait::async_trait;
+use background_service::Suggestion;
 use common_exception::Result;
 use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobStatus;
+use databend_query::sessions::QueryContext;
+
 /// A trait for implementing a background job
 ///
 /// Example implementation:
@@ -42,7 +46,6 @@ pub trait Job: JobClone {
     /// Runs the job
     async fn run(&mut self);
     fn get_info(&self) -> BackgroundJobInfo;
-
     fn get_name(&self) -> BackgroundJobIdent;
     async fn update_job_status(&mut self, status: BackgroundJobStatus) -> Result<()>;
 }

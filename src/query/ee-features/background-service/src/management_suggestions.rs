@@ -12,11 +12,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-mod admin;
-mod license_info;
-pub mod tenant_quota;
-pub mod suggested_background_tasks;
-mod suggested_background_compaction_tasks;
+pub use serde::Serialize;
+pub use serde::Deserialize;
+use common_meta_app::schema::TableStatistics;
 
-pub use admin::AdminProcedure;
-pub use admin::SuggestedBackgroundTasksProcedure;
+// external tagged
+// {"Compaction": {"need_compact_segment": false ...}}
+// details: https://serde.rs/enum-representations.html
+#[derive(Serialize, Deserialize)]
+pub enum Suggestion {
+    Compaction {
+        need_compact_segment: bool,
+        need_compact_block: bool,
+        db_id: uint64,
+        db_name: String,
+        table_id: uint64,
+        table_name: String,
+        table_stats: TableStatistics,
+    },
+}

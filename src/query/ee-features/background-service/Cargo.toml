@@ -18,6 +18,8 @@ async-backtrace = { workspace = true }
 async-trait = "0.1.57"
 common-base = { path = "../../../common/base" }
 common-exception = { path = "../../../common/exception" }
+serde = { workspace = true }
+common-meta-app = { path = "../../../meta/app" }
 
 [build-dependencies]
 

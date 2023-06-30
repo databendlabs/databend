@@ -28,5 +28,9 @@ impl AdminProcedure {
             "admin$license_info",
             Box::new(LicenseInfoProcedure::try_create),
         );
+        factory.register(
+            "admin$suggested_background_tasks",
+            Box::new(LicenseInfoProcedure::try_create),
+        )
     }
 }
