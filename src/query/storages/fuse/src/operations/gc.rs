@@ -31,6 +31,7 @@ use storages_common_table_meta::meta::Location;
 use storages_common_table_meta::meta::SegmentInfo;
 use storages_common_table_meta::meta::TableSnapshot;
 use storages_common_table_meta::meta::TableSnapshotStatistics;
+use tracing::error;
 use tracing::info;
 use tracing::warn;
 
@@ -110,6 +111,14 @@ impl FuseTable {
         let mut dry_run_purge_files = vec![];
         // 3. Read snapshot fields by chunk size(max_storage_io_requests).
         for chunk in snapshot_files.chunks(chunk_size).rev() {
+            if let Err(err) = ctx.check_aborting() {
+                error!(
+                    "gc: aborted query, because the server is shutting down or the query was killed. table: {}, ident {}",
+                    self.table_info.desc, self.table_info.ident,
+                );
+                return Err(err);
+            }
+
             let results = snapshots_io
                 .read_snapshot_lite_extends(chunk, root_snapshot_lite.clone(), false)
                 .await?;
