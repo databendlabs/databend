@@ -17,6 +17,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use common_base::base::GlobalInstance;
+use common_catalog::table::Table;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
 use common_storages_fuse::FuseTable;
@@ -30,6 +31,12 @@ pub trait VacuumHandler: Sync + Send {
         retention_time: DateTime<Utc>,
         dry_run_limit: Option<usize>,
     ) -> Result<Option<Vec<String>>>;
+
+    async fn do_vacuum_drop_tables(
+        &self,
+        tables: Vec<Arc<dyn Table>>,
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<(String, String)>>>;
 }
 
 pub struct VacuumHandlerWrapper {
@@ -51,6 +58,17 @@ impl VacuumHandlerWrapper {
     ) -> Result<Option<Vec<String>>> {
         self.handler
             .do_vacuum(fuse_table, ctx, retention_time, dry_run_limit)
+            .await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn do_vacuum_drop_tables(
+        &self,
+        tables: Vec<Arc<dyn Table>>,
+        dry_run_limit: Option<usize>,
+    ) -> Result<Option<Vec<(String, String)>>> {
+        self.handler
+            .do_vacuum_drop_tables(tables, dry_run_limit)
             .await
     }
 }

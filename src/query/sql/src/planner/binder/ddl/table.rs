@@ -959,10 +959,7 @@ impl Binder {
             option,
         } = stmt;
 
-        let (catalog, database) = match database {
-            Some(database) => self.normalize_object_identifier_double(catalog, database),
-            None => (self.ctx.get_current_catalog(), "".to_string()),
-        };
+        let (catalog, database) = self.normalize_object_identifier_double(catalog, database);
 
         let option = {
             let retain_hours = match option.retain_hours {
