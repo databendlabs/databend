@@ -401,6 +401,13 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_enable_aggregating_index_scan(&self) -> bool {
+        todo!()
+    }
+    fn set_enable_aggregating_index_scan(&self, _: bool) {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: String, _query: String) {
         todo!()
     }

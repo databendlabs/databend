@@ -339,6 +339,18 @@ impl TableContext for QueryContext {
         self.shared.cacheable.store(cacheable, Ordering::Release);
     }
 
+    fn get_enable_aggregating_index_scan(&self) -> bool {
+        self.shared
+            .enable_aggregating_index_scan
+            .load(Ordering::Acquire)
+    }
+
+    fn set_enable_aggregating_index_scan(&self, enable: bool) {
+        self.shared
+            .enable_aggregating_index_scan
+            .store(enable, Ordering::Release);
+    }
+
     fn attach_query_str(&self, kind: String, query: String) {
         self.shared.attach_query_str(kind, query);
     }
