@@ -364,7 +364,7 @@ async fn test_users_table() -> Result<()> {
             UserInfo {
                 auth_info: auth_data,
                 name: "test".to_string(),
-                hostname: "localhost".to_string(),
+                hostname: "%".to_string(),
                 grants: UserGrantSet::empty(),
                 quota: UserQuota::no_limit(),
                 option: UserOption::default(),
