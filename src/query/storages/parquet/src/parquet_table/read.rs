@@ -185,7 +185,8 @@ fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [usize]) -> usize 
     sizes.sort_by(|a, b| b.cmp(a));
     let mut mem = 0;
     for (i, s) in sizes.iter().enumerate() {
-        mem += s;
+        // there may be 2 blocks in a pipe.
+        mem += s * 2;
         if mem > max_memory {
             return i;
         }
