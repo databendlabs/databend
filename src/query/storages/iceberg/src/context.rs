@@ -25,7 +25,7 @@ use dashmap::DashMap;
 /// Maintains a global context for iceberg tables is definitely not a good
 /// idea. We use this to make the iceberg table work with the current
 /// codebase.
-pub static ICEBERG_CONTEXT: LazyLock<IcebergContext> = LazyLock::new(|| IcebergContext::default());
+pub static ICEBERG_CONTEXT: LazyLock<IcebergContext> = LazyLock::new(IcebergContext::default);
 
 #[derive(Default, Clone)]
 pub struct IcebergContext {

@@ -2747,6 +2747,7 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
  "arrow-schema",
  "async-backtrace",
  "async-trait",
@@ -2760,12 +2761,12 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
- "common-storages-parquet",
  "dashmap",
  "futures",
  "icelake",
  "itertools",
  "opendal",
+ "parquet",
  "serde",
  "tracing",
  "typetag",
@@ -6138,14 +6139,16 @@ dependencies = [
 [[package]]
 name = "icelake"
 version = "0.0.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2eb244cc2e0136dd255512ebe8209952612e61ddf091997a69bf26f14fb0de4"
 dependencies = [
  "anyhow",
  "apache-avro",
+ "arrow-array",
  "arrow-schema",
+ "async-trait",
+ "bytes",
  "futures",
  "opendal",
+ "parquet",
  "serde",
  "serde_json",
  "serde_with",
@@ -7530,7 +7533,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-semantic-conventions",
  "thiserror",
- "thrift",
+ "thrift 0.16.0",
  "tokio",
 ]
 
@@ -7746,6 +7749,39 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "parquet"
+version = "40.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6a656fcc17e641657c955742c689732684e096f790ff30865d9f8dcc39f7c4a"
+dependencies = [
+ "ahash 0.8.3",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-cast",
+ "arrow-data",
+ "arrow-ipc",
+ "arrow-schema",
+ "arrow-select",
+ "base64 0.21.0",
+ "brotli",
+ "bytes",
+ "chrono",
+ "flate2",
+ "futures",
+ "hashbrown 0.13.2",
+ "lz4",
+ "num",
+ "num-bigint",
+ "paste",
+ "seq-macro",
+ "snap",
+ "thrift 0.17.0",
+ "tokio",
+ "twox-hash",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -10373,6 +10409,17 @@ dependencies = [
  "log",
  "ordered-float 1.1.1",
  "threadpool",
+]
+
+[[package]]
+name = "thrift"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e54bc85fc7faa8bc175c4bab5b92ba8d9a3ce893d0e9f42cc455c8ab16a9e09"
+dependencies = [
+ "byteorder",
+ "integer-encoding",
+ "ordered-float 2.10.0",
 ]
 
 [[package]]
