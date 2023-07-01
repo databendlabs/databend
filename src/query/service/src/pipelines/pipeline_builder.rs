@@ -1088,17 +1088,21 @@ impl PipelineBuilder {
                 .iter()
                 .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
                 .collect::<Vec<_>>();
-            self.main_pipeline.add_transform(|input, output| {
-                Ok(ProcessorPtr::create(CompoundBlockOperator::create(
-                    input,
-                    output,
-                    input_schema.num_fields(),
-                    self.ctx.get_function_context()?,
-                    vec![BlockOperator::Project {
-                        projection: projection.clone(),
-                    }],
-                )))
-            })?;
+
+            if projection.len() < input_schema.fields().len() {
+                // Only if the projection is not a full projection, we need to add a projection transform.
+                self.main_pipeline.add_transform(|input, output| {
+                    Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                        input,
+                        output,
+                        input_schema.num_fields(),
+                        self.ctx.get_function_context()?,
+                        vec![BlockOperator::Project {
+                            projection: projection.clone(),
+                        }],
+                    )))
+                })?;
+            }
         }
 
         let input_schema = sort.output_schema()?;

@@ -399,16 +399,17 @@ impl Sort {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
         if let Some(proj) = &self.pre_projection {
-            let mut fields = Vec::with_capacity(proj.len());
-            for index in proj.iter() {
-                if let Ok(field) = input_schema.field_with_name(&index.to_string()) {
-                    fields.push(field.clone());
-                }
+            let fields = proj
+                .iter()
+                .filter_map(|index| input_schema.field_with_name(&index.to_string()).ok())
+                .cloned()
+                .collect::<Vec<_>>();
+            if fields.len() < input_schema.fields().len() {
+                // Only if the projection is not a full projection, we need to add a projection transform.
+                return Ok(DataSchemaRefExt::create(fields));
             }
-            Ok(DataSchemaRefExt::create(fields))
-        } else {
-            Ok(input_schema)
         }
+        Ok(input_schema)
     }
 }
 
