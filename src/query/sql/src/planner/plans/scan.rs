@@ -223,7 +223,7 @@ impl Operator for Scan {
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction
-                    selectivity *= sb.compute_selectivity(pred, true)?;
+                    selectivity = selectivity.min(sb.compute_selectivity(pred, true)?);
                 }
                 // Update other columns's statistic according to selectivity.
                 sb.update_other_statistic_by_selectivity(selectivity);

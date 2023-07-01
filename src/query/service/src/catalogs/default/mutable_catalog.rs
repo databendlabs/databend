@@ -70,6 +70,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -240,6 +242,11 @@ impl Catalog for MutableCatalog {
     #[async_backtrace::framed]
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
         Ok(self.ctx.meta.get_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
+        Ok(self.ctx.meta.update_index(req).await?)
     }
 
     #[async_backtrace::framed]

@@ -76,7 +76,8 @@ pub struct TransformWindow<T: Number> {
     func: WindowFunctionImpl,
 
     partition_indices: Vec<usize>,
-    order_by: Vec<SortColumnDescription>, /* The second field indicate if the order by column is nullable. */
+    // The second field indicate if the order by column is nullable.
+    order_by: Vec<SortColumnDescription>,
 
     /// A queue of data blocks that we need to process.
     /// If partition is ended, we may free the data block from front of the queue.
@@ -553,6 +554,21 @@ impl<T: Number> TransformWindow<T> {
                 };
                 let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
                 builder.push(value.as_ref());
+            }
+            WindowFunctionImpl::Ntile(ntile) => {
+                let num_partition_rows = if self.partition_indices.is_empty() {
+                    let mut rows = 0;
+                    for i in self.frame_start.block..self.frame_end.block {
+                        let row_ptr = RowPtr { block: i, row: 0 };
+                        rows += self.block_rows(&row_ptr);
+                    }
+                    rows
+                } else {
+                    self.partition_size
+                };
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
+                let bucket = ntile.compute_nitle(self.current_row_in_partition, num_partition_rows);
+                builder.push(ScalarRef::Number(NumberScalar::UInt64(bucket as u64)));
             }
         };
 
