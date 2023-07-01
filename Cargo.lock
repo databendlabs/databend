@@ -6138,7 +6138,9 @@ dependencies = [
 
 [[package]]
 name = "icelake"
-version = "0.0.5"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a2da7532c19b2f1ee486ba65c06cd4e54bafa18ca709359e812115a6d059794"
 dependencies = [
  "anyhow",
  "apache-avro",
