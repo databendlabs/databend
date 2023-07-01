@@ -24,7 +24,6 @@ use common_expression::types::DataType;
 use common_expression::types::NumberDataType;
 use common_expression::BlockEntry;
 use common_expression::DataBlock;
-use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableDataType;
 use common_expression::TableField;
@@ -34,7 +33,6 @@ use common_expression::Value;
 use jsonb::Value as JsonbValue;
 use serde_json::json;
 use serde_json::Value as JsonValue;
-use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::SegmentInfo;
 
 use crate::io::SegmentsIO;
@@ -45,13 +43,12 @@ use crate::Table;
 pub struct ClusteringInformation<'a> {
     pub ctx: Arc<dyn TableContext>,
     pub table: &'a FuseTable,
-    pub plain_cluster_keys: String,
-    pub cluster_keys: Vec<RemoteExpr<String>>,
 }
 
 struct ClusteringStatistics {
     total_block_count: u64,
-    total_constant_block_count: u64,
+    constant_block_count: u64,
+    unclustered_block_count: u64,
     average_overlaps: f64,
     average_depth: f64,
     block_depth_histogram: JsonValue,
@@ -61,7 +58,8 @@ impl Default for ClusteringStatistics {
     fn default() -> Self {
         ClusteringStatistics {
             total_block_count: 0,
-            total_constant_block_count: 0,
+            constant_block_count: 0,
+            unclustered_block_count: 0,
             average_overlaps: 0.0,
             average_depth: 0.0,
             block_depth_histogram: json!({}),
@@ -70,137 +68,79 @@ impl Default for ClusteringStatistics {
 }
 
 impl<'a> ClusteringInformation<'a> {
-    pub fn new(
-        ctx: Arc<dyn TableContext>,
-        table: &'a FuseTable,
-        plain_cluster_keys: String,
-        cluster_keys: Vec<RemoteExpr<String>>,
-    ) -> Self {
-        Self {
-            ctx,
-            table,
-            plain_cluster_keys,
-            cluster_keys,
-        }
+    pub fn new(ctx: Arc<dyn TableContext>, table: &'a FuseTable) -> Self {
+        Self { ctx, table }
     }
 
     #[async_backtrace::framed]
     pub async fn get_clustering_info(&self) -> Result<DataBlock> {
+        if self.table.cluster_key_meta.is_none() {
+            return Err(ErrorCode::UnclusteredTable(format!(
+                "Unclustered table {}",
+                self.table.table_info.desc
+            )));
+        }
+
         let snapshot = self.table.read_table_snapshot().await?;
-
-        let mut info = ClusteringStatistics::default();
-        if let Some(snapshot) = snapshot {
-            let segment_locations = &snapshot.segments;
-            let segments_io = SegmentsIO::create(
-                self.ctx.clone(),
-                self.table.operator.clone(),
-                self.table.schema(),
-            );
-            let segments = segments_io
-                .read_segments::<Arc<SegmentInfo>>(segment_locations, true)
-                .await?
-                .into_iter()
-                .collect::<Result<Vec<_>>>()?;
-            if !segments.is_empty() {
-                let blocks = segments.iter().flat_map(|s| s.blocks.iter());
-                info = self.get_clustering_stats(blocks)?
-            }
-        };
-
-        let cluster_by_keys = self.plain_cluster_keys.clone();
-
-        Ok(DataBlock::new(
-            vec![
-                BlockEntry::new(
-                    DataType::String,
-                    Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(info.total_block_count))),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::UInt64),
-                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(
-                        info.total_constant_block_count,
-                    ))),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::Float64),
-                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
-                        info.average_overlaps.into(),
-                    ))),
-                ),
-                BlockEntry::new(
-                    DataType::Number(NumberDataType::Float64),
-                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
-                        info.average_depth.into(),
-                    ))),
-                ),
-                BlockEntry::new(
-                    DataType::Variant,
-                    Value::Scalar(Scalar::Variant(
-                        JsonbValue::from(&info.block_depth_histogram).to_vec(),
-                    )),
-                ),
-            ],
-            1,
-        ))
-    }
-
-    fn get_min_max_stats(&self, block: &BlockMeta) -> Result<(Vec<Scalar>, Vec<Scalar>)> {
-        if self.table.cluster_keys(self.ctx.clone()) != self.cluster_keys
-            || block.cluster_stats.is_none()
-        {
-            // Todo(zhyass): support manually specifying the cluster key.
-            return Err(ErrorCode::Unimplemented("Unimplemented"));
+        if snapshot.is_none() {
+            return self.build_block(ClusteringStatistics::default());
         }
+        let snapshot = snapshot.unwrap();
 
-        let cluster_key_id = block.cluster_stats.clone().unwrap().cluster_key_id;
-        let default_cluster_key_id = self.table.cluster_key_meta.clone().unwrap().0;
-        if cluster_key_id != default_cluster_key_id {
-            return Err(ErrorCode::Unimplemented("Unimplemented"));
-        }
-
-        let cluster_stats = block.cluster_stats.clone().unwrap();
-        Ok((cluster_stats.min, cluster_stats.max))
-    }
-
-    fn get_clustering_stats<'b>(
-        &self,
-        blocks: impl Iterator<Item = &'b Arc<BlockMeta>>,
-    ) -> Result<ClusteringStatistics> {
         // Gather all cluster statistics points to a sorted Map.
         // Key: The cluster statistics points.
         // Value: 0: The block indexes with key as min value;
         //        1: The block indexes with key as max value;
-        let mut points_map: BTreeMap<Vec<Scalar>, (Vec<usize>, Vec<usize>)> = BTreeMap::new();
-        let mut total_constant_block_count = 0;
+        let mut points_map: BTreeMap<Vec<Scalar>, (Vec<u64>, Vec<u64>)> = BTreeMap::new();
+        let mut constant_block_count = 0;
         let mut total_block_count = 0;
-        for (i, block) in blocks.enumerate() {
-            let (min, max) = self.get_min_max_stats(block.as_ref())?;
-            if min.eq(&max) {
-                total_constant_block_count += 1;
+        let mut unclustered_block_count = 0;
+
+        let segments_io = SegmentsIO::create(
+            self.ctx.clone(),
+            self.table.operator.clone(),
+            self.table.schema(),
+        );
+        let default_cluster_key_id = self.table.cluster_key_meta.clone().unwrap().0;
+        let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
+        for chunk in snapshot.segments.chunks(chunk_size) {
+            let segments = segments_io
+                .read_segments::<Arc<SegmentInfo>>(chunk, true)
+                .await?;
+
+            for segment in segments.into_iter().flatten() {
+                for block in &segment.blocks {
+                    if let Some(cluster_stats) = &block.cluster_stats {
+                        if cluster_stats.cluster_key_id != default_cluster_key_id {
+                            unclustered_block_count += 1;
+                        } else {
+                            if cluster_stats.min.eq(&cluster_stats.max) {
+                                constant_block_count += 1;
+                            }
+                            points_map
+                                .entry(cluster_stats.min.clone())
+                                .and_modify(|v| v.0.push(total_block_count))
+                                .or_insert((vec![total_block_count], vec![]));
+                            points_map
+                                .entry(cluster_stats.max.clone())
+                                .and_modify(|v| v.1.push(total_block_count))
+                                .or_insert((vec![], vec![total_block_count]));
+                        }
+                    } else {
+                        unclustered_block_count += 1;
+                    }
+                    total_block_count += 1;
+                }
             }
-
-            points_map
-                .entry(min.clone())
-                .and_modify(|v| v.0.push(i))
-                .or_insert((vec![i], vec![]));
-
-            points_map
-                .entry(max.clone())
-                .and_modify(|v| v.1.push(i))
-                .or_insert((vec![], vec![i]));
-            total_block_count += 1;
         }
+        drop(snapshot);
 
         // calculate overlaps and depth.
         let mut stats = Vec::new();
         // key: the block index.
         // value: (overlaps, depth).
-        let mut unfinished_parts: HashMap<usize, (usize, usize)> = HashMap::new();
-        for (start, end) in points_map.values() {
+        let mut unfinished_parts: HashMap<u64, (usize, usize)> = HashMap::new();
+        for (_, (start, end)) in points_map.into_iter() {
             let point_depth = unfinished_parts.len() + start.len();
 
             for (_, val) in unfinished_parts.iter_mut() {
@@ -237,22 +177,75 @@ impl<'a> ClusteringInformation<'a> {
         let average_depth = (10000.0 * sum_depth as f64 / length as f64).round() / 10000.0;
         let average_overlaps = (10000.0 * sum_overlap as f64 / length as f64).round() / 10000.0;
 
-        let objects = mp.iter().fold(
-            serde_json::Map::with_capacity(mp.len()),
+        let map_len = mp.len();
+        let objects = mp.into_iter().fold(
+            serde_json::Map::with_capacity(map_len),
             |mut acc, (bucket, count)| {
                 acc.insert(format!("{:05}", bucket), json!(count));
                 acc
             },
         );
         let block_depth_histogram = JsonValue::Object(objects);
-
-        Ok(ClusteringStatistics {
+        let info = ClusteringStatistics {
             total_block_count,
-            total_constant_block_count,
+            constant_block_count,
+            unclustered_block_count,
             average_overlaps,
             average_depth,
             block_depth_histogram,
-        })
+        };
+
+        self.build_block(info)
+    }
+
+    fn build_block(&self, info: ClusteringStatistics) -> Result<DataBlock> {
+        let cluster_by_keys = self
+            .table
+            .cluster_key_str()
+            .ok_or(ErrorCode::Internal("It's a bug"))?;
+        Ok(DataBlock::new(
+            vec![
+                BlockEntry::new(
+                    DataType::String,
+                    Value::Scalar(Scalar::String(cluster_by_keys.as_bytes().to_vec())),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(info.total_block_count))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(
+                        info.constant_block_count,
+                    ))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::UInt64),
+                    Value::Scalar(Scalar::Number(NumberScalar::UInt64(
+                        info.unclustered_block_count,
+                    ))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::Float64),
+                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
+                        info.average_overlaps.into(),
+                    ))),
+                ),
+                BlockEntry::new(
+                    DataType::Number(NumberDataType::Float64),
+                    Value::Scalar(Scalar::Number(NumberScalar::Float64(
+                        info.average_depth.into(),
+                    ))),
+                ),
+                BlockEntry::new(
+                    DataType::Variant,
+                    Value::Scalar(Scalar::Variant(
+                        JsonbValue::from(&info.block_depth_histogram).to_vec(),
+                    )),
+                ),
+            ],
+            1,
+        ))
     }
 
     pub fn schema() -> Arc<TableSchema> {
@@ -263,7 +256,11 @@ impl<'a> ClusteringInformation<'a> {
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
-                "total_constant_block_count",
+                "constant_block_count",
+                TableDataType::Number(NumberDataType::UInt64),
+            ),
+            TableField::new(
+                "unclustered_block_count",
                 TableDataType::Number(NumberDataType::UInt64),
             ),
             TableField::new(
