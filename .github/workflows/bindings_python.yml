@@ -112,7 +112,7 @@ jobs:
           path: src/bendpy/dist/*.whl
 
   release:
-    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
+    if: github.event_name != 'pull_request'
     name: Publish to PyPI
     needs: builds
     runs-on: ubuntu-latest
@@ -122,4 +122,4 @@ jobs:
         uses: pypa/gh-action-pypi-publish@master
         with:
           password: ${{ secrets.pypi_password }}
-          skip-existing: true
+          skip_existing: true
