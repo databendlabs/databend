@@ -226,7 +226,11 @@ impl Binder {
 
                 // Avoid death loop
                 let mut agg_indexes = vec![];
-                if self.ctx.get_enable_aggregating_index_scan()
+                if self.ctx.get_can_scan_from_agg_index()
+                    && self
+                        .ctx
+                        .get_settings()
+                        .get_enable_aggregating_index_scan()?
                     && !bind_context.planning_agg_index
                     && table_meta.support_index()
                     && table_meta.engine() != "VIEW"

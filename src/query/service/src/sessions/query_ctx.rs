@@ -339,15 +339,13 @@ impl TableContext for QueryContext {
         self.shared.cacheable.store(cacheable, Ordering::Release);
     }
 
-    fn get_enable_aggregating_index_scan(&self) -> bool {
-        self.shared
-            .enable_aggregating_index_scan
-            .load(Ordering::Acquire)
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        self.shared.can_scan_from_agg_index.load(Ordering::Acquire)
     }
 
-    fn set_enable_aggregating_index_scan(&self, enable: bool) {
+    fn set_can_scan_from_agg_index(&self, enable: bool) {
         self.shared
-            .enable_aggregating_index_scan
+            .can_scan_from_agg_index
             .store(enable, Ordering::Release);
     }
 

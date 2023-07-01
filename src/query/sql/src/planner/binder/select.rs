@@ -91,7 +91,7 @@ impl Binder {
     ) -> Result<(SExpr, BindContext)> {
         if !order_by.is_empty() {
             // Currently, we disable aggregating index scan if the query is a single-table query with order by.
-            self.ctx.set_enable_aggregating_index_scan(false);
+            self.ctx.set_can_scan_from_agg_index(false);
         }
 
         if let Some(hints) = &stmt.hints {

@@ -401,10 +401,10 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
-    fn get_enable_aggregating_index_scan(&self) -> bool {
+    fn get_can_scan_from_agg_index(&self) -> bool {
         todo!()
     }
-    fn set_enable_aggregating_index_scan(&self, _: bool) {
+    fn set_can_scan_from_agg_index(&self, _: bool) {
         todo!()
     }
 
