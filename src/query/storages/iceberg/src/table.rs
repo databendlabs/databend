@@ -181,7 +181,10 @@ impl IcebergTable {
             .into_iter()
             .map(|v: icelake::types::DataFile| match v.file_format {
                 icelake::types::DataFileFormat::Parquet => Arc::new(Box::new(IcebergPartInfo {
-                    path: v.file_path,
+                    path: self
+                        .table
+                        .rel_path(&v.file_path)
+                        .expect("file path must be rel to table"),
                     size: v.file_size_in_bytes as u64,
                 })
                     as Box<dyn PartInfo>),

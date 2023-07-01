@@ -17,4 +17,4 @@ CONNECTION=(
 );
 EOF
 
-echo "SELECT * FROM iceberg_ctl.iceberg_db.iceberg_tbl;" | $MYSQL_CLIENT_CONNECT
+echo "SELECT count(*) FROM iceberg_ctl.iceberg_db.iceberg_tbl;" | $MYSQL_CLIENT_CONNECT
