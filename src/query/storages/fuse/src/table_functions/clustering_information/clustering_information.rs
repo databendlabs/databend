@@ -93,8 +93,8 @@ impl<'a> ClusteringInformation<'a> {
         //        1: The block indexes with key as max value;
         let mut points_map: BTreeMap<Vec<Scalar>, (Vec<u64>, Vec<u64>)> = BTreeMap::new();
         let mut constant_block_count = 0;
-        let mut total_block_count = 0;
         let mut unclustered_block_count = 0;
+        let mut index = 0;
 
         let segments_io = SegmentsIO::create(
             self.ctx.clone(),
@@ -102,6 +102,7 @@ impl<'a> ClusteringInformation<'a> {
             self.table.schema(),
         );
         let default_cluster_key_id = self.table.cluster_key_meta.clone().unwrap().0;
+        let total_block_count = snapshot.summary.block_count;
         let chunk_size = self.ctx.get_settings().get_max_storage_io_requests()? as usize;
         for chunk in snapshot.segments.chunks(chunk_size) {
             let segments = segments_io
@@ -119,17 +120,17 @@ impl<'a> ClusteringInformation<'a> {
                             }
                             points_map
                                 .entry(cluster_stats.min.clone())
-                                .and_modify(|v| v.0.push(total_block_count))
-                                .or_insert((vec![total_block_count], vec![]));
+                                .and_modify(|v| v.0.push(index))
+                                .or_insert((vec![index], vec![]));
                             points_map
                                 .entry(cluster_stats.max.clone())
-                                .and_modify(|v| v.1.push(total_block_count))
-                                .or_insert((vec![], vec![total_block_count]));
+                                .and_modify(|v| v.1.push(index))
+                                .or_insert((vec![], vec![index]));
+                            index += 1;
                         }
                     } else {
                         unclustered_block_count += 1;
                     }
-                    total_block_count += 1;
                 }
             }
         }
