@@ -116,6 +116,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -131,16 +133,19 @@ use common_meta_app::share::ShareNameIdent;
 use common_meta_app::share::ShareTableInfoMap;
 use common_meta_kvapi::kvapi;
 use common_meta_kvapi::kvapi::Key;
+use common_meta_kvapi::kvapi::UpsertKVReq;
 use common_meta_types::txn_op::Request;
 use common_meta_types::txn_op_response::Response;
 use common_meta_types::ConditionResult;
 use common_meta_types::GCDroppedDataReply;
 use common_meta_types::GCDroppedDataReq;
 use common_meta_types::InvalidReply;
+use common_meta_types::MatchSeq;
 use common_meta_types::MatchSeqExt;
 use common_meta_types::MetaError;
 use common_meta_types::MetaId;
 use common_meta_types::MetaNetworkError;
+use common_meta_types::Operation;
 use common_meta_types::SeqV;
 use common_meta_types::TxnCondition;
 use common_meta_types::TxnGetRequest;
@@ -893,7 +898,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
         let tenant_index = &req.name_ident;
 
-        if req.meta.drop_on.is_some() {
+        if req.meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::CreateIndexWithDropTime(
                 CreateIndexWithDropTime::new(&tenant_index.index_name),
             )));
@@ -999,13 +1004,13 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             debug!(index_id, name_key = debug(&tenant_index), "drop_index");
 
             // drop an index with drop time
-            if index_meta.drop_on.is_some() {
+            if index_meta.dropped_on.is_some() {
                 return Err(KVAppError::AppError(AppError::DropIndexWithDropTime(
                     DropIndexWithDropTime::new(&tenant_index.index_name),
                 )));
             }
             // update drop on time
-            index_meta.drop_on = Some(Utc::now());
+            index_meta.dropped_on = Some(Utc::now());
 
             // Delete index by these operations:
             // del (tenant, index_name) -> index_id
@@ -1064,7 +1069,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         debug!(index_id, name_key = debug(&tenant_index), "drop_index");
 
         // get an index with drop time
-        if index_meta.drop_on.is_some() {
+        if index_meta.dropped_on.is_some() {
             return Err(KVAppError::AppError(AppError::GetIndexWithDropTIme(
                 GetIndexWithDropTime::new(&tenant_index.index_name),
             )));
@@ -1074,6 +1079,32 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             index_id,
             index_meta,
         })
+    }
+
+    #[tracing::instrument(level = "debug", ret, err, skip_all)]
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let index_id_key = IndexId {
+            index_id: req.index_id,
+        };
+
+        let reply = self
+            .upsert_kv(UpsertKVReq::new(
+                &index_id_key.to_string_key(),
+                MatchSeq::GE(1),
+                Operation::Update(serialize_struct(&req.index_meta)?),
+                None,
+            ))
+            .await?;
+
+        if !reply.is_changed() {
+            Err(KVAppError::AppError(AppError::UnknownIndex(
+                UnknownIndex::new(&req.index_name, "update_index"),
+            )))
+        } else {
+            Ok(UpdateIndexReply {})
+        }
     }
 
     #[tracing::instrument(level = "debug", ret, err, skip_all)]
@@ -1113,7 +1144,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     // 1. index is not dropped.
                     // 2. table_id is not specified
                     //    or table_id is specified and equals to the given table_id.
-                    meta.drop_on.is_none()
+                    meta.dropped_on.is_none()
                         && req.table_id.filter(|id| *id != meta.table_id).is_none()
                 })
                 .collect::<Vec<_>>()

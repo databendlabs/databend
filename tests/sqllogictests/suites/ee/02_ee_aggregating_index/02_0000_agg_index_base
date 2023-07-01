@@ -152,6 +152,35 @@ DROP AGGREGATING INDEX testi
 statement ok
 DROP TABLE t
 
+statement ok
+CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'
+
+statement ok
+INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
+
+statement ok
+INSERT INTO t VALUES (1,1,6), (1,2,7), (1,2,8), (2,2,9)
+
+# query: eval-agg-eval-scan, index: eval-agg-eval-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select sum(a), b from t group by b
+
+# partial refresh
+statement ok
+REFRESH AGGREGATING INDEX testi LIMIT 1
+
+query 1
+select sum(a) + 1 as s from t group by b order by s
+----
+3
+9
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
 
 statement ok
 use default

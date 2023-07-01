@@ -41,23 +41,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - uses: everpcpc/actions-cache@v1
-        if: env.RUNNER_PROVIDER == 'aws'
-        env:
-          AWS_REGION: us-east-2
-        with:
-          bucket: "databend-ci"
-          root: "cache/cargo"
-          path: |
-            ~/.cargo/registry/cache
-            ~/.cargo/registry/index
-            ~/.cargo/git/db
-          key: |
-            ${{ runner.os }}/${{ matrix.target.name }}/${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}/${{ matrix.target.name }}/
-            ${{ runner.os }}/
-
       - name: Generate version
         working-directory: src/bendpy
         run: |
@@ -86,11 +69,7 @@ jobs:
       - name: Get opts
         id: opts
         run: |
-          if [[ "${RUNNER_PROVIDER}" == "aws" ]]; then
-            echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_BUCKET=databend-ci --env SCCACHE_REGION=us-east-2 --env SCCACHE_S3_KEY_PREFIX=cache/sccache/ --env SCCACHE_S3_USE_SSL=true" >> $GITHUB_OUTPUT
-          else
-            echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true" >> $GITHUB_OUTPUT
-          fi
+          echo "DOCKER_OPTS=--env RUSTC_WRAPPER=sccache --env SCCACHE_GHA_ENABLED=true" >> $GITHUB_OUTPUT
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             echo "BUILD_ARGS=--strip --out dist" >> $GITHUB_OUTPUT
             echo "BUILD_PROFILE=debug" >> $GITHUB_ENV
@@ -133,13 +112,13 @@ jobs:
           path: src/bendpy/dist/*.whl
 
   release:
-    name: Publish in PyPI
-    needs: [builds]
+    if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
+    name: Publish to PyPI
+    needs: builds
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v3
       - name: Publish to PyPI
-        if: github.event_name == 'push' || !github.event.pull_request.head.repo.fork
         uses: pypa/gh-action-pypi-publish@master
         with:
           password: ${{ secrets.pypi_password }}

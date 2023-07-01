@@ -29,15 +29,6 @@ mysql -h127.0.0.1 -uroot -P3307
 
 <iframe width="853" height="505" className="iframe-video" src="https://www.youtube.com/embed/3cFmGvtU-ws" title="YouTube video player" frameBorder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen></iframe>
 
-## Built-in Accounts
-
-There are four built-in accounts in Databend that can be accessed from a local machine without requiring a password. These accounts are immutable and possess the highest level of privileges, meaning their settings cannot be altered or removed. Additionally, it is not possible to change or update their passwords.
-
-- `root@127.0.0.1`
-- `root@localhost`
-- `default@127.0.0.1`
-- `default@localhost`
-
 ## Example: Connect from DBeaver
 
 DBeaver is a universal database management tool for everyone who needs to work with data in a professional way. With DBeaver you are able to manipulate with your data like in a regular spreadsheet, create analytical reports based on records from different data storages, export information in an appropriate format.

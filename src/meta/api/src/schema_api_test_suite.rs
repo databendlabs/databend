@@ -3827,7 +3827,8 @@ impl SchemaApiTestSuite {
             table_id,
             index_type: IndexType::AGGREGATING,
             created_on,
-            drop_on: None,
+            dropped_on: None,
+            updated_on: None,
             query: "SELECT a, SUM(b) FROM tb1 WHERE a > 1 GROUP BY b".to_string(),
         };
 
@@ -3836,7 +3837,8 @@ impl SchemaApiTestSuite {
             table_id,
             index_type: IndexType::AGGREGATING,
             created_on,
-            drop_on: None,
+            dropped_on: None,
+            updated_on: None,
             query: "SELECT a, SUM(b) FROM tb1 WHERE b > 1 GROUP BY b".to_string(),
         };
 

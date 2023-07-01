@@ -58,6 +58,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -332,6 +334,11 @@ impl Catalog for ImmutableCatalog {
 
     #[async_backtrace::framed]
     async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
         unimplemented!()
     }
 
