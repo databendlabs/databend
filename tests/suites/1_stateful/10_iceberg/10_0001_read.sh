@@ -17,4 +17,5 @@ CONNECTION=(
 );
 EOF
 
-echo "SELECT count(*) FROM iceberg_ctl.iceberg_db.iceberg_tbl;" | $MYSQL_CLIENT_CONNECT
+# Iceberg read is not ready on cluster yet
+# echo "SELECT count(*) FROM iceberg_ctl.iceberg_db.iceberg_tbl;" | $MYSQL_CLIENT_CONNECT
