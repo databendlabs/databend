@@ -28,6 +28,7 @@ use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
 use common_meta_app::schema::TableMeta;
 use common_users::UserApiProvider;
+use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
 
 use crate::table::AsyncOneBlockSystemTable;
 use crate::table::AsyncSystemTable;
@@ -53,20 +54,20 @@ impl AsyncSystemTable for UsersTable {
         let tenant = ctx.get_tenant();
         let users = UserApiProvider::instance().get_users(&tenant).await?;
 
-        let names: Vec<Vec<u8>> = users.iter().map(|x| x.name.as_bytes().to_vec()).collect();
-        let hostnames: Vec<Vec<u8>> = users
+        let mut names: Vec<Vec<u8>> = users.iter().map(|x| x.name.as_bytes().to_vec()).collect();
+        let mut hostnames: Vec<Vec<u8>> = users
             .iter()
             .map(|x| x.hostname.as_bytes().to_vec())
             .collect();
-        let auth_types: Vec<Vec<u8>> = users
+        let mut auth_types: Vec<Vec<u8>> = users
             .iter()
             .map(|x| x.auth_info.get_type().to_str().as_bytes().to_vec())
             .collect();
-        let auth_strings: Vec<Vec<u8>> = users
+        let mut auth_strings: Vec<Vec<u8>> = users
             .iter()
             .map(|x| x.auth_info.get_auth_string().as_bytes().to_vec())
             .collect();
-        let default_roles: Vec<Vec<u8>> = users
+        let mut default_roles: Vec<Vec<u8>> = users
             .iter()
             .map(|x| {
                 x.option
@@ -77,6 +78,17 @@ impl AsyncSystemTable for UsersTable {
                     .to_vec()
             })
             .collect();
+        let mut is_configureds: Vec<Vec<u8>> = vec!["NO".as_bytes().to_vec(); users.len()];
+
+        let configured_users = UserApiProvider::instance().get_configured_users();
+        for (name, auth_info) in configured_users {
+            names.push(name.as_bytes().to_vec());
+            hostnames.push("%".as_bytes().to_vec());
+            auth_types.push(auth_info.get_type().to_str().as_bytes().to_vec());
+            auth_strings.push(auth_info.get_auth_string().as_bytes().to_vec());
+            default_roles.push(BUILTIN_ROLE_ACCOUNT_ADMIN.as_bytes().to_vec());
+            is_configureds.push("YES".as_bytes().to_vec());
+        }
 
         Ok(DataBlock::new_from_columns(vec![
             StringType::from_data(names),
@@ -84,6 +96,7 @@ impl AsyncSystemTable for UsersTable {
             StringType::from_data(auth_types),
             StringType::from_data(auth_strings),
             StringType::from_data(default_roles),
+            StringType::from_data(is_configureds),
         ]))
     }
 }
@@ -96,6 +109,7 @@ impl UsersTable {
             TableField::new("auth_type", TableDataType::String),
             TableField::new("auth_string", TableDataType::String),
             TableField::new("default_role", TableDataType::String),
+            TableField::new("is_configured", TableDataType::String),
         ]);
 
         let table_info = TableInfo {

@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use std::any::Any;
-use std::collections::HashSet;
 
+use ahash::HashSet;
 use common_exception::ErrorCode;
 use common_expression::BlockMetaInfo;
 use common_expression::BlockMetaInfoDowncast;

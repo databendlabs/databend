@@ -29,6 +29,7 @@ pub struct MetricService {
     shutdown_handler: HttpShutdownHandler,
 }
 
+#[allow(clippy::let_with_type_underscore)]
 #[poem::handler]
 #[async_backtrace::framed]
 pub async fn metric_handler(prom_extension: Data<&PrometheusHandle>) -> impl IntoResponse {

@@ -36,6 +36,7 @@ use common_arrow::parquet::metadata::RowGroupMetaData;
 use common_arrow::parquet::read::read_metadata;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockMetaInfo;
 use common_expression::DataBlock;
 use common_expression::DataField;
 use common_expression::DataSchema;
@@ -236,6 +237,7 @@ impl DynData for SplitMeta {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct RowGroupInMemory {
     pub split_info: String,
     pub meta: RowGroupMetaData,
@@ -254,6 +256,21 @@ impl RowBatchTrait for RowGroupInMemory {
 
     fn rows(&self) -> usize {
         self.meta.num_rows()
+    }
+}
+
+#[typetag::serde(name = "row_batch_parquet")]
+impl BlockMetaInfo for RowGroupInMemory {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
+    fn equals(&self, _info: &Box<dyn BlockMetaInfo>) -> bool {
+        unreachable!("RowGroupInMemory as BlockMetaInfo is not expected to be compared.")
+    }
+
+    fn clone_self(&self) -> Box<dyn BlockMetaInfo> {
+        unreachable!("RowGroupInMemory as BlockMetaInfo is not expected to be cloned.")
     }
 }
 

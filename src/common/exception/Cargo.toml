@@ -21,6 +21,7 @@ common-meta-types = { path = "../../meta/types" }
 codespan-reporting = { git = "https://github.com/brendanzab/codespan", rev = "c84116f5" }
 
 anyhow = { workspace = true }
+backtrace = "0.3.67"
 bincode = { version = "2.0.0-rc.1", features = ["serde", "std", "alloc"] }
 http = "0.2"
 opendal = { workspace = true }

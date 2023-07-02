@@ -73,7 +73,7 @@ impl ExchangeSink {
                     )]));
                 }
 
-                pipeline.resize(1)?;
+                pipeline.try_resize(1)?;
                 assert_eq!(flight_senders.len(), 1);
                 let item = create_writer_item(flight_senders.remove(0));
                 pipeline.add_pipe(Pipe::create(1, 0, vec![item]));

@@ -86,6 +86,63 @@ SELECT dense_rank() OVER (PARTITION BY four ORDER BY ten) FROM tenk1 WHERE uniqu
 1
 2
 
+# ntile
+query I
+SELECT ntile(2) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn
+----
+1
+1
+1
+1
+1
+2
+2
+2
+2
+2
+
+query I
+SELECT ntile(3) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn
+----
+1
+1
+1
+1
+2
+2
+2
+3
+3
+3
+
+query I
+SELECT ntile(4) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn
+----
+1
+1
+1
+2
+2
+2
+3
+3
+4
+4
+
+query I
+SELECT ntile(5) OVER (ORDER BY ten, four) nn FROM tenk1 ORDER BY ten, four, nn
+----
+1
+1
+2
+2
+3
+3
+4
+4
+5
+5
+
 # lead/lag
 query I
 SELECT lag(ten) OVER (PARTITION BY four ORDER BY ten) lt FROM tenk1 order by four, ten, lt nulls first

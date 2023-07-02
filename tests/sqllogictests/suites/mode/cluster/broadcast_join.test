@@ -133,10 +133,10 @@ NULL NULL 6 8
 query IIII
 select * from t1 right join t2 on t1.a > t2.c order by t2.c
 ----
-3 4 1 4
 7 8 1 4
-3 4 2 3
+3 4 1 4
 7 8 2 3
+3 4 2 3
 7 8 6 8
 
 query IIII

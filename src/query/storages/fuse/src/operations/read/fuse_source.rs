@@ -30,6 +30,7 @@ use common_pipeline_core::SourcePipeBuilder;
 use tracing::info;
 
 use crate::fuse_part::FusePartInfo;
+use crate::io::AggIndexReader;
 use crate::io::BlockReader;
 use crate::operations::read::native_data_source_deserializer::NativeDeserializeDataTransform;
 use crate::operations::read::native_data_source_reader::ReadNativeDataSource;
@@ -101,7 +102,7 @@ pub fn build_fuse_native_source_pipeline(
                 );
             }
             pipeline.add_pipe(source_builder.finalize());
-            pipeline.resize(max_threads)?;
+            pipeline.try_resize(max_threads)?;
         }
     };
 
@@ -116,7 +117,7 @@ pub fn build_fuse_native_source_pipeline(
         )
     })?;
 
-    pipeline.resize(max_threads)
+    pipeline.try_resize(max_threads)
 }
 
 pub fn build_fuse_parquet_source_pipeline(
@@ -126,6 +127,7 @@ pub fn build_fuse_parquet_source_pipeline(
     plan: &DataSourcePlan,
     mut max_threads: usize,
     mut max_io_requests: usize,
+    index_reader: Arc<Option<AggIndexReader>>,
 ) -> Result<()> {
     (max_threads, max_io_requests) =
         adjust_threads_and_request(false, max_threads, max_io_requests, plan);
@@ -147,6 +149,7 @@ pub fn build_fuse_parquet_source_pipeline(
                         output,
                         block_reader.clone(),
                         partitions.clone(),
+                        index_reader.clone(),
                     )?,
                 );
             }
@@ -168,11 +171,12 @@ pub fn build_fuse_parquet_source_pipeline(
                         output,
                         block_reader.clone(),
                         partitions.clone(),
+                        index_reader.clone(),
                     )?,
                 );
             }
             pipeline.add_pipe(source_builder.finalize());
-            pipeline.resize(std::cmp::min(max_threads, max_io_requests))?;
+            pipeline.try_resize(std::cmp::min(max_threads, max_io_requests))?;
 
             info!(
                 "read block pipeline resize from:{} to:{}",
@@ -188,6 +192,7 @@ pub fn build_fuse_parquet_source_pipeline(
             block_reader.clone(),
             transform_input,
             transform_output,
+            index_reader.clone(),
         )
     })
 }

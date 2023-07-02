@@ -263,7 +263,7 @@ CONNECTION = (
     ACCESS_KEY_ID = '<your-access-key-ID>',
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1)
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 SIZE_LIMIT = 10;
 ```
 
@@ -272,7 +272,7 @@ This example loads data from a CSV file without specifying the endpoint URL:
 ```sql
 COPY INTO mytable
 FROM 's3://mybucket/data.csv'
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1)
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1)
 SIZE_LIMIT = 10;
 ```
 
@@ -314,7 +314,7 @@ This example reads data from a CSV file on IPFS and inserts it into a table:
 COPY INTO mytable
 FROM 'ipfs://<your-ipfs-hash>'
 CONNECTION = (endpoint_url = 'https://<your-ipfs-gateway>')
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 </TabItem>
 
@@ -328,7 +328,7 @@ This example uses pattern matching to only load from CSV files containing `sales
 COPY INTO mytable
 FROM 's3://mybucket/'
 PATTERN = '.*sales.*[.]csv'
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 Where `.*` is interpreted as `zero or more occurrences of any character`. The square brackets escape the period character `(.)` that precedes a file extension.
 
@@ -337,7 +337,7 @@ If you want to load from all the CSV files, use `PATTERN = '.*[.]csv'`:
 COPY INTO mytable
 FROM 's3://mybucket/'
 PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 
 ### 5. Loading Data with AWS IAM Role
@@ -352,7 +352,7 @@ CONNECTION = (
     EXTERNAL_ID = '123456'
 )
 PATTERN = '.*[.]csv'
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1);
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1);
 ```
 
 ### 6. Loading Data with Compression
@@ -367,7 +367,7 @@ CONNECTION = (
     ACCESS_KEY_ID = '<your-access-key-ID>',
     SECRET_ACCESS_KEY = '<your-secret-access-key>'
 )
-FILE_FORMAT = (type = CSV, field_delimiter = ',', record_delimiter = '\n', skip_header = 1, compression = AUTO)
+FILE_FORMAT = (type = CSV field_delimiter = ',' record_delimiter = '\n' skip_header = 1 compression = AUTO)
 SIZE_LIMIT = 10;
 ```
 

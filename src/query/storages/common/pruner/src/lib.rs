@@ -15,12 +15,14 @@
 #![allow(clippy::uninlined_format_args)]
 #![deny(unused_crate_dependencies)]
 
+mod block_meta;
 mod internal_column_pruner;
 mod limiter_pruner;
 mod page_pruner;
 mod range_pruner;
 mod topn_pruner;
 
+pub use block_meta::BlockMetaIndex;
 pub use internal_column_pruner::InternalColumnPruner;
 pub use limiter_pruner::Limiter;
 pub use limiter_pruner::LimiterPruner;
@@ -29,5 +31,4 @@ pub use page_pruner::PagePruner;
 pub use page_pruner::PagePrunerCreator;
 pub use range_pruner::RangePruner;
 pub use range_pruner::RangePrunerCreator;
-pub use topn_pruner::BlockMetaIndex;
 pub use topn_pruner::TopNPrunner;

@@ -144,7 +144,7 @@ impl Table for RangeTable {
         &self,
         _ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
-        _dyn_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         // dummy statistics
         Ok((PartStatistics::default_exact(), Partitions::default()))

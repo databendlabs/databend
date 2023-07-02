@@ -295,7 +295,7 @@ pub async fn start_services(conf: &InnerConfig) -> Result<()> {
         conf.query.mysql_handler_host, conf.query.mysql_handler_port
     );
     println!(
-        "    connect via: mysql -uroot -h{} -P{}",
+        "    connect via: mysql -u${{USER}} -p${{PASSWORD}} -h{} -P{}",
         conf.query.mysql_handler_host, conf.query.mysql_handler_port
     );
     println!("Clickhouse(http)");

@@ -28,13 +28,22 @@ echo "Waiting on databend-meta 10 seconds..."
 ./wait_tcp.py --port 9191 --timeout 10
 echo 'Start databend-query...'
 
-nohup databend-query \
-    --meta-endpoints "127.0.0.1:9191" \
-    --storage-type fs \
-    --storage-fs-data-path "benchmark/data/${BENCHMARK_ID}/${BENCHMARK_DATASET}/" \
-    --tenant-id benchmark \
-    --cluster-id "${BENCHMARK_ID}" \
-    --storage-allow-insecure &
+cat <<EOF >config.toml
+[query]
+tenant_id = "benchmark"
+cluster_id = "${BENCHMARK_ID}"
+[[query.users]]
+name = "root"
+auth_type = "no_password"
+[meta]
+endpoints = ["127.0.0.1:9191"]
+[storage]
+type = "fs"
+[storage.fs]
+data_path = "benchmark/data/${BENCHMARK_ID}/${BENCHMARK_DATASET}/"
+EOF
+
+nohup databend-query --config-file config.toml --storage-allow-insecure &
 
 echo "Waiting on databend-query 10 seconds..."
 ./wait_tcp.py --port 8000 --timeout 10

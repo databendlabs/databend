@@ -188,7 +188,8 @@ impl JoinHashTable {
                         result_blocks.push(merged_block);
                         if self.hash_join_desc.join_type == JoinType::Full {
                             for row_ptr in local_build_indexes.iter().take(matched_num) {
-                                outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+                                outer_scan_map[row_ptr.chunk_index as usize]
+                                    [row_ptr.row_index as usize] = true;
                             }
                         }
                     }
@@ -436,7 +437,8 @@ impl JoinHashTable {
                             result_blocks.push(merged_block);
                             if self.hash_join_desc.join_type == JoinType::Full {
                                 for row_ptr in local_build_indexes.iter().take(matched_num) {
-                                    outer_scan_map[row_ptr.chunk_index][row_ptr.row_index] = true;
+                                    outer_scan_map[row_ptr.chunk_index as usize]
+                                        [row_ptr.row_index as usize] = true;
                                 }
                             }
                         } else if all_false {
@@ -453,8 +455,9 @@ impl JoinHashTable {
                                 while idx < matched_num {
                                     let valid = unsafe { validity.get_bit_unchecked(idx) };
                                     if valid {
-                                        outer_scan_map[local_build_indexes[idx].chunk_index]
-                                            [local_build_indexes[idx].row_index] = true;
+                                        outer_scan_map
+                                            [local_build_indexes[idx].chunk_index as usize]
+                                            [local_build_indexes[idx].row_index as usize] = true;
                                     } else {
                                         row_state[row_state_indexes[idx]] -= 1;
                                     }

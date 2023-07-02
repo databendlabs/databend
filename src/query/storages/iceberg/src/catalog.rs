@@ -56,6 +56,7 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -63,6 +64,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -248,6 +251,7 @@ impl Catalog for IcebergCatalog {
         &self,
         _tenant: &str,
         _db_name: &str,
+        _filter: Option<TableInfoFilter>,
     ) -> Result<Vec<Arc<dyn Table>>> {
         unimplemented!()
     }
@@ -370,6 +374,11 @@ impl Catalog for IcebergCatalog {
 
     #[async_backtrace::framed]
     async fn get_index(&self, _req: GetIndexReq) -> Result<GetIndexReply> {
+        unimplemented!()
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, _req: UpdateIndexReq) -> Result<UpdateIndexReply> {
         unimplemented!()
     }
 

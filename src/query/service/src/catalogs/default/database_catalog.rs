@@ -54,6 +54,7 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -61,6 +62,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -308,6 +311,7 @@ impl Catalog for DatabaseCatalog {
         &self,
         tenant: &str,
         db_name: &str,
+        filter: Option<TableInfoFilter>,
     ) -> Result<Vec<Arc<dyn Table>>> {
         if tenant.is_empty() {
             return Err(ErrorCode::TenantIsEmpty(
@@ -317,14 +321,14 @@ impl Catalog for DatabaseCatalog {
 
         let r = self
             .immutable_catalog
-            .list_tables_history(tenant, db_name)
+            .list_tables_history(tenant, db_name, filter.clone())
             .await;
         match r {
             Ok(x) => Ok(x),
             Err(e) => {
                 if e.code() == ErrorCode::UNKNOWN_DATABASE {
                     self.mutable_catalog
-                        .list_tables_history(tenant, db_name)
+                        .list_tables_history(tenant, db_name, filter)
                         .await
                 } else {
                     Err(e)
@@ -494,6 +498,11 @@ impl Catalog for DatabaseCatalog {
     #[async_backtrace::framed]
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply> {
         self.mutable_catalog.get_index(req).await
+    }
+
+    #[async_backtrace::framed]
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
+        self.mutable_catalog.update_index(req).await
     }
 
     #[async_backtrace::framed]

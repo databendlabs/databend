@@ -551,7 +551,6 @@ impl FuseTable {
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
-        let format_version = meta.location.1;
         let create_on = meta.create_on;
 
         let sort_min_max = top_k.as_ref().map(|top_k| {
@@ -561,7 +560,6 @@ impl FuseTable {
 
         FusePartInfo::create(
             location,
-            format_version,
             rows_count,
             columns_meta,
             virtual_columns_meta,
@@ -594,7 +592,6 @@ impl FuseTable {
 
         let rows_count = meta.row_count;
         let location = meta.location.0.clone();
-        let format_version = meta.location.1;
         let create_on = meta.create_on;
 
         let sort_min_max = top_k.and_then(|top_k| {
@@ -607,7 +604,6 @@ impl FuseTable {
         // not the count the rows in this partition
         FusePartInfo::create(
             location,
-            format_version,
             rows_count,
             columns_meta,
             virtual_columns_meta,

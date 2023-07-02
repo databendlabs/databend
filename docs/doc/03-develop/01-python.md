@@ -26,7 +26,7 @@ Both packages require Python version 3.5 or higher to run, so before using them,
 In the following tutorial, you'll learn how to utilize the packages above to develop your Python applications. The tutorial will walk you through creating a SQL user in Databend and then writing Python code to create a table, insert data, and perform data queries.
 
 :::tip
-You can also connect to and interact with Databend from Jupyter Notebook. For more information, see [Jupyter Notebook](../11-integrations/20-gui-tool/00-jupyter.md).
+You can also connect to and interact with Databend from Jupyter Notebook. For more information, see [Jupyter Notebook](../13-integrations/00-jupyter.md).
 :::
 
 ## Tutorial: Developing with Databend using Python

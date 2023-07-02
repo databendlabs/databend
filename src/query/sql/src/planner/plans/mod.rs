@@ -62,8 +62,6 @@ pub use kill::KillPlan;
 pub use limit::*;
 pub use operator::*;
 pub use pattern::PatternPlan;
-pub use plan::Plan::*;
-pub use plan::RewriteKind::*;
 pub use plan::*;
 pub use presign::*;
 pub use project_set::*;

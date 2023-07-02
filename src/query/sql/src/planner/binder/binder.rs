@@ -246,6 +246,9 @@ impl<'a> Binder {
             Statement::ShowTablesStatus(stmt) => {
                 self.bind_show_tables_status(bind_context, stmt).await?
             }
+            Statement::ShowDropTables(stmt) => {
+                self.bind_show_drop_tables(bind_context, stmt).await?
+            }
             Statement::CreateTable(stmt) => self.bind_create_table(stmt).await?,
             Statement::DropTable(stmt) => self.bind_drop_table(stmt).await?,
             Statement::UndropTable(stmt) => self.bind_undrop_table(stmt).await?,
@@ -279,7 +282,7 @@ impl<'a> Binder {
                 if_exists: *if_exists,
                 user: user.clone(),
             })),
-            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
+            Statement::ShowUsers => self.bind_rewrite_to_query(bind_context, "SELECT name, hostname, auth_type, auth_string, is_configured FROM system.users ORDER BY name", RewriteKind::ShowUsers).await?,
             Statement::AlterUser(stmt) => self.bind_alter_user(stmt).await?,
 
             // Roles

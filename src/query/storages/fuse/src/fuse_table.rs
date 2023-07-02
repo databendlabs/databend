@@ -351,7 +351,7 @@ impl Table for FuseTable {
         Some(self.data_metrics.clone())
     }
 
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         true
     }
 
@@ -489,9 +489,9 @@ impl Table for FuseTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        dyn_run: bool,
+        dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
-        self.do_read_partitions(ctx, push_downs, dyn_run).await
+        self.do_read_partitions(ctx, push_downs, dry_run).await
     }
 
     #[tracing::instrument(level = "debug", name = "fuse_table_read_data", skip(self, ctx, pipeline), fields(ctx.id = ctx.get_id().as_str()))]
@@ -721,6 +721,10 @@ impl Table for FuseTable {
     }
 
     fn support_row_id_column(&self) -> bool {
+        true
+    }
+
+    fn result_can_be_cached(&self) -> bool {
         true
     }
 }

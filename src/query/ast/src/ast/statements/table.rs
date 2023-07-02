@@ -103,6 +103,22 @@ impl Display for ShowTablesStatusStmt {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub struct ShowDropTablesStmt {
+    pub database: Option<Identifier>,
+}
+
+impl Display for ShowDropTablesStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "SHOW DROP TABLE")?;
+        if let Some(database) = &self.database {
+            write!(f, " FROM {database}")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub struct CreateTableStmt {
     pub if_not_exists: bool,
     pub catalog: Option<Identifier>,

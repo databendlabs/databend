@@ -1,54 +1,63 @@
 statement ok
-DROP USER IF EXISTS 'test-e'@'localhost'
+DROP USER IF EXISTS 'test-e'
 
 statement ok
-DROP USER IF EXISTS 'test-g'@'localhost'
+DROP USER IF EXISTS 'test-g'
 
 statement ok
-DROP USER IF EXISTS 'test-h'@'localhost'
+DROP USER IF EXISTS 'test-h'
 
 statement ok
-DROP USER IF EXISTS 'test-i@localhost'
+DROP USER IF EXISTS 'test-i'
 
 statement ok
-CREATE USER 'test-e'@'localhost' IDENTIFIED BY 'password'
+CREATE USER 'test-e' IDENTIFIED BY 'password'
 
 statement ok
-ALTER USER 'test-e'@'localhost' IDENTIFIED BY 'new-password'
+ALTER USER 'test-e' IDENTIFIED BY 'new-password'
+
+statement ok
+ALTER USER 'test-e'@'%' IDENTIFIED BY 'new-password2'
+
+statement error 1005
+ALTER USER 'test-e'@'127.0.0.1' IDENTIFIED BY 'new-password3'
+
+statement ok
+ALTER USER 'test-e' IDENTIFIED BY 'new-password'
 
 statement error 2201
-ALTER USER 'test1'@'localhost' IDENTIFIED BY 'password'
+ALTER USER 'test1' IDENTIFIED BY 'password'
 
 statement ok
-CREATE USER 'test-g'@'localhost' IDENTIFIED WITH sha256_password BY 'password'
+CREATE USER 'test-g' IDENTIFIED WITH sha256_password BY 'password'
 
 statement ok
-ALTER USER 'test-g'@'localhost' IDENTIFIED WITH sha256_password BY 'new-password'
+ALTER USER 'test-g' IDENTIFIED WITH sha256_password BY 'new-password'
 
 statement ok
-CREATE USER 'test-h'@'localhost' IDENTIFIED WITH double_sha1_password BY 'password'
+CREATE USER 'test-h' IDENTIFIED WITH double_sha1_password BY 'password'
 
 statement ok
-ALTER USER 'test-h'@'localhost' IDENTIFIED WITH double_sha1_password BY 'new-password'
+ALTER USER 'test-h' IDENTIFIED WITH double_sha1_password BY 'new-password'
 
 statement ok
-CREATE USER 'test-i@localhost' IDENTIFIED WITH sha256_password BY 'password'
+CREATE USER 'test-i' IDENTIFIED WITH sha256_password BY 'password'
 
 statement ok
-ALTER USER 'test-i@localhost' IDENTIFIED WITH sha256_password BY 'new-password'
+ALTER USER 'test-i' IDENTIFIED WITH sha256_password BY 'new-password'
 
 statement ok
-ALTER USER 'test-h'@'localhost' WITH DEFAULT_ROLE = 'role1'
+ALTER USER 'test-h' WITH DEFAULT_ROLE = 'role1'
 
 statement ok
-DROP USER IF EXISTS 'test-e'@'localhost'
+DROP USER IF EXISTS 'test-e'
 
 statement ok
-DROP USER IF EXISTS 'test-g'@'localhost'
+DROP USER IF EXISTS 'test-g'
 
 statement ok
-DROP USER IF EXISTS 'test-h'@'localhost'
+DROP USER IF EXISTS 'test-h'
 
 statement ok
-DROP USER IF EXISTS 'test-i@localhost'
+DROP USER IF EXISTS 'test-i'
 

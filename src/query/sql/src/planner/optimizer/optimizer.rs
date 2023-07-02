@@ -19,6 +19,7 @@ use common_ast::ast::ExplainKind;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use tracing::info;
 
 use super::cost::CostContext;
 use super::format::display_memo;
@@ -30,6 +31,8 @@ use crate::optimizer::runtime_filter::try_add_runtime_filter_nodes;
 use crate::optimizer::util::contains_local_table_scan;
 use crate::optimizer::HeuristicOptimizer;
 use crate::optimizer::SExpr;
+use crate::optimizer::COMMUTE_JOIN_RULES;
+use crate::optimizer::DEFAULT_REWRITE_RULES;
 use crate::plans::CopyPlan;
 use crate::plans::Plan;
 use crate::BindContext;
@@ -131,7 +134,22 @@ pub fn optimize(
                         from: Box::new(optimize(ctx, opt_ctx, *from)?),
                     }
                 }
-                into_table => into_table,
+                CopyPlan::NoFileToCopy => *v,
+                CopyPlan::IntoTable(mut into_table) => match into_table.query {
+                    // Todo:(JackTna25):for now, we just support copy into table from raw stage, copy from query
+                    // will be given later.
+                    Some(_) => CopyPlan::IntoTable(into_table),
+                    None => {
+                        into_table.enable_distributed =
+                            opt_ctx.config.enable_distributed_optimization
+                                && ctx.get_settings().get_enable_distributed_copy()?;
+                        info!(
+                            "after optimization enable_distributed_copy? : {}",
+                            into_table.enable_distributed
+                        );
+                        CopyPlan::IntoTable(into_table)
+                    }
+                },
             })))
         }
         // Passthrough statements
@@ -149,13 +167,13 @@ pub fn optimize_query(
     let contains_local_table_scan = contains_local_table_scan(&s_expr, &metadata);
 
     let heuristic =
-        HeuristicOptimizer::new(ctx.get_function_context()?, bind_context, metadata.clone());
-    let mut result = heuristic.optimize(s_expr)?;
+        HeuristicOptimizer::new(ctx.get_function_context()?, &bind_context, metadata.clone());
+    let mut result = heuristic.optimize(s_expr, &DEFAULT_REWRITE_RULES)?;
     if ctx.get_settings().get_enable_dphyp()? {
-        let (dp_res, optimized) =
-            DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result))?;
+        let (dp_res, _) = DPhpy::new(ctx.clone(), metadata.clone()).optimize(Arc::new(result))?;
         result = (*dp_res).clone();
-        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, optimized)?;
+        result = heuristic.optimize(result, &COMMUTE_JOIN_RULES)?;
+        let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, true)?;
         result = cascades.optimize(result)?;
     } else {
         let mut cascades = CascadesOptimizer::create(ctx.clone(), metadata, false)?;
@@ -187,8 +205,8 @@ fn get_optimized_memo(
     bind_context: Box<BindContext>,
 ) -> Result<(Memo, HashMap<IndexType, CostContext>)> {
     let heuristic =
-        HeuristicOptimizer::new(ctx.get_function_context()?, bind_context, metadata.clone());
-    let result = heuristic.optimize(s_expr)?;
+        HeuristicOptimizer::new(ctx.get_function_context()?, &bind_context, metadata.clone());
+    let result = heuristic.optimize(s_expr, &DEFAULT_REWRITE_RULES)?;
 
     let mut cascades = CascadesOptimizer::create(ctx, metadata, false)?;
     cascades.optimize(result)?;

@@ -20,6 +20,7 @@ use common_config::GlobalConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::TableSchemaRefExt;
+use common_license::license::Feature::ComputedColumn;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::CreateTableReq;
 use common_meta_app::schema::TableMeta;
@@ -91,7 +92,7 @@ impl Interpreter for CreateTableInterpreter {
             license_manager.manager.check_enterprise_enabled(
                 &self.ctx.get_settings(),
                 tenant.clone(),
-                "create_table_with_computed_column".to_string(),
+                ComputedColumn,
             )?;
         }
 

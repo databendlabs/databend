@@ -354,13 +354,13 @@ impl RangeJoinState {
         let right_table = self.right_table.read();
         let mut indices = Vec::with_capacity(left_buffer.len());
         for res in left_buffer.iter() {
-            indices.push((0usize, *res, 1usize));
+            indices.push((0u32, *res as u32, 1usize));
         }
         let mut left_result_block =
             DataBlock::take_blocks(&[&left_table[left_idx]], &indices, indices.len());
         indices.clear();
         for res in right_buffer.iter() {
-            indices.push((0usize, *res, 1usize));
+            indices.push((0u32, *res as u32, 1usize));
         }
         let right_result_block =
             DataBlock::take_blocks(&[&right_table[right_idx]], &indices, indices.len());

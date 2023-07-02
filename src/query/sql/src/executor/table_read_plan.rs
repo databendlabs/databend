@@ -32,6 +32,7 @@ use common_expression::FieldIndex;
 use common_expression::RemoteExpr;
 use common_expression::Scalar;
 use common_expression::TableField;
+use common_license::license::Feature::DataMask;
 use common_license::license_manager::get_license_manager;
 use common_settings::Settings;
 use common_users::UserApiProvider;
@@ -113,7 +114,7 @@ impl ToReadDataSourcePlan for dyn Table {
 
         let schema = &source_info.schema();
         let description = statistics.get_description(&source_info.desc());
-        let mut output_schema = match (self.benefit_column_prune(), &push_downs) {
+        let mut output_schema = match (self.support_column_projection(), &push_downs) {
             (true, Some(push_downs)) => match &push_downs.prewhere {
                 Some(prewhere) => Arc::new(prewhere.output_columns.project_schema(schema)),
                 _ => {
@@ -162,7 +163,7 @@ impl ToReadDataSourcePlan for dyn Table {
                 let ret = license_manager.manager.check_enterprise_enabled(
                     &ctx.get_settings(),
                     tenant.clone(),
-                    "data_mask".to_string(),
+                    DataMask,
                 );
                 if ret.is_err() {
                     None

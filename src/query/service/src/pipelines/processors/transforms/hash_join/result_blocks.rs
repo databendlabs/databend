@@ -16,7 +16,10 @@ use std::iter::TrustedLen;
 
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::BlockEntry;
 use common_expression::DataBlock;
+use common_expression::Scalar;
+use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
 
 use super::JoinHashTable;
@@ -116,5 +119,25 @@ impl JoinHashTable {
                 self.hash_join_desc.join_type
             ))),
         }
+    }
+
+    pub(crate) fn left_fast_return(&self, input: &DataBlock) -> Result<Vec<DataBlock>> {
+        if self.hash_join_desc.join_type == JoinType::LeftAnti {
+            return Ok(vec![input.clone()]);
+        }
+        let null_build_block = DataBlock::new(
+            self.row_space
+                .data_schema
+                .fields()
+                .iter()
+                .map(|df| BlockEntry {
+                    data_type: df.data_type().clone(),
+                    value: Value::Scalar(Scalar::Null),
+                })
+                .collect(),
+            input.num_rows(),
+        );
+
+        Ok(vec![self.merge_eq_block(&null_build_block, input)?])
     }
 }

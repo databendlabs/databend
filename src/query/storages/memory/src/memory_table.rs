@@ -149,7 +149,7 @@ impl Table for MemoryTable {
         &self.table_info
     }
 
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         true
     }
 
@@ -162,7 +162,7 @@ impl Table for MemoryTable {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        _dyn_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let blocks = self.blocks.read();
 
@@ -250,7 +250,7 @@ impl Table for MemoryTable {
         _copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         pipeline.add_sink(|input| {
             Ok(ProcessorPtr::create(MemoryTableSink::create(

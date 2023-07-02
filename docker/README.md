@@ -35,6 +35,9 @@ docker run \
     datafuselabs/databend
 ```
 
+> NOTE:
+> if `QUERY_DEFAULT_USER` or `QUERY_DEFAULT_PASSWORD` is not specified, a default root user with no password will be added.
+
 ### Run with MinIO as backend
 *NOTE:* setting `MINIO_ENABLED` will trigger a runtime MinIO binary download.
 
@@ -84,7 +87,7 @@ docker run \
 
 There are two ways connecting to databend with docker:
 
-### Using default root user
+### Using default added root user
 
 ```shell
 docker run \
@@ -115,9 +118,6 @@ Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
 
 mysql>
 ```
-
-> NOTE:
-> * `--net=host` is required for root user since it would only allow connections from localhost.
 
 ### Adding an built-in user
 
