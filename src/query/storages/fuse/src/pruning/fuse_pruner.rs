@@ -74,6 +74,7 @@ pub struct DeletedSegmentInfo {
     // segment index.
     pub index: usize,
     // deleted segment location and summary.
+    // location is used for hash
     pub segment_info: (Location, Statistics),
 }
 

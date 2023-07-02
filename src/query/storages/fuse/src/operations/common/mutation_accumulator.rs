@@ -182,7 +182,6 @@ impl MutationAccumulator {
             );
             segments_editor.remove(&mutation_deleted_segment.deleted_segment.index);
         }
-
         if self.mutations.len() == self.base_segments.len() - self.deleted_segments.len() {
             self.summary = Statistics::default();
             recalc_stats = true;

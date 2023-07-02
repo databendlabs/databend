@@ -53,6 +53,7 @@ use tracing::info;
 use super::mutation::MutationDeletedSegment;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_nums;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;
+use crate::metrics::metrics_inc_deletion_segment_range_purned_whole_segment_nums;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
 use crate::operations::mutation::MutationSource;
@@ -421,7 +422,7 @@ impl FuseTable {
 
         let mut part_num = parts.len();
         let mut num_whole_block_mutation = whole_block_deletions.len();
-
+        let segment_num = pruner.deleted_segments.len();
         // now try to add deleted_segment
         for deleted_segment in pruner.deleted_segments {
             part_num += deleted_segment.segment_info.1.block_count as usize;
@@ -436,6 +437,7 @@ impl FuseTable {
         let block_nums = base_snapshot.summary.block_count;
         metrics_inc_deletion_block_range_pruned_nums(block_nums - part_num as u64);
         metrics_inc_deletion_block_range_pruned_whole_block_nums(num_whole_block_mutation as u64);
+        metrics_inc_deletion_segment_range_purned_whole_segment_nums(segment_num as u64);
         Ok((parts, MutationTaskInfo {
             total_tasks: part_num,
             num_whole_block_mutation,

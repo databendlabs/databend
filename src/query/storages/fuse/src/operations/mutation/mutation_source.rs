@@ -398,6 +398,11 @@ impl Processor for MutationSource {
                     // we can make sure this is Mutation::Delete
                     // only delete operation will have deleted segments, not for update.
                     let deleted_segment = MutationDeletedSegment::from_part(&part)?;
+                    let progress_values = ProgressValues {
+                        rows: deleted_segment.deleted_segment.segment_info.1.row_count as usize,
+                        bytes: 0,
+                    };
+                    self.ctx.get_write_progress().incr(&progress_values);
                     self.state = State::Output(
                         self.ctx.get_partition(),
                         DataBlock::empty_with_meta(SerializeDataMeta::create_with_deleted_segment(
