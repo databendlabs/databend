@@ -2,7 +2,7 @@
 title: "This Week in Databend #86"
 date: 2023-03-24
 slug: 2023-03-24-databend-weekly
-tags: [databend, weekly]
+tags: [weekly]
 description: "Stay up to date with the latest weekly developments on Databend!"
 contributors:
   - name: andylokandy
