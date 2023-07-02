@@ -16,10 +16,12 @@ use super::aggregate_approx_count_distinct::aggregate_approx_count_distinct_func
 use super::aggregate_arg_min_max::aggregate_arg_max_function_desc;
 use super::aggregate_arg_min_max::aggregate_arg_min_function_desc;
 use super::aggregate_avg::aggregate_avg_function_desc;
-use super::aggregate_bitmap_count::aggregate_bitmap_and_count_function_desc;
-use super::aggregate_bitmap_count::aggregate_bitmap_not_count_function_desc;
-use super::aggregate_bitmap_count::aggregate_bitmap_or_count_function_desc;
-use super::aggregate_bitmap_count::aggregate_bitmap_xor_count_function_desc;
+use super::aggregate_bitmap::aggregate_bitmap_and_count_function_desc;
+use super::aggregate_bitmap::aggregate_bitmap_intersect_function_desc;
+use super::aggregate_bitmap::aggregate_bitmap_not_count_function_desc;
+use super::aggregate_bitmap::aggregate_bitmap_or_count_function_desc;
+use super::aggregate_bitmap::aggregate_bitmap_union_function_desc;
+use super::aggregate_bitmap::aggregate_bitmap_xor_count_function_desc;
 use super::aggregate_combinator_distinct::aggregate_combinator_distinct_desc;
 use super::aggregate_combinator_distinct::aggregate_combinator_uniq_desc;
 use super::aggregate_combinator_state::AggregateStateCombinator;
@@ -81,19 +83,24 @@ impl Aggregators {
         factory.register("kurtosis", aggregate_kurtosis_function_desc());
         factory.register("skewness", aggregate_skewness_function_desc());
         factory.register("string_agg", aggregate_string_agg_function_desc());
-        
+
         factory.register(
             "bitmap_and_count",
             aggregate_bitmap_and_count_function_desc(),
         );
         factory.register(
             "bitmap_not_count",
-            aggregate_bitmap_not_count_function_desc()
+            aggregate_bitmap_not_count_function_desc(),
         );
         factory.register("bitmap_or_count", aggregate_bitmap_or_count_function_desc());
         factory.register(
             "bitmap_xor_count",
             aggregate_bitmap_xor_count_function_desc(),
+        );
+        factory.register("bitmap_union", aggregate_bitmap_union_function_desc());
+        factory.register(
+            "bitmap_intersect",
+            aggregate_bitmap_intersect_function_desc(),
         );
     }
 
