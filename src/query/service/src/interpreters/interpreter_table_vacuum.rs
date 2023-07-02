@@ -20,6 +20,7 @@ use common_expression::types::StringType;
 use common_expression::DataBlock;
 use common_expression::DataSchemaRef;
 use common_expression::FromData;
+use common_license::license::Feature::Vacuum;
 use common_license::license_manager::get_license_manager;
 use common_sql::plans::VacuumTablePlan;
 use common_storages_fuse::FuseTable;
@@ -60,7 +61,7 @@ impl Interpreter for VacuumTableInterpreter {
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
             self.ctx.get_tenant(),
-            "vacuum".to_string(),
+            Vacuum,
         )?;
 
         let catalog_name = self.plan.catalog.clone();

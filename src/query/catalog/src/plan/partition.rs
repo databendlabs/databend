@@ -159,6 +159,7 @@ impl Partitions {
                 break;
             }
         }
+
         Ok(executor_part)
     }
 

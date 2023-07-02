@@ -6,7 +6,7 @@
   <a href="https://databend.rs/doc/cloud">Databend Serverless Cloud (beta)</a>  |
   <a href="https://databend.rs/doc">Documentation</a>  |
   <a href="https://benchmark.clickhouse.com/">Benchmarking</a>  |
-  <a href="https://github.com/datafuselabs/databend/issues/10334">Roadmap (v1.1)</a>
+  <a href="https://github.com/datafuselabs/databend/issues/11868">Roadmap (v1.3)</a>
 
 </h4>
 

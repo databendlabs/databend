@@ -22,8 +22,7 @@ Databend aims to be easy to use by design and does NOT require any of those oper
 - [CREATE TABLE](#create-table): Creates a table from scratch.
 - [CREATE TABLE ... LIKE](#create-table--like): Creates a table with the same column definitions as an existing one.
 - [CREATE TABLE ... AS](#create-table--as): Creates a table and inserts data with the results of a SELECT query.
-- [CREATE TRANSIENT TABLE](#create-transient-table): Creates a table without storing its historical data for Time Travel.
-- [CREATE TABLE ... SNAPSHOT_LOCATION](#create-table--snapshot_location): Creates a table and inserts data with a snapshot file.
+- [CREATE TRANSIENT TABLE](#create-transient-table): Creates a table without storing its historical data for Time Travel..
 - [CREATE TABLE ... EXTERNAL_LOCATION](#create-table--external_location): Creates a table and specifies an S3 bucket for the data storage instead of the FUSE engine.
 
 ## CREATE TABLE
@@ -100,32 +99,6 @@ Transient tables help save your storage expenses because they do not need extra 
 Syntax:
 ```sql
 CREATE TRANSIENT TABLE ...
-```
-
-## CREATE TABLE ... SNAPSHOT_LOCATION
-
-Creates a table and inserts data from a snapshot file. 
-
-Databend automatically creates snapshots when data updates occur, so a snapshot can be considered as a view of your data at a time point in the past. Databend may store many snapshots of a table (depending on the number of update operations you performed) for the Time Travel feature that allows you to query, back up, and restore from a previous version of your data within the retention period (24 hours by default).
-
-This command enables you to insert the data stored in a snapshot file when you create a table. Please note that the table you create must have same column definitions as the data from the snapshot.
-
-Syntax:
-```sql
-CREATE TABLE [IF NOT EXISTS] [db.]table_name
-(
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
-    <column_name> <data_type> [ NOT NULL | NULL] [ { DEFAULT <expr> }],
-    ...
-)
-SNAPSHOT_LOCATION = '<SNAPSHOT_FILENAME>';
-```
-
-To obtain the snapshot information (including the snapshot locations) of a table, execute the following command:
-
-```sql
-SELECT * 
-FROM   Fuse_snapshot('<database_name>', '<table_name>'); 
 ```
 
 ## CREATE TABLE ... EXTERNAL_LOCATION
@@ -425,57 +398,6 @@ SELECT * FROM visits;
 |         2 |
 |         3 |
 +-----------+
-```
-
-### Create Table ... Snapshot_Location
-
-Create a table from a specific snapshot, allowing you to create a new table based on the data at a specific point in time:
-
-```sql
-CREATE TABLE members 
-  ( 
-     name VARCHAR 
-  ); 
-
-INSERT INTO members 
-VALUES     ('Amy'); 
-
-SELECT snapshot_id, 
-       timestamp, 
-       snapshot_location 
-FROM   fuse_snapshot('default', 'members'); 
-+-----------------------------------+----------------------------+------------------------------------------------------------+
-| snapshot_id                       | timestamp                  | snapshot_location                                          |
-+-----------------------------------+----------------------------+------------------------------------------------------------+
-|  b5931727ee404869ab99b25bf9e672a9 | 2022-08-29 17:53:54.243561 | 418920/604411/_ss/b5931727ee404869ab99b25bf9e672a9_v1.json |
-+-----------------------------------+----------------------------+------------------------------------------------------------+
-
-INSERT INTO members 
-VALUES     ('Bob'); 
-
-SELECT snapshot_id, 
-       timestamp, 
-       snapshot_location 
-FROM   fuse_snapshot('default', 'members'); 
-+----------------------------------+----------------------------+------------------------------------------------------------+
-| snapshot_id                      | timestamp                  | snapshot_location                                          |
-|----------------------------------|----------------------------|------------------------------------------------------------|
-| b5931727ee404869ab99b25bf9e672a9 | 2022-08-29 17:53:54.243561 | 418920/604411/_ss/b5931727ee404869ab99b25bf9e672a9_v1.json |
-| 12637e70dd1c4abbab15470fa0a6d69b | 2022-08-29 18:04:18.973272 | 418920/604411/_ss/12637e70dd1c4abbab15470fa0a6d69b_v1.json |
-+----------------------------------+----------------------------+------------------------------------------------------------+
-
--- Create a new table with a snapshot (ID: b5931727ee404869ab99b25bf9e672a9)
-CREATE TABLE members_previous 
-  ( 
-     name VARCHAR 
-  )
-snapshot_location='418920/604411/_ss/b5931727ee404869ab99b25bf9e672a9_v1.json';
-
--- The created table contains "Amy" that is stored in the snapshot
-SELECT * 
-FROM   members_previous; 
----
-Amy
 ```
 
 ### Create Table ... External_Location

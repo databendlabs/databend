@@ -76,6 +76,7 @@ pub use table::TableIdListKey;
 pub use table::TableIdToName;
 pub use table::TableIdent;
 pub use table::TableInfo;
+pub use table::TableInfoFilter;
 pub use table::TableLockKey;
 pub use table::TableMeta;
 pub use table::TableNameIdent;

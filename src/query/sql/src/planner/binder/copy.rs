@@ -130,6 +130,8 @@ impl<'a> Binder {
                     required_values_schema: required_values_schema.clone(),
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
+
+                    enable_distributed: false,
                 };
 
                 self.bind_copy_into_table_from_location(bind_context, plan)
@@ -205,6 +207,8 @@ impl<'a> Binder {
                     required_values_schema: required_values_schema.clone(),
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
+
+                    enable_distributed: false,
                 };
 
                 self.bind_copy_into_table_from_location(bind_context, plan)
@@ -354,6 +358,8 @@ impl<'a> Binder {
                     write_mode: CopyIntoTableMode::Copy,
                     query: None,
                     validation_mode: ValidationMode::None,
+
+                    enable_distributed: false,
                 };
                 self.bind_copy_from_query_into_table(bind_context, plan, select_list, alias)
                     .await
@@ -473,6 +479,8 @@ impl<'a> Binder {
             write_mode,
             query: None,
             validation_mode: ValidationMode::None,
+
+            enable_distributed: false,
         };
 
         self.bind_copy_into_table_from_location(bind_context, plan)

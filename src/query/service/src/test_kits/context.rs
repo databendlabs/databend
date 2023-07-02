@@ -50,7 +50,7 @@ pub async fn create_query_context_with_session(
     let dummy_session = SessionManager::instance().create_session(typ).await?;
 
     // Set user with all privileges
-    let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+    let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
         hash_method: PasswordHashMethod::Sha256,
         hash_value: Vec::from("pass"),
     });
@@ -80,7 +80,7 @@ pub async fn create_query_context_with_config(
         .await?;
 
     if current_user.is_none() {
-        let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+        let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
             hash_value: Vec::from("pass"),
         });

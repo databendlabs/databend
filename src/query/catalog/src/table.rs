@@ -91,7 +91,7 @@ pub trait Table: Sync + Send {
     }
 
     /// whether column prune(projection) can help in table read
-    fn benefit_column_prune(&self) -> bool {
+    fn support_column_projection(&self) -> bool {
         false
     }
 
@@ -154,7 +154,7 @@ pub trait Table: Sync + Send {
         &self,
         ctx: Arc<dyn TableContext>,
         push_downs: Option<PushDownInfo>,
-        _dyn_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let (_, _) = (ctx, push_downs);
         Err(ErrorCode::Unimplemented(format!(
@@ -387,6 +387,10 @@ pub trait Table: Sync + Send {
     fn is_stage_table(&self) -> bool {
         false
     }
+
+    fn result_can_be_cached(&self) -> bool {
+        false
+    }
 }
 
 #[async_trait::async_trait]
@@ -492,7 +496,7 @@ pub trait ColumnStatisticsProvider {
                         max.push(0);
                     }
                 }
-                for idx in (0..min.len()).rev() {
+                for idx in 0..min.len() {
                     min_value = min_value * 128 + min[idx] as u32;
                     max_value = max_value * 128 + max[idx] as u32;
                 }

@@ -473,6 +473,16 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+    let show_drop_tables_status = map(
+        rule! {
+            SHOW ~ DROP ~ ( TABLES | TABLE ) ~ ( FROM ~ ^#ident )?
+        },
+        |(_, _, _, opt_database)| {
+            Statement::ShowDropTables(ShowDropTablesStmt {
+                database: opt_database.map(|(_, database)| database),
+            })
+        },
+    );
     let create_table = map(
         rule! {
             CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
@@ -1317,6 +1327,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #describe_table : "`DESCRIBE [<database>.]<table>`"
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
+            | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
             | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
             | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
@@ -2150,13 +2161,11 @@ pub fn user_option(i: Input) -> IResult<UserOptionItem> {
 pub fn user_identity(i: Input) -> IResult<UserIdentity> {
     map(
         rule! {
-            #parameter_to_string ~ ( "@" ~ #literal_string )?
+            #parameter_to_string ~ ( "@" ~  "'%'" )?
         },
-        |(username, opt_hostname)| UserIdentity {
-            username,
-            hostname: opt_hostname
-                .map(|(_, hostname)| hostname)
-                .unwrap_or_else(|| "%".to_string()),
+        |(username, _)| {
+            let hostname = "%".to_string();
+            UserIdentity { username, hostname }
         },
     )(i)
 }

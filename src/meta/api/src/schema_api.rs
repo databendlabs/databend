@@ -63,6 +63,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -117,6 +119,8 @@ pub trait SchemaApi: Send + Sync {
     async fn drop_index(&self, req: DropIndexReq) -> Result<DropIndexReply, KVAppError>;
 
     async fn get_index(&self, req: GetIndexReq) -> Result<GetIndexReply, KVAppError>;
+
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply, KVAppError>;
 
     async fn list_indexes(
         &self,

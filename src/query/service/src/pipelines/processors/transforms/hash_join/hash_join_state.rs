@@ -14,6 +14,8 @@
 
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchemaRef;
+use common_sql::plans::JoinType;
 
 use super::ProbeState;
 use crate::pipelines::processors::transforms::hash_join::desc::JoinState;
@@ -55,38 +57,36 @@ pub trait HashJoinState: Send + Sync {
     // Detach to state: `probe_count`.
     fn probe_done(&self) -> Result<()>;
 
+    /// Divide the final scan phase into multiple tasks.
+    fn generate_final_scan_task(&self) -> Result<()>;
+
+    /// Get one final scan task.
+    fn final_scan_task(&self) -> Option<usize>;
+
+    /// Final scan.
+    fn final_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
+
     /// Check if need outer scan.
     fn need_outer_scan(&self) -> bool;
 
-    /// Divide the finalize phase into multiple tasks.
-    fn generate_outer_scan_task(&self) -> Result<()>;
-
-    /// Get one outer scan task.
-    fn outer_scan_task(&self) -> Option<usize>;
-
-    /// Outer scan.
-    fn outer_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
-
-    /// Outer scan right and full join.
-    fn outer_scan_right_and_full_join(
+    /// Outer scan for right and full join.
+    fn right_and_full_outer_scan(
         &self,
         task: usize,
         state: &mut ProbeState,
     ) -> Result<Vec<DataBlock>>;
 
-    /// Outer scan right semi join.
-    fn outer_scan_right_semi_join(
-        &self,
-        task: usize,
-        state: &mut ProbeState,
-    ) -> Result<Vec<DataBlock>>;
+    /// Outer scan for right semi join.
+    fn right_semi_outer_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
 
-    /// Outer scan right anti join.
-    fn outer_scan_right_anti_join(
-        &self,
-        task: usize,
-        state: &mut ProbeState,
-    ) -> Result<Vec<DataBlock>>;
+    /// Outer scan for right anti join.
+    fn right_anti_outer_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
+
+    /// Check if need mark scan.
+    fn need_mark_scan(&self) -> bool;
+
+    /// Mark scan for left mark join.
+    fn left_mark_scan(&self, task: usize, state: &mut ProbeState) -> Result<Vec<DataBlock>>;
 
     /// Wait until the build phase is finished.
     async fn wait_build_finish(&self) -> Result<()>;
@@ -97,6 +97,12 @@ pub trait HashJoinState: Send + Sync {
     /// Wait until the probe phase is finished.
     async fn wait_probe_finish(&self) -> Result<()>;
 
-    /// Get mark join results.
-    fn mark_join_blocks(&self) -> Result<Vec<DataBlock>>;
+    /// Get `fast_return`
+    fn fast_return(&self) -> Result<bool>;
+
+    /// Get `merged_schema` which is `probe_schema` + `build_schema`
+    fn merged_schema(&self) -> Result<DataSchemaRef>;
+
+    /// Get join type
+    fn join_type(&self) -> JoinType;
 }

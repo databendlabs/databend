@@ -29,6 +29,7 @@ use common_meta_app::schema::GetTableCopiedFileReq;
 use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
 use common_meta_app::schema::UndropTableReply;
@@ -123,7 +124,10 @@ impl Database for ShareDatabase {
     }
 
     #[async_backtrace::framed]
-    async fn list_tables_history(&self) -> Result<Vec<Arc<dyn Table>>> {
+    async fn list_tables_history(
+        &self,
+        _filter: Option<TableInfoFilter>,
+    ) -> Result<Vec<Arc<dyn Table>>> {
         Err(ErrorCode::PermissionDenied(
             "Permission denied, cannot list table history from a shared database".to_string(),
         ))

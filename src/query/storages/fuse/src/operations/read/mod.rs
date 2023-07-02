@@ -25,4 +25,5 @@ mod parquet_rows_fetcher;
 
 pub use fuse_rows_fetcher::build_row_fetcher_pipeline;
 pub use fuse_source::build_fuse_parquet_source_pipeline;
+pub use parquet_data_source::DataSource;
 pub use parquet_data_source::DataSourceMeta;

@@ -91,13 +91,8 @@ impl Rule for RuleCommuteJoinBaseTable {
                 );
 
                 // Disable the following rules for the generated expression
-                result.set_applied_rule(&RuleID::CommuteJoin);
                 result.set_applied_rule(&RuleID::CommuteJoinBaseTable);
-                result.set_applied_rule(&RuleID::LeftAssociateJoin);
                 result.set_applied_rule(&RuleID::LeftExchangeJoin);
-                result.set_applied_rule(&RuleID::RightAssociateJoin);
-                result.set_applied_rule(&RuleID::RightExchangeJoin);
-                result.set_applied_rule(&RuleID::ExchangeJoin);
 
                 state.add_result(result);
             }

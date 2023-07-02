@@ -21,6 +21,7 @@ use itertools::Itertools;
 use super::AggregateExpand;
 use super::DeleteFinal;
 use super::DeletePartial;
+use super::DistributedCopyIntoTable;
 use super::DistributedInsertSelect;
 use super::ProjectSet;
 use super::RowFetch;
@@ -81,6 +82,9 @@ impl<'a> Display for PhysicalPlanIndentFormatDisplay<'a> {
             PhysicalPlan::ProjectSet(unnest) => write!(f, "{}", unnest)?,
             PhysicalPlan::RuntimeFilterSource(plan) => write!(f, "{}", plan)?,
             PhysicalPlan::RangeJoin(plan) => write!(f, "{}", plan)?,
+            PhysicalPlan::DistributedCopyIntoTable(copy_into_table) => {
+                write!(f, "{}", copy_into_table)?
+            }
         }
 
         for node in self.node.children() {
@@ -359,6 +363,11 @@ impl Display for DeletePartial {
 impl Display for DeleteFinal {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "DeleteFinal")
+    }
+}
+impl Display for DistributedCopyIntoTable {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DistributedCopyIntoTable")
     }
 }
 

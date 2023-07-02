@@ -15,9 +15,9 @@
 use common_arrow::arrow::bitmap::Bitmap;
 use common_arrow::arrow::bitmap::MutableBitmap;
 use common_expression::FunctionContext;
-use common_hashtable::MarkerKind;
 use common_hashtable::RowPtr;
 
+use super::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::sql::plans::JoinType;
 
@@ -36,7 +36,7 @@ pub struct ProbeState {
     pub(crate) row_state: Option<Vec<usize>>,
     pub(crate) row_state_indexes: Option<Vec<usize>>,
     pub(crate) probe_unmatched_indexes: Option<Vec<(u32, u32)>>,
-    pub(crate) markers: Option<Vec<MarkerKind>>,
+    pub(crate) markers: Option<Vec<u8>>,
 }
 
 impl ProbeState {
@@ -66,13 +66,17 @@ impl ProbeState {
             }
             _ => (None, None, None),
         };
+        let markers = if matches!(&join_type, JoinType::RightMark) {
+            Some(vec![MARKER_KIND_FALSE; JOIN_MAX_BLOCK_SIZE])
+        } else {
+            None
+        };
         ProbeState {
             probe_indexes: vec![(0, 0); JOIN_MAX_BLOCK_SIZE],
             build_indexes: vec![
                 RowPtr {
                     chunk_index: 0,
                     row_index: 0,
-                    marker: None
                 };
                 JOIN_MAX_BLOCK_SIZE
             ],
@@ -81,7 +85,7 @@ impl ProbeState {
             func_ctx,
             row_state,
             row_state_indexes,
-            markers: None,
+            markers,
             probe_unmatched_indexes,
         }
     }

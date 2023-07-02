@@ -1,0 +1,103 @@
+statement ok
+set lazy_read_threshold=100
+
+statement ok
+drop table if exists t_lazy
+
+statement ok
+create table t_lazy (a int, b float, c string, d tuple(a int, b int), e date)
+
+statement ok
+insert into t_lazy values (1, 1.1, 'a', (1, 1), '2020-01-01'), (2, 2.2, 'b', (2, 2), '2020-01-02'), (3, 3.3, 'c', (3, 3), '2020-01-03')
+
+statement ok
+insert into t_lazy values (4, 5.5, 'b', (2, 2), '2020-01-02'), (5, 0.1, 'a', (3, 1), '2020-01-01')
+
+statement ok
+insert into t_lazy values (6, 8.5, 'c', (2, 2), '2020-02-02'), (7, 0.2, 'd', (3, 1), '2020-01-05')
+
+query ITTTT
+select * from t_lazy order by a desc limit 2
+----
+7 0.2 d (3,1) 2020-01-05
+6 8.5 c (2,2) 2020-02-02
+
+query ITTTT
+select * from t_lazy where b > 2 order by a limit 2
+----
+2 2.2 b (2,2) 2020-01-02
+3 3.3 c (3,3) 2020-01-03
+
+query TTT
+select b, c, d from t_lazy where b < 1 order by a limit 2
+----
+0.1 a (3,1)
+0.2 d (3,1)
+
+query TTTT
+select a, b, c, d from t_lazy where b < 1 order by c limit 2
+----
+5 0.1 a (3,1)
+7 0.2 d (3,1)
+
+query TTTT
+select a, b, c, d from t_lazy where b < 1 order by e limit 2
+----
+5 0.1 a (3,1)
+7 0.2 d (3,1)
+
+query TTT
+select b, c, d from t_lazy where b < 1 order by a, e limit 2
+----
+0.1 a (3,1)
+0.2 d (3,1)
+
+query TT
+select b, c from t_lazy order by d:a desc, a limit 2
+----
+3.3 c
+0.1 a
+
+query TT
+select b, d, c from t_lazy order by d:a desc, a limit 2
+----
+3.3 (3,3) c
+0.1 (3,1) a
+
+query TT
+select b, d:a from t_lazy order by a desc limit 2
+----
+0.2 3
+8.5 2
+
+query TT
+select d:b, d, e from t_lazy order by a desc limit 2
+----
+1 (3,1) 2020-01-05
+2 (2,2) 2020-02-02
+
+statement ok
+drop table t_lazy
+
+# ISSUE 11882
+statement ok
+drop table if exists t_11882
+
+statement ok
+create table t_11882(a int, b string)
+
+statement ok
+insert into t_11882 values(1,'asdsa')
+
+statement ok
+insert into t_11882 values(2,'aaaa'), (3,'bbb')
+
+# Construct the case that one of the blocks will be filtered into a empty block (`num_rows` = 0)
+# P.S. The block will exist in the computing pipeline, but its `num_rows` = 0.
+query IT
+select * from t_11882 where substr(b,1,1)='b' limit 2
+----
+3 bbb
+
+statement ok
+drop table t_11882

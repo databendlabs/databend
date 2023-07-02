@@ -46,7 +46,6 @@ use opendal::Operator;
 use parking_lot::Mutex;
 
 use crate::stage_table_sink::StageTableSink;
-
 /// TODO: we need to track the data metrics in stage table.
 pub struct StageTable {
     table_info: StageTableInfo,
@@ -110,7 +109,7 @@ impl Table for StageTable {
         &self,
         ctx: Arc<dyn TableContext>,
         _push_downs: Option<PushDownInfo>,
-        _dyn_run: bool,
+        _dry_run: bool,
     ) -> Result<(PartStatistics, Partitions)> {
         let stage_info = &self.table_info;
         // User set the files.
@@ -205,7 +204,7 @@ impl Table for StageTable {
             self.table_info.is_select,
             projection,
         )?);
-
+        tracing::debug!("start copy splits feeder in {}", ctx.get_cluster().local_id);
         input_ctx.format.exec_copy(input_ctx.clone(), pipeline)?;
         Ok(())
     }
@@ -239,7 +238,7 @@ impl Table for StageTable {
         }
 
         // final compact unload
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         // Add sink pipe.
         pipeline.add_sink(|input| {

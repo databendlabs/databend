@@ -12,7 +12,7 @@ import time
 #
 # Connection id:		41
 # Current database:	default
-# Current user:		'root'@'127.0.0.1'
+# Current user:		'root'@'%'
 # SSL:			Not in use
 # Current pager:		less
 # Using outfile:		''

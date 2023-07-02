@@ -20,8 +20,10 @@ use common_catalog::table::ColumnStatistics;
 use common_catalog::table::TableStatistics;
 use common_catalog::table_context::TableContext;
 use common_exception::Result;
+use common_expression::DataSchema;
 use itertools::Itertools;
 
+use super::ScalarItem;
 use crate::optimizer::histogram_from_ndv;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::ColumnStat;
@@ -56,7 +58,8 @@ pub struct Prewhere {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AggIndexInfo {
     pub index_id: u64,
-    pub selection: Vec<ScalarExpr>,
+    pub schema: DataSchema,
+    pub selection: Vec<ScalarItem>,
     pub predicates: Vec<ScalarExpr>,
 }
 
@@ -220,7 +223,7 @@ impl Operator for Scan {
                 let mut selectivity = MAX_SELECTIVITY;
                 for pred in prewhere.predicates.iter() {
                     // Compute selectivity for each conjunction
-                    selectivity *= sb.compute_selectivity(pred, true)?;
+                    selectivity = selectivity.min(sb.compute_selectivity(pred, true)?);
                 }
                 // Update other columns's statistic according to selectivity.
                 sb.update_other_statistic_by_selectivity(selectivity);

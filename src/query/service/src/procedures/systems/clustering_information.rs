@@ -23,7 +23,6 @@ use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-use crate::storages::fuse::table_functions::get_cluster_keys;
 use crate::storages::fuse::table_functions::ClusteringInformation;
 use crate::storages::fuse::FuseTable;
 
@@ -42,7 +41,6 @@ impl OneBlockProcedure for ClusteringInformationProcedure {
     }
 
     fn features(&self) -> ProcedureFeatures {
-        // Todo(zhyass): ProcedureFeatures::default().variadic_arguments(2, 3)
         ProcedureFeatures::default().num_arguments(2)
     }
 
@@ -61,14 +59,10 @@ impl OneBlockProcedure for ClusteringInformationProcedure {
             .await?;
 
         let tbl = FuseTable::try_from_table(tbl.as_ref())?;
-        let definition = if args.len() > 2 { &args[2] } else { "" };
-        let (cluster_keys, plain) = get_cluster_keys(ctx.clone(), tbl, definition)?;
 
-        Ok(
-            ClusteringInformation::new(ctx, tbl, plain.unwrap_or_default(), cluster_keys)
-                .get_clustering_info()
-                .await?,
-        )
+        Ok(ClusteringInformation::new(ctx, tbl)
+            .get_clustering_info()
+            .await?)
     }
 
     fn schema(&self) -> Arc<DataSchema> {

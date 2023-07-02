@@ -19,6 +19,7 @@ use common_ast::ast::ModifyColumnAction;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_license::license::Feature::DataMask;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DatabaseType;
 use common_meta_app::schema::TableMeta;
@@ -56,7 +57,7 @@ impl ModifyTableColumnInterpreter {
         license_manager.manager.check_enterprise_enabled(
             &self.ctx.get_settings(),
             self.ctx.get_tenant(),
-            "data_mask".to_string(),
+            DataMask,
         )?;
 
         let meta_api = UserApiProvider::instance().get_meta_store_client();

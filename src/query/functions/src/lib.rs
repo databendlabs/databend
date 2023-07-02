@@ -35,7 +35,7 @@ pub fn is_builtin_function(name: &str) -> bool {
 #[ctor]
 pub static BUILTIN_FUNCTIONS: FunctionRegistry = builtin_functions();
 
-pub const GENERAL_WINDOW_FUNCTIONS: [&str; 11] = [
+pub const GENERAL_WINDOW_FUNCTIONS: [&str; 12] = [
     "row_number",
     "rank",
     "dense_rank",
@@ -47,6 +47,7 @@ pub const GENERAL_WINDOW_FUNCTIONS: [&str; 11] = [
     "last_value",
     "last",
     "nth_value",
+    "ntile",
 ];
 
 fn builtin_functions() -> FunctionRegistry {
