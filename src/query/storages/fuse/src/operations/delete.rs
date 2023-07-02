@@ -43,9 +43,7 @@ use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use storages_common_index::RangeIndex;
-use storages_common_pruner::BlockMetaIndex;
 use storages_common_pruner::RangePruner;
-use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
@@ -312,6 +310,7 @@ impl FuseTable {
     }
 
     #[async_backtrace::framed]
+    #[allow(clippy::too_many_arguments)]
     pub async fn do_mutation_block_pruning(
         &self,
         ctx: Arc<dyn TableContext>,
@@ -360,13 +359,11 @@ impl FuseTable {
             pruner.set_inverse_range_index(range_index);
         }
 
-        let block_metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>;
-
-        if is_delete {
-            block_metas = pruner.delete_pruning(segment_locations).await?;
+        let block_metas = if is_delete {
+            pruner.delete_pruning(segment_locations).await?
         } else {
-            block_metas = pruner.read_pruning(segment_locations).await?;
-        }
+            pruner.read_pruning(segment_locations).await?
+        };
 
         let mut whole_block_deletions = std::collections::HashSet::new();
 

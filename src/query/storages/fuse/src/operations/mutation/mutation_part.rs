@@ -49,9 +49,7 @@ impl PartInfo for MutationDeletedSegment {
 
 impl MutationDeletedSegment {
     pub fn create(deleted_segment: DeletedSegmentInfo) -> Self {
-        MutationDeletedSegment {
-            deleted_segment: deleted_segment,
-        }
+        MutationDeletedSegment { deleted_segment }
     }
 
     pub fn from_part(info: &PartInfoPtr) -> Result<&MutationDeletedSegment> {
