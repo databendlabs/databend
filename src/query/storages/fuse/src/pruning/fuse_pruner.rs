@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hash;
+use std::hash::Hasher;
 use std::sync::Arc;
 
 use common_base::base::tokio::sync::Semaphore;
@@ -27,6 +30,7 @@ use common_expression::SEGMENT_NAME_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::field_default_value;
 use opendal::Operator;
+use storages_common_index::RangeIndex;
 use storages_common_pruner::BlockMetaIndex;
 use storages_common_pruner::InternalColumnPruner;
 use storages_common_pruner::Limiter;
@@ -39,6 +43,8 @@ use storages_common_pruner::TopNPrunner;
 use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::ClusterKey;
 use storages_common_table_meta::meta::ColumnStatistics;
+use storages_common_table_meta::meta::Location;
+use storages_common_table_meta::meta::Statistics;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use tracing::warn;
 
@@ -63,12 +69,29 @@ pub struct PruningContext {
 
     pub pruning_stats: Arc<FusePruningStatistics>,
 }
+#[derive(serde::Serialize, serde::Deserialize, PartialEq, Clone, Debug)]
+pub struct DeletedSegmentInfo {
+    // segment index.
+    pub index: usize,
+    // deleted segment location and summary.
+    pub segment_info: (Location, Statistics),
+}
+
+impl DeletedSegmentInfo {
+    pub fn hash(&self) -> u64 {
+        let mut s = DefaultHasher::new();
+        self.segment_info.0.hash(&mut s);
+        s.finish()
+    }
+}
 
 pub struct FusePruner {
     max_concurrency: usize,
     pub table_schema: TableSchemaRef,
     pub pruning_ctx: Arc<PruningContext>,
     pub push_down: Option<PushDownInfo>,
+    pub inverse_range_index: Option<RangeIndex>,
+    pub deleted_segments: Vec<DeletedSegmentInfo>,
 }
 
 impl FusePruner {
@@ -199,15 +222,33 @@ impl FusePruner {
             table_schema,
             push_down: push_down.clone(),
             pruning_ctx,
+            inverse_range_index: None,
+            deleted_segments: vec![],
         })
     }
 
+    #[async_backtrace::framed]
+    pub async fn read_pruning(
+        &mut self,
+        segment_locs: Vec<SegmentLocation>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        self.pruning(segment_locs, false).await
+    }
+
+    #[async_backtrace::framed]
+    pub async fn delete_pruning(
+        &mut self,
+        segment_locs: Vec<SegmentLocation>,
+    ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
+        self.pruning(segment_locs, true).await
+    }
     // Pruning chain:
     // segment pruner -> block pruner -> topn pruner
     #[async_backtrace::framed]
     pub async fn pruning(
-        &self,
+        &mut self,
         mut segment_locs: Vec<SegmentLocation>,
+        delete_purning: bool,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Segment pruner.
         let segment_pruner =
@@ -224,7 +265,7 @@ impl FusePruner {
             remain -= gap_size;
 
             let mut batch = segment_locs.drain(0..batch_size).collect::<Vec<_>>();
-
+            let inverse_range_index = self.get_inverse_range_index();
             works.push(self.pruning_ctx.pruning_runtime.spawn({
                 let block_pruner = block_pruner.clone();
                 let segment_pruner = segment_pruner.clone();
@@ -243,12 +284,39 @@ impl FusePruner {
                     }
 
                     let mut res = vec![];
+                    let mut deleted_segments = vec![];
                     let pruned_segments = segment_pruner.pruning(batch).await?;
-                    for (location, info) in pruned_segments {
-                        res.extend(block_pruner.pruning(location, &info).await?);
-                    }
 
-                    Result::<_, ErrorCode>::Ok(res)
+                    if delete_purning {
+                        // inverse purn
+                        for (segment_location, compact_segment_info) in &pruned_segments {
+                            // for delete_purn
+                            if !inverse_range_index
+                                .as_ref()
+                                .unwrap()
+                                .should_keep(&compact_segment_info.summary.col_stats, None)
+                            {
+                                deleted_segments.push(DeletedSegmentInfo {
+                                    index: segment_location.segment_idx,
+                                    segment_info: (
+                                        segment_location.location.clone(),
+                                        compact_segment_info.summary.clone(),
+                                    ),
+                                })
+                            } else {
+                                res.extend(
+                                    block_pruner
+                                        .pruning(segment_location.clone(), compact_segment_info)
+                                        .await?,
+                                );
+                            }
+                        }
+                    } else {
+                        for (location, info) in pruned_segments {
+                            res.extend(block_pruner.pruning(location, &info).await?);
+                        }
+                    }
+                    Result::<_, ErrorCode>::Ok((res, deleted_segments))
                 }
             }));
         }
@@ -261,11 +329,18 @@ impl FusePruner {
             Ok(workers) => {
                 let mut metas = vec![];
                 for worker in workers {
-                    metas.extend(worker?);
+                    let mut res = worker?;
+                    metas.extend(res.0);
+                    self.deleted_segments.append(&mut res.1);
                 }
-
-                // TopN pruner.
-                self.topn_pruning(metas)
+                if delete_purning {
+                    Ok(metas)
+                } else {
+                    // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
+                    // will get here, we can prevent other mutations like update and so on.
+                    // TopN pruner.
+                    self.topn_pruning(metas)
+                }
             }
         }
     }
@@ -313,5 +388,13 @@ impl FusePruner {
             blocks_bloom_pruning_before,
             blocks_bloom_pruning_after,
         }
+    }
+
+    pub fn set_inverse_range_index(&mut self, index: RangeIndex) {
+        self.inverse_range_index = Some(index)
+    }
+
+    pub fn get_inverse_range_index(&self) -> Option<RangeIndex> {
+        self.inverse_range_index.clone()
     }
 }

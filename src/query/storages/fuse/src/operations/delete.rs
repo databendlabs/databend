@@ -43,11 +43,14 @@ use common_expression::ROW_ID_COL_NAME;
 use common_functions::BUILTIN_FUNCTIONS;
 use common_sql::evaluator::BlockOperator;
 use storages_common_index::RangeIndex;
+use storages_common_pruner::BlockMetaIndex;
 use storages_common_pruner::RangePruner;
+use storages_common_table_meta::meta::BlockMeta;
 use storages_common_table_meta::meta::StatisticsOfColumns;
 use storages_common_table_meta::meta::TableSnapshot;
 use tracing::info;
 
+use super::mutation::MutationDeletedSegment;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_nums;
 use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;
 use crate::operations::mutation::MutationAction;
@@ -132,6 +135,7 @@ impl FuseTable {
                 Some(deletion_filters.inverted_filter),
                 projection,
                 &snapshot,
+                true,
                 true,
             )
             .await?;
@@ -279,6 +283,7 @@ impl FuseTable {
             ctx.set_status_info(&status);
             info!(status);
         }
+
         let (parts, part_info) = self
             .do_mutation_block_pruning(
                 ctx.clone(),
@@ -287,6 +292,7 @@ impl FuseTable {
                 projection.clone(),
                 base_snapshot,
                 with_origin,
+                false, // for update
             )
             .await?;
         ctx.set_partitions(parts)?;
@@ -313,6 +319,7 @@ impl FuseTable {
         projection: Projection,
         base_snapshot: &TableSnapshot,
         with_origin: bool,
+        is_delete: bool,
     ) -> Result<(Partitions, MutationTaskInfo)> {
         let push_down = Some(PushDownInfo {
             projection: Some(projection),
@@ -321,7 +328,7 @@ impl FuseTable {
         });
 
         let segment_locations = base_snapshot.segments.clone();
-        let pruner = FusePruner::create(
+        let mut pruner = FusePruner::create(
             &ctx,
             self.operator.clone(),
             self.table_info.schema(),
@@ -329,34 +336,41 @@ impl FuseTable {
         )?;
 
         let segment_locations = create_segment_location_vector(segment_locations, None);
-        let block_metas = pruner.pruning(segment_locations).await?;
+
+        if let Some(inverse) = inverted_filter {
+            // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
+            //
+            // let's try pruning the blocks further to get the blocks that need to be deleted completely, so that
+            // later during mutation, we need not to load the data of these blocks:
+            //
+            // 1. invert the filter expression
+            // 2. apply the inverse filter expression to the block metas, utilizing range index
+            //  - for those blocks that need to be deleted completely, they will be filtered out.
+            //  - for those blocks that need to be deleted partially, they will NOT be filtered out.
+            //
+            let inverse = inverse.as_expr(&BUILTIN_FUNCTIONS);
+            let func_ctx = ctx.get_function_context()?;
+            let range_index = RangeIndex::try_create(
+                func_ctx,
+                &inverse,
+                self.table_info.schema(),
+                StatisticsOfColumns::default(), // TODO default values
+            )?;
+            pruner.set_inverse_range_index(range_index);
+        }
+
+        let block_metas: Vec<(BlockMetaIndex, Arc<BlockMeta>)>;
+
+        if is_delete {
+            block_metas = pruner.delete_pruning(segment_locations).await?;
+        } else {
+            block_metas = pruner.read_pruning(segment_locations).await?;
+        }
 
         let mut whole_block_deletions = std::collections::HashSet::new();
 
         if !block_metas.is_empty() {
-            if let Some(inverse) = inverted_filter {
-                // now the `block_metas` refers to the blocks that need to be deleted completely or partially.
-                //
-                // let's try pruning the blocks further to get the blocks that need to be deleted completely, so that
-                // later during mutation, we need not to load the data of these blocks:
-                //
-                // 1. invert the filter expression
-                // 2. apply the inverse filter expression to the block metas, utilizing range index
-                //  - for those blocks that need to be deleted completely, they will be filtered out.
-                //  - for those blocks that need to be deleted partially, they will NOT be filtered out.
-                //
-
-                let inverse = inverse.as_expr(&BUILTIN_FUNCTIONS);
-
-                let func_ctx = ctx.get_function_context()?;
-
-                let range_index = RangeIndex::try_create(
-                    func_ctx,
-                    &inverse,
-                    self.table_info.schema(),
-                    StatisticsOfColumns::default(), // TODO default values
-                )?;
-
+            if let Some(range_index) = pruner.get_inverse_range_index() {
                 for (block_meta_idx, block_meta) in &block_metas {
                     if !range_index.should_keep(&block_meta.as_ref().col_stats, None) {
                         // this block should be deleted completely
@@ -382,7 +396,7 @@ impl FuseTable {
             PruningStatistics::default(),
         )?;
 
-        let parts = Partitions::create_nolazy(
+        let mut parts = Partitions::create_nolazy(
             PartitionsShuffleKind::Mod,
             block_metas
                 .into_iter()
@@ -405,9 +419,19 @@ impl FuseTable {
                 .collect(),
         );
 
-        let part_num = parts.len();
+        let mut part_num = parts.len();
+        let mut num_whole_block_mutation = whole_block_deletions.len();
 
-        let num_whole_block_mutation = whole_block_deletions.len();
+        // now try to add deleted_segment
+        for deleted_segment in pruner.deleted_segments {
+            part_num += deleted_segment.segment_info.1.block_count as usize;
+            num_whole_block_mutation += deleted_segment.segment_info.1.block_count as usize;
+            parts
+                .partitions
+                .push(Arc::new(Box::new(MutationDeletedSegment::create(
+                    deleted_segment,
+                ))));
+        }
 
         let block_nums = base_snapshot.summary.block_count;
         metrics_inc_deletion_block_range_pruned_nums(block_nums - part_num as u64);
