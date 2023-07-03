@@ -1083,6 +1083,31 @@ impl PipelineBuilder {
 
         let input_schema = sort.input.output_schema()?;
 
+        if let Some(proj) = &sort.pre_projection {
+            // Do projection to reduce useless data copying during sorting.
+            let projection = proj
+                .iter()
+                .filter_map(|i| input_schema.index_of(&i.to_string()).ok())
+                .collect::<Vec<_>>();
+
+            if projection.len() < input_schema.fields().len() {
+                // Only if the projection is not a full projection, we need to add a projection transform.
+                self.main_pipeline.add_transform(|input, output| {
+                    Ok(ProcessorPtr::create(CompoundBlockOperator::create(
+                        input,
+                        output,
+                        input_schema.num_fields(),
+                        self.ctx.get_function_context()?,
+                        vec![BlockOperator::Project {
+                            projection: projection.clone(),
+                        }],
+                    )))
+                })?;
+            }
+        }
+
+        let input_schema = sort.output_schema()?;
+
         let sort_desc = sort
             .order_by
             .iter()

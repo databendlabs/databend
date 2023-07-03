@@ -403,6 +403,13 @@ impl TableContext for CtxDelegation {
         todo!()
     }
 
+    fn get_can_scan_from_agg_index(&self) -> bool {
+        todo!()
+    }
+    fn set_can_scan_from_agg_index(&self, _: bool) {
+        todo!()
+    }
+
     fn attach_query_str(&self, _kind: String, _query: String) {
         todo!()
     }
