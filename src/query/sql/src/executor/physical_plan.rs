@@ -335,10 +335,10 @@ impl WindowFunction {
             WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
-            WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
-            WindowFunction::LagLead(f) => Ok(f.return_type.clone()),
-            WindowFunction::NthValue(f) => Ok(f.return_type.clone()),
-            WindowFunction::Ntile(f) => Ok(f.return_type.clone()),
+            WindowFunction::PercentRank => DataType::Number(NumberDataType::Float64),
+            WindowFunction::LagLead(f) => f.return_type.clone(),
+            WindowFunction::NthValue(f) => f.return_type.clone(),
+            WindowFunction::Ntile(f) => f.return_type.clone(),
         }
     }
 }
