@@ -18,9 +18,9 @@ use std::sync::Arc;
 use common_base::base::tokio::sync::broadcast::channel;
 use common_base::base::tokio::sync::broadcast::Sender;
 use common_base::base::tokio::task::JoinHandle;
+use common_base::match_join_handle;
 use common_base::runtime::Runtime;
 use common_base::runtime::TrySpawn;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use futures_util::future::select;
 use futures_util::future::Either;
@@ -141,27 +141,7 @@ impl StatisticsReceiver {
         let mut exchanges_handler = std::mem::take(&mut self.exchange_handler);
         futures::executor::block_on(async move {
             while let Some(exchange_handler) = exchanges_handler.pop() {
-                match exchange_handler.await {
-                    Ok(Ok(_)) => Ok(()),
-                    Ok(Err(cause)) => Err(cause),
-                    Err(join_error) => match join_error.is_cancelled() {
-                        true => Err(ErrorCode::TokioError("Tokio error is cancelled.")),
-                        false => {
-                            let panic_error = join_error.into_panic();
-                            match panic_error.downcast_ref::<&'static str>() {
-                                None => match panic_error.downcast_ref::<String>() {
-                                    None => {
-                                        Err(ErrorCode::PanicError("Sorry, unknown panic message"))
-                                    }
-                                    Some(message) => {
-                                        Err(ErrorCode::PanicError(message.to_string()))
-                                    }
-                                },
-                                Some(message) => Err(ErrorCode::PanicError(message.to_string())),
-                            }
-                        }
-                    },
-                }?;
+                match_join_handle(exchange_handler).await?;
             }
 
             Ok(())
