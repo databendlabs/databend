@@ -124,6 +124,9 @@ pub struct TransformWindow<T: Number> {
     /// For ROWS frame, it is the same as `current_row`.
     /// For RANGE frame, `peer_group_start` <= `current_row`
     peer_group_start: RowPtr,
+    peer_group_end: RowPtr,
+    peer_group_ended: bool,
+    need_peer: bool,
 
     // Used for row_number
     current_row_in_partition: usize,
@@ -357,6 +360,29 @@ impl<T: Number> TransformWindow<T> {
         row
     }
 
+    fn advance_peer_group_end(&mut self, mut row: RowPtr) {
+        if !self.need_peer {
+            return;
+        }
+
+        let current_row = row;
+        while row < self.partition_end {
+            row = self.advance_row(row);
+            if row == self.partition_end {
+                break;
+            }
+            if self.are_peers(&current_row, &row, false) {
+                continue;
+            } else {
+                self.peer_group_end = row;
+                self.peer_group_ended = true;
+                return;
+            }
+        }
+        self.peer_group_ended = self.partition_ended;
+        self.peer_group_end = self.partition_end;
+    }
+
     /// If the two rows are within the same peer group.
     fn are_peers(&self, lhs: &RowPtr, rhs: &RowPtr, for_computing_bound: bool) -> bool {
         if lhs == rhs {
@@ -570,6 +596,26 @@ impl<T: Number> TransformWindow<T> {
                 let bucket = ntile.compute_nitle(self.current_row_in_partition, num_partition_rows);
                 builder.push(ScalarRef::Number(NumberScalar::UInt64(bucket as u64)));
             }
+            WindowFunctionImpl::CumeDist => {
+                let cume_rows = {
+                    let mut rows = 0;
+                    let mut row = self.partition_start;
+                    while row < self.peer_group_end {
+                        row = self.advance_row(row);
+                        rows += 1;
+                    }
+                    rows
+                };
+
+                let builder = &mut self.blocks[self.current_row.block - self.first_block].builder;
+
+                let cume_dist = if self.partition_size > 0 {
+                    cume_rows as f64 / self.partition_size as f64
+                } else {
+                    0_f64
+                };
+                builder.push(ScalarRef::Number(NumberScalar::Float64(cume_dist.into())));
+            }
         };
 
         Ok(())
@@ -642,6 +688,9 @@ impl TransformWindow<u64> {
             prev_frame_start: RowPtr::default(),
             prev_frame_end: RowPtr::default(),
             peer_group_start: RowPtr::default(),
+            peer_group_end: RowPtr::default(),
+            peer_group_ended: false,
+            need_peer: false,
             current_row: RowPtr::default(),
             current_row_in_partition: 1,
             current_rank: 1,
@@ -707,6 +756,9 @@ where T: Number + ResultTypeOfUnary
             prev_frame_start: RowPtr::default(),
             prev_frame_end: RowPtr::default(),
             peer_group_start: RowPtr::default(),
+            peer_group_end: RowPtr::default(),
+            peer_group_ended: false,
+            need_peer: true,
             current_row: RowPtr::default(),
             current_row_in_partition: 1,
             current_rank: 1,
@@ -882,8 +934,13 @@ where T: Number + ResultTypeOfUnary
             while self.current_row < self.partition_end {
                 if !self.are_peers(&self.peer_group_start, &self.current_row, false) {
                     self.peer_group_start = self.current_row;
+                    self.peer_group_end = self.current_row;
+                    self.peer_group_ended = false;
                     self.current_dense_rank += 1;
                     self.current_rank = self.current_row_in_partition;
+
+                    // peer changed, re-calculate peer end.
+                    self.advance_peer_group_end(self.peer_group_start);
 
                     // If current peer group is a null frame, there will be no null frame in this partition again;
                     // if current peer group is not a null frame, we may need to check it in the codes below.
@@ -891,6 +948,21 @@ where T: Number + ResultTypeOfUnary
                 } else if self.is_null_frame {
                     // Only one null frame can exist in one partition, so we don't need to check it again.
                     self.need_check_null_frame = false;
+                }
+
+                // execute only once for each partition.
+                if self.peer_group_start == self.partition_start {
+                    self.advance_peer_group_end(self.current_row);
+                }
+
+                if self.partition_ended {
+                    self.peer_group_ended = true;
+                }
+
+                if !self.peer_group_ended {
+                    debug_assert!(!self.input_is_finished);
+                    debug_assert!(!self.partition_ended);
+                    break;
                 }
 
                 // 2.
@@ -966,6 +1038,7 @@ where T: Number + ResultTypeOfUnary
 
                 // reset peer group
                 self.peer_group_start = self.partition_start;
+                self.peer_group_end = self.partition_start;
 
                 // reset row number, rank, ...
                 self.current_row_in_partition = 1;
