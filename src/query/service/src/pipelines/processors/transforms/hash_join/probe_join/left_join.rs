@@ -49,10 +49,6 @@ impl JoinHashTable {
         let local_build_indexes = &mut probe_state.build_indexes;
         let local_build_indexes_ptr = local_build_indexes.as_mut_ptr();
         // Safe to unwrap.
-        if input_num_rows > probe_state.probe_unmatched_indexes.as_ref().unwrap().len() {
-            probe_state.probe_unmatched_indexes = Some(vec![(0, 0); input_num_rows]);
-        }
-        // Safe to unwrap.
         let probe_unmatched_indexes = probe_state.probe_unmatched_indexes.as_mut().unwrap();
 
         let mut matched_num = 0;
@@ -104,6 +100,10 @@ impl JoinHashTable {
             } else {
                 probe_unmatched_indexes[probe_unmatched_indexes_occupied] = (i as u32, 1);
                 probe_unmatched_indexes_occupied += 1;
+                if probe_unmatched_indexes_occupied >= JOIN_MAX_BLOCK_SIZE {
+                    result_blocks.push(self.create_left_join_null_block(input, &probe_unmatched_indexes, probe_unmatched_indexes_occupied)?);
+                    probe_unmatched_indexes_occupied = 0;
+                }
             }
             if matched_num >= JOIN_MAX_BLOCK_SIZE || i == input_num_rows - 1 {
                 loop {
@@ -208,16 +208,18 @@ impl JoinHashTable {
                         JOIN_MAX_BLOCK_SIZE,
                     );
 
-                    total_probe_matched += probe_matched;
-                    if self.hash_join_desc.join_type == JoinType::Single && total_probe_matched > 1
-                    {
-                        return Err(ErrorCode::Internal(
-                            "Scalar subquery can't return more than one row",
-                        ));
+                    if probe_matched > 0 {
+                        total_probe_matched += probe_matched;
+                        if self.hash_join_desc.join_type == JoinType::Single && total_probe_matched > 1
+                        {
+                            return Err(ErrorCode::Internal(
+                                "Scalar subquery can't return more than one row",
+                            ));
+                        }
+                        matched_num += probe_matched;
+                        probe_indexes[probe_indexes_occupied] = (i as u32, probe_matched as u32);
+                        probe_indexes_occupied += 1;
                     }
-
-                    probe_indexes[probe_indexes_occupied] = (i as u32, probe_matched as u32);
-                    probe_indexes_occupied += 1;
 
                     if matched_num < JOIN_MAX_BLOCK_SIZE && i != input_num_rows - 1 {
                         break;
@@ -229,43 +231,7 @@ impl JoinHashTable {
         if probe_unmatched_indexes_occupied == 0 {
             return Ok(result_blocks);
         }
-
-        let null_build_block = DataBlock::new(
-            self.row_space
-                .data_schema
-                .fields()
-                .iter()
-                .map(|df| BlockEntry {
-                    data_type: df.data_type().clone(),
-                    value: Value::Scalar(Scalar::Null),
-                })
-                .collect(),
-            probe_unmatched_indexes_occupied,
-        );
-
-        let mut probe_block = DataBlock::take_compacted_indices(
-            input,
-            &probe_unmatched_indexes[0..probe_unmatched_indexes_occupied],
-            probe_unmatched_indexes_occupied,
-        )?;
-
-        // For full join, wrap nullable for probe block
-        if self.hash_join_desc.join_type == JoinType::Full {
-            let nullable_probe_columns = probe_block
-                .columns()
-                .iter()
-                .map(|c| {
-                    let mut probe_validity = MutableBitmap::new();
-                    probe_validity.extend_constant(probe_unmatched_indexes_occupied, true);
-                    let probe_validity: Bitmap = probe_validity.into();
-                    Self::set_validity(c, probe_unmatched_indexes_occupied, &probe_validity)
-                })
-                .collect::<Vec<_>>();
-            probe_block = DataBlock::new(nullable_probe_columns, probe_unmatched_indexes_occupied);
-        }
-
-        result_blocks.push(self.merge_eq_block(&null_build_block, &probe_block)?);
-
+        result_blocks.push(self.create_left_join_null_block(input, &probe_unmatched_indexes, probe_unmatched_indexes_occupied)?);
         Ok(result_blocks)
     }
 
@@ -492,22 +458,23 @@ impl JoinHashTable {
                         matched_num,
                         JOIN_MAX_BLOCK_SIZE,
                     );
-
-                    total_probe_matched += probe_matched;
-                    if self.hash_join_desc.join_type == JoinType::Single && total_probe_matched > 1
-                    {
-                        return Err(ErrorCode::Internal(
-                            "Scalar subquery can't return more than one row",
-                        ));
+                    
+                    if probe_matched > 0 {
+                        total_probe_matched += probe_matched;
+                        if self.hash_join_desc.join_type == JoinType::Single && total_probe_matched > 1 {
+                            return Err(ErrorCode::Internal(
+                                "Scalar subquery can't return more than one row",
+                            ));
+                        }
+        
+                        row_state[i] += probe_matched;
+                        for _ in 0..probe_matched {
+                            row_state_indexes[matched_num] = i;
+                            matched_num += 1;
+                        }
+                        probe_indexes[probe_indexes_occupied] = (i as u32, probe_matched as u32);
+                        probe_indexes_occupied += 1;
                     }
-
-                    row_state[i] += probe_matched;
-                    for _ in 0..probe_matched {
-                        row_state_indexes[matched_num] = i;
-                        matched_num += 1;
-                    }
-                    probe_indexes[probe_indexes_occupied] = (i as u32, probe_matched as u32);
-                    probe_indexes_occupied += 1;
 
                     if matched_num < JOIN_MAX_BLOCK_SIZE && i != input_num_rows - 1 {
                         break;
@@ -522,6 +489,10 @@ impl JoinHashTable {
             if row_state[idx] == 0 {
                 probe_indexes[probe_indexes_occupied] = (idx as u32, 1);
                 probe_indexes_occupied += 1;
+                if probe_indexes_occupied >= JOIN_MAX_BLOCK_SIZE {
+                    result_blocks.push(self.create_left_join_null_block(input, &probe_indexes, probe_indexes_occupied)?);
+                    probe_indexes_occupied = 0;
+                }
             }
             row_state[idx] = 0;
             idx += 1;
@@ -530,7 +501,11 @@ impl JoinHashTable {
         if probe_indexes_occupied == 0 {
             return Ok(result_blocks);
         }
+        result_blocks.push(self.create_left_join_null_block(input, &probe_indexes, probe_indexes_occupied)?);
+        Ok(result_blocks)
+    }
 
+    fn create_left_join_null_block(&self, input: &DataBlock, indexes: &[(u32, u32)], occupied: usize) -> Result<DataBlock> {
         let null_build_block = DataBlock::new(
             self.row_space
                 .data_schema
@@ -541,33 +516,30 @@ impl JoinHashTable {
                     value: Value::Scalar(Scalar::Null),
                 })
                 .collect(),
-            probe_indexes_occupied,
+                occupied,
         );
 
         let mut probe_block = DataBlock::take_compacted_indices(
             input,
-            &probe_indexes[0..probe_indexes_occupied],
-            probe_indexes_occupied,
+            &indexes[0..occupied],
+            occupied,
         )?;
 
         // For full join, wrap nullable for probe block
         if self.hash_join_desc.join_type == JoinType::Full {
-            let num_rows = probe_block.num_rows();
             let nullable_probe_columns = probe_block
                 .columns()
                 .iter()
                 .map(|c| {
                     let mut probe_validity = MutableBitmap::new();
-                    probe_validity.extend_constant(num_rows, true);
+                    probe_validity.extend_constant(occupied, true);
                     let probe_validity: Bitmap = probe_validity.into();
-                    Self::set_validity(c, num_rows, &probe_validity)
+                    Self::set_validity(c, occupied, &probe_validity)
                 })
                 .collect::<Vec<_>>();
-            probe_block = DataBlock::new(nullable_probe_columns, num_rows);
+            probe_block = DataBlock::new(nullable_probe_columns, occupied);
         }
 
-        result_blocks.push(self.merge_eq_block(&null_build_block, &probe_block)?);
-
-        Ok(result_blocks)
+        Ok(self.merge_eq_block(&null_build_block, &probe_block)?)
     }
 }
