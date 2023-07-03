@@ -110,6 +110,7 @@ impl OptimizeTableInterpreter {
 
         Ok(build_res)
     }
+
     async fn build_pipeline(
         &self,
         target: CompactTarget,
@@ -133,20 +134,26 @@ impl OptimizeTableInterpreter {
             )));
         }
 
-        let mut pipeline = Pipeline::create();
+        let mut compact_pipeline = Pipeline::create();
         table
-            .compact(self.ctx.clone(), target, self.plan.limit, &mut pipeline)
+            .compact(
+                self.ctx.clone(),
+                target,
+                self.plan.limit,
+                &mut compact_pipeline,
+            )
             .await?;
 
         let mut build_res = PipelineBuildResult::create();
         let settings = self.ctx.get_settings();
         if need_recluster {
-            if !pipeline.is_empty() {
-                pipeline.set_max_threads(settings.get_max_threads()? as usize);
+            if !compact_pipeline.is_empty() {
+                compact_pipeline.set_max_threads(settings.get_max_threads()? as usize);
 
                 let query_id = self.ctx.get_id();
                 let executor_settings = ExecutorSettings::try_create(&settings, query_id)?;
-                let executor = PipelineCompleteExecutor::try_create(pipeline, executor_settings)?;
+                let executor =
+                    PipelineCompleteExecutor::try_create(compact_pipeline, executor_settings)?;
 
                 self.ctx.set_executor(executor.get_inner())?;
                 executor.execute()?;
@@ -164,7 +171,7 @@ impl OptimizeTableInterpreter {
                 )
                 .await?;
         } else {
-            build_res.main_pipeline = pipeline;
+            build_res.main_pipeline = compact_pipeline;
         }
 
         let ctx = self.ctx.clone();
