@@ -1085,8 +1085,8 @@ EvalScalar
     ├── estimated rows: 0.08
     └── HashJoin
         ├── join type: INNER
-        ├── build keys: [a.id (#0)]
-        ├── probe keys: [b.id (#2)]
+        ├── build keys: [CAST(a.id (#0) AS Int32 NULL)]
+        ├── probe keys: [CAST(b.id (#2) AS Int32 NULL)]
         ├── filters: []
         ├── estimated rows: 0.08
         ├── Filter(Build)
