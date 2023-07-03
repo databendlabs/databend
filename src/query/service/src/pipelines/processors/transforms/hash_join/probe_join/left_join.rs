@@ -103,7 +103,7 @@ impl JoinHashTable {
                 if probe_unmatched_indexes_occupied >= JOIN_MAX_BLOCK_SIZE {
                     result_blocks.push(self.create_left_join_null_block(
                         input,
-                        &probe_unmatched_indexes,
+                        probe_unmatched_indexes,
                         probe_unmatched_indexes_occupied,
                     )?);
                     probe_unmatched_indexes_occupied = 0;
@@ -238,7 +238,7 @@ impl JoinHashTable {
         }
         result_blocks.push(self.create_left_join_null_block(
             input,
-            &probe_unmatched_indexes,
+            probe_unmatched_indexes,
             probe_unmatched_indexes_occupied,
         )?);
         Ok(result_blocks)
@@ -503,7 +503,7 @@ impl JoinHashTable {
                 if probe_indexes_occupied >= JOIN_MAX_BLOCK_SIZE {
                     result_blocks.push(self.create_left_join_null_block(
                         input,
-                        &probe_indexes,
+                        probe_indexes,
                         probe_indexes_occupied,
                     )?);
                     probe_indexes_occupied = 0;
@@ -518,7 +518,7 @@ impl JoinHashTable {
         }
         result_blocks.push(self.create_left_join_null_block(
             input,
-            &probe_indexes,
+            probe_indexes,
             probe_indexes_occupied,
         )?);
         Ok(result_blocks)
@@ -561,6 +561,6 @@ impl JoinHashTable {
             probe_block = DataBlock::new(nullable_probe_columns, occupied);
         }
 
-        Ok(self.merge_eq_block(&null_build_block, &probe_block)?)
+        self.merge_eq_block(&null_build_block, &probe_block)
     }
 }
