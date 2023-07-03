@@ -3003,9 +3003,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
 
         let name_key = &req.name_ident;
 
-        let mut retry = 0;
-        while retry < TXN_MAX_RETRY_TIMES {
-            retry += 1;
+        let ctx = &func_name!();
+
+        let mut trials = txn_trials(None, ctx);
+
+        let catalog_id = loop {
+            trials.next().unwrap()?;
 
             // Get catalog by name to ensure absence
             let (catalog_id_seq, catalog_id) = get_u64_value(self, name_key).await?;
@@ -3051,7 +3054,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     else_then: vec![],
                 };
 
-                let (succ, _responses) = send_txn(self, txn_req).await?;
+                let (succ, _) = send_txn(self, txn_req).await?;
 
                 debug!(
                     name = debug(&name_key),
@@ -3061,14 +3064,12 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                 );
 
                 if succ {
-                    return Ok(CreateCatalogReply { catalog_id });
+                    break catalog_id;
                 }
             }
-        }
+        };
 
-        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
-            TxnRetryMaxTimes::new("create_catalog", TXN_MAX_RETRY_TIMES),
-        )))
+        Ok(CreateCatalogReply { catalog_id })
     }
 
     fn name(&self) -> String {
