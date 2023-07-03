@@ -49,9 +49,7 @@ externalStageParams ::=
 ```
 
 :::note
-To create a stage on Amazon S3, you can use one of two methods: providing AWS access keys and secrets, or specifying an AWS IAM role and external ID for authentication. 
-
-By specifying an AWS IAM role and external ID, you can provide more granular control over which S3 buckets a user can access. This means that if the IAM role has been granted permissions to access only specific S3 buckets, then the user will only be able to access those buckets. An external ID can further enhance security by providing an additional layer of verification. For more information, see https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-role.html
+To create an external stage on Amazon S3, you can also use an IAM user account, enabling you to define fine-grained access controls for the stage, including specifying actions such as read or write access to specific S3 buckets. See [Example 3: Create External Stage with AWS IAM User](#example-3-create-external-stage-with-aws-iam-user).
 :::
 
 | Parameter                 | Description                                                                                                                                                                           | Required |
@@ -168,11 +166,26 @@ copyOptions ::=
 
 ## Examples
 
+### Example 1: Create Internal Stage
+
+This example creates an internal stage named *my_internal_stage*:
+
 ```sql
--- This example creates an internal stage.
 CREATE STAGE my_internal_stage;
 
--- This example creates an external stage on Amazon S3.
+DESC STAGE my_internal_stage;
+
+name             |stage_type|stage_params                                                  |copy_options                                                                                                                                                  |file_format_options             |number_of_files|creator           |comment|
+-----------------+----------+--------------------------------------------------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------+--------------------------------+---------------+------------------+-------+
+my_internal_stage|Internal  |StageParams { storage: Fs(StorageFsConfig { root: "_data" }) }|CopyOptions { on_error: AbortNum(1), size_limit: 0, max_files: 0, split_size: 0, purge: false, single: false, max_file_size: 0, disable_variant_check: false }|Parquet(ParquetFileFormatParams)|              0|'root'@'127.0.0.1'|       |
+
+```
+
+### Example 2: Create External Stage with AWS Access Key
+
+This example creates an external stage named *my_s3_stage* on Amazon S3:
+
+```sql
 CREATE STAGE my_s3_stage URL='s3://load/files/' CONNECTION = (ACCESS_KEY_ID = '<your-access-key-id>' SECRET_ACCESS_KEY = '<your-secret-access-key>');
 
 DESC STAGE my_s3_stage;
@@ -181,4 +194,73 @@ DESC STAGE my_s3_stage;
 +-------------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
 | my_s3_stage | External   | StageParams { storage: S3(StageS3Storage { bucket: "load", path: "/files/", credentials_aws_key_id: "", credentials_aws_secret_key: "", encryption_master_key: "" }) } | CopyOptions { on_error: None, size_limit: 0 } | FileFormatOptions { format: Csv, skip_header: 0, field_delimiter: ",", record_delimiter: "\n", compression: None } |         |
 +-------------+------------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------+-----------------------------------------------+--------------------------------------------------------------------------------------------------------------------+---------+
+```
+
+### Example 3: Create External Stage with AWS IAM User
+
+This example creates an external stage named *iam_external_stage* on Amazon S3 with an AWS Identity and Access Management (IAM) user.
+
+#### Step 1: Create Access Policy for S3 Bucket
+
+The procedure below creates an access policy named *databend-access* for the bucket *databend-toronto* on Amazon S3:
+
+1. Log into the AWS Management Console, then select **Services** > **Security, Identity, & Compliance** > **IAM**.
+2. Select **Account settings** in the left navigation pane, and go to the **Security Token Service (STS)** section on the right page. Make sure the status of AWS region where your account belongs is **Active**.
+3. Select **Policies** in the left navigation pane, then select **Create policy** on the right page.
+4. Click the **JSON** tab, copy and paste the following code to the editor, then save the policy as *databend_access*.
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:GetObject",
+                "s3:GetObjectVersion",
+                "s3:DeleteObject",
+                "s3:DeleteObjectVersion",
+                "s3:ListBucket"
+            ],
+            "Resource": "arn:aws:s3:::databend-toronto/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation"
+            ],
+            "Resource": "arn:aws:s3:::databend-toronto/*",
+            "Condition": {
+                "StringLike": {
+                    "s3:prefix": [
+                        "/*"
+                    ]
+                }
+            }
+        }
+    ]
+}
+```
+
+#### Step 2: Create IAM User
+
+The procedure below creates an IAM user named *databend* and attach the access policy *databend-access* to the user.
+
+1. Select **Users** in the left navigation pane, then select **Add users** on the right page.
+2. Configure the user:
+    - Set the user name to *databend*. 
+    - When setting permissions for the user, click **Attach policies directly**, then search for and select the access policy *databend-access*.
+3. After the user is created, click the user name to open the details page and select the **Security credentials** tab.
+4. In the **Access keys** section, click **Create access key**.
+5. Select **Third-party service** for the use case, and tick the checkbox below to confirm creation of the access key. 
+6. Copy and save the generated access key and secret access key to a safe place.
+
+#### Step 3: Create External Stage
+
+Use the access key and secret access key generated for the IAM user *databend* to create an external stage.
+
+```sql
+CREATE STAGE iam_external_stage url = 's3://databend-toronto' CONNECTION =(aws_key_id='<access-key>' aws_secret_key='<secret-access-key>' region='us-east-2');
 ```
