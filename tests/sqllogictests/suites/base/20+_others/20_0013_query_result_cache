@@ -68,6 +68,25 @@ SELECT * FROM t1, t2 ORDER BY a, b;
 3 b
 3 c
 
+# The explain results of cache reading are the same in both standalone and cluster modes.
+query T
+EXPLAIN SELECT * FROM t1 ORDER BY a;
+----
+ReadQueryResultCache
+├── SQL: SELECT * FROM t1 ORDER BY a
+├── Number of rows: 3
+└── Result size: 12
+
+query T
+EXPLAIN SELECT * FROM t1, t2 ORDER BY a, b;
+----
+ReadQueryResultCache
+├── SQL: SELECT * FROM t1, t2 ORDER BY a, b
+├── Number of rows: 9
+└── Result size: 125
+
+
+
 # Not cached
 query I
 SELECT count(*) FROM t1;

@@ -40,9 +40,6 @@ impl Display for CatalogType {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct IcebergCatalogOption {
     pub storage_params: Box<StorageParams>,
-    /// is the remote iceberg storage storing
-    /// tables directly in the root directory
-    pub flatten: bool,
 }
 
 /// different options for creating catalogs

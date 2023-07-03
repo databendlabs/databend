@@ -2,7 +2,7 @@
 title: 'Databend 2022 Recap'
 date: 2022-12-31
 slug: 2022-12-31-databend-2022-recap
-tags: [databend, weekly]
+tags: [weekly]
 authors:
 - name: PsiACE
   url: https://github.com/psiace

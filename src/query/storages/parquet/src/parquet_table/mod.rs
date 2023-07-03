@@ -18,5 +18,6 @@ mod partition;
 mod read;
 mod table;
 
+pub use read::calc_parallelism;
 pub(crate) use table::arrow_to_table_schema;
 pub use table::ParquetTable;
