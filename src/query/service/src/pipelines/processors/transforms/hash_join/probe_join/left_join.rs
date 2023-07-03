@@ -101,7 +101,11 @@ impl JoinHashTable {
                 probe_unmatched_indexes[probe_unmatched_indexes_occupied] = (i as u32, 1);
                 probe_unmatched_indexes_occupied += 1;
                 if probe_unmatched_indexes_occupied >= JOIN_MAX_BLOCK_SIZE {
-                    result_blocks.push(self.create_left_join_null_block(input, &probe_unmatched_indexes, probe_unmatched_indexes_occupied)?);
+                    result_blocks.push(self.create_left_join_null_block(
+                        input,
+                        &probe_unmatched_indexes,
+                        probe_unmatched_indexes_occupied,
+                    )?);
                     probe_unmatched_indexes_occupied = 0;
                 }
             }
@@ -210,7 +214,8 @@ impl JoinHashTable {
 
                     if probe_matched > 0 {
                         total_probe_matched += probe_matched;
-                        if self.hash_join_desc.join_type == JoinType::Single && total_probe_matched > 1
+                        if self.hash_join_desc.join_type == JoinType::Single
+                            && total_probe_matched > 1
                         {
                             return Err(ErrorCode::Internal(
                                 "Scalar subquery can't return more than one row",
@@ -231,7 +236,11 @@ impl JoinHashTable {
         if probe_unmatched_indexes_occupied == 0 {
             return Ok(result_blocks);
         }
-        result_blocks.push(self.create_left_join_null_block(input, &probe_unmatched_indexes, probe_unmatched_indexes_occupied)?);
+        result_blocks.push(self.create_left_join_null_block(
+            input,
+            &probe_unmatched_indexes,
+            probe_unmatched_indexes_occupied,
+        )?);
         Ok(result_blocks)
     }
 
@@ -458,15 +467,17 @@ impl JoinHashTable {
                         matched_num,
                         JOIN_MAX_BLOCK_SIZE,
                     );
-                    
+
                     if probe_matched > 0 {
                         total_probe_matched += probe_matched;
-                        if self.hash_join_desc.join_type == JoinType::Single && total_probe_matched > 1 {
+                        if self.hash_join_desc.join_type == JoinType::Single
+                            && total_probe_matched > 1
+                        {
                             return Err(ErrorCode::Internal(
                                 "Scalar subquery can't return more than one row",
                             ));
                         }
-        
+
                         row_state[i] += probe_matched;
                         for _ in 0..probe_matched {
                             row_state_indexes[matched_num] = i;
@@ -490,7 +501,11 @@ impl JoinHashTable {
                 probe_indexes[probe_indexes_occupied] = (idx as u32, 1);
                 probe_indexes_occupied += 1;
                 if probe_indexes_occupied >= JOIN_MAX_BLOCK_SIZE {
-                    result_blocks.push(self.create_left_join_null_block(input, &probe_indexes, probe_indexes_occupied)?);
+                    result_blocks.push(self.create_left_join_null_block(
+                        input,
+                        &probe_indexes,
+                        probe_indexes_occupied,
+                    )?);
                     probe_indexes_occupied = 0;
                 }
             }
@@ -501,11 +516,20 @@ impl JoinHashTable {
         if probe_indexes_occupied == 0 {
             return Ok(result_blocks);
         }
-        result_blocks.push(self.create_left_join_null_block(input, &probe_indexes, probe_indexes_occupied)?);
+        result_blocks.push(self.create_left_join_null_block(
+            input,
+            &probe_indexes,
+            probe_indexes_occupied,
+        )?);
         Ok(result_blocks)
     }
 
-    fn create_left_join_null_block(&self, input: &DataBlock, indexes: &[(u32, u32)], occupied: usize) -> Result<DataBlock> {
+    fn create_left_join_null_block(
+        &self,
+        input: &DataBlock,
+        indexes: &[(u32, u32)],
+        occupied: usize,
+    ) -> Result<DataBlock> {
         let null_build_block = DataBlock::new(
             self.row_space
                 .data_schema
@@ -516,14 +540,11 @@ impl JoinHashTable {
                     value: Value::Scalar(Scalar::Null),
                 })
                 .collect(),
-                occupied,
+            occupied,
         );
 
-        let mut probe_block = DataBlock::take_compacted_indices(
-            input,
-            &indexes[0..occupied],
-            occupied,
-        )?;
+        let mut probe_block =
+            DataBlock::take_compacted_indices(input, &indexes[0..occupied], occupied)?;
 
         // For full join, wrap nullable for probe block
         if self.hash_join_desc.join_type == JoinType::Full {
