@@ -391,7 +391,7 @@ impl CopyInterpreter {
             .await?;
             (build_res, plan.required_source_schema.clone(), files)
         };
-        // copy into table from query/stage (standlone)
+        // copy into table from query/stage (standalone)
         if !plan.enable_distributed {
             append_data_and_set_finish(
                 &mut build_res.main_pipeline,
