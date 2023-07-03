@@ -63,6 +63,7 @@ use crate::executor::EvalScalar;
 use crate::executor::FragmentKind;
 use crate::executor::LagLeadDefault;
 use crate::executor::LagLeadFunctionDesc;
+use crate::executor::NtileFunctionDesc;
 use crate::executor::PhysicalJoinType;
 use crate::executor::PhysicalPlan;
 use crate::executor::RuntimeFilterSource;
@@ -927,10 +928,21 @@ impl PhysicalPlanBuilder {
                         Ok((expr.as_remote_expr(), item.index))
                     })
                     .collect::<Result<Vec<_>>>()?;
+
+                let mut unused_indices = HashSet::new();
+                if let Some(ref unused_columns) = project_set.unused_columns {
+                    for column in unused_columns {
+                        if let Ok(index) = input_schema.index_of(&column.to_string()) {
+                            unused_indices.insert(index);
+                        }
+                    }
+                }
+
                 Ok(PhysicalPlan::ProjectSet(ProjectSet {
                     plan_id: self.next_plan_id(),
                     input: Box::new(input),
                     srf_exprs,
+                    unused_indices,
                     stat_info: Some(stat_info),
                 }))
             }
@@ -1038,6 +1050,10 @@ impl PhysicalPlanBuilder {
                         "Window's nth_value function argument must be a BoundColumnRef".to_string(),
                     ))
                 }?,
+            }),
+            WindowFuncType::Ntile(func) => WindowFunction::Ntile(NtileFunctionDesc {
+                n: func.n,
+                return_type: *func.return_type.clone(),
             }),
             WindowFuncType::RowNumber => WindowFunction::RowNumber,
             WindowFuncType::Rank => WindowFunction::Rank,

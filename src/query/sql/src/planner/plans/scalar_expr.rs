@@ -373,6 +373,12 @@ pub struct NthValueFunction {
     pub return_type: Box<DataType>,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub struct NtileFunction {
+    pub n: u64,
+    pub return_type: Box<DataType>,
+}
+
 #[derive(Clone, Debug, Educe)]
 #[educe(PartialEq, Eq, Hash)]
 pub struct WindowFunc {

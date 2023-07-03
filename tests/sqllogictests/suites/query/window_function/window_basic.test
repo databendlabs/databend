@@ -523,6 +523,26 @@ SELECT depname, empno,
 		) fv
 FROM empsalary
 
+# ntile
+query TII
+SELECT depname, salary, ntile(3) OVER (PARTITION BY depname ORDER BY salary) AS rank_group FROM empsalary
+----
+develop 4200 1
+develop 4500 1
+develop 5200 2
+develop 5200 2
+develop 6000 3
+personnel 3500 1
+personnel 3900 2
+sales 4800 1
+sales 4800 2
+sales 5000 3
+
+statement error
+SELECT depname, salary, ntile() OVER (PARTITION BY depname ORDER BY salary) AS rank_group FROM empsalary
+
+statement error
+SELECT depname, salary, ntile(0) OVER (PARTITION BY depname ORDER BY salary) AS rank_group FROM empsalary
 
 # min/max/avg
 query TIIR

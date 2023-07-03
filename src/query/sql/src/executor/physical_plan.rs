@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::collections::BTreeMap;
+use std::collections::HashSet;
 use std::fmt::Display;
 use std::fmt::Formatter;
 
@@ -174,6 +175,8 @@ pub struct ProjectSet {
 
     pub srf_exprs: Vec<(RemoteExpr, IndexType)>,
 
+    pub unused_indices: HashSet<IndexType>,
+
     /// Only used for explain
     pub stat_info: Option<PlanStatsInfo>,
 }
@@ -181,7 +184,12 @@ pub struct ProjectSet {
 impl ProjectSet {
     pub fn output_schema(&self) -> Result<DataSchemaRef> {
         let input_schema = self.input.output_schema()?;
-        let mut fields = input_schema.fields().clone();
+        let mut fields = Vec::with_capacity(input_schema.num_fields() + self.srf_exprs.len());
+        for (i, field) in input_schema.fields().iter().enumerate() {
+            if !self.unused_indices.contains(&i) {
+                fields.push(field.clone());
+            }
+        }
         fields.extend(self.srf_exprs.iter().map(|(srf, index)| {
             DataField::new(
                 &index.to_string(),
@@ -317,6 +325,7 @@ pub enum WindowFunction {
     PercentRank,
     LagLead(LagLeadFunctionDesc),
     NthValue(NthValueFunctionDesc),
+    Ntile(NtileFunctionDesc),
 }
 
 impl WindowFunction {
@@ -326,9 +335,10 @@ impl WindowFunction {
             WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
-            WindowFunction::PercentRank => DataType::Number(NumberDataType::Float64),
-            WindowFunction::LagLead(f) => f.return_type.clone(),
-            WindowFunction::NthValue(f) => f.return_type.clone(),
+            WindowFunction::PercentRank => Ok(DataType::Number(NumberDataType::Float64)),
+            WindowFunction::LagLead(f) => Ok(f.return_type.clone()),
+            WindowFunction::NthValue(f) => Ok(f.return_type.clone()),
+            WindowFunction::Ntile(f) => Ok(f.return_type.clone()),
         }
     }
 }
@@ -344,6 +354,7 @@ impl Display for WindowFunction {
             WindowFunction::LagLead(lag_lead) if lag_lead.is_lag => write!(f, "lag"),
             WindowFunction::LagLead(_) => write!(f, "lead"),
             WindowFunction::NthValue(_) => write!(f, "nth_value"),
+            WindowFunction::Ntile(_) => write!(f, "ntile"),
         }
     }
 }
@@ -678,9 +689,12 @@ pub struct DistributedCopyIntoTable {
     pub catalog_name: String,
     pub database_name: String,
     pub table_name: String,
-    pub required_values_schema: DataSchemaRef, // ... into table(<columns>) ..  -> <columns>
-    pub values_consts: Vec<Scalar>,            // (1, ?, 'a', ?) -> (1, 'a')
-    pub required_source_schema: DataSchemaRef, // (1, ?, 'a', ?) -> (?, ?)
+    // ... into table(<columns>) ..  -> <columns>
+    pub required_values_schema: DataSchemaRef,
+    // (1, ?, 'a', ?) -> (1, 'a')
+    pub values_consts: Vec<Scalar>,
+    // (1, ?, 'a', ?) -> (?, ?)
+    pub required_source_schema: DataSchemaRef,
 
     pub write_mode: CopyIntoTableMode,
     pub validation_mode: ValidationMode,
@@ -720,6 +734,7 @@ impl DistributedInsertSelect {
         Ok(DataSchemaRef::default())
     }
 }
+
 // Build runtime predicate data from join build side
 // Then pass it to runtime filter on join probe side
 // It's the children of join node
@@ -1018,6 +1033,12 @@ pub struct LagLeadFunctionDesc {
 pub struct NthValueFunctionDesc {
     pub n: Option<u64>,
     pub arg: usize,
+    pub return_type: DataType,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct NtileFunctionDesc {
+    pub n: u64,
     pub return_type: DataType,
 }
 

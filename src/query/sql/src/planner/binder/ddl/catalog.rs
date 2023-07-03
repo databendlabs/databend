@@ -153,16 +153,6 @@ impl Binder {
             CatalogType::Iceberg => {
                 let mut catalog_options = options.clone();
 
-                // getting other options to create this catalog
-                let flatten = matches!(
-                    catalog_options
-                        .get("flatten")
-                        .map(|v| v.to_lowercase())
-                        .unwrap_or_default()
-                        .as_str(),
-                    "true" | "on"
-                );
-
                 // the uri should in the same schema as in stages
                 let uri = catalog_options
                     .remove("url") // has to be removed, or UriLocation will complain about unknown field.
@@ -213,7 +203,6 @@ impl Binder {
 
                 let opt = IcebergCatalogOption {
                     storage_params: Box::new(sp),
-                    flatten,
                 };
                 CatalogOption::Iceberg(opt)
             }

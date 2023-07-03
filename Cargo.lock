@@ -2748,9 +2748,13 @@ dependencies = [
 name = "common-storages-iceberg"
 version = "0.1.0"
 dependencies = [
+ "arrow-array",
+ "arrow-schema",
  "async-backtrace",
  "async-trait",
  "chrono",
+ "common-arrow",
+ "common-base",
  "common-catalog",
  "common-exception",
  "common-expression",
@@ -2758,10 +2762,12 @@ dependencies = [
  "common-meta-types",
  "common-pipeline-core",
  "common-storage",
+ "dashmap",
  "futures",
  "icelake",
  "itertools",
  "opendal",
+ "parquet",
  "serde",
  "tracing",
  "typetag",
@@ -6133,14 +6139,19 @@ dependencies = [
 
 [[package]]
 name = "icelake"
-version = "0.0.3"
+version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc9337eeb3d4c7f1d37a521e6962a539ce66eb835beca2b604adbeea54f5d764"
+checksum = "6a2da7532c19b2f1ee486ba65c06cd4e54bafa18ca709359e812115a6d059794"
 dependencies = [
  "anyhow",
  "apache-avro",
+ "arrow-array",
+ "arrow-schema",
+ "async-trait",
+ "bytes",
  "futures",
  "opendal",
+ "parquet",
  "serde",
  "serde_json",
  "serde_with",
@@ -7525,7 +7536,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-semantic-conventions",
  "thiserror",
- "thrift",
+ "thrift 0.16.0",
  "tokio",
 ]
 
@@ -7741,6 +7752,39 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-sys 0.45.0",
+]
+
+[[package]]
+name = "parquet"
+version = "40.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6a656fcc17e641657c955742c689732684e096f790ff30865d9f8dcc39f7c4a"
+dependencies = [
+ "ahash 0.8.3",
+ "arrow-array",
+ "arrow-buffer",
+ "arrow-cast",
+ "arrow-data",
+ "arrow-ipc",
+ "arrow-schema",
+ "arrow-select",
+ "base64 0.21.0",
+ "brotli",
+ "bytes",
+ "chrono",
+ "flate2",
+ "futures",
+ "hashbrown 0.13.2",
+ "lz4",
+ "num",
+ "num-bigint",
+ "paste",
+ "seq-macro",
+ "snap",
+ "thrift 0.17.0",
+ "tokio",
+ "twox-hash",
+ "zstd 0.12.3+zstd.1.5.2",
 ]
 
 [[package]]
@@ -10368,6 +10412,17 @@ dependencies = [
  "log",
  "ordered-float 1.1.1",
  "threadpool",
+]
+
+[[package]]
+name = "thrift"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e54bc85fc7faa8bc175c4bab5b92ba8d9a3ce893d0e9f42cc455c8ab16a9e09"
+dependencies = [
+ "byteorder",
+ "integer-encoding",
+ "ordered-float 2.10.0",
 ]
 
 [[package]]

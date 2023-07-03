@@ -17,12 +17,12 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 
-use crate::optimizer::util::contains_project_set;
 use crate::optimizer::ColumnSet;
 use crate::optimizer::SExpr;
 use crate::plans::Aggregate;
 use crate::plans::DummyTableScan;
 use crate::plans::EvalScalar;
+use crate::plans::ProjectSet;
 use crate::plans::RelOperator;
 use crate::ColumnEntry;
 use crate::MetadataRef;
@@ -124,14 +124,6 @@ impl UnusedColumnPruner {
 
             RelOperator::EvalScalar(p) => {
                 let mut used = vec![];
-                if contains_project_set(expr) {
-                    return Ok(SExpr::create_unary(
-                        Arc::new(RelOperator::EvalScalar(EvalScalar {
-                            items: p.items.clone(),
-                        })),
-                        Arc::new(expr.child(0)?.clone()),
-                    ));
-                }
                 // Only keep columns needed by parent plan.
                 for s in p.items.iter() {
                     if !required.contains(&s.index) {
@@ -258,14 +250,21 @@ impl UnusedColumnPruner {
             }
 
             RelOperator::ProjectSet(op) => {
-                // We can't prune SRFs because they may change the cardinality of result set,
-                // even if the result column of an SRF is not used by any following expression.
+                let parent_required = required.clone();
                 for s in op.srfs.iter() {
                     required.extend(s.scalar.used_columns().iter().copied());
                 }
+                // Columns that are not used by the parent plan don't need to be kept.
+                // Repeating the rows to as many as the results of SRF may result in an OOM.
+                let unused = required.difference(&parent_required);
+                let unused_columns = unused.into_iter().copied().collect::<Vec<_>>();
+                let project_set = ProjectSet {
+                    srfs: op.srfs.clone(),
+                    unused_columns: Some(unused_columns),
+                };
 
                 Ok(SExpr::create_unary(
-                    Arc::new(RelOperator::ProjectSet(op.clone())),
+                    Arc::new(RelOperator::ProjectSet(project_set)),
                     Arc::new(self.keep_required_columns(expr.child(0)?, required)?),
                 ))
             }
