@@ -77,7 +77,7 @@ select count($1) from @st_query;
 2000000
 
 statement ok
-copy into t_query from (select $1,$2,$3 from @st_query as t2) force =  true;
+copy into t_query from (select $1,$2,$3 from @st_query as t2) force =  true purge = true;
 
 query I
 select count(*) from t_query;
@@ -107,7 +107,7 @@ statement ok
 set max_threads = 1;
 
 statement ok
-copy into t_query2 from (select $1,$2,$3 from @st_query2 as t2) force =  true;
+copy into t_query2 from (select $1,$2,$3 from @st_query2 as t2) force =  true purge = true;
 
 query I
 select block_count from fuse_snapshot('default','t_query2');
