@@ -134,6 +134,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'inherited_roles'               | 'system'             | 'roles'               | 'UInt64'           | 'BIGINT UNSIGNED'   | ''       | ''       | 'NO'     | ''       |
 | 'is_aggregate'                  | 'system'             | 'functions'           | 'Boolean'          | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_builtin'                    | 'system'             | 'functions'           | 'Boolean'          | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
+| 'is_configured'                 | 'system'             | 'users'               | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_insertable_into'            | 'information_schema' | 'views'               | 'Boolean'          | 'BOOLEAN'           | ''       | ''       | 'NO'     | ''       |
 | 'is_nullable'                   | 'information_schema' | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'is_nullable'                   | 'system'             | 'columns'             | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
@@ -291,6 +292,7 @@ DB.Table: 'system'.'columns', Table: columns-table_id:1, ver:0, Engine: SystemCo
 | 'type'                          | 'system'             | 'processes'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'type'                          | 'system'             | 'settings'            | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |
 | 'updated_on'                    | 'system'             | 'background_tasks'    | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
+| 'updated_on'                    | 'system'             | 'indexes'             | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'updated_on'                    | 'system'             | 'tables'              | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'updated_on'                    | 'system'             | 'tables_with_history' | 'Timestamp'        | 'TIMESTAMP'         | ''       | ''       | 'NO'     | ''       |
 | 'user'                          | 'system'             | 'processes'           | 'String'           | 'VARCHAR'           | ''       | ''       | 'NO'     | ''       |

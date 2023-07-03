@@ -98,6 +98,8 @@ pub trait TableContext: Send + Sync {
     fn get_partitions_shas(&self) -> Vec<String>;
     fn get_cacheable(&self) -> bool;
     fn set_cacheable(&self, cacheable: bool);
+    fn get_can_scan_from_agg_index(&self) -> bool;
+    fn set_can_scan_from_agg_index(&self, enable: bool);
 
     fn attach_query_str(&self, kind: String, query: String);
     fn get_query_str(&self) -> String;

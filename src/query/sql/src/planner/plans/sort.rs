@@ -34,6 +34,10 @@ pub struct Sort {
 
     /// If the sort plan is after the exchange plan.
     pub after_exchange: bool,
+
+    /// The columns needed by the plan after the sort plan.
+    /// It's used to build a projection operation before building the sort operator.
+    pub pre_projection: Option<Vec<IndexType>>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

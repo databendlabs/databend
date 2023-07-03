@@ -49,8 +49,9 @@ fn test_decode_v37_index() -> anyhow::Result<()> {
             table_id,
             index_type,
             created_on,
-            drop_on: None,
+            dropped_on: None,
             query,
+            updated_on: None,
         }
     };
 

@@ -2,7 +2,7 @@
 title: "This Week in Databend #95"
 date: 2023-05-28
 slug: 2023-05-28-databend-weekly
-tags: [databend, weekly]
+tags: [weekly]
 description: "Stay up to date with the latest weekly developments on Databend!"
 contributors:
   - name: ariesdevil

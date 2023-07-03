@@ -82,6 +82,7 @@ use crate::plans::ConstantExpr;
 use crate::plans::FunctionCall;
 use crate::plans::LagLeadFunction;
 use crate::plans::NthValueFunction;
+use crate::plans::NtileFunction;
 use crate::plans::ScalarExpr;
 use crate::plans::SubqueryExpr;
 use crate::plans::SubqueryType;
@@ -976,7 +977,13 @@ impl<'a> TypeChecker<'a> {
             })
         }
         let frame = self
-            .resolve_window_frame(span, &func, &mut order_by, spec.window_frame.clone())
+            .resolve_window_frame(
+                span,
+                &func,
+                &partitions,
+                &mut order_by,
+                spec.window_frame.clone(),
+            )
             .await?;
         let data_type = func.return_type();
         let window_func = WindowFunc {
@@ -1116,6 +1123,7 @@ impl<'a> TypeChecker<'a> {
         &mut self,
         span: Span,
         func: &WindowFuncType,
+        partition_by: &[ScalarExpr],
         order_by: &mut [WindowOrderBy],
         window_frame: Option<WindowFrame>,
     ) -> Result<WindowFuncFrame> {
@@ -1147,6 +1155,21 @@ impl<'a> TypeChecker<'a> {
                     end_bound: WindowFuncFrameBound::Following(Some(Scalar::Number(
                         NumberScalar::UInt64(lag_lead.offset),
                     ))),
+                });
+            }
+            WindowFuncType::Ntile(_) => {
+                return Ok(if partition_by.is_empty() {
+                    WindowFuncFrame {
+                        units: WindowFuncFrameUnits::Rows,
+                        start_bound: WindowFuncFrameBound::Preceding(None),
+                        end_bound: WindowFuncFrameBound::Following(None),
+                    }
+                } else {
+                    WindowFuncFrame {
+                        units: WindowFuncFrameUnits::Rows,
+                        start_bound: WindowFuncFrameBound::CurrentRow,
+                        end_bound: WindowFuncFrameBound::CurrentRow,
+                    }
                 });
             }
             _ => {}
@@ -1209,6 +1232,7 @@ impl<'a> TypeChecker<'a> {
                 self.resolve_nth_value_window_function(func_name, &arguments, &arg_types)
                     .await
             }
+            "ntile" => self.resolve_ntile_window_function(&arguments).await,
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {func_name}"
             ))),
@@ -1343,6 +1367,37 @@ impl<'a> TypeChecker<'a> {
                 })
             }
         })
+    }
+
+    #[async_backtrace::framed]
+    async fn resolve_ntile_window_function(
+        &mut self,
+        args: &[ScalarExpr],
+    ) -> Result<WindowFuncType> {
+        if args.len() != 1 {
+            return Err(ErrorCode::InvalidArgument(
+                "Argument number is invalid".to_string(),
+            ));
+        }
+        let n_expr = ScalarExpr::CastExpr(CastExpr {
+            span: args[0].span(),
+            is_try: false,
+            argument: Box::new(args[0].clone()),
+            target_type: Box::new(DataType::Number(NumberDataType::UInt64)),
+        })
+        .as_expr()?;
+        let return_type = n_expr.data_type().wrap_nullable();
+        let n = check_number::<_, u64>(n_expr.span(), &self.func_ctx, &n_expr, &BUILTIN_FUNCTIONS)?;
+        if n == 0 {
+            return Err(ErrorCode::InvalidArgument(
+                "ntile buckets must be greater than 0".to_string(),
+            ));
+        }
+
+        Ok(WindowFuncType::Ntile(NtileFunction {
+            n,
+            return_type: Box::new(return_type),
+        }))
     }
 
     /// Resolve aggregation function call.

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use common_base::base::GlobalInstance;
@@ -123,5 +124,9 @@ impl UserApiProvider {
 
     pub fn get_configured_user(&self, user_name: &str) -> Option<&AuthInfo> {
         self.idm_config.users.get(user_name)
+    }
+
+    pub fn get_configured_users(&self) -> HashMap<String, AuthInfo> {
+        self.idm_config.users.clone()
     }
 }
