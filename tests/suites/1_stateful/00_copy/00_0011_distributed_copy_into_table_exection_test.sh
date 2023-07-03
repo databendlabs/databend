@@ -20,7 +20,6 @@ echo "select * from products order by id,name,description;" | $MYSQL_CLIENT_CONN
 echo "select count(*) from products;" | $MYSQL_CLIENT_CONNECT
 ## error test!!!
 curl -s -u root: -H "stage_name:s0011" -F "upload=@${CURDIR}/../../../data/sample_2_columns.csv" -XPUT "http://localhost:8000/v1/upload_to_stage" -u root: | jq ".data"
-echo "set enable_distributed_copy_into = 1;copy into products from @s0011 pattern = '.*[.]csv' purge = true;" | $MYSQL_CLIENT_CONNECT
+echo "set enable_distributed_copy_into = 1;copy into products from @s0011 pattern = '.*[.]csv' purge = true;"  | $MYSQL_CLIENT_CONNECT 2>&1 | grep -o 'Text = expect 3 fields, only found 2'
 echo "select count(*) from products;" | $MYSQL_CLIENT_CONNECT
 echo "list @s0011;" | $MYSQL_CLIENT_CONNECT | grep -o 'csv' | wc -l
-
