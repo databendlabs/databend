@@ -630,3 +630,14 @@ select * from (select * from numbers(10)) n full join t1 on n.number = t1.a orde
 
 statement ok
 drop table t1;
+
+query III
+select a.number, pt,register_at from ( select number,  to_yyyymmdd(to_timestamp(number))   as pt
+	from numbers(10) where number > 5
+) a join ( select distinct number , to_yyyymmdd(to_timestamp(number)) as  register_at from numbers(10) where number > 5
+) b on  a.number=b.number order by a.number;
+----
+6 19700101 19700101
+7 19700101 19700101
+8 19700101 19700101
+9 19700101 19700101
