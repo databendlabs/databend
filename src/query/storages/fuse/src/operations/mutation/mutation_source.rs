@@ -353,9 +353,7 @@ impl Processor for MutationSource {
             State::ReadData(Some(part)) => {
                 let settings = ReadSettings::from_ctx(&self.ctx)?;
                 let res = MutationPartInfo::from_part(&part);
-                if res.is_ok() {
-                    let part = res.unwrap();
-
+                if let Ok(part) = res {
                     self.index = BlockMetaIndex {
                         segment_idx: part.index.segment_idx,
                         block_idx: part.index.block_idx,
