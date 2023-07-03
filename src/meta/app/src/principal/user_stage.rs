@@ -61,7 +61,7 @@ pub enum StageType {
     /// LegacyInternal will be deprecated.
     ///
     /// Please never use this variant except in `proto_conv`. We keep this
-    /// stage type for backword compatible.
+    /// stage type for backward compatible.
     ///
     /// TODO(xuanwo): remove this when we are releasing v0.9.
     LegacyInternal,
