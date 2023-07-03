@@ -16,15 +16,13 @@ use std::sync::Arc;
 
 use arrow_array::RecordBatch;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
-use background_service::{BackgroundServiceHandler, Suggestion};
+use background_service::{BackgroundServiceHandler, };
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::GlobalInstance;
-use common_catalog::table_context::TableContext;
 use common_config::InnerConfig;
 use common_exception::ErrorCode;
 use common_exception::Result;
-use common_expression::DataBlock;
 use common_license::license::Feature;
 use common_license::license_manager::get_license_manager;
 use common_meta_api::BackgroundApi;
@@ -40,18 +38,14 @@ use common_meta_app::principal::UserInfo;
 use common_meta_store::MetaStore;
 use common_users::UserApiProvider;
 use common_users::BUILTIN_ROLE_ACCOUNT_ADMIN;
-use databend_query::interpreters::InterpreterFactory;
-use databend_query::sessions::{QueryContext, Session};
+use databend_query::sessions::{ Session};
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
-use databend_query::sql::Planner;
-use tracing::error;
 use tracing::info;
-use background_service::Suggestion::Compaction;
 use databend_query::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
 
 use crate::background_service::session::create_session;
-use crate::background_service::{CompactionJob, Job};
+use crate::background_service::{CompactionJob, };
 use crate::background_service::JobScheduler;
 
 pub struct RealBackgroundService {

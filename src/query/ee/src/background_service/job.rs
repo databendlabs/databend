@@ -12,14 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::sync::Arc;
 use async_trait::async_trait;
-use background_service::Suggestion;
 use common_exception::Result;
 use common_meta_app::background::BackgroundJobIdent;
 use common_meta_app::background::BackgroundJobInfo;
 use common_meta_app::background::BackgroundJobStatus;
-use databend_query::sessions::QueryContext;
 
 /// A trait for implementing a background job
 ///

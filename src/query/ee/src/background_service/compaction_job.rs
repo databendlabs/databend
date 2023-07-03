@@ -20,9 +20,7 @@ use arrow_array::BooleanArray;
 use arrow_array::LargeBinaryArray;
 use arrow_array::RecordBatch;
 use arrow_array::UInt64Array;
-use background_service::{get_background_service_handler, Suggestion};
 use chrono::Utc;
-use jwt_simple::reexports::serde_json::ser::CharEscape::Tab;
 use common_base::base::tokio::sync::mpsc::Sender;
 use common_base::base::tokio::sync::Mutex;
 use common_base::base::tokio::time::Instant;
@@ -49,10 +47,8 @@ use databend_query::procedures::admins::suggested_background_tasks::SuggestedBac
 use databend_query::sessions::{QueryContext, Session};
 
 use crate::background_service::job::Job;
-use crate::background_service::RealBackgroundService;
-use crate::background_service::session::create_session;
 
-const SEGMENT_SIZE: u64 = 1;
+const BLOCK_COUNT: u64 = 500;
 const PER_SEGMENT_BLOCK: u64 = 500;
 const PER_BLOCK_SIZE: u64 = 50; // MB
 
@@ -110,10 +106,12 @@ pub fn should_continue_compaction(old: &TableStatistics, new: &TableStatistics) 
     let new_segment_density =
         new.number_of_blocks.unwrap() as f64 / new.number_of_segments.unwrap() as f64;
     let should_continue_seg_compact = new_segment_density != old_segment_density
-        && new_segment_density < PER_SEGMENT_BLOCK as f64;
+        && new.number_of_blocks.unwrap() > BLOCK_COUNT
+        && new_segment_density < PER_SEGMENT_BLOCK as f64 ;
     let old_block_density = old.data_bytes as f64 / old.number_of_blocks.unwrap() as f64;
     let new_block_density = new.data_bytes as f64 / new.number_of_blocks.unwrap() as f64;
     let should_continue_blk_compact = new_block_density != old_block_density
+        && new.number_of_blocks.unwrap() > BLOCK_COUNT
         && new_block_density < PER_BLOCK_SIZE as f64 * 1024.0 * 1024.0;
     (should_continue_seg_compact, should_continue_blk_compact)
 }
@@ -243,7 +241,7 @@ impl CompactionJob {
             session.clone(),
             database.clone(),
             table.clone(),
-            SEGMENT_SIZE,
+            BLOCK_COUNT,
             PER_SEGMENT_BLOCK,
             PER_BLOCK_SIZE,
         )
@@ -299,7 +297,7 @@ impl CompactionJob {
                     session.clone(),
                     database.clone(),
                     table.clone(),
-                    SEGMENT_SIZE,
+                    BLOCK_COUNT,
                     PER_SEGMENT_BLOCK,
                     PER_BLOCK_SIZE,
                 )
@@ -342,7 +340,7 @@ impl CompactionJob {
             session.clone(),
             database.clone(),
             table.clone(),
-            SEGMENT_SIZE,
+            BLOCK_COUNT,
             PER_SEGMENT_BLOCK,
             PER_BLOCK_SIZE,
         )
@@ -360,7 +358,7 @@ impl CompactionJob {
                     session.clone(),
                     database.clone(),
                     table.clone(),
-                    SEGMENT_SIZE,
+                    BLOCK_COUNT,
                     PER_SEGMENT_BLOCK,
                     PER_BLOCK_SIZE,
                 )
@@ -381,7 +379,7 @@ impl CompactionJob {
                     session.clone(),
                     database.clone(),
                     table.clone(),
-                    SEGMENT_SIZE,
+                    BLOCK_COUNT,
                     PER_SEGMENT_BLOCK,
                     PER_BLOCK_SIZE,
                 )
@@ -496,11 +494,11 @@ impl CompactionJob {
         session: Arc<Session>,
         database: String,
         table: String,
-        seg_size: u64,
+        blk_cnt: u64,
         avg_seg: u64,
         avg_blk: u64,
     ) -> Result<(bool, bool, TableStatistics)> {
-        let sql = Self::get_compaction_advice_sql(database, table, seg_size, avg_seg, avg_blk);
+        let sql = Self::get_compaction_advice_sql(database, table, blk_cnt, avg_seg, avg_blk);
         debug!(
             job = "compaction",
             background = true,
@@ -619,21 +617,21 @@ impl CompactionJob {
     pub fn get_compaction_advice_sql(
         database: String,
         table: String,
-        seg_size: u64,
+        blk_count: u64,
         avg_seg: u64,
         avg_blk: u64,
     ) -> String {
         format!(
             "
         select
-        IF(segment_count > {} and block_count / segment_count < {}, TRUE, FALSE) AS segment_advice,
-        IF(bytes_uncompressed / block_count / 1024 / 1024 < {} and bytes_uncompressed / 1024 / 1024 > 1000, TRUE, FALSE) AS block_advice,
+        IF(block_count > {} and block_count / segment_count < {}, TRUE, FALSE) AS segment_advice,
+        IF(row_count > 100000 AND block_count > {} AND bytes_uncompressed / block_count / 1024 / 1024  < {}, TRUE, FALSE) AS block_advice,
         row_count, bytes_uncompressed, bytes_compressed, index_size,
         segment_count, block_count,
         block_count/segment_count
         from fuse_snapshot('{}', '{}') order by timestamp ASC LIMIT 1;
         ",
-            seg_size, avg_seg, avg_blk, database, table
+            blk_count, avg_seg, blk_count, avg_blk, database, table
         )
     }
     pub fn get_segment_compaction_sql(

@@ -15,12 +15,11 @@
 use std::sync::Arc;
 use arrow_array::{BooleanArray, LargeBinaryArray, PrimitiveArray, RecordBatch};
 use arrow_array::types::UInt64Type;
-use tracing::{debug, info};
+use tracing::{ info};
 use background_service::Suggestion;
 use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
 use crate::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
-use tokio_stream::StreamExt;
 use crate::sessions::QueryContext;
 
 const SUGGEST_TABLES_NEED_COMPACTION: &str = "

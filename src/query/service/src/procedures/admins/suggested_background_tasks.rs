@@ -15,9 +15,8 @@
 use std::sync::Arc;
 use arrow_array::RecordBatch;
 use tracing::error;
-use background_service::background_service::BackgroundServiceHandlerWrapper;
-use common_exception::{ErrorCode, ToErrorCode};
-use common_expression::{BlockEntry, DataBlock, DataField, DataSchema, DataSchemaRefExt, FromData, FromOptData, Scalar, Value};
+use common_exception::{ErrorCode, };
+use common_expression::{ DataBlock, DataField, DataSchema, DataSchemaRefExt, FromData, FromOptData, };
 use common_expression::types::{BooleanType, DataType, StringType, VariantType};
 use common_license::license::Feature;
 use common_sql::Planner;
