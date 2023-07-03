@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #[allow(clippy::derive_partial_eq_without_eq)]
+#[allow(clippy::large_enum_variant)]
 
 /// ProtoBuf generated files.
 pub mod pb {
