@@ -126,20 +126,20 @@ impl CompactionJob {
         config: &InnerConfig,
         name: String,
         info: BackgroundJobInfo,
+        session: Arc<Session>,
         finish_tx: Arc<Mutex<Sender<u64>>>,
     ) -> Self {
         let tenant = config.query.tenant_id.clone();
         let creator = BackgroundJobIdent { tenant, name };
         let meta_api = UserApiProvider::instance().get_meta_store_client();
         let info = Arc::new(parking_lot::Mutex::new(info));
-        let session = create_session().await.expect("failed to create session");
         Self {
             conf: config.clone(),
             meta_api,
             creator,
             info,
-            finish_tx,
             session,
+            finish_tx,
         }
     }
     async fn do_compaction_job(&mut self) -> Result<()> {
@@ -398,7 +398,6 @@ impl CompactionJob {
 
     pub async fn do_get_target_tables_from_config(config: &InnerConfig, ctx: Arc<QueryContext>) -> Result<Vec<RecordBatch>> {
         if !config.background.compaction.has_target_tables() {
-            let session = create_session().await?;
             let res =  SuggestedBackgroundTasksProcedure::do_get_all_suggested_compaction_tables(ctx).await;
             return res
         }
@@ -475,6 +474,12 @@ impl CompactionJob {
         let all_target_tables = Self::parse_all_target_tables(all_target_tables);
         let future_res = all_target_tables.into_iter().map(|(k, v) | {
             let sql = Self::get_target_from_config_sql(k, v);
+            info!(
+                job = "compaction",
+                background = true,
+                sql = sql.as_str(),
+                "get target tables"
+                );
             SuggestedBackgroundTasksProcedure::do_execute_sql(ctx.clone(), sql)
         }
         ).collect::<Vec<_>>();

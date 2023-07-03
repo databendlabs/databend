@@ -45,7 +45,6 @@ use databend_query::sessions::{QueryContext, Session};
 use databend_query::sessions::SessionManager;
 use databend_query::sessions::SessionType;
 use databend_query::sql::Planner;
-use futures_util::StreamExt;
 use tracing::error;
 use tracing::info;
 use background_service::Suggestion::Compaction;
@@ -83,13 +82,13 @@ impl BackgroundServiceHandler for RealBackgroundService {
     }
     #[async_backtrace::framed]
     async fn start(&self) -> Result<()> {
-        let enterprise_enabled = self.check_license().await.is_ok();
-        if !enterprise_enabled {
-            panic!("Background service is only available in enterprise edition.");
+        if let Err(e) = self.check_license().await {
+            panic!("Background service is only available in enterprise edition. error: {}", e);
         }
+
         let scheduler = self.scheduler.clone();
         scheduler.start().await?;
-        info!("all one shot jobs finished");
+        info!("all jobs finished");
         Ok(())
     }
 }
@@ -119,6 +118,7 @@ impl RealBackgroundService {
                 meta_api.clone(),
                 conf,
                 &user.identity(),
+                session.clone(),
                 scheduler.finish_tx.clone(),
             )
             .await?;
@@ -137,6 +137,7 @@ impl RealBackgroundService {
         meta: Arc<MetaStore>,
         conf: &InnerConfig,
         creator: &UserIdentity,
+        session: Arc<Session>,
         finish_tx: Arc<Mutex<Sender<u64>>>,
     ) -> Result<CompactionJob> {
         // background compactor job
@@ -160,7 +161,7 @@ impl RealBackgroundService {
         Self::update_compaction_job_params(meta.clone(), &id, conf).await?;
         let info = Self::suspend_job(meta.clone(), &id, false).await?;
 
-        let job = CompactionJob::create(conf, name, info, finish_tx).await;
+        let job = CompactionJob::create(conf, name, info, session, finish_tx).await;
         Ok(job)
     }
 

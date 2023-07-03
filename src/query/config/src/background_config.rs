@@ -39,7 +39,7 @@ pub struct BackgroundConfig {
 pub struct BackgroundCompactionConfig {
     // only wake up background job if it is enabled.
     #[clap(long)]
-    pub enable: bool,
+    pub enable_compaction: bool,
     #[clap(long, default_value = "one_shot")]
     pub compact_mode: String,
 
@@ -150,7 +150,7 @@ impl TryInto<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
         Ok(InnerBackgroundCompactionConfig {
             segment_limit: self.segment_limit,
             block_limit: self.block_limit,
-            enable: self.enable,
+            enable: self.enable_compaction,
             target_tables: self.target_tables,
             params: {
                 match self.compact_mode.as_str() {
@@ -191,7 +191,7 @@ impl TryInto<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
 impl From<InnerBackgroundCompactionConfig> for BackgroundCompactionConfig {
     fn from(inner: InnerBackgroundCompactionConfig) -> Self {
         let mut cfg = Self {
-            enable: inner.enable,
+            enable_compaction: inner.enable,
             compact_mode: "".to_string(), // it would be set later
             target_tables: inner.target_tables,
             segment_limit: inner.segment_limit,
@@ -233,7 +233,7 @@ impl From<BackgroundJobParams> for BackgroundScheduledConfig {
 impl Default for BackgroundCompactionConfig {
     fn default() -> Self {
         Self {
-            enable: false,
+            enable_compaction: false,
             compact_mode: "one_shot".to_string(),
             target_tables: None,
             segment_limit: None,

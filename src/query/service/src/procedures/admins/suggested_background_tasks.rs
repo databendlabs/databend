@@ -17,10 +17,9 @@ use arrow_array::RecordBatch;
 use tracing::error;
 use background_service::background_service::BackgroundServiceHandlerWrapper;
 use common_exception::{ErrorCode, ToErrorCode};
-use common_expression::{DataBlock, DataField, DataSchema, DataSchemaRefExt};
-use common_expression::types::DataType;
+use common_expression::{BlockEntry, DataBlock, DataField, DataSchema, DataSchemaRefExt, FromData, FromOptData, Scalar, Value};
+use common_expression::types::{BooleanType, DataType, StringType, VariantType};
 use common_license::license::Feature;
-use common_license::license_manager::get_license_manager;
 use common_sql::Planner;
 use common_exception::Result;
 use crate::interpreters::InterpreterFactory;
@@ -30,6 +29,9 @@ use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
 use tokio_stream::StreamExt;
+use background_service::Suggestion;
+use common_license::license_manager::get_license_manager;
+
 pub struct SuggestedBackgroundTasksProcedure;
 
 impl SuggestedBackgroundTasksProcedure {
@@ -85,24 +87,60 @@ impl OneBlockProcedure for SuggestedBackgroundTasksProcedure {
 
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, _args: Vec<String>) -> Result<DataBlock> {
-        todo!()
+        let license_mgr = get_license_manager();
+        license_mgr.manager.check_enterprise_enabled(&ctx.get_settings(), ctx.get_tenant(), Feature::BackgroundService)?;
+        let suggestions = Self::get_suggested_compaction_tasks(ctx.clone()).await?;
+        self.to_block(suggestions)
     }
 
     fn schema(&self) -> Arc<DataSchema> {
         DataSchemaRefExt::create(vec![
-            DataField::new("license_issuer", DataType::String),
-            DataField::new("license_type", DataType::String),
-            DataField::new("organization", DataType::String),
-            DataField::new("issued_at", DataType::Timestamp),
-            DataField::new("expire_at", DataType::Timestamp),
-            // formatted string calculate the available time from now to expiry of license
-            DataField::new("available_time_until_expiry", DataType::String),
+            DataField::new("type", DataType::String),
+            DataField::new("database_name", DataType::String),
+            DataField::new("table_name", DataType::String),
+            DataField::new("table_statistics", DataType::Variant),
+            DataField::new("should_do_segment_compact", DataType::Boolean),
+            DataField::new("should_do_compact", DataType::Boolean),
         ])
     }
 }
 
 impl SuggestedBackgroundTasksProcedure {
-    fn to_block(&self) -> Result<DataBlock> {
-        todo!()
+    fn to_block(&self, suggestions: Vec<Suggestion>) -> Result<DataBlock> {
+        let mut suggestion_type = vec![];
+        let mut should_do_segment_compact = vec![];
+        let mut should_do_compact = vec![];
+        let mut database_name = vec![];
+        let mut table_names = vec![];
+        let mut table_statistics = vec![];
+        for suggestion in suggestions {
+            match suggestion {
+                Suggestion::Compaction {
+                    need_compact_segment,
+                    need_compact_block,
+                    db_name,
+                    table_name,
+                    table_stats,
+                    ..
+                } => {
+                    suggestion_type.push( "compaction".to_string().into_bytes().to_vec());
+                    should_do_segment_compact.push(Some(need_compact_segment));
+                    should_do_compact.push(Some(need_compact_block));
+                    database_name.push(db_name.into_bytes().to_vec());
+                    table_names.push(table_name.into_bytes().to_vec());
+                    table_statistics.push(serde_json::to_vec(&table_stats).unwrap());
+                }
+            }
+        }
+        Ok(DataBlock::new_from_columns(
+            vec![
+                StringType::from_data(suggestion_type),
+                StringType::from_data(database_name),
+                StringType::from_data(table_names),
+                VariantType::from_data(table_statistics),
+                BooleanType::from_opt_data(should_do_segment_compact),
+                BooleanType::from_opt_data(should_do_compact),
+            ]
+        ))
     }
 }

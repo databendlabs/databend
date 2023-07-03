@@ -13,15 +13,14 @@
 // limitations under the License.
 
 use std::sync::Arc;
-use arrow_array::{LargeBinaryArray, RecordBatch};
+use arrow_array::{BooleanArray, LargeBinaryArray, PrimitiveArray, RecordBatch};
+use arrow_array::types::UInt64Type;
 use tracing::{debug, info};
 use background_service::Suggestion;
-use common_arrow::arrow::array::{BooleanArray, UInt64Array};
 use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
 use crate::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
 use tokio_stream::StreamExt;
-use crate::sql::Planner;
 use crate::sessions::QueryContext;
 
 const SUGGEST_TABLES_NEED_COMPACTION: &str = "
@@ -56,7 +55,7 @@ WHERE t.database != 'system'
     AND t.number_of_blocks > 500
     AND t.data_size > 1
 
-    AND t.number_of_blocks / t.number_of_segments < 500 OR t.data_size / t.number_of_blocks < 50 * 1024 * 1024
+    AND (t.num_rows >  1 * 1000 * 100 AND t.number_of_blocks > 500 AND t.data_size / t.number_of_blocks < 50 * 1024 * 1024) OR (t.number_of_blocks > 500 AND t.number_of_blocks / t.number_of_segments < 500)
     AND t.table_id NOT IN (
         SELECT
           table_id
@@ -78,7 +77,7 @@ impl SuggestedBackgroundTasksProcedure {
         ).await?;
         let mut suggestions = vec![];
         for records in resps {
-            debug!(?records, "target_tables");
+            info!(?records, "target_tables");
             let db_names = records
                 .column(0)
                 .as_any()
@@ -87,7 +86,7 @@ impl SuggestedBackgroundTasksProcedure {
             let db_ids = records
                 .column(1)
                 .as_any()
-                .downcast_ref::<UInt64Array>()
+                .downcast_ref::<PrimitiveArray<UInt64Type>>()
                 .unwrap();
             let tb_names = records
                 .column(2)
@@ -97,7 +96,7 @@ impl SuggestedBackgroundTasksProcedure {
             let tb_ids = records
                 .column(3)
                 .as_any()
-                .downcast_ref::<UInt64Array>()
+                .downcast_ref::<PrimitiveArray<UInt64Type>>()
                 .unwrap();
             let segment_advice = records
                 .column(4)
@@ -112,32 +111,32 @@ impl SuggestedBackgroundTasksProcedure {
             let row_count = records
                 .column(6)
                 .as_any()
-                .downcast_ref::<UInt64Array>()
+                .downcast_ref::<PrimitiveArray<UInt64Type>>()
                 .unwrap();
             let bytes_uncompressed = records
                 .column(7)
                 .as_any()
-                .downcast_ref::<UInt64Array>()
+                .downcast_ref::<PrimitiveArray<UInt64Type>>()
                 .unwrap();
             let bytes_compressed = records
                 .column(8)
                 .as_any()
-                .downcast_ref::<UInt64Array>()
+                .downcast_ref::<PrimitiveArray<UInt64Type>>()
                 .unwrap();
             let index_size = records
                 .column(9)
                 .as_any()
-                .downcast_ref::<UInt64Array>()
+                .downcast_ref::<PrimitiveArray<UInt64Type>>()
                 .unwrap();
             let segment_count = records
                 .column(10)
                 .as_any()
-                .downcast_ref::<UInt64Array>()
+                .downcast_ref::<PrimitiveArray<UInt64Type>>()
                 .unwrap();
             let block_count = records
                 .column(11)
                 .as_any()
-                .downcast_ref::<UInt64Array>()
+                .downcast_ref::<PrimitiveArray<UInt64Type>>()
                 .unwrap();
             for i in 0..records.num_rows() {
                 let db_name : String = String::from_utf8_lossy(db_names.value(i).to_vec().as_slice()).to_string();
@@ -183,6 +182,7 @@ impl SuggestedBackgroundTasksProcedure {
             job = "compaction",
             background = true,
             tables = num_of_tables,
+            sql = SUGGEST_TABLES_NEED_COMPACTION,
             "get all suggested tables"
         );
         let res = res.map(|r| vec![r]).unwrap_or_else(|| vec![]);
