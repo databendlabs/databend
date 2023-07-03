@@ -3040,9 +3040,9 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                     txn_cond_seq(&id_to_name_key, Eq, 0),
                 ];
                 let if_then = vec![
-                    txn_op_put(name_key, serialize_u64(catalog_id)?), /* (tenant, db_name) -> catalog_id */
+                    txn_op_put(name_key, serialize_u64(catalog_id)?), /* (tenant, catalog_name) -> catalog_id */
                     txn_op_put(&id_key, serialize_struct(&req.meta)?), /* (catalog_id) -> catalog_meta */
-                    txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
+                    txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_catalog_id_to_name/<catalog_id> -> (tenant,catalog_name) */
                 ];
 
                 let txn_req = TxnRequest {
