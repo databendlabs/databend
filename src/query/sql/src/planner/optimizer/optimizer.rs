@@ -135,21 +135,23 @@ pub fn optimize(
                     }
                 }
                 CopyPlan::NoFileToCopy => *v,
-                CopyPlan::IntoTable(mut into_table) => match into_table.query {
-                    // Todo:(JackTna25):for now, we just support copy into table from raw stage, copy from query
-                    // will be given later.
-                    Some(_) => CopyPlan::IntoTable(into_table),
-                    None => {
-                        into_table.enable_distributed =
-                            opt_ctx.config.enable_distributed_optimization
-                                && ctx.get_settings().get_enable_distributed_copy()?;
-                        info!(
-                            "after optimization enable_distributed_copy? : {}",
-                            into_table.enable_distributed
-                        );
-                        CopyPlan::IntoTable(into_table)
+
+                CopyPlan::IntoTable(mut into_table) => {
+                    into_table.enable_distributed = opt_ctx.config.enable_distributed_optimization
+                        && ctx.get_settings().get_enable_distributed_copy()?;
+                    match into_table.query {
+                        // Todo:(JackTna25):for now, we just support copy into table from raw stage, copy from query
+                        // will be given later.
+                        Some(_) => CopyPlan::IntoTable(into_table),
+                        None => {
+                            info!(
+                                "after optimization enable_distributed_copy? : {}",
+                                into_table.enable_distributed
+                            );
+                            CopyPlan::IntoTable(into_table)
+                        }
                     }
-                },
+                }
             })))
         }
         // Passthrough statements

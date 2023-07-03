@@ -17,9 +17,10 @@ use common_exception::Result;
 use super::AggregateExpand;
 use super::AggregateFinal;
 use super::AggregatePartial;
+use super::CopyIntoTableFromQuery;
 use super::DeleteFinal;
 use super::DeletePartial;
-use super::DistributedCopyIntoTable;
+use super::DistributedCopyIntoTableFromStage;
 use super::DistributedInsertSelect;
 use super::EvalScalar;
 use super::Exchange;
@@ -64,7 +65,12 @@ pub trait PhysicalPlanReplacer {
             PhysicalPlan::DeletePartial(plan) => self.replace_delete_partial(plan),
             PhysicalPlan::DeleteFinal(plan) => self.replace_delete_final(plan),
             PhysicalPlan::RangeJoin(plan) => self.replace_range_join(plan),
-            PhysicalPlan::DistributedCopyIntoTable(plan) => self.replace_copy_into_table(plan),
+            PhysicalPlan::DistributedCopyIntoTableFromStage(plan) => {
+                self.replace_copy_into_table(plan)
+            }
+            PhysicalPlan::CopyIntoTableFromQuery(plan) => {
+                self.replace_copy_into_table_from_query(plan)
+            }
         }
     }
 
@@ -278,9 +284,25 @@ pub trait PhysicalPlanReplacer {
         }))
     }
 
-    fn replace_copy_into_table(&mut self, plan: &DistributedCopyIntoTable) -> Result<PhysicalPlan> {
-        Ok(PhysicalPlan::DistributedCopyIntoTable(Box::new(
+    fn replace_copy_into_table(
+        &mut self,
+        plan: &DistributedCopyIntoTableFromStage,
+    ) -> Result<PhysicalPlan> {
+        Ok(PhysicalPlan::DistributedCopyIntoTableFromStage(Box::new(
             plan.clone(),
+        )))
+    }
+
+    fn replace_copy_into_table_from_query(
+        &mut self,
+        plan: &CopyIntoTableFromQuery,
+    ) -> Result<PhysicalPlan> {
+        let input = self.replace(&plan.input)?;
+        Ok(PhysicalPlan::CopyIntoTableFromQuery(Box::new(
+            CopyIntoTableFromQuery {
+                input: Box::new(input),
+                ..plan.clone()
+            },
         )))
     }
 
@@ -402,7 +424,10 @@ impl PhysicalPlan {
                 PhysicalPlan::ProjectSet(plan) => {
                     Self::traverse(&plan.input, pre_visit, visit, post_visit)
                 }
-                PhysicalPlan::DistributedCopyIntoTable(_) => {}
+                PhysicalPlan::DistributedCopyIntoTableFromStage(_) => {}
+                PhysicalPlan::CopyIntoTableFromQuery(plan) => {
+                    Self::traverse(&plan.input, pre_visit, visit, post_visit);
+                }
                 PhysicalPlan::RuntimeFilterSource(plan) => {
                     Self::traverse(&plan.left_side, pre_visit, visit, post_visit);
                     Self::traverse(&plan.right_side, pre_visit, visit, post_visit);
