@@ -81,9 +81,11 @@ impl Binder {
             order_by: window_info.order_by_items.clone(),
             frame: window_info.frame.clone(),
         };
-        new_expr = SExpr::create_unary(Arc::new(window_plan.into()), Arc::new(new_expr));
 
-        Ok(new_expr)
+        Ok(SExpr::create_unary(
+            Arc::new(window_plan.into()),
+            Arc::new(new_expr),
+        ))
     }
 
     pub(super) fn analyze_window_definition(

@@ -41,6 +41,7 @@ use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_exception::Span;
+use common_expression::cast_scalar;
 use common_expression::infer_schema_type;
 use common_expression::shrink_scalar;
 use common_expression::type_check;
@@ -98,6 +99,7 @@ use crate::BindContext;
 use crate::ColumnBinding;
 use crate::ColumnEntry;
 use crate::MetadataRef;
+use crate::TypeCheck;
 use crate::Visibility;
 
 /// A helper for type checking.
@@ -1070,33 +1072,21 @@ impl<'a> TypeChecker<'a> {
     }
 
     #[async_backtrace::framed]
-    async fn resolve_range_offset(
-        &mut self,
-        bound: &WindowFrameBound,
-    ) -> Result<Option<(ScalarExpr, DataType)>> {
+    async fn resolve_range_offset(&mut self, bound: &WindowFrameBound) -> Result<Option<Scalar>> {
         match bound {
             WindowFrameBound::Following(Some(box expr))
             | WindowFrameBound::Preceding(Some(box expr)) => {
-                let box (value, mut data_type) = self.resolve(expr).await?;
-                if matches!(
-                    data_type,
-                    DataType::Number(_)
-                        | DataType::Decimal(_)
-                        | DataType::Date
-                        | DataType::Timestamp
-                ) {
-                    // Make sure RANEG offset is number type.
-                    if data_type.is_decimal() {
-                        data_type = DataType::Number(NumberDataType::Float64)
-                    } else if data_type.is_date_or_date_time() {
-                        data_type = DataType::Number(NumberDataType::Int64)
-                    }
-                    return Ok(Some((value, data_type)));
+                let box (expr, _) = self.resolve(expr).await?;
+                let (expr, _) =
+                    ConstantFolder::fold(&expr.type_check()?, &self.func_ctx, &BUILTIN_FUNCTIONS);
+                if let common_expression::Expr::Constant { scalar, .. } = expr {
+                    Ok(Some(scalar))
+                } else {
+                    Err(ErrorCode::SemanticError(
+                        "Only constant is allowed in RANGE offset".to_string(),
+                    )
+                    .set_span(expr.span()))
                 }
-                Err(ErrorCode::SemanticError(
-                    "Only numbers are allowed in RANGE offset".to_string(),
-                )
-                .set_span(expr.span()))
             }
             _ => Ok(None),
         }
@@ -1114,20 +1104,20 @@ impl<'a> TypeChecker<'a> {
         let mut common_type = order_by_type.remove_nullable();
         let start_offset = self.resolve_range_offset(&frame.start_bound).await?;
         let end_offset = self.resolve_range_offset(&frame.end_bound).await?;
-        if let Some((_, data_type)) = &start_offset {
+        if let Some(start_offset) = &start_offset {
             common_type = type_check::common_super_type(
                 common_type.clone(),
-                data_type.clone(),
+                start_offset.as_ref().infer_data_type(),
                 &BUILTIN_FUNCTIONS.default_cast_rules,
             )
             .ok_or_else(|| {
                 ErrorCode::SemanticError("Cannot unify ORDER BY and RANGE offset types".to_string())
             })?;
         }
-        if let Some((_, data_type)) = &end_offset {
+        if let Some(end_offset) = &end_offset {
             common_type = type_check::common_super_type(
                 common_type.clone(),
-                data_type.clone(),
+                end_offset.as_ref().infer_data_type(),
                 &BUILTIN_FUNCTIONS.default_cast_rules,
             )
             .ok_or_else(|| {
@@ -1137,37 +1127,13 @@ impl<'a> TypeChecker<'a> {
 
         // Unify ORDER BY and RANGE offsets types.
         let start_offset = start_offset
-            .map(|(mut expr, _)| {
-                expr = wrap_cast(&expr, &common_type);
-                let expr = expr.as_expr()?;
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let common_expression::Expr::Constant { scalar, .. } = expr {
-                    debug_assert!(matches!(scalar, Scalar::Number(_)));
-                    if scalar.is_positive() {
-                        return Ok(scalar);
-                    }
-                }
-                Err(ErrorCode::SemanticError(
-                    "Only positive numbers are allowed in RANGE offset".to_string(),
-                )
-                .set_span(span))
+            .map(|start_offset| {
+                cast_scalar(span, start_offset, common_type.clone(), &BUILTIN_FUNCTIONS)
             })
             .transpose()?;
         let end_offset = end_offset
-            .map(|(mut expr, _)| {
-                expr = wrap_cast(&expr, &common_type);
-                let expr = expr.as_expr()?.project_column_ref(|col| col.index);
-                let (expr, _) = ConstantFolder::fold(&expr, &self.func_ctx, &BUILTIN_FUNCTIONS);
-                if let common_expression::Expr::Constant { scalar, .. } = expr {
-                    debug_assert!(matches!(scalar, Scalar::Number(_)));
-                    if scalar.is_positive() {
-                        return Ok(scalar);
-                    }
-                }
-                Err(ErrorCode::SemanticError(
-                    "Only positive numbers are allowed in RANGE offset".to_string(),
-                )
-                .set_span(span))
+            .map(|end_offset| {
+                cast_scalar(span, end_offset, common_type.clone(), &BUILTIN_FUNCTIONS)
             })
             .transpose()?;
 

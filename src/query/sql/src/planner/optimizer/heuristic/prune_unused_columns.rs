@@ -191,16 +191,12 @@ impl UnusedColumnPruner {
             }
             RelOperator::Window(p) => {
                 if required.contains(&p.index) {
-                    // The scalar items in window function is not replaced yet.
-                    // The will be replaced in physical plan builder.
-                    p.arguments.iter().for_each(|item| {
-                        required.extend(item.scalar.used_columns());
-                    });
+                    required.extend(p.function.used_columns());
                     p.partition_by.iter().for_each(|item| {
-                        required.extend(item.scalar.used_columns());
+                        required.insert(item.index);
                     });
                     p.order_by.iter().for_each(|item| {
-                        required.extend(item.order_by_item.scalar.used_columns());
+                        required.insert(item.order_by_item.index);
                     });
                 }
 
