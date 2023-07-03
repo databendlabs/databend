@@ -188,16 +188,15 @@ pub fn metrics_inc_replace_row_number_after_pruning(c: u64) {
     increment_gauge!(key!("replace_into_row_number_after_pruning"), c as f64);
 }
 
-pub fn metrics_inc_replace_block_number_partial_loaded(c: u64) {
-    increment_gauge!(key!("replace_into_block_number_partial_loaded"), c as f64);
-}
-
-pub fn metrics_inc_replace_row_number_partial_loaded(c: u64) {
-    increment_gauge!(key!("replace_into_row_number_partial_loaded"), c as f64);
-}
-
 pub fn metrics_inc_replace_block_number_totally_loaded(c: u64) {
     increment_gauge!(key!("replace_into_block_number_totally_loaded"), c as f64);
+}
+
+pub fn metrics_inc_replace_row_number_write(c: u64) {
+    increment_gauge!(key!("replace_into_row_number_write"), c as f64);
+}
+pub fn metrics_inc_replace_block_number_write(c: u64) {
+    increment_gauge!(key!("replace_into_block_number_write"), c as f64);
 }
 
 pub fn metrics_inc_replace_row_number_totally_loaded(c: u64) {
@@ -273,7 +272,7 @@ pub fn metrics_reset() {
     gauge!(key!("replace_into_row_number_write"), c);
 
     // number of blocks deleted totally during executing replace into
-    guage!(key!("replace_into_whole_block_deletion"), c);
+    gauge!(key!("replace_into_whole_block_deletion"), c);
     // number of blocks failed to be pruned, and no rows deleted, during executing replace into
-    guage!(key!("replace_into_block_of_zero_row_deleted"), c);
+    gauge!(key!("replace_into_block_of_zero_row_deleted"), c);
 }

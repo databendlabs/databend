@@ -15,8 +15,6 @@
 use std::sync::Arc;
 
 use common_base::runtime::GlobalIORuntime;
-use common_catalog::table::CompactTarget;
-use common_catalog::table::TableExt;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,7 +27,6 @@ use common_sql::plans::OptimizeTablePlan;
 use common_sql::plans::Plan;
 use common_sql::plans::Replace;
 use common_sql::NameResolutionContext;
-use time::Instant;
 use tracing::info;
 
 use crate::interpreters::common::check_deduplicate_label;
