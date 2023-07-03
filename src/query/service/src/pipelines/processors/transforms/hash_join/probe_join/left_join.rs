@@ -25,7 +25,6 @@ use common_expression::Scalar;
 use common_expression::Value;
 use common_hashtable::HashJoinHashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::ProbeState;
 use crate::pipelines::processors::JoinHashTable;
 use crate::sql::plans::JoinType;
@@ -43,6 +42,7 @@ impl JoinHashTable {
         H::Key: 'a,
     {
         let input_num_rows = input.num_rows();
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let true_validity = &probe_state.true_validity;
         let probe_indexes = &mut probe_state.probe_indexes;
@@ -74,7 +74,7 @@ impl JoinHashTable {
                         key,
                         local_build_indexes_ptr,
                         matched_num,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     )
                 } else {
                     self.probe_key(
@@ -84,6 +84,7 @@ impl JoinHashTable {
                         i,
                         local_build_indexes_ptr,
                         matched_num,
+                        max_block_size,
                     )
                 };
             let mut total_probe_matched = 0;
@@ -100,7 +101,7 @@ impl JoinHashTable {
             } else {
                 probe_unmatched_indexes[probe_unmatched_indexes_occupied] = (i as u32, 1);
                 probe_unmatched_indexes_occupied += 1;
-                if probe_unmatched_indexes_occupied >= JOIN_MAX_BLOCK_SIZE {
+                if probe_unmatched_indexes_occupied >= max_block_size {
                     result_blocks.push(self.create_left_join_null_block(
                         input,
                         probe_unmatched_indexes,
@@ -109,7 +110,7 @@ impl JoinHashTable {
                     probe_unmatched_indexes_occupied = 0;
                 }
             }
-            if matched_num >= JOIN_MAX_BLOCK_SIZE || i == input_num_rows - 1 {
+            if matched_num >= max_block_size || i == input_num_rows - 1 {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -141,14 +142,14 @@ impl JoinHashTable {
                                 .collect::<Vec<_>>(),
                             matched_num,
                         )
-                    } else if matched_num == JOIN_MAX_BLOCK_SIZE {
+                    } else if matched_num == max_block_size {
                         (
                             build_block
                                 .columns()
                                 .iter()
-                                .map(|c| Self::set_validity(c, JOIN_MAX_BLOCK_SIZE, true_validity))
+                                .map(|c| Self::set_validity(c, max_block_size, true_validity))
                                 .collect::<Vec<_>>(),
-                            JOIN_MAX_BLOCK_SIZE,
+                            max_block_size,
                         )
                     } else {
                         let mut validity = MutableBitmap::new();
@@ -167,11 +168,11 @@ impl JoinHashTable {
 
                     // For full join, wrap nullable for probe block
                     if self.hash_join_desc.join_type == JoinType::Full {
-                        let nullable_probe_columns = if matched_num == JOIN_MAX_BLOCK_SIZE {
+                        let nullable_probe_columns = if matched_num == max_block_size {
                             probe_block
                                 .columns()
                                 .iter()
-                                .map(|c| Self::set_validity(c, JOIN_MAX_BLOCK_SIZE, true_validity))
+                                .map(|c| Self::set_validity(c, max_block_size, true_validity))
                                 .collect::<Vec<_>>()
                         } else {
                             let mut validity = MutableBitmap::new();
@@ -209,7 +210,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         local_build_indexes_ptr,
                         matched_num,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
 
                     if probe_matched > 0 {
@@ -226,7 +227,7 @@ impl JoinHashTable {
                         probe_indexes_occupied += 1;
                     }
 
-                    if matched_num < JOIN_MAX_BLOCK_SIZE && i != input_num_rows - 1 {
+                    if matched_num < max_block_size && i != input_num_rows - 1 {
                         break;
                     }
                 }
@@ -256,6 +257,7 @@ impl JoinHashTable {
         H::Key: 'a,
     {
         let input_num_rows = input.num_rows();
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let true_validity = &probe_state.true_validity;
         let probe_indexes = &mut probe_state.probe_indexes;
@@ -294,7 +296,7 @@ impl JoinHashTable {
                         key,
                         local_build_indexes_ptr,
                         matched_num,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     )
                 } else {
                     self.probe_key(
@@ -304,6 +306,7 @@ impl JoinHashTable {
                         i,
                         local_build_indexes_ptr,
                         matched_num,
+                        max_block_size,
                     )
                 };
             let mut total_probe_matched = 0;
@@ -323,7 +326,7 @@ impl JoinHashTable {
                 probe_indexes[probe_indexes_occupied] = (i as u32, probe_matched as u32);
                 probe_indexes_occupied += 1;
             }
-            if matched_num >= JOIN_MAX_BLOCK_SIZE || i == input_num_rows - 1 {
+            if matched_num >= max_block_size || i == input_num_rows - 1 {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -355,14 +358,14 @@ impl JoinHashTable {
                                 .collect::<Vec<_>>(),
                             matched_num,
                         )
-                    } else if matched_num == JOIN_MAX_BLOCK_SIZE {
+                    } else if matched_num == max_block_size {
                         (
                             build_block
                                 .columns()
                                 .iter()
-                                .map(|c| Self::set_validity(c, JOIN_MAX_BLOCK_SIZE, true_validity))
+                                .map(|c| Self::set_validity(c, max_block_size, true_validity))
                                 .collect::<Vec<_>>(),
-                            JOIN_MAX_BLOCK_SIZE,
+                            max_block_size,
                         )
                     } else {
                         let mut validity = MutableBitmap::new();
@@ -381,11 +384,11 @@ impl JoinHashTable {
 
                     // For full join, wrap nullable for probe block
                     if self.hash_join_desc.join_type == JoinType::Full {
-                        let nullable_probe_columns = if matched_num == JOIN_MAX_BLOCK_SIZE {
+                        let nullable_probe_columns = if matched_num == max_block_size {
                             probe_block
                                 .columns()
                                 .iter()
-                                .map(|c| Self::set_validity(c, JOIN_MAX_BLOCK_SIZE, true_validity))
+                                .map(|c| Self::set_validity(c, max_block_size, true_validity))
                                 .collect::<Vec<_>>()
                         } else {
                             let mut validity = MutableBitmap::new();
@@ -465,7 +468,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         local_build_indexes_ptr,
                         matched_num,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
 
                     if probe_matched > 0 {
@@ -487,7 +490,7 @@ impl JoinHashTable {
                         probe_indexes_occupied += 1;
                     }
 
-                    if matched_num < JOIN_MAX_BLOCK_SIZE && i != input_num_rows - 1 {
+                    if matched_num < max_block_size && i != input_num_rows - 1 {
                         break;
                     }
                 }
@@ -500,7 +503,7 @@ impl JoinHashTable {
             if row_state[idx] == 0 {
                 probe_indexes[probe_indexes_occupied] = (idx as u32, 1);
                 probe_indexes_occupied += 1;
-                if probe_indexes_occupied >= JOIN_MAX_BLOCK_SIZE {
+                if probe_indexes_occupied >= max_block_size {
                     result_blocks.push(self.create_left_join_null_block(
                         input,
                         probe_indexes,
