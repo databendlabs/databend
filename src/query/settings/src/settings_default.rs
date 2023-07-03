@@ -316,6 +316,12 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: true,
                 }),
+                ("enable_aggregating_index_scan", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enable scanning aggregating index data while querying.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

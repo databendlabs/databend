@@ -73,6 +73,37 @@ EvalScalar
                 ├── output columns: [a]
                 └── estimated rows: 0.00
 
+statement ok
+set max_threads = 4;
+
+
+# Sort without pre-projection
+query T
+explain pipeline select a, b from t1 order by a;
+----
+CompoundBlockOperator(Project) × 1 processor
+  Merge (SortMergeTransform × 4 processors) to (CompoundBlockOperator(Project) × 1)
+    SortMergeTransform × 4 processors
+      SortPartialTransform × 4 processors
+        Merge (DeserializeDataTransform × 1 processor) to (SortPartialTransform × 4)
+          DeserializeDataTransform × 1 processor
+            SyncReadParquetDataSource × 1 processor
+
+
+# Sort with pre-projection
+query T
+explain pipeline select a + 1, b from t1 order by a + 1;
+----
+CompoundBlockOperator(Project) × 1 processor
+  Merge (SortMergeTransform × 4 processors) to (CompoundBlockOperator(Project) × 1)
+    SortMergeTransform × 4 processors
+      SortPartialTransform × 4 processors
+        Merge (CompoundBlockOperator(Project) × 1 processor) to (SortPartialTransform × 4)
+          CompoundBlockOperator(Project) × 1 processor
+            CompoundBlockOperator(Map) × 1 processor
+              DeserializeDataTransform × 1 processor
+                SyncReadParquetDataSource × 1 processor
+
 
 statement ok
 drop table if exists t1;
