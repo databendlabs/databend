@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_ast::ast::ExplainKind;
+use common_ast::ast::FormatTreeNode;
 use common_catalog::table_context::TableContext;
 use common_exception::ErrorCode;
 use common_exception::Result;
@@ -29,8 +30,11 @@ use common_profile::QueryProfileManager;
 use common_profile::SharedProcessorProfiles;
 use common_sql::executor::ProfileHelper;
 use common_sql::MetadataRef;
+use common_storages_result_cache::gen_result_cache_key;
+use common_storages_result_cache::ResultCacheReader;
+use common_users::UserApiProvider;
 
-use crate::interpreters::interpreter_copy::CopyInterpreter;
+use super::InterpreterFactory;
 use crate::interpreters::Interpreter;
 use crate::pipelines::executor::ExecutorSettings;
 use crate::pipelines::executor::PipelineCompleteExecutor;
@@ -69,12 +73,21 @@ impl Interpreter for ExplainInterpreter {
 
             ExplainKind::Plan => match &self.plan {
                 Plan::Query {
-                    s_expr, metadata, ..
+                    s_expr,
+                    metadata,
+                    formatted_ast,
+                    ..
                 } => {
                     let ctx = self.ctx.clone();
-                    let mut builder = PhysicalPlanBuilder::new(metadata.clone(), ctx, true);
+                    // If `formatted_ast` is Some, it means we may use query result cache.
+                    // If we use result cache for this query,
+                    // we should not use `dry_run` mode to build the physical plan.
+                    // It's because we need to get the same partitions as the original selecting plan.
+                    let mut builder =
+                        PhysicalPlanBuilder::new(metadata.clone(), ctx, formatted_ast.is_none());
                     let plan = builder.build(s_expr).await?;
-                    self.explain_physical_plan(&plan, metadata)?
+                    self.explain_physical_plan(&plan, metadata, formatted_ast)
+                        .await?
                 }
                 _ => self.explain_plan(&self.plan)?,
             },
@@ -108,27 +121,11 @@ impl Interpreter for ExplainInterpreter {
                 ))?,
             },
 
-            ExplainKind::Pipeline => match &self.plan {
-                Plan::Query {
-                    s_expr,
-                    metadata,
-                    ignore_result,
-                    ..
-                } => {
-                    self.explain_pipeline(*s_expr.clone(), metadata.clone(), *ignore_result)
-                        .await?
-                }
-                Plan::Copy(copy) => {
-                    let interpreter =
-                        CopyInterpreter::try_create(self.ctx.clone(), copy.as_ref().clone())?;
-                    let build_res = interpreter.execute2().await?;
-
-                    Self::format_pipeline(&build_res)
-                }
-                _ => {
-                    return Err(ErrorCode::Unimplemented("Unsupported EXPLAIN statement"));
-                }
-            },
+            ExplainKind::Pipeline => {
+                let interpter = InterpreterFactory::get(self.ctx.clone(), &self.plan).await?;
+                let pipeline = interpter.execute2().await?;
+                Self::format_pipeline(&pipeline)
+            }
 
             ExplainKind::Fragments => match &self.plan {
                 Plan::Query {
@@ -180,11 +177,41 @@ impl ExplainInterpreter {
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
     }
 
-    pub fn explain_physical_plan(
+    pub async fn explain_physical_plan(
         &self,
         plan: &PhysicalPlan,
         metadata: &MetadataRef,
+        formatted_ast: &Option<String>,
     ) -> Result<Vec<DataBlock>> {
+        if self.ctx.get_settings().get_enable_query_result_cache()? && self.ctx.get_cacheable() {
+            let key = gen_result_cache_key(formatted_ast.as_ref().unwrap());
+            let kv_store = UserApiProvider::instance().get_meta_store_client();
+            let cache_reader = ResultCacheReader::create(
+                self.ctx.clone(),
+                &key,
+                kv_store.clone(),
+                self.ctx
+                    .get_settings()
+                    .get_query_result_cache_allow_inconsistent()?,
+            );
+            if let Some(v) = cache_reader.check_cache().await? {
+                // Construct a format tree for result cache reading
+                let children = vec![
+                    FormatTreeNode::new(format!("SQL: {}", v.sql)),
+                    FormatTreeNode::new(format!("Number of rows: {}", v.num_rows)),
+                    FormatTreeNode::new(format!("Result size: {}", v.result_size)),
+                ];
+
+                let format_tree =
+                    FormatTreeNode::with_children("ReadQueryResultCache".to_string(), children);
+
+                let result = format_tree.format_pretty()?;
+                let line_split_result: Vec<&str> = result.lines().collect();
+                let formatted_plan = StringType::from_data(line_split_result);
+                return Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])]);
+            }
+        }
+
         let result = plan
             .format(metadata.clone(), SharedProcessorProfiles::default())?
             .format_pretty()?;
@@ -202,19 +229,6 @@ impl ExplainInterpreter {
         let line_split_result: Vec<&str> = result.lines().collect();
         let formatted_plan = StringType::from_data(line_split_result);
         Ok(vec![DataBlock::new_from_columns(vec![formatted_plan])])
-    }
-
-    #[async_backtrace::framed]
-    pub async fn explain_pipeline(
-        &self,
-        s_expr: SExpr,
-        metadata: MetadataRef,
-        ignore_result: bool,
-    ) -> Result<Vec<DataBlock>> {
-        let mut builder = PhysicalPlanBuilder::new(metadata, self.ctx.clone(), true);
-        let plan = builder.build(&s_expr).await?;
-        let build_res = build_query_pipeline(&self.ctx, &[], &plan, ignore_result, false).await?;
-        Ok(Self::format_pipeline(&build_res))
     }
 
     fn format_pipeline(build_res: &PipelineBuildResult) -> Vec<DataBlock> {
