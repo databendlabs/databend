@@ -25,13 +25,18 @@ use serde::Serializer;
 
 use crate::io::MergeIOReadResult;
 
+pub enum DataSource {
+    AggIndex(Vec<u8>),
+    Normal(MergeIOReadResult),
+}
+
 pub struct DataSourceMeta {
     pub part: Vec<PartInfoPtr>,
-    pub data: Vec<MergeIOReadResult>,
+    pub data: Vec<DataSource>,
 }
 
 impl DataSourceMeta {
-    pub fn create(part: Vec<PartInfoPtr>, data: Vec<MergeIOReadResult>) -> BlockMetaInfoPtr {
+    pub fn create(part: Vec<PartInfoPtr>, data: Vec<DataSource>) -> BlockMetaInfoPtr {
         Box::new(DataSourceMeta { part, data })
     }
 }

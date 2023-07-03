@@ -19,7 +19,6 @@ mod transform_cast_schema;
 mod transform_create_sets;
 mod transform_hash_join;
 mod transform_limit;
-mod transform_mark_join;
 mod window;
 
 mod range_join;
@@ -75,8 +74,6 @@ pub use transform_hash_join::TransformHashJoinProbe;
 pub use transform_ie_join::TransformRangeJoinLeft;
 pub use transform_ie_join::TransformRangeJoinRight;
 pub use transform_limit::TransformLimit;
-pub use transform_mark_join::MarkJoinCompactor;
-pub use transform_mark_join::TransformMarkJoin;
 pub use transform_merge_block::TransformMergeBlock;
 pub use transform_resort_addon::TransformResortAddOn;
 pub use transform_runtime_cast_schema::TransformRuntimeCastSchema;

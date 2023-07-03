@@ -21,6 +21,7 @@ mod write;
 
 pub use files::Files;
 pub use locations::TableMetaLocationGenerator;
+pub use read::AggIndexReader;
 pub use read::BlockReader;
 pub use read::BloomBlockFilterReader;
 pub use read::CompactSegmentInfoReader;

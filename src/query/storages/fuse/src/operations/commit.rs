@@ -75,7 +75,7 @@ impl FuseTable {
         copied_files: Option<UpsertTableCopiedFileReq>,
         overwrite: bool,
     ) -> Result<()> {
-        pipeline.resize(1)?;
+        pipeline.try_resize(1)?;
 
         pipeline.add_transform(|input, output| {
             let aggregator = TableMutationAggregator::create(

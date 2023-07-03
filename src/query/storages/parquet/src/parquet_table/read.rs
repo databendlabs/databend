@@ -41,7 +41,12 @@ use crate::parquet_source::SyncParquetSource;
 
 impl ParquetTable {
     pub fn create_reader(&self, projection: Projection) -> Result<Arc<ParquetReader>> {
-        ParquetReader::create(self.operator.clone(), self.arrow_schema.clone(), projection)
+        ParquetReader::create(
+            self.operator.clone(),
+            &self.arrow_schema,
+            &self.schema_descr,
+            projection,
+        )
     }
 
     fn build_filter(filter: &RemoteExpr<String>, schema: &DataSchema) -> Expr {
@@ -71,7 +76,8 @@ impl ParquetTable {
         // Build the reader for parquet source.
         let source_reader = ParquetReader::create(
             self.operator.clone(),
-            self.arrow_schema.clone(),
+            &self.arrow_schema,
+            &self.schema_descr,
             source_projection,
         )?;
 
@@ -106,7 +112,8 @@ impl ParquetTable {
         let remain_reader = if let Some(p) = &push_down_prewhere {
             ParquetReader::create(
                 self.operator.clone(),
-                self.arrow_schema.clone(),
+                &self.arrow_schema,
+                &self.schema_descr,
                 p.remain_columns.clone(),
             )?
         } else {
@@ -117,7 +124,8 @@ impl ParquetTable {
             .map(|p| {
                 let reader = ParquetReader::create(
                     self.operator.clone(),
-                    self.arrow_schema.clone(),
+                    &self.arrow_schema,
+                    &self.schema_descr,
                     p.prewhere_columns,
                 )?;
                 src_fields.extend_from_slice(reader.output_schema.fields());
@@ -155,7 +163,7 @@ impl ParquetTable {
             )?;
         };
 
-        pipeline.resize(num_deserializer)?;
+        pipeline.try_resize(num_deserializer)?;
 
         pipeline.add_transform(|input, output| {
             ParquetDeserializeTransform::create(
@@ -177,7 +185,8 @@ fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [usize]) -> usize 
     sizes.sort_by(|a, b| b.cmp(a));
     let mut mem = 0;
     for (i, s) in sizes.iter().enumerate() {
-        mem += s;
+        // there may be 2 blocks in a pipe.
+        mem += s * 2;
         if mem > max_memory {
             return i;
         }
@@ -185,7 +194,7 @@ fn limit_parallelism_by_memory(max_memory: usize, sizes: &mut [usize]) -> usize 
     sizes.len()
 }
 
-fn calc_parallelism(
+pub fn calc_parallelism(
     ctx: &Arc<dyn TableContext>,
     plan: &DataSourcePlan,
     is_blocking: bool,
@@ -193,6 +202,9 @@ fn calc_parallelism(
     if plan.parts.partitions.is_empty() {
         return Ok((1, 1));
     }
+    let settings = ctx.get_settings();
+    let num_partitions = plan.parts.partitions.len();
+    let max_threads = settings.get_max_threads()? as usize;
     let mut sizes = vec![];
     for p in plan.parts.partitions.iter() {
         sizes.push(ParquetPart::from_part(p)?.uncompressed_size() as usize);
@@ -200,10 +212,10 @@ fn calc_parallelism(
     let num_chunks = ParquetPart::from_part(&plan.parts.partitions[0])?
         .num_io()
         .max(1);
-    let max_memory = ctx.get_settings().get_max_memory_usage()? as usize;
+    let max_memory = settings.get_max_memory_usage()? as usize;
     let max_by_memory = limit_parallelism_by_memory(max_memory, &mut sizes).max(1);
 
-    let max_storage_io_requests = ctx.get_settings().get_max_storage_io_requests()? as usize;
+    let max_storage_io_requests = settings.get_max_storage_io_requests()? as usize;
     let num_readers = if is_blocking {
         max_storage_io_requests
     } else {
@@ -212,12 +224,10 @@ fn calc_parallelism(
     .min(max_by_memory)
     .max(1);
 
-    let num_deserializer = (ctx.get_settings().get_max_threads()? as usize)
-        .min(max_by_memory)
-        .max(1);
+    let num_deserializer = max_threads.min(max_by_memory).max(1);
 
     tracing::info!(
-        "loading row groups with {num_readers} readers and {num_deserializer} deserializers, blocking = {is_blocking}, according to max_memory={max_memory}, num_chunks={num_chunks}, max_storage_io_requests={max_storage_io_requests}, max_split_size={}",
+        "loading {num_partitions} partitions with {num_readers} readers and {num_deserializer} deserializers, blocking = {is_blocking}, according to max_memory={max_memory}, num_chunks={num_chunks}, max_storage_io_requests={max_storage_io_requests}, max_split_size={}, max_threads={max_threads}",
         sizes[0]
     );
     Ok((num_readers, num_deserializer))

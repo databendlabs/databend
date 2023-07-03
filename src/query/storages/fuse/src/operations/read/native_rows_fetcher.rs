@@ -26,6 +26,7 @@ use common_catalog::plan::Projection;
 use common_catalog::table::Table;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::DataSchema;
 use common_expression::TableSchemaRef;
 use common_storage::ColumnNodes;
 use storages_common_cache::LoadParams;
@@ -94,12 +95,16 @@ impl<const BLOCKING_IO: bool> RowsFetcher for NativeRowsFetcher<BLOCKING_IO> {
             .iter()
             .map(|(prefix, page_idx, idx)| {
                 let block_idx = idx_map[&(*prefix, *page_idx)];
-                (block_idx, *idx as usize, 1_usize)
+                (block_idx as u32, *idx as u32, 1_usize)
             })
             .collect::<Vec<_>>();
 
         let blocks = blocks.iter().collect::<Vec<_>>();
         Ok(DataBlock::take_blocks(&blocks, &indices, num_rows))
+    }
+
+    fn schema(&self) -> DataSchema {
+        self.reader.data_schema()
     }
 }
 

@@ -14,6 +14,7 @@
 
 use std::convert::TryFrom;
 use std::sync::Arc;
+use std::time::Instant;
 
 use async_channel::Receiver;
 use common_catalog::table::AppendMode;
@@ -42,8 +43,10 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_sinks::EmptySink;
 use common_pipeline_sinks::Sinker;
 use common_pipeline_sinks::UnionReceiveSink;
+use common_pipeline_transforms::processors::profile_wrapper::ProcessorProfileWrapper;
+use common_pipeline_transforms::processors::profile_wrapper::TransformProfileWrapper;
 use common_pipeline_transforms::processors::transforms::build_full_sort_pipeline;
-use common_pipeline_transforms::processors::ProfileWrapper;
+use common_pipeline_transforms::processors::transforms::Transformer;
 use common_profile::SharedProcessorProfiles;
 use common_sql::evaluator::BlockOperator;
 use common_sql::evaluator::CompoundBlockOperator;
@@ -53,6 +56,7 @@ use common_sql::executor::AggregateFunctionDesc;
 use common_sql::executor::AggregatePartial;
 use common_sql::executor::DeleteFinal;
 use common_sql::executor::DeletePartial;
+use common_sql::executor::DistributedCopyIntoTable;
 use common_sql::executor::DistributedInsertSelect;
 use common_sql::executor::EvalScalar;
 use common_sql::executor::ExchangeSink;
@@ -70,7 +74,6 @@ use common_sql::executor::Sort;
 use common_sql::executor::TableScan;
 use common_sql::executor::UnionAll;
 use common_sql::executor::Window;
-use common_sql::plans::JoinType;
 use common_sql::ColumnBinding;
 use common_sql::IndexType;
 use common_storage::DataOperator;
@@ -79,6 +82,7 @@ use common_storages_fuse::operations::build_row_fetcher_pipeline;
 use common_storages_fuse::operations::FillInternalColumnProcessor;
 use common_storages_fuse::operations::SerializeDataTransform;
 use common_storages_fuse::FuseTable;
+use common_storages_stage::StageTable;
 use petgraph::matrix_graph::Zero;
 
 use super::processors::transforms::FrameBound;
@@ -86,7 +90,9 @@ use super::processors::transforms::WindowFunctionInfo;
 use super::processors::TransformExpandGroupingSets;
 use crate::api::DefaultExchangeInjector;
 use crate::api::ExchangeInjector;
+use crate::interpreters::append_data_and_set_finish;
 use crate::interpreters::fill_missing_columns;
+use crate::interpreters::PlanParam;
 use crate::pipelines::processors::transforms::build_partition_bucket;
 use crate::pipelines::processors::transforms::AggregateInjector;
 use crate::pipelines::processors::transforms::FinalSingleStateAggregator;
@@ -96,7 +102,6 @@ use crate::pipelines::processors::transforms::RangeJoinState;
 use crate::pipelines::processors::transforms::RuntimeFilterState;
 use crate::pipelines::processors::transforms::TransformAggregateSpillWriter;
 use crate::pipelines::processors::transforms::TransformGroupBySpillWriter;
-use crate::pipelines::processors::transforms::TransformMarkJoin;
 use crate::pipelines::processors::transforms::TransformMergeBlock;
 use crate::pipelines::processors::transforms::TransformPartialAggregate;
 use crate::pipelines::processors::transforms::TransformPartialGroupBy;
@@ -105,7 +110,6 @@ use crate::pipelines::processors::transforms::TransformRangeJoinRight;
 use crate::pipelines::processors::transforms::TransformWindow;
 use crate::pipelines::processors::AggregatorParams;
 use crate::pipelines::processors::JoinHashTable;
-use crate::pipelines::processors::MarkJoinCompactor;
 use crate::pipelines::processors::SinkRuntimeFilterSource;
 use crate::pipelines::processors::TransformCastSchema;
 use crate::pipelines::processors::TransformHashJoinBuild;
@@ -200,7 +204,37 @@ impl PipelineBuilder {
             PhysicalPlan::DeletePartial(delete) => self.build_delete_partial(delete),
             PhysicalPlan::DeleteFinal(delete) => self.build_delete_final(delete),
             PhysicalPlan::RangeJoin(range_join) => self.build_range_join(range_join),
+            PhysicalPlan::DistributedCopyIntoTable(distributed_plan) => {
+                self.build_distributed_copy_into_table(distributed_plan)
+            }
         }
+    }
+
+    fn build_distributed_copy_into_table(
+        &mut self,
+        distributed_plan: &DistributedCopyIntoTable,
+    ) -> Result<()> {
+        let catalog = self.ctx.get_catalog(&distributed_plan.catalog_name)?;
+        let to_table = catalog.get_table_by_info(&distributed_plan.table_info)?;
+        let stage_table_info = distributed_plan.stage_table_info.clone();
+        let stage_table = StageTable::try_create(stage_table_info)?;
+        stage_table.set_block_thresholds(distributed_plan.thresholds);
+        let ctx = self.ctx.clone();
+        let table_ctx: Arc<dyn TableContext> = ctx.clone();
+        let start = Instant::now();
+        stage_table.read_data(table_ctx, &distributed_plan.source, &mut self.main_pipeline)?;
+        // append data
+        append_data_and_set_finish(
+            &mut self.main_pipeline,
+            distributed_plan.required_source_schema.clone(),
+            PlanParam::DistributedCopyIntoTable(distributed_plan.clone()),
+            ctx,
+            to_table,
+            distributed_plan.files.clone(),
+            start,
+            false,
+        )?;
+        Ok(())
     }
 
     /// The flow of Pipeline is as follows:
@@ -272,11 +306,11 @@ impl PipelineBuilder {
     ) -> Result<()> {
         self.build_pipeline(&range_join.left)?;
         let max_threads = self.ctx.get_settings().get_max_threads()? as usize;
-        self.main_pipeline.resize(max_threads)?;
+        self.main_pipeline.try_resize(max_threads)?;
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformRangeJoinLeft::create(input, output, state.clone());
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
                     range_join.plan_id,
                     self.prof_span_set.clone(),
@@ -306,7 +340,7 @@ impl PipelineBuilder {
                 TransformRangeJoinRight::create(state.clone()),
             );
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
                     range_join.plan_id,
                     self.prof_span_set.clone(),
@@ -359,7 +393,7 @@ impl PipelineBuilder {
             );
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
                     hash_join_plan.plan_id,
                     self.prof_span_set.clone(),
@@ -486,24 +520,26 @@ impl PipelineBuilder {
 
         let num_input_columns = filter.input.output_schema()?.num_fields();
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::create(
-                input,
-                output,
-                num_input_columns,
-                self.ctx.get_function_context()?,
+            let transform = CompoundBlockOperator::new(
                 vec![BlockOperator::Filter {
                     expr: predicate.clone(),
                 }],
+                self.ctx.get_function_context()?,
+                num_input_columns,
             );
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(TransformProfileWrapper::create(
                     transform,
+                    input,
+                    output,
                     filter.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
-                Ok(ProcessorPtr::create(transform))
+                Ok(ProcessorPtr::create(Transformer::create(
+                    input, output, transform,
+                )))
             }
         })?;
 
@@ -556,22 +592,21 @@ impl PipelineBuilder {
         let num_input_columns = input_schema.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::create(
-                input,
-                output,
-                num_input_columns,
-                func_ctx.clone(),
-                vec![op.clone()],
-            );
+            let transform =
+                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns);
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(TransformProfileWrapper::create(
                     transform,
+                    input,
+                    output,
                     eval_scalar.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
-                Ok(ProcessorPtr::create(transform))
+                Ok(ProcessorPtr::create(Transformer::create(
+                    input, output, transform,
+                )))
             }
         })?;
 
@@ -587,6 +622,7 @@ impl PipelineBuilder {
                 .iter()
                 .map(|(expr, _)| expr.as_expr(&BUILTIN_FUNCTIONS))
                 .collect(),
+            unused_indices: project_set.unused_indices.clone(),
         };
 
         let func_ctx = self.ctx.get_function_context()?;
@@ -594,22 +630,21 @@ impl PipelineBuilder {
         let num_input_columns = project_set.input.output_schema()?.num_fields();
 
         self.main_pipeline.add_transform(|input, output| {
-            let transform = CompoundBlockOperator::create(
-                input,
-                output,
-                num_input_columns,
-                func_ctx.clone(),
-                vec![op.clone()],
-            );
+            let transform =
+                CompoundBlockOperator::new(vec![op.clone()], func_ctx.clone(), num_input_columns);
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(TransformProfileWrapper::create(
                     transform,
+                    input,
+                    output,
                     project_set.plan_id,
                     self.prof_span_set.clone(),
                 )))
             } else {
-                Ok(ProcessorPtr::create(transform))
+                Ok(ProcessorPtr::create(Transformer::create(
+                    input, output, transform,
+                )))
             }
         })
     }
@@ -681,7 +716,7 @@ impl PipelineBuilder {
                 let transform = PartialSingleStateAggregator::try_create(input, output, &params)?;
 
                 if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                         transform,
                         aggregate.plan_id,
                         self.prof_span_set.clone(),
@@ -724,7 +759,7 @@ impl PipelineBuilder {
             }?;
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
                     aggregate.plan_id,
                     self.prof_span_set.clone(),
@@ -768,7 +803,7 @@ impl PipelineBuilder {
                 };
 
                 if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                         transform,
                         aggregate.plan_id,
                         self.prof_span_set.clone(),
@@ -812,12 +847,12 @@ impl PipelineBuilder {
 
         if params.group_columns.is_empty() {
             self.build_pipeline(&aggregate.input)?;
-            self.main_pipeline.resize(1)?;
+            self.main_pipeline.try_resize(1)?;
             return self.main_pipeline.add_transform(|input, output| {
                 let transform = FinalSingleStateAggregator::try_create(input, output, &params)?;
 
                 if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                         transform,
                         aggregate.plan_id,
                         self.prof_span_set.clone(),
@@ -859,6 +894,9 @@ impl PipelineBuilder {
                         v,
                         &mut self.main_pipeline,
                         params.clone(),
+                        self.enable_profiling,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
                     )
                 }
             }),
@@ -880,6 +918,9 @@ impl PipelineBuilder {
                         v,
                         &mut self.main_pipeline,
                         params.clone(),
+                        self.enable_profiling,
+                        aggregate.plan_id,
+                        self.prof_span_set.clone(),
                     )
                 }
             }),
@@ -973,7 +1014,7 @@ impl PipelineBuilder {
             self.build_sort_pipeline(input_schema.clone(), sort_desc, window.plan_id, None, false)?;
         }
         // `TransformWindow` is a pipeline breaker.
-        self.main_pipeline.resize(1)?;
+        self.main_pipeline.try_resize(1)?;
         let func = WindowFunctionInfo::try_create(&window.func, &input_schema)?;
         // Window
         self.main_pipeline.add_transform(|input, output| {
@@ -1034,7 +1075,7 @@ impl PipelineBuilder {
             Ok(ProcessorPtr::create(transform))
         })?;
 
-        self.main_pipeline.resize(old_output_len)
+        self.main_pipeline.try_resize(old_output_len)
     }
 
     fn build_sort(&mut self, sort: &Sort) -> Result<()> {
@@ -1078,7 +1119,7 @@ impl PipelineBuilder {
 
         // TODO(Winter): the query will hang in MultiSortMergeProcessor when max_threads == 1 and output_len != 1
         if self.main_pipeline.output_len() == 1 || max_threads == 1 {
-            self.main_pipeline.resize(max_threads)?;
+            self.main_pipeline.try_resize(max_threads)?;
         }
         let prof_info = if self.enable_profiling {
             Some((plan_id, self.prof_span_set.clone()))
@@ -1101,12 +1142,12 @@ impl PipelineBuilder {
     fn build_limit(&mut self, limit: &Limit) -> Result<()> {
         self.build_pipeline(&limit.input)?;
 
-        self.main_pipeline.resize(1)?;
+        self.main_pipeline.try_resize(1)?;
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformLimit::try_create(limit.limit, limit.offset, input, output)?;
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
                     limit.plan_id,
                     self.prof_span_set.clone(),
@@ -1143,7 +1184,7 @@ impl PipelineBuilder {
             )?;
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
                     join.plan_id,
                     self.prof_span_set.clone(),
@@ -1152,27 +1193,6 @@ impl PipelineBuilder {
                 Ok(ProcessorPtr::create(transform))
             }
         })?;
-
-        if join.join_type == JoinType::LeftMark {
-            self.main_pipeline.resize(1)?;
-            self.main_pipeline.add_transform(|input, output| {
-                let transform = TransformMarkJoin::try_create(
-                    input,
-                    output,
-                    MarkJoinCompactor::create(state.clone()),
-                )?;
-
-                if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
-                        transform,
-                        join.plan_id,
-                        self.prof_span_set.clone(),
-                    )))
-                } else {
-                    Ok(ProcessorPtr::create(transform))
-                }
-            })?;
-        }
 
         Ok(())
     }
@@ -1213,7 +1233,7 @@ impl PipelineBuilder {
             let transform = UnionReceiveSink::create(Some(tx.clone()), input_port);
 
             if self.enable_profiling {
-                Ok(ProcessorPtr::create(ProfileWrapper::create(
+                Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                     transform,
                     union_plan.plan_id,
                     self.prof_span_set.clone(),
@@ -1244,7 +1264,7 @@ impl PipelineBuilder {
                 )?;
 
                 if self.enable_profiling {
-                    Ok(ProcessorPtr::create(ProfileWrapper::create(
+                    Ok(ProcessorPtr::create(ProcessorProfileWrapper::create(
                         transform,
                         union_all.plan_id,
                         self.prof_span_set.clone(),

@@ -126,7 +126,7 @@ SELECT * FROM t_insert_default;
 
 ## Insert with Staged Files
 
-Databend allows you to insert data from a staged file into a table by utilizing the INSERT INTO statement with its [HTTP Handler](../../11-integrations/00-api/00-rest.md).
+Databend allows you to insert data from a staged file into a table by utilizing the INSERT INTO statement with its [HTTP Handler](../../03-develop/00-api/00-rest.md).
 
 ### Syntax
 
@@ -136,7 +136,7 @@ INSERT INTO [db.]table [(c1, c2, c3)] VALUES ...
 
 ### Examples
 
-This example showcases the usage of Databend's [HTTP handler](../../11-integrations/00-api/01-mysql-handler.md) to insert data from a staged CSV file into a table. 
+This example showcases the usage of Databend's [HTTP handler](../../03-develop/00-api/00-rest.md) to insert data from a staged CSV file into a table. 
 
 ```sql
 CREATE TABLE t_insert_stage(a int null, b int default 2, c float, d varchar default 'd');

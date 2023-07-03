@@ -1216,6 +1216,20 @@ impl<'ast> Visitor<'ast> for AstFormatVisitor {
         self.children.push(node);
     }
 
+    fn visit_show_drop_tables(&mut self, stmt: &'ast ShowDropTablesStmt) {
+        let mut children = Vec::new();
+        if let Some(database) = &stmt.database {
+            let database_name = format!("Database {}", database);
+            let database_format_ctx = AstFormatContext::new(database_name);
+            let database_node = FormatTreeNode::new(database_format_ctx);
+            children.push(database_node);
+        }
+        let name = "ShowDropTables".to_string();
+        let format_ctx = AstFormatContext::with_children(name, children.len());
+        let node = FormatTreeNode::with_children(format_ctx, children);
+        self.children.push(node);
+    }
+
     fn visit_create_table(&mut self, stmt: &'ast CreateTableStmt) {
         let mut children = Vec::new();
         self.visit_table_ref(&stmt.catalog, &stmt.database, &stmt.table);

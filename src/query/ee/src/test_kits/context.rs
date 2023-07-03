@@ -42,6 +42,7 @@ fn build_custom_claims(license_type: String, org: String) -> LicenseInfo {
         r#type: Some(license_type),
         org: Some(org),
         tenants: Some(vec!["test".to_string()]),
+        features: None,
     }
 }
 
@@ -74,7 +75,7 @@ pub async fn create_ee_query_context(
         .await?;
 
     if current_user.is_none() {
-        let mut user_info = UserInfo::new("root", "127.0.0.1", AuthInfo::Password {
+        let mut user_info = UserInfo::new("root", "%", AuthInfo::Password {
             hash_method: PasswordHashMethod::Sha256,
             hash_value: Vec::from("pass"),
         });

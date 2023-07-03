@@ -14,6 +14,7 @@
 
 pub mod agg_index;
 mod filter_join;
+mod rule_commute_join;
 mod rule_eliminate_eval_scalar;
 mod rule_eliminate_filter;
 mod rule_fold_count_aggregate;
@@ -38,6 +39,7 @@ mod rule_push_down_sort_scan;
 mod rule_split_aggregate;
 mod rule_try_apply_agg_index;
 
+pub use rule_commute_join::RuleCommuteJoin;
 pub use rule_eliminate_eval_scalar::RuleEliminateEvalScalar;
 pub use rule_eliminate_filter::RuleEliminateFilter;
 pub use rule_fold_count_aggregate::RuleFoldCountAggregate;

@@ -1,0 +1,64 @@
+statement ok
+set enable_distributed_copy_into = 1;
+
+statement ok
+drop table if exists products;
+
+statement ok
+drop table if exists table_random;
+
+statement ok
+drop table if exists table_random2;
+
+statement ok
+drop stage if exists s1;
+
+statement ok
+create stage s1 FILE_FORMAT = (TYPE = CSV);
+
+statement ok
+create table products (id int, name string, description string);
+
+statement ok
+create table table_random(a int,b string,c string) ENGINE = Random;
+
+statement ok
+create table table_random2(a int,b string) ENGINE = Random;
+
+statement ok
+copy into @s1 from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @s1 from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @s1 from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @s1 from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @s1 from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @s1 from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @s1 from (select a,b,c from table_random limit 1000000);
+
+statement ok
+copy into @s1 from (select a,b from table_random2 limit 1000000);
+
+statement error 1046
+copy into products from @s1 pattern = '.*[.]csv' purge = true;
+
+query I
+select count(*) from products;
+----
+0
+
+statement ok
+select block_count from fuse_snapshot('default','products');
+
+statement ok
+set enable_distributed_copy_into = 0;

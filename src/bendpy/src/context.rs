@@ -51,7 +51,7 @@ impl PySessionContext {
                 session.set_current_tenant(uuid::Uuid::new_v4().to_string());
             }
 
-            let user = UserInfo::new_no_auth("root", "127.0.0.1");
+            let user = UserInfo::new_no_auth("root", "%");
             session.set_authed_user(user, None).await.unwrap();
             session
         });

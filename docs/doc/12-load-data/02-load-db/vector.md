@@ -26,7 +26,7 @@ CREATE DATABASE nginx;
 GRANT INSERT ON nginx.* TO user1;
 ```
 
-### Step 2. Configure Databend as a Sink in Vector
+### Step 2: Configure Databend as a Sink in Vector
 
 In this step, configure Databend as a sink in Vector by specifying the necessary settings such as the input source, compression, database, endpoint, table, and authentication credentials (username and password) for Databend integration. The following is a simple example of configuring Databend as a sink. For a comprehensive list of configuration parameters, refer to the Vector documentation at https://vector.dev/docs/reference/configuration/sinks/databend/
 

@@ -21,11 +21,11 @@ use common_base::base::tokio::sync::mpsc::Receiver;
 use common_base::base::ProgressValues;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::DataBlock;
 use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::processor::Event;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use common_pipeline_core::processors::Processor;
-use crossbeam_channel::TrySendError;
 
 use crate::input_formats::input_pipeline::AligningStateTrait;
 use crate::input_formats::input_pipeline::InputFormatPipe;
@@ -50,7 +50,6 @@ pub struct Aligner<I: InputFormatPipe> {
 
     // output
     row_batches: VecDeque<I::RowBatch>,
-    row_batch_tx: crossbeam_channel::Sender<I::RowBatch>,
 }
 
 impl<I: InputFormatPipe> Aligner<I> {
@@ -58,13 +57,11 @@ impl<I: InputFormatPipe> Aligner<I> {
         output: Arc<OutputPort>,
         ctx: Arc<InputContext>,
         split_rx: async_channel::Receiver<Result<Split<I>>>,
-        batch_tx: crossbeam_channel::Sender<I::RowBatch>,
     ) -> Result<ProcessorPtr> {
         Ok(ProcessorPtr::create(Box::new(Self {
             ctx,
             output,
             split_rx,
-            row_batch_tx: batch_tx,
             state: None,
             read_batch: None,
             batch_rx: None,
@@ -86,27 +83,17 @@ impl<I: InputFormatPipe> Processor for Aligner<I> {
     }
 
     fn event(&mut self) -> Result<Event> {
-        if self.no_more_split && self.row_batches.is_empty() && self.read_batch.is_none() {
+        if self.output.is_finished() {
+            Ok(Event::Finished)
+        } else if self.no_more_split && self.row_batches.is_empty() && self.read_batch.is_none() {
             self.output.finish();
             Ok(Event::Finished)
+        } else if !self.output.can_push() {
+            Ok(Event::NeedConsume)
         } else if let Some(rb) = self.row_batches.pop_front() {
-            match self.row_batch_tx.try_send(rb) {
-                Ok(()) => {
-                    tracing::debug!("aligner send row batch ok");
-                    self.output.push_data(Err(ErrorCode::Ok("")));
-                    Ok(Event::NeedConsume)
-                }
-                Err(TrySendError::Full(b)) => {
-                    tracing::debug!("aligner send row batch full");
-                    self.row_batches.push_front(b);
-                    Ok(Event::NeedConsume)
-                }
-                Err(TrySendError::Disconnected(_)) => {
-                    tracing::debug!("aligner send row batch disconnected");
-                    self.output.finish();
-                    Ok(Event::Finished)
-                }
-            }
+            let block = DataBlock::empty_with_meta(Box::new(rb));
+            self.output.push_data(Ok(block));
+            Ok(Event::NeedConsume)
         } else if self.read_batch.is_some() || self.is_flushing_split {
             Ok(Event::Sync)
         } else {

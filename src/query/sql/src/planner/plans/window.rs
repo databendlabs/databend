@@ -40,6 +40,7 @@ use crate::optimizer::RequiredProperty;
 use crate::optimizer::StatInfo;
 use crate::optimizer::Statistics;
 use crate::plans::LagLeadFunction;
+use crate::plans::NtileFunction;
 use crate::plans::Operator;
 use crate::plans::RelOp;
 use crate::plans::ScalarItem;
@@ -222,6 +223,7 @@ pub enum WindowFuncType {
     PercentRank,
     LagLead(LagLeadFunction),
     NthValue(NthValueFunction),
+    Ntile(NtileFunction),
 }
 
 impl WindowFuncType {
@@ -248,6 +250,7 @@ impl WindowFuncType {
             WindowFuncType::LagLead(lag_lead) if lag_lead.is_lag => "lag".to_string(),
             WindowFuncType::LagLead(_) => "lead".to_string(),
             WindowFuncType::NthValue(_) => "nth_value".to_string(),
+            WindowFuncType::Ntile(_) => "ntile".to_string(),
         }
     }
 
@@ -279,6 +282,7 @@ impl WindowFuncType {
             WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
             WindowFuncType::LagLead(lag_lead) => *lag_lead.return_type.clone(),
             WindowFuncType::NthValue(nth_value) => *nth_value.return_type.clone(),
+            WindowFuncType::Ntile(buckets) => *buckets.return_type.clone(),
         }
     }
 }

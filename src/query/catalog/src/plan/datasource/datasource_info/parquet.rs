@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_arrow::arrow::datatypes::Schema as ArrowSchema;
+use common_arrow::parquet::metadata::SchemaDescriptor;
 use common_expression::TableSchema;
 use common_meta_app::principal::StageInfo;
 use common_meta_app::schema::TableInfo;
@@ -23,7 +24,7 @@ use common_storage::StageFilesInfo;
 
 use crate::plan::datasource::datasource_info::parquet_read_options::ParquetReadOptions;
 
-#[derive(serde::Serialize, serde::Deserialize, Clone, PartialEq, Eq, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 pub struct ParquetTableInfo {
     pub read_options: ParquetReadOptions,
     pub stage_info: StageInfo,
@@ -31,6 +32,7 @@ pub struct ParquetTableInfo {
 
     pub table_info: TableInfo,
     pub arrow_schema: ArrowSchema,
+    pub schema_descr: SchemaDescriptor,
     pub files_to_read: Option<Vec<StageFileInfo>>,
 }
 

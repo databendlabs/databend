@@ -12,13 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
+use common_catalog::plan::AggIndexMeta;
 use common_exception::Result;
 use common_expression::types::nullable::NullableColumnBuilder;
 use common_expression::types::BooleanType;
 use common_expression::types::DataType;
 use common_expression::BlockEntry;
+use common_expression::BlockMetaInfoDowncast;
 use common_expression::Column;
 use common_expression::ColumnBuilder;
 use common_expression::DataBlock;
@@ -34,6 +37,8 @@ use common_pipeline_core::processors::port::OutputPort;
 use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
+
+use crate::IndexType;
 
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]
@@ -54,12 +59,26 @@ pub enum BlockOperator {
     Project { projection: Vec<FieldIndex> },
 
     /// Expand the input [`DataBlock`] with set-returning functions.
-    FlatMap { srf_exprs: Vec<Expr> },
+    FlatMap {
+        srf_exprs: Vec<Expr>,
+        unused_indices: HashSet<IndexType>,
+    },
 }
 
 impl BlockOperator {
     pub fn execute(&self, func_ctx: &FunctionContext, mut input: DataBlock) -> Result<DataBlock> {
         match self {
+            BlockOperator::Map { .. }
+            | BlockOperator::MapWithOutput { .. }
+            | BlockOperator::Filter { .. }
+                if input
+                    .get_meta()
+                    .and_then(AggIndexMeta::downcast_ref_from)
+                    .is_some() =>
+            {
+                // It's from aggregating index.
+                Ok(input)
+            }
             BlockOperator::Map { exprs } => {
                 for expr in exprs {
                     let evaluator = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
@@ -114,7 +133,10 @@ impl BlockOperator {
                 Ok(result)
             }
 
-            BlockOperator::FlatMap { srf_exprs } => {
+            BlockOperator::FlatMap {
+                srf_exprs,
+                unused_indices,
+            } => {
                 let eval = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
 
                 // [
@@ -149,11 +171,15 @@ impl BlockOperator {
                         continue;
                     }
 
-                    for entry in input.columns() {
+                    for (j, entry) in input.columns().iter().enumerate() {
+                        // Skip unused columns.
+                        if unused_indices.contains(&j) {
+                            continue;
+                        }
                         // Take the i-th row of input data block and add it to the row.
                         let mut builder =
                             ColumnBuilder::with_capacity(&entry.data_type, max_num_rows);
-                        let scalar_ref = entry.value.index(i).unwrap();
+                        let scalar_ref = unsafe { entry.value.index_unchecked(i) };
                         (0..max_num_rows).for_each(|_| {
                             builder.push(scalar_ref.clone());
                         });
@@ -196,6 +222,15 @@ impl BlockOperator {
                                     }
                                 }
                             }
+                        } else {
+                            row_result = Value::Column(
+                                ColumnBuilder::repeat(
+                                    &ScalarRef::Tuple(vec![ScalarRef::Null]),
+                                    max_num_rows,
+                                    srf_expr.data_type(),
+                                )
+                                .build(),
+                            );
                         }
 
                         row.push(BlockEntry::new(srf_expr.data_type().clone(), row_result))
@@ -218,6 +253,15 @@ pub struct CompoundBlockOperator {
 }
 
 impl CompoundBlockOperator {
+    pub fn new(
+        operators: Vec<BlockOperator>,
+        ctx: FunctionContext,
+        input_num_columns: usize,
+    ) -> Self {
+        let operators = Self::compact_map(operators, input_num_columns);
+        Self { operators, ctx }
+    }
+
     pub fn create(
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,

@@ -110,6 +110,10 @@ To query data files in a bucket or container, provide necessary connection infor
 
 They are explained in [Create Stage](../../14-sql-commands/00-ddl/40-stage/01-ddl-create-stage.md).
 
+:::tip
+If you're using S3 storage and your bucket has public read access, you can access and query an external stage associated with the bucket anonymously without providing credentials. To enable this feature, add the **allow_anonymous** parameter to the [storage.s3] section in the *databend-query.toml* configuration file and set it to **true**.
+:::
+
 ## Limitations
 
 When querying a staged file, the following limitations are applicable in terms of format-specific constraints:
@@ -129,7 +133,7 @@ This example shows how to query data in a Parquet file stored in different locat
 <Tabs groupId="query2stage">
 <TabItem value="Stages" label="Stages">
 
-Let's assume you have a sample file named [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) and you have uploaded it to your user stage, an internal stage named *my_internal_stage*, and an external stage named *my_external_stage*. To upload files to a stage, use the [File Upload API](../../11-integrations/00-api/10-put-to-stage.md).
+Let's assume you have a sample file named [books.parquet](https://datafuse-1253727613.cos.ap-hongkong.myqcloud.com/data/books.parquet) and you have uploaded it to your user stage, an internal stage named *my_internal_stage*, and an external stage named *my_external_stage*. To upload files to a stage, use the [PRESIGN](../../14-sql-commands/00-ddl/80-presign/presign.md) method.
 
 ```sql
 -- Query file in user stage

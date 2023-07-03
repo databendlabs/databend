@@ -62,6 +62,7 @@ use common_meta_app::schema::RenameTableReply;
 use common_meta_app::schema::RenameTableReq;
 use common_meta_app::schema::TableIdent;
 use common_meta_app::schema::TableInfo;
+use common_meta_app::schema::TableInfoFilter;
 use common_meta_app::schema::TableMeta;
 use common_meta_app::schema::TruncateTableReply;
 use common_meta_app::schema::TruncateTableReq;
@@ -69,6 +70,8 @@ use common_meta_app::schema::UndropDatabaseReply;
 use common_meta_app::schema::UndropDatabaseReq;
 use common_meta_app::schema::UndropTableReply;
 use common_meta_app::schema::UndropTableReq;
+use common_meta_app::schema::UpdateIndexReply;
+use common_meta_app::schema::UpdateIndexReq;
 use common_meta_app::schema::UpdateTableMetaReply;
 use common_meta_app::schema::UpdateTableMetaReq;
 use common_meta_app::schema::UpdateVirtualColumnReply;
@@ -242,6 +245,11 @@ impl Catalog for MutableCatalog {
     }
 
     #[async_backtrace::framed]
+    async fn update_index(&self, req: UpdateIndexReq) -> Result<UpdateIndexReply> {
+        Ok(self.ctx.meta.update_index(req).await?)
+    }
+
+    #[async_backtrace::framed]
     async fn list_indexes(&self, req: ListIndexesReq) -> Result<Vec<(u64, String, IndexMeta)>> {
         Ok(self.ctx.meta.list_indexes(req).await?)
     }
@@ -328,9 +336,10 @@ impl Catalog for MutableCatalog {
         &self,
         tenant: &str,
         db_name: &str,
+        filter: Option<TableInfoFilter>,
     ) -> Result<Vec<Arc<dyn Table>>> {
         let db = self.get_database(tenant, db_name).await?;
-        db.list_tables_history().await
+        db.list_tables_history(filter).await
     }
 
     #[async_backtrace::framed]
