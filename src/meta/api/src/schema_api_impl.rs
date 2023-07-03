@@ -19,6 +19,7 @@ use std::sync::Arc;
 use chrono::DateTime;
 use chrono::Utc;
 use common_meta_app::app_error::AppError;
+use common_meta_app::app_error::CatalogAlreadyExists;
 use common_meta_app::app_error::CreateDatabaseWithDropTime;
 use common_meta_app::app_error::CreateIndexWithDropTime;
 use common_meta_app::app_error::CreateTableWithDropTime;
@@ -45,9 +46,13 @@ use common_meta_app::app_error::UnknownTableId;
 use common_meta_app::app_error::VirtualColumnAlreadyExists;
 use common_meta_app::app_error::WrongShare;
 use common_meta_app::app_error::WrongShareObject;
+use common_meta_app::schema::CatalogId;
+use common_meta_app::schema::CatalogIdToName;
 use common_meta_app::schema::CountTablesKey;
 use common_meta_app::schema::CountTablesReply;
 use common_meta_app::schema::CountTablesReq;
+use common_meta_app::schema::CreateCatalogReply;
+use common_meta_app::schema::CreateCatalogReq;
 use common_meta_app::schema::CreateDatabaseReply;
 use common_meta_app::schema::CreateDatabaseReq;
 use common_meta_app::schema::CreateIndexReply;
@@ -2988,6 +2993,82 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
         }
 
         Ok(())
+    }
+
+    async fn create_catalog(
+        &self,
+        req: CreateCatalogReq,
+    ) -> Result<CreateCatalogReply, KVAppError> {
+        debug!(req = debug(&req), "SchemaApi: {}", func_name!());
+
+        let name_key = &req.name_ident;
+
+        let mut retry = 0;
+        while retry < TXN_MAX_RETRY_TIMES {
+            retry += 1;
+
+            // Get catalog by name to ensure absence
+            let (catalog_id_seq, catalog_id) = get_u64_value(self, name_key).await?;
+            debug!(catalog_id_seq, catalog_id, ?name_key, "get_catalog");
+
+            if catalog_id_seq > 0 {
+                return if req.if_not_exists {
+                    Ok(CreateCatalogReply { catalog_id })
+                } else {
+                    Err(KVAppError::AppError(AppError::CatalogAlreadyExists(
+                        CatalogAlreadyExists::new(
+                            &name_key.catalog_name,
+                            format!("create catalog: tenant: {}", name_key.tenant),
+                        ),
+                    )))
+                };
+            }
+
+            // Create catalog by inserting these record:
+            // (tenant, catalog_name) -> catalog_id
+            // (catalog_id) -> catalog_meta
+            // (catalog_id) -> (tenant, catalog_name)
+            let catalog_id = fetch_id(self, IdGenerator::catalog_id()).await?;
+            let id_key = CatalogId { catalog_id };
+            let id_to_name_key = CatalogIdToName { catalog_id };
+
+            debug!(catalog_id, name_key = debug(&name_key), "new catalog id");
+
+            {
+                let condition = vec![
+                    txn_cond_seq(name_key, Eq, 0),
+                    txn_cond_seq(&id_to_name_key, Eq, 0),
+                ];
+                let if_then = vec![
+                    txn_op_put(name_key, serialize_u64(catalog_id)?), /* (tenant, db_name) -> catalog_id */
+                    txn_op_put(&id_key, serialize_struct(&req.meta)?), /* (catalog_id) -> catalog_meta */
+                    txn_op_put(&id_to_name_key, serialize_struct(name_key)?), /* __fd_database_id_to_name/<db_id> -> (tenant,db_name) */
+                ];
+
+                let txn_req = TxnRequest {
+                    condition,
+                    if_then,
+                    else_then: vec![],
+                };
+
+                let (succ, _responses) = send_txn(self, txn_req).await?;
+
+                debug!(
+                    name = debug(&name_key),
+                    id = debug(&id_key),
+                    succ = display(succ),
+                    "create_catalog"
+                );
+
+                if succ {
+                    return Ok(CreateCatalogReply { catalog_id });
+                }
+            }
+        }
+
+        Err(KVAppError::AppError(AppError::TxnRetryMaxTimes(
+            TxnRetryMaxTimes::new("create_catalog", TXN_MAX_RETRY_TIMES),
+        )))
     }
 
     fn name(&self) -> String {
