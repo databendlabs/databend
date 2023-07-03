@@ -111,11 +111,14 @@ impl ModifyTableColumnInterpreter {
 
         let schema = table.schema();
         let new_schema = if let Some((i, field)) = schema.column_with_name(&self.plan.column) {
-            if let Some(ComputedExpr::Stored(_)) = field.computed_expr() {
-                return Err(ErrorCode::UnknownColumn(format!(
-                    "Column '{}' is not a stored computed column",
-                    self.plan.column
-                )));
+            match field.computed_expr {
+                Some(ComputedExpr::Stored(_)) => {}
+                _ => {
+                    return Err(ErrorCode::UnknownColumn(format!(
+                        "Column '{}' is not a stored computed column",
+                        self.plan.column
+                    )));
+                }
             }
             let mut new_field = field.clone();
             new_field.computed_expr = None;
