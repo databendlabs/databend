@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use common_catalog::plan::AggIndexMeta;
@@ -37,6 +38,8 @@ use common_pipeline_core::processors::Processor;
 use common_pipeline_transforms::processors::transforms::Transform;
 use common_pipeline_transforms::processors::transforms::Transformer;
 
+use crate::IndexType;
+
 /// `BlockOperator` takes a `DataBlock` as input and produces a `DataBlock` as output.
 #[derive(Clone)]
 pub enum BlockOperator {
@@ -56,7 +59,10 @@ pub enum BlockOperator {
     Project { projection: Vec<FieldIndex> },
 
     /// Expand the input [`DataBlock`] with set-returning functions.
-    FlatMap { srf_exprs: Vec<Expr> },
+    FlatMap {
+        srf_exprs: Vec<Expr>,
+        unused_indices: HashSet<IndexType>,
+    },
 }
 
 impl BlockOperator {
@@ -127,7 +133,10 @@ impl BlockOperator {
                 Ok(result)
             }
 
-            BlockOperator::FlatMap { srf_exprs } => {
+            BlockOperator::FlatMap {
+                srf_exprs,
+                unused_indices,
+            } => {
                 let eval = Evaluator::new(&input, func_ctx, &BUILTIN_FUNCTIONS);
 
                 // [
@@ -162,11 +171,15 @@ impl BlockOperator {
                         continue;
                     }
 
-                    for entry in input.columns() {
+                    for (j, entry) in input.columns().iter().enumerate() {
+                        // Skip unused columns.
+                        if unused_indices.contains(&j) {
+                            continue;
+                        }
                         // Take the i-th row of input data block and add it to the row.
                         let mut builder =
                             ColumnBuilder::with_capacity(&entry.data_type, max_num_rows);
-                        let scalar_ref = entry.value.index(i).unwrap();
+                        let scalar_ref = unsafe { entry.value.index_unchecked(i) };
                         (0..max_num_rows).for_each(|_| {
                             builder.push(scalar_ref.clone());
                         });
@@ -209,6 +222,15 @@ impl BlockOperator {
                                     }
                                 }
                             }
+                        } else {
+                            row_result = Value::Column(
+                                ColumnBuilder::repeat(
+                                    &ScalarRef::Tuple(vec![ScalarRef::Null]),
+                                    max_num_rows,
+                                    srf_expr.data_type(),
+                                )
+                                .build(),
+                            );
                         }
 
                         row.push(BlockEntry::new(srf_expr.data_type().clone(), row_result))

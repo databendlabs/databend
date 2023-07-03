@@ -29,20 +29,26 @@ insert into t values(1,1),(3,3);
 insert into t values(2,2),(5,5);
 insert into t values(4,4);
 
-select * from clustering_information('default','t');
-+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+
-| cluster_by_keys | total_block_count | total_constant_block_count | average_overlaps | average_depth | block_depth_histogram |
-+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+
-| ((a + 1))       |                 3 |                          1 |           1.3333 |           2.0 | {"00002":3}           |
-+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+
+select * from clustering_information('default','t')\G
+*************************** 1. row ***************************
+        cluster_by_keys: ((a + 1))
+      total_block_count: 3
+   constant_block_count: 1
+unclustered_block_count: 0
+       average_overlaps: 1.3333
+          average_depth: 2.0
+  block_depth_histogram: {"00002":3}
 
 -- alter table recluster
 ALTER TABLE t RECLUSTER FINAL WHERE a != 4;
 
-select * from clustering_information('default','t');
-+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+
-| cluster_by_keys | total_block_count | total_constant_block_count | average_overlaps | average_depth | block_depth_histogram |
-+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+
-| ((a + 1))       |                 2 |                          1 |              1.0 |           2.0 | {"00002":2}           |
-+-----------------+-------------------+----------------------------+------------------+---------------+-----------------------+
+select * from clustering_information('default','t')\G
+*************************** 1. row ***************************
+        cluster_by_keys: ((a + 1))
+      total_block_count: 2
+   constant_block_count: 1
+unclustered_block_count: 0
+       average_overlaps: 1.0
+          average_depth: 2.0
+  block_depth_histogram: {"00002":2}
 ```

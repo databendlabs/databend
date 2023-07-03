@@ -572,10 +572,10 @@ select segment_count, block_count from fuse_snapshot('db_09_0008', 't10') limit 
 1 2
 2 2
 
-query TIIFFT
+query TIIIFFT
 select * from clustering_information('db_09_0008','t10')
 ----
-(abs(a)) 2 0 1.0 2.0 {"00002":2}
+(abs(a)) 2 0 0 1.0 2.0 {"00002":2}
 
 
 
