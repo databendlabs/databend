@@ -19,4 +19,4 @@ pub mod suggested_background_tasks;
 mod suggested_background_compaction_tasks;
 
 pub use admin::AdminProcedure;
-pub use admin::SuggestedBackgroundTasksProcedure;
+pub use crate::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;

@@ -841,6 +841,8 @@ dependencies = [
  "async-trait",
  "common-base",
  "common-exception",
+ "common-meta-app",
+ "serde",
 ]
 
 [[package]]

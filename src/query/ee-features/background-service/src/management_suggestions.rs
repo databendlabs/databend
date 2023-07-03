@@ -24,9 +24,9 @@ pub enum Suggestion {
     Compaction {
         need_compact_segment: bool,
         need_compact_block: bool,
-        db_id: uint64,
+        db_id: u64,
         db_name: String,
-        table_id: uint64,
+        table_id: u64,
         table_name: String,
         table_stats: TableStatistics,
     },

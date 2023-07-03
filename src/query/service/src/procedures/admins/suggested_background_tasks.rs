@@ -29,7 +29,7 @@ use crate::procedures::Procedure;
 use crate::procedures::ProcedureFeatures;
 use crate::sessions::QueryContext;
 use crate::sessions::TableContext;
-
+use tokio_stream::StreamExt;
 pub struct SuggestedBackgroundTasksProcedure;
 
 impl SuggestedBackgroundTasksProcedure {
@@ -85,7 +85,7 @@ impl OneBlockProcedure for SuggestedBackgroundTasksProcedure {
 
     #[async_backtrace::framed]
     async fn all_data(&self, ctx: Arc<QueryContext>, _args: Vec<String>) -> Result<DataBlock> {
-        let suggestions = BackgroundServiceHandlerWrapper::get_all_suggested_tasks().await?;
+        todo!()
     }
 
     fn schema(&self) -> Arc<DataSchema> {

@@ -20,6 +20,8 @@ use common_arrow::arrow::array::{BooleanArray, UInt64Array};
 use common_exception::Result;
 use common_meta_app::schema::TableStatistics;
 use crate::procedures::admins::suggested_background_tasks::SuggestedBackgroundTasksProcedure;
+use tokio_stream::StreamExt;
+use crate::sql::Planner;
 use crate::sessions::QueryContext;
 
 const SUGGEST_TABLES_NEED_COMPACTION: &str = "
@@ -175,7 +177,7 @@ impl SuggestedBackgroundTasksProcedure {
     pub async fn do_get_all_suggested_compaction_tables(
         ctx: Arc<QueryContext>
     ) -> Result<Vec<RecordBatch>> {
-        let res = RealBackgroundService::do_execute_sql(ctx, SUGGEST_TABLES_NEED_COMPACTION.to_string()).await?;
+        let res = SuggestedBackgroundTasksProcedure::do_execute_sql(ctx, SUGGEST_TABLES_NEED_COMPACTION.to_string()).await?;
         let num_of_tables = res.as_ref().map_or_else(|| 0, |r| r.num_rows());
         info!(
             job = "compaction",
