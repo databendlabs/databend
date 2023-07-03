@@ -310,6 +310,13 @@ impl DefaultSettings {
                     possible_values: None,
                     display_in_show_settings: false,
                 }),
+
+                ("enable_auto_reclustering", DefaultSettingValue {
+                    value: UserSettingValue::UInt64(1),
+                    desc: "Enables auto re-clustering.",
+                    possible_values: None,
+                    display_in_show_settings: true,
+                }),
             ]);
 
             Ok(Arc::new(DefaultSettings {

@@ -101,7 +101,10 @@ impl Interpreter for ReplaceInterpreter {
             )
             .await?;
 
-        if !pipeline.main_pipeline.is_empty() && has_cluster_key {
+        if !pipeline.main_pipeline.is_empty()
+            && has_cluster_key
+            && self.ctx.get_settings().get_enable_auto_reclustering()?
+        {
             let ctx = self.ctx.clone();
             let catalog = self.plan.catalog.clone();
             let database = self.plan.database.to_string();
