@@ -15,6 +15,7 @@
 use std::sync::Arc;
 
 use common_base::base::ProgressValues;
+use common_catalog::plan::PartInfoPtr;
 use common_catalog::plan::Partitions;
 use common_catalog::plan::PartitionsShuffleKind;
 use common_catalog::plan::Projection;
@@ -54,6 +55,7 @@ use crate::metrics::metrics_inc_deletion_block_range_pruned_whole_block_nums;
 use crate::metrics::metrics_inc_deletion_segment_range_purned_whole_segment_nums;
 use crate::operations::mutation::MutationAction;
 use crate::operations::mutation::MutationPartInfo;
+use crate::operations::mutation::MutationEnum;
 use crate::operations::mutation::MutationSource;
 use crate::pipelines::Pipeline;
 use crate::pruning::create_segment_location_vector;
@@ -407,12 +409,13 @@ impl FuseTable {
                     };
                     let key = (block_meta_index.segment_idx, block_meta_index.block_idx);
                     let whole_block_deletion = whole_block_deletions.contains(&key);
-                    MutationPartInfo::create(
+                    let part_info_ptr:PartInfoPtr = Arc::new(Box::new(MutationEnum::MutationPartInfo( MutationPartInfo::create(
                         block_meta_index,
                         cluster_stats,
                         c,
                         whole_block_deletion,
-                    )
+                    ))));
+                    part_info_ptr
                 })
                 .collect(),
         );
@@ -426,9 +429,9 @@ impl FuseTable {
             num_whole_block_mutation += deleted_segment.segment_info.1.block_count as usize;
             parts
                 .partitions
-                .push(Arc::new(Box::new(MutationDeletedSegment::create(
+                .push(Arc::new(Box::new(MutationEnum::MutationDeletedSegment(MutationDeletedSegment::create(
                     deleted_segment,
-                ))));
+                )))));
         }
 
         let block_nums = base_snapshot.summary.block_count;
