@@ -777,6 +777,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             .map(|db_id_list_key| db_id_list_key.to_string_key())
             .collect();
         let mut db_id_list_keys_iter = db_id_list_keys.into_iter();
+        let include_drop_db = matches!(&req.filter, Some(DatabaseInfoFilter::IncludeDropped));
         for c in keys.chunks(DEFAULT_MGET_SIZE) {
             let db_id_list_seq_and_list: Vec<(u64, Option<DbIdList>)> =
                 mget_pb_values(self, c).await?;
@@ -811,7 +812,8 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                             continue;
                         }
                         let db_meta = db_meta.unwrap();
-                        if req.filter.is_none()
+                        // if include drop db, then no need to fill out of retention time db
+                        if !include_drop_db
                             && is_drop_time_out_of_retention_time(&db_meta.drop_on, &now)
                         {
                             continue;
@@ -1994,6 +1996,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
             let db_infos = self
                 .get_database_history(ListDatabaseReq {
                     tenant: req.inner.tenant.clone(),
+                    // need to get all db(include drop db)
                     filter: Some(DatabaseInfoFilter::IncludeDropped),
                 })
                 .await?;
@@ -2029,7 +2032,7 @@ impl<KV: kvapi::KVApi<Error = MetaError>> SchemaApi for KV {
                         }
                     }
                     None => {
-                        // not drop db, only filter drop tables
+                        // not drop db, only filter drop tables with filter drop on
                         do_get_table_history(
                             &self,
                             ListTableReq {
