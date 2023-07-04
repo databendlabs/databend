@@ -262,7 +262,7 @@ The procedure below creates an IAM user named *databend* and attach the access p
 Use the access key and secret access key generated for the IAM user *databend* to create an external stage.
 
 ```sql
-CREATE STAGE iam_external_stage url = 's3://databend-toronto' CONNECTION =(aws_key_id='<access-key>' aws_secret_key='<secret-access-key>' region='us-east-2');
+CREATE STAGE iam_external_stage url = 's3://databend-toronto' CONNECTION =(aws_key_id='<your-access-key-id>' aws_secret_key='<your-secret-access-key>' region='us-east-2');
 ```
 
 ### Example 4: Create External Stage on Cloueflare R2
@@ -295,6 +295,6 @@ CREATE STAGE r2_stage
   CONNECTION = (
     REGION = 'auto'
     ENDPOINT_URL = 'https://1726b2d2b81f9485620516a8ad451149.r2.cloudflarestorage.com/databend'
-    ACCESS_KEY_ID = '9a0218bbfb5fadd4897eb75850e0b79d'
-    SECRET_ACCESS_KEY = '4c26fdcae5e1344f186ecd5a656311bf417c7e9ddff5c707c3c1bcfd02af39bf');
+    ACCESS_KEY_ID = '<your-access-key-id>'
+    SECRET_ACCESS_KEY = '<your-secret-access-key>');
 ```
