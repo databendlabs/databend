@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 
 import os
-import time
 import mysql.connector
 import sys
-import signal
-from multiprocessing import Process
 
 CURDIR = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, os.path.join(CURDIR, "../../../helpers"))
 
-from native_client import NativeClient
-from native_client import prompt
+from native_client import NativeClient  # NOQA
+from native_client import prompt  # NOQA
 
 log = None
 
