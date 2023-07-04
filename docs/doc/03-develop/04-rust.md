@@ -60,7 +60,7 @@ use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() {
-    let dsn = "databend://user1:abc123@localhost:8000/default?sslmode=disable";
+    let dsn = "databend://user1:abc123@localhost:8000/book_db?sslmode=disable";
     let conn = new_connection(dsn).unwrap();
 
     let sql_db_create = "CREATE DATABASE IF NOT EXISTS book_db;";
