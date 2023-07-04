@@ -161,3 +161,112 @@ where T: Transform + 'static
         Ok(())
     }
 }
+
+/// A stub transform for collecting profile information
+/// at some point of the pipeline.
+/// For example, we can profiling the output data of a
+/// processor by adding a [`ProfileStub`] after it.
+/// [`ProfileStub`] will pass through all the data without
+/// any modification.
+#[allow(clippy::type_complexity)]
+pub struct ProfileStub {
+    prof_id: u32,
+    proc_profs: SharedProcessorProfiles,
+    prof: ProcessorProfile,
+
+    /// Callback function for processing the start event.
+    on_start: Box<dyn Fn(&ProcessorProfile) -> ProcessorProfile + Send + Sync + 'static>,
+    /// Callback function for processing the input data.
+    on_process:
+        Box<dyn Fn(&DataBlock, &ProcessorProfile) -> ProcessorProfile + Send + Sync + 'static>,
+    /// Callback function for processing the finish event.
+    on_finish: Box<dyn Fn(&ProcessorProfile) -> ProcessorProfile + Send + Sync + 'static>,
+}
+
+impl ProfileStub {
+    pub fn new(prof_id: u32, proc_profs: SharedProcessorProfiles) -> Self {
+        Self {
+            prof_id,
+            proc_profs,
+            prof: Default::default(),
+            on_start: Box::new(|_| Default::default()),
+            on_process: Box::new(|_, _| Default::default()),
+            on_finish: Box::new(|_| Default::default()),
+        }
+    }
+
+    /// Create a new [`ProfileStub`] with `on_start` callback.
+    /// The previous callback will be called before the new one.
+    pub fn on_start(
+        self,
+        f: impl Fn(&ProcessorProfile) -> ProcessorProfile + Sync + Send + 'static,
+    ) -> Self {
+        Self {
+            on_start: Box::new(move |prof| f(&(self.on_start)(prof))),
+            ..self
+        }
+    }
+
+    /// Create a new [`ProfileStub`] with `on_process` callback.
+    /// The previous callback will be called before the new one.
+    pub fn on_process(
+        self,
+        f: impl Fn(&DataBlock, &ProcessorProfile) -> ProcessorProfile + Sync + Send + 'static,
+    ) -> Self {
+        Self {
+            on_process: Box::new(move |data, prof| f(data, &(self.on_process)(data, prof))),
+            ..self
+        }
+    }
+
+    /// Create a new [`ProfileStub`] with `on_finish` callback.
+    /// The previous callback will be called before the new one.
+    pub fn on_finish(
+        self,
+        f: impl Fn(&ProcessorProfile) -> ProcessorProfile + Sync + Send + 'static,
+    ) -> Self {
+        Self {
+            on_finish: Box::new(move |prof| f(&(self.on_finish)(prof))),
+            ..self
+        }
+    }
+
+    /// Accumulate the number of output rows.
+    pub fn accumulate_output_rows(self) -> Self {
+        self.on_process(|data, prof| ProcessorProfile {
+            output_rows: prof.output_rows + data.num_rows(),
+            ..*prof
+        })
+    }
+
+    /// Accumulate the number of output bytes.
+    pub fn accumulate_output_bytes(self) -> Self {
+        self.on_process(|data, prof| ProcessorProfile {
+            output_bytes: prof.output_bytes + data.memory_size(),
+            ..*prof
+        })
+    }
+}
+
+impl Transform for ProfileStub {
+    const NAME: &'static str = "ProfileStub";
+
+    fn transform(&mut self, data: DataBlock) -> Result<DataBlock> {
+        self.prof = self.prof + (self.on_process)(&data, &self.prof);
+        Ok(data)
+    }
+
+    fn on_start(&mut self) -> Result<()> {
+        self.prof = self.prof + (self.on_start)(&self.prof);
+        Ok(())
+    }
+
+    fn on_finish(&mut self) -> Result<()> {
+        self.prof = self.prof + (self.on_finish)(&self.prof);
+        self.proc_profs
+            .lock()
+            .unwrap()
+            .update(self.prof_id, self.prof);
+        Ok(())
+    }
+}
