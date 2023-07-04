@@ -48,6 +48,7 @@ use storages_common_table_meta::table::OPT_KEY_EXTERNAL_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_LEGACY_SNAPSHOT_LOC;
 use storages_common_table_meta::table::OPT_KEY_SNAPSHOT_LOCATION;
 use storages_common_table_meta::table::OPT_KEY_STORAGE_FORMAT;
+use storages_common_table_meta::table::OPT_KEY_STORAGE_PREFIX;
 use storages_common_table_meta::table::OPT_KEY_TABLE_COMPRESSION;
 use tracing::error;
 
@@ -295,6 +296,7 @@ pub static CREATE_TABLE_OPTIONS: Lazy<HashSet<&'static str>> = Lazy::new(|| {
     r.insert(OPT_KEY_COMMENT);
     r.insert(OPT_KEY_EXTERNAL_LOCATION);
     r.insert(OPT_KEY_ENGINE);
+    r.insert(OPT_KEY_STORAGE_PREFIX);
 
     r.insert("transient");
     r
