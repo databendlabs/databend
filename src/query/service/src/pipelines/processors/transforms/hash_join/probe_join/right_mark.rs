@@ -24,7 +24,6 @@ use common_expression::types::ValueType;
 use common_expression::DataBlock;
 use common_hashtable::HashJoinHashtableLike;
 
-use crate::pipelines::processors::transforms::hash_join::desc::JOIN_MAX_BLOCK_SIZE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_FALSE;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_NULL;
 use crate::pipelines::processors::transforms::hash_join::desc::MARKER_KIND_TRUE;
@@ -74,6 +73,7 @@ impl JoinHashTable {
         IT: Iterator<Item = &'a H::Key> + TrustedLen,
         H::Key: 'a,
     {
+        let max_block_size = probe_state.max_block_size;
         let valids = &probe_state.valids;
         let has_null = *self.hash_join_desc.marker_join_desc.has_null.read();
         let cols = input
@@ -103,14 +103,20 @@ impl JoinHashTable {
             .fold(0, |acc, chunk| acc + chunk.num_rows());
 
         for (i, key) in keys_iter.enumerate() {
-            let (mut match_count, mut incomplete_ptr) = if self
-                .hash_join_desc
-                .from_correlated_subquery
-            {
-                hash_table.probe_hash_table(key, build_indexes_ptr, occupied, JOIN_MAX_BLOCK_SIZE)
-            } else {
-                self.probe_key(hash_table, key, valids, i, build_indexes_ptr, occupied)
-            };
+            let (mut match_count, mut incomplete_ptr) =
+                if self.hash_join_desc.from_correlated_subquery {
+                    hash_table.probe_hash_table(key, build_indexes_ptr, occupied, max_block_size)
+                } else {
+                    self.probe_key(
+                        hash_table,
+                        key,
+                        valids,
+                        i,
+                        build_indexes_ptr,
+                        occupied,
+                        max_block_size,
+                    )
+                };
             if match_count == 0 {
                 continue;
             }
@@ -118,7 +124,7 @@ impl JoinHashTable {
             occupied += match_count;
             probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
             probe_indexes_len += 1;
-            if occupied >= JOIN_MAX_BLOCK_SIZE {
+            if occupied >= max_block_size {
                 loop {
                     if self.interrupt.load(Ordering::Relaxed) {
                         return Err(ErrorCode::AbortedQuery(
@@ -171,7 +177,7 @@ impl JoinHashTable {
                         incomplete_ptr,
                         build_indexes_ptr,
                         occupied,
-                        JOIN_MAX_BLOCK_SIZE,
+                        max_block_size,
                     );
                     if match_count == 0 {
                         break;
@@ -181,7 +187,7 @@ impl JoinHashTable {
                     probe_indexes[probe_indexes_len] = (i as u32, match_count as u32);
                     probe_indexes_len += 1;
 
-                    if occupied < JOIN_MAX_BLOCK_SIZE {
+                    if occupied < max_block_size {
                         break;
                     }
                 }
