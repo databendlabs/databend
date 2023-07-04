@@ -264,3 +264,37 @@ Use the access key and secret access key generated for the IAM user *databend* t
 ```sql
 CREATE STAGE iam_external_stage url = 's3://databend-toronto' CONNECTION =(aws_key_id='<access-key>' aws_secret_key='<secret-access-key>' region='us-east-2');
 ```
+
+### Example 4: Create External Stage on Cloueflare R2
+
+[Cloudflare R2](https://www.cloudflare.com/en-ca/products/r2/) is an object storage service introduced by Cloudflare that is fully compatible with Amazon's AWS S3 service. This example creates an external stage named *r2_stage* on Cloueflare R2.
+
+#### Step 1: Create Bucket
+
+The procedure below creates a bucket named *databend* on Cloudflare R2.
+
+1. Log into the Cloudflare dashboard, and select **R2** in the left navigation pane.
+2. Click **Create bucket** to create a bucket, and set the bucket name to *databend*. Once the bucket is successfully created, you can find the bucket endpoint right below the bucket name when you view the bucket details page.
+
+#### Step 2: Create R2 API Token
+
+The procedure below creates an R2 API token that includes an Access Key ID and a Secret Access Key.
+
+1. Click **Manage R2 API Tokens** on **R2** > **Overview**.
+2. Click **Create API token** to create an API token. 
+3. When configuring the API token, select the **Edit** permission and set **TTL** to **Forever**.
+4. Click **Create API Token** to obtain the Access Key ID and Secret Access Key. Copy and save them to a safe place.
+
+#### Step 3: Create External Stage
+
+Use the created Access Key ID and Secret Access Key to create an external stage named *r2_stage*.
+
+```sql
+CREATE STAGE r2_stage
+  URL='s3://databend/'
+  CONNECTION = (
+    REGION = 'auto'
+    ENDPOINT_URL = 'https://1726b2d2b81f9485620516a8ad451149.r2.cloudflarestorage.com/databend'
+    ACCESS_KEY_ID = '9a0218bbfb5fadd4897eb75850e0b79d'
+    SECRET_ACCESS_KEY = '4c26fdcae5e1344f186ecd5a656311bf417c7e9ddff5c707c3c1bcfd02af39bf');
+```
