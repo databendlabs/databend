@@ -77,7 +77,7 @@ impl InterpreterFactory {
     }
 
     pub fn get_inner(ctx: Arc<QueryContext>, plan: &Plan) -> Result<InterpreterPtr> {
-        let interpreter: InterpreterPtr = match plan {
+        match plan {
             Plan::Query {
                 s_expr,
                 bind_context,
@@ -85,320 +85,361 @@ impl InterpreterFactory {
                 ignore_result,
                 formatted_ast,
                 ..
-            } => Arc::new(SelectInterpreter::try_create(
+            } => Ok(Arc::new(SelectInterpreter::try_create(
                 ctx,
                 *bind_context.clone(),
                 *s_expr.clone(),
                 metadata.clone(),
                 formatted_ast.clone(),
                 *ignore_result,
-            )?),
-            Plan::Explain { kind, plan } => Arc::new(ExplainInterpreter::try_create(
+            )?)),
+            Plan::Explain { kind, plan } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 kind.clone(),
-            )?),
-            Plan::ExplainAst { formatted_string } => Arc::new(ExplainInterpreter::try_create(
+            )?)),
+            Plan::ExplainAst { formatted_string } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Ast(formatted_string.clone()),
-            )?),
-            Plan::ExplainSyntax { formatted_sql } => Arc::new(ExplainInterpreter::try_create(
+            )?)),
+            Plan::ExplainSyntax { formatted_sql } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 plan.clone(),
                 ExplainKind::Syntax(formatted_sql.clone()),
-            )?),
-            Plan::ExplainAnalyze { plan } => Arc::new(ExplainInterpreter::try_create(
+            )?)),
+            Plan::ExplainAnalyze { plan } => Ok(Arc::new(ExplainInterpreter::try_create(
                 ctx,
                 *plan.clone(),
                 ExplainKind::AnalyzePlan,
-            )?),
+            )?)),
 
-            Plan::Call(plan) => Arc::new(CallInterpreter::try_create(ctx, *plan.clone())?),
+            Plan::Call(plan) => Ok(Arc::new(CallInterpreter::try_create(ctx, *plan.clone())?)),
 
-            Plan::Copy(copy_plan) => {
-                Arc::new(CopyInterpreter::try_create(ctx, *copy_plan.clone())?)
-            }
+            Plan::Copy(copy_plan) => Ok(Arc::new(CopyInterpreter::try_create(
+                ctx,
+                *copy_plan.clone(),
+            )?)),
             // catalogs
             Plan::ShowCreateCatalog(_) => todo!(),
-            Plan::CreateCatalog(plan) => {
-                Arc::new(CreateCatalogInterpreter::try_create(ctx, *plan.clone())?)
+            Plan::CreateCatalog(plan) => Ok(Arc::new(CreateCatalogInterpreter::try_create(
+                ctx,
+                *plan.clone(),
+            )?)),
+            Plan::DropCatalog(plan) => {
+                Ok(Arc::new(DropCatalogInterpreter::create(ctx, *plan.clone())))
             }
-            Plan::DropCatalog(plan) => Arc::new(DropCatalogInterpreter::create(ctx, *plan.clone())),
 
             // Databases
-            Plan::ShowCreateDatabase(show_create_database) => Arc::new(
+            Plan::ShowCreateDatabase(show_create_database) => Ok(Arc::new(
                 ShowCreateDatabaseInterpreter::try_create(ctx, *show_create_database.clone())?,
-            ),
-            Plan::CreateDatabase(create_database) => Arc::new(
+            )),
+            Plan::CreateDatabase(create_database) => Ok(Arc::new(
                 CreateDatabaseInterpreter::try_create(ctx, *create_database.clone())?,
-            ),
-            Plan::DropDatabase(drop_database) => Arc::new(DropDatabaseInterpreter::try_create(
+            )),
+            Plan::DropDatabase(drop_database) => Ok(Arc::new(DropDatabaseInterpreter::try_create(
                 ctx,
                 *drop_database.clone(),
-            )?),
+            )?)),
 
-            Plan::UndropDatabase(undrop_database) => Arc::new(
+            Plan::UndropDatabase(undrop_database) => Ok(Arc::new(
                 UndropDatabaseInterpreter::try_create(ctx, *undrop_database.clone())?,
-            ),
+            )),
 
-            Plan::RenameDatabase(rename_database) => Arc::new(
+            Plan::RenameDatabase(rename_database) => Ok(Arc::new(
                 RenameDatabaseInterpreter::try_create(ctx, *rename_database.clone())?,
-            ),
+            )),
 
             // Tables
-            Plan::ShowCreateTable(show_create_table) => Arc::new(
+            Plan::ShowCreateTable(show_create_table) => Ok(Arc::new(
                 ShowCreateTableInterpreter::try_create(ctx, *show_create_table.clone())?,
-            ),
-            Plan::DescribeTable(describe_table) => Arc::new(DescribeTableInterpreter::try_create(
-                ctx,
-                *describe_table.clone(),
-            )?),
-            Plan::CreateTable(create_table) => Arc::new(CreateTableInterpreter::try_create(
+            )),
+            Plan::DescribeTable(describe_table) => Ok(Arc::new(
+                DescribeTableInterpreter::try_create(ctx, *describe_table.clone())?,
+            )),
+            Plan::CreateTable(create_table) => Ok(Arc::new(CreateTableInterpreter::try_create(
                 ctx,
                 *create_table.clone(),
-            )?),
-            Plan::DropTable(drop_table) => {
-                Arc::new(DropTableInterpreter::try_create(ctx, *drop_table.clone())?)
-            }
-            Plan::UndropTable(undrop_table) => Arc::new(UndropTableInterpreter::try_create(
+            )?)),
+            Plan::DropTable(drop_table) => Ok(Arc::new(DropTableInterpreter::try_create(
+                ctx,
+                *drop_table.clone(),
+            )?)),
+            Plan::UndropTable(undrop_table) => Ok(Arc::new(UndropTableInterpreter::try_create(
                 ctx,
                 *undrop_table.clone(),
-            )?),
-            Plan::RenameTable(rename_table) => Arc::new(RenameTableInterpreter::try_create(
+            )?)),
+            Plan::RenameTable(rename_table) => Ok(Arc::new(RenameTableInterpreter::try_create(
                 ctx,
                 *rename_table.clone(),
-            )?),
-            Plan::SetOptions(set_options) => Arc::new(SetOptionsInterpreter::try_create(
+            )?)),
+            Plan::SetOptions(set_options) => Ok(Arc::new(SetOptionsInterpreter::try_create(
                 ctx,
                 *set_options.clone(),
-            )?),
-            Plan::RenameTableColumn(rename_table_column) => Arc::new(
+            )?)),
+            Plan::RenameTableColumn(rename_table_column) => Ok(Arc::new(
                 RenameTableColumnInterpreter::try_create(ctx, *rename_table_column.clone())?,
-            ),
-            Plan::AddTableColumn(add_table_column) => Arc::new(
+            )),
+            Plan::AddTableColumn(add_table_column) => Ok(Arc::new(
                 AddTableColumnInterpreter::try_create(ctx, *add_table_column.clone())?,
-            ),
-            Plan::ModifyTableColumn(modify_table_column) => Arc::new(
+            )),
+            Plan::ModifyTableColumn(modify_table_column) => Ok(Arc::new(
                 ModifyTableColumnInterpreter::try_create(ctx, *modify_table_column.clone())?,
-            ),
-            Plan::DropTableColumn(drop_table_column) => Arc::new(
+            )),
+            Plan::DropTableColumn(drop_table_column) => Ok(Arc::new(
                 DropTableColumnInterpreter::try_create(ctx, *drop_table_column.clone())?,
-            ),
-            Plan::AlterTableClusterKey(alter_table_cluster_key) => Arc::new(
+            )),
+            Plan::AlterTableClusterKey(alter_table_cluster_key) => Ok(Arc::new(
                 AlterTableClusterKeyInterpreter::try_create(ctx, *alter_table_cluster_key.clone())?,
-            ),
-            Plan::DropTableClusterKey(drop_table_cluster_key) => Arc::new(
+            )),
+            Plan::DropTableClusterKey(drop_table_cluster_key) => Ok(Arc::new(
                 DropTableClusterKeyInterpreter::try_create(ctx, *drop_table_cluster_key.clone())?,
-            ),
-            Plan::ReclusterTable(recluster_table) => Arc::new(
+            )),
+            Plan::ReclusterTable(recluster_table) => Ok(Arc::new(
                 ReclusterTableInterpreter::try_create(ctx, *recluster_table.clone())?,
-            ),
-            Plan::TruncateTable(truncate_table) => Arc::new(TruncateTableInterpreter::try_create(
-                ctx,
-                *truncate_table.clone(),
-            )?),
-            Plan::OptimizeTable(optimize_table) => Arc::new(OptimizeTableInterpreter::try_create(
-                ctx,
-                *optimize_table.clone(),
-            )?),
-            Plan::VacuumTable(vacuum_table) => Arc::new(VacuumTableInterpreter::try_create(
+            )),
+            Plan::TruncateTable(truncate_table) => Ok(Arc::new(
+                TruncateTableInterpreter::try_create(ctx, *truncate_table.clone())?,
+            )),
+            Plan::OptimizeTable(optimize_table) => Ok(Arc::new(
+                OptimizeTableInterpreter::try_create(ctx, *optimize_table.clone())?,
+            )),
+            Plan::VacuumTable(vacuum_table) => Ok(Arc::new(VacuumTableInterpreter::try_create(
                 ctx,
                 *vacuum_table.clone(),
-            )?),
-            Plan::AnalyzeTable(analyze_table) => Arc::new(AnalyzeTableInterpreter::try_create(
+            )?)),
+            Plan::AnalyzeTable(analyze_table) => Ok(Arc::new(AnalyzeTableInterpreter::try_create(
                 ctx,
                 *analyze_table.clone(),
-            )?),
-            Plan::ExistsTable(exists_table) => Arc::new(ExistsTableInterpreter::try_create(
+            )?)),
+            Plan::ExistsTable(exists_table) => Ok(Arc::new(ExistsTableInterpreter::try_create(
                 ctx,
                 *exists_table.clone(),
-            )?),
+            )?)),
 
             // Views
-            Plan::CreateView(create_view) => Arc::new(CreateViewInterpreter::try_create(
+            Plan::CreateView(create_view) => Ok(Arc::new(CreateViewInterpreter::try_create(
                 ctx,
                 *create_view.clone(),
-            )?),
-            Plan::AlterView(alter_view) => {
-                Arc::new(AlterViewInterpreter::try_create(ctx, *alter_view.clone())?)
-            }
-            Plan::DropView(drop_view) => {
-                Arc::new(DropViewInterpreter::try_create(ctx, *drop_view.clone())?)
-            }
+            )?)),
+            Plan::AlterView(alter_view) => Ok(Arc::new(AlterViewInterpreter::try_create(
+                ctx,
+                *alter_view.clone(),
+            )?)),
+            Plan::DropView(drop_view) => Ok(Arc::new(DropViewInterpreter::try_create(
+                ctx,
+                *drop_view.clone(),
+            )?)),
 
             // Indexes
-            Plan::CreateIndex(index) => {
-                Arc::new(CreateIndexInterpreter::try_create(ctx, *index.clone())?)
-            }
+            Plan::CreateIndex(index) => Ok(Arc::new(CreateIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
 
-            Plan::DropIndex(index) => {
-                Arc::new(DropIndexInterpreter::try_create(ctx, *index.clone())?)
-            }
-            Plan::RefreshIndex(index) => {
-                Arc::new(RefreshIndexInterpreter::try_create(ctx, *index.clone())?)
-            }
+            Plan::DropIndex(index) => Ok(Arc::new(DropIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
+            Plan::RefreshIndex(index) => Ok(Arc::new(RefreshIndexInterpreter::try_create(
+                ctx,
+                *index.clone(),
+            )?)),
             // Virtual columns
-            Plan::CreateVirtualColumns(create_virtual_columns) => Arc::new(
+            Plan::CreateVirtualColumns(create_virtual_columns) => Ok(Arc::new(
                 CreateVirtualColumnsInterpreter::try_create(ctx, *create_virtual_columns.clone())?,
-            ),
-            Plan::AlterVirtualColumns(alter_virtual_columns) => Arc::new(
+            )),
+            Plan::AlterVirtualColumns(alter_virtual_columns) => Ok(Arc::new(
                 AlterVirtualColumnsInterpreter::try_create(ctx, *alter_virtual_columns.clone())?,
-            ),
-            Plan::DropVirtualColumns(drop_virtual_columns) => Arc::new(
+            )),
+            Plan::DropVirtualColumns(drop_virtual_columns) => Ok(Arc::new(
                 DropVirtualColumnsInterpreter::try_create(ctx, *drop_virtual_columns.clone())?,
-            ),
+            )),
             Plan::GenerateVirtualColumns(generate_virtual_columns) => {
-                Arc::new(GenerateVirtualColumnsInterpreter::try_create(
+                Ok(Arc::new(GenerateVirtualColumnsInterpreter::try_create(
                     ctx,
                     *generate_virtual_columns.clone(),
-                )?)
+                )?))
             }
             // Users
-            Plan::CreateUser(create_user) => Arc::new(CreateUserInterpreter::try_create(
+            Plan::CreateUser(create_user) => Ok(Arc::new(CreateUserInterpreter::try_create(
                 ctx,
                 *create_user.clone(),
-            )?),
-            Plan::DropUser(drop_user) => {
-                Arc::new(DropUserInterpreter::try_create(ctx, *drop_user.clone())?)
-            }
-            Plan::AlterUser(alter_user) => {
-                Arc::new(AlterUserInterpreter::try_create(ctx, *alter_user.clone())?)
-            }
+            )?)),
+            Plan::DropUser(drop_user) => Ok(Arc::new(DropUserInterpreter::try_create(
+                ctx,
+                *drop_user.clone(),
+            )?)),
+            Plan::AlterUser(alter_user) => Ok(Arc::new(AlterUserInterpreter::try_create(
+                ctx,
+                *alter_user.clone(),
+            )?)),
 
-            Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone())?,
+            Plan::Insert(insert) => InsertInterpreter::try_create(ctx, *insert.clone()),
 
-            Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone())?,
+            Plan::Replace(replace) => ReplaceInterpreter::try_create(ctx, *replace.clone()),
 
-            Plan::Delete(delete) => Arc::new(DeleteInterpreter::try_create(ctx, *delete.clone())?),
+            Plan::Delete(delete) => Ok(Arc::new(DeleteInterpreter::try_create(
+                ctx,
+                *delete.clone(),
+            )?)),
 
-            Plan::Update(update) => Arc::new(UpdateInterpreter::try_create(ctx, *update.clone())?),
+            Plan::Update(update) => Ok(Arc::new(UpdateInterpreter::try_create(
+                ctx,
+                *update.clone(),
+            )?)),
 
             // Roles
-            Plan::CreateRole(create_role) => Arc::new(CreateRoleInterpreter::try_create(
+            Plan::CreateRole(create_role) => Ok(Arc::new(CreateRoleInterpreter::try_create(
                 ctx,
                 *create_role.clone(),
-            )?),
-            Plan::DropRole(drop_role) => {
-                Arc::new(DropRoleInterpreter::try_create(ctx, *drop_role.clone())?)
-            }
-            Plan::SetRole(set_role) => {
-                Arc::new(SetRoleInterpreter::try_create(ctx, *set_role.clone())?)
-            }
-            Plan::ShowRoles(show_roles) => {
-                Arc::new(ShowRolesInterpreter::try_create(ctx, *show_roles.clone())?)
-            }
+            )?)),
+            Plan::DropRole(drop_role) => Ok(Arc::new(DropRoleInterpreter::try_create(
+                ctx,
+                *drop_role.clone(),
+            )?)),
+            Plan::SetRole(set_role) => Ok(Arc::new(SetRoleInterpreter::try_create(
+                ctx,
+                *set_role.clone(),
+            )?)),
+            Plan::ShowRoles(show_roles) => Ok(Arc::new(ShowRolesInterpreter::try_create(
+                ctx,
+                *show_roles.clone(),
+            )?)),
 
             // Stages
-            Plan::CreateStage(create_stage) => Arc::new(CreateUserStageInterpreter::try_create(
+            Plan::CreateStage(create_stage) => Ok(Arc::new(
+                CreateUserStageInterpreter::try_create(ctx, *create_stage.clone())?,
+            )),
+            Plan::DropStage(s) => Ok(Arc::new(DropUserStageInterpreter::try_create(
                 ctx,
-                *create_stage.clone(),
-            )?),
-            Plan::DropStage(s) => Arc::new(DropUserStageInterpreter::try_create(ctx, *s.clone())?),
-            Plan::RemoveStage(s) => {
-                Arc::new(RemoveUserStageInterpreter::try_create(ctx, *s.clone())?)
-            }
+                *s.clone(),
+            )?)),
+            Plan::RemoveStage(s) => Ok(Arc::new(RemoveUserStageInterpreter::try_create(
+                ctx,
+                *s.clone(),
+            )?)),
 
             // FileFormats
-            Plan::CreateFileFormat(create_file_format) => Arc::new(
+            Plan::CreateFileFormat(create_file_format) => Ok(Arc::new(
                 CreateFileFormatInterpreter::try_create(ctx, *create_file_format.clone())?,
-            ),
-            Plan::DropFileFormat(drop_file_format) => Arc::new(
+            )),
+            Plan::DropFileFormat(drop_file_format) => Ok(Arc::new(
                 DropFileFormatInterpreter::try_create(ctx, *drop_file_format.clone())?,
-            ),
-            Plan::ShowFileFormats(show_file_formats) => Arc::new(
+            )),
+            Plan::ShowFileFormats(show_file_formats) => Ok(Arc::new(
                 ShowFileFormatsInterpreter::try_create(ctx, *show_file_formats.clone())?,
-            ),
+            )),
 
             // Grant
-            Plan::GrantPriv(grant_priv) => Arc::new(GrantPrivilegeInterpreter::try_create(
+            Plan::GrantPriv(grant_priv) => Ok(Arc::new(GrantPrivilegeInterpreter::try_create(
                 ctx,
                 *grant_priv.clone(),
-            )?),
-            Plan::GrantRole(grant_role) => {
-                Arc::new(GrantRoleInterpreter::try_create(ctx, *grant_role.clone())?)
-            }
-            Plan::ShowGrants(show_grants) => Arc::new(ShowGrantsInterpreter::try_create(
+            )?)),
+            Plan::GrantRole(grant_role) => Ok(Arc::new(GrantRoleInterpreter::try_create(
+                ctx,
+                *grant_role.clone(),
+            )?)),
+            Plan::ShowGrants(show_grants) => Ok(Arc::new(ShowGrantsInterpreter::try_create(
                 ctx,
                 *show_grants.clone(),
-            )?),
-            Plan::RevokePriv(revoke_priv) => Arc::new(RevokePrivilegeInterpreter::try_create(
+            )?)),
+            Plan::RevokePriv(revoke_priv) => Ok(Arc::new(RevokePrivilegeInterpreter::try_create(
                 ctx,
                 *revoke_priv.clone(),
-            )?),
-            Plan::RevokeRole(revoke_role) => Arc::new(RevokeRoleInterpreter::try_create(
+            )?)),
+            Plan::RevokeRole(revoke_role) => Ok(Arc::new(RevokeRoleInterpreter::try_create(
                 ctx,
                 *revoke_role.clone(),
-            )?),
-            Plan::CreateUDF(create_user_udf) => Arc::new(CreateUserUDFInterpreter::try_create(
+            )?)),
+            Plan::CreateUDF(create_user_udf) => Ok(Arc::new(CreateUserUDFInterpreter::try_create(
                 ctx,
                 *create_user_udf.clone(),
-            )?),
-            Plan::AlterUDF(alter_udf) => Arc::new(AlterUserUDFInterpreter::try_create(
+            )?)),
+            Plan::AlterUDF(alter_udf) => Ok(Arc::new(AlterUserUDFInterpreter::try_create(
                 ctx,
                 *alter_udf.clone(),
-            )?),
-            Plan::DropUDF(drop_udf) => {
-                Arc::new(DropUserUDFInterpreter::try_create(ctx, *drop_udf.clone())?)
-            }
+            )?)),
+            Plan::DropUDF(drop_udf) => Ok(Arc::new(DropUserUDFInterpreter::try_create(
+                ctx,
+                *drop_udf.clone(),
+            )?)),
 
-            Plan::Presign(presign) => {
-                Arc::new(PresignInterpreter::try_create(ctx, *presign.clone())?)
-            }
+            Plan::Presign(presign) => Ok(Arc::new(PresignInterpreter::try_create(
+                ctx,
+                *presign.clone(),
+            )?)),
 
-            Plan::SetVariable(set_variable) => {
-                Arc::new(SettingInterpreter::try_create(ctx, *set_variable.clone())?)
-            }
-            Plan::UnSetVariable(unset_variable) => Arc::new(UnSettingInterpreter::try_create(
+            Plan::SetVariable(set_variable) => Ok(Arc::new(SettingInterpreter::try_create(
+                ctx,
+                *set_variable.clone(),
+            )?)),
+            Plan::UnSetVariable(unset_variable) => Ok(Arc::new(UnSettingInterpreter::try_create(
                 ctx,
                 *unset_variable.clone(),
-            )?),
-            Plan::UseDatabase(p) => Arc::new(UseDatabaseInterpreter::try_create(ctx, *p.clone())?),
-            Plan::Kill(p) => Arc::new(KillInterpreter::try_create(ctx, *p.clone())?),
+            )?)),
+            Plan::UseDatabase(p) => Ok(Arc::new(UseDatabaseInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::Kill(p) => Ok(Arc::new(KillInterpreter::try_create(ctx, *p.clone())?)),
 
             // share plans
-            Plan::CreateShareEndpoint(p) => {
-                Arc::new(CreateShareEndpointInterpreter::try_create(ctx, *p.clone())?)
-            }
-            Plan::ShowShareEndpoint(p) => {
-                Arc::new(ShowShareEndpointInterpreter::try_create(ctx, *p.clone())?)
-            }
-            Plan::DropShareEndpoint(p) => {
-                Arc::new(DropShareEndpointInterpreter::try_create(ctx, *p.clone())?)
-            }
-            Plan::CreateShare(p) => Arc::new(CreateShareInterpreter::try_create(ctx, *p.clone())?),
-            Plan::DropShare(p) => Arc::new(DropShareInterpreter::try_create(ctx, *p.clone())?),
-            Plan::GrantShareObject(p) => {
-                Arc::new(GrantShareObjectInterpreter::try_create(ctx, *p.clone())?)
-            }
-            Plan::RevokeShareObject(p) => {
-                Arc::new(RevokeShareObjectInterpreter::try_create(ctx, *p.clone())?)
-            }
-            Plan::AlterShareTenants(p) => {
-                Arc::new(AlterShareTenantsInterpreter::try_create(ctx, *p.clone())?)
-            }
-            Plan::DescShare(p) => Arc::new(DescShareInterpreter::try_create(ctx, *p.clone())?),
-            Plan::ShowShares(p) => Arc::new(ShowSharesInterpreter::try_create(ctx, *p.clone())?),
-            Plan::ShowObjectGrantPrivileges(p) => Arc::new(
+            Plan::CreateShareEndpoint(p) => Ok(Arc::new(
+                CreateShareEndpointInterpreter::try_create(ctx, *p.clone())?,
+            )),
+            Plan::ShowShareEndpoint(p) => Ok(Arc::new(ShowShareEndpointInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropShareEndpoint(p) => Ok(Arc::new(DropShareEndpointInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::CreateShare(p) => Ok(Arc::new(CreateShareInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropShare(p) => Ok(Arc::new(DropShareInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::GrantShareObject(p) => Ok(Arc::new(GrantShareObjectInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::RevokeShareObject(p) => Ok(Arc::new(RevokeShareObjectInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::AlterShareTenants(p) => Ok(Arc::new(AlterShareTenantsInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescShare(p) => Ok(Arc::new(DescShareInterpreter::try_create(ctx, *p.clone())?)),
+            Plan::ShowShares(p) => Ok(Arc::new(ShowSharesInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::ShowObjectGrantPrivileges(p) => Ok(Arc::new(
                 ShowObjectGrantPrivilegesInterpreter::try_create(ctx, *p.clone())?,
-            ),
-            Plan::ShowGrantTenantsOfShare(p) => Arc::new(
+            )),
+            Plan::ShowGrantTenantsOfShare(p) => Ok(Arc::new(
                 ShowGrantTenantsOfShareInterpreter::try_create(ctx, *p.clone())?,
-            ),
-            Plan::RevertTable(p) => Arc::new(RevertTableInterpreter::try_create(ctx, *p.clone())?),
-            Plan::CreateDatamaskPolicy(p) => {
-                Arc::new(CreateDataMaskInterpreter::try_create(ctx, *p.clone())?)
-            }
-            Plan::DropDatamaskPolicy(p) => {
-                Arc::new(DropDataMaskInterpreter::try_create(ctx, *p.clone())?)
-            }
-            Plan::DescDatamaskPolicy(p) => {
-                Arc::new(DescDataMaskInterpreter::try_create(ctx, *p.clone())?)
-            }
-        };
-
-        debug_assert_eq!(interpreter.schema(), plan.schema());
-
-        Ok(interpreter)
+            )),
+            Plan::RevertTable(p) => Ok(Arc::new(RevertTableInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::CreateDatamaskPolicy(p) => Ok(Arc::new(CreateDataMaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DropDatamaskPolicy(p) => Ok(Arc::new(DropDataMaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+            Plan::DescDatamaskPolicy(p) => Ok(Arc::new(DescDataMaskInterpreter::try_create(
+                ctx,
+                *p.clone(),
+            )?)),
+        }
     }
 }
