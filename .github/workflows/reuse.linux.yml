@@ -225,7 +225,7 @@ jobs:
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
         timeout-minutes: 15
         env:
-          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+          QUERY_DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
         with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
