@@ -294,7 +294,7 @@ CREATE STAGE r2_stage
   URL='s3://databend/'
   CONNECTION = (
     REGION = 'auto'
-    ENDPOINT_URL = 'https://1726b2d2b81f9485620516a8ad451149.r2.cloudflarestorage.com/databend'
+    ENDPOINT_URL = '<your-bucket-endpoint>'
     ACCESS_KEY_ID = '<your-access-key-id>'
     SECRET_ACCESS_KEY = '<your-secret-access-key>');
 ```
