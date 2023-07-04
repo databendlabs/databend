@@ -25,6 +25,7 @@ use common_pipeline_core::processors::port::InputPort;
 use common_pipeline_core::processors::processor::ProcessorPtr;
 use opendal::Operator;
 
+use super::MutationDeletedSegment;
 use crate::io::write_data;
 use crate::io::BlockBuilder;
 use crate::io::BlockSerialization;
@@ -65,6 +66,8 @@ pub struct SerializeDataTransform {
     dal: Operator,
 
     index: BlockMetaIndex,
+
+    deleted_segment: Option<MutationDeletedSegment>,
 }
 
 impl SerializeDataTransform {
@@ -91,6 +94,7 @@ impl SerializeDataTransform {
             block_builder,
             dal: table.get_operator(),
             index: BlockMetaIndex::default(),
+            deleted_segment: None,
         })))
     }
 }
@@ -141,11 +145,18 @@ impl Processor for SerializeDataTransform {
         let meta = input_data.take_meta();
         if let Some(meta) = meta {
             let meta = SerializeDataMeta::downcast_ref_from(&meta).unwrap();
-            self.index = meta.index.clone();
-            if input_data.is_empty() {
+            // delete a whole segment, segment level
+            if let Some(deleted_segment) = &meta.deleted_segment {
                 self.state = State::Output(Replacement::Deleted);
+                self.deleted_segment = Some(deleted_segment.clone());
             } else {
-                self.state = State::NeedSerialize(input_data, meta.stats_type.clone());
+                // block level
+                self.index = meta.index.clone();
+                if input_data.is_empty() {
+                    self.state = State::Output(Replacement::Deleted);
+                } else {
+                    self.state = State::NeedSerialize(input_data, meta.stats_type.clone());
+                }
             }
         } else {
             self.state = State::Output(Replacement::DoNothing);
@@ -173,6 +184,7 @@ impl Processor for SerializeDataTransform {
                 let entry = ReplacementLogEntry {
                     index: self.index.clone(),
                     op,
+                    deleted_segment: self.deleted_segment.take(),
                 };
                 let meta = MutationLogs {
                     entries: vec![MutationLogEntry::Replacement(entry)],
