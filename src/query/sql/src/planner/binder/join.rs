@@ -640,7 +640,6 @@ impl<'a> JoinConditionResolver<'a> {
                 ))
             })?;
             // Wrap cast for both left and right, `cast` can change the physical type of the data block
-            // Related issue: https://github.com/datafuselabs/databend/issues/7650
             left = wrap_cast(&left, &least_super_type);
             right = wrap_cast(&right, &least_super_type);
         }
