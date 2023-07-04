@@ -74,7 +74,7 @@ The test will run a series of SQL and validation commands to verify the results.
 
 Databend conducts long run tests to verify the correctness and performance of the system under heavy load and concurrency. These tests involve concurrent ingestion of large-scale data, table maintenance (optimization, re-clustering, and vacuuming), as well as querying.
 
-During the testing process, a series of SQL commands will be executed and validation checks will be performed to ensure accurate results. It will start by running pre-test scripts (`_before.sh`), followed by repeated execution of concurrent test scripts, and finally executing post-test scripts (`_after.sh`). All event logs will be stored in a Databend table for further analysis.
+During the testing process, a series of SQL commands and validation checks will be performed to ensure accurate results. The testing process will start by running pre-test scripts (`_before.sh`), followed by repeated execution of concurrent test scripts, and finally executing post-test scripts (`_after.sh`). All event logs will be stored in a Databend table for further analysis.
 
 ```lua
                       +-------------------+
