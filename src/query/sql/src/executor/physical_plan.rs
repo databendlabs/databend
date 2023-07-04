@@ -326,6 +326,7 @@ pub enum WindowFunction {
     LagLead(LagLeadFunctionDesc),
     NthValue(NthValueFunctionDesc),
     Ntile(NtileFunctionDesc),
+    CumeDist,
 }
 
 impl WindowFunction {
@@ -335,7 +336,9 @@ impl WindowFunction {
             WindowFunction::RowNumber | WindowFunction::Rank | WindowFunction::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
-            WindowFunction::PercentRank => DataType::Number(NumberDataType::Float64),
+            WindowFunction::PercentRank | WindowFunction::CumeDist => {
+                DataType::Number(NumberDataType::Float64)
+            }
             WindowFunction::LagLead(f) => f.return_type.clone(),
             WindowFunction::NthValue(f) => f.return_type.clone(),
             WindowFunction::Ntile(f) => f.return_type.clone(),
@@ -355,6 +358,7 @@ impl Display for WindowFunction {
             WindowFunction::LagLead(_) => write!(f, "lead"),
             WindowFunction::NthValue(_) => write!(f, "nth_value"),
             WindowFunction::Ntile(_) => write!(f, "ntile"),
+            WindowFunction::CumeDist => write!(f, "cume_dist"),
         }
     }
 }

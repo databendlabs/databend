@@ -218,6 +218,7 @@ pub enum WindowFuncType {
     LagLead(LagLeadFunction),
     NthValue(NthValueFunction),
     Ntile(NtileFunction),
+    CumeDist,
 }
 
 impl WindowFuncType {
@@ -227,6 +228,7 @@ impl WindowFuncType {
             "rank" => Ok(WindowFuncType::Rank),
             "dense_rank" => Ok(WindowFuncType::DenseRank),
             "percent_rank" => Ok(WindowFuncType::PercentRank),
+            "cume_dist" => Ok(WindowFuncType::CumeDist),
             _ => Err(ErrorCode::UnknownFunction(format!(
                 "Unknown window function: {}",
                 name
@@ -245,6 +247,7 @@ impl WindowFuncType {
             WindowFuncType::LagLead(_) => "lead".to_string(),
             WindowFuncType::NthValue(_) => "nth_value".to_string(),
             WindowFuncType::Ntile(_) => "ntile".to_string(),
+            WindowFuncType::CumeDist => "cume_dist".to_string(),
         }
     }
 
@@ -273,7 +276,9 @@ impl WindowFuncType {
             WindowFuncType::RowNumber | WindowFuncType::Rank | WindowFuncType::DenseRank => {
                 DataType::Number(NumberDataType::UInt64)
             }
-            WindowFuncType::PercentRank => DataType::Number(NumberDataType::Float64),
+            WindowFuncType::PercentRank | WindowFuncType::CumeDist => {
+                DataType::Number(NumberDataType::Float64)
+            }
             WindowFuncType::LagLead(lag_lead) => *lag_lead.return_type.clone(),
             WindowFuncType::NthValue(nth_value) => *nth_value.return_type.clone(),
             WindowFuncType::Ntile(buckets) => *buckets.return_type.clone(),
