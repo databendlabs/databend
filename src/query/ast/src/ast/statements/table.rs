@@ -175,6 +175,28 @@ impl Display for CreateTableStmt {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct AttachTableStmt {
+    pub database: Option<Identifier>,
+    pub table: Identifier,
+    pub uri_location: UriLocation,
+    pub table_options: BTreeMap<String, String>,
+}
+
+impl Display for AttachTableStmt {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        write!(f, "ATTACH TABLE ")?;
+        write_period_separated_list(f, self.database.iter().chain(Some(&self.table)))?;
+
+        write!(f, " FROM {0}", self.uri_location)?;
+
+        // Format table options
+        write_space_separated_map(f, self.table_options.iter())?;
+
+        Ok(())
+    }
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum CreateTableSource {

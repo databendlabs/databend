@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_ast::ast::AlterTableAction;
 use common_ast::ast::AlterTableStmt;
 use common_ast::ast::AnalyzeTableStmt;
+use common_ast::ast::AttachTableStmt;
 use common_ast::ast::ColumnDefinition;
 use common_ast::ast::ColumnExpr;
 use common_ast::ast::CompactTarget;
@@ -88,6 +89,7 @@ use crate::planner::semantic::IdentifierNormalizer;
 use crate::plans::AddTableColumnPlan;
 use crate::plans::AlterTableClusterKeyPlan;
 use crate::plans::AnalyzeTablePlan;
+use crate::plans::AttachTablePlan;
 use crate::plans::CreateTablePlan;
 use crate::plans::DescribeTablePlan;
 use crate::plans::DropTableClusterKeyPlan;
@@ -563,6 +565,39 @@ impl Binder {
             },
         };
         Ok(Plan::CreateTable(Box::new(plan)))
+    }
+
+    #[async_backtrace::framed]
+    pub(in crate::planner::binder) async fn bind_attach_table(
+        &mut self,
+        stmt: &AttachTableStmt,
+    ) -> Result<Plan> {
+        let catalog_name = self.ctx.get_current_catalog();
+        let database_name = stmt
+            .database
+            .as_ref()
+            .map(|ident| normalize_identifier(ident, &self.name_resolution_ctx).name)
+            .unwrap_or_else(|| self.ctx.get_current_database());
+        let table_name = normalize_identifier(&stmt.table, &self.name_resolution_ctx).name;
+        let engine = Engine::Fuse;
+        if stmt.table_options.len() != 1 {
+            return Err(ErrorCode::BadArguments(
+                "Incorrect ATTACH query: required one table option",
+            ));
+        }
+        let table_option = stmt.table_options.clone();
+        let mut uri = stmt.uri_location.clone();
+        let (sp, _) = parse_uri_location(&mut uri)?;
+
+        // create a temporary op to check if params is correct
+        DataOperator::try_create(&sp).await?;
+        Ok(Plan::AttachTable(Box::new(AttachTablePlan {
+            catalog: catalog_name,
+            database: database_name,
+            table: table_name,
+            options: table_option,
+            engine: engine,
+        })))
     }
 
     #[async_backtrace::framed]

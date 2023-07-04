@@ -483,6 +483,20 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             })
         },
     );
+
+    let attach_table = map(
+        rule! {
+            ATTACH ~ TABLE ~ #period_separated_idents_1_to_2 ~ #uri_location ~ #table_option
+        },
+        |(_, _, (database, table), uri_location, table_options)| {
+            Statement::AttachTable(AttachTableStmt {
+                database,
+                table,
+                table_options,
+                uri_location,
+            })
+        },
+    );
     let create_table = map(
         rule! {
             CREATE ~ TRANSIENT? ~ TABLE ~ ( IF ~ NOT ~ EXISTS )?
@@ -1328,6 +1342,7 @@ pub fn statement(i: Input) -> IResult<StatementMsg> {
             | #show_fields : "`SHOW FIELDS FROM [<database>.]<table>`"
             | #show_tables_status : "`SHOW TABLES STATUS [FROM <database>] [<show_limit>]`"
             | #show_drop_tables_status : "`SHOW DROP TABLES [FROM <database>]`"
+            | #attach_table : "`ATTACH TABLE [<database>.]<table> <uri> <table_options>`"
             | #create_table : "`CREATE TABLE [IF NOT EXISTS] [<database>.]<table> [<source>] [<table_options>]`"
             | #drop_table : "`DROP TABLE [IF EXISTS] [<database>.]<table>`"
             | #undrop_table : "`UNDROP TABLE [<database>.]<table>`"
