@@ -328,7 +328,7 @@ statement ok
 create table t (c int) row_per_block = 100000 block_per_segment = 1000;
 
 statement ok
-set global max_threads = 1;
+set max_threads = 1;
 
 # 0-1000000
 statement ok
