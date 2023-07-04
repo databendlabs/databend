@@ -23,3 +23,6 @@ curl -s -u root: -H "stage_name:s0011" -F "upload=@${CURDIR}/../../../data/sampl
 echo "set enable_distributed_copy_into = 1;copy into products from @s0011 pattern = '.*[.]csv' purge = true;"  | $MYSQL_CLIENT_CONNECT 2>&1 | grep -o 'Text = expect 3 fields, only found 2'
 echo "select count(*) from products;" | $MYSQL_CLIENT_CONNECT
 echo "list @s0011;" | $MYSQL_CLIENT_CONNECT | grep -o 'csv' | wc -l
+echo "set enable_distributed_copy_into = 1;copy into products from (select \$1,\$2,\$3 from @s0011 as t2) force = true purge = true;"  | $MYSQL_CLIENT_CONNECT
+echo "select count(*) from products;" | $MYSQL_CLIENT_CONNECT
+echo "list @s0011;" | $MYSQL_CLIENT_CONNECT | grep -o 'csv' | wc -l
