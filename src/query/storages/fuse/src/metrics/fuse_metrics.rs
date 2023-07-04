@@ -173,6 +173,13 @@ pub fn metrics_inc_deletion_block_range_pruned_nums(c: u64) {
     increment_gauge!(key!("deletion_block_range_pruned_nums"), c as f64);
 }
 
+pub fn metrics_inc_deletion_segment_range_purned_whole_segment_nums(c: u64) {
+    increment_gauge!(
+        key!("deletion_segment_range_pruned_whole_segment_nums"),
+        c as f64
+    );
+}
+
 pub fn metrics_inc_deletion_block_range_pruned_whole_block_nums(c: u64) {
     increment_gauge!(
         key!("deletion_block_range_pruned_whole_block_nums"),
@@ -226,4 +233,7 @@ pub fn metrics_reset() {
     gauge!(key!("bytes_block_range_pruning_after"), c);
     gauge!(key!("deletion_block_range_pruned_nums"), c);
     gauge!(key!("deletion_block_range_pruned_whole_block_nums"), c);
+
+    // segment metrics
+    gauge!(key!("deletion_segment_range_pruned_whole_segment_nums"), c);
 }

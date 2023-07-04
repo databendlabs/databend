@@ -19,6 +19,7 @@ use std::sync::Arc;
 use common_exception::ErrorCode;
 use common_exception::Result;
 use common_expression::DataBlock;
+use common_expression::FunctionContext;
 use common_sql::plans::JoinType;
 
 use super::hash_join::ProbeState;
@@ -27,8 +28,6 @@ use crate::pipelines::processors::port::OutputPort;
 use crate::pipelines::processors::processor::Event;
 use crate::pipelines::processors::transforms::hash_join::HashJoinState;
 use crate::pipelines::processors::Processor;
-use crate::sessions::QueryContext;
-use crate::sessions::TableContext;
 
 enum HashJoinStep {
     Build,
@@ -47,20 +46,20 @@ pub struct TransformHashJoinProbe {
     step: HashJoinStep,
     join_state: Arc<dyn HashJoinState>,
     probe_state: ProbeState,
-    block_size: u64,
+    max_block_size: usize,
     outer_scan_finished: bool,
 }
 
 impl TransformHashJoinProbe {
     pub fn create(
-        ctx: Arc<QueryContext>,
         input_port: Arc<InputPort>,
         output_port: Arc<OutputPort>,
         join_state: Arc<dyn HashJoinState>,
+        max_block_size: usize,
+        func_ctx: FunctionContext,
         join_type: &JoinType,
         with_conjunct: bool,
     ) -> Result<Box<dyn Processor>> {
-        let default_block_size = ctx.get_settings().get_max_block_size()?;
         Ok(Box::new(TransformHashJoinProbe {
             input_data: VecDeque::new(),
             output_data_blocks: VecDeque::new(),
@@ -68,8 +67,8 @@ impl TransformHashJoinProbe {
             output_port,
             step: HashJoinStep::Build,
             join_state,
-            probe_state: ProbeState::create(join_type, with_conjunct, ctx.get_function_context()?),
-            block_size: default_block_size,
+            probe_state: ProbeState::create(max_block_size, join_type, with_conjunct, func_ctx),
+            max_block_size,
             outer_scan_finished: false,
         }))
     }
@@ -140,7 +139,7 @@ impl Processor for TransformHashJoinProbe {
                 if self.input_port.has_data() {
                     let data = self.input_port.pull_data().unwrap()?;
                     // Split data to `block_size` rows per sub block.
-                    let (sub_blocks, remain_block) = data.split_by_rows(self.block_size as usize);
+                    let (sub_blocks, remain_block) = data.split_by_rows(self.max_block_size);
                     self.input_data.extend(sub_blocks);
                     if let Some(remain) = remain_block {
                         self.input_data.push_back(remain);

@@ -103,6 +103,7 @@ impl ReclusterMutator {
                         let entry = ReplacementLogEntry {
                             index: block_idx,
                             op: Replacement::Deleted,
+                            deleted_segment: None,
                         };
                         self.mutation_logs
                             .entries
@@ -183,6 +184,7 @@ impl ReclusterMutator {
                     let entry = ReplacementLogEntry {
                         index: block_idx,
                         op: Replacement::Deleted,
+                        deleted_segment: None,
                     };
                     self.mutation_logs
                         .entries

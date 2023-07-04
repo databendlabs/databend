@@ -1223,12 +1223,15 @@ impl PipelineBuilder {
     fn build_join_probe(&mut self, join: &HashJoin, state: Arc<JoinHashTable>) -> Result<()> {
         self.build_pipeline(&join.probe)?;
 
+        let max_block_size = self.ctx.get_settings().get_max_block_size()? as usize;
+        let func_ctx = self.ctx.get_function_context()?;
         self.main_pipeline.add_transform(|input, output| {
             let transform = TransformHashJoinProbe::create(
-                self.ctx.clone(),
                 input,
                 output,
                 TransformHashJoinProbe::attach(state.clone())?,
+                max_block_size,
+                func_ctx.clone(),
                 &join.join_type,
                 !join.non_equi_conditions.is_empty(),
             )?;

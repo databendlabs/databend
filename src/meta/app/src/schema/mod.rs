@@ -20,13 +20,7 @@ mod index;
 mod table;
 mod virtual_column;
 
-pub use catalog::CatalogMeta;
-pub use catalog::CatalogNameIdent;
-pub use catalog::CatalogOption;
-pub use catalog::CatalogType;
-pub use catalog::CreateCatalogReq;
-pub use catalog::DropCatalogReq;
-pub use catalog::IcebergCatalogOption;
+pub use catalog::*;
 pub use database::CreateDatabaseReply;
 pub use database::CreateDatabaseReq;
 pub use database::DatabaseId;
@@ -100,6 +94,10 @@ pub use virtual_column::UpdateVirtualColumnReply;
 pub use virtual_column::UpdateVirtualColumnReq;
 pub use virtual_column::VirtualColumnMeta;
 pub use virtual_column::VirtualColumnNameIdent;
+
+const PREFIX_CATALOG: &str = "__fd_catalog";
+const PREFIX_CATALOG_BY_ID: &str = "__fd_catalog_by_id";
+const PREFIX_CATALOG_ID_TO_NAME: &str = "__fd_catalog_id_to_name";
 
 const PREFIX_DB_ID_LIST: &str = "__fd_db_id_list";
 const PREFIX_DATABASE: &str = "__fd_database";
