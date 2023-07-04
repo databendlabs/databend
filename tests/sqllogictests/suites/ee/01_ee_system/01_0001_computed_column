@@ -101,7 +101,7 @@ statement ok
 drop table if exists t_virtual
 
 statement ok
-create table t_virtual(a string null default 'a', b string null as (concat(a, '-', c)) stored, c string null default 'c')
+create table t_virtual(a string null default 'a', b string null as (concat(a, '-', c)) virtual, c string null default 'c')
 
 statement ok
 insert into t_virtual values ('a1', 'c1'), ('a2', 'c2')

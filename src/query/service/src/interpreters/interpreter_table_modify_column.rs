@@ -19,6 +19,9 @@ use common_ast::ast::ModifyColumnAction;
 use common_catalog::table::Table;
 use common_exception::ErrorCode;
 use common_exception::Result;
+use common_expression::ComputedExpr;
+use common_expression::TableSchema;
+use common_license::license::Feature::ComputedColumn;
 use common_license::license::Feature::DataMask;
 use common_license::license_manager::get_license_manager;
 use common_meta_app::schema::DatabaseType;
@@ -93,6 +96,46 @@ impl ModifyTableColumnInterpreter {
         new_table_meta.column_mask_policy = Some(column_mask_policy);
         Ok(new_table_meta)
     }
+
+    async fn do_convert_stored_computed_column(
+        &self,
+        table: &Arc<dyn Table>,
+        table_meta: TableMeta,
+    ) -> Result<TableMeta> {
+        let license_manager = get_license_manager();
+        license_manager.manager.check_enterprise_enabled(
+            &self.ctx.get_settings(),
+            self.ctx.get_tenant(),
+            ComputedColumn,
+        )?;
+
+        let schema = table.schema();
+        let new_schema = if let Some((i, field)) = schema.column_with_name(&self.plan.column) {
+            match field.computed_expr {
+                Some(ComputedExpr::Stored(_)) => {}
+                _ => {
+                    return Err(ErrorCode::UnknownColumn(format!(
+                        "Column '{}' is not a stored computed column",
+                        self.plan.column
+                    )));
+                }
+            }
+            let mut new_field = field.clone();
+            new_field.computed_expr = None;
+            let mut fields = schema.fields().clone();
+            fields[i] = new_field;
+            TableSchema::new_from(fields, schema.metadata.clone())
+        } else {
+            return Err(ErrorCode::UnknownColumn(format!(
+                "Cannot find column {}",
+                self.plan.column
+            )));
+        };
+
+        let mut new_table_meta = table_meta;
+        new_table_meta.schema = new_schema.into();
+        Ok(new_table_meta)
+    }
 }
 
 #[async_trait::async_trait]
@@ -142,6 +185,10 @@ impl Interpreter for ModifyTableColumnInterpreter {
         let new_table_meta = match &self.plan.action {
             ModifyColumnAction::SetMaskingPolicy(mask_name) => {
                 self.do_set_data_mask_policy(table, table_meta, mask_name.clone())
+                    .await?
+            }
+            ModifyColumnAction::ConvertStoredComputedColumn => {
+                self.do_convert_stored_computed_column(table, table_meta)
                     .await?
             }
         };

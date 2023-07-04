@@ -303,6 +303,8 @@ pub enum TokenKind {
     SOME,
     #[token("ALTER", ignore(ascii_case))]
     ALTER,
+    #[token("ALWAYS", ignore(ascii_case))]
+    ALWAYS,
     #[token("ANALYZE", ignore(ascii_case))]
     ANALYZE,
     #[token("AND", ignore(ascii_case))]
@@ -527,6 +529,8 @@ pub enum TokenKind {
     FUSE,
     #[token("GENERATE", ignore(ascii_case))]
     GENERATE,
+    #[token("GENERATED", ignore(ascii_case))]
+    GENERATED,
     #[token("GLOBAL", ignore(ascii_case))]
     GLOBAL,
     #[token("GRAPH", ignore(ascii_case))]

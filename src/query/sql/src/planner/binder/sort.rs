@@ -247,6 +247,7 @@ impl Binder {
             items: order_by_items,
             limit: None,
             after_exchange: false,
+            pre_projection: None,
         };
         new_expr = SExpr::create_unary(Arc::new(sort_plan.into()), Arc::new(new_expr));
         Ok(new_expr)
@@ -298,6 +299,7 @@ impl Binder {
             items: order_by_items,
             limit: None,
             after_exchange: false,
+            pre_projection: None,
         };
         Ok(SExpr::create_unary(
             Arc::new(sort_plan.into()),

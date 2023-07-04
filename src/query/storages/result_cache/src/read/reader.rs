@@ -28,6 +28,7 @@ use common_storage::DataOperator;
 use opendal::Operator;
 
 use crate::common::gen_result_cache_meta_key;
+use crate::common::ResultCacheValue;
 use crate::meta_manager::ResultCacheMetaManager;
 
 pub struct ResultCacheReader {
@@ -65,6 +66,16 @@ impl ResultCacheReader {
 
     pub fn get_meta_key(&self) -> String {
         self.meta_key.clone()
+    }
+
+    #[async_backtrace::framed]
+    pub async fn check_cache(&self) -> Result<Option<ResultCacheValue>> {
+        if let Some(v) = self.meta_mgr.get(self.meta_key.clone()).await? {
+            if self.tolerate_inconsistent || v.partitions_shas == self.partitions_shas {
+                return Ok(Some(v));
+            }
+        }
+        Ok(None)
     }
 
     #[async_backtrace::framed]

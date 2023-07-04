@@ -83,7 +83,7 @@ pub enum HashJoinHashTable {
 
 pub struct JoinHashTable {
     pub(crate) ctx: Arc<QueryContext>,
-    pub(crate) data_block_size_limit: Arc<usize>,
+    pub(crate) build_side_block_size_limit: Arc<usize>,
     /// Reference count
     pub(crate) build_count: Mutex<usize>,
     pub(crate) finalize_count: Mutex<usize>,
@@ -161,7 +161,9 @@ impl JoinHashTable {
         }
         Ok(Self {
             row_space: RowSpace::new(ctx.clone(), build_data_schema)?,
-            data_block_size_limit: Arc::new(ctx.get_settings().get_max_block_size()? as usize * 16),
+            build_side_block_size_limit: Arc::new(
+                ctx.get_settings().get_max_block_size()? as usize * 16,
+            ),
             ctx,
             build_count: Mutex::new(0),
             finalize_count: Mutex::new(0),
