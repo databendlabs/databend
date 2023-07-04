@@ -12,10 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::Weak;
+use std::task::Waker;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
@@ -26,6 +29,7 @@ use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_condvar::WorkersWaitingStatus;
 use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
+use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
 use crate::pipelines::processors::processor::ProcessorPtr;
 
 pub struct ExecutorTasksQueue {
@@ -48,12 +52,21 @@ impl ExecutorTasksQueue {
         self.finished_notify.notify_waiters();
 
         let mut workers_tasks = self.workers_tasks.lock();
+
         let mut wakeup_workers =
             Vec::with_capacity(workers_tasks.workers_waiting_status.waiting_size());
 
         while workers_tasks.workers_waiting_status.waiting_size() != 0 {
             let worker_id = workers_tasks.workers_waiting_status.wakeup_any_worker();
             wakeup_workers.push(worker_id);
+        }
+
+        for pending_sync_tasks in &mut workers_tasks.workers_pending_async_tasks {
+            for (_proc, async_task) in pending_sync_tasks.drain() {
+                if let Some(async_task) = Weak::upgrade(&async_task) {
+                    async_task.wakeup();
+                }
+            }
         }
 
         drop(workers_tasks);
@@ -163,6 +176,10 @@ impl ExecutorTasksQueue {
         let mut workers_tasks = self.workers_tasks.lock();
 
         let mut worker_id = task.worker_id;
+        if task.has_pending {
+            workers_tasks.workers_pending_async_tasks[worker_id].remove(&(task.id as usize));
+        }
+
         workers_tasks.tasks_size += 1;
         workers_tasks.workers_completed_async_tasks[worker_id].push_back(task);
 
@@ -182,6 +199,12 @@ impl ExecutorTasksQueue {
         }
     }
 
+    pub fn pending_async_task(&self, task: &Arc<ProcessorAsyncTask>) {
+        let mut workers_tasks = self.workers_tasks.lock();
+        workers_tasks.workers_pending_async_tasks[task.worker_id]
+            .insert(task.processor_id as usize, Arc::downgrade(task));
+    }
+
     pub fn get_finished_notify(&self) -> Arc<Notify> {
         self.finished_notify.clone()
     }
@@ -197,11 +220,17 @@ pub struct CompletedAsyncTask {
     pub id: NodeIndex,
     pub worker_id: usize,
     pub res: Result<()>,
+    pub has_pending: bool,
 }
 
 impl CompletedAsyncTask {
-    pub fn create(id: NodeIndex, worker_id: usize, res: Result<()>) -> Self {
-        CompletedAsyncTask { id, worker_id, res }
+    pub fn create(id: NodeIndex, worker_id: usize, pending: bool, res: Result<()>) -> Self {
+        CompletedAsyncTask {
+            id,
+            worker_id,
+            res,
+            has_pending: pending,
+        }
     }
 }
 
@@ -210,6 +239,7 @@ struct ExecutorTasks {
     workers_waiting_status: WorkersWaitingStatus,
     workers_sync_tasks: Vec<VecDeque<ProcessorPtr>>,
     workers_completed_async_tasks: Vec<VecDeque<CompletedAsyncTask>>,
+    workers_pending_async_tasks: Vec<HashMap<usize, Weak<ProcessorAsyncTask>>>,
 }
 
 unsafe impl Send for ExecutorTasks {}
@@ -217,16 +247,19 @@ unsafe impl Send for ExecutorTasks {}
 impl ExecutorTasks {
     pub fn create(workers_size: usize) -> ExecutorTasks {
         let mut workers_sync_tasks = Vec::with_capacity(workers_size);
+        let mut workers_pending_async_tasks = Vec::with_capacity(workers_size);
         let mut workers_completed_async_tasks = Vec::with_capacity(workers_size);
 
         for _index in 0..workers_size {
             workers_sync_tasks.push(VecDeque::new());
+            workers_pending_async_tasks.push(HashMap::new());
             workers_completed_async_tasks.push(VecDeque::new());
         }
 
         ExecutorTasks {
             tasks_size: 0,
             workers_sync_tasks,
+            workers_pending_async_tasks,
             workers_completed_async_tasks,
             workers_waiting_status: WorkersWaitingStatus::create(workers_size),
         }

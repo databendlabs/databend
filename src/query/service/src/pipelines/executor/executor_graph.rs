@@ -32,6 +32,7 @@ use crate::pipelines::executor::executor_condvar::WorkersCondvar;
 use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
+use crate::pipelines::executor::processor_async_task::ProcessorAsyncFuture;
 use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::pipeline::Pipeline;
@@ -337,7 +338,7 @@ impl ScheduleQueue {
             let process_future = proc.async_process();
             executor
                 .async_runtime
-                .spawn(TrackedFuture::create(ProcessorAsyncTask::create(
+                .spawn(TrackedFuture::create(ProcessorAsyncFuture::create(
                     query_id,
                     wakeup_worker_id,
                     proc.clone(),
