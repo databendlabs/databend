@@ -249,7 +249,7 @@ impl FusePruner {
     pub async fn pruning(
         &mut self,
         mut segment_locs: Vec<SegmentLocation>,
-        delete_purning: bool,
+        delete_pruning: bool,
     ) -> Result<Vec<(BlockMetaIndex, Arc<BlockMeta>)>> {
         // Segment pruner.
         let segment_pruner =
@@ -288,28 +288,36 @@ impl FusePruner {
                     let mut deleted_segments = vec![];
                     let pruned_segments = segment_pruner.pruning(batch).await?;
 
-                    if delete_purning {
-                        // inverse purn
+                    if delete_pruning {
+                        // inverse prun
                         for (segment_location, compact_segment_info) in &pruned_segments {
-                            // for delete_purn
-                            if !inverse_range_index
-                                .as_ref()
-                                .unwrap()
-                                .should_keep(&compact_segment_info.summary.col_stats, None)
-                            {
-                                deleted_segments.push(DeletedSegmentInfo {
-                                    index: segment_location.segment_idx,
-                                    segment_info: (
-                                        segment_location.location.clone(),
-                                        compact_segment_info.summary.clone(),
-                                    ),
-                                })
-                            } else {
-                                res.extend(
-                                    block_pruner
-                                        .pruning(segment_location.clone(), compact_segment_info)
-                                        .await?,
-                                );
+                            // for delete_prun
+                            match inverse_range_index.as_ref(){
+                                Some(range_index) => {
+                                    if !range_index.should_keep(&compact_segment_info.summary.col_stats, None)
+                                    {
+                                        deleted_segments.push(DeletedSegmentInfo {
+                                            index: segment_location.segment_idx,
+                                            segment_info: (
+                                                segment_location.location.clone(),
+                                                compact_segment_info.summary.clone(),
+                                            ),
+                                        })
+                                    }else {
+                                        res.extend(
+                                            block_pruner
+                                                .pruning(segment_location.clone(), compact_segment_info)
+                                                .await?,
+                                        );
+                                    }
+                                },
+                                None => {
+                                    res.extend(
+                                        block_pruner
+                                            .pruning(segment_location.clone(), compact_segment_info)
+                                            .await?,
+                                    );
+                                }
                             }
                         }
                     } else {
@@ -334,7 +342,7 @@ impl FusePruner {
                     metas.extend(res.0);
                     self.deleted_segments.append(&mut res.1);
                 }
-                if delete_purning {
+                if delete_pruning {
                     Ok(metas)
                 } else {
                     // Todo:: for now, all operation (contains other mutation other than delete, like select,update etc.)
