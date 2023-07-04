@@ -18,7 +18,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::sync::Weak;
-use std::task::Waker;
 
 use common_base::base::tokio::sync::Notify;
 use common_exception::Result;
@@ -177,7 +176,7 @@ impl ExecutorTasksQueue {
 
         let mut worker_id = task.worker_id;
         if task.has_pending {
-            workers_tasks.workers_pending_async_tasks[worker_id].remove(&(task.id as usize));
+            workers_tasks.workers_pending_async_tasks[worker_id].remove(&task.id.index());
         }
 
         workers_tasks.tasks_size += 1;
@@ -202,7 +201,7 @@ impl ExecutorTasksQueue {
     pub fn pending_async_task(&self, task: &Arc<ProcessorAsyncTask>) {
         let mut workers_tasks = self.workers_tasks.lock();
         workers_tasks.workers_pending_async_tasks[task.worker_id]
-            .insert(task.processor_id as usize, Arc::downgrade(task));
+            .insert(task.processor_id.index(), Arc::downgrade(task));
     }
 
     pub fn get_finished_notify(&self) -> Arc<Notify> {

@@ -12,32 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::cell::UnsafeCell;
 use std::future::Future;
 use std::mem::ManuallyDrop;
 use std::ops::DerefMut;
 use std::pin::Pin;
-use std::process::Output;
-use std::ptr::null_mut;
 use std::sync::atomic::AtomicPtr;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::task::Context;
 use std::task::Poll;
 use std::task::Waker;
-use std::time::Duration;
-use std::time::Instant;
 
-use common_ast::parser::token::INNER;
-use common_base::base::tokio::time::sleep;
 use common_base::runtime::catch_unwind;
-use common_exception::ErrorCode;
 use common_exception::Result;
 use common_pipeline_core::processors::processor::ProcessorPtr;
-use futures_util::future::BoxFuture;
-use futures_util::future::Either;
-use futures_util::task::AtomicWaker;
-use futures_util::FutureExt;
 use petgraph::prelude::NodeIndex;
 
 use crate::pipelines::executor::executor_condvar::WorkersCondvar;
@@ -69,7 +57,7 @@ impl ProcessorAsyncTask {
     }
 
     #[inline(always)]
-    pub fn is_finished(self: Arc<Self>) -> bool {
+    pub fn is_finished(&self) -> bool {
         self.queue.is_finished()
     }
 
@@ -103,7 +91,7 @@ impl ProcessorAsyncTask {
     #[inline(always)]
     pub fn set_pending_watcher(self: Arc<Self>, waker: Waker) -> Poll<()> {
         let mut expected = std::ptr::null_mut();
-        let mut desired = ManuallyDrop::new(waker).deref_mut() as *mut Waker;
+        let desired = ManuallyDrop::new(waker).deref_mut() as *mut Waker;
 
         loop {
             match self.pending_waker.compare_exchange_weak(
@@ -113,7 +101,7 @@ impl ProcessorAsyncTask {
                 Ordering::Relaxed,
             ) {
                 Err(new_expected) => unsafe {
-                    if new_expected.will_wake(&*desired) {
+                    if (&*new_expected).will_wake(&*desired) {
                         return Poll::Pending;
                     }
 
@@ -132,14 +120,14 @@ impl ProcessorAsyncTask {
     }
 }
 
-pub struct ProcessorAsyncFuture<Inner: Future<Output = Result<()>> + Send + 'static> {
+pub struct ProcessorAsyncFuture<Inner: Future<Output=Result<()>> + Send + 'static> {
     inner: Inner,
     task: Arc<ProcessorAsyncTask>,
 }
 
-impl<Inner: Future<Output = Result<()>> + Send + 'static> ProcessorAsyncFuture<Inner> {
+impl<Inner: Future<Output=Result<()>> + Send + 'static> ProcessorAsyncFuture<Inner> {
     pub fn create(
-        query_id: Arc<String>,
+        _query_id: Arc<String>,
         worker_id: usize,
         processor: ProcessorPtr,
         queue: Arc<ExecutorTasksQueue>,
@@ -158,7 +146,7 @@ impl<Inner: Future<Output = Result<()>> + Send + 'static> ProcessorAsyncFuture<I
     }
 }
 
-impl<Inner: Future<Output = Result<()>> + Send + 'static> Future for ProcessorAsyncFuture<Inner> {
+impl<Inner: Future<Output=Result<()>> + Send + 'static> Future for ProcessorAsyncFuture<Inner> {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
@@ -169,10 +157,10 @@ impl<Inner: Future<Output = Result<()>> + Send + 'static> Future for ProcessorAs
         let task = self.task.clone();
         let inner = unsafe { self.map_unchecked_mut(|x| &mut x.inner) };
 
-        match catch_unwind(move || inner.poll(cx)) {
-            Ok(Poll::Ready(res)) => task.finish(res),
+        match catch_unwind(move || (inner.poll(cx), cx)) {
+            Ok((Poll::Ready(res), _)) => task.finish(res),
             Err(cause) => task.finish(Err(cause)),
-            Ok(Poll::Pending) => task.set_pending_watcher(cx.waker().clone()),
+            Ok((Poll::Pending, cx)) => task.set_pending_watcher(cx.waker().clone()),
         }
     }
 }

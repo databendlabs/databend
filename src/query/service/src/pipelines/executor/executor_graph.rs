@@ -33,7 +33,6 @@ use crate::pipelines::executor::executor_tasks::ExecutorTasksQueue;
 use crate::pipelines::executor::executor_worker_context::ExecutorTask;
 use crate::pipelines::executor::executor_worker_context::ExecutorWorkerContext;
 use crate::pipelines::executor::processor_async_task::ProcessorAsyncFuture;
-use crate::pipelines::executor::processor_async_task::ProcessorAsyncTask;
 use crate::pipelines::executor::PipelineExecutor;
 use crate::pipelines::pipeline::Pipeline;
 use crate::pipelines::processors::connect;
