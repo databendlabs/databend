@@ -226,7 +226,7 @@ jobs:
         timeout-minutes: 15
         env:
           DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
-          with:
+        with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
           storage-format: ${{ matrix.format }}
