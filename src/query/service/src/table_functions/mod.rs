@@ -17,6 +17,7 @@ mod infer_schema;
 mod list_stage;
 mod numbers;
 mod openai;
+mod slow_async;
 mod srf;
 mod sync_crash_me;
 mod table_function;

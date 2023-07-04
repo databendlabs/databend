@@ -120,12 +120,12 @@ impl ProcessorAsyncTask {
     }
 }
 
-pub struct ProcessorAsyncFuture<Inner: Future<Output=Result<()>> + Send + 'static> {
+pub struct ProcessorAsyncFuture<Inner: Future<Output = Result<()>> + Send + 'static> {
     inner: Inner,
     task: Arc<ProcessorAsyncTask>,
 }
 
-impl<Inner: Future<Output=Result<()>> + Send + 'static> ProcessorAsyncFuture<Inner> {
+impl<Inner: Future<Output = Result<()>> + Send + 'static> ProcessorAsyncFuture<Inner> {
     pub fn create(
         _query_id: Arc<String>,
         worker_id: usize,
@@ -146,7 +146,7 @@ impl<Inner: Future<Output=Result<()>> + Send + 'static> ProcessorAsyncFuture<Inn
     }
 }
 
-impl<Inner: Future<Output=Result<()>> + Send + 'static> Future for ProcessorAsyncFuture<Inner> {
+impl<Inner: Future<Output = Result<()>> + Send + 'static> Future for ProcessorAsyncFuture<Inner> {
     type Output = ();
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {

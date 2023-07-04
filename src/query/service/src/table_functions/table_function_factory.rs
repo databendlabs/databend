@@ -33,6 +33,7 @@ use crate::table_functions::async_crash_me::AsyncCrashMeTable;
 use crate::table_functions::infer_schema::InferSchemaTable;
 use crate::table_functions::list_stage::ListStageTable;
 use crate::table_functions::numbers::NumbersTable;
+use crate::table_functions::slow_async::SlowAsyncTable;
 use crate::table_functions::srf::RangeTable;
 use crate::table_functions::sync_crash_me::SyncCrashMeTable;
 use crate::table_functions::GPT2SQLTable;
@@ -133,6 +134,11 @@ impl TableFunctionFactory {
         creators.insert(
             "async_crash_me".to_string(),
             (next_id(), Arc::new(AsyncCrashMeTable::create)),
+        );
+
+        creators.insert(
+            "slow_async".to_string(),
+            (next_id(), Arc::new(SlowAsyncTable::create)),
         );
 
         creators.insert(
