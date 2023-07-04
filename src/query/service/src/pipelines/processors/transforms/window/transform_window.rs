@@ -727,6 +727,8 @@ where T: Number + ResultTypeOfUnary
             false
         };
 
+        let need_peer = matches!(func, WindowFunctionImpl::CumeDist);
+
         Ok(Self {
             input,
             output,
@@ -758,7 +760,7 @@ where T: Number + ResultTypeOfUnary
             peer_group_start: RowPtr::default(),
             peer_group_end: RowPtr::default(),
             peer_group_ended: false,
-            need_peer: true,
+            need_peer,
             current_row: RowPtr::default(),
             current_row_in_partition: 1,
             current_rank: 1,
@@ -955,11 +957,11 @@ where T: Number + ResultTypeOfUnary
                     self.advance_peer_group_end(self.current_row);
                 }
 
-                if self.partition_ended {
+                if self.need_peer && self.partition_ended {
                     self.peer_group_ended = true;
                 }
 
-                if !self.peer_group_ended {
+                if self.need_peer && !self.peer_group_ended {
                     debug_assert!(!self.input_is_finished);
                     debug_assert!(!self.partition_ended);
                     break;
