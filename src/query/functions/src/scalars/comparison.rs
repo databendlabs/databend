@@ -826,7 +826,7 @@ fn find(mut haystack: &[u8], needle: &[u8]) -> Option<usize> {
         {
             return Some(offset + idx + needle_len);
         }
-        if haystack_len - idx < needle_len {
+        if idx + needle_len >= haystack_len {
             return None;
         }
         checksum -= haystack[idx];
