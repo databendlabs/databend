@@ -36,31 +36,42 @@ impl Display for CatalogType {
     }
 }
 
-/// Option for creating a iceberg catalog
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct IcebergCatalogOption {
-    pub storage_params: Box<StorageParams>,
-}
-
 /// different options for creating catalogs
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 pub enum CatalogOption {
     // hms_address
-    Hive(String),
+    Hive(HiveCatalogOption),
     // Uri location for iceberg
     Iceberg(IcebergCatalogOption),
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Option for creating a iceberg catalog
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct HiveCatalogOption {
+    pub address: String,
+}
+
+/// Option for creating a iceberg catalog
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
+pub struct IcebergCatalogOption {
+    pub storage_params: Box<StorageParams>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CatalogMeta {
     pub catalog_option: CatalogOption,
     pub created_on: DateTime<Utc>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CatalogNameIdent {
     pub tenant: String,
     pub catalog_name: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct CatalogId {
+    pub catalog_id: u64,
 }
 
 impl Display for CatalogNameIdent {
@@ -69,11 +80,31 @@ impl Display for CatalogNameIdent {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, Eq, PartialEq)]
+pub struct CatalogIdToName {
+    pub catalog_id: u64,
+}
+
+impl Display for CatalogIdToName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.catalog_id)
+    }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct CreateCatalogReq {
     pub if_not_exists: bool,
     pub name_ident: CatalogNameIdent,
     pub meta: CatalogMeta,
+}
+
+impl CreateCatalogReq {
+    pub fn tenant(&self) -> &str {
+        &self.name_ident.tenant
+    }
+    pub fn catalog_name(&self) -> &str {
+        &self.name_ident.catalog_name
+    }
 }
 
 impl Display for CreateCatalogReq {
@@ -84,6 +115,11 @@ impl Display for CreateCatalogReq {
             self.if_not_exists, self.name_ident.tenant, self.name_ident.catalog_name, self.meta
         )
     }
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Eq, PartialEq)]
+pub struct CreateCatalogReply {
+    pub catalog_id: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -99,5 +135,81 @@ impl Display for DropCatalogReq {
             "drop_catalog(if_exists={}):{}/{}",
             self.if_exists, self.name_ident.tenant, self.name_ident.catalog_name
         )
+    }
+}
+
+mod kvapi_key_impl {
+    use common_meta_kvapi::kvapi;
+
+    use super::CatalogId;
+    use super::CatalogIdToName;
+    use super::CatalogNameIdent;
+    use crate::schema::PREFIX_CATALOG;
+    use crate::schema::PREFIX_CATALOG_BY_ID;
+    use crate::schema::PREFIX_CATALOG_ID_TO_NAME;
+
+    /// __fd_catalog/<tenant>/<catalog_name> -> <catalog_id>
+    impl kvapi::Key for CatalogNameIdent {
+        const PREFIX: &'static str = PREFIX_CATALOG;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_str(&self.tenant)
+                .push_str(&self.catalog_name)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let tenant = p.next_str()?;
+            let catalog_name = p.next_str()?;
+            p.done()?;
+
+            Ok(CatalogNameIdent {
+                tenant,
+                catalog_name,
+            })
+        }
+    }
+
+    /// "__fd_catalog_by_id/<catalog_id>"
+    impl kvapi::Key for CatalogId {
+        const PREFIX: &'static str = PREFIX_CATALOG_BY_ID;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.catalog_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let catalog_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(CatalogId { catalog_id })
+        }
+    }
+
+    /// "__fd_catalog_id_to_name/<catalog_id> -> CatalogNameIdent"
+    impl kvapi::Key for CatalogIdToName {
+        const PREFIX: &'static str = PREFIX_CATALOG_ID_TO_NAME;
+
+        fn to_string_key(&self) -> String {
+            kvapi::KeyBuilder::new_prefixed(Self::PREFIX)
+                .push_u64(self.catalog_id)
+                .done()
+        }
+
+        fn from_str_key(s: &str) -> Result<Self, kvapi::KeyError> {
+            let mut p = kvapi::KeyParser::new_prefixed(s, Self::PREFIX)?;
+
+            let catalog_id = p.next_u64()?;
+            p.done()?;
+
+            Ok(CatalogIdToName { catalog_id })
+        }
     }
 }

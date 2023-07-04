@@ -1,0 +1,160 @@
+statement ok
+drop database if exists test_index
+
+statement ok
+create database test_index
+
+statement ok
+use test_index
+
+
+statement ok
+DROP AGGREGATING INDEX IF EXISTS testi;
+
+statement ok
+CREATE TABLE t (a int, b int, c int) storage_format = 'parquet'
+
+statement ok
+INSERT INTO t VALUES (1,1,4), (1,2,1), (1,2,4), (2,2,5)
+
+# query: eval-scan, index: eval-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select c + 1 from t
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query T
+select to_string(c + 1) from t
+----
+5
+2
+5
+6
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+# eval-filter-scan, index: eval-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select a, b from t
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query T
+select a from t where b > 1
+----
+1
+1
+2
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+# query: eval-agg-eval-scan, index: eval-scan
+# No available case for index scan.
+
+# query: eval-agg-eval-filter-scan, index: eval-scan
+# No available case for index scan.
+
+# query: eval-scan, index: eval-filter-scan
+# No available case for index scan.
+
+# query: eval-filter-scan, index: eval-filter-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select a, b from t where b > 1
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query T
+select a, b from t where b > 2
+----
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+# query: eval-agg-eval-scan, index: eval-filter-scan
+# No available case for index scan.
+
+# query: eval-agg-eval-filter-scan, index: eval-filter-scan
+# No available case for index scan.
+
+# query: eval-scan, index: eval-agg-eval-scan
+# No available case for index scan.
+
+# query: eval-filter-scan, index: eval-agg-eval-scan
+# No available case for index scan.
+
+# query: eval-agg-eval-scan, index: eval-agg-eval-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select sum(a), b from t group by b
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query 1
+select sum(a) + 1 as s from t group by b order by s
+----
+2
+5
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+# query: eval-agg-eval-filter-scan, index: eval-agg-eval-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select sum(a), b from t group by b
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query 1
+select sum(a) + 1 from t where b > 1 group by b
+----
+5
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+# query: eval-scan, index: eval-agg-eval-filter-scan
+# No available case for index scan.
+
+# query: eval-filter-scan, index: eval-agg-eval-filter-scan
+# No available case for index scan.
+
+# query: eval-agg-eval-scan, index: eval-agg-eval-filter-scan
+# No available case for index scan.
+
+# query: eval-agg-eval-filter-scan, index: eval-agg-eval-filter-scan
+
+statement ok
+CREATE AGGREGATING INDEX testi AS select b, sum(a) from t where c > 1 group by b
+
+statement ok
+REFRESH AGGREGATING INDEX testi
+
+query 1
+select sum(a) + 1 as s from t where c > 1 group by b order by s
+----
+2
+4
+
+statement ok
+DROP AGGREGATING INDEX testi
+
+statement ok
+DROP TABLE t
+
+
+statement ok
+use default
+
+statement ok
+drop database test_index

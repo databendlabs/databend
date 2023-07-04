@@ -34,7 +34,6 @@ use common_hashtable::HashJoinHashtableLike;
 use common_hashtable::RowPtr;
 use common_sql::executor::cast_expr_to_non_null_boolean;
 
-use super::desc::JOIN_MAX_BLOCK_SIZE;
 use super::desc::MARKER_KIND_FALSE;
 use super::desc::MARKER_KIND_NULL;
 use super::desc::MARKER_KIND_TRUE;
@@ -73,6 +72,7 @@ impl JoinHashTable {
     }
 
     #[inline]
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn probe_key<'a, H: HashJoinHashtableLike>(
         &self,
         hash_table: &'a H,
@@ -81,9 +81,10 @@ impl JoinHashTable {
         i: usize,
         vec_ptr: *mut RowPtr,
         occupied: usize,
+        max_block_size: usize,
     ) -> (usize, u64) {
         if valids.as_ref().map_or(true, |v| v.get_bit(i)) {
-            return hash_table.probe_hash_table(key, vec_ptr, occupied, JOIN_MAX_BLOCK_SIZE);
+            return hash_table.probe_hash_table(key, vec_ptr, occupied, max_block_size);
         }
         (0, 0)
     }
