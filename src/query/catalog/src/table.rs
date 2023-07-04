@@ -354,13 +354,14 @@ pub trait Table: Sync + Send {
         )))
     }
 
+    // return the selected block num.
     #[async_backtrace::framed]
     async fn recluster(
         &self,
         ctx: Arc<dyn TableContext>,
         pipeline: &mut Pipeline,
         push_downs: Option<PushDownInfo>,
-    ) -> Result<()> {
+    ) -> Result<u64> {
         let (_, _, _) = (ctx, pipeline, push_downs);
 
         Err(ErrorCode::Unimplemented(format!(
