@@ -37,7 +37,8 @@ jobs:
         run: |
           aws s3 cp s3://databend-ci/misc/license.key license.key
           aws s3 cp s3://databend-ci/misc/license.json license.json
-          echo "license=$(cat license.key)" >> $GITHUB_OUTPUT
+          echo "license=$(cat license.key | base64 -w 0)" >> $GITHUB_OUTPUT
+          cat license.json
 
   build:
     name: build_${{ matrix.arch }}_${{ matrix.libc }}
@@ -217,11 +218,15 @@ jobs:
           - "mysql,http,clickhouse"
     steps:
       - uses: actions/checkout@v3
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_ee_sqllogic_standalone_linux
         timeout-minutes: 15
         env:
-          DATABEND_ENTERPRISE_LICENSE: ${{ needs.license.outputs.license }}
-        with:
+          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
+          with:
           dirs: ${{ matrix.dirs }}
           handlers: ${{ matrix.handlers }}
           storage-format: ${{ matrix.format }}
@@ -363,10 +368,14 @@ jobs:
     if: needs.license.outputs.license
     steps:
       - uses: actions/checkout@v3
+      - name: Decode license
+        id: license
+        run: |
+          echo "license=$(echo '${{ needs.license.outputs.license }}' | base64 -d)" >> $GITHUB_OUTPUT
       - uses: ./.github/actions/test_ee_standalone_linux
         timeout-minutes: 10
         env:
-          DATABEND_ENTERPRISE_LICENSE: ${{ needs.license.outputs.license }}
+          DATABEND_ENTERPRISE_LICENSE: ${{ steps.license.outputs.license }}
       - name: Upload failure
         if: failure() || cancelled()
         uses: ./.github/actions/artifact_failure
